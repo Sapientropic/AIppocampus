@@ -417,6 +417,17 @@ def main(argv: list[str] | None = None) -> int:
     spend_parser.add_argument("--warning-effective-tokens", type=int, default=None)
     spend_parser.add_argument("--warning-min-foreground-value-rate", type=float, default=None)
     spend_parser.add_argument("--json", action="store_true", dest="json_output")
+    spend_parser.add_argument(
+        "--detail",
+        choices=["compact", "full"],
+        default="compact",
+        help="JSON detail level. Default --json emits a compact foreground decision card.",
+    )
+    spend_parser.add_argument(
+        "--operator-json",
+        action="store_true",
+        help="Emit full local spend/yield telemetry JSON; implies JSON output.",
+    )
     config_parser = subparsers.add_parser(
         "config",
         usage="aippocampus doctor config [--compact-json|--json]",
@@ -454,7 +465,16 @@ def main(argv: list[str] | None = None) -> int:
             days=args.days,
             **kwargs,
         )
-        if args.json_output:
+        full_detail_json = bool(args.operator_json or args.detail == "full")
+        if args.json_output and not full_detail_json:
+            print(
+                json.dumps(
+                    spend_doctor.compact_spend_doctor_card(report),
+                    ensure_ascii=False,
+                    indent=2,
+                )
+            )
+        elif args.json_output or args.operator_json:
             print(json.dumps(report, ensure_ascii=False, indent=2))
         else:
             print(spend_doctor.render_text(report))

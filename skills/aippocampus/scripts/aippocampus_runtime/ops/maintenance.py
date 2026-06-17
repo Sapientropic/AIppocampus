@@ -21,6 +21,8 @@ SCRIPT_DIR = Path(__file__).resolve().parents[2]
 READ_ONLY_OPERATIONS = {"status", "summary", "plan"}
 APPLY_OPERATIONS = {"apply", "run"}
 APPLY_SUMMARY_COMMAND = "aippocampus maintenance apply --summary-json"
+PLAN_SUMMARY_COMMAND = "aippocampus maintenance plan --summary-json"
+STATUS_SUMMARY_COMMAND = "aippocampus maintenance status --summary-json"
 STATUS_COMMAND = "aippocampus maintenance status --json"
 STORAGE_GC_BOUNDED_AUDIT_COMMAND = "aippocampus storage gc --dry-run --json --top 1 --cwd ."
 
@@ -256,9 +258,76 @@ def public_recommended_action(item: dict) -> dict:
     command = public_action_command(action_id)
     if command:
         result["command"] = command
+        if command == STORAGE_GC_BOUNDED_AUDIT_COMMAND:
+            result["mutation_risk"] = "read_only"
+        else:
+            result["mutation_risk"] = "explicit_generated_artifact_write"
+            result["requires_user_consent"] = True
     else:
         result["operator_boundary"] = "inspect the full audit before acting on this item"
     return {key: value for key, value in result.items() if value not in (None, "", [])}
+
+
+def _read_only_plan_action() -> dict[str, Any]:
+    return {
+        "id": "review_maintenance_plan",
+        "kind": "shell_command",
+        "command": PLAN_SUMMARY_COMMAND,
+        "mutates": False,
+        "mutation_risk": "read_only",
+        "reason": "review generated-artifact maintenance before any write-capable apply",
+    }
+
+
+def _apply_with_consent_action() -> dict[str, Any]:
+    return {
+        "id": "apply_after_user_consent",
+        "kind": "shell_command",
+        "command": APPLY_SUMMARY_COMMAND,
+        "mutates": True,
+        "mutation_risk": "explicit_generated_artifact_write",
+        "requires_user_consent": True,
+        "requires_clean_or_intentionally_dirty_worktree": True,
+        "preflight_commands": ["git status --short"],
+        "reason": "apply only after reviewing the plan and confirming local generated-artifact writes are intended",
+    }
+
+
+def maintenance_safe_next_actions(best: dict, *, read_only: bool) -> list[dict[str, Any]]:
+    actions: list[dict[str, Any]] = []
+    if read_only:
+        actions.append(_read_only_plan_action())
+        actions.append(_apply_with_consent_action())
+    else:
+        actions.append(
+            {
+                "id": "inspect_maintenance_status",
+                "kind": "shell_command",
+                "command": STATUS_SUMMARY_COMMAND,
+                "mutates": False,
+                "mutation_risk": "read_only",
+                "reason": "inspect the post-apply maintenance state without writing",
+            }
+        )
+    if best.get("id") == "storage_gc_rebuildable_cache" and best.get("command"):
+        actions.append(
+            {
+                "id": "storage_gc_audit",
+                "kind": "shell_command",
+                "command": str(best["command"]),
+                "mutates": False,
+                "mutation_risk": "read_only",
+                "reason": "audit generated-cache pressure before any storage cleanup apply",
+            }
+        )
+    seen: set[str] = set()
+    unique: list[dict[str, Any]] = []
+    for action in actions:
+        action_id = str(action.get("id") or "")
+        if action_id and action_id not in seen:
+            seen.add(action_id)
+            unique.append(action)
+    return unique
 
 
 def maintenance_agent_next_action(best: dict, *, read_only: bool) -> dict[str, Any]:
@@ -273,20 +342,13 @@ def maintenance_agent_next_action(best: dict, *, read_only: bool) -> dict[str, A
             "reason": "storage pressure needs a bounded audit before apply/no-apply",
         }
     if read_only:
-        return {
-            "id": "inspect_or_apply_maintenance",
-            "kind": "shell_command",
-            "command": APPLY_SUMMARY_COMMAND,
-            "mutates": True,
-            "reason": (
-                "apply only when this plan matches the intended local generated-artifact refresh"
-            ),
-        }
+        return _read_only_plan_action()
     return {
         "id": "inspect_maintenance_status",
         "kind": "shell_command",
-        "command": STATUS_COMMAND,
+        "command": STATUS_SUMMARY_COMMAND,
         "mutates": False,
+        "mutation_risk": "read_only",
         "reason": "use maintenance status/summary for a no-write card",
     }
 
@@ -430,6 +492,7 @@ def summary_payload(result: dict) -> dict:
         "full_audit_flag": "--json",
         "plan_first_command": STATUS_COMMAND,
         "agent_next_action": maintenance_agent_next_action(best, read_only=False),
+        "safe_next_actions": maintenance_safe_next_actions(best, read_only=False),
     }
 
 
@@ -486,6 +549,7 @@ def plan_payload(
             "source_text_included": False,
         },
         "agent_next_action": maintenance_agent_next_action(best, read_only=True),
+        "safe_next_actions": maintenance_safe_next_actions(best, read_only=True),
     }
     if not command_ok and health_error:
         payload["health_probe"] = {

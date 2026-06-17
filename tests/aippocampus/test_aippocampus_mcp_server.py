@@ -254,6 +254,8 @@ class AippocampusMcpServerTests(unittest.TestCase):
         self.assertEqual(payload["detail"], "compact")
         self.assertEqual(payload["output_boundary"], "compact_foreground_no_local_private_handles")
         self.assertEqual(payload["action_boundary"]["primary_action_field"], "foreground_action")
+        self.assertNotIn("cannot_claim", payload)
+        self.assertIn("source_backed_claims", payload["claim_boundary"]["must_reopen_for"])
         action = payload["foreground_action"]
         self.assertEqual(action["action_id"], "agent_deepen_selected_route")
         self.assertEqual(action["tool_name"], "agent_deepen")
@@ -333,6 +335,8 @@ class AippocampusMcpServerTests(unittest.TestCase):
         self.assertEqual(aippo_payload["surface"], "agent_aippo_guidance_card")
         self.assertEqual(aippo_payload["foreground_action"]["tool_name"], "agent_aippo")
         self.assertTrue(aippo_payload["boundary"]["navigation_only_not_fact"])
+        self.assertNotIn("cannot_claim", aippo_payload)
+        self.assertIn("source_backed_facts", aippo_payload["claim_boundary"]["must_reopen_for"])
         self.assertEqual(
             aippo_payload["contract_action"]["action_id"],
             "deepen_aippo_working_contract",
@@ -909,7 +913,8 @@ class AippocampusMcpServerTests(unittest.TestCase):
         self.assertEqual(payload["detail"], "compact")
         self.assertEqual(payload["output_boundary"], "compact_foreground_no_local_private_handles")
         self.assertEqual(payload["support_level"], "navigation")
-        self.assertEqual(payload["source_boundary"]["navigation_only_not_fact"], True)
+        self.assertIn("source_backed_claims", payload["claim_boundary"]["must_reopen_for"])
+        self.assertNotIn("source_boundary", payload)
         route = payload["routes"][0]
         self.assertEqual(route["evidence_level"], "needs_reopen")
         self.assertEqual(route["foreground_action"]["tool_name"], "recall_deepen")
@@ -990,6 +995,17 @@ class AippocampusMcpServerTests(unittest.TestCase):
         self.assertEqual(payload["source_refs"][0]["message_id"], "msg_final")
         self.assertEqual(payload["source_reopen_path"]["tool"], "get_turn_context")
         self.assertIn("不是摘要替代事实", payload["source_window"]["messages"][1]["text"])
+        self.assertEqual(
+            payload["source_window"]["messages"][0]["source_use_class"],
+            "foreground_continuity_source",
+        )
+        self.assertEqual(
+            payload["source_window"]["messages"][1]["source_use_class"],
+            "foreground_continuity_source",
+        )
+        self.assertNotIn("no_raw_private_paths", payload["source_boundary"])
+        self.assertTrue(payload["source_boundary"]["private_paths_may_exist_in_source_text"])
+        self.assertTrue(payload["source_boundary"]["default_projection_redacts_private_paths"])
         self.assertNotIn(str(self.cwd), encoded)
 
     def test_recall_deepen_accepts_ambient_navigation_seed_handle(self) -> None:
@@ -1187,6 +1203,7 @@ class AippocampusMcpServerTests(unittest.TestCase):
 
     def test_recall_deepen_redacts_local_paths_inside_source_window_text(self) -> None:
         local_path = "X:" + "\\synthetic-private\\workspace\\secret.txt"
+        forward_path = "E:/synthetic-private/workspace/process.jsonl"
         self.messages.append(
             {
                 "message_id": "msg_path",
@@ -1200,6 +1217,32 @@ class AippocampusMcpServerTests(unittest.TestCase):
                 "text": f"Path boundary example lives at {local_path}.",
             }
         )
+        self.messages.append(
+            {
+                "message_id": "msg_process",
+                "turn_id": "turn_process",
+                "source_id": "src_test",
+                "source_line": 13,
+                "role": "assistant",
+                "phase": "commentary",
+                "turn_index": 4,
+                "is_final": False,
+                "text": f"<subagent_notification> audit payload opened {forward_path}",
+            }
+        )
+        self.messages.append(
+            {
+                "message_id": "msg_process_final",
+                "turn_id": "turn_process",
+                "source_id": "src_test",
+                "source_line": 14,
+                "role": "assistant",
+                "phase": "final_answer",
+                "turn_index": 4,
+                "is_final": True,
+                "text": "Ordinary closure route should remain the foreground continuity source.",
+            }
+        )
         with (self.clean / "messages.jsonl").open("w", encoding="utf-8", newline="\n") as f:
             for item in self.messages:
                 f.write(json.dumps(item, ensure_ascii=False) + "\n")
@@ -1210,6 +1253,18 @@ class AippocampusMcpServerTests(unittest.TestCase):
                         "turn_id": "turn_path",
                         "turn_index": 3,
                         "message_ids": ["msg_path"],
+                        "assistant_phase": "final_answer",
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n"
+            )
+            f.write(
+                json.dumps(
+                    {
+                        "turn_id": "turn_process",
+                        "turn_index": 4,
+                        "message_ids": ["msg_process", "msg_process_final"],
                         "assistant_phase": "final_answer",
                     },
                     ensure_ascii=False,
@@ -1250,6 +1305,45 @@ class AippocampusMcpServerTests(unittest.TestCase):
         self.assertFalse(response["result"].get("isError", False))
         self.assertNotIn(local_path, encoded)
         self.assertIn("<redacted:local-path>", encoded)
+        self.assertNotIn(forward_path, encoded)
+        self.assertNotIn("no_raw_private_paths", payload["source_boundary"])
+
+        context_response = mcp.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 310,
+                "method": "tools/call",
+                "params": {
+                    "name": "recall_context",
+                    "arguments": {
+                        "intent": "Ordinary closure route",
+                        "cwd": str(self.cwd),
+                        "detail": "full",
+                    },
+                },
+            }
+        )
+        handle = self.tool_payload(context_response)["routes"][0]["handle"]
+        response = mcp.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 311,
+                "method": "tools/call",
+                "params": {
+                    "name": "recall_deepen",
+                    "arguments": {"handle": handle, "cwd": str(self.cwd)},
+                },
+            }
+        )
+        payload = self.tool_payload(response)
+        by_id = {item["message_id"]: item for item in payload["source_window"]["messages"]}
+        self.assertEqual(by_id["msg_process"]["source_use_class"], "audit_or_commentary_source")
+        self.assertEqual(by_id["msg_process"]["ordinary_continuity_priority"], "low")
+        self.assertEqual(
+            by_id["msg_process_final"]["source_use_class"],
+            "foreground_continuity_source",
+        )
+        self.assertNotIn(forward_path, json.dumps(payload, ensure_ascii=False))
 
     def test_search_memory_clamps_requested_limit_on_server_side(self) -> None:
         response = mcp.handle_request(

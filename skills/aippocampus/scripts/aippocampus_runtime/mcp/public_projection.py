@@ -340,6 +340,19 @@ def _without_empty(value: Any) -> Any:
     return value
 
 
+def _compact_claim_boundary(
+    *,
+    can_use_for: list[str],
+    must_reopen_for: list[str],
+    detail_command: str,
+) -> dict[str, Any]:
+    return {
+        "can_use_for": can_use_for,
+        "must_reopen_for": must_reopen_for,
+        "detail_available_with": detail_command,
+    }
+
+
 def _handle_digest(value: Any) -> str:
     if not value:
         return ""
@@ -516,6 +529,11 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "audit_available": bool(payload.get("audit_available")),
         "semantic_gate_diagnostics": semantic_compact,
         "provider_key_bridge": payload.get("provider_key_bridge"),
+        "claim_boundary": _compact_claim_boundary(
+            can_use_for=["route_selection", "next_action_choice"],
+            must_reopen_for=["source_backed_claims", "exact_wording", "sensitive_or_stale_facts"],
+            detail_command='aippocampus agent recall "old decision or handoff cue" --json --detail full',
+        ),
         "policy_boundary": payload.get("policy_boundary"),
         "output_boundary": "compact_foreground_no_local_private_handles",
         "action_boundary": {
@@ -582,7 +600,11 @@ def compact_recall_context_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "route_count": len(routes),
         "suggested_next": "follow_route_foreground_action" if routes else payload.get("suggested_next"),
         "continuity_route_status": payload.get("continuity_route_status"),
-        "source_boundary": payload.get("source_boundary"),
+        "claim_boundary": _compact_claim_boundary(
+            can_use_for=["route_selection", "recall_deepen_target_choice"],
+            must_reopen_for=["source_backed_claims", "exact_wording", "sensitive_or_stale_facts"],
+            detail_command='recall_context with {"detail":"full"}',
+        ),
         "metrics": {
             "funnel_stage": (payload.get("metrics") or {}).get("funnel_stage"),
             "route_count": len(routes),

@@ -6,6 +6,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -398,8 +399,14 @@ class AippocampusCliRecoveryCardTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             jobs = Path(tmp) / "subconscious_jobs.jsonl"
             synthetic_registry = Path(tmp) / "synthetic-registry.json"
+            fresh_timestamp = (
+                datetime.now(timezone.utc)
+                .replace(microsecond=0)
+                .isoformat()
+                .replace("+00:00", "Z")
+            )
             rows = [
-                question_row("open", "open route", "2026-06-16T00:00:00Z"),
+                question_row("open", "open route", fresh_timestamp),
                 question_row("dormant", "dormant route", "2000-01-01T00:00:00Z"),
                 question_row(
                     "resolved",
@@ -421,7 +428,7 @@ class AippocampusCliRecoveryCardTests(unittest.TestCase):
                 question_row(
                     "missing",
                     "missing source route",
-                    "2026-06-16T00:00:00Z",
+                    fresh_timestamp,
                     source_refs=[],
                 ),
             ]
@@ -556,13 +563,62 @@ class AippocampusCliRecoveryCardTests(unittest.TestCase):
         self.assertEqual(proc.returncode, 2)
         self.assertNotIn("usage:", proc.stdout + proc.stderr)
         payload = json.loads(proc.stdout)
+        self.assertEqual(payload["kind"], "aippocampus_import_conversation_recovery")
+        self.assertEqual(payload["status"], "needs_input")
         self.assertEqual(payload["error"]["code"], "usage_error")
         self.assertEqual(
             payload["error"]["missing"],
             ["--input/--source", "--provider/--format"],
         )
+        self.assertEqual(payload["missing"], ["input_path", "format_or_provider"])
         self.assertFalse(payload["error"]["written"])
-        self.assertIn("--dry-run --json", payload["error"]["next_action"])
+        self.assertNotIn("<path>", payload["error"]["next_action"])
+        self.assertNotIn("recovery_actions", payload)
+        commands = [
+            item.get("command", "")
+            for item in payload["safe_next_actions"]
+            if item.get("command")
+        ]
+        templates = [
+            item.get("command_template", "")
+            for item in payload["safe_next_actions"]
+            if item.get("command_template")
+        ]
+        self.assertIn("aippocampus import --json", commands)
+        self.assertTrue(any("--dry-run --json" in item for item in templates))
+        self.assertTrue(all("<path>" not in item for item in commands))
+
+    def test_import_conversation_missing_args_distinguishes_input_and_format(self) -> None:
+        missing_input = self.run_cli("import", "conversation", "--format", "generic-jsonl", "--json")
+        missing_format = self.run_cli(
+            "import",
+            "conversation",
+            "--input",
+            "conversation.jsonl",
+            "--json",
+        )
+
+        self.assertEqual(missing_input.returncode, 2)
+        self.assertEqual(missing_format.returncode, 2)
+        input_payload = json.loads(missing_input.stdout)
+        format_payload = json.loads(missing_format.stdout)
+
+        self.assertEqual(input_payload["missing"], ["input_path"])
+        self.assertEqual(format_payload["missing"], ["format_or_provider"])
+        for payload in (input_payload, format_payload):
+            commands = [
+                item.get("command", "")
+                for item in payload["safe_next_actions"]
+                if item.get("command")
+            ]
+            templates = [
+                item.get("command_template", "")
+                for item in payload["safe_next_actions"]
+                if item.get("command_template")
+            ]
+            self.assertIn("aippocampus import --json", commands)
+            self.assertTrue(any("<path>" in item for item in templates))
+            self.assertTrue(all("<path>" not in item for item in commands))
 
     def test_import_conversation_help_is_preview_first(self) -> None:
         proc = self.run_cli("import", "conversation", "--help")

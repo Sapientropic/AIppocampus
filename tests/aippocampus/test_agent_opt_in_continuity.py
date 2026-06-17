@@ -1475,6 +1475,9 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertEqual(payload["output_boundary"], "public_compact_no_local_private_handles")
         self.assertEqual(payload["foreground_action"]["tool_name"], "agent_deepen")
         self.assertEqual(payload["foreground_action"]["arguments"]["request_index"], 1)
+        self.assertNotIn("cannot_claim", payload)
+        self.assertIn("source_backed_claims", payload["claim_boundary"]["must_reopen_for"])
+        self.assertTrue(payload["action_boundary"]["source_reopen_required_for_claims"])
         self.assertNotIn("memory_packets", payload)
         self.assertNotIn("deepen_requests", payload)
         self.assertNotIn("foreground_action_card", payload)
@@ -1516,6 +1519,7 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertIn("memory_packets", payload)
         self.assertIn("deepen_requests", payload)
         self.assertIn("foreground_action_card", payload)
+        self.assertIn("cannot_claim", payload)
         self.assertIn("aippo-nav:", encoded)
         self.assertNotIn(str(self.cwd), encoded)
 
@@ -1844,6 +1848,8 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertIn("benchmark_reporting", payload["task_families"])
         self.assertIn("measured results", " ".join(payload["use_guidance"]))
         self.assertEqual(payload["foreground_action"]["tool_name"], "agent_aippo")
+        self.assertNotIn("cannot_claim", payload)
+        self.assertIn("source_backed_facts", payload["claim_boundary"]["must_reopen_for"])
         self.assertIn("operator_json_command", payload)
         self.assertNotIn("activation_packet", payload)
         self.assertNotIn("metrics", payload)
@@ -1875,6 +1881,8 @@ class AgentOptInContinuityTests(unittest.TestCase):
         status = payload["contract_status"]
 
         self.assertEqual(payload["foreground_action"]["action_id"], "use_hint")
+        self.assertNotIn("cannot_claim", payload)
+        self.assertIn("source_backed_facts", payload["claim_boundary"]["must_reopen_for"])
         self.assertGreaterEqual(status["available_active_clause_count"], 1)
         self.assertEqual(status["available_active_clause_count"], status["active_clause_count"])
         self.assertGreaterEqual(status["contract_active_clause_count"], status["active_clause_count"])

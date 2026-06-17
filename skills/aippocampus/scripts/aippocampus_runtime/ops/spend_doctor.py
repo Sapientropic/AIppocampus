@@ -10,8 +10,9 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping
 
 from aippocampus_runtime import core as runtime_core
+from aippocampus_runtime.ops.spend_doctor_card import compact_spend_doctor_card
 from aippocampus_runtime.recall.semantic_recall_gate import semantic_gate_mode
-from aippocampus_runtime.warm_ambient.scheduler import warm_background_enabled
+from aippocampus_runtime.warm_ambient.scheduler import warm_background_enabled, warm_status_payload
 
 SCHEMA_VERSION = 1
 DEFAULT_DAYS = 7
@@ -725,6 +726,27 @@ def _budget_guardrails(
     }
 
 
+def _warm_queue_health(root: Path, *, now: datetime) -> dict[str, Any]:
+    status = warm_status_payload(job_dir=root / "ambient_warm_jobs", now=now)
+    activity = status.get("job_activity") if isinstance(status.get("job_activity"), Mapping) else {}
+    return runtime_core.sanitize_external_model_payload(
+        {
+            "status": status.get("status"),
+            "enabled": bool(status.get("enabled")),
+            "action_code": status.get("action_code"),
+            "next_command": status.get("next_command"),
+            "status_command": activity.get("status_command") or "aippocampus warm status --json",
+            "queue_state": activity.get("queue_state"),
+            "pending_stale_count": _safe_int(activity.get("pending_stale_count")),
+            "pending_recent_count": _safe_int(activity.get("pending_recent_count")),
+            "completed_count": _safe_int(activity.get("completed_count")),
+            "worker_process_active": bool(activity.get("worker_process_active")),
+            "ordinary_recall_usable": bool(status.get("ordinary_recall_usable")),
+            "boundary": "warm ambient queue health is optional; source-backed recall can continue",
+        }
+    )
+
+
 def _totals(routes: Mapping[str, Mapping[str, Any]]) -> dict[str, Any]:
     spend_counter: Counter[str] = Counter()
     yield_counter: Counter[str] = Counter()
@@ -777,6 +799,7 @@ def _spend_decision(
     *,
     warnings: list[dict[str, Any]],
     reporting_boundary: Mapping[str, Any],
+    warm_queue_health: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     summaries = [_route_spend_summary(name, route) for name, route in routes.items()]
     highest = max(summaries, key=lambda item: item["effective_tokens"], default={})
@@ -789,7 +812,22 @@ def _spend_decision(
     )
     usage_gaps = _usage_gap_routes(routes)
     warning_routes = sorted({str(item.get("route")) for item in warnings if item.get("route")})
-    if warning_routes:
+    warm_blocked = bool(
+        warm_queue_health
+        and warm_queue_health.get("status") == "blocked"
+        and (
+            warm_queue_health.get("queue_state") == "blocked_stale_pending"
+            or _safe_int(warm_queue_health.get("pending_stale_count")) > 0
+        )
+    )
+    inspect_routes = sorted({*warning_routes, *(["warm_ambient"] if warm_blocked else [])})
+    if warm_blocked:
+        action = "inspect"
+        reason = (
+            "Warm ambient has a blocked stale queue; reconcile warm status before "
+            "launching more optional background work."
+        )
+    elif warning_routes:
         action = "inspect"
         reason = "At least one route crossed the spend threshold without enough normalized foreground value."
     elif usage_gaps:
@@ -803,8 +841,9 @@ def _spend_decision(
         "reason": reason,
         "highest_spend_route": highest,
         "lowest_yield_route": lowest,
-        "routes_to_pause_or_inspect": warning_routes,
+        "routes_to_pause_or_inspect": inspect_routes,
         "usage_telemetry_gaps": usage_gaps,
+        "warm_queue_health": dict(warm_queue_health or {}),
         "estimated_cost_supported": bool(reporting_boundary.get("estimated_cost_supported")),
         "cost_basis": reporting_boundary.get("cost_basis"),
         "cost_explanation": (
@@ -812,7 +851,7 @@ def _spend_decision(
             if not reporting_boundary.get("estimated_cost_supported")
             else "estimated from configured local price table"
         ),
-        "safe_next_command": "aippocampus doctor spend --json",
+        "safe_next_command": "aippocampus doctor spend --detail full --json",
     }
 
 
@@ -835,11 +874,16 @@ def build_spend_doctor_report(
     _aggregate_dream(routes["dream"], root, since=since)
     _aggregate_prompt_hook(routes["prompt_hook"], root, since=since)
     _finalize_model_telemetry(routes)
+    warm_queue_health = _warm_queue_health(root, now=now_dt)
     warnings = _attach_route_metrics_and_warnings(
         routes,
         warn_effective_tokens=max(1, int(warn_effective_tokens)),
         warn_min_foreground_value_rate=max(0.0, _safe_float(warn_min_foreground_value_rate)),
     )
+    warm_queue_blocked = bool(warm_queue_health.get("status") == "blocked")
+    warning_codes = [str(item["code"]) for item in warnings]
+    if warm_queue_blocked:
+        warning_codes.append("blocked_warm_queue:warm_ambient")
     reporting_boundary = {
         "registry_location_printed": False,
         "price_table_configured": False,
@@ -850,7 +894,7 @@ def build_spend_doctor_report(
         "schema_version": SCHEMA_VERSION,
         "kind": "aippocampus_spend_doctor",
         "ok": True,
-        "status": "warning" if warnings else "ok",
+        "status": "warning" if warnings or warm_queue_blocked else "ok",
         "generated_at": now_dt.isoformat().replace("+00:00", "Z"),
         "window": {
             "days": window_days,
@@ -868,7 +912,8 @@ def build_spend_doctor_report(
         "routes": routes,
         "totals": _totals(routes),
         "warnings": warnings,
-        "warning_codes": [str(item["code"]) for item in warnings],
+        "warning_codes": warning_codes,
+        "warm_queue_health": warm_queue_health,
         "budget_guardrails": _budget_guardrails(
             warnings,
             warn_effective_tokens=max(1, int(warn_effective_tokens)),
@@ -880,6 +925,7 @@ def build_spend_doctor_report(
         routes,
         warnings=warnings,
         reporting_boundary=reporting_boundary,
+        warm_queue_health=warm_queue_health,
     )
     return runtime_core.sanitize_external_model_payload(report)
 

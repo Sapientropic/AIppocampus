@@ -645,8 +645,22 @@ starts; it does not prove what a previously started Codex Desktop hook process
 could see. Use `--provider-env-var <NAME>` when you need to test a local route
 override without changing the route configuration.
 
+If the key is visible in the current and child process, keep the normal bridge
+path presence-only and confirm the visible environment source directly:
+
+```sh
+aippocampus onboard provider-key --plan --target codex-hooks --source visible-env-key --provider-env-var DEEPSEEK_API_KEY --json
+aippocampus onboard provider-key --apply --target codex-hooks --source visible-env-key --provider-env-var DEEPSEEK_API_KEY --json
+```
+
+This records only the env-var source metadata and restart boundary. It does not
+print, hash, persist, or validate the secret value. Future hook processes are
+ready only when they are launched from an environment where the same variable is
+visible.
+
 When a key exists somewhere on the machine but the hook-relevant process still
-reports `missing_provider_env_var`, use explicit credential-source discovery:
+reports `missing_provider_env_var`, or when the user explicitly chooses a
+private file, use explicit credential-source discovery:
 
 ```sh
 aippocampus doctor provider --discover-credential-sources --credential-dotenv /path/to/.env --json
@@ -660,8 +674,8 @@ probe; validation is skipped for non-HTTPS routes except loopback HTTP. This
 diagnostic does not install a hook wrapper or bridge credentials into Codex
 Desktop by itself.
 
-To bridge a private key source into future Codex hook processes, use the
-separate onboarding surface:
+To bridge a private file source into future Codex hook processes, use the
+separate explicit onboarding surface:
 
 ```sh
 aippocampus onboard provider-key --plan --target codex-hooks --source explicit-dotenv --credential-dotenv /path/to/.env --json

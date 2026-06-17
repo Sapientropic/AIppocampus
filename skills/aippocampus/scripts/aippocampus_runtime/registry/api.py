@@ -140,8 +140,15 @@ def _subcommand_index(args: list[str], command: str) -> int | None:
 
 
 def import_conversation_usage_payload(missing: list[str]) -> dict:
+    normalized_missing = [
+        "input_path" if item == "--input/--source" else "format_or_provider"
+        for item in missing
+    ]
     return {
+        "kind": "aippocampus_import_conversation_recovery",
         "ok": False,
+        "status": "needs_input",
+        "missing": normalized_missing,
         "error": {
             "code": "usage_error",
             "class": "usage_error",
@@ -149,19 +156,37 @@ def import_conversation_usage_payload(missing: list[str]) -> dict:
             "missing": missing,
             "written": False,
             "path_redacted": True,
-            "next_action": (
-                "Preview the import first: aippocampus import conversation "
-                "--format generic-jsonl --input <path> --dry-run --json"
-            ),
+            "next_action": "Choose an import path or provide fields for a dry-run preview.",
+        },
+        "input_schema": {
+            "required": normalized_missing,
+            "supported_formats": ["generic-jsonl"],
+            "preview_first": True,
         },
         "source_boundary": {
             "explicit_input_required": True,
             "preview_before_write": True,
             "local_paths_redacted_by_default": True,
         },
-        "recovery_actions": [
-            "aippocampus import conversation --format generic-jsonl --input <path> --dry-run --json",
-            "aippocampus import conversation --help",
+        "safe_next_actions": [
+            {
+                "id": "show_import_chooser",
+                "kind": "shell_command",
+                "command": "aippocampus import --json",
+                "mutation_risk": "read_only",
+                "reason": "show machine-readable import choices without writing registry data",
+            },
+            {
+                "id": "preview_generic_jsonl",
+                "kind": "shell_command_template",
+                "command_template": (
+                    "aippocampus import conversation --format generic-jsonl "
+                    "--input <path> --dry-run --json"
+                ),
+                "requires": ["input_path"],
+                "mutation_risk": "read_only_preview",
+                "reason": "validate the transcript before any registry write",
+            },
         ],
         "data": None,
     }
@@ -176,7 +201,14 @@ def render_import_conversation_error(payload: dict) -> str:
     missing = error.get("missing") or []
     if missing:
         lines.append("missing: " + ", ".join(str(item) for item in missing))
-    if error.get("next_action"):
+    actions = payload.get("safe_next_actions") or []
+    chooser = next((item for item in actions if item.get("command")), None)
+    template = next((item for item in actions if item.get("command_template")), None)
+    if chooser:
+        lines.append(f"next: {chooser.get('command')}")
+    if template:
+        lines.append(f"preview template: {template.get('command_template')}")
+    if not chooser and not template and error.get("next_action"):
         lines.append(f"next: {error.get('next_action')}")
     lines.append("written: false")
     lines.append("privacy: local input paths are redacted by default")

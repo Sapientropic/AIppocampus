@@ -136,7 +136,11 @@ def agent_recall_missing_query_payload(
             "mode": "recall",
             "surface": "agent_cli_or_mcp_adapter",
             "policy_boundary": policy_boundary(),
-            "cannot_claim": ["source_backed_claim", "absence_of_memory"],
+            "claim_boundary": {
+                "can_use_for": ["asking_for_a_cue", "choosing_a_read_only_next_action"],
+                "must_reopen_for": ["source_backed_claims", "absence_of_memory_claims"],
+                "detail_available_with": 'aippocampus agent recall "old decision or handoff cue" --json --detail full',
+            },
         }
     )
     return payload
@@ -559,15 +563,12 @@ def compact_aippo_guidance_card(payload: Mapping[str, Any], *, task: str = "") -
         foreground_action = {
             "action_id": "run_agent_recall_if_prior_source_matters",
             "tool_name": "agent_recall",
-            "arguments": {"query": task_text or "<continuity cue>"},
-            "cli_command": (
-                f'aippocampus agent recall "{task_text}" --json'
-                if task_text
-                else 'aippocampus agent recall "<continuity cue>" --json'
-            ),
+            "arguments": {"query": task_text} if task_text else {"query_required": True},
             "claim_boundary": "no_aippo_guidance_no_claim",
             "why": "No active AIppo working contract matched strongly enough.",
         }
+        if task_text:
+            foreground_action["cli_command"] = f'aippocampus agent recall "{task_text}" --json'
     reason_codes: list[str] = []
     no_contract_reason = str(packet.get("no_active_contract_reason") or "").strip()
     if no_contract_reason:
@@ -617,12 +618,17 @@ def compact_aippo_guidance_card(payload: Mapping[str, Any], *, task: str = "") -
                 "source_reopen_required_for_claims": True,
                 "candidate_surfaces_are_not_truth": True,
             },
+            "claim_boundary": {
+                "can_use_for": ["low_risk_working_guidance", "next_action_choice"],
+                "must_reopen_for": [
+                    "source_backed_facts",
+                    "public_product_readiness",
+                    "exact_user_history_claims",
+                ],
+                "detail_available_with": 'aippocampus agent aippo --task "task cue" --json --operator-json',
+            },
             "operator_json_available": True,
-            "operator_json_command": "aippocampus agent aippo <task> --json --operator-json",
-            "cannot_claim": [
-                "claim_ready_facts_without_source_reopen",
-                "public_product_readiness_from_aippo_guidance",
-            ],
+            "operator_json_command": 'aippocampus agent aippo --task "task cue" --json --operator-json',
         }
     )
 

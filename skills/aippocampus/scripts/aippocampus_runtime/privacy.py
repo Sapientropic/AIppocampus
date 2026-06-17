@@ -82,7 +82,7 @@ SENSITIVE_ASSIGNMENT_RE = re.compile(
 BEARER_VALUE_RE = re.compile(r"(?i)\bbearer\s+[a-z0-9._~+/=-]{8,}")
 OPENAI_KEY_RE = re.compile(r"\bsk-[A-Za-z0-9][A-Za-z0-9._-]{8,}\b")
 LOCAL_PATH_TEXT_RE = re.compile(
-    r"(?P<path>(?:[A-Za-z]:\\|/(?:Users|home|tmp|var|private|Volumes)/)[^\s,;\"')\]]+)"
+    r"(?P<path>(?:[A-Za-z]:[\\/]|/(?:Users|home|tmp|var|private|Volumes)/)[^\s,;\"')\]]+)"
 )
 
 

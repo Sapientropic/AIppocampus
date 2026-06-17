@@ -124,8 +124,14 @@ class DocsHealthTests(unittest.TestCase):
         self.assertIn("ignore_or_blocked", skill_text)
         self.assertIn("Active Path Packets", skill_text)
         self.assertIn("before broad manual search", " ".join(skill_text.split()))
-        self.assertIn("python3 -m ...", skill_text)
-        self.assertIn("py -m ...", skill_text)
+        self.assertIn("Foreground continuity surfaces", skill_text)
+        self.assertIn("CLI chooser/recovery card", skill_text)
+        self.assertNotIn("python3 -m", skill_text)
+        self.assertNotIn("py -m", skill_text)
+        self.assertNotIn("python -m aippocampus_runtime", skill_text)
+        self.assertNotIn("<path>", skill_text)
+        self.assertNotIn("<rollout.jsonl>", skill_text)
+        self.assertNotIn("<label>", skill_text)
         self.assertNotIn("`python -m aippocampus_runtime.", skill_text)
         self.assertLess(
             skill_text.index("First recall for a vague handoff or old decision"),
@@ -136,8 +142,8 @@ class DocsHealthTests(unittest.TestCase):
             skill_text.index("Check the local provider matrix"),
         )
         self.assertLess(
-            skill_text.index("Diagnostic/operator fallbacks"),
-            skill_text.index("`python3 -m aippocampus_runtime."),
+            skill_text.index("Foreground continuity surfaces"),
+            skill_text.index("Repair, setup, and imports"),
         )
         self.assertIn("suggested_agent_action", skill_text)
         self.assertIn("not_enough_for_claim", skill_text)
@@ -199,6 +205,44 @@ class DocsHealthTests(unittest.TestCase):
         self.assertLess(
             claude_skill.index("## First Success Path"),
             claude_skill.index("## Repair And Host Diagnostics"),
+        )
+
+    def test_provider_key_docs_prefer_visible_env_before_dotenv_fallbacks(self) -> None:
+        safe_env = (
+            REPO_ROOT / "docs" / "guides" / "setup" / "safe-environment.md"
+        ).read_text(encoding="utf-8")
+        install_guide = (REPO_ROOT / "docs" / "guides" / "install-guide.md").read_text(
+            encoding="utf-8"
+        )
+        public_api = (REPO_ROOT / "docs" / "guides" / "public-api.md").read_text(
+            encoding="utf-8"
+        )
+        safe_env_flat = " ".join(safe_env.split())
+        install_guide_flat = " ".join(install_guide.split())
+        public_api_flat = " ".join(public_api.split())
+
+        self.assertIn("visible environment key is the normal first path", safe_env_flat)
+        self.assertIn("Dotenv discovery is an alternate operator diagnostic", safe_env_flat)
+        self.assertLess(
+            safe_env_flat.index("visible environment key is the normal first path"),
+            safe_env_flat.index("Dotenv discovery is an alternate operator diagnostic"),
+        )
+
+        self.assertIn("--source visible-env-key", install_guide)
+        self.assertLess(
+            install_guide.index("--source visible-env-key"),
+            install_guide.index("--source explicit-dotenv"),
+        )
+        self.assertIn(
+            "does not print, hash, persist, or validate the secret",
+            install_guide_flat,
+        )
+
+        self.assertIn("--source visible-env-key --provider-env-var <NAME>", public_api)
+        self.assertIn("Supported alternate source names are `explicit-dotenv`", public_api_flat)
+        self.assertLess(
+            public_api_flat.index("--source visible-env-key --provider-env-var <NAME>"),
+            public_api_flat.index("Supported alternate source names are `explicit-dotenv`"),
         )
 
     def test_skill_hook_packet_decoder_maps_signals_to_actions(self) -> None:
@@ -1689,9 +1733,14 @@ class DocsHealthTests(unittest.TestCase):
             encoding="utf-8"
         )
 
-        self.assertIn("--feedback-jsonl <local-feedback.jsonl>", card)
+        self.assertIn("agent feedback <route_id> --outcome helped --json", card)
+        self.assertIn("do-not-use-here <route-or-ticket-id> --json", card)
+        self.assertIn("--feedback-jsonl", card)
+        self.assertIn("advanced/operator override", card)
+        self.assertNotIn("--feedback-jsonl <local-feedback.jsonl>", card)
         self.assertIn("hooks action refresh-cache --write --json", card)
         self.assertNotIn("agent feedback <route_id> --outcome helped --json` | receipt only", card)
+        self.assertNotIn("durable only with an explicit path", card)
         self.assertNotIn("<local-cache.jsonl>", card)
 
     def test_repo_markdown_scan_ignores_tmp_prompts(self) -> None:

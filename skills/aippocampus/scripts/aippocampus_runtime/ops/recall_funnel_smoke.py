@@ -20,6 +20,43 @@ from aippocampus_runtime.mcp.recall_navigation import NAVIGATION_SCHEMA_VERSION
 SCHEMA_VERSION = 1
 
 
+def cue_required_recovery_card() -> dict[str, Any]:
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "kind": "aippocampus_recall_funnel_smoke_recovery",
+        "ok": False,
+        "status": "needs_cue",
+        "cue_required": True,
+        "error": {
+            "code": "cue_required",
+            "message": "Provide a cue before running the recall funnel smoke diagnostic.",
+        },
+        "safe_next_actions": [
+            {
+                "id": "run_smoke_recall_funnel",
+                "label": "Run recall funnel smoke diagnostic",
+                "command_template": 'aippocampus smoke recall-funnel "<cue>" --json',
+                "requires": ["cue"],
+                "mutation_risk": "read_only",
+                "claim_boundary": "smoke_diagnostic_not_source_evidence",
+            },
+            {
+                "id": "ordinary_agent_recall",
+                "label": "Use ordinary continuity recall",
+                "command_template": 'aippocampus agent recall "<cue>" --json',
+                "requires": ["cue"],
+                "mutation_risk": "read_only",
+                "claim_boundary": "no_claim_before_reopen",
+            },
+        ],
+        "source_boundary": {
+            "claim_boundary": "smoke output is diagnostic, not source evidence",
+            "source_backed_claim_allowed": False,
+            "source_reopen_required_before_claims": True,
+        },
+    }
+
+
 def _tool_payload(result: dict[str, Any]) -> dict[str, Any]:
     content = result.get("content") or []
     if not content or not isinstance(content[0], dict):
@@ -236,6 +273,19 @@ def render_text(report: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def render_cue_required_text(card: dict[str, Any]) -> str:
+    actions = card["safe_next_actions"]
+    return "\n".join(
+        [
+            "AIppocampus recall funnel smoke: cue required.",
+            f"next: {actions[0]['command_template']}",
+            f"ordinary path: {actions[1]['command_template']}",
+            "boundary: smoke output is diagnostic, not source evidence.",
+            "",
+        ]
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="aippocampus smoke")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -259,7 +309,7 @@ def main(argv: list[str] | None = None) -> int:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         help="Run recall_context -> first reopenable recall_deepen route as a diagnostic.",
     )
-    recall_parser.add_argument("cue")
+    recall_parser.add_argument("cue", nargs="?")
     recall_parser.add_argument("--cwd", default=os.getcwd())
     recall_parser.add_argument("--clean-source-dir", default=None)
     recall_parser.add_argument("--registry-dir", default=None)
@@ -268,6 +318,14 @@ def main(argv: list[str] | None = None) -> int:
     recall_parser.add_argument("--include-private-paths", action="store_true")
     recall_parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args(argv)
+
+    if args.command == "recall-funnel" and not (args.cue or "").strip():
+        card = cue_required_recovery_card()
+        if args.json_output:
+            print(json.dumps(card, ensure_ascii=False, indent=2))
+        else:
+            print(render_cue_required_text(card))
+        return 2
 
     report = build_recall_funnel_smoke(
         args.cue,

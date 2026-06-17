@@ -977,21 +977,26 @@ Common installs should stay small:
   `--provider-env-var` to override the selected route variable name for local
   diagnostics.
 - `aippocampus doctor provider --discover-credential-sources --credential-dotenv <path> --json`
-  is an explicit onboarding diagnostic for cases where a key exists outside the
-  current process environment. It reads only user-specified `.env` files and the
-  current process env, reports public candidate shape and optional validation
-  status, omits local paths by default, and never prints secret values. It does
-  not change runtime behavior or install hook wrappers. `--validate-credentials`
-  may probe the selected route's models endpoint, but only over HTTPS or
-  loopback HTTP.
+  is an alternate operator diagnostic for cases where a key exists outside the
+  current process environment or the user explicitly chooses a private file. It
+  reads only user-specified `.env` files and the current process env, reports
+  public candidate shape and optional validation status, omits local paths by
+  default, and never prints secret values. It does not change runtime behavior
+  or install hook wrappers. `--validate-credentials` may probe the selected
+  route's models endpoint, but only over HTTPS or loopback HTTP.
 - `aippocampus onboard provider-key --plan|--apply|--undo --target codex-hooks`
-  is the explicit provider-key bridge surface. Apply writes only a local
+  is the explicit provider-key bridge surface. If `doctor provider` can already
+  see the selected env var in the current and child process, the normal plan is
+  `--source visible-env-key --provider-env-var <NAME>`; apply records only the
+  env-var source metadata and restart boundary. Apply writes only a local
   AIppocampus-owned hook wrapper plus manifest and updates Codex hook commands
-  to call that wrapper; secret values are never written to public JSON,
-  `hooks.json`, or the manifest. Supported source names are `explicit-dotenv`,
-  `macos-keychain`, `windows-credential-manager`, and `linux-secret-service`;
-  each requires explicit locator flags and is outside normal provider doctor
-  discovery. This prepares future/restarted Codex hook processes only.
+  to call that wrapper; secret values are never printed, hashed, validated,
+  or written to public JSON, `hooks.json`, or the manifest. Supported alternate
+  source names are `explicit-dotenv`, `macos-keychain`,
+  `windows-credential-manager`, and `linux-secret-service`; each requires
+  explicit locator flags and is outside normal provider doctor discovery. This
+  prepares future/restarted Codex hook processes only, and they are ready only
+  when launched from an environment with the same variable visible.
 - `aippocampus health --json`, `aippocampus doctor provider --json`, and
   `aippocampus onboard --status --json` expose path-free `legacy_aliases`
   diagnostics for compatibility fallbacks. New setup examples should still use

@@ -20,9 +20,18 @@ registry paths, local executable paths, and provider account ids in your private
 shell or private `.env`, never in repository docs, issues, PRs, or plugin
 metadata.
 
-Provider-key discovery stays explicit. `aippocampus doctor provider` normally
-checks only whether the selected environment variable is visible to the current
-process and a child process. If you run
+Provider-key discovery stays explicit, but a visible environment key is the
+normal first path when it already exists. `aippocampus doctor provider` checks
+only whether the selected environment variable is visible to the current
+process and a child process, without reading or printing the value. When that
+visibility is present, use `aippocampus onboard provider-key --plan --json` and
+the `visible-env-key` confirmation action before considering private file
+sources. The confirmation records source metadata and restart boundaries only;
+it does not print, hash, persist, or inspect the secret.
+
+Dotenv discovery is an alternate operator diagnostic for cases where the key is
+not visible to the runtime or the user explicitly chooses a private file. If you
+run
 `aippocampus doctor provider --discover-credential-sources --credential-dotenv <path> --json`,
 AIppocampus reads only that specified file and reports redacted candidate
 metadata; it does not scan the repository, print the secret, or install a
