@@ -1132,12 +1132,10 @@ class DocsHealthTests(unittest.TestCase):
             "Claude Code MCP guide missing Claude hook status command",
             issues,
         )
+        self.assertIn("Claude Code MCP guide missing explicit hook install command", issues)
+        self.assertIn("Claude Code MCP guide missing explicit hook uninstall command", issues)
         self.assertIn(
-            "Claude Code MCP guide missing no configuration-mutating installer boundary",
-            issues,
-        )
-        self.assertIn(
-            "Claude Code project skill missing hook status/dry-run/smoke boundary",
+            "Claude Code project skill missing hook status/dry-run/install/uninstall/smoke boundary",
             issues,
         )
         self.assertIn("public API doc missing provider-support-vs-hook-support boundary", issues)

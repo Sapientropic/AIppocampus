@@ -78,7 +78,7 @@ _NON_EXECUTABLE_FIELD_MARKERS = (
 _ANGLE_PLACEHOLDER_RE = re.compile(r"<[^>\n]+>")
 _BRACE_PLACEHOLDER_RE = re.compile(
     r"\{(?:cue|continuity_cue|exact_phrase|input_path|output_path|"
-    r"request_index|task|query|note_text|card_id|handle)\}"
+    r"request_index|task|query|note_text|card_id|arc_handle|scope|handle)\}"
 )
 _SAMPLE_COMMAND_PHRASES = (
     "old decision or handoff cue",

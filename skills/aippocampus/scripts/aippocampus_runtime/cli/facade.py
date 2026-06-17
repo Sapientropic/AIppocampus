@@ -341,18 +341,20 @@ def smoke_chooser_payload() -> dict[str, Any]:
         status="needs_subcommand",
         decision="choose a bounded smoke runner",
         choices=[
-            foreground_shell_action(
+            _template_action(
                 action_id="recall_funnel",
                 label="Run progressive recall funnel smoke",
-                command='aippocampus smoke recall-funnel "old decision or handoff cue" --json',
+                command_template='aippocampus smoke recall-funnel "{cue}" --json',
+                requires="cue",
                 why="Use for a bounded diagnostic of recall_context -> deepen flow.",
                 mutation_risk="read_only",
                 claim_boundary="smoke_diagnostic_not_source_evidence",
             ),
-            foreground_shell_action(
+            _template_action(
                 action_id="ordinary_agent_recall",
                 label="Use ordinary continuity path",
-                command='aippocampus agent recall "old decision or handoff cue" --json',
+                command_template='aippocampus agent recall "{cue}" --json',
+                requires="cue",
                 why="Use for normal foreground continuity work instead of a smoke diagnostic.",
                 mutation_risk="read_only",
                 claim_boundary="no_claim_before_reopen",

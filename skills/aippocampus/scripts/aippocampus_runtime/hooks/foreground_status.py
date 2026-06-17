@@ -338,6 +338,7 @@ def lifecycle_status_contract(
 
 _ACTION_STEP_IDS = {
     "check": "check_action_hint_status",
+    "review_guidance": "review_action_hint_guidance",
     "prepare_cache": "refresh_action_hint_cache",
     "refresh_cache": "refresh_action_hint_cache",
     "install": "install_action_hint_hook",
@@ -346,6 +347,7 @@ _ACTION_STEP_IDS = {
 
 _ACTION_STEP_RISK = {
     "check": "read_only",
+    "review_guidance": "read_only",
     "prepare_cache": "explicit_local_cache_write",
     "refresh_cache": "explicit_local_cache_write",
     "install": "explicit_config_write",
@@ -357,6 +359,10 @@ def _action_hint_step_action(step: Mapping[str, Any], *, claim_boundary: str) ->
     label = str(step.get("label") or "action")
     command = str(step.get("command") or "")
     why_by_id = {
+        "review_action_hint_guidance": (
+            "Review whether prepared or semantic learning guidance exists before "
+            "writing the action-hint cache."
+        ),
         "refresh_action_hint_cache": (
             "Refresh the prepared action-hint cache so the installed PreToolUse "
             "hook has useful navigation records."
@@ -401,12 +407,38 @@ def action_hint_status_contract(frontstage_card: Mapping[str, Any]) -> dict[str,
         for step in steps
         if step.get("command")
     ]
+    refresh_action = next(
+        (action for action in mapped_steps if action.get("id") == "refresh_action_hint_cache"),
+        None,
+    )
+    install_action = next(
+        (action for action in mapped_steps if action.get("id") == "install_action_hint_hook"),
+        None,
+    )
+    review_action = next(
+        (action for action in mapped_steps if action.get("id") == "review_action_hint_guidance"),
+        None,
+    )
+    if isinstance(refresh_action, dict) and isinstance(install_action, dict):
+        refresh_action["follow_up_action"] = {
+            key: install_action[key]
+            for key in ("id", "label", "command", "mutation_risk", "claim_boundary")
+            if key in install_action
+        }
+    if isinstance(review_action, dict) and isinstance(refresh_action, dict):
+        review_action["follow_up_action"] = {
+            key: refresh_action[key]
+            for key in ("id", "label", "command", "mutation_risk", "claim_boundary")
+            if key in refresh_action
+        }
     if ready:
         primary = _no_action_needed(
             label="Action-time hints ready",
             message="No foreground action-hint setup action is needed.",
         )
         primary["claim_boundary"] = claim_boundary
+    elif not installed and isinstance(review_action, dict):
+        primary = review_action
     else:
         primary = next(
             (

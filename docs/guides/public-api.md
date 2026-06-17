@@ -78,8 +78,10 @@ this section remains the no-clone/API-stability path.
    indexes, sync bundles, or private local paths.
 
 This path intentionally does not require MCP, cognitive-map jobs, sync, plugin
-packaging, benchmark runners, or hook installation. Unreviewed Dream,
-subconscious, and semantic jobs remain outside the 10-minute dependency story.
+packaging, or benchmark runners. Hook installation is still explicit opt-in, but
+trusted Codex users should review action-time hint status during setup with
+`aippocampus hooks action status --json`; install only after that review.
+Unreviewed Dream, subconscious, and semantic jobs remain outside the 10-minute dependency story.
 Reviewed foreground cards such as `aippocampus agent background "task cue"
 --json` can still be product-visible continuity navigation when setup permits;
 they are not source evidence until source is reopened.
@@ -522,13 +524,14 @@ Their JSON/status output includes `host_integration.host = "codex"` and
 `host_integration.config_surface = "codex_hooks_json"`.
 
 Claude Code hook contract status is exposed separately through
-`aippocampus hooks claude-code status|dry-run|smoke`. That surface is non-mutating: it
-reports scoped `UserPromptSubmit` / `Stop` handler support, shows a dry-run
-Claude settings handler shape, and runs isolated synthetic Claude-shaped hook
-JSON without printing raw prompts, transcript paths, session ids, tool payloads,
-or settings paths. It does not claim a Claude Code configuration-mutating
-installer, real-host firing, `PostToolUse` / `PostToolBatch` payload capture, or
-compaction hook utility.
+`aippocampus hooks claude-code status|dry-run|install|uninstall|smoke`.
+`status` and `dry-run` are non-mutating. `install` and `uninstall` are explicit
+operator commands that write only AIppocampus-owned `UserPromptSubmit` / `Stop`
+handlers or remove those handlers again, while preserving unrelated Claude
+settings and unrelated hooks. The surface runs isolated synthetic Claude-shaped
+hook JSON without printing raw prompts, transcript paths, session ids, tool
+payloads, or settings paths. It does not claim real-host firing,
+`PostToolUse` / `PostToolBatch` payload capture, or compaction hook utility.
 
 ### Provider Conformance Boundary
 
@@ -537,7 +540,9 @@ The public provider conformance kit is
 contract for provider-normalized source behavior, not an end-user runtime API.
 The kit verifies that provider suites keep ingestion, MCP/registry access, host
 hooks, and configuration-mutating installers as separate status fields. Passing
-one surface must not imply another.
+one surface must not imply another; Claude Code's explicit hook installer proves
+only the scoped settings mutation contract, not real host firing or memory
+quality.
 
 For new provider integrations, the kit should pass before public docs describe
 the provider as supported. A passing suite can support claims about stable

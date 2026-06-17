@@ -180,22 +180,27 @@ MCP tool results redact local paths unless a local operator explicitly requests
 ## Hooks
 
 Claude Code has its own upstream hook settings and event schemas. AIppocampus
-intakes that official Claude Code hooks contract through a scoped, non-mutating
-surface. Start with `aippocampus hooks claude-code status --json`:
+intakes that official Claude Code hooks contract through a scoped surface with
+read-only status/dry-run plus explicit install/uninstall commands. Start with
+`aippocampus hooks claude-code status --json`:
 
 ```sh
 aippocampus hooks claude-code status --json
 aippocampus hooks claude-code dry-run --json
+aippocampus hooks claude-code install --json
+aippocampus hooks claude-code uninstall --json
 aippocampus hooks claude-code smoke --json
 ```
 
-No Claude Code configuration-mutating installer ships yet. The dry-run command
-shows the `UserPromptSubmit` and `Stop` handler shape that an operator could add
-to Claude settings after explicit local approval, but it does not write
-`~/.claude/settings.json`, project settings, or local settings.
+`install` writes only AIppocampus-owned `UserPromptSubmit` and `Stop` handlers
+after an explicit local command. It preserves unrelated Claude settings and
+unrelated hook handlers. `uninstall` removes only AIppocampus-owned handlers and
+is the command-based rollback shown by dry-run and install output. `status` and
+`dry-run` never mutate `~/.claude/settings.json`, project settings, or local
+settings.
 
-The dry-run output also validates whether the displayed handler command is
-copy-paste ready in the current environment. It prefers
+The dry-run output validates whether the displayed handler command is copy-paste
+ready in the current environment and shows the same rollback command. It prefers
 `aippocampus hooks claude-code handle` when the console script is on `PATH`; if
 the console script is missing but a Python module entrypoint is available, it
 shows a `python3 -m aippocampus_runtime.cli.facade hooks claude-code handle`
@@ -212,6 +217,9 @@ The scoped handler is fail-open and privacy-first:
 - `PostToolUse`, `PostToolBatch`, `PreCompact`, and `PostCompact` remain
   event-level cannot-claim boundaries until they have payload sanitizers,
   summary/source-truth handling, and real-host firing evidence.
+- Malformed or non-object Claude settings are reported as `blocked` with a
+  redacted settings path. Repair the local JSON first, then rerun status before
+  installing.
 
 Do not reuse Codex hook installers as Claude Code hook support: `aippocampus
 hooks prompt ...` and `aippocampus hooks lifecycle ...` still mutate Codex

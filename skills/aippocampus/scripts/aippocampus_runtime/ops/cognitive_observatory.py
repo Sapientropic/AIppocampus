@@ -899,9 +899,7 @@ def summary_projection(report: Mapping[str, Any]) -> dict[str, Any]:
         "privacy_boundary": report.get("privacy_boundary"),
         "foreground_action": action,
         "claim_boundary": _compact_claim_boundary(),
-        "agent_next_action": (
-            "Use ready rows as navigation only, reopen source before claims, and treat suppressed rows as intentional silence."
-        ),
+        "agent_next_action": action,
     }
 
 

@@ -454,6 +454,9 @@ class ActionHintCacheTests(unittest.TestCase):
         )
         self.assertEqual(result["cache_path_source"], "default_registry")
         self.assertEqual(result["cache_scope"], "current_workspace")
+        # macOS temp paths can spell the same directory as /var/... or
+        # /private/var/...; compare canonical paths so the quick gate tests the
+        # cache boundary rather than the host alias spelling.
         self.assertTrue(default_path.resolve().is_relative_to(registry.resolve()))
         self.assertFalse((root / ".aippocampus" / "action-hints").exists())
         self.assertEqual(result["cache_status"], "with_cache_records")
@@ -472,12 +475,22 @@ class ActionHintCacheTests(unittest.TestCase):
 
         self.assertTrue(result["ok"], result)
         self.assertEqual(result["cache"]["record_count"], 0)
-        self.assertEqual(result["foreground_action"]["id"], "discover_learning_sources")
+        self.assertEqual(result["foreground_action"]["id"], "review_semantic_guidance_before_cache")
         action_ids = [item["id"] for item in result["safe_next_actions"]]
+        self.assertIn("review_semantic_guidance_before_cache", action_ids)
         self.assertIn("discover_learning_sources", action_ids)
         self.assertIn("inspect_learning_guidance", action_ids)
         self.assertIn("activate_aippo_guidance", action_ids)
-        self.assertEqual(result["empty_cache_recovery"]["reason"], "no_learning_or_effectiveness_inputs_found")
+        self.assertEqual(
+            result["empty_cache_recovery"]["reason"],
+            "semantic_guidance_present_but_not_materialized",
+        )
+        self.assertGreater(
+            result["empty_cache_recovery"]["semantic_guidance"][
+                "semantic_action_time_guidance_count"
+            ],
+            0,
+        )
         encoded = json.dumps(result, ensure_ascii=False)
         self.assertNotIn("<events.jsonl>", encoded)
         self.assertNotIn(str(root), encoded)

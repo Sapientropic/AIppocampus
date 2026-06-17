@@ -507,7 +507,7 @@ HOST_HOOK_BOUNDARY_DOC_TERMS = {
         "configuration-mutating installers": (
             "provider inventory missing configuration-mutating installer classification"
         ),
-        "Claude Code hook contract status: scoped handler/status/dry-run/smoke support": (
+        "Claude Code hook contract status: scoped handler/status/dry-run/install/uninstall/smoke support": (
             "provider inventory missing scoped Claude Code hook contract boundary"
         ),
     },
@@ -520,16 +520,19 @@ HOST_HOOK_BOUNDARY_DOC_TERMS = {
         "`aippocampus hooks claude-code status --json`": (
             "Claude Code MCP guide missing Claude hook status command"
         ),
-        "No Claude Code configuration-mutating installer ships yet": (
-            "Claude Code MCP guide missing no configuration-mutating installer boundary"
+        "aippocampus hooks claude-code install --json": (
+            "Claude Code MCP guide missing explicit hook install command"
+        ),
+        "aippocampus hooks claude-code uninstall --json": (
+            "Claude Code MCP guide missing explicit hook uninstall command"
         ),
         "official Claude Code hooks contract": (
             "Claude Code MCP guide missing official hook contract follow-up boundary"
         ),
     },
     ".claude/skills/aippocampus/SKILL.md": {
-        "AIppocampus provides Claude Code hook status/dry-run/smoke commands": (
-            "Claude Code project skill missing hook status/dry-run/smoke boundary"
+        "status/dry-run/install/uninstall/smoke": (
+            "Claude Code project skill missing hook status/dry-run/install/uninstall/smoke boundary"
         ),
     },
     "docs/guides/public-api.md": {
@@ -539,8 +542,8 @@ HOST_HOOK_BOUNDARY_DOC_TERMS = {
         "Codex-only hook installers": (
             "public API doc missing Codex-only hook installer boundary"
         ),
-        "`aippocampus hooks claude-code status|dry-run|smoke`": (
-            "public API doc missing Claude hook status/dry-run/smoke boundary"
+        "`aippocampus hooks claude-code status|dry-run|install|uninstall|smoke`": (
+            "public API doc missing Claude hook status/dry-run/install/uninstall/smoke boundary"
         ),
     },
 }

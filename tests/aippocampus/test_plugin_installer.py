@@ -416,7 +416,12 @@ class PluginInstallerTests(unittest.TestCase):
             self.assertEqual(summary["tool_count"], 8)
             self.assertGreaterEqual(summary["nonfatal_host_warning_count"], 1)
             self.assertFalse(summary["aippocampus_action_required"])
-            self.assertEqual(summary["next_action"], "reload host app if tools are not visible")
+            self.assertIn("review trusted Codex action hints", summary["next_action"])
+            trusted_commands = {
+                action["command"] for action in summary["trusted_codex_next_actions"]
+            }
+            self.assertIn("aippocampus hooks action status --json", trusted_commands)
+            self.assertIn("aippocampus hooks action install --json", trusted_commands)
             self.assertIn("agent_recall", summary["host_probe"]["key_tools_present"])
             self.assertIn("agent_background", summary["host_probe"]["key_tools_present"])
             self.assertEqual(summary["rollback_command"], "aippocampus plugin uninstall --codex")

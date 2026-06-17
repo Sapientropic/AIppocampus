@@ -44,8 +44,33 @@ def _next_action(
     if action_required:
         return "review aippocampus host warnings with --operator-json"
     if agent_callable_status == "host_live_probe_ok":
-        return "reload host app if tools are not visible"
+        return "reload host app if tools are not visible, then review trusted Codex action hints"
     return "run aippocampus update status --json"
+
+
+def _trusted_codex_next_actions(*, ok: bool, action_required: bool) -> list[dict[str, Any]]:
+    if not ok or action_required:
+        return []
+    return [
+        {
+            "id": "check_update_status",
+            "command": "aippocampus update status --json",
+            "mutation_risk": "read_only",
+            "why": "Confirm local package/plugin/MCP readiness after install or reload.",
+        },
+        {
+            "id": "check_action_time_hints",
+            "command": "aippocampus hooks action status --json",
+            "mutation_risk": "read_only",
+            "why": "Trusted Codex sessions should review action-time hints before relying on hook nudges.",
+        },
+        {
+            "id": "install_action_time_hints_after_review",
+            "command": "aippocampus hooks action install --json",
+            "mutation_risk": "explicit_config_write",
+            "why": "Install only after reviewing status/guidance and choosing to enable local hook wiring.",
+        },
+    ]
 
 
 def public_install_summary(result: dict[str, Any]) -> dict[str, Any]:
@@ -88,6 +113,10 @@ def public_install_summary(result: dict[str, Any]) -> dict[str, Any]:
             ok=ok,
             action_required=action_required,
             agent_callable_status=agent_callable_status,
+        ),
+        "trusted_codex_next_actions": _trusted_codex_next_actions(
+            ok=ok,
+            action_required=action_required,
         ),
         "plugin": {
             "id": plugin.get("id"),

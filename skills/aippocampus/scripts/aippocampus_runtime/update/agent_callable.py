@@ -382,12 +382,7 @@ def status_agent_callable(
             "aippocampus plugin install --codex --verify"
         )
     elif host_probe_status.get("ok") is True and not ready:
-        next_command = (
-            "call agent_recall and agent_deepen in this foreground thread, then rerun "
-            "aippocampus update status --foreground-tools-visible "
-            "--foreground-key-tools-callable --agent-json; if those calls fail, rerun "
-            "with --foreground-key-tool-failure <summary>"
-        )
+        next_command = "aippocampus update status --foreground-tools-visible --agent-json"
     elif host_probe_status.get("ok") is True:
         next_command = "aippocampus update status --json"
     elif not cli.get("console_script_available_on_path") and cli.get("module_entrypoint_available"):

@@ -89,6 +89,23 @@ class InstallActionHintHookTests(unittest.TestCase):
         self.assertNotIn(str(self.codex_home), encoded)
         self.assertNotIn(str(SCRIPTS.resolve()), encoded)
 
+    def test_status_not_installed_primary_is_ordered_setup_chain(self) -> None:
+        result = installer.status(self.hooks_json)
+
+        self.assertFalse(result["installed"])
+        self.assertEqual(result["agent_next_action"]["id"], "review_action_hint_guidance")
+        action_ids = [action["id"] for action in result["safe_next_actions"]]
+        self.assertEqual(
+            action_ids[:4],
+            [
+                "review_action_hint_guidance",
+                "check_action_hint_status",
+                "refresh_action_hint_cache",
+                "install_action_hint_hook",
+            ],
+        )
+        self.assertEqual(result["safe_next_actions"][2]["follow_up_action"]["id"], "install_action_hint_hook")
+
     def test_status_reports_cache_records_without_leaking_cache_path(self) -> None:
         cache_path = self.codex_home / "action-hints.jsonl"
         cache_path.write_text(

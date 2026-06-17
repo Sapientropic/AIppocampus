@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Claude Code hook contract status, dry-run, and isolated synthetic smoke.
+"""Claude Code hook status, explicit install/uninstall, and synthetic smoke.
 
-This module is deliberately not a configuration-mutating installer. Claude Code
-has a different upstream hook schema from Codex; keep the first supported slice
-as a dry-run/status/handler contract so provider onboarding cannot be mistaken
-for host-hook installation.
+Claude Code uses a different upstream hook schema from Codex, so mutation stays
+behind explicit `install` / `uninstall` commands. Status and dry-run remain
+read-only and unsupported events stay contract-only until their privacy boundary
+is implemented.
 """
 
 from __future__ import annotations
@@ -72,13 +72,82 @@ def redacted_settings_path(path: Path | None) -> str | None:
 
 
 def load_settings(path: Path | None) -> dict[str, Any]:
+    settings, _ = read_settings_for_status(path)
+    return settings
+
+
+def read_settings_for_status(path: Path | None) -> tuple[dict[str, Any], str | None]:
     if path is None or not path.exists():
-        return {}
+        return {}, None
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
+    except json.JSONDecodeError:
+        return {}, "settings_json_unreadable"
+    except OSError:
+        return {}, "settings_json_unreadable"
+    if not isinstance(data, dict):
+        return {}, "settings_json_root_not_object"
+    return data, None
+
+
+def _mutation_settings_error(exc: Exception) -> str:
+    if isinstance(exc, json.JSONDecodeError):
+        return "claude_settings_json_invalid"
+    if isinstance(exc, ValueError):
+        return "claude_settings_json_root_not_object"
+    if isinstance(exc, OSError):
+        return "claude_settings_unreadable"
+    return "claude_settings_unavailable"
+
+
+def _mutation_blocked_result(
+    *,
+    action: str,
+    settings_path: Path,
+    error_code: str,
+    command_report: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    status = status_report(settings_path=settings_path)
+    rollback = (
+        "aippocampus hooks claude-code uninstall --json"
+        if action == "install"
+        else "aippocampus hooks claude-code install --json"
+    )
+    return {
+        "ok": False,
+        "host": HOST,
+        "action": action,
+        "wrote": False,
+        "changed": False,
+        "settings_path": redacted_settings_path(settings_path),
+        "path_redacted": True,
+        "error": {
+            "code": error_code,
+            "message": "Claude settings JSON could not be safely mutated; repair it locally and rerun status.",
+        },
+        "handler_command": command_report or handler_command_report(),
+        "settings": status["settings"],
+        "rollback_command": rollback,
+        "agent_next_action": status["agent_next_action"],
+        "safe_next_actions": status["safe_next_actions"],
+    }
+
+
+def load_settings_for_mutation(path: Path) -> dict[str, Any]:
+    if not path.exists():
         return {}
-    return data if isinstance(data, dict) else {}
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError("Claude settings JSON root must be an object")
+    return data
+
+
+def save_settings(path: Path, settings: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(settings, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
 
 
 def _module_available() -> bool:
@@ -179,6 +248,177 @@ def installed_events(settings: dict[str, Any]) -> set[str]:
     return installed
 
 
+def _is_aippocampus_handler(handler: Any) -> bool:
+    command = str(handler.get("command") or "") if isinstance(handler, dict) else ""
+    return any(marker in command for marker in HANDLER_MARKERS)
+
+
+def _without_aippocampus_handlers(groups: Any) -> list[dict[str, Any]]:
+    if not isinstance(groups, list):
+        return []
+    cleaned: list[dict[str, Any]] = []
+    for group in groups:
+        if not isinstance(group, dict):
+            continue
+        handlers = group.get("hooks")
+        if not isinstance(handlers, list):
+            cleaned.append(dict(group))
+            continue
+        kept_handlers = [handler for handler in handlers if not _is_aippocampus_handler(handler)]
+        if kept_handlers:
+            updated = dict(group)
+            updated["hooks"] = kept_handlers
+            cleaned.append(updated)
+    return cleaned
+
+
+def _install_supported_hooks(
+    settings: dict[str, Any],
+    *,
+    command_report: dict[str, Any],
+) -> dict[str, Any]:
+    updated = json.loads(json.dumps(settings, ensure_ascii=False))
+    hooks = updated.setdefault("hooks", {})
+    if not isinstance(hooks, dict):
+        hooks = {}
+        updated["hooks"] = hooks
+    for event in SUPPORTED_HANDLER_EVENTS:
+        groups = _without_aippocampus_handlers(hooks.get(event))
+        groups.append(handler_entry(event, command_report=command_report))
+        hooks[event] = groups
+    return updated
+
+
+def _uninstall_supported_hooks(settings: dict[str, Any]) -> dict[str, Any]:
+    updated = json.loads(json.dumps(settings, ensure_ascii=False))
+    hooks = updated.get("hooks")
+    if not isinstance(hooks, dict):
+        return updated
+    for event in SUPPORTED_HANDLER_EVENTS:
+        groups = _without_aippocampus_handlers(hooks.get(event))
+        if groups:
+            hooks[event] = groups
+        else:
+            hooks.pop(event, None)
+    if not hooks:
+        updated.pop("hooks", None)
+    return updated
+
+
+def _mutation_result(
+    *,
+    action: str,
+    settings_path: Path,
+    before: dict[str, Any],
+    after: dict[str, Any],
+    wrote: bool,
+    command_report: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    status = status_report(settings_path=settings_path)
+    changed = before != after
+    if command_report is None:
+        command_report = handler_command_report()
+    rollback = (
+        "aippocampus hooks claude-code uninstall --json"
+        if action == "install"
+        else "aippocampus hooks claude-code install --json"
+    )
+    return {
+        "ok": True,
+        "host": HOST,
+        "action": action,
+        "wrote": wrote,
+        "changed": changed,
+        "settings_path": redacted_settings_path(settings_path),
+        "path_redacted": True,
+        "handler_command": command_report,
+        "settings": status["settings"],
+        "events": {
+            event: status["events"][event]
+            for event in SUPPORTED_HANDLER_EVENTS
+        },
+        "rollback_command": rollback,
+        "agent_next_action": status["agent_next_action"],
+        "safe_next_actions": status["safe_next_actions"],
+        "privacy_boundary": {
+            "local_path_serialized": False,
+            "raw_prompt_serialized": False,
+            "unsupported_events_installed": False,
+        },
+        "cannot_claim": [
+            "real_host_hook_firing_without_event_log",
+            "post_tool_payload_capture",
+            "compaction_survival_packet_quality",
+            "all_claude_code_versions",
+        ],
+    }
+
+
+def install_hooks(*, settings_path: Path | None = None) -> dict[str, Any]:
+    settings_path = default_settings_path() if settings_path is None else settings_path
+    command_report = handler_command_report()
+    if not command_report.get("command_resolvable"):
+        return {
+            "ok": False,
+            "host": HOST,
+            "action": "install",
+            "wrote": False,
+            "changed": False,
+            "settings_path": redacted_settings_path(settings_path),
+            "path_redacted": True,
+            "error": {
+                "code": "handler_command_not_resolvable",
+                "message": "Put the aippocampus console script or module fallback on the Claude hook PATH before install.",
+            },
+            "handler_command": command_report,
+            "rollback_command": "aippocampus hooks claude-code uninstall --json",
+        }
+    try:
+        before = load_settings_for_mutation(settings_path)
+    except Exception as exc:
+        return _mutation_blocked_result(
+            action="install",
+            settings_path=settings_path,
+            error_code=_mutation_settings_error(exc),
+            command_report=command_report,
+        )
+    after = _install_supported_hooks(before, command_report=command_report)
+    changed = before != after
+    if changed:
+        save_settings(settings_path, after)
+    return _mutation_result(
+        action="install",
+        settings_path=settings_path,
+        before=before,
+        after=after,
+        wrote=changed,
+        command_report=command_report,
+    )
+
+
+def uninstall_hooks(*, settings_path: Path | None = None) -> dict[str, Any]:
+    settings_path = default_settings_path() if settings_path is None else settings_path
+    try:
+        before = load_settings_for_mutation(settings_path)
+    except Exception as exc:
+        return _mutation_blocked_result(
+            action="uninstall",
+            settings_path=settings_path,
+            error_code=_mutation_settings_error(exc),
+        )
+    after = _uninstall_supported_hooks(before)
+    changed = before != after
+    if changed:
+        save_settings(settings_path, after)
+    return _mutation_result(
+        action="uninstall",
+        settings_path=settings_path,
+        before=before,
+        after=after,
+        wrote=changed,
+    )
+
+
 def read_observed_events(event_log_path: Path | None) -> set[str]:
     if event_log_path is None or not event_log_path.exists():
         return set()
@@ -200,7 +440,10 @@ def event_status(
     *,
     installed: set[str],
     observed: set[str],
+    settings_blocker: str | None = None,
 ) -> str:
+    if settings_blocker and event in SUPPORTED_HANDLER_EVENTS:
+        return "blocked"
     if event in observed:
         return "firing"
     if event in installed:
@@ -210,14 +453,25 @@ def event_status(
     return "unsupported_event"
 
 
-def event_report(event: str, *, installed: set[str], observed: set[str]) -> dict[str, Any]:
-    status = event_status(event, installed=installed, observed=observed)
+def event_report(
+    event: str,
+    *,
+    installed: set[str],
+    observed: set[str],
+    settings_blocker: str | None = None,
+) -> dict[str, Any]:
+    status = event_status(
+        event,
+        installed=installed,
+        observed=observed,
+        settings_blocker=settings_blocker,
+    )
     if event == "UserPromptSubmit":
         role = "ambient_prompt_route"
-        blocker = None
+        blocker = settings_blocker
     elif event == "Stop":
         role = "completion_lifecycle_fail_open"
-        blocker = None
+        blocker = settings_blocker
     elif event in {"PostToolUse", "PostToolBatch"}:
         role = "tool_surface_capture"
         blocker = "raw_tool_payload_sanitizer_not_shipped"
@@ -268,7 +522,18 @@ def foreground_action_card(
         for event in SUPPORTED_HANDLER_EVENTS
         if events.get(event, {}).get("status") in {"installed", "firing"}
     ]
-    if settings_status == "not_installed" and installable:
+    if settings_status == "blocked":
+        primary = {
+            "id": "repair_claude_code_settings_json",
+            "label": "Repair Claude Code settings JSON",
+            "manual_instruction": (
+                "Fix the local Claude settings JSON root, then rerun "
+                "`aippocampus hooks claude-code status --json`."
+            ),
+            "mutation_risk": "manual_config_repair",
+            "claim_boundary": "host_setup_not_memory_evidence",
+        }
+    elif settings_status == "not_installed" and installable:
         primary = foreground_shell_action(
             action_id="preview_claude_code_supported_hooks",
             label="Preview supported Claude Code hooks",
@@ -317,14 +582,36 @@ def foreground_action_card(
             claim_boundary="host_status_not_memory_evidence",
         ),
     ]
+    if settings_status == "blocked":
+        safe_actions.append(
+            foreground_shell_action(
+                action_id="preview_claude_code_supported_hooks_after_repair",
+                label="Preview supported Claude Code hooks",
+                command="aippocampus hooks claude-code dry-run --json",
+                why="Use after the settings JSON is repaired to see exactly what install would write.",
+                mutation_risk="read_only",
+                claim_boundary="host_setup_not_memory_evidence",
+            )
+        )
+    if settings_status == "not_installed" and installable:
+        safe_actions.append(
+            foreground_shell_action(
+                action_id="install_claude_code_supported_hooks",
+                label="Install supported Claude Code hooks",
+                command="aippocampus hooks claude-code install --json",
+                why="Explicitly write only the shipped UserPromptSubmit and Stop hook handlers.",
+                mutation_risk="explicit_config_write",
+                claim_boundary="host_setup_not_memory_evidence",
+            )
+        )
     if installed_or_firing:
         safe_actions.append(
             foreground_shell_action(
-                action_id="review_manual_rollback",
-                label="Review manual Claude settings rollback",
-                command="aippocampus hooks claude-code dry-run --json",
-                why="The helper does not mutate Claude settings; compare dry-run handlers before manual removal.",
-                mutation_risk="read_only",
+                action_id="uninstall_claude_code_supported_hooks",
+                label="Uninstall supported Claude Code hooks",
+                command="aippocampus hooks claude-code uninstall --json",
+                why="Rollback removes only AIppocampus handlers for shipped Claude Code events.",
+                mutation_risk="explicit_config_write",
                 claim_boundary="host_setup_not_memory_evidence",
             )
         )
@@ -351,15 +638,23 @@ def status_report(
     event_log_path: Path | None = None,
 ) -> dict[str, Any]:
     settings_path = default_settings_path() if settings_path is None else settings_path
-    settings = load_settings(settings_path)
+    settings, settings_blocker = read_settings_for_status(settings_path)
     installed = installed_events(settings)
     observed = read_observed_events(event_log_path)
     events = {
-        event: event_report(event, installed=installed, observed=observed)
+        event: event_report(
+            event,
+            installed=installed,
+            observed=observed,
+            settings_blocker=settings_blocker,
+        )
         for event in (*SUPPORTED_HANDLER_EVENTS, *CONTRACT_ONLY_EVENTS)
     }
     installed_any = bool(installed & set(SUPPORTED_HANDLER_EVENTS))
-    settings_status = "installed" if installed_any else "not_installed"
+    if settings_blocker:
+        settings_status = "blocked"
+    else:
+        settings_status = "installed" if installed_any else "not_installed"
     if any(item["status"] == "firing" for item in events.values()):
         settings_status = "firing"
     foreground_action = foreground_action_card(settings_status=settings_status, events=events)
@@ -371,6 +666,7 @@ def status_report(
             "status": settings_status,
             "path": redacted_settings_path(settings_path),
             "path_redacted": True,
+            **({"blocker": settings_blocker} if settings_blocker else {}),
         },
         "official_contract": {
             "intake_date": CONTRACT_INTAKE_DATE,
@@ -386,11 +682,11 @@ def status_report(
         "status_vocabulary": list(STATUS_VOCABULARY),
         "cannot_claim": [
             "real_host_hook_firing_without_event_log",
-            "no_configuration_mutating_installer",
             "post_tool_payload_capture",
             "compaction_survival_packet_quality",
             "all_claude_code_versions",
-        ],
+        ]
+        + (["claude_settings_status_blocked"] if settings_blocker else []),
     }
 
 
@@ -411,8 +707,9 @@ def dry_run_report(*, settings_path: Path | None = None) -> dict[str, Any]:
         "path_redacted": True,
         "handler_command": command_report,
         "proposed_hooks": proposed_hooks(command_report=command_report),
-        "rollback": "remove the displayed handlers from the selected Claude settings file",
-        "blocker": "configuration_mutating_installer_not_shipped",
+        "install_command": "aippocampus hooks claude-code install --json",
+        "rollback_command": "aippocampus hooks claude-code uninstall --json",
+        "rollback": "aippocampus hooks claude-code uninstall --json",
         "next_operator_step": next_step,
     }
 
@@ -524,7 +821,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "action",
-        choices=["status", "dry-run", "smoke", "handle"],
+        choices=["status", "dry-run", "install", "uninstall", "smoke", "handle"],
         nargs="?",
         default="status",
     )
@@ -550,6 +847,10 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.action == "dry-run":
         payload = dry_run_report(settings_path=args.settings_json)
+    elif args.action == "install":
+        payload = install_hooks(settings_path=args.settings_json)
+    elif args.action == "uninstall":
+        payload = uninstall_hooks(settings_path=args.settings_json)
     elif args.action == "smoke":
         payload = synthetic_smoke_report()
     else:
@@ -561,8 +862,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Claude Code hook status: {payload.get('settings', {}).get('status', payload.get('action'))}")
         print(f"host: {HOST}")
         print(f"config surface: {CONFIG_SURFACE}")
-        print("configuration mutation: dry-run only")
-    return 0
+        print("configuration mutation: explicit install/uninstall only")
+    return 0 if payload.get("ok", True) else 2
 
 
 if __name__ == "__main__":

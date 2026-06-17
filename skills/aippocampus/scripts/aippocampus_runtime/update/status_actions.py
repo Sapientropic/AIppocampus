@@ -419,11 +419,13 @@ def post_apply_next_actions(results: list[dict[str, Any]]) -> list[dict[str, Any
             ),
             "command": (
                 "aippocampus update status --foreground-tools-visible "
-                "--foreground-key-tools-callable --agent-json"
+                "--agent-json"
             ),
             "manual_instruction": (
                 "Reload Codex Desktop after local plugin or hook files change, then call "
-                "agent_recall and agent_deepen in the foreground thread before rerunning status."
+                "agent_recall and agent_deepen in the foreground thread before rerunning status. "
+                "--foreground-key-tools-callable is only a caller assertion and does not certify "
+                "the current MCP transport."
             ),
         }
     ]

@@ -847,6 +847,14 @@ class AippocampusCliRecoveryCardTests(unittest.TestCase):
                 self.assertIn("foreground-action-v1", payload["foreground_action_contract"])
                 self.assertIn("safe_next_actions" if "safe_next_actions" in payload else "choices", payload)
                 actions = payload.get("safe_next_actions") or payload.get("choices") or []
+                if args == ("smoke", "--json"):
+                    encoded = json.dumps(payload, ensure_ascii=False)
+                    self.assertNotIn("old decision or handoff cue", encoded)
+                    recall_funnel = next(
+                        action for action in actions if action.get("id") == "recall_funnel"
+                    )
+                    self.assertNotIn("command", recall_funnel)
+                    self.assertIn("command_template", recall_funnel)
                 for action in actions:
                     if isinstance(action, dict) and "command" in action:
                         self.assertIn("aippocampus ", action["command"])

@@ -134,6 +134,20 @@ class ExportBundleTests(unittest.TestCase):
         self.assertIn("public-metadata", payload["error"]["allowed"])
         self.assertFalse(payload["write_performed"])
         self.assertIn("safe_next_actions", payload)
+        templates = [
+            action["command_template"]
+            for action in payload["safe_next_actions"]
+            if action.get("command_template")
+        ]
+        self.assertTrue(templates)
+        export_templates = [
+            action["command_template"]
+            for action in payload["safe_next_actions"]
+            if action.get("id") == "public_metadata_export"
+        ]
+        self.assertTrue(export_templates)
+        self.assertTrue(all("{output_path}" in template for template in export_templates))
+        self.assertFalse(any("{{output_path}}" in template for template in templates))
         self.assertNotIn("usage:", stdout.lower())
 
     def test_run_build_index_uses_package_api_without_subprocess(self) -> None:

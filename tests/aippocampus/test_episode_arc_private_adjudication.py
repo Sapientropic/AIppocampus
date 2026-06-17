@@ -251,6 +251,11 @@ class EpisodeArcPrivateAdjudicationTests(unittest.TestCase):
         self.assertEqual(payload["top_arcs"][0]["current_validity"], "needs_reopen")
         self.assertIn("arc_handle", payload["top_arcs"][0])
         self.assertIn("source_reopen_action", payload["top_arcs"][0])
+        reopen = payload["top_arcs"][0]["source_reopen_action"]
+        self.assertEqual(reopen["kind"], "inspect_episode_arc_sources")
+        self.assertNotIn("command", reopen)
+        self.assertIn("{arc_handle}", reopen["command_template"])
+        self.assertEqual(reopen["requires"], ["arc_handle"])
         self.assertNotIn("source_refs", json.dumps(payload["top_arcs"], ensure_ascii=False))
         self.assertNotIn("session:cli-private-arc", result.stdout)
         self.assertNotIn("session:cli-private-arc", summary.stdout)

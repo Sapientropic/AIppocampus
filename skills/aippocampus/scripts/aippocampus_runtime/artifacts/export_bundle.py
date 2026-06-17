@@ -541,7 +541,7 @@ def _export_recovery_actions(*, provided: str | None = None) -> list[dict[str, o
             "id": "public_metadata_export",
             "command_template": (
                 f"aippocampus export --redaction-profile {public_profile} "
-                "--no-raw --output {{output_path}} --json"
+                "--no-raw --output {output_path} --json"
             ),
             "requires": ["output_path"],
             "template_only": True,
