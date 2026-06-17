@@ -33,6 +33,8 @@ from aippocampus_runtime.core import (
 )
 from aippocampus_runtime.model.routing import (
     DEFAULT_DEEPSEEK_API_KEY_ENV,
+    deepseek_api_key_env,
+    is_default_deepseek_api_key_env,
     resolve_model_route,
     route_cache_metrics,
     route_payload_with_effective_values,
@@ -173,12 +175,20 @@ def semantic_gate_mode(value: str | None = None) -> str:
 
 
 def semantic_gate_enabled(
-    mode: str | None = None, *, api_key: str | None = None, api_key_env: str = "DEEPSEEK_API_KEY"
+    mode: str | None = None,
+    *,
+    api_key: str | None = None,
+    api_key_env: str = DEFAULT_DEEPSEEK_API_KEY_ENV,
 ) -> bool:
     resolved = semantic_gate_mode(mode)
     if resolved == "off":
         return False
-    key = api_key or os.environ.get(api_key_env)
+    resolved_api_key_env = (
+        deepseek_api_key_env(os.environ)
+        if is_default_deepseek_api_key_env(api_key_env)
+        else api_key_env
+    )
+    key = api_key or os.environ.get(resolved_api_key_env)
     if resolved == "on":
         return bool(key)
     return bool(key)

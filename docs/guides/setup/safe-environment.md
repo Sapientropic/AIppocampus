@@ -43,10 +43,12 @@ Use `AIPPOCAMPUS_HOME` or `AIPPOCAMPUS_REGISTRY_DIR` for non-Codex storage.
 `CODEX_HOME` remains a compatibility fallback for Codex installs, not the
 preferred new storage API.
 
-Optional external-model routes stay opt-in. Leaving `DEEPSEEK_API_KEY`,
-`AIPPOCAMPUS_OPENAI_COMPAT_*`, object-storage credentials, or GitHub planning
-tokens blank must not block local-first install, MCP listing, docs health, or
-the manifest-classified `quick` / `pr` test tiers.
+Optional external-model routes stay opt-in. Leaving
+`AIPPOCAMPUS_DEEPSEEK_API_KEY`, `AIPPOCAMPUS_OPENAI_COMPAT_*`,
+object-storage credentials, or GitHub planning tokens blank must not block
+local-first install, MCP listing, docs health, or the manifest-classified
+`quick` / `pr` test tiers. `DEEPSEEK_API_KEY` remains a legacy fallback for
+existing installs, but new setup should use the AIppocampus-prefixed name.
 
 ## Plugin MCP Environment
 

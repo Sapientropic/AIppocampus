@@ -29,7 +29,11 @@ from aippocampus_runtime.contracts import (
     foreground_shell_action,
 )
 from aippocampus_runtime.legacy_aliases import env_legacy_alias_diagnostics
-from aippocampus_runtime.model.routing import ModelRoute, resolve_model_route
+from aippocampus_runtime.model.routing import (
+    DEFAULT_DEEPSEEK_API_KEY_ENV,
+    ModelRoute,
+    resolve_model_route,
+)
 from aippocampus_runtime.ops.provider_credentials import (
     CredentialValidator,
     build_credential_discovery_report,
@@ -39,7 +43,7 @@ from aippocampus_runtime.recall.semantic_recall_gate import semantic_gate_enable
 from aippocampus_runtime.warm_ambient.scheduler import warm_background_enabled
 
 SCHEMA_VERSION = 1
-DEFAULT_PROVIDER_ENV_VAR = "DEEPSEEK" + "_API_KEY"
+DEFAULT_PROVIDER_ENV_VAR = DEFAULT_DEEPSEEK_API_KEY_ENV
 ROUTE_PROVIDER_ENV_ATTR = "api" + "_key_env"
 
 

@@ -8,7 +8,7 @@ skills:
     license: Apache-2.0
     optional_env:
       - CODEX_HOME
-      - DEEPSEEK_API_KEY
+      - AIPPOCAMPUS_DEEPSEEK_API_KEY
       - AIPPOCAMPUS_REGISTRY_DIR
       - AIPPOCAMPUS_PROMPT_PROBE_LIMIT
       - AIPPOCAMPUS_PROMPT_SEMANTIC_TIMEOUT
@@ -35,6 +35,7 @@ skills:
       - CODEX_MEMORY_SITE_TITLE
       - THREAD_MEMORY_REGISTRY_DIR
       - AIIPPOCAMPUS_SUBCONSCIOUS_HOOK
+      - DEEPSEEK_API_KEY
     notes: "Source-backed conversation memory for AI agents, with clean-source indexes, life-wide scope labels and timeline groups, registry search, ambient recall hooks, local/object-storage sync, MCP access, plugin packaging, and optional DeepSeek-compatible semantic/subconscious jobs."
   - name: aippocampus-ux
     path: skills/aippocampus-ux

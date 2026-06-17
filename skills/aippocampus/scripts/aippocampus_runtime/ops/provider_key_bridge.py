@@ -20,19 +20,14 @@ from typing import Any
 
 from aippocampus_runtime.core import codex_home, now_utc
 from aippocampus_runtime.hooks import install_lifecycle, install_prompt
-from aippocampus_runtime.ops.provider_credentials import (
-    credential_candidate,
-    dotenv_values,
-    public_candidate,
-    public_token,
-)
+from aippocampus_runtime.ops.provider_credentials import public_token
 
 SCHEMA_VERSION = 1
 BRIDGE_DIR_NAME = "provider-credential-bridge"
 BRIDGE_MANIFEST_NAME = "provider-key-bridge.json"
 BRIDGE_SCRIPT_NAME = "aippocampus_provider_bridge_hook.py"
 DEFAULT_TARGET = "codex-hooks"
-DEFAULT_PROVIDER_ENV_VAR = "DEEPSEEK_API_KEY"
+DEFAULT_PROVIDER_ENV_VAR = "AIPPOCAMPUS_DEEPSEEK_API_KEY"
 SUPPORTED_TARGETS = (DEFAULT_TARGET,)
 SUPPORTED_SOURCES = (
     "visible-env-key",
@@ -192,17 +187,25 @@ def _candidate_for_source(
                 "value_printed": False,
                 "path_included": False,
             }
-        value = dotenv_values(credential_dotenv).get(provider_env_var)
-        return public_candidate(
-            credential_candidate(
-                source="explicit_dotenv",
-                provider="provider_key_bridge",
-                env_var=provider_env_var,
-                value=value,
-                path=credential_dotenv,
-                include_local_paths=include_local_paths,
-            )
-        )
+        source_available = credential_dotenv.is_file()
+        candidate: dict[str, Any] = {
+            "source": "explicit_dotenv",
+            "provider": "provider_key_bridge",
+            "env_var": public_token(provider_env_var),
+            "status": "explicit_source_configured" if source_available else "credential_source_missing",
+            "secret_shape": "not_read_during_plan",
+            "source_path_exists": source_available,
+            "value_checked": False,
+            "value_printed": False,
+            "value_hashed": False,
+            "value_persisted": False,
+            "path_included": bool(include_local_paths),
+        }
+        if include_local_paths:
+            candidate["path"] = str(credential_dotenv)
+        else:
+            candidate["path_hint"] = "omitted_by_default"
+        return candidate
     return {
         "source": source.replace("-", "_"),
         "provider": "provider_key_bridge",
@@ -396,8 +399,8 @@ def build_provider_key_bridge_plan(
                 "provider env var is not visible in the current process and inherited child process",
             )
         )
-    if normalized_source == "explicit-dotenv" and candidate.get("status") != "candidate_present":
-        issues.append(_issue("credential_candidate_missing", "explicit .env candidate is missing the provider env var"))
+    if normalized_source == "explicit-dotenv" and candidate.get("status") != "explicit_source_configured":
+        issues.append(_issue("credential_source_missing", "explicit .env source path is missing"))
     if normalized_source != "visible-env-key":
         try:
             build_bridge_manifest(

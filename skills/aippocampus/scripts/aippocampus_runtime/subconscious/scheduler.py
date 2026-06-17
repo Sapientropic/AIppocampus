@@ -28,6 +28,7 @@ from typing import Any
 
 from aippocampus_runtime.cognitive_worker_mode import resolve_cognitive_worker_mode
 from aippocampus_runtime.core import aippocampus_registry_dir, now_utc
+from aippocampus_runtime.model import routing as model_routing
 from aippocampus_runtime.ops import log_retention
 from aippocampus_runtime.public_output import emit_public_text
 from aippocampus_runtime.subconscious import (
@@ -53,7 +54,7 @@ DEFAULT_MAX_TURNS = 96
 DEFAULT_MAX_FINDINGS = 220
 DEFAULT_JOB_CONCURRENCY = int(os.environ.get("AIPPOCAMPUS_SUBCONSCIOUS_JOB_CONCURRENCY", "4"))
 DEFAULT_SAMPLES_PER_JOB = int(os.environ.get("AIPPOCAMPUS_SUBCONSCIOUS_SAMPLES_PER_JOB", "2"))
-DEFAULT_API_KEY_ENV = "DEEPSEEK_API_KEY"
+DEFAULT_API_KEY_ENV = model_routing.DEFAULT_DEEPSEEK_API_KEY_ENV
 
 
 @dataclass
@@ -381,6 +382,14 @@ def module_cmd(module: str, *args: str) -> list[str]:
     return [sys.executable, "-m", module, *args]
 
 
+def resolved_scheduler_api_key_env(api_key_env: str) -> str:
+    return (
+        model_routing.deepseek_api_key_env(os.environ)
+        if model_routing.is_default_deepseek_api_key_env(api_key_env)
+        else api_key_env
+    )
+
+
 def run_project(
     stats: ProjectStats,
     *,
@@ -574,7 +583,8 @@ def maybe_start(args: argparse.Namespace) -> dict[str, Any]:
         hook_env = os.environ.get("AIIPPOCAMPUS_SUBCONSCIOUS_HOOK", "1")
     if hook_env.lower() in {"0", "false", "off", "no"}:
         return {"started": False, "skipped": "disabled_by_env", "projects": []}
-    worker_mode = resolve_cognitive_worker_mode(api_key_env=args.api_key_env)
+    resolved_api_key_env = resolved_scheduler_api_key_env(args.api_key_env)
+    worker_mode = resolve_cognitive_worker_mode(api_key_env=resolved_api_key_env)
     resolved_worker_mode = str(worker_mode.get("resolved_mode") or "")
     if resolved_worker_mode == "off":
         return {
@@ -683,6 +693,7 @@ def maybe_start_locked(args: argparse.Namespace, *, root: Path, state_file: Path
     state = load_state(state_file)
     now_ts = time.time()
     shell_override = getattr(args, "shell_selection", "auto")
+    resolved_api_key_env = resolved_scheduler_api_key_env(args.api_key_env)
 
     due, diagnostics = choose_projects_with_diagnostics(
         root=root,
@@ -786,7 +797,7 @@ def maybe_start_locked(args: argparse.Namespace, *, root: Path, state_file: Path
         "--samples-per-job",
         str(getattr(args, "samples_per_job", DEFAULT_SAMPLES_PER_JOB)),
         "--api-key-env",
-        args.api_key_env,
+        resolved_api_key_env,
     ]
     if args.cwd:
         cmd.extend(["--cwd", str(Path(args.cwd).resolve())])

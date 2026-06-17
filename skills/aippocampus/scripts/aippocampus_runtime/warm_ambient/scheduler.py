@@ -26,6 +26,11 @@ from aippocampus_runtime.core import (
     sanitize_external_model_text,
     stable_text_fingerprint,
 )
+from aippocampus_runtime.model.routing import (
+    DEFAULT_DEEPSEEK_API_KEY_ENV,
+    deepseek_api_key_env,
+    is_default_deepseek_api_key_env,
+)
 from aippocampus_runtime.recall.active_recall_lock import start_or_update_recall_lock
 from aippocampus_runtime.recall.ambient_cache import default_ambient_cache_path
 from aippocampus_runtime.warm_ambient.config import (
@@ -411,7 +416,7 @@ def schedule_warm_ambient_recall(
     current_thread_key: str | None = None,
     prompt_trace: list[dict[str, Any]] | None = None,
     topic_epoch: str | None = None,
-    api_key_env: str = "DEEPSEEK_API_KEY",
+    api_key_env: str = DEFAULT_DEEPSEEK_API_KEY_ENV,
     user_id: str | None = None,
     scouts: tuple[str, ...] | list[str] | None = None,
     scheduler_tier: str | None = "tier2_background",
@@ -445,8 +450,13 @@ def schedule_warm_ambient_recall(
             "reason": str(secret_policy.get("reason") or "prompt hard-blocked"),
             "secret_policy": secret_policy,
         }
-    if spawn and not os.environ.get(api_key_env):
-        return {"status": "skipped_missing_api_key", "reason": f"{api_key_env} is not set"}
+    resolved_api_key_env = (
+        deepseek_api_key_env(os.environ)
+        if is_default_deepseek_api_key_env(api_key_env)
+        else api_key_env
+    )
+    if spawn and not os.environ.get(resolved_api_key_env):
+        return {"status": "skipped_missing_api_key", "reason": f"{resolved_api_key_env} is not set"}
     tier_policy = scheduler_tier_policy(scheduler_tier)
     explicit_scouts = scouts is not None
     selected_scouts = (
@@ -532,7 +542,7 @@ def schedule_warm_ambient_recall(
         "residue_path": str(Path(residue_path).resolve()) if residue_path else None,
         "lock_path": str(Path(lock_path).resolve()) if lock_path else None,
         "lock_id": lock_id,
-        "api_key_env": api_key_env,
+        "api_key_env": resolved_api_key_env,
         "user_id": user_id,
         "scouts": list(selected_scouts),
         "scheduler": {

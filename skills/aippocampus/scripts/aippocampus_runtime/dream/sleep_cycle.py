@@ -36,6 +36,7 @@ from aippocampus_runtime.model.routing import (
     DEFAULT_DEEPSEEK_API_KEY_ENV,
     deepseek_base_url,
     flash_model,
+    is_default_deepseek_api_key_env,
     resolve_model_route,
     resolve_route_reasoning_effort,
     resolve_route_thinking,
@@ -628,13 +629,17 @@ def config_from_args(args: argparse.Namespace) -> ChatClientConfig:
         explicit_base_url=args.base_url if args.base_url != deepseek_base_url() and not args.model_route else None,
         explicit_api_key_env=(
             api_key_env_arg
-            if api_key_env_arg != DEFAULT_DEEPSEEK_API_KEY_ENV and not args.model_route
+            if not is_default_deepseek_api_key_env(api_key_env_arg) and not args.model_route
             else None
         ),
     )
     model = route.model if args.model == flash_model() else args.model
     base_url = route.base_url if args.base_url == deepseek_base_url() else args.base_url
-    api_key_env = route.api_key_env if api_key_env_arg == DEFAULT_DEEPSEEK_API_KEY_ENV else api_key_env_arg
+    api_key_env = (
+        route.api_key_env
+        if is_default_deepseek_api_key_env(api_key_env_arg)
+        else api_key_env_arg
+    )
     api_key = os.environ.get(api_key_env, "")
     if not api_key:
         raise RuntimeError(f"missing API key env: {api_key_env}")

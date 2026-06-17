@@ -374,7 +374,8 @@ installed cache is refreshed, update apply preserves a portable existing
 required before foreground agent tools are visible. It also does not read,
 print, or store API-key values. If `update status`
 reports the LLM surface as missing, set the reported environment variable
-(`DEEPSEEK_API_KEY` by default, or the configured OpenAI-compatible key env)
+(`AIPPOCAMPUS_DEEPSEEK_API_KEY` by default, or the configured
+OpenAI-compatible key env)
 in the process that launches Codex, then rerun status. When the key already
 exists in a private source but Codex hooks cannot inherit it, use the explicit
 provider-key bridge below instead of editing `hooks.json` by hand.
@@ -648,7 +649,8 @@ aippocampus doctor provider --json
 
 This is a visibility diagnostic, not a credential-store reader. A key can exist
 in a `.env` file, password manager, shell profile, or another project while the
-Codex hook process still cannot see `DEEPSEEK_API_KEY` or the selected
+Codex hook process still cannot see `AIPPOCAMPUS_DEEPSEEK_API_KEY`,
+legacy `DEEPSEEK_API_KEY`, or the selected
 OpenAI-compatible key variable. The doctor prints variable names and booleans,
 never key values or base URL values. It is a presence-only check: it does not
 read or validate the key value, so it cannot prove the key is non-empty, correct,
@@ -661,8 +663,8 @@ If the key is visible in the current and child process, keep the normal bridge
 path presence-only and confirm the visible environment source directly:
 
 ```sh
-aippocampus onboard provider-key --plan --target codex-hooks --source visible-env-key --provider-env-var DEEPSEEK_API_KEY --json
-aippocampus onboard provider-key --apply --target codex-hooks --source visible-env-key --provider-env-var DEEPSEEK_API_KEY --json
+aippocampus onboard provider-key --plan --target codex-hooks --source visible-env-key --provider-env-var AIPPOCAMPUS_DEEPSEEK_API_KEY --json
+aippocampus onboard provider-key --apply --target codex-hooks --source visible-env-key --provider-env-var AIPPOCAMPUS_DEEPSEEK_API_KEY --json
 ```
 
 This records only the env-var source metadata and restart boundary. It does not

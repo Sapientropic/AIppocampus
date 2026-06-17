@@ -1379,7 +1379,7 @@ def render_text(report: dict[str, Any]) -> str:
         item = surfaces.get(name) or {}
         lines.append(f"- {name}: {item.get('status')}")
         if name == "llm" and not item.get("ready"):
-            env_name = item.get("provider_env_var") or "DEEPSEEK_API_KEY"
+            env_name = item.get("provider_env_var") or "AIPPOCAMPUS_DEEPSEEK_API_KEY"
             lines.append(f"  next: set {env_name} in the environment that launches the hook")
         if name == "hooks" and item.get("status") != "current":
             lines.append("  next: aippocampus update apply --surface hooks")

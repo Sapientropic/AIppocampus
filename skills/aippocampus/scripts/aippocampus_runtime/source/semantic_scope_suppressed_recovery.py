@@ -24,7 +24,10 @@ from aippocampus_runtime.core import (
 )
 from aippocampus_runtime.model.routing import (
     DEEPSEEK_PREFIX_CACHE_CONTRACT,
+    DEFAULT_DEEPSEEK_API_KEY_ENV,
     NO_PROVIDER_CACHE_CONTRACT,
+    deepseek_api_key_env,
+    is_default_deepseek_api_key_env,
     resolve_model_route,
     route_cache_contract,
     route_cache_metrics,
@@ -423,7 +426,7 @@ def run_suppressed_label_recovery_smoke(
     registry_path: str | Path | None = None,
     jobs_output_path: str | Path | None = None,
     live: bool = False,
-    api_key_env: str = "DEEPSEEK_API_KEY",
+    api_key_env: str = DEFAULT_DEEPSEEK_API_KEY_ENV,
     max_cases: int = 8,
     min_recovered_labels: int = 1,
     model: str | None = None,
@@ -482,7 +485,12 @@ def run_suppressed_label_recovery_smoke(
             "cases": [],
             "privacy_boundary": privacy_boundary,
         }
-    api_key = os.environ.get(api_key_env)
+    resolved_api_key_env = (
+        deepseek_api_key_env(os.environ)
+        if is_default_deepseek_api_key_env(api_key_env)
+        else api_key_env
+    )
+    api_key = os.environ.get(resolved_api_key_env)
     if not api_key:
         candidate_label_count = sum(len(case.get("labels") or []) for case in cases)
         return {
@@ -741,7 +749,7 @@ def main() -> int:
     parser.add_argument("--registry")
     parser.add_argument("--jobs-output")
     parser.add_argument("--live", action="store_true")
-    parser.add_argument("--api-key-env", default="DEEPSEEK_API_KEY")
+    parser.add_argument("--api-key-env", default=DEFAULT_DEEPSEEK_API_KEY_ENV)
     parser.add_argument("--max-cases", type=int, default=8)
     parser.add_argument("--min-recovered-labels", type=int, default=1)
     parser.add_argument("--model")

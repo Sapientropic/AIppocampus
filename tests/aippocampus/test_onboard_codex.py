@@ -30,6 +30,14 @@ from aippocampus_runtime.registry import api as registry  # noqa: E402
 from conversation_sources import CodexConversationProvider  # noqa: E402
 
 ONBOARD_CMD = [sys.executable, "-m", "aippocampus_runtime.onboarding.facade"]
+PROVIDER_ENV_NOISE = (
+    "AIPPOCAMPUS_DEEPSEEK_API_KEY",
+    "DEEPSEEK_API_KEY",
+    "DEEPSEEK_BASE_URL",
+    "DEEPSEEK_MODEL",
+    "DEEPSEEK_PRO_MODEL",
+    "AIIPPOCAMPUS_SUBCONSCIOUS_HOOK",
+)
 
 
 class OnboardCodexTests(unittest.TestCase):
@@ -561,7 +569,10 @@ class OnboardCodexTests(unittest.TestCase):
     def _run_onboard_facade(self, *args: str, env_extra: dict[str, str] | None = None) -> Any:
         import subprocess
 
-        env = {**os.environ, "CODEX_HOME": str(self.root), **(env_extra or {})}
+        env = {**os.environ, "CODEX_HOME": str(self.root)}
+        for name in PROVIDER_ENV_NOISE:
+            env.pop(name, None)
+        env.update(env_extra or {})
         return subprocess.run(
             [*ONBOARD_CMD, *args],
             text=True,
@@ -840,9 +851,11 @@ class OnboardCodexTests(unittest.TestCase):
             }
 
         old_run_jobs = onboard_frontier.run_jobs
-        old_api_key = os.environ.get("DEEPSEEK_API_KEY")
+        old_api_key = os.environ.get("AIPPOCAMPUS_DEEPSEEK_API_KEY")
+        old_legacy_api_key = os.environ.get("DEEPSEEK_API_KEY")
         onboard_frontier.run_jobs = fake_run_jobs
-        os.environ["DEEPSEEK_API_KEY"] = "test-key"
+        os.environ["AIPPOCAMPUS_DEEPSEEK_API_KEY"] = "test-key"
+        os.environ.pop("DEEPSEEK_API_KEY", None)
         try:
             result = onboard.run_onboarding(
                 cwd=self.cwd,
@@ -857,9 +870,13 @@ class OnboardCodexTests(unittest.TestCase):
         finally:
             onboard_frontier.run_jobs = old_run_jobs
             if old_api_key is None:
+                os.environ.pop("AIPPOCAMPUS_DEEPSEEK_API_KEY", None)
+            else:
+                os.environ["AIPPOCAMPUS_DEEPSEEK_API_KEY"] = old_api_key
+            if old_legacy_api_key is None:
                 os.environ.pop("DEEPSEEK_API_KEY", None)
             else:
-                os.environ["DEEPSEEK_API_KEY"] = old_api_key
+                os.environ["DEEPSEEK_API_KEY"] = old_legacy_api_key
 
         frontier = result["data"]["boundary"]["frontier"]
         self.assertEqual(captured["project"], "Project")
@@ -878,7 +895,9 @@ class OnboardCodexTests(unittest.TestCase):
         self.assertIn("missing_clean=0", captured["objective"])
 
     def test_frontier_smoke_missing_deepseek_key_blocks_instead_of_skipping(self) -> None:
-        old_api_key = os.environ.get("DEEPSEEK_API_KEY")
+        old_api_key = os.environ.get("AIPPOCAMPUS_DEEPSEEK_API_KEY")
+        old_legacy_api_key = os.environ.get("DEEPSEEK_API_KEY")
+        os.environ.pop("AIPPOCAMPUS_DEEPSEEK_API_KEY", None)
         os.environ.pop("DEEPSEEK_API_KEY", None)
         try:
             result = onboard.run_onboarding(
@@ -893,9 +912,13 @@ class OnboardCodexTests(unittest.TestCase):
             )
         finally:
             if old_api_key is None:
+                os.environ.pop("AIPPOCAMPUS_DEEPSEEK_API_KEY", None)
+            else:
+                os.environ["AIPPOCAMPUS_DEEPSEEK_API_KEY"] = old_api_key
+            if old_legacy_api_key is None:
                 os.environ.pop("DEEPSEEK_API_KEY", None)
             else:
-                os.environ["DEEPSEEK_API_KEY"] = old_api_key
+                os.environ["DEEPSEEK_API_KEY"] = old_legacy_api_key
 
         self.assertEqual(result["ok"], "partial")
         self.assertEqual(

@@ -201,6 +201,11 @@ class RuntimeContractsAndConfigRegistryTests(unittest.TestCase):
         self.assertNotIn("do-not-print", rendered)
 
     def test_config_registry_metadata_is_classified(self) -> None:
+        deepseek_key = CONFIG_BY_NAME["AIPPOCAMPUS_DEEPSEEK_API_KEY"]
+
+        self.assertTrue(deepseek_key.sensitive)
+        self.assertEqual(deepseek_key.owner, "model/routing")
+
         for name, knob in CONFIG_BY_NAME.items():
             with self.subTest(name=name):
                 self.assertTrue(knob.owner)

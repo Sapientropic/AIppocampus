@@ -33,6 +33,7 @@ from aippocampus_runtime.model.routing import (
     DEFAULT_DEEPSEEK_API_KEY_ENV,
     deepseek_base_url,
     flash_model,
+    is_default_deepseek_api_key_env,
     resolve_model_route,
     resolve_route_reasoning_effort,
     resolve_route_thinking,
@@ -425,7 +426,7 @@ def run_worker(
         explicit_base_url=base_url if base_url != DEFAULT_BASE_URL and not model_route else None,
         explicit_api_key_env=(
             api_key_env
-            if api_key_env != DEFAULT_DEEPSEEK_API_KEY_ENV and not model_route
+            if not is_default_deepseek_api_key_env(api_key_env) and not model_route
             else None
         ),
     )
@@ -434,7 +435,7 @@ def run_worker(
     resolved_base_url = route.base_url if base_url == DEFAULT_BASE_URL else base_url
     resolved_api_key_env = (
         route.api_key_env
-        if api_key_env == DEFAULT_DEEPSEEK_API_KEY_ENV
+        if is_default_deepseek_api_key_env(api_key_env)
         else api_key_env
     )
     route_payload = route_payload_with_effective_values(

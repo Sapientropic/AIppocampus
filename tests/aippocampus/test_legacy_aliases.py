@@ -24,6 +24,7 @@ class LegacyAliasDiagnosticsTests(unittest.TestCase):
                     "CODEX_MEMORY_VAULT": str(root / "private-vault"),
                     "AIPPOCAMPUS_STYLE_SOURCE": "canonical-style.css",
                     "CODEX_MEMORY_STYLE_SOURCE": "legacy-style.css",
+                    "DEEPSEEK_API_KEY": "legacy-secret-key",
                     "DEEPSEEK_MODEL": "legacy-flash-model",
                     "AIIPPOCAMPUS_SUBCONSCIOUS_HOOK": "0",
                 },
@@ -46,6 +47,7 @@ class LegacyAliasDiagnosticsTests(unittest.TestCase):
             active,
             {
                 "CODEX_MEMORY_VAULT",
+                "DEEPSEEK_API_KEY",
                 "DEEPSEEK_MODEL",
                 "AIIPPOCAMPUS_SUBCONSCIOUS_HOOK",
                 "CODEX_HOME/aippocampus-registry",
@@ -58,6 +60,7 @@ class LegacyAliasDiagnosticsTests(unittest.TestCase):
         self.assertNotIn(str(root), encoded)
         self.assertNotIn("private-vault", encoded)
         self.assertNotIn("legacy-flash-model", encoded)
+        self.assertNotIn("legacy-secret-key", encoded)
         self.assertNotIn('"0"', encoded)
         self.assertNotIn("canonical-style.css", encoded)
 

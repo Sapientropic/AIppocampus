@@ -31,6 +31,8 @@ class DeepSeekModelRoutingTests(unittest.TestCase):
         self.old_values = {
             name: os.environ.get(name)
             for name in [
+                "AIPPOCAMPUS_DEEPSEEK_API_KEY",
+                "DEEPSEEK_API_KEY",
                 "DEEPSEEK_MODEL",
                 "DEEPSEEK_BASE_URL",
                 "AIPPOCAMPUS_DEEPSEEK_FLASH_MODEL",
@@ -68,7 +70,7 @@ class DeepSeekModelRoutingTests(unittest.TestCase):
         self.assertEqual(default.model, "deepseek-v4-flash")
         self.assertEqual(default.provider, "deepseek")
         self.assertEqual(default.base_url, "https://api.deepseek.com")
-        self.assertEqual(default.api_key_env, "DEEPSEEK_API_KEY")
+        self.assertEqual(default.api_key_env, "AIPPOCAMPUS_DEEPSEEK_API_KEY")
         self.assertTrue(default.capabilities.supports_user_id)
         self.assertTrue(default.capabilities.supports_thinking)
         self.assertTrue(default.capabilities.supports_reasoning_effort)
@@ -142,6 +144,21 @@ class DeepSeekModelRoutingTests(unittest.TestCase):
         self.assertEqual(pro.model, "primary-pro")
         self.assertEqual(flash.base_url, "https://primary.example/v1")
         self.assertEqual(pro.base_url, "https://primary.example/v1")
+
+    def test_aippocampus_deepseek_api_key_env_wins_with_legacy_fallback(self) -> None:
+        self.assertEqual(
+            routing.resolve_model_route("default").api_key_env,
+            "AIPPOCAMPUS_DEEPSEEK_API_KEY",
+        )
+
+        os.environ["DEEPSEEK_API_KEY"] = "legacy-key"
+        self.assertEqual(routing.resolve_model_route("default").api_key_env, "DEEPSEEK_API_KEY")
+
+        os.environ["AIPPOCAMPUS_DEEPSEEK_API_KEY"] = "canonical-key"
+        self.assertEqual(
+            routing.resolve_model_route("default").api_key_env,
+            "AIPPOCAMPUS_DEEPSEEK_API_KEY",
+        )
 
     def test_configured_openai_compatible_provider_exposes_neutral_capabilities(self) -> None:
         os.environ["AIPPOCAMPUS_OPENAI_COMPAT_PROVIDER"] = "local-test-provider"
