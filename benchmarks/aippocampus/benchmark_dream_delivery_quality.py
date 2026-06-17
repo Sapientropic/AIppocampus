@@ -19,6 +19,8 @@ import _paths
 
 _paths.ensure_paths()
 
+from benchmarks.aippocampus.shared.report_actions import report_next_action
+
 REPORT_KIND = "aippocampus_dream_delivery_quality_eval"
 SCHEMA_VERSION = 1
 ARM_BASELINE = "baseline_no_dream"
@@ -350,6 +352,33 @@ def build_dream_delivery_quality_report() -> dict[str, Any]:
         and negative_controls["dream_only_foreground_leak_count"] == 0
         and negative_controls["source_truth_overclaim_count"] == 0
     )
+    github_1438_actions = [
+        report_next_action(
+            action_id="open_dream_delivery_successor",
+            label="Open successor for reviewed Dream delivery quality",
+            status="successor_missing",
+            reason=(
+                "#1438 is closed/historical; this synthetic closeout candidate needs "
+                "an open successor or review note before any owner-status claim."
+            ),
+            command=(
+                'gh issue create --title "Review Dream delivery quality successor" '
+                '--body "Use benchmark_dream_delivery_quality.py --json as bounded '
+                'review input; keep live/private quality unclaimed until reviewed."'
+            ),
+            owner_path="benchmarks/aippocampus/benchmark_dream_delivery_quality.py",
+            issue_url="https://github.com/Sapientropic/AIppocampus/issues/1438",
+            claim_boundary="review_action_not_closeout_evidence",
+        ),
+        report_next_action(
+            action_id="rerun_public_dream_delivery_report",
+            label="Rerun public Dream delivery report for review packet",
+            reason="Refresh the bounded synthetic report before writing a human review or successor issue.",
+            command="python benchmarks/aippocampus/benchmark_dream_delivery_quality.py --json",
+            owner_path="benchmarks/aippocampus/benchmark_dream_delivery_quality.py",
+            claim_boundary="synthetic_report_not_live_quality_claim",
+        ),
+    ]
     return {
         "kind": REPORT_KIND,
         "schema_version": SCHEMA_VERSION,
@@ -381,6 +410,8 @@ def build_dream_delivery_quality_report() -> dict[str, Any]:
         "cases": cases,
         "issue_readouts": {
             "github_1438": {
+                "issue_url": "https://github.com/Sapientropic/AIppocampus/issues/1438",
+                "issue_state": "closed_historical",
                 "delivery_quality_eval_measured": True,
                 "arms_pre_registered": True,
                 "negative_controls_covered": True,
@@ -390,6 +421,9 @@ def build_dream_delivery_quality_report() -> dict[str, Any]:
                 "closeout_eligible": False,
                 "decision_impact_gate_ok": False,
                 "requires_human_review_before_closeout": True,
+                "successor_required": True,
+                "successor_status": "successor_missing",
+                "review_next_actions": github_1438_actions,
             }
         },
         "can_claim": [
@@ -403,6 +437,7 @@ def build_dream_delivery_quality_report() -> dict[str, Any]:
             "keeps stale, noisy, over-personalized, and unsourced controls quiet",
         ],
         "agent_action": "use_as_issue_review_input_not_owner_status",
+        "review_next_actions": github_1438_actions,
         "can_support_after_action": [
             "human-reviewed closeout note for bounded synthetic delivery-quality fixture"
         ],

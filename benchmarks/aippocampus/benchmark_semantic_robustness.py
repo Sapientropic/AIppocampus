@@ -28,6 +28,7 @@ _paths.ensure_paths()
 import benchmark_memory_decision_gate as track_a
 from aippocampus_runtime.recall.index_builder import make_sqlite
 from aippocampus_runtime.recall.retrieval import search_hybrid_index, split_query_terms
+from shared.report_actions import report_next_action
 
 SCHEMA_VERSION = 1
 DEFAULT_TOP_K = 5
@@ -571,6 +572,25 @@ def run_s3_hard_negative_suppression(
 
 
 def s4_offline_proxy_alignment(*, include_proxy_alignment: bool) -> dict[str, Any]:
+    next_actions = [
+        report_next_action(
+            action_id="check_local_proxy_model_availability",
+            label="Check local proxy model availability",
+            reason="S4 is disabled until an offline cross-encoder/proxy model is explicitly available.",
+            command="python benchmarks/aippocampus/benchmark_semantic_robustness.py --help",
+            owner_path="benchmarks/aippocampus/benchmark_semantic_robustness.py",
+            required_artifact="local offline proxy model or cross-encoder configuration",
+            claim_boundary="proxy_setup_action_not_semantic_quality_evidence",
+        ),
+        report_next_action(
+            action_id="complete_proxy_model_license_review",
+            label="Complete proxy model license review",
+            reason="S4 must keep local model availability separate from redistribution/license permission.",
+            owner_path="docs/evidence/benchmarks/design/memory-decision/optional-tracks-and-gates.md",
+            required_artifact="documented local-model license and use-boundary review",
+            claim_boundary="license_review_not_model_quality_evidence",
+        ),
+    ]
     if not include_proxy_alignment:
         return {
             "status": "disabled_by_default",
@@ -581,6 +601,7 @@ def s4_offline_proxy_alignment(*, include_proxy_alignment: bool) -> dict[str, An
                 "live_llm_required": False,
             },
             "next_step": "Enable only after local model availability and license review.",
+            "next_actions": next_actions,
         }
     return {
         "status": "skipped_missing_local_model",
@@ -591,6 +612,7 @@ def s4_offline_proxy_alignment(*, include_proxy_alignment: bool) -> dict[str, An
             "live_llm_required": False,
         },
         "skip_reason": "offline_cross_encoder_not_configured",
+        "next_actions": next_actions,
     }
 
 
@@ -606,6 +628,25 @@ def s5_representation_space_health() -> dict[str, Any]:
             "live_llm_required": False,
         },
         "next_step": "Report vector-space health only when a local embedding index is explicitly supplied.",
+        "next_actions": [
+            report_next_action(
+                action_id="provide_local_embedding_index",
+                label="Provide explicit local embedding index",
+                reason="S5 cannot report vector-space health until an embedding index artifact is supplied.",
+                command="python benchmarks/aippocampus/benchmark_semantic_robustness.py --help",
+                owner_path="skills/aippocampus/scripts/aippocampus_runtime/recall/index_builder.py",
+                required_artifact="local embedding index path or build artifact",
+                claim_boundary="representation_health_setup_not_quality_evidence",
+            ),
+            report_next_action(
+                action_id="add_representation_health_runner",
+                label="Add representation-health runner",
+                reason="Once an index exists, S5 still needs a runner for cosine/anisotropy/neighborhood metrics.",
+                owner_path="benchmarks/aippocampus/benchmark_semantic_robustness.py",
+                required_artifact="representation health runner for cosine distribution, anisotropy, and neighborhood purity",
+                claim_boundary="representation_health_setup_not_quality_evidence",
+            ),
+        ],
     }
 
 

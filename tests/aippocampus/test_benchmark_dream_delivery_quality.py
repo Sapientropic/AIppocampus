@@ -60,6 +60,16 @@ class DreamDeliveryQualityBenchmarkTests(unittest.TestCase):
         self.assertFalse(readout["closeout_eligible"], readout)
         self.assertFalse(readout["decision_impact_gate_ok"], readout)
         self.assertTrue(readout["requires_human_review_before_closeout"], readout)
+        self.assertEqual(readout["issue_state"], "closed_historical")
+        self.assertTrue(readout["successor_required"])
+        self.assertEqual(readout["successor_status"], "successor_missing")
+        actions = {action["id"]: action for action in readout["review_next_actions"]}
+        self.assertIn("open_dream_delivery_successor", actions)
+        self.assertEqual(actions["open_dream_delivery_successor"]["status"], "successor_missing")
+        self.assertIn("gh issue create", actions["open_dream_delivery_successor"]["command"])
+        self.assertIn("benchmark_dream_delivery_quality.py", actions[
+            "rerun_public_dream_delivery_report"
+        ]["owner_path"])
 
     def test_report_is_public_safe_and_not_a_live_private_quality_claim(self) -> None:
         report = benchmark.build_dream_delivery_quality_report()
@@ -85,6 +95,8 @@ class DreamDeliveryQualityBenchmarkTests(unittest.TestCase):
         self.assertFalse(report["decision_impact_gate_ok"])
         self.assertTrue(report["requires_human_review_before_closeout"])
         self.assertIn("useful_now", report)
+        self.assertIn("review_next_actions", report)
+        self.assertTrue(report["review_next_actions"][0]["claim_boundary"])
 
     def test_cli_writes_public_json_report(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

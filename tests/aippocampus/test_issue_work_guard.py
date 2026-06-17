@@ -30,7 +30,45 @@ class IssueWorkGuardTests(unittest.TestCase):
         self.assertIn("benchmark_capability_provenance", packet["lead_kinds"])
         self.assertIn("semantic_scope_builder", packet["existing_owner_ref_ids"])
         self.assertIn("subconscious_jobs", packet["existing_owner_ref_ids"])
+        self.assertEqual(packet["owner_refs_confidence"], "high")
+        self.assertTrue(all("reason" in item for item in packet["existing_owner_refs"]))
         self.assertIn("check_existing_routes_before_manual_benchmark_scaffold", packet["constraints"])
+
+    def test_skill_docs_issue_prefers_bootstrap_and_docs_owners(self) -> None:
+        packet = build_issue_active_pull_packet(
+            title="Make SKILL.md a foreground continuity bootstrap",
+            body=(
+                "The installable skill entrypoint should lead with foreground continuity "
+                "cards and public docs, not operator fallback maps."
+            ),
+        )
+
+        self.assertTrue(packet["should_pull"])
+        self.assertEqual(packet["owner_refs_confidence"], "high")
+        self.assertIn("skill_entrypoint", packet["existing_owner_ref_ids"])
+        self.assertIn("public_docs", packet["existing_owner_ref_ids"])
+        self.assertIn("docs_health_guard", packet["existing_owner_ref_ids"])
+        self.assertNotIn("attention_router", packet["existing_owner_ref_ids"])
+        self.assertNotIn("semantic_scope_builder", packet["existing_owner_ref_ids"])
+        self.assertIn("skill_or_docs_surface_owner", packet["lead_kinds"])
+        self.assertIn("check_foreground_surface_owner_before_runtime_patch", packet["constraints"])
+
+    def test_cli_foreground_card_issue_prefers_card_contract_owners(self) -> None:
+        packet = build_issue_active_pull_packet(
+            title="Make doctor spend default JSON a compact decision card",
+            body=(
+                "The foreground JSON card should lead with safe_next_actions and a "
+                "compact claim_boundary instead of cannot_claim noise."
+            ),
+        )
+
+        self.assertTrue(packet["should_pull"])
+        self.assertEqual(packet["owner_refs_confidence"], "high")
+        self.assertIn("foreground_cli_facade", packet["existing_owner_ref_ids"])
+        self.assertIn("foreground_output_projection", packet["existing_owner_ref_ids"])
+        self.assertIn("agent_continuity_cards", packet["existing_owner_ref_ids"])
+        self.assertNotIn("attention_router", packet["existing_owner_ref_ids"])
+        self.assertIn("foreground_card_contract", packet["lead_kinds"])
 
     def test_trivial_issue_stays_silent(self) -> None:
         packet = build_issue_active_pull_packet(

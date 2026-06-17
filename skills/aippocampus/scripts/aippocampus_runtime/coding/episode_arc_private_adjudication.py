@@ -504,7 +504,12 @@ def summary_projection(report: Mapping[str, Any]) -> dict[str, Any]:
         "safe_next_actions": [action],
         "full_audit_flag": "--json",
         "privacy_boundary": report.get("privacy_boundary"),
-        "cannot_claim": list(report.get("cannot_claim") or [])[:8],
+        "claim_boundary": {
+            "can_use_for": ["sequence_hint_triage", "source_reopen_target_selection"],
+            "must_reopen_for": ["current_validity", "source_backed_claims", "truth_layer_claims"],
+            "detail_available_with": "aippocampus episode-arcs --json",
+        },
+        "boundary_detail_available": True,
     }
 
 

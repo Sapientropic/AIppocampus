@@ -20,6 +20,7 @@ from aippocampus_runtime.learning_loop.core import (  # noqa: E402
     detect_workflow_order_findings,
     project_action_time_guidance,
 )
+from shared.report_actions import report_next_action
 
 SCHEMA_VERSION = 1
 REPORT_KIND = "aippocampus_learning_loop_public_companion_eval"
@@ -274,6 +275,44 @@ def _gap_labels(*, workflow_count: int, context_count: int, environment_count: i
     return gaps
 
 
+GAP_ACTIONS = {
+    "public_sources_do_not_express_environment_workaround_recovery": report_next_action(
+        action_id="add_public_environment_workaround_source_shape",
+        label="Add a public-safe environment-workaround recovery cohort",
+        reason=(
+            "The public companion can see workflow guidance, but lacks a public "
+            "source shape for environment workaround recovery."
+        ),
+        command="python benchmarks/aippocampus/benchmark_learning_loop_public_companion.py --json",
+        owner_path="skills/aippocampus/scripts/aippocampus_runtime/learning_loop/core.py",
+        required_artifact="public-safe behavior event with failed workaround -> recovery -> success shape",
+    ),
+    "state_bench_official_eval_client_not_available_no_score_claim": report_next_action(
+        action_id="prepare_state_bench_official_eval_client",
+        label="Prepare the official STATE-Bench eval client path",
+        reason=(
+            "The public companion must not claim an official STATE-Bench score "
+            "until the locked eval client path is available."
+        ),
+        command="python benchmarks/aippocampus/benchmark_state_bench_agent_learning.py --help",
+        owner_path="benchmarks/aippocampus/benchmark_state_bench_agent_learning.py",
+        required_artifact="official STATE-Bench eval client or documented successor issue",
+    ),
+}
+
+
+def gap_next_actions(gaps: Iterable[str]) -> list[dict[str, Any]]:
+    actions: list[dict[str, Any]] = []
+    for gap in gaps:
+        action = GAP_ACTIONS.get(str(gap))
+        if not action:
+            continue
+        item = dict(action)
+        item["gap_id"] = str(gap)
+        actions.append(item)
+    return actions
+
+
 def run_public_companion_eval(
     *,
     rollout_path: Path = DEFAULT_ROLLOUT,
@@ -352,6 +391,11 @@ def run_public_companion_eval(
         "state_bench_train_only_shape_check": "not_official_score",
     }
     route_surface_ok = route_surface_count > 0 and negative_no_lesson_count > 0
+    source_shape_gaps = _gap_labels(
+        workflow_count=len(workflow),
+        context_count=context_count,
+        environment_count=environment_count,
+    )
     return {
         "schema_version": SCHEMA_VERSION,
         "kind": REPORT_KIND,
@@ -393,11 +437,8 @@ def run_public_companion_eval(
             },
             "workflow_guidance_companion": workflow_shape,
         },
-        "source_shape_gaps": _gap_labels(
-            workflow_count=len(workflow),
-            context_count=context_count,
-            environment_count=environment_count,
-        ),
+        "source_shape_gaps": source_shape_gaps,
+        "gap_next_actions": gap_next_actions(source_shape_gaps),
         "reused_benchmark_files": [
             "benchmarks/aippocampus/benchmark_vcs_future_event_recall.py",
             "benchmarks/aippocampus/benchmark_state_bench_agent_learning.py",

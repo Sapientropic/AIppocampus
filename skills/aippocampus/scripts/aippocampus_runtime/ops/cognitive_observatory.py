@@ -458,6 +458,7 @@ def cognitive_observatory_readout(
         activation_surfaces=activation_surfaces or [],
         activation_authority=authority,
     )
+    foreground_action = _foreground_action()
     report = {
         "kind": OBSERVATORY_KIND,
         "schema_version": OBSERVATORY_SCHEMA_VERSION,
@@ -474,6 +475,9 @@ def cognitive_observatory_readout(
         "query_pattern_routes": query_routes,
         "cognitive_load_calibration": cognitive_load,
         "metrics": metrics,
+        "foreground_action": foreground_action,
+        "agent_next_action": foreground_action,
+        "claim_boundary": _compact_claim_boundary(),
         "contract": {
             "read_only_report": True,
             "not_control_plane": True,
@@ -852,8 +856,28 @@ def _panel_previews(report: Mapping[str, Any], *, limit: int = 3) -> dict[str, l
     return previews
 
 
+def _foreground_action() -> dict[str, Any]:
+    return {
+        "id": "use_observatory_as_read_only_navigation",
+        "kind": "shell_command",
+        "command": "aippocampus observatory --summary-json",
+        "mutation_risk": "read_only",
+        "claim_boundary": "observatory_readout_not_source_truth_or_control_plane",
+        "why": "Use ready/useful rows as navigation only; reopen source before claims and use owner tools for mutation.",
+    }
+
+
+def _compact_claim_boundary() -> dict[str, Any]:
+    return {
+        "can_use_for": ["route_readiness_triage", "observability_review"],
+        "must_reopen_for": ["source_backed_claims", "control_state_changes"],
+        "detail_available_with": "aippocampus observatory --json",
+    }
+
+
 def summary_projection(report: Mapping[str, Any]) -> dict[str, Any]:
     metrics = report.get("metrics") or {}
+    action = _foreground_action()
     return {
         "kind": "aippocampus_cognitive_observatory_summary",
         "ok": bool(report.get("ok")),
@@ -871,6 +895,8 @@ def summary_projection(report: Mapping[str, Any]) -> dict[str, Any]:
         "full_audit_flag": "--json",
         "html_flag": "--html",
         "privacy_boundary": report.get("privacy_boundary"),
+        "foreground_action": action,
+        "claim_boundary": _compact_claim_boundary(),
         "agent_next_action": (
             "Use ready rows as navigation only, reopen source before claims, and treat suppressed rows as intentional silence."
         ),

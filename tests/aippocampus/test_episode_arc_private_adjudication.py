@@ -234,6 +234,12 @@ class EpisodeArcPrivateAdjudicationTests(unittest.TestCase):
             "aippocampus episode-arcs --json --top 5",
         )
         self.assertEqual(summary_payload["safe_next_actions"][0]["kind"], "retrieve_actionable_arc_handles")
+        self.assertNotIn("cannot_claim", summary_payload)
+        self.assertIn("current_validity", summary_payload["claim_boundary"]["must_reopen_for"])
+        self.assertEqual(
+            summary_payload["claim_boundary"]["detail_available_with"],
+            "aippocampus episode-arcs --json",
+        )
         self.assertIn("top_arcs", payload)
         self.assertEqual(payload["top_arcs"][0]["current_validity"], "needs_reopen")
         self.assertIn("arc_handle", payload["top_arcs"][0])

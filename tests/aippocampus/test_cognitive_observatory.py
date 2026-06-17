@@ -513,6 +513,11 @@ class RouteReadinessObservatoryTests(unittest.TestCase):
         self.assertEqual(payload["kind"], "aippocampus_cognitive_observatory_readout")
         self.assertTrue(payload["contract"]["read_only_report"])
         self.assertTrue(payload["route_readiness"]["navigation_only"])
+        self.assertEqual(
+            payload["foreground_action"]["claim_boundary"],
+            "observatory_readout_not_source_truth_or_control_plane",
+        )
+        self.assertIn("source_backed_claims", payload["claim_boundary"]["must_reopen_for"])
 
     def test_default_text_explains_no_input_and_fixture_panels(self) -> None:
         empty = facade.run_command(["observatory"], capture_output=True)
@@ -546,6 +551,11 @@ class RouteReadinessObservatoryTests(unittest.TestCase):
         self.assertTrue(payload["panel_previews"]["useful_now"])
         self.assertLessEqual(len(payload["panel_previews"]["useful_now"]), 3)
         self.assertEqual(payload["full_audit_flag"], "--json")
+        self.assertEqual(
+            payload["foreground_action"]["command"],
+            "aippocampus observatory --summary-json",
+        )
+        self.assertIn("control_state_changes", payload["claim_boundary"]["must_reopen_for"])
         self.assertNotIn("route_readiness", payload)
         self.assertNotIn("activation_authority", payload)
 

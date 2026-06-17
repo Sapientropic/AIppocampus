@@ -83,10 +83,26 @@ class SemanticRobustnessBenchmarkTests(unittest.TestCase):
 
         self.assertEqual(tracks["s4_offline_proxy_alignment"]["status"], "disabled_by_default")
         self.assertEqual(tracks["s4_offline_proxy_alignment"]["claim_boundary"], "proxy_not_truth")
+        s4_actions = {
+            action["id"]: action
+            for action in tracks["s4_offline_proxy_alignment"]["next_actions"]
+        }
+        self.assertIn("check_local_proxy_model_availability", s4_actions)
+        self.assertIn("complete_proxy_model_license_review", s4_actions)
+        self.assertIn("required_artifact", s4_actions["check_local_proxy_model_availability"])
+        self.assertIn("owner_path", s4_actions["complete_proxy_model_license_review"])
         self.assertEqual(
             tracks["s5_representation_space_health"]["claim_boundary"],
             "health_check_not_quality_claim",
         )
+        s5_actions = {
+            action["id"]: action
+            for action in tracks["s5_representation_space_health"]["next_actions"]
+        }
+        self.assertIn("provide_local_embedding_index", s5_actions)
+        self.assertIn("add_representation_health_runner", s5_actions)
+        self.assertIn("required_artifact", s5_actions["provide_local_embedding_index"])
+        self.assertIn("owner_path", s5_actions["add_representation_health_runner"])
         self.assertIn("human_level_semantic_understanding", payload["cannot_claim"])
         self.assertIn("track_a_b_product_quality_replacement", payload["cannot_claim"])
         self.assertIn("live_llm_judge_quality", payload["cannot_claim"])

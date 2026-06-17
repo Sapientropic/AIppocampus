@@ -176,6 +176,11 @@ class CognitivePortraitBenchmarkTests(unittest.TestCase):
             "Exact quote recovery still needs fuller clean-source injection.",
             payload["report"]["loses_fidelity"],
         )
+        actions = payload["fidelity_gap_actions"]
+        self.assertEqual(actions[0]["gap_id"], "exact_quote_recovery")
+        self.assertIn("aippocampus search", actions[0]["command"])
+        self.assertIn("recall_navigation.py", actions[0]["owner_path"])
+        self.assertEqual(actions[0]["claim_boundary"], "diagnostic_action_not_source_evidence")
         self.assertTrue(payload["report"]["over_personalization"])
         cases = {case["case_id"]: case for case in payload["cases"]}
         self.assertTrue(cases["resume_after_compaction"]["portrait_equivalent_by_fixture"])

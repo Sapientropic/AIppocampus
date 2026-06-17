@@ -26,6 +26,7 @@ import _paths
 _paths.ensure_paths()
 
 from aippocampus_runtime.core import benchmark_text_is_sensitive
+from shared.report_actions import report_next_action
 
 SCHEMA_VERSION = 1
 PORTRAIT_KIND = "aippocampus_cognitive_portrait"
@@ -45,6 +46,37 @@ RISKY_PROFILE_RE = re.compile(
     r"(?i)\b(the user|user|用户)\b.{0,48}\b(always|never|is|are|personality|identity|obsessed|"
     r"distrustful|prefers|likes|hates|本质|人格|总是|从不|喜欢|讨厌)\b"
 )
+FIDELITY_GAP_ACTIONS = {
+    "Exact quote recovery still needs fuller clean-source injection.": {
+        "gap_id": "exact_quote_recovery",
+        "action": report_next_action(
+            action_id="repair_exact_quote_clean_source_reopen",
+            label="Map exact-quote loss to clean-source reopen owners",
+            reason=(
+                "The portrait omitted exact quote material that full source context "
+                "can recover; repair should happen in clean-source/deepen source "
+                "window projection, not by treating portrait text as source truth."
+            ),
+            command='aippocampus search "exact quote recovery" --json',
+            owner_path=(
+                "skills/aippocampus/scripts/aippocampus_runtime/mcp/recall_navigation.py"
+            ),
+        ),
+    },
+}
+
+
+def fidelity_gap_actions(losses: Iterable[str]) -> list[dict[str, Any]]:
+    actions: list[dict[str, Any]] = []
+    for loss in losses:
+        mapped = FIDELITY_GAP_ACTIONS.get(str(loss))
+        if not mapped:
+            continue
+        action = dict(mapped["action"])
+        action["gap_id"] = mapped["gap_id"]
+        action["loss"] = str(loss)
+        actions.append(action)
+    return actions
 
 
 @dataclass(frozen=True)
@@ -767,6 +799,11 @@ def run_benchmark(
     if sample_warning:
         cannot_claim.extend(warning_cannot_claim)
     emitted_contexts = [portrait_context, full_context, unsafe_summary] if include_private_text else []
+    loses_fidelity = [
+        case["loss_reason"]
+        for case in cases
+        if case["loss_reason"] and case["portrait_missing_terms"]
+    ]
     payload: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
         "kind": BENCHMARK_KIND,
@@ -805,15 +842,12 @@ def run_benchmark(
             "helps": [
                 "Structured portrait preserves resume/guardrail cues while reducing the deterministic prompt footprint."
             ],
-            "loses_fidelity": [
-                case["loss_reason"]
-                for case in cases
-                if case["loss_reason"] and case["portrait_missing_terms"]
-            ],
+            "loses_fidelity": loses_fidelity,
             "over_personalization": [
                 "Naive trait summaries can create unsupported profile claims; the structured portrait keeps observations tied to source refs."
             ],
         },
+        "fidelity_gap_actions": fidelity_gap_actions(loses_fidelity),
         "privacy_boundary": {
             "raw_context_emitted": include_private_text,
             "raw_source_text_emitted": include_private_text,
