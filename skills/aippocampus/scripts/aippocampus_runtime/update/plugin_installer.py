@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any, Callable, cast
 
 from aippocampus_runtime.core import codex_home
+from aippocampus_runtime.public_output import emit_public_text
 from aippocampus_runtime.update.agent_callable import (
     default_host_probe_report_path as _default_host_probe_report_path,
 )
@@ -895,7 +896,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def _emit_result(result: dict[str, Any], *, json_output: bool) -> None:
     if json_output:
-        print(json.dumps(result, ensure_ascii=False, indent=2, default=_json_default))
+        emit_public_text(json.dumps(result, ensure_ascii=False, indent=2, default=_json_default))
         return
     if result["kind"] == "aippocampus_plugin_install_recovery":
         print("plugin install needs attention")
