@@ -241,6 +241,69 @@ class RecallFunnelSmokeTests(unittest.TestCase):
         self.assertIn("not source-backed evidence", proc.stdout)
         self.assertIn("agent recall -> agent deepen", proc.stdout)
 
+    def test_cli_smoke_recall_funnel_json_missing_cue_returns_recovery_card(self) -> None:
+        proc = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "aippocampus_runtime.cli.facade",
+                "smoke",
+                "recall-funnel",
+                "--json",
+            ],
+            cwd=SCRIPTS,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            check=False,
+        )
+
+        self.assertEqual(proc.returncode, 2)
+        self.assertEqual(proc.stderr, "")
+        payload = json.loads(proc.stdout)
+        self.assertEqual(payload["kind"], "aippocampus_recall_funnel_smoke_recovery")
+        self.assertFalse(payload["ok"])
+        self.assertTrue(payload["cue_required"])
+        self.assertEqual(payload["error"]["code"], "cue_required")
+        self.assertIn("diagnostic", payload["source_boundary"]["claim_boundary"])
+        self.assertIn("not source evidence", payload["source_boundary"]["claim_boundary"])
+
+        smoke_action = payload["safe_next_actions"][0]
+        ordinary_action = payload["safe_next_actions"][1]
+        self.assertNotIn("command", smoke_action)
+        self.assertNotIn("command", ordinary_action)
+        self.assertIn("<cue>", smoke_action["command_template"])
+        self.assertIn("<cue>", ordinary_action["command_template"])
+        self.assertIn("cue", smoke_action["requires"])
+        self.assertIn("cue", ordinary_action["requires"])
+
+    def test_cli_smoke_recall_funnel_human_missing_cue_is_concise(self) -> None:
+        proc = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "aippocampus_runtime.cli.facade",
+                "smoke",
+                "recall-funnel",
+            ],
+            cwd=SCRIPTS,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            check=False,
+        )
+
+        self.assertEqual(proc.returncode, 2)
+        self.assertEqual(proc.stderr, "")
+        self.assertIn("cue required", proc.stdout.lower())
+        self.assertIn("aippocampus smoke recall-funnel", proc.stdout)
+        self.assertIn("aippocampus agent recall", proc.stdout)
+        self.assertIn("diagnostic, not source evidence", proc.stdout)
+        self.assertNotIn("usage:", proc.stdout.lower())
+        self.assertNotIn("the following arguments are required", proc.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()

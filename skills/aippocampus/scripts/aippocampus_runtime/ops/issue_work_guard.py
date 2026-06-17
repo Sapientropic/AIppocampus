@@ -12,7 +12,13 @@ import argparse
 import json
 import re
 import subprocess
+import sys
 from typing import Any, Iterable
+
+from aippocampus_runtime.contracts import (
+    foreground_recovery_card,
+    foreground_shell_action,
+)
 
 SCHEMA_VERSION = "issue-work-active-pull-v0"
 
@@ -23,7 +29,20 @@ BENCHMARK_RE = re.compile(
 )
 ARCHITECTURE_RE = re.compile(
     r"\b(attention router|semantic scope|subconscious|warm ambient|aippo|"
-    r"macro orientation|architecture|design)\b",
+    r"macro orientation|learning[-_ ]loop|action[-_ ]time guidance|"
+    r"learning guidance|action hints|architecture|design)\b",
+    re.I,
+)
+SKILL_DOCS_RE = re.compile(
+    r"\b(SKILL\.md|skill entrypoint|installable skill|README|quickstart|"
+    r"public api|install guide|setup doc|docs?/|documentation|foreground continuity bootstrap)\b",
+    re.I,
+)
+FOREGROUND_CARD_RE = re.compile(
+    r"\b(foreground card|compact card|json card|recovery card|agent-native|"
+    r"safe_next_actions|claim_boundary|cannot_claim|doctor spend|health --json|"
+    r"maintenance|import conversation|recall-funnel|work-guard|cli facade|"
+    r"public facade|task-first)\b",
     re.I,
 )
 TRIVIAL_RE = re.compile(r"\b(typo|spelling|formatting|link fix|rename only)\b", re.I)
@@ -50,6 +69,30 @@ OWNER_REFS: dict[str, dict[str, str]] = {
     "attention_router": {
         "kind": "runtime_owner",
         "path": "skills/aippocampus/scripts/aippocampus_runtime/navigation/attention_hot_router.py",
+    },
+    "skill_entrypoint": {
+        "kind": "skill_entrypoint",
+        "path": "skills/aippocampus/SKILL.md",
+    },
+    "foreground_cli_facade": {
+        "kind": "runtime_owner",
+        "path": "skills/aippocampus/scripts/aippocampus_runtime/cli/facade.py",
+    },
+    "foreground_output_projection": {
+        "kind": "runtime_owner",
+        "path": "skills/aippocampus/scripts/aippocampus_runtime/mcp/public_projection.py",
+    },
+    "agent_continuity_cards": {
+        "kind": "runtime_owner",
+        "path": "skills/aippocampus/scripts/aippocampus_runtime/recall/agent_continuity_cli_support.py",
+    },
+    "docs_health_guard": {
+        "kind": "repo_tool",
+        "path": "tools/aippocampus/docs/check_docs_health.py",
+    },
+    "public_docs": {
+        "kind": "documentation",
+        "path": "docs/guides/public-api.md",
     },
 }
 
@@ -124,14 +167,26 @@ def fetch_issue_context(reference: str) -> dict[str, Any]:
 
 def classify_issue_work(title: str, body: str = "") -> list[str]:
     text = _text(title, body)
+    if TRIVIAL_RE.search(text):
+        return ["trivial_local_edit"]
     categories: list[str] = []
     if BENCHMARK_RE.search(text):
         categories.append("benchmark_or_external_evaluation")
+    if SKILL_DOCS_RE.search(text):
+        categories.append("skill_or_docs_surface")
+    if FOREGROUND_CARD_RE.search(text):
+        categories.append("foreground_card_or_cli_surface")
     if ARCHITECTURE_RE.search(text):
         categories.append("architecture_or_memory_design")
-    if TRIVIAL_RE.search(text) and not categories:
-        categories.append("trivial_local_edit")
     return categories
+
+
+def _owner_ref(owner_id: str, *, reason: str, confidence: str) -> dict[str, str]:
+    return OWNER_REFS[owner_id] | {
+        "id": owner_id,
+        "reason": reason,
+        "confidence": confidence,
+    }
 
 
 def build_issue_active_pull_packet(
@@ -145,8 +200,13 @@ def build_issue_active_pull_packet(
     changed = list(changed_files)
     path_text = "\n".join(changed)
     benchmark_like = "benchmark_or_external_evaluation" in categories or BENCHMARK_RE.search(path_text)
+    skill_docs_like = "skill_or_docs_surface" in categories or SKILL_DOCS_RE.search(path_text)
+    foreground_card_like = (
+        "foreground_card_or_cli_surface" in categories or FOREGROUND_CARD_RE.search(path_text)
+    )
     architecture_like = "architecture_or_memory_design" in categories or ARCHITECTURE_RE.search(path_text)
-    should_pull = bool(benchmark_like or architecture_like)
+    trivial_only = categories == ["trivial_local_edit"]
+    should_pull = bool(not trivial_only and (benchmark_like or skill_docs_like or foreground_card_like or architecture_like))
 
     if not should_pull:
         return {
@@ -160,11 +220,14 @@ def build_issue_active_pull_packet(
             "lead_kinds": [],
             "existing_owner_refs": [],
             "existing_owner_ref_ids": [],
+            "owner_refs_confidence": "none",
             "constraints": [],
             "claim_permission": "navigation_only_not_fact",
         }
 
     owner_ids: list[str] = []
+    owner_reasons: dict[str, str] = {}
+    owner_confidence = "medium"
     if benchmark_like:
         owner_ids.extend(
             [
@@ -175,29 +238,84 @@ def build_issue_active_pull_packet(
                 "attention_router",
             ]
         )
+        owner_reasons.update(
+            {
+                "semantic_scope_labeling": "benchmark/source-side issue should check source-shape job contracts",
+                "semantic_scope_builder": "benchmark/source-side issue may depend on semantic recall gates",
+                "subconscious_jobs": "benchmark/source-side issue may depend on background job findings",
+                "warm_ambient_routes": "benchmark/source-side issue may depend on warm route artifacts",
+                "attention_router": "benchmark/source-side issue may depend on attention-router behavior",
+            }
+        )
+        owner_confidence = "high"
+    if skill_docs_like:
+        owner_ids.extend(["skill_entrypoint", "public_docs", "docs_health_guard"])
+        owner_reasons.update(
+            {
+                "skill_entrypoint": "issue mentions SKILL/docs/bootstrap surface",
+                "public_docs": "public first-use docs shape the foreground route",
+                "docs_health_guard": "docs-health guards prevent SKILL/public docs drift",
+            }
+        )
+        owner_confidence = "high"
+    if foreground_card_like:
+        owner_ids.extend(
+            ["foreground_cli_facade", "foreground_output_projection", "agent_continuity_cards"]
+        )
+        owner_reasons.update(
+            {
+                "foreground_cli_facade": "foreground card issue should start at the public CLI facade",
+                "foreground_output_projection": "compact JSON card shape is projected here",
+                "agent_continuity_cards": "agent-facing recovery and recall cards live here",
+            }
+        )
+        owner_confidence = "high"
     elif architecture_like:
         owner_ids.extend(["attention_router", "semantic_scope_builder"])
+        owner_reasons.update(
+            {
+                "attention_router": "generic architecture issue mentions attention/route design",
+                "semantic_scope_builder": "generic architecture issue mentions semantic/source-scope design",
+            }
+        )
     owner_ids = _unique(owner_ids)
 
     constraints = [
-        "check_existing_routes_before_manual_benchmark_scaffold",
         *lesson_constraints,
     ]
+    if benchmark_like:
+        constraints.append("check_existing_routes_before_manual_benchmark_scaffold")
+    if architecture_like and not benchmark_like:
+        constraints.append("check_existing_architecture_owner_before_patch")
+    if skill_docs_like or foreground_card_like:
+        constraints.append("check_foreground_surface_owner_before_runtime_patch")
     lead_kinds = ["memory_route", "aippo_working_contract"]
     if benchmark_like:
         lead_kinds.append("benchmark_capability_provenance")
+    if skill_docs_like:
+        lead_kinds.append("skill_or_docs_surface_owner")
+    if foreground_card_like:
+        lead_kinds.append("foreground_card_contract")
 
     return {
         "kind": "aippocampus_issue_work_orientation_packet",
         "schema_version": SCHEMA_VERSION,
         "should_pull": True,
         "output_mode": "reopenable_route",
-        "reason": "benchmark, architecture, or memory-design context may change the safe implementation route",
+        "reason": "issue surface has existing owners that may change the safe implementation route",
         "suggested_agent_action": "agent_recall",
         "fallback_action": "if recall is unavailable, inspect listed owner refs before broad manual scaffolding",
         "lead_kinds": _unique(lead_kinds),
-        "existing_owner_refs": [OWNER_REFS[item] | {"id": item} for item in owner_ids],
+        "existing_owner_refs": [
+            _owner_ref(
+                item,
+                reason=owner_reasons.get(item, "issue text matches this existing owner surface"),
+                confidence=owner_confidence if item in owner_reasons else "medium",
+            )
+            for item in owner_ids
+        ],
         "existing_owner_ref_ids": owner_ids,
+        "owner_refs_confidence": owner_confidence if owner_ids else "low",
         "constraints": _unique(constraints),
         "active_pull_required_before": [
             "implementation",
@@ -313,7 +431,68 @@ def _issue_error_payload(message: str) -> dict[str, Any]:
     }
 
 
+def _missing_input_payload() -> dict[str, Any]:
+    return foreground_recovery_card(
+        kind="aippocampus_issue_work_orientation_packet",
+        error_code="work_guard_issue_or_title_required",
+        message="Provide a GitHub issue number/URL or an explicit --title before using work-guard.",
+        safe_next_actions=[
+            foreground_shell_action(
+                action_id="inspect_issue_context",
+                label="Fetch and classify a GitHub issue",
+                command="aippocampus work-guard <issue-number> --json",
+                why="Use this when issue comments and source-route context may change the implementation path.",
+                mutation_risk="read_only",
+                claim_boundary="navigation_only_not_fact",
+            ),
+            foreground_shell_action(
+                action_id="classify_title_body",
+                label="Classify provided title/body",
+                command='aippocampus work-guard --title "issue title" --body "issue body" --json',
+                why="Use this if GitHub is unavailable but the issue text is already in context.",
+                mutation_risk="read_only",
+                claim_boundary="navigation_only_not_fact",
+            ),
+            foreground_shell_action(
+                action_id="run_recall_for_issue",
+                label="Pull continuity before memory-design work",
+                command='aippocampus agent recall "issue title and key terms" --json',
+                why="Memory-design, benchmark, AIppo, and learning-loop work should pull existing route owners first.",
+                mutation_risk="read_only",
+                claim_boundary="no_claim_before_reopen",
+            ),
+        ],
+        source_boundary={
+            "work_guard_is_route_guidance_not_evidence": True,
+            "source_reopen_required_before_claims": True,
+            "no_write_happened": True,
+        },
+    )
+
+
+def _render_missing_input_text(payload: dict[str, Any]) -> str:
+    actions = [item for item in payload.get("safe_next_actions") or [] if isinstance(item, dict)]
+    lines = [
+        "AIppocampus work guard",
+        "decision: issue or title required",
+        "meaning: classify issue work before benchmark, architecture, AIppo, or learning-loop changes.",
+    ]
+    for action in actions[:3]:
+        lines.append(f"- {action.get('label') or action.get('id')}: {action.get('command')}")
+    lines.append("boundary: this is route guidance, not source evidence.")
+    return "\n".join(lines)
+
+
 def main(argv: list[str] | None = None) -> int:
+    raw_args = list(sys.argv[1:] if argv is None else argv)
+    if not raw_args:
+        payload = _missing_input_payload()
+        print(_render_missing_input_text(payload))
+        return 2
+    if set(raw_args) <= {"--json"}:
+        payload = _missing_input_payload()
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        return 2
     parser = argparse.ArgumentParser(
         prog="aippocampus work-guard",
         description=(
@@ -340,7 +519,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--changed-file", action="append", default=[])
     parser.add_argument("--fixture-report", action="store_true")
     parser.add_argument("--json", action="store_true", dest="json_output")
-    args = parser.parse_args(argv)
+    args = parser.parse_args(raw_args)
 
     issue_ref = args.issue or issue_reference_from_text(args.issue_ref or "")
     issue_context: dict[str, Any] = {}
@@ -361,7 +540,12 @@ def main(argv: list[str] | None = None) -> int:
 
     title = args.title or str(issue_context.get("title") or "")
     if not args.fixture_report and not title:
-        parser.error("work-guard requires --title or a GitHub issue number/URL")
+        payload = _missing_input_payload()
+        if args.json_output:
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
+        else:
+            print(_render_missing_input_text(payload))
+        return 2
     body = _issue_body_with_comments(issue_context, args.body)
 
     payload = (

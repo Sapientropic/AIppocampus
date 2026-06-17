@@ -9,6 +9,7 @@ refs, event ids, thread ids, local paths, or source-ref hash samples.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from collections import Counter
 from pathlib import Path
@@ -22,6 +23,7 @@ REPORT_KIND = "aippocampus_episode_arc_private_history_adjudication_report"
 SCHEMA_VERSION = 1
 DEFAULT_MAX_THREADS = 100
 DEFAULT_MAX_LINE_GAP = 3_000
+DEFAULT_TOP_ARCS = 5
 
 
 def _as_mapping(value: Any) -> Mapping[str, Any]:
@@ -227,6 +229,44 @@ def _safe_use_counts(arcs: Sequence[Mapping[str, Any]]) -> dict[str, int]:
     return dict(sorted(counts.items()))
 
 
+def _arc_handle(arc: Mapping[str, Any]) -> str:
+    payload = json.dumps(
+        {
+            "episode_id": arc.get("episode_id"),
+            "episode_kind": arc.get("episode_kind"),
+            "source_ref_count": len(_as_list(arc.get("source_refs"))),
+            "origin": arc.get("origin"),
+        },
+        ensure_ascii=False,
+        sort_keys=True,
+    )
+    return "arc_" + hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
+
+
+def _top_arc_cards(arcs: Sequence[Mapping[str, Any]], *, limit: int = DEFAULT_TOP_ARCS) -> list[dict[str, Any]]:
+    cards: list[dict[str, Any]] = []
+    for arc in arcs[: max(0, limit)]:
+        plan = episode_arcs.build_reopen_plan(arc)
+        cards.append(
+            {
+                "arc_handle": _arc_handle(arc),
+                "episode_kind": str(arc.get("episode_kind") or "unknown"),
+                "current_validity": str(arc.get("current_validity") or "unknown"),
+                "safe_uses": list(_as_list(plan.get("safe_uses")))[:6],
+                "source_ref_count": len(_as_list(arc.get("source_refs"))),
+                "sequence_gap_count": len(_as_list(arc.get("sequence_gaps"))),
+                "source_reopen_action": {
+                    "kind": "reopen_episode_arc_sources",
+                    "command": "aippocampus episode-arcs --json --top 5",
+                    "requires": "operator_source_reopen_from_local_report",
+                    "claim_boundary": "sequence_hint_not_source_truth",
+                    "authority_after_running": "actionable_arc_handle_only_until_source_reopen",
+                },
+            }
+        )
+    return cards
+
+
 def _sequence_resolution_counts(arcs: Sequence[Mapping[str, Any]]) -> dict[str, int]:
     counts: Counter[str] = Counter()
     for arc in arcs:
@@ -315,6 +355,7 @@ def build_private_history_episode_arc_adjudication_report(
     source_ref_count = sum(len(_as_list(arc.get("source_refs"))) for arc in arcs)
     sequence_resolution_counts = _sequence_resolution_counts(arcs)
     safe_use_counts = _safe_use_counts(arcs)
+    top_arcs = _top_arc_cards(arcs, limit=DEFAULT_TOP_ARCS)
     return {
         "ok": True,
         "kind": REPORT_KIND,
@@ -354,6 +395,7 @@ def build_private_history_episode_arc_adjudication_report(
         "sequence_gap_counts": _gap_counts(arcs),
         "sequence_packet_reopen_resolution_counts": sequence_resolution_counts,
         "safe_use_counts": safe_use_counts,
+        "top_arcs": top_arcs,
         "issue_readouts": {
             "github_663": {
                 "private_history_adjudication": status,
@@ -441,19 +483,54 @@ def render_text(report: dict[str, Any]) -> str:
 
 def summary_projection(report: Mapping[str, Any]) -> dict[str, Any]:
     metrics = _as_mapping(report.get("metrics"))
+    episode_arc_count = int(metrics.get("episode_arc_count") or 0)
+    owner_route = {
+        "kind": "current_owner_route",
+        "command": "aippocampus episode-arcs --json --top 5",
+        "mutation_risk": "read_only",
+        "claim_boundary": "sequence_hint_not_source_truth",
+        "why": "Use this owner route when there are actionable arc handles to inspect.",
+    }
+    route_action = {
+        "kind": "retrieve_actionable_arc_handles",
+        "command": "aippocampus episode-arcs --json --top 5",
+        "mutation_risk": "read_only",
+        "claim_boundary": "sequence_hint_not_source_truth",
+        "why": "Aggregate counts are only a signal; retrieve a small redacted handle set before acting on an arc.",
+    }
+    no_op_action = {
+        "kind": "no_episode_arcs_to_route",
+        "command": "no-op",
+        "mutation_risk": "none",
+        "claim_boundary": "sequence_hint_not_source_truth",
+        "why": "No episode arcs are currently present in the scoped aggregate readout.",
+    }
+    no_op = episode_arc_count == 0
+    action = no_op_action if no_op else route_action
     return {
         "kind": "aippocampus_episode_arcs_summary",
         "ok": bool(report.get("ok")),
         "status": report.get("status"),
-        "episode_arc_count": metrics.get("episode_arc_count", 0),
+        "episode_arc_count": episode_arc_count,
         "complete_arc_count": metrics.get("complete_arc_count", 0),
         "gappy_arc_count": metrics.get("gappy_arc_count", 0),
         "current_validity_counts": dict(_as_mapping(report.get("current_validity_counts"))),
         "safe_use_counts": dict(_as_mapping(report.get("safe_use_counts"))),
-        "next_action": "Use arcs as navigation-only sequence hints; reopen/refresh source before action.",
+        "next_action": "Use arcs as navigation-only sequence hints; retrieve handles before source reopen.",
+        "what_to_do": "no_episode_arcs_to_route" if no_op else "retrieve_actionable_arc_handles",
+        "no_op": no_op,
+        "owner_route": owner_route,
+        "foreground_action": action,
+        "agent_next_action": action,
+        "safe_next_actions": [action],
         "full_audit_flag": "--json",
         "privacy_boundary": report.get("privacy_boundary"),
-        "cannot_claim": list(report.get("cannot_claim") or [])[:8],
+        "claim_boundary": {
+            "can_use_for": ["sequence_hint_triage", "source_reopen_target_selection"],
+            "must_reopen_for": ["current_validity", "source_backed_claims", "truth_layer_claims"],
+            "detail_available_with": "aippocampus episode-arcs --json",
+        },
+        "boundary_detail_available": True,
     }
 
 
@@ -465,6 +542,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--json", action="store_true", dest="json_output")
     parser.add_argument("--summary-json", action="store_true")
     parser.add_argument("--output", type=Path)
+    parser.add_argument("--top", type=int, default=DEFAULT_TOP_ARCS)
     args = parser.parse_args(argv)
 
     registry_path = _resolve_registry_path(args.registry)
@@ -473,6 +551,8 @@ def main(argv: list[str] | None = None) -> int:
         max_threads=args.max_threads,
         max_line_gap=args.max_line_gap,
     )
+    if args.top >= 0:
+        report["top_arcs"] = list(report.get("top_arcs") or [])[: args.top]
     output = json.dumps(report, ensure_ascii=False, indent=2)
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)

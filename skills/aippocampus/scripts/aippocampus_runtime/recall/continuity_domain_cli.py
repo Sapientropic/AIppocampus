@@ -16,6 +16,10 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.contracts import (
+    foreground_recovery_card,
+    foreground_shell_action,
+)
 from aippocampus_runtime.core import compact_text
 from aippocampus_runtime.ops.route_readiness import safe_source_refs
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
@@ -51,6 +55,46 @@ def _json_error(code: str, message: str) -> dict[str, Any]:
             "aippocampus continuity-domain produce --preview --json",
         ],
     }
+
+
+def recovery_payload() -> MappingPayload:
+    return foreground_recovery_card(
+        kind="aippocampus_continuity_domain_recovery",
+        error_code="continuity_domain_command_required",
+        message="Choose a read path, preview path, or explicit operator write path.",
+        safe_next_actions=[
+            foreground_shell_action(
+                action_id="preview_domain_candidates",
+                label="Preview candidate continuity domains",
+                command="aippocampus continuity-domain preview --json",
+                why="Preview is bounded and emits navigation-only candidate actions.",
+                mutation_risk="read_only",
+                claim_boundary="preview_not_source_truth",
+            ),
+            foreground_shell_action(
+                action_id="read_latest_snapshot",
+                label="Read latest published domain snapshot",
+                command="aippocampus continuity-domain latest --json",
+                why="Use existing snapshots as reopenable route hints, not facts.",
+                mutation_risk="read_only",
+                claim_boundary="source_reopen_required_before_claims",
+            ),
+            {
+                "id": "ordinary_recall_path",
+                "label": "Use ordinary recall for a continuity cue",
+                "requires": "cue",
+                "command_template": "aippocampus agent recall <cue> --json",
+                "why": "Most foreground work should start from recall/deepen rather than domain backfill.",
+                "mutation_risk": "read_only",
+                "claim_boundary": "no_claim_before_reopen",
+            },
+        ],
+        source_boundary={
+            "continuity_domains_are_routes_not_source_truth": True,
+            "source_reopen_required_before_claims": True,
+            "no_write_happened": True,
+        },
+    )
 
 
 def _print_payload(payload: MappingPayload, *, json_output: bool) -> None:
@@ -111,6 +155,27 @@ def _print_payload(payload: MappingPayload, *, json_output: bool) -> None:
 
 
 MappingPayload = dict[str, Any]
+GENERIC_FOREGROUND_CUE_TERMS = {
+    "aippocampus",
+    "aiippocampus",
+    "codex-hindsight-memory",
+    "recall",
+    "append",
+    "maintenance",
+    "runtime",
+    "continuity-domain",
+    "continuity",
+    "route",
+    "source",
+    "source-backed",
+    "foreground",
+    "action",
+}
+GENERIC_FOREGROUND_CUE_PHRASES = {
+    "runtime-contract.md",
+    "old continuity cue",
+    "continuity domain candidate",
+}
 
 
 def _read_event(args: argparse.Namespace) -> dict[str, Any]:
@@ -379,6 +444,33 @@ def _strip_producer_local_detail(payload: MappingPayload) -> MappingPayload:
     return clean
 
 
+def _foreground_cue_quality(cue: str) -> tuple[str, str]:
+    text = compact_text(str(cue or ""), 80).strip()
+    if not text:
+        return "low_information", "empty"
+    low = text.casefold()
+    if low in GENERIC_FOREGROUND_CUE_PHRASES:
+        return "low_information", "generic_tool_word"
+    if low.endswith((".md", ".py", ".json", ".jsonl", ".toml", ".yaml", ".yml")) and " " not in low:
+        return "low_information", "file_name_only"
+    tokens = [token for token in low.replace("_", "-").split() if token]
+    if tokens and all(token.strip('"`.,;:!?') in GENERIC_FOREGROUND_CUE_TERMS for token in tokens):
+        return "low_information", "generic_tool_word"
+    if low in GENERIC_FOREGROUND_CUE_TERMS:
+        return "low_information", "generic_tool_word"
+    return "actionable", ""
+
+
+def _best_foreground_cue(cues: list[str], fallback_title: str) -> tuple[str, str, str]:
+    for cue in [*cues, fallback_title]:
+        quality, reason = _foreground_cue_quality(cue)
+        if quality == "actionable":
+            return compact_text(str(cue), 80), quality, reason
+    first = cues[0] if cues else fallback_title
+    quality, reason = _foreground_cue_quality(first)
+    return compact_text(str(first), 80), quality, reason
+
+
 def _producer_candidate_previews(payload: MappingPayload) -> list[MappingPayload]:
     previews: list[MappingPayload] = []
     for event in payload.get("candidate_events") or []:
@@ -390,17 +482,35 @@ def _producer_candidate_previews(payload: MappingPayload) -> list[MappingPayload
             for cue in event.get("activation_cues") or []
             if str(cue).strip()
         ][:6]
-        previews.append(
-            {
+        title = compact_text(str(event.get("title") or "untitled domain"), 96)
+        cue, quality, reason = _best_foreground_cue(cues, title)
+        preview = {
                 "domain_handle": event.get("domain_id"),
-                "title": compact_text(str(event.get("title") or "untitled domain"), 96),
+                "title": title,
                 "domain_type": event.get("domain_type"),
                 "scale": event.get("scale"),
                 "activation_cues": cues,
+                "foreground_candidate_quality": quality,
                 "source_ref_count": len(refs) if isinstance(refs, list) else 0,
                 "source_reopen_required_before_claim": True,
             }
-        )
+        if reason:
+            preview["suppression_reason"] = reason
+        if quality == "actionable" and cue:
+            recall_command = f"aippocampus agent recall {json.dumps(cue, ensure_ascii=False)} --json"
+            preview["foreground_actions"] = [
+                    foreground_shell_action(
+                        action_id="recall_candidate_cue",
+                        label="Recall this candidate cue",
+                        command=recall_command,
+                        why="Candidate previews are navigation only; recall/deepen before claims.",
+                        mutation_risk="read_only",
+                        claim_boundary="no_claim_before_reopen",
+                    )
+                ]
+        else:
+            preview["foreground_actions"] = []
+        previews.append(preview)
     return previews
 
 
@@ -415,11 +525,18 @@ def _producer_agent_preview(payload: MappingPayload) -> MappingPayload:
         "local_paths_emitted": False,
         "preview_is_not_source_truth": True,
     }
-    if previews:
+    actionable_previews = [
+        preview for preview in previews if preview.get("foreground_candidate_quality") == "actionable"
+    ]
+    if actionable_previews:
+        primary = actionable_previews[0].get("foreground_actions") or []
+        primary_action = primary[0] if primary and isinstance(primary[0], dict) else None
+        clean["foreground_candidate_quality"] = "actionable"
         clean["agent_next_action"] = {
             "id": "use_candidate_preview_as_reopenable_route",
             "label": "Use candidate_previews as navigation only; run recall/deepen on the cue before any factual claim.",
-            "command": "aippocampus agent recall <cue> --json",
+            "command": (primary_action or {}).get("command")
+            or 'aippocampus agent recall "continuity domain candidate" --json',
             "requires_operator_review": False,
         }
         clean["operator_next_action"] = {
@@ -428,10 +545,20 @@ def _producer_agent_preview(payload: MappingPayload) -> MappingPayload:
             "command": "aippocampus continuity-domain produce --append --publish --json",
             "requires_operator_review": True,
         }
+    elif previews:
+        clean["foreground_candidate_quality"] = "needs_broader_scan"
+        clean["agent_next_action"] = {
+            "id": "needs_broader_scan_or_cue",
+            "label": "Only low-information continuity-domain cues surfaced; broaden the scan or provide a user cue.",
+            "command": "aippocampus continuity-domain preview --broad-scan --json",
+            "requires_operator_review": False,
+        }
     else:
+        clean["foreground_candidate_quality"] = "needs_broader_scan"
         clean["agent_next_action"] = {
             "id": "no_continuity_domain_candidates",
             "label": "No supported continuity-domain candidates were found; keep the public dry-run report as evidence.",
+            "command": "aippocampus continuity-domain preview --broad-scan --json",
             "requires_operator_review": False,
         }
     return redact_sensitive_values(redact_private_paths(clean))
@@ -448,15 +575,25 @@ def produce_command(args: argparse.Namespace) -> MappingPayload:
     broad_scan = bool(getattr(args, "broad_scan", False))
     max_threads = args.max_threads
     max_candidates = args.max_candidates
-    if args.preview:
-        if not broad_scan and max_threads is None:
-            max_threads = DEFAULT_CONTINUITY_DOMAIN_PREVIEW_THREAD_BUDGET
-            preview_scan_policy = {
-                "mode": "foreground_bounded_default",
-                "max_threads": max_threads,
-                "broad_scan_command": "aippocampus continuity-domain preview --broad-scan --json",
-            }
-        elif broad_scan:
+    # Plain `produce --json` is often reached from foreground agents. Keep that
+    # path bounded and preview-shaped unless the operator explicitly asks for a
+    # broad/custom backfill scan. Do not treat `--include-local-detail` as broad
+    # permission; it can expose local detail, but it should still inherit the
+    # safe thread budget unless paired with --broad-scan, --append, or
+    # --max-threads.
+    foreground_bounded_default = not args.append and not broad_scan and max_threads is None
+    preview_equivalent = bool(
+        args.preview or (foreground_bounded_default and not args.include_local_detail)
+    )
+    if foreground_bounded_default:
+        max_threads = DEFAULT_CONTINUITY_DOMAIN_PREVIEW_THREAD_BUDGET
+        preview_scan_policy = {
+            "mode": "foreground_bounded_default",
+            "max_threads": max_threads,
+            "broad_scan_command": "aippocampus continuity-domain preview --broad-scan --json",
+        }
+    elif args.preview:
+        if broad_scan:
             preview_scan_policy = {
                 "mode": "explicit_broad_scan",
                 "max_threads": max_threads,
@@ -466,8 +603,8 @@ def produce_command(args: argparse.Namespace) -> MappingPayload:
                 "mode": "explicit_bounded",
                 "max_threads": max_threads,
             }
-        if max_candidates is None:
-            max_candidates = DEFAULT_CONTINUITY_DOMAIN_PREVIEW_CANDIDATE_BUDGET
+    if preview_equivalent and max_candidates is None:
+        max_candidates = DEFAULT_CONTINUITY_DOMAIN_PREVIEW_CANDIDATE_BUDGET
     elif max_candidates is None:
         max_candidates = 24
     proposal = propose_continuity_domain_events_from_registry(
@@ -483,7 +620,7 @@ def produce_command(args: argparse.Namespace) -> MappingPayload:
         ),
     )
     events = list(proposal.get("candidate_events") or [])
-    if args.preview:
+    if preview_equivalent:
         payload = _producer_agent_preview(proposal)
     elif args.include_local_detail:
         payload = proposal
@@ -656,8 +793,16 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    raw_args = list(sys.argv[1:] if argv is None else argv)
+    command_names = {"append", "publish", "latest", "list", "report", "produce", "preview"}
+    if not any(arg in command_names for arg in raw_args) and not any(
+        arg in {"-h", "--help"} for arg in raw_args
+    ):
+        payload = recovery_payload()
+        _print_payload(payload, json_output="--json" in raw_args)
+        return 2
     parser = build_arg_parser()
-    args = parser.parse_args(argv)
+    args = parser.parse_args(raw_args)
     try:
         if args.command == "append":
             payload = append_command(args)

@@ -417,27 +417,54 @@ def main(argv: list[str] | None = None) -> int:
     spend_parser.add_argument("--warning-effective-tokens", type=int, default=None)
     spend_parser.add_argument("--warning-min-foreground-value-rate", type=float, default=None)
     spend_parser.add_argument("--json", action="store_true", dest="json_output")
+    spend_parser.add_argument(
+        "--detail",
+        choices=["compact", "full"],
+        default="compact",
+        help="JSON detail level. Default --json emits a compact foreground decision card.",
+    )
+    spend_parser.add_argument(
+        "--operator-json",
+        action="store_true",
+        help="Emit full local spend/yield telemetry JSON; implies JSON output.",
+    )
     config_parser = subparsers.add_parser(
         "config",
-        usage="aippocampus doctor config [--compact-json|--json]",
+        usage="aippocampus doctor config [--json] [--detail compact|full] [--operator-json]",
         help="Report registered AIPPOCAMPUS_* configuration without printing values.",
         description=(
             "Config doctor answers: which AIppocampus configuration knobs are "
             "known/configured without revealing their values?\n\n"
             "Normal examples:\n"
-            "  aippocampus doctor config --compact-json\n"
-            "  aippocampus doctor config --json"
+            "  aippocampus doctor config --json\n"
+            "  aippocampus doctor config --detail full --json\n"
+            "  aippocampus doctor config --operator-json"
         ),
-        epilog="Privacy boundary: values are never printed; configured means presence only.",
+        epilog=(
+            "Privacy boundary: values are never printed; configured means presence only. "
+            "Default JSON is a compact foreground decision card; full inventory is "
+            "operator/detail output."
+        ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     config_parser.add_argument("--json", action="store_true", dest="json_output")
+    config_parser.add_argument(
+        "--detail",
+        choices=["compact", "full"],
+        default="compact",
+        help="JSON detail level. Default --json emits a compact foreground decision card.",
+    )
+    config_parser.add_argument(
+        "--operator-json",
+        action="store_true",
+        help="Emit the full operator knob inventory JSON; implies JSON output.",
+    )
     config_parser.add_argument(
         "--compact-json",
         "--summary",
         action="store_true",
         dest="summary_json",
-        help="Emit compact foreground-agent JSON instead of the full knob catalog.",
+        help="Legacy alias for the compact foreground decision card.",
     )
     args = parser.parse_args(argv)
 
@@ -454,7 +481,16 @@ def main(argv: list[str] | None = None) -> int:
             days=args.days,
             **kwargs,
         )
-        if args.json_output:
+        full_detail_json = bool(args.operator_json or args.detail == "full")
+        if args.json_output and not full_detail_json:
+            print(
+                json.dumps(
+                    spend_doctor.compact_spend_doctor_card(report),
+                    ensure_ascii=False,
+                    indent=2,
+                )
+            )
+        elif args.json_output or args.operator_json:
             print(json.dumps(report, ensure_ascii=False, indent=2))
         else:
             print(spend_doctor.render_text(report))
@@ -464,7 +500,8 @@ def main(argv: list[str] | None = None) -> int:
         from aippocampus_runtime.config import registry as config_registry  # noqa: PLC0415
 
         report = config_registry.config_report()
-        if args.summary_json:
+        full_detail_json = bool(args.operator_json or args.detail == "full")
+        if args.summary_json or (args.json_output and not full_detail_json):
             print(
                 json.dumps(
                     config_registry.config_summary_report(report),
@@ -472,7 +509,7 @@ def main(argv: list[str] | None = None) -> int:
                     indent=2,
                 )
             )
-        elif args.json_output:
+        elif args.json_output or args.operator_json:
             print(json.dumps(report, ensure_ascii=False, indent=2))
         else:
             print(render_config_text(report))

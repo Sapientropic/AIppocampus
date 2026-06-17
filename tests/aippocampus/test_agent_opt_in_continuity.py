@@ -1,3 +1,4 @@
+# ruff: noqa: I001
 from __future__ import annotations
 
 import json
@@ -15,7 +16,8 @@ sys.path.insert(0, str(SCRIPTS))
 
 from aippocampus_runtime.macro import state as macro_state  # noqa: E402
 from aippocampus_runtime.navigation import attention_route_projection  # noqa: E402
-from aippocampus_runtime.recall import agent_continuity, feedback_events  # noqa: E402
+from aippocampus_runtime.recall import agent_continuity, agent_continuity_cli_support, background_findings, feedback_events  # noqa: E402
+from aippocampus_runtime.registry import api as registry_api  # noqa: E402
 
 
 class AgentOptInContinuityTests(unittest.TestCase):
@@ -122,7 +124,9 @@ class AgentOptInContinuityTests(unittest.TestCase):
 
         self.assertEqual(report["kind"], "aippocampus_agent_continuity_path")
         self.assertEqual(report["mode"], "recall")
-        self.assertTrue(report["opt_in_required"])
+        self.assertFalse(report["opt_in_required"])
+        self.assertEqual(report["schema_version"], "agent-continuity-path-v1")
+        self.assertEqual(report["policy_boundary"]["activation_model"], "explicit_foreground_action")
         self.assertEqual(report["status"], "ok")
         self.assertEqual(report["foreground_action_card"]["decision"], "use_route_first")
         self.assertEqual(report["foreground_action_card"]["next_action"], "deepen")
@@ -171,7 +175,9 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertTrue(deepen_request["deepen_route_id_display_only"])
         self.assertEqual(deepen_request["callable_handle"], deepen_request["handle"])
         self.assertEqual(deepen_request["callable_handle_field"], "deepen_requests[].handle")
-        self.assertIn(deepen_request["handle"], deepen_request["copy_paste_command"])
+        self.assertNotIn(deepen_request["handle"], deepen_request["copy_paste_command"])
+        self.assertIn("--request 1 --last-recall --json", deepen_request["copy_paste_command"])
+        self.assertIn(deepen_request["handle"], deepen_request["private_handle_command"])
         self.assertEqual(report["suggested_next_command"], deepen_request["copy_paste_command"])
         self.assertNotIn("source_refs", json.dumps(deepen_request, ensure_ascii=False))
 
@@ -216,8 +222,8 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertEqual(report["deepen_requests"][0]["handle"], long_handle)
         self.assertIn("handle_preview", report["deepen_requests"][0])
         self.assertIn("handle_sha256_12", report["deepen_requests"][0])
-        self.assertIn("deepen route 1", human)
-        self.assertIn("--json --detail full for local-private handle", human)
+        self.assertIn("aippocampus agent deepen --request 1 --last-recall --json", human)
+        self.assertIn("private_handle_command", report["deepen_requests"][0])
         self.assertNotIn(long_handle, human)
         self.assertNotIn("aippo-nav:", human)
         self.assertLess(max(len(line) for line in human.splitlines()), 180)
@@ -258,6 +264,54 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertNotIn("aippo-nav:", encoded)
         self.assertLess(len(encoded.encode("utf-8")), 4096)
 
+    def test_agent_background_projects_reviewed_dream_finding_as_navigation_handle(self) -> None:
+        working_memory = self.cwd / "working_memory.jsonl"
+        working_memory.write_text(
+            json.dumps(
+                {
+                    "kind": "aippocampus_working_memory",
+                    "status": "active",
+                    "route": "use_with_source",
+                    "candidate_type": "dream_hypothesis",
+                    "candidate_key": "wm_dream_continuity",
+                    "title": "Continuity route bridge",
+                    "summary": "Use only as a route hint.",
+                    "trigger_terms": ["continuity source refs"],
+                    "source_finding_ids": ["dreamfinding_continuity"],
+                    "source_refs": [{"thread_key": "session:a", "message_id": "msg-a", "line": 10}],
+                    "confidence": 0.7,
+                    "project_label": "AIppocampus",
+                    "review_state": "agent_adjudicated",
+                    "truth_boundary": "adjudicated_dream_hypothesis_not_fact",
+                    "sensitive_use_gate": {"state": "allowed"},
+                    "foreground_use": {"strong_claim_requires_source_reopen": True},
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        payload = background_findings.background_findings_card(
+            "AIppocampus continuity source refs",
+            working_memory_path=working_memory,
+        )
+
+        encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertEqual(payload["status"], "ok")
+        self.assertEqual(payload["finding_count"], 1)
+        finding = payload["findings"][0]
+        self.assertEqual(finding["finding_id"], "wm_dream_continuity")
+        self.assertEqual(finding["surface"], "dream_working_memory")
+        self.assertEqual(finding["boundary"]["action_grammar"], "reopenable_route")
+        self.assertFalse(finding["boundary"]["source_backed_claim_allowed"])
+        self.assertTrue(finding["source"]["source_reopen_required_before_claims"])
+        self.assertFalse(finding["source"]["raw_source_refs_emitted"])
+        self.assertEqual(payload["agent_next_action"]["command"], 'aippocampus agent recall "AIppocampus continuity source refs" --json')
+        self.assertNotIn("session:a", encoded)
+        self.assertNotIn("msg-a", encoded)
+        self.assertNotIn(str(working_memory), encoded)
+
     def test_public_recall_no_routes_returns_recovery_card_without_deepen_placeholder(self) -> None:
         report = agent_continuity.recall(
             "unlikely-no-match-token-xyz-12345",
@@ -275,21 +329,29 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertNotIn("suggested_next_command", public)
         self.assertNotIn("public_safe_command_preview", public)
         self.assertNotIn("<local-private-handle>", encoded)
+        self.assertNotIn("<", encoded)
         self.assertNotIn("agent deepen", encoded)
         self.assertEqual(public["foreground_action"]["action_id"], "recover_recall_miss")
         self.assertEqual(public["foreground_action"]["tool_name"], "search_memory")
+        self.assertEqual(
+            public["foreground_action"]["cli_command"],
+            'aippocampus search "distinctive exact phrase" --json',
+        )
         self.assertEqual(public["miss_recovery_card"]["miss_class"], "no_route")
         self.assertIn("refine", " ".join(public["miss_recovery_card"]["recovery_actions"]))
-        self.assertIn("onboard --status", " ".join(public["miss_recovery_card"]["recovery_actions"]))
+        self.assertIn(
+            "onboard --provider auto --status",
+            " ".join(public["miss_recovery_card"]["recovery_actions"]),
+        )
 
     def test_public_recall_weak_route_without_deepen_request_gets_recovery_card(self) -> None:
         public = agent_continuity.public_recall_projection(
             {
                 "kind": "aippocampus_agent_continuity_path",
-                "schema_version": "agent-opt-in-continuity-v0",
+                "schema_version": "agent-continuity-path-v1",
                 "mode": "recall",
                 "status": "ok",
-                "opt_in_required": True,
+                "opt_in_required": False,
                 "foreground_action_card": {
                     "decision": "continue_normally",
                     "canonical_action": {
@@ -584,7 +646,7 @@ class AgentOptInContinuityTests(unittest.TestCase):
         human = agent_continuity._render_recall_human(routed_report)
         self.assertIn("why: attention_router:top_route_changed", human)
         self.assertIn("Navigation:", human)
-        self.assertIn("aippocampus agent deepen handle:attention", human)
+        self.assertIn("aippocampus agent deepen --request 1 --last-recall --json", human)
         self.assertTrue(routed_report["metrics"]["attention_router_applied"])
         self.assertEqual(routed_report["metrics"]["attention_router_ranked_route_count"], 2)
         self.assertEqual(routed_report["metrics"]["foreground_forbidden_key_count"], 0)
@@ -667,6 +729,247 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertNotIn("source_handles", encoded)
         self.assertNotIn("head_votes", encoded)
         self.assertNotIn("src_helpful", encoded)
+
+    def test_cli_agent_feedback_default_lane_is_consumed_by_next_recall(self) -> None:
+        registry = self.cwd / "registry"
+        env = {**os.environ, "AIPPOCAMPUS_REGISTRY_DIR": str(registry)}
+        base = [sys.executable, "-m", "aippocampus_runtime.cli.facade", "agent"]
+        run_kwargs = {
+            "cwd": SCRIPTS,
+            "text": True,
+            "encoding": "utf-8",
+            "errors": "replace",
+            "capture_output": True,
+            "check": False,
+            "env": env,
+        }
+        recall_proc = subprocess.run(
+            [
+                *base,
+                "recall",
+                "agent-native recall opt-in",
+                "--cwd",
+                str(self.cwd),
+                "--clean-source-dir",
+                str(self.clean),
+                "--json",
+            ],
+            **run_kwargs,
+        )
+        self.assertEqual(recall_proc.returncode, 0, recall_proc.stderr)
+        route_id = json.loads(recall_proc.stdout)["routes"][0]["route_id"]
+
+        feedback_proc = subprocess.run(
+            [
+                *base,
+                "feedback",
+                route_id,
+                "--outcome",
+                "wrong",
+                "--cwd",
+                str(self.cwd),
+                "--json",
+            ],
+            **run_kwargs,
+        )
+        self.assertEqual(feedback_proc.returncode, 0, feedback_proc.stderr)
+        feedback_payload = json.loads(feedback_proc.stdout)
+        self.assertEqual(feedback_payload["write_boundary"]["storage"], "jsonl")
+        self.assertEqual(feedback_payload["feedback_lane"]["path_source"], "default_registry")
+
+        full_recall_proc = subprocess.run(
+            [
+                *base,
+                "recall",
+                "agent-native recall opt-in",
+                "--cwd",
+                str(self.cwd),
+                "--clean-source-dir",
+                str(self.clean),
+                "--attention-router",
+                "--json",
+                "--detail",
+                "full",
+            ],
+            **run_kwargs,
+        )
+
+        self.assertEqual(full_recall_proc.returncode, 0, full_recall_proc.stderr)
+        full_payload = json.loads(full_recall_proc.stdout)
+        calibration = full_payload["attention_router_navigation"]["feedback_calibration"]
+        encoded = json.dumps(full_payload, ensure_ascii=False)
+        self.assertEqual(calibration["load_status"], "loaded")
+        self.assertGreaterEqual(calibration["event_count_loaded"], 1)
+        self.assertNotIn(str(registry), encoded)
+
+    def test_cli_agent_recall_default_compact_last_recall_round_trips(self) -> None:
+        registry = self.cwd / "registry"
+        env = {**os.environ, "AIPPOCAMPUS_REGISTRY_DIR": str(registry)}
+        base = [sys.executable, "-m", "aippocampus_runtime.cli.facade", "agent"]
+        run_kwargs = {
+            "cwd": SCRIPTS,
+            "text": True,
+            "encoding": "utf-8",
+            "errors": "replace",
+            "capture_output": True,
+            "check": False,
+            "env": env,
+        }
+        recall_proc = subprocess.run(
+            [
+                *base,
+                "recall",
+                "agent-native recall opt-in",
+                "--cwd",
+                str(self.cwd),
+                "--clean-source-dir",
+                str(self.clean),
+                "--json",
+            ],
+            **run_kwargs,
+        )
+        self.assertEqual(recall_proc.returncode, 0, recall_proc.stderr)
+        recall_payload = json.loads(recall_proc.stdout)
+        self.assertTrue(recall_payload["last_recall_cache_available"])
+        self.assertIn("--last-recall", recall_payload["foreground_action"]["cli_command"])
+
+        deepen_proc = subprocess.run(
+            [
+                *base,
+                "deepen",
+                "--request",
+                "1",
+                "--last-recall",
+                "--json",
+            ],
+            **run_kwargs,
+        )
+
+        self.assertEqual(deepen_proc.returncode, 0, deepen_proc.stderr)
+        deepen_payload = json.loads(deepen_proc.stdout)
+        self.assertEqual(deepen_payload["mode"], "deepen")
+        self.assertEqual(deepen_payload["status"], "ok")
+        self.assertNotIn(str(registry), deepen_proc.stdout)
+
+    def test_last_recall_cache_preserves_dict_handles_as_json(self) -> None:
+        cache_path = self.cwd / "last-recall-dict.json"
+        handle_dict = {
+            "kind": "thread_candidate",
+            "route_id": "route_dict",
+            "thread_key": "session:test",
+        }
+
+        wrote = agent_continuity_cli_support.write_last_recall_cache(
+            [{"request_index": 1, "route_id": "route_dict", "handle": handle_dict}],
+            cwd=self.cwd,
+            clean_source_dir=self.clean,
+            registry_dir=None,
+            macro_state_path=None,
+            project="AIppocampus",
+            max_matches=1,
+            schema_version=agent_continuity.SCHEMA_VERSION,
+            path=cache_path,
+        )
+        handle, _context = agent_continuity_cli_support.handle_from_last_recall_cache(
+            request_index=1,
+            path=cache_path,
+        )
+
+        self.assertTrue(wrote)
+        self.assertEqual(json.loads(handle), handle_dict)
+
+    def test_agent_deepen_accepts_json_thread_candidate_handle(self) -> None:
+        registry_dir = self.cwd / "registry"
+        thread_key = "session:thread-candidate"
+        clean_dir = registry_api.thread_store_dir(thread_key, registry_dir) / "clean-source"
+        clean_dir.mkdir(parents=True)
+        with (clean_dir / "messages.jsonl").open("w", encoding="utf-8", newline="\n") as handle:
+            handle.write(
+                json.dumps(
+                    {
+                        "thread_key": thread_key,
+                        "message_id": "msg_tc",
+                        "turn_id": "turn_tc",
+                        "turn_index": 1,
+                        "source_line": 1,
+                        "role": "assistant",
+                        "phase": "final_answer",
+                        "is_final": True,
+                        "text": "Thread candidate handles should reopen clean source.",
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n"
+            )
+
+        payload = agent_continuity.deepen(
+            json.dumps(
+                {
+                    "kind": "thread_candidate",
+                    "route_id": "route_thread_candidate",
+                    "thread_key": thread_key,
+                },
+                ensure_ascii=False,
+            ),
+            cwd=self.cwd,
+            clean_source_dir=self.clean,
+            registry_dir=registry_dir,
+        )
+
+        self.assertEqual(payload["status"], "ok")
+        self.assertEqual(payload["result"]["route_id"], "route_thread_candidate")
+        self.assertEqual(payload["result"]["source_refs"][0]["thread_key"], thread_key)
+
+    def test_compact_projection_does_not_advertise_last_recall_when_cache_missing(self) -> None:
+        payload = {
+            "kind": agent_continuity.KIND,
+            "schema_version": agent_continuity.SCHEMA_VERSION,
+            "mode": "recall",
+            "status": "ok",
+            "opt_in_required": False,
+            "last_recall_cache_available": False,
+            "foreground_action_card": {
+                "canonical_action": {
+                    "action_id": "agent_deepen_selected_route",
+                    "tool_name": "agent_deepen",
+                    "arguments": {"request_index": 1, "last_recall": True},
+                    "cli_command": "aippocampus agent deepen --request 1 --last-recall --json",
+                    "claim_boundary": "no_claim_before_reopen",
+                }
+            },
+            "memory_packets": [
+                {
+                    "route_id": "route_missing_cache",
+                    "route_label": "missing cache route",
+                    "output_mode": "reopenable_route",
+                    "claim_permission": "no_claim_before_reopen",
+                }
+            ],
+            "metrics": {"requested_max_routes": 1, "effective_max_routes": 1},
+            "policy_boundary": agent_continuity.policy_boundary(),
+        }
+
+        projected = agent_continuity.public_recall_projection(payload)
+        encoded = json.dumps(projected, ensure_ascii=False)
+
+        self.assertFalse(projected["last_recall_cache_available"])
+        self.assertNotIn("--last-recall", encoded)
+        self.assertEqual(projected["foreground_action"]["action_id"], "repair_last_recall_cache")
+        self.assertIn("last_recall_cache_recovery_card", projected)
+
+    def test_last_recall_unavailable_recovery_does_not_loop_to_same_command(self) -> None:
+        payload = agent_continuity_cli_support.last_recall_unavailable_payload(
+            mode="deepen",
+            exc=ValueError("public compact recall projection needs the same-machine last recall cache"),
+            schema_version=agent_continuity.SCHEMA_VERSION,
+            kind=agent_continuity.KIND,
+        )
+        encoded = json.dumps(payload, ensure_ascii=False)
+
+        self.assertEqual(payload["next_safe_action"], "recall_with_cue_full_detail")
+        self.assertEqual(payload["agent_next_action"]["id"], "recall_with_cue_full_detail")
+        self.assertNotIn("follow_up_action", payload)
+        self.assertNotIn("--last-recall", encoded)
 
     def test_memory_packet_budget_trimming_keeps_route_label(self) -> None:
         packet = {
@@ -1222,6 +1525,9 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertEqual(payload["output_boundary"], "public_compact_no_local_private_handles")
         self.assertEqual(payload["foreground_action"]["tool_name"], "agent_deepen")
         self.assertEqual(payload["foreground_action"]["arguments"]["request_index"], 1)
+        self.assertNotIn("cannot_claim", payload)
+        self.assertIn("source_backed_claims", payload["claim_boundary"]["must_reopen_for"])
+        self.assertTrue(payload["action_boundary"]["source_reopen_required_for_claims"])
         self.assertNotIn("memory_packets", payload)
         self.assertNotIn("deepen_requests", payload)
         self.assertNotIn("foreground_action_card", payload)
@@ -1263,6 +1569,7 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertIn("memory_packets", payload)
         self.assertIn("deepen_requests", payload)
         self.assertIn("foreground_action_card", payload)
+        self.assertIn("cannot_claim", payload)
         self.assertIn("aippo-nav:", encoded)
         self.assertNotIn(str(self.cwd), encoded)
 
@@ -1374,7 +1681,7 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stderr)
         self.assertEqual(deepen_proc.returncode, 0, deepen_proc.stderr)
         self.assertIn("AIppocampus agent recall: ok", proc.stdout)
-        self.assertIn("Next: aippocampus agent deepen --request 1 --last-recall.", proc.stdout)
+        self.assertIn("Next: aippocampus agent deepen --request 1 --last-recall --json.", proc.stdout)
         self.assertIn("AIppocampus agent deepen: ok", deepen_proc.stdout)
         self.assertIn("Boundary: route only", proc.stdout)
         self.assertNotIn('"memory_packets"', proc.stdout)
@@ -1591,12 +1898,77 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertIn("benchmark_reporting", payload["task_families"])
         self.assertIn("measured results", " ".join(payload["use_guidance"]))
         self.assertEqual(payload["foreground_action"]["tool_name"], "agent_aippo")
+        self.assertNotIn("cannot_claim", payload)
+        self.assertIn("source_backed_facts", payload["claim_boundary"]["must_reopen_for"])
         self.assertIn("operator_json_command", payload)
         self.assertNotIn("activation_packet", payload)
         self.assertNotIn("metrics", payload)
         self.assertNotIn("red_lines", payload)
         self.assertNotIn("source_refs", encoded)
         self.assertNotIn("candidate_provenance", encoded)
+
+    def test_cli_agent_aippo_use_hint_reports_available_clause(self) -> None:
+        proc = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "aippocampus_runtime.cli.facade",
+                "agent",
+                "aippo",
+                "--json",
+                "fix failing pytest after forgetting ruff",
+            ],
+            cwd=SCRIPTS,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            check=False,
+        )
+
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        payload = json.loads(proc.stdout)
+        status = payload["contract_status"]
+
+        self.assertEqual(payload["foreground_action"]["action_id"], "use_hint")
+        self.assertNotIn("cannot_claim", payload)
+        self.assertIn("source_backed_facts", payload["claim_boundary"]["must_reopen_for"])
+        self.assertGreaterEqual(status["available_active_clause_count"], 1)
+        self.assertEqual(status["available_active_clause_count"], status["active_clause_count"])
+        self.assertGreaterEqual(status["contract_active_clause_count"], status["active_clause_count"])
+        self.assertIn("active_not_foreground_available_count", status)
+        self.assertEqual(
+            payload["match_diagnostics"]["available_active_clause_count"],
+            status["available_active_clause_count"],
+        )
+
+    def test_cli_agent_aippo_no_match_recovers_instead_of_use_hint(self) -> None:
+        proc = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "aippocampus_runtime.cli.facade",
+                "agent",
+                "aippo",
+                "--json",
+                "casual chat about weather",
+            ],
+            cwd=SCRIPTS,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            check=False,
+        )
+
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        payload = json.loads(proc.stdout)
+
+        self.assertEqual(payload["status"], "no_active_contract")
+        self.assertEqual(payload["contract_status"]["available_active_clause_count"], 0)
+        self.assertNotEqual(payload["foreground_action"]["action_id"], "use_hint")
+        self.assertEqual(payload["foreground_action"]["tool_name"], "agent_recall")
+        self.assertIn("no_task_family_match", payload["reason_codes"])
 
     def test_cli_agent_aippo_core_product_journeys_are_not_empty_contracts(self) -> None:
         proc = subprocess.run(

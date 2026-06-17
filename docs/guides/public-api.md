@@ -49,7 +49,8 @@ this section remains the no-clone/API-stability path.
    source-backed snippet:
 
    ```sh
-   uvx aippocampus onboard --provider codex --all
+   uvx aippocampus onboard --provider codex --status --json
+   # Then follow the explicit write recommendation after consent.
    uvx aippocampus onboard --provider claude-code --dry-run
    uvx aippocampus onboard --provider claude-code
    uvx aippocampus import conversation --format generic-jsonl --input <path> --dry-run --json
@@ -76,10 +77,12 @@ this section remains the no-clone/API-stability path.
    repositories should not receive raw rollouts, registry exports, generated
    indexes, sync bundles, or private local paths.
 
-This path intentionally does not require MCP, Dream, cognitive-map jobs,
-semantic gates, sync, plugin packaging, benchmark runners, or hook installation.
-Those surfaces can be useful, but they are not the ordinary 10-minute dependency
-story.
+This path intentionally does not require MCP, cognitive-map jobs, sync, plugin
+packaging, benchmark runners, or hook installation. Unreviewed Dream,
+subconscious, and semantic jobs remain outside the 10-minute dependency story.
+Reviewed foreground cards such as `aippocampus agent background "task cue"
+--json` can still be product-visible continuity navigation when setup permits;
+they are not source evidence until source is reopened.
 
 The default control vocabulary for the personal path is pause / forget /
 do-not-use-here / export / why-not. `export`, `why-not`, and
@@ -93,7 +96,7 @@ nearest explicit route without claiming global pause or destructive deletion.
 | --- | --- | --- | --- |
 | No-clone probe or install smoke | PyPI `uvx aippocampus ...` and documented repository checks | Documented CLI command names, documented flags, return code success/failure, MCP tool names, and public-safe `--json` outputs where documented | Unreleased GitHub `uvx --from git+...` snapshots as stable release evidence; Codex-only scoped-provider status from the provider-matrix status command; unsigned binary paths beyond the dated Windows x64 evidence |
 | Local operator status | `aippocampus health`, `aippocampus onboard --status`, and `memory_health` MCP | Documented status fields, additive JSON fields, source-intake quality diagnostics, and CLI JSON error classes | Human-readable prose, local absolute paths, or private registry internals |
-| Opt-in agent continuity | `aippocampus agent recall`, `agent aippo`, `agent deepen`, `agent explain`, `agent feedback`, and `do-not-use-here` | Documented command names, public-safe JSON envelope fields, compact foreground packet fields, explicit deepen/request handles, and low-authority feedback receipts or JSONL rows when explicitly chosen | Default foreground hooks, every-turn recall, public SDK stability, hosted API behavior, feedback as source truth, or destructive forgetting |
+| Agent continuity pull path | `aippocampus agent recall`, `agent background`, `agent aippo`, `agent deepen`, `agent explain`, `agent feedback`, and `do-not-use-here` | Documented command names, public-safe JSON envelope fields, compact foreground packet fields, reviewed background finding handles, explicit deepen/request handles, and low-authority feedback receipts or JSONL rows when explicitly chosen | Default foreground hooks, every-turn recall, public SDK stability, hosted API behavior, background findings as facts, feedback as source truth, or destructive forgetting |
 | Agent-host read and setup tools | MCP `agent_recall`, `agent_aippo`, `agent_deepen`, `agent_explain`, `search_memory`, `recall_context`, `recall_deepen`, `latest_reply`, `get_turn_context`, `list_threads`, `register_thread`, `sync_status`, `memory_health`, `list_telepathy_handoffs`, and `deepen_telepathy_handoff` | Tool names, required input fields, additive output fields, JSON tool errors, public-safe path redaction, and compact foreground projections by default | Broad memory writes, `agent feedback` through MCP, Telepathy card create/release through MCP, hook install/uninstall, sync push/pull, arbitrary file ingest through MCP, or mutating setup calls without an explicit write-shaped argument |
 | Provider-neutral import | `aippocampus import conversation --format generic-jsonl` | Generic JSONL required fields, validation diagnostics, canonical source refs, and import manifests | Markdown import as a public claim, role-ambiguous transcripts, host-private metadata as public identity, or internal registry modules as public CLI contracts |
 | Script or CI integration | CLI `--json`, public schemas, and `aippocampus_runtime.cli.facade.run_command(capture_output=True)` inside a trusted Python process | Same command names, JSON shapes, and return-code policy as the public CLI | A broad Python or TypeScript domain SDK; helper-module internals under `skills/aippocampus/scripts/` |
@@ -102,6 +105,17 @@ nearest explicit route without claiming global pause or destructive deletion.
 | Research or roadmap work | Roadmap, evidence docs, benchmarks, and research notes | Evidence for the current implementation or design direction only | Public API stability for Dream, subconscious jobs, semantic caches, benchmark cache files, or cognitive-map artifacts |
 
 ## Copyable Agent Gesture
+
+For an agent-facing first call, choose the narrow foreground pull path before
+reading the full tool catalog:
+
+| Situation | First tool | Then |
+| --- | --- | --- |
+| Fuzzy old context, unfinished work, handoff, correction, or preference | `agent_recall` or `recall_context` | Deepen the selected route before claims. |
+| Exact phrase or distinctive wording | `search_memory` or `aippocampus search` | Reopen source before quoting or widening scope. |
+| Latest closeout | `latest_reply` | Use `get_turn_context` if surrounding turns matter. |
+| No route, stale registry, or missing source | `memory_health` or onboard/status card | Repair/setup only after explicit consent. |
+| Route was wrong, noisy, or should be quiet here | feedback/control command | Treat it as low-authority scoped feedback, not source truth. |
 
 Agent hosts that want one minimal source-backed continuity move should copy the
 `source_backed_continuity_gesture_v1` workflow from
@@ -121,10 +135,11 @@ network API. Negative and anti-nag controls are part of the gesture: do not call
 AIppocampus every turn, and do not treat AIppo activation or bounded summaries
 as source evidence.
 
-`aippocampus agent recall --attention-router-mode auto` belongs to this opt-in
-agent continuity surface. It may sort already emitted reopenable routes only
-after the explicit-pull attention-router gate passes; it is not a default hook,
-every-prompt recall path, hosted API behavior, or source-truth upgrade.
+`aippocampus agent recall --attention-router-mode auto` belongs to this
+agent continuity pull path. It may sort already emitted
+reopenable routes only after the explicit-pull attention-router gate passes; it
+is not a default hook, every-prompt recall path, hosted API behavior, or
+source-truth upgrade.
 Returned route labels, topics, and rank reasons are navigation previews only.
 
 The first executable AIppo working-contract fixture lives at
@@ -354,6 +369,11 @@ For these commands:
   reopen is available. `--public` and `--compact-json` remain compatibility
   aliases for this default. Use `--detail full` only for explicit local
   diagnostics where private handles are acceptable.
+- `aippocampus agent background "task cue" --json` is the foreground route for
+  reviewed Dream/subconscious working-memory findings. It may return finding
+  ids, matched terms, source-ref counts, and next actions to recall, deepen,
+  mark helpful/wrong, or preview action-hint materialization, but these findings
+  are navigation only and never source truth until source is reopened.
 - `observatory --json` emits a public-safe, no-write Cognitive Observatory
   readout; `observatory --html --output <path>` renders the same sanitized
   readout as a static, no-script operator view. The first stable slice
@@ -638,7 +658,7 @@ The sibling AIppo working-contract fixture uses the same boundary: foreground
 activation is working posture only, not evidence, and exact/public/disputed or
 high-risk claims still go through source reopen.
 
-The first packaged opt-in CLI path is:
+The first packaged foreground CLI path is:
 
 ```sh
 aippocampus agent recall "continue the old decision" --json
@@ -671,7 +691,7 @@ project/workflow working-contract activation. `agent feedback` records or
 returns calibration/routing evidence only; it cannot ripen a candidate-only,
 Dream-only, or stale clause without source support.
 
-`agent recall --attention-router` is an additive opt-in sorting path. It may
+`agent recall --attention-router` is an additive explicit sorting path. It may
 reorder already emitted `recall_context` routes through the deterministic
 attention router and reports `attention_router_navigation` diagnostics, but it
 does not create new source authority, change default hook behavior, or remove
@@ -964,21 +984,26 @@ Common installs should stay small:
   `--provider-env-var` to override the selected route variable name for local
   diagnostics.
 - `aippocampus doctor provider --discover-credential-sources --credential-dotenv <path> --json`
-  is an explicit onboarding diagnostic for cases where a key exists outside the
-  current process environment. It reads only user-specified `.env` files and the
-  current process env, reports public candidate shape and optional validation
-  status, omits local paths by default, and never prints secret values. It does
-  not change runtime behavior or install hook wrappers. `--validate-credentials`
-  may probe the selected route's models endpoint, but only over HTTPS or
-  loopback HTTP.
+  is an alternate operator diagnostic for cases where a key exists outside the
+  current process environment or the user explicitly chooses a private file. It
+  reads only user-specified `.env` files and the current process env, reports
+  public candidate shape and optional validation status, omits local paths by
+  default, and never prints secret values. It does not change runtime behavior
+  or install hook wrappers. `--validate-credentials` may probe the selected
+  route's models endpoint, but only over HTTPS or loopback HTTP.
 - `aippocampus onboard provider-key --plan|--apply|--undo --target codex-hooks`
-  is the explicit provider-key bridge surface. Apply writes only a local
+  is the explicit provider-key bridge surface. If `doctor provider` can already
+  see the selected env var in the current and child process, the normal plan is
+  `--source visible-env-key --provider-env-var <NAME>`; apply records only the
+  env-var source metadata and restart boundary. Apply writes only a local
   AIppocampus-owned hook wrapper plus manifest and updates Codex hook commands
-  to call that wrapper; secret values are never written to public JSON,
-  `hooks.json`, or the manifest. Supported source names are `explicit-dotenv`,
-  `macos-keychain`, `windows-credential-manager`, and `linux-secret-service`;
-  each requires explicit locator flags and is outside normal provider doctor
-  discovery. This prepares future/restarted Codex hook processes only.
+  to call that wrapper; secret values are never printed, hashed, validated,
+  or written to public JSON, `hooks.json`, or the manifest. Supported alternate
+  source names are `explicit-dotenv`, `macos-keychain`,
+  `windows-credential-manager`, and `linux-secret-service`; each requires
+  explicit locator flags and is outside normal provider doctor discovery. This
+  prepares future/restarted Codex hook processes only, and they are ready only
+  when launched from an environment with the same variable visible.
 - `aippocampus health --json`, `aippocampus doctor provider --json`, and
   `aippocampus onboard --status --json` expose path-free `legacy_aliases`
   diagnostics for compatibility fallbacks. New setup examples should still use

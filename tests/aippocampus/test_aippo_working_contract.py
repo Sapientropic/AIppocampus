@@ -114,6 +114,12 @@ class AIppoWorkingContractTests(unittest.TestCase):
             report["foreground_packet_budget_bytes"],
         )
         self.assertEqual(packet["active_clause_count"], len(packet["active_clause_ids"]))
+        self.assertEqual(packet["available_active_clause_count"], packet["active_clause_count"])
+        self.assertEqual(packet["contract_active_clause_count"], 3)
+        self.assertEqual(
+            packet["active_not_foreground_available_count"],
+            packet["contract_active_clause_count"] - packet["active_clause_count"],
+        )
         self.assertEqual(report["metrics"]["available_active_clause_count"], 3)
         self.assertEqual(report["metrics"]["suppressed_clause_count"], 3)
         self.assertGreater(report["metrics"]["active_clause_information_density"], 0)
@@ -140,8 +146,29 @@ class AIppoWorkingContractTests(unittest.TestCase):
         self.assertNotIn("PRIVATE_SOURCE_SENTINEL", encoded)
         self.assertNotIn("C:\\", encoded)
 
+    def test_activation_packet_exposes_public_safe_contract_deepen_action(self) -> None:
+        report = aippo.build_aippo_working_contract_fixture_report()
+        packet = report["activation_packet"]
+
+        action = packet["contract_action"]
+
+        self.assertEqual(action["action_id"], "deepen_aippo_working_contract")
+        self.assertEqual(action["tool_name"], "agent_deepen")
+        self.assertEqual(action["arguments"]["handle"], packet["deepen_route_id"])
+        self.assertEqual(action["claim_boundary"], "source_reopen_required_before_claim")
+        self.assertEqual(
+            action["authority_after_running"],
+            "source_open_within_aippo_contract_scope",
+        )
+        self.assertNotIn("source_refs", json.dumps(action, ensure_ascii=False))
+
     def test_compacted_activation_counts_match_visible_clause_ids(self) -> None:
         contract = aippo.build_project_workflow_public_safe_contract()
+        roomy_packet = aippo.activation_packet_from_working_contract(
+            contract,
+            task="benchmark reporting issue closeout",
+            max_packet_bytes=1200,
+        )
         packet = aippo.activation_packet_from_working_contract(
             contract,
             task="benchmark reporting issue closeout",
@@ -153,7 +180,10 @@ class AIppoWorkingContractTests(unittest.TestCase):
             {"source_backed_claim_without_reopen": 0},
         )
 
+        self.assertEqual(roomy_packet["contract_active_clause_count"], 3)
+        self.assertGreaterEqual(roomy_packet["active_not_foreground_available_count"], 2)
         self.assertEqual(packet["active_clause_count"], len(packet["active_clause_ids"]))
+        self.assertEqual(packet["available_active_clause_count"], packet["active_clause_count"])
         self.assertLessEqual(packet["active_clause_count"], 1)
         self.assertEqual(
             metrics["stable_workflow_search_avoided_count"],
@@ -188,6 +218,9 @@ class AIppoWorkingContractTests(unittest.TestCase):
 
         self.assertEqual(packet["task_families"], [])
         self.assertEqual(packet["active_clause_count"], 0)
+        self.assertEqual(packet["available_active_clause_count"], 0)
+        self.assertEqual(packet["contract_active_clause_count"], 3)
+        self.assertEqual(packet["active_not_foreground_available_count"], 3)
         self.assertEqual(packet["active_clause_ids"], [])
         self.assertEqual(packet["use_guidance"], [])
         self.assertEqual(packet["next_action"], "stay_silent")

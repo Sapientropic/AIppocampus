@@ -134,6 +134,8 @@ def diagnostics(
     return {
         "applied": bool(matched_rows),
         "consumer": "attention_route_projection",
+        "load_status": calibration_payload.get("load_status"),
+        "event_count_loaded": calibration_payload.get("event_count_loaded"),
         "matched_route_count": len(matched_rows),
         "positive_delta_count": positive,
         "negative_delta_count": negative,

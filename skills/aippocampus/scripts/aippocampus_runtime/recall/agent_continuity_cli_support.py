@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 from collections.abc import Iterable, Mapping
@@ -9,12 +10,19 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime import core
+from aippocampus_runtime.aippo import working_contract as aippo_working_contract
+from aippocampus_runtime.contracts import (
+    FOREGROUND_ACTION_CONTRACT_VERSION,
+    foreground_recovery_card,
+    foreground_shell_action,
+)
 from aippocampus_runtime.macro import state as macro_state
 from aippocampus_runtime.mcp.public_projection import compact_agent_recall_payload
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 from aippocampus_runtime.recall import feedback_events
 
 LAST_RECALL_CACHE_ENV = "AIPPOCAMPUS_AGENT_LAST_RECALL_PATH"
+DEFAULT_FEEDBACK_ENV = "AIPPOCAMPUS_FEEDBACK_JSONL"
 DEFAULT_MACRO_STATE_RELATIVE_PATHS = (
     Path(".aippocampus") / "macro-orientation.jsonl",
     Path(".aippocampus") / "macro_orientation.jsonl",
@@ -76,7 +84,9 @@ def handle_boundary_fields() -> dict[str, Any]:
 
 def policy_boundary() -> dict[str, Any]:
     return {
-        "opt_in_required": True,
+        "opt_in_required": False,
+        "activation_model": "explicit_foreground_action",
+        "legacy_opt_in_wording_retired": True,
         "default_hook_foreground": False,
         "navigation_only_not_fact": True,
         "source_reopen_required_for_strong_claims": True,
@@ -86,19 +96,123 @@ def policy_boundary() -> dict[str, Any]:
     }
 
 
-def handle_recovery_fields(mode: str) -> dict[str, Any]:
-    command = f"aippocampus agent {mode} --request 1 --last-recall --json"
+def agent_recall_missing_query_payload(
+    *,
+    schema_version: str,
+    kind: str,
+) -> dict[str, Any]:
+    payload = foreground_recovery_card(
+        kind=kind,
+        status="needs_input",
+        error_code="agent_recall_cue_required",
+        message="agent recall needs a cue, old decision, issue title, or handoff phrase.",
+        safe_next_actions=[
+            foreground_shell_action(
+                action_id="recall_vague_cue",
+                label="Run agent recall with a continuity cue",
+                command='aippocampus agent recall "old decision or handoff cue" --json',
+                why="Use recall for fuzzy continuity, unfinished work, and old route context.",
+                mutation_risk="read_only",
+                claim_boundary="no_claim_before_reopen",
+            ),
+            foreground_shell_action(
+                action_id="search_exact_phrase",
+                label="Search exact clean-source wording",
+                command='aippocampus search "distinctive exact phrase" --json',
+                why="Use search when you know a distinctive exact phrase.",
+                mutation_risk="read_only",
+                claim_boundary="search_result_requires_source_boundary",
+            ),
+            foreground_shell_action(
+                action_id="check_onboarding_status",
+                label="Check source registration",
+                command="aippocampus onboard --provider auto --status --json",
+                why="Use this if recall/search has no local clean-source surface yet.",
+                mutation_risk="read_only",
+                claim_boundary="setup_status_not_memory_evidence",
+            ),
+        ],
+    )
+    payload.update(
+        {
+            "schema_version": schema_version,
+            "recovery_kind": "aippocampus_agent_recall_recovery",
+            "mode": "recall",
+            "surface": "agent_cli_or_mcp_adapter",
+            "policy_boundary": policy_boundary(),
+            "claim_boundary": {
+                "can_use_for": ["asking_for_a_cue", "choosing_a_read_only_next_action"],
+                "must_reopen_for": ["source_backed_claims", "absence_of_memory_claims"],
+                "detail_available_with": 'aippocampus agent recall "old decision or handoff cue" --json --detail full',
+            },
+        }
+    )
+    return payload
+
+
+def _foreground_template_action(
+    action_id: str, command_template: str, requires: list[str], label: str, why: str
+) -> dict[str, Any]:
     return {
-        "foreground_action": {
-            "tool_name": f"agent_{mode}",
-            "arguments": {"request_index": 1, "last_recall": True},
-            "cli_command": command,
-            "claim_boundary": "no_claim_before_reopen",
-        },
-        "agent_next_action": command,
-        "next_safe_action": "rerun_agent_recall_then_request_index",
-        "examples": ['aippocampus agent recall "<cue>" --json', command],
-        "recovery_actions": ['aippocampus agent recall "<cue>" --json', command],
+        "id": action_id,
+        "label": label,
+        "command_template": command_template,
+        "requires": list(requires),
+        "mutation_risk": "read_only",
+        "claim_boundary": "no_claim_before_reopen",
+        "why": why,
+    }
+
+
+def _recall_with_cue_action(*, label: str, why: str, action_id: str = "recall_with_cue") -> dict[str, Any]:
+    return _foreground_template_action(
+        action_id, 'aippocampus agent recall "{cue}" --json', ["cue"], label, why
+    )
+
+
+def _request_index_followup_action(mode: str) -> dict[str, Any]:
+    return _foreground_template_action(
+        f"{mode}_last_recall_request",
+        f"aippocampus agent {mode} --request {{request_index}} --last-recall --json",
+        ["last_recall_cache", "request_index"],
+        f"Run agent {mode} against a numbered route from the last recall",
+        "Requires a fresh recall cache and selected request index.",
+    )
+
+
+def handle_recovery_fields(mode: str) -> dict[str, Any]:
+    actions = [
+        _recall_with_cue_action(
+            label="Run agent recall with a continuity cue",
+            why="Recall must run before request-index deepen/explain.",
+        ),
+        _request_index_followup_action(mode),
+    ]
+    return {
+        "foreground_action_contract": FOREGROUND_ACTION_CONTRACT_VERSION,
+        "foreground_action": actions[0],
+        "follow_up_action": actions[1],
+        "agent_next_action": actions[0],
+        "next_safe_action": "recall_with_cue_then_request_index",
+        "safe_next_actions": actions,
+    }
+
+
+def last_recall_cache_recovery_fields(mode: str) -> dict[str, Any]:
+    del mode
+    action = _recall_with_cue_action(
+        label="Rerun agent recall with full detail",
+        why="The last-recall cache was unavailable; rerun recall for a fresh route.",
+    ) | {
+        "id": "recall_with_cue_full_detail",
+        "command_template": 'aippocampus agent recall "{cue}" --json --detail full',
+    }
+    return {
+        "foreground_action_contract": FOREGROUND_ACTION_CONTRACT_VERSION,
+        "foreground_action": action,
+        "agent_next_action": action,
+        "next_safe_action": "recall_with_cue_full_detail",
+        "safe_next_actions": [action],
     }
 
 
@@ -113,7 +227,7 @@ def missing_handle_payload(
             "code": "missing_recall_handle",
             "message": f"agent {mode} requires a local handle or --request N --last-recall",
         },
-        "next_safe_action": "rerun_agent_recall_then_request_index",
+        "next_safe_action": "recall_with_cue_then_request_index",
     }
     return _public_payload(
         {
@@ -152,7 +266,7 @@ def last_recall_unavailable_payload(
                     "message": str(exc),
                 }
             },
-            **handle_recovery_fields(mode),
+            **last_recall_cache_recovery_fields(mode),
             "policy_boundary": policy_boundary(),
             "cannot_claim": ["source_backed_claim", "route_handle_as_fact"],
         }
@@ -163,6 +277,60 @@ def _public_payload(payload: Any) -> Any:
     return redact_sensitive_values(redact_private_paths(payload))
 
 
+def _workspace_feedback_scope_id(cwd: str | Path | None = None) -> str:
+    root = Path(cwd or Path.cwd()).expanduser().resolve()
+    digest = hashlib.sha256(str(root).encode("utf-8", errors="replace")).hexdigest()[:16]
+    return f"workspace_{digest}"
+
+
+def feedback_lane_resolution(
+    explicit: str | Path | None = None,
+    *,
+    cwd: str | Path | None = None,
+    registry_dir: str | Path | None = None,
+) -> dict[str, Any]:
+    """Resolve the low-authority route-feedback lane for foreground controls.
+
+    The default lane is deliberately registry-backed and workspace-scoped. Do
+    not broaden this into a project-local `.aippocampus` write or a global
+    unscoped feedback file: route feedback is useful calibration, not source
+    truth, and `do-not-use-here` must not bleed across unrelated workspaces.
+    """
+
+    if explicit:
+        return {
+            "path": Path(explicit).expanduser().resolve(),
+            "path_source": "argument",
+            "scope": "explicit_override",
+            "path_label": "explicit-feedback-jsonl",
+            "raw_path_emitted": False,
+        }
+    env_value = os.environ.get(DEFAULT_FEEDBACK_ENV)
+    if env_value:
+        return {
+            "path": Path(env_value).expanduser().resolve(),
+            "path_source": "environment",
+            "scope": "explicit_override",
+            "path_label": f"{DEFAULT_FEEDBACK_ENV}",
+            "raw_path_emitted": False,
+        }
+    scope_id = _workspace_feedback_scope_id(cwd)
+    root = Path(registry_dir).expanduser().resolve() if registry_dir else core.aippocampus_registry_dir().resolve()
+    return {
+        "path": root / "agent" / "feedback" / scope_id / "route-feedback.jsonl",
+        "path_source": "default_registry",
+        "scope": "current_workspace",
+        "scope_id": scope_id,
+        "path_label": "registry/agent/feedback/<workspace-scope>/route-feedback.jsonl",
+        "raw_path_emitted": False,
+        "review_boundary": {
+            "local_jsonl_lane": True,
+            "source_truth_mutation_allowed": False,
+            "remove_or_edit_requires_explicit_local_file_action": True,
+        },
+    }
+
+
 def capture_feedback(
     *,
     route_id: str,
@@ -170,7 +338,8 @@ def capture_feedback(
     route_kind: str = "active_path",
     reason: str = "",
     feedback_path: str | Path | None = None,
-    schema_version: str = "agent-opt-in-continuity-v0",
+    feedback_lane: Mapping[str, Any] | None = None,
+    schema_version: str = "agent-continuity-path-v1",
     kind: str = "aippocampus_agent_continuity_path",
 ) -> dict[str, Any]:
     """Capture low-authority outcome feedback without changing source truth."""
@@ -198,6 +367,7 @@ def capture_feedback(
             "status": "captured",
             "authority": "low_authority_feedback_signal",
             "event": event,
+            "feedback_lane": dict(feedback_lane or {}) if feedback_lane else None,
             "feedback_report": report,
             "wrote_event": wrote_event,
             "storage": "jsonl" if wrote_event else "receipt_only",
@@ -218,12 +388,14 @@ def capture_feedback(
 def compact_feedback_receipt(
     payload: Mapping[str, Any],
     *,
-    schema_version: str = "agent-opt-in-continuity-v0",
+    schema_version: str = "agent-continuity-path-v1",
     kind: str = "aippocampus_agent_continuity_path",
 ) -> dict[str, Any]:
     raw_event = payload.get("event")
     event: Mapping[str, Any] = raw_event if isinstance(raw_event, Mapping) else {}
     wrote_event = bool(payload.get("wrote_event"))
+    raw_lane = payload.get("feedback_lane")
+    lane: Mapping[str, Any] = raw_lane if isinstance(raw_lane, Mapping) else {}
     return _public_payload(
         {
             "kind": kind,
@@ -245,8 +417,9 @@ def compact_feedback_receipt(
                 "source_truth_changed_by_feedback": False,
                 "feedback_is_source_truth": False,
             },
+            "feedback_lane": dict(lane) if lane else None,
             "agent_next_action": (
-                "Feedback was written to the local JSONL calibration lane; continue the task "
+                "Feedback was written to the scoped local calibration lane; continue the task "
                 "and reopen source before making claims."
                 if wrote_event
                 else "This is only a receipt. Add --feedback-jsonl <path> when you want future "
@@ -263,7 +436,7 @@ def compact_feedback_receipt(
 
 def missing_feedback_route_payload(
     *,
-    schema_version: str = "agent-opt-in-continuity-v0",
+    schema_version: str = "agent-continuity-path-v1",
     kind: str = "aippocampus_agent_continuity_path",
 ) -> dict[str, Any]:
     return _public_payload(
@@ -273,13 +446,30 @@ def missing_feedback_route_payload(
             "mode": "feedback",
             "status": "needs_route_id",
             "ok": False,
-            "agent_next_action": (
-                "Run `aippocampus agent recall \"old cue\" --json`, deepen the selected route "
-                "if needed, then pass the route_id to `aippocampus agent feedback <route_id>`."
-            ),
-            "examples": [
-                'aippocampus agent recall "old cue" --json',
-                "aippocampus agent feedback <route_id> --outcome source_reopen_success --json",
+            "agent_next_action": {
+                "id": "recall_before_feedback",
+                "command": 'aippocampus agent recall "old cue" --json',
+                "why": "Feedback needs a route_id from a recall result.",
+            },
+            "safe_next_actions": [
+                {
+                    "id": "recall_before_feedback",
+                    "command": 'aippocampus agent recall "old cue" --json',
+                    "mutation_risk": "read_only",
+                    "claim_boundary": "no_claim_before_reopen",
+                },
+                {
+                    "id": "deepen_if_needed",
+                    "command": "aippocampus agent deepen --request 1 --last-recall --json",
+                    "mutation_risk": "read_only",
+                    "claim_boundary": "no_claim_before_reopen",
+                },
+                {
+                    "id": "record_route_feedback",
+                    "command": "aippocampus agent feedback <route_id> --outcome source_reopen_success --json",
+                    "mutation_risk": "durable_low_authority_feedback_write",
+                    "claim_boundary": "feedback_is_not_source_truth",
+                },
             ],
             "write_boundary": {
                 "wrote_event": False,
@@ -305,7 +495,36 @@ def public_recall_projection(payload: Mapping[str, Any]) -> dict[str, Any]:
     projected.update(handle_boundary_fields())
     projected["surface"] = "agent_cli_public_compact"
     projected["output_boundary"] = "public_compact_no_local_private_handles"
-    projected["last_recall_cache_available"] = bool(source.get("last_recall_cache_available"))
+    cache_available = bool(source.get("last_recall_cache_available"))
+    projected["last_recall_cache_available"] = cache_available
+    action = projected.get("foreground_action")
+    action_map = action if isinstance(action, Mapping) else {}
+    raw_action_args = action_map.get("arguments")
+    action_args = raw_action_args if isinstance(raw_action_args, Mapping) else {}
+    advertises_last_recall = bool(action_args.get("last_recall")) or "--last-recall" in str(
+        action_map.get("cli_command") or ""
+    )
+    if not cache_available and advertises_last_recall:
+        projected["foreground_action"] = {
+            "action_id": "repair_last_recall_cache",
+            "tool_name": "agent_recall",
+            "arguments": {"query": "<same cue>", "detail": "full"},
+            "cli_command": 'aippocampus agent recall "<same cue>" --json --detail full',
+            "why": (
+                "Recall found route-shaped context, but the same-machine request cache was "
+                "not written, so request-index deepen is not available from compact output."
+            ),
+            "claim_boundary": "no_claim_before_reopen",
+        }
+        projected["last_recall_cache_recovery_card"] = {
+            "status": "cache_unavailable",
+            "primary_action": "rerun_recall_or_use_full_local_diagnostics",
+            "safe_actions": [
+                'aippocampus agent recall "<same cue>" --json',
+                'aippocampus agent recall "<same cue>" --json --detail full',
+            ],
+            "boundary": "full detail may expose local-private handles; keep it local",
+        }
     return projected
 
 
@@ -325,8 +544,36 @@ def compact_aippo_guidance_card(payload: Mapping[str, Any], *, task: str = "") -
     families = [str(item) for item in packet.get("task_families") or [] if str(item).strip()]
     status = str(payload.get("status") or "unknown")
     next_action = str(packet.get("next_action") or "").strip()
+    active_clause_count = int(packet.get("active_clause_count") or 0)
+    available_raw = packet.get("available_active_clause_count")
+    available_active_clause_count = (
+        int(available_raw)
+        if isinstance(available_raw, (int, float)) and not isinstance(available_raw, bool)
+        else active_clause_count
+    )
+    contract_active_clause_count = int(packet.get("contract_active_clause_count") or 0)
+    active_not_foreground_available_count = int(
+        packet.get("active_not_foreground_available_count") or 0
+    )
+    suppressed_clause_count = int(packet.get("suppressed_clause_count") or 0)
+    direct_guidance_available = bool(guidance and next_action and next_action != "use_hint")
+    use_hint_available = (
+        status == "ok"
+        and bool(guidance)
+        and next_action == "use_hint"
+        and available_active_clause_count > 0
+    )
+    deepen_route_id = str(packet.get("deepen_route_id") or "").strip()
+    contract_action_raw = packet.get("contract_action")
+    contract_action = (
+        dict(contract_action_raw)
+        if isinstance(contract_action_raw, Mapping)
+        else aippo_working_contract.contract_deepen_action(deepen_route_id)
+        if deepen_route_id
+        else None
+    )
     task_text = str(task or "").strip()
-    if status == "ok" and guidance:
+    if use_hint_available or (status == "ok" and direct_guidance_available):
         foreground_action = {
             "action_id": next_action or "use_aippo_working_contract_guidance",
             "tool_name": "agent_aippo",
@@ -341,15 +588,12 @@ def compact_aippo_guidance_card(payload: Mapping[str, Any], *, task: str = "") -
         foreground_action = {
             "action_id": "run_agent_recall_if_prior_source_matters",
             "tool_name": "agent_recall",
-            "arguments": {"query": task_text or "<continuity cue>"},
-            "cli_command": (
-                f'aippocampus agent recall "{task_text}" --json'
-                if task_text
-                else 'aippocampus agent recall "<continuity cue>" --json'
-            ),
+            "arguments": {"query": task_text} if task_text else {"query_required": True},
             "claim_boundary": "no_aippo_guidance_no_claim",
             "why": "No active AIppo working contract matched strongly enough.",
         }
+        if task_text:
+            foreground_action["cli_command"] = f'aippocampus agent recall "{task_text}" --json'
     reason_codes: list[str] = []
     no_contract_reason = str(packet.get("no_active_contract_reason") or "").strip()
     if no_contract_reason:
@@ -358,6 +602,8 @@ def compact_aippo_guidance_card(payload: Mapping[str, Any], *, task: str = "") -
         reason_codes.append("related_task_needs_reopen_or_contract_ripening")
     elif not families and task_text:
         reason_codes.append("no_task_family_match")
+    if next_action == "use_hint" and guidance and available_active_clause_count <= 0:
+        reason_codes.append("use_hint_blocked_no_available_active_clause")
     return _public_payload(
         {
             "kind": payload.get("kind"),
@@ -372,24 +618,42 @@ def compact_aippo_guidance_card(payload: Mapping[str, Any], *, task: str = "") -
             "foreground_action": foreground_action,
             "reason_codes": reason_codes,
             "contract_status": {
-                "active_clause_count": int(packet.get("active_clause_count") or 0),
-                "available_active_clause_count": int(
-                    packet.get("available_active_clause_count") or 0
+                "active_clause_count": active_clause_count,
+                "available_active_clause_count": available_active_clause_count,
+                "contract_active_clause_count": contract_active_clause_count,
+                "active_not_foreground_available_count": active_not_foreground_available_count,
+                "suppressed_clause_count": suppressed_clause_count,
+                "availability_basis": str(
+                    packet.get("availability_basis")
+                    or "unknown_packet_projection"
                 ),
-                "suppressed_clause_count": int(packet.get("suppressed_clause_count") or 0),
             },
+            "match_diagnostics": {
+                "task_family_count": len(families),
+                "selected_clause_count": active_clause_count,
+                "available_active_clause_count": available_active_clause_count,
+                "contract_active_clause_count": contract_active_clause_count,
+                "active_not_foreground_available_count": active_not_foreground_available_count,
+                "direct_guidance_available": direct_guidance_available,
+            },
+            "contract_action": contract_action,
             "boundary": {
                 "authority": "working_guidance",
                 "navigation_only_not_fact": True,
                 "source_reopen_required_for_claims": True,
                 "candidate_surfaces_are_not_truth": True,
             },
+            "claim_boundary": {
+                "can_use_for": ["low_risk_working_guidance", "next_action_choice"],
+                "must_reopen_for": [
+                    "source_backed_facts",
+                    "public_product_readiness",
+                    "exact_user_history_claims",
+                ],
+                "detail_available_with": 'aippocampus agent aippo --task "task cue" --json --operator-json',
+            },
             "operator_json_available": True,
-            "operator_json_command": "aippocampus agent aippo <task> --json --operator-json",
-            "cannot_claim": [
-                "claim_ready_facts_without_source_reopen",
-                "public_product_readiness_from_aippo_guidance",
-            ],
+            "operator_json_command": 'aippocampus agent aippo --task "task cue" --json --operator-json',
         }
     )
 
@@ -411,7 +675,12 @@ def _encode_local_reopen_token(value: Any) -> dict[str, Any]:
     public output should keep using `--public` / `--compact-json`.
     """
 
-    raw = str(value or "").encode("utf-8")
+    raw_text = (
+        json.dumps(dict(value), ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        if isinstance(value, Mapping)
+        else str(value or "")
+    )
+    raw = raw_text.encode("utf-8")
     return {
         "encoding": LOCAL_REOPEN_TOKEN_ENCODING,
         "bytes": [byte ^ _LOCAL_REOPEN_TOKEN_MASK for byte in raw],
@@ -656,8 +925,25 @@ def render_macro_human(payload: Mapping[str, Any]) -> str:
         diagnostics = [str(item) for item in payload.get("diagnostics") or [] if str(item)]
         if diagnostics:
             lines.append("Why: " + ", ".join(diagnostics[:3]))
-        lines.append("Expected: .aippocampus/macro-orientation.jsonl or --macro-state-jsonl.")
-        lines.append("Repair: aippocampus agent macro --explain-schema")
+        actions: list[str] = []
+        for action in payload.get("safe_next_actions") or []:
+            if not isinstance(action, Mapping):
+                continue
+            command = str(action.get("command") or "").strip()
+            if not command:
+                command = str(action.get("command_template") or action.get("id") or "").strip()
+            if command:
+                actions.append(command)
+            if len(actions) == 3:
+                break
+        if actions:
+            lines.extend(
+                ("Next: " if index == 0 else "Or: ") + command
+                for index, command in enumerate(actions)
+            )
+        else:
+            lines.append("Expected: .aippocampus/macro-orientation.jsonl or --macro-state-jsonl.")
+            lines.append("Repair: aippocampus agent macro --explain-schema")
     lines.append("Boundary: macro orientation is navigation only, not source truth.")
     return "\n".join(lines)
 

@@ -37,7 +37,9 @@ class PluginDistributionTests(unittest.TestCase):
         interface = manifest["interface"]
         self.assertIn("privacy", interface["longDescription"].casefold())
         self.assertIn("explicit", interface["longDescription"].casefold())
-        self.assertIn("first source-backed recall", interface["longDescription"].casefold())
+        self.assertIn("trusted codex hooks/action hints", interface["longDescription"].casefold())
+        self.assertIn("silent auto-enable: no", interface["longDescription"].casefold())
+        self.assertIn("no-key source-backed fallback", interface["longDescription"].casefold())
         self.assertLessEqual(len(interface["defaultPrompt"]), 3)
         self.assertTrue(all(len(item) <= 128 for item in interface["defaultPrompt"]))
         self.assertIn("source-backed", interface["shortDescription"].casefold())

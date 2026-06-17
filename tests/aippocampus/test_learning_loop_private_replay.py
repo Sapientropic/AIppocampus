@@ -3,7 +3,9 @@ from __future__ import annotations
 import json
 import sys
 import unittest
+from io import StringIO
 from pathlib import Path
+from unittest.mock import patch
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
@@ -21,9 +23,57 @@ from aippocampus_runtime.learning_loop.private_replay import (  # noqa: E402
     build_private_history_replay_report,
     private_replay_fixture_events,
 )
+from aippocampus_runtime.learning_loop.private_replay import (
+    main as private_replay_main,
+)
 
 
 class LearningLoopPrivateReplayTests(unittest.TestCase):
+    def _run_private_replay(self, argv: list[str]) -> tuple[int, str, str]:
+        with patch("sys.stdout", new=StringIO()) as stdout, patch("sys.stderr", new=StringIO()) as stderr:
+            code = private_replay_main(argv)
+        return int(code or 0), stdout.getvalue(), stderr.getvalue()
+
+    def test_missing_replay_events_file_returns_json_recovery_without_path_leak(self) -> None:
+        missing = Path("E:/private/source/missing-events.jsonl")
+
+        code, stdout, stderr = self._run_private_replay(["--events", str(missing), "--json"])
+
+        self.assertNotEqual(code, 0)
+        self.assertEqual(stderr, "")
+        self.assertNotIn("Traceback", stdout + stderr)
+        payload = json.loads(stdout)
+        encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertEqual(payload["kind"], "aippocampus_learning_frontdoor")
+        self.assertEqual(payload["mode"], "replay_recovery")
+        self.assertEqual(payload["error"]["code"], "learning_events_file_not_found")
+        self.assertFalse(payload["privacy_boundary"]["local_paths_serialized"])
+        self.assertIn("safe_next_actions", payload)
+        self.assertNotIn("E:/private", encoded)
+
+    def test_missing_clean_source_export_events_returns_json_recovery_without_writing(self) -> None:
+        missing = Path("C:/Users/private/source/missing-clean-source-events.jsonl")
+        output = Path("C:/Users/private/source/sanitized.jsonl")
+
+        code, stdout, stderr = self._run_private_replay(
+            [
+                "--clean-source-events",
+                str(missing),
+                "--export-output",
+                str(output),
+                "--json",
+            ]
+        )
+
+        self.assertNotEqual(code, 0)
+        self.assertEqual(stderr, "")
+        payload = json.loads(stdout)
+        encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertEqual(payload["error"]["code"], "learning_events_file_not_found")
+        self.assertFalse(payload["write_performed"])
+        self.assertNotIn("Traceback", encoded + stderr)
+        self.assertNotIn("C:/Users/private", encoded)
+
     def test_private_replay_reports_aggregate_metrics_without_raw_leaks(self) -> None:
         events = private_replay_fixture_events()
         events[0]["raw_text"] = "PRIVATE_HISTORY_PAYLOAD should never be serialized"

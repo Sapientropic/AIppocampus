@@ -15,6 +15,11 @@ from typing import Any
 
 from aippocampus_runtime import core
 from aippocampus_runtime.aippo import working_contract as aippo
+from aippocampus_runtime.contracts import (
+    FOREGROUND_ACTION_CONTRACT_VERSION,
+    foreground_recovery_card,
+    foreground_shell_action,
+)
 from aippocampus_runtime.macro import state as macro_state
 from aippocampus_runtime.mcp.recall_navigation import (
     RecallNavigationError,
@@ -31,6 +36,7 @@ from aippocampus_runtime.recall import (
     agent_semantic_diagnostics,
     architecture_navigation_affordance,
     attention_router_policy,
+    background_findings,
     feedback_events,
     foreground_action_card,
     macro_field_live,
@@ -41,9 +47,11 @@ from aippocampus_runtime.recall import (
 )
 from aippocampus_runtime.recall.agent_continuity_cli_support import (
     DEFAULT_MACRO_STATE_RELATIVE_PATHS,
+    agent_recall_missing_query_payload,
     capture_feedback,
     compact_aippo_guidance_card,
     compact_feedback_receipt,
+    feedback_lane_resolution,
     handle_boundary_fields,
     handle_from_last_recall_cache,
     handle_recovery_fields,
@@ -63,7 +71,7 @@ from aippocampus_runtime.recall.agent_continuity_cli_support import (
     write_last_recall_cache,
 )
 
-SCHEMA_VERSION = "agent-opt-in-continuity-v0"
+SCHEMA_VERSION = "agent-continuity-path-v1"
 MACRO_PACKET_SCHEMA_VERSION = "macro-orientation-agent-packet-v0"
 KIND = "aippocampus_agent_continuity_path"
 MAX_ROUTES = 5
@@ -409,6 +417,69 @@ def _macro_project_from_handle(value: Any) -> str | None:
     return project or None
 
 
+def _macro_positional_cue_payload(cue: str, *, project: str) -> dict[str, Any]:
+    return _public_payload(
+        foreground_recovery_card(
+            kind=KIND,
+            error_code="macro_positional_cue_not_supported",
+            message=(
+                "agent macro is a project navigation-prior command, not a cue search. "
+                "Use agent recall for positional cues."
+            ),
+            safe_next_actions=[
+                foreground_shell_action(
+                    action_id="recall_positional_cue",
+                    label="Recall this cue",
+                    command=f"aippocampus agent recall {json.dumps(cue, ensure_ascii=False)} --json",
+                    why="A positional macro argument is most likely a continuity cue.",
+                    mutation_risk="read_only",
+                    claim_boundary="no_claim_before_reopen",
+                ),
+                foreground_shell_action(
+                    action_id="inspect_macro_project",
+                    label="Read macro orientation for the project",
+                    command=f"aippocampus agent macro --project {json.dumps(project, ensure_ascii=False)} --json",
+                    why="Use macro only as a navigation prior after project state exists.",
+                    mutation_risk="read_only",
+                    claim_boundary="macro_orientation_not_source_truth",
+                ),
+                foreground_shell_action(
+                    action_id="explain_macro_schema",
+                    label="Explain macro state schema",
+                    command="aippocampus agent macro --explain-schema",
+                    why="Use this when setting up a local macro-orientation state file.",
+                    mutation_risk="read_only",
+                    claim_boundary="operator_setup_not_source_evidence",
+                ),
+            ],
+            source_boundary={
+                "macro_orientation_is_navigation_only": True,
+                "source_reopen_required_before_claims": True,
+                "no_write_happened": True,
+            },
+        )
+        | {
+            "schema_version": SCHEMA_VERSION,
+            "mode": "macro",
+            "surface": "macro_orientation",
+            "project": project,
+            "cue": cue,
+        }
+    )
+
+
+def _render_macro_recovery_text(payload: Mapping[str, Any]) -> str:
+    actions = [item for item in payload.get("safe_next_actions") or [] if isinstance(item, Mapping)]
+    lines = [
+        "AIppocampus agent macro: cue provided",
+        "decision: use recall for cue-shaped input; macro is only a project navigation prior.",
+    ]
+    for action in actions[:3]:
+        lines.append(f"- {action.get('label') or action.get('id')}: {action.get('command')}")
+    lines.append("Boundary: macro orientation is navigation only, not source truth.")
+    return "\n".join(lines)
+
+
 def _load_macro_projection(
     *,
     project: str,
@@ -574,6 +645,46 @@ def macro_orientation(
         for packet in memory_packets
     ]
     forbidden_count = _count_forbidden_keys(memory_packets)
+    safe_next_actions: list[dict[str, Any]] = []
+    if deepen_requests:
+        suggested_next = "agent deepen"
+        foreground_action = None
+    elif projection.get("status") == "missing_macro_state_path":
+        suggested_next = "agent_recall_or_macro_schema_setup"
+        safe_next_actions = [
+            {
+                "id": "recall_project_macro_orientation",
+                "label": "Recall project macro-orientation context",
+                "command_template": 'aippocampus agent recall "{cue}" --json',
+                "requires": ["cue"],
+                "mutation_risk": "read_only",
+                "claim_boundary": "no_claim_before_reopen",
+                "why": (
+                    "No macro state exists; ordinary recall is the usable foreground path "
+                    "unless the user is setting up macro state."
+                ),
+            },
+            {
+                "id": "explain_macro_schema",
+                "label": "Explain macro state schema",
+                "command": "aippocampus agent macro --explain-schema",
+                "mutation_risk": "read_only",
+                "claim_boundary": "operator_setup_not_source_evidence",
+                "why": "Use this when preparing or repairing a local macro-orientation state file.",
+            },
+            {
+                "id": "init_macro_state_template",
+                "label": "Create a macro state template",
+                "command": "aippocampus agent macro --init-template --json",
+                "mutation_risk": "local_template_stdout_only",
+                "claim_boundary": "operator_setup_not_source_evidence",
+                "why": "Use this to inspect the expected local JSONL entry shape before writing state.",
+            },
+        ]
+        foreground_action = safe_next_actions[0]
+    else:
+        suggested_next = "continue_normally"
+        foreground_action = None
     result = {
         "kind": KIND,
         "schema_version": SCHEMA_VERSION,
@@ -581,10 +692,14 @@ def macro_orientation(
         "mode": "macro",
         "surface": "macro_orientation",
         "status": "ok" if memory_packets else str(projection.get("status") or "no_packet"),
-        "opt_in_required": True,
+        "opt_in_required": False,
         "memory_packets": memory_packets,
         "deepen_requests": deepen_requests,
-        "suggested_next": "agent deepen" if deepen_requests else "continue_normally",
+        "suggested_next": suggested_next,
+        "foreground_action_contract": FOREGROUND_ACTION_CONTRACT_VERSION,
+        "foreground_action": foreground_action,
+        "agent_next_action": foreground_action,
+        "safe_next_actions": safe_next_actions,
         "diagnostics": diagnostics,
         "metrics": {
             "macro_packet_shown_count": len(memory_packets),
@@ -722,7 +837,9 @@ def recall(
 
     cwd_path = core.canonical_path(cwd or Path.cwd())
     source_dir = _clean_source_dir(cwd_path, clean_source_dir)
-    registry_path = _as_path(registry_dir, Path()) if registry_dir else None
+    registry_path = (
+        _as_path(registry_dir, Path()) if registry_dir else core.aippocampus_registry_dir().resolve()
+    )
     requested_limit = normalize_route_limit(max_routes, default=MAX_ROUTES)
     macro_projection = _load_macro_projection(
         project=project,
@@ -755,7 +872,7 @@ def recall(
                 "mode": "recall",
                 "surface": "agent_cli_or_mcp_adapter",
                 "status": "cannot_verify",
-                "opt_in_required": True,
+                "opt_in_required": False,
                 "foreground_action_card": action_card,
                 "audit_available": True,
                 "memory_packets": [],
@@ -873,7 +990,7 @@ def recall(
         "mode": "recall",
         "surface": "agent_cli_or_mcp_adapter",
         "status": "ok" if memory_packets else "no_routes",
-        "opt_in_required": True,
+        "opt_in_required": False,
         "foreground_action_card": action_card,
         "audit_available": True,
         "memory_packets": memory_packets,
@@ -930,7 +1047,7 @@ def activate_aippo(*, task: str = "") -> dict[str, Any]:
         "mode": "aippo",
         "surface": "project_workflow_ai_ppocampus",
         "status": "ok" if has_guidance else "no_active_contract",
-        "opt_in_required": True,
+        "opt_in_required": False,
         "task_hint_used": bool(str(task or "").strip()),
         "activation_packet": activation,
         "policy_boundary": policy_boundary(),
@@ -986,7 +1103,9 @@ def deepen(
 
     cwd_path = core.canonical_path(cwd or Path.cwd())
     source_dir = _clean_source_dir(cwd_path, clean_source_dir)
-    registry_path = _as_path(registry_dir, Path()) if registry_dir else None
+    registry_path = (
+        _as_path(registry_dir, Path()) if registry_dir else core.aippocampus_registry_dir().resolve()
+    )
     match_limit = normalize_route_limit(max_matches, default=MAX_ROUTES)
     try:
         payload = recall_deepen_packet(
@@ -1255,11 +1374,15 @@ def _route_limit_arg(value: str) -> int:
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="aippocampus agent",
-        description="Opt-in agent recall, AIppo activation, deepen, explain, and feedback.",
+        description=(
+            "Opt-in agent recall, AIppo activation, reviewed background findings, "
+            "deepen, explain, and feedback."
+        ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "First useful loop:\n"
             '  aippocampus agent recall "old cue" --json\n'
+            '  aippocampus agent background "task cue" --json\n'
             "  aippocampus agent deepen --request 1 --last-recall --json\n"
             "  aippocampus agent feedback <route_id> --outcome source_reopen_success --json\n\n"
             "Default recall JSON is compact and foreground-safe. Use --detail full only for "
@@ -1346,6 +1469,25 @@ def _parser() -> argparse.ArgumentParser:
         help="Emit the full activation envelope for local diagnostics.",
     )
 
+    background_parser = sub.add_parser(
+        "background",
+        usage='aippocampus agent background "task cue" --json [options]',
+        description=(
+            "Reviewed background findings card:\n"
+            "  Surfaces already reviewed/source-linked Dream or subconscious working-memory rows.\n"
+            "  Findings are navigation only; reopen source before factual, exact, or sensitive claims.\n"
+            "  This command does not start background jobs or expose raw registry paths."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    background_parser.add_argument("cue", nargs="*")
+    background_parser.add_argument("--task", dest="task_flag")
+    background_parser.add_argument("--registry-dir")
+    background_parser.add_argument("--working-memory")
+    background_parser.add_argument("--project", default="AIppocampus")
+    background_parser.add_argument("--max", type=_route_limit_arg, default=4)
+    background_parser.add_argument("--json", action="store_true")
+
     macro_parser = sub.add_parser(
         "macro",
         description=(
@@ -1364,6 +1506,7 @@ def _parser() -> argparse.ArgumentParser:
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
+    macro_parser.add_argument("cue", nargs="*")
     macro_parser.add_argument("--project", default="AIppocampus")
     macro_parser.add_argument("--cwd")
     macro_parser.add_argument("--macro-state-jsonl")
@@ -1419,17 +1562,17 @@ def _parser() -> argparse.ArgumentParser:
     feedback_parser = sub.add_parser(
         "feedback",
         description=(
-            "Record whether a recall/deepen route helped. With --feedback-jsonl it becomes "
-            "durable low-authority route calibration; without it, the command returns a receipt only. "
-            "Feedback is never source truth."
+            "Record whether a recall/deepen route helped. By default this writes durable "
+            "low-authority route calibration to a scoped local lane; --feedback-jsonl can "
+            "override the lane explicitly. Feedback is never source truth."
         ),
         epilog=(
-            "Durable examples:\n"
+            "Default durable example:\n"
+            "  aippocampus agent feedback <route_id> --outcome helped --json\n\n"
+            "Explicit lane examples:\n"
             "  aippocampus agent feedback <route_id> --outcome helped --feedback-jsonl <local-feedback.jsonl> --json\n"
             "  aippocampus agent feedback <route_id> --outcome wrong --reason wrong-project --feedback-jsonl <local-feedback.jsonl> --json\n\n"
-            "Receipt-only example:\n"
-            "  aippocampus agent feedback <route_id> --outcome helped --json\n\n"
-            "Use `aippocampus do-not-use-here <route_id> --feedback-jsonl <local-feedback.jsonl> --json` "
+            "Use `aippocampus do-not-use-here <route_id> --json` "
             "when the user wants an explicit quieting control."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -1453,6 +1596,8 @@ def _parser() -> argparse.ArgumentParser:
     )
     feedback_parser.add_argument("--reason", default="")
     feedback_parser.add_argument("--feedback-jsonl")
+    feedback_parser.add_argument("--cwd")
+    feedback_parser.add_argument("--registry-dir")
     feedback_parser.add_argument("--json", action="store_true")
     feedback_parser.add_argument(
         "--operator-json",
@@ -1467,6 +1612,19 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.command == "recall":
         query = args.query_flag or " ".join(args.query)
+        if not str(query or "").strip():
+            payload = agent_recall_missing_query_payload(
+                schema_version=SCHEMA_VERSION,
+                kind=KIND,
+            )
+            if args.json:
+                _json_out(payload)
+            else:
+                print("AIppocampus agent recall: cue required")
+                print("Next: " + str(payload["agent_next_action"]["command"]))
+                print("Then: " + str(payload["safe_next_actions"][1]["command"]))
+                print("Boundary: recovery guidance is not source evidence.")
+            return 2
         payload = recall(
             query,
             cwd=args.cwd,
@@ -1479,7 +1637,11 @@ def main(argv: list[str] | None = None) -> int:
             run_semantic_gate=args.run_semantic_gate,
             semantic_gate_mode=args.semantic or args.semantic_gate_mode or "off",
             semantic_timeout=args.semantic_timeout,
-            feedback_path=args.feedback_jsonl,
+            feedback_path=feedback_lane_resolution(
+                args.feedback_jsonl,
+                cwd=args.cwd,
+                registry_dir=args.registry_dir,
+            )["path"],
         )
         cache_written = write_last_recall_cache(
             payload.get("deepen_requests") or [],
@@ -1520,7 +1682,34 @@ def main(argv: list[str] | None = None) -> int:
         else:
             print(render_aippo_human(payload))
         return 0
+    if args.command == "background":
+        cue = args.task_flag or " ".join(args.cue)
+        payload = background_findings.background_findings_card(
+            cue,
+            registry_dir=args.registry_dir,
+            working_memory_path=args.working_memory,
+            project=args.project,
+            limit=args.max,
+        )
+        if args.json:
+            _json_out(payload)
+        else:
+            print("AIppocampus agent background: " + str(payload.get("status") or "unknown"))
+            print("findings: " + str(payload.get("finding_count") or 0))
+            action = payload.get("agent_next_action")
+            if isinstance(action, Mapping):
+                print("next: " + str(action.get("command") or action.get("command_template") or action.get("id")))
+            print("boundary: background findings are navigation only until source is reopened.")
+        return 2 if payload.get("status") == "needs_input" else 0
     if args.command == "macro":
+        macro_cue = " ".join(args.cue).strip()
+        if macro_cue and not args.init_template and not args.explain_schema:
+            payload = _macro_positional_cue_payload(macro_cue, project=args.project)
+            if args.json:
+                _json_out(payload)
+            else:
+                print(_render_macro_recovery_text(payload))
+            return 2
         if args.init_template:
             payload = macro_state_template(args.project)
             if args.json:
@@ -1630,15 +1819,23 @@ def main(argv: list[str] | None = None) -> int:
                 _json_out(payload)
             else:
                 print("AIppocampus agent feedback: route_id required")
-                print("Next: " + payload["agent_next_action"])
+                next_action = payload.get("agent_next_action")
+                command = next_action.get("command") if isinstance(next_action, Mapping) else next_action
+                print("Next: " + str(command))
             return 2
         try:
+            lane = feedback_lane_resolution(
+                args.feedback_jsonl,
+                cwd=args.cwd,
+                registry_dir=args.registry_dir,
+            )
             payload = capture_feedback(
                 route_id=args.route_id,
                 outcome=args.outcome,
                 route_kind=args.route_kind,
                 reason=args.reason,
-                feedback_path=args.feedback_jsonl,
+                feedback_path=lane["path"],
+                feedback_lane=lane,
                 schema_version=SCHEMA_VERSION,
                 kind=KIND,
             )

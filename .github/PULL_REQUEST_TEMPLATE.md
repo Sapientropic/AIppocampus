@@ -10,47 +10,38 @@
 
 - [ ] `python tools\aippocampus\test_plan.py --json`
 - [ ] Focused tests from the changed-surface planner
-- [ ] `python tools\aippocampus\docs\check_docs_health.py --json` when docs, skill text, release notes, or public claims changed
 - [ ] `python tools\aippocampus\run_tests.py --tier pr` when the planner names it, CI is unavailable/stale, or runtime/plugin/skill surfaces changed
 - [ ] Other:
 
-## Source And Privacy Boundary
+## Privacy / Source Boundary
 
-- [ ] No raw rollouts, private registry exports, local paths, credentials, or
-      private conversation text are included.
+- [ ] No raw rollouts, private registry exports, local paths, credentials, or private conversation text are included.
 - [ ] New source-backed claims point to docs, fixtures, reports, or tests.
-- [ ] Public benchmark/readiness claims lead with measured result, support, and
-      material limits; compatibility `cannot_claim` lists stay short.
-- [ ] Benchmark, recall, architecture, AIppo, source-side, or LongMemEval PRs
-      record AIppocampus orientation/deepen use, or explain why the change is
-      trivial and route context would not change the patch.
-- [ ] Benchmark reports separate actual AIppocampus runtime capabilities from
-      benchmark-local scaffolding or isolated experiments.
 
 ## Issue / Roadmap Link
 
 Closes or relates to:
 
+## Optional Benchmark / Readiness Closeout
+
+Use this only for benchmark, readiness, public-claim, default-adoption, broad live/model-backed, AIppo/source-side/LongMemEval, or scale issues.
+
 Closeout class:
 
-- [ ] `complete` - acceptance criteria are satisfied.
-- [ ] `complete_with_followups` - any remaining gaps are linked below.
-- [ ] `blocker_recorded` - this records useful blocker evidence; do not use a
-      closing keyword unless a follow-up issue owns the remaining work.
-- [ ] `narrow_slice_only` - use relates-to wording, not `Closes #...`.
+- [ ] `complete`
+- [ ] `complete_with_followups`
+- [ ] `blocker_recorded`
+- [ ] `narrow_slice_only`
 
 Evidence level:
 
-- `contract_fixture`, `scripted_proxy`, `model_pilot`, `behavior_run`,
-  `scale_run`, or `default_adoption`
+- `contract_fixture`, `scripted_proxy`, `model_pilot`, `behavior_run`, `scale_run`, or `default_adoption`
 
-Issue intent:
+Benchmark/readiness boundary:
 
-- Fill this when closing a broad live/model-backed/behavior/default/scale issue,
-  e.g. `model-backed behavior`, `500Q scale run`, or `default adoption`.
-- Fixture/proxy work is valuable; if it is lower than the issue's evidence
-  goal, use `complete_with_followups` and link the remaining behavior or scale
-  owner below instead of silently closing the broader question.
+- [ ] Public benchmark/readiness claims lead with measured result, support, and material limits.
+- [ ] Benchmark reports separate actual AIppocampus runtime capabilities from benchmark-local scaffolding or isolated experiments.
+- [ ] AIppocampus orientation/deepen was used for broad recall/architecture/source-side work, or this PR explains why route context would not change the patch.
 
 Remaining gap / follow-up issue:
 

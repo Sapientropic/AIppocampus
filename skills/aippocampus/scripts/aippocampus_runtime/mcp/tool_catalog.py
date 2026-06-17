@@ -22,6 +22,10 @@ def tool_schema(
         "additionalProperties": False,
     }
     if required_any:
+        # `required_any` is an AIppocampus readability extension. Mirror it into
+        # standard JSON Schema so strict MCP clients do not treat all alternates
+        # as optional and discover the error only after a tool call.
+        input_schema["anyOf"] = [{"required": [name]} for name in required_any]
         input_schema["required_any"] = required_any
     return {
         "name": name,

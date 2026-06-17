@@ -1,6 +1,6 @@
 ---
 name: aippocampus
-description: Find source-backed continuity before important agent work: recover old wording, reopen routes, check handoffs/corrections/preferences, and keep fresh-thread or high-risk work grounded in local source. Also covers clean source, hooks, registry, sync, MCP access, and long-session audits.
+description: Find source-backed continuity before important agent work: recover old wording, reopen routes, check handoffs/corrections/preferences, and keep fresh-thread or high-risk work grounded in local source. Use reference docs and CLI cards for setup, repair, import, sync, hooks, and storage operations.
 ---
 
 # AIppocampus
@@ -103,9 +103,9 @@ claims, and abstention.
 
 ## First Moves
 
-Use `aippocampus` after package install. In a raw skill checkout, run package
-modules from `$CODEX_HOME/skills/aippocampus/scripts` or put that directory on
-`PYTHONPATH`.
+Use the installed `aippocampus` CLI or the AIppocampus MCP tools. If those are
+missing, follow install/update cards or the narrow reference docs instead of
+dropping straight into runtime modules.
 
 Start route-first:
 
@@ -117,14 +117,18 @@ Start route-first:
 - Use direct clean-source search when the user gives exact wording, no route
   exists, or a route is blocked and a bounded manual search is still justified.
 - Drop to raw/indexed rollout only for exact repair, tool provenance, byte
-  accounting, missing evidence, or audit questions.
+  accounting, missing evidence, or audit questions, and treat that as an
+  operator/audit path.
 
-Useful portable commands:
+Foreground continuity surfaces:
 
 - First recall for a vague handoff or old decision:
   `aippocampus agent recall "query" --json`. This default is a bounded
   foreground projection. Use `--detail full` only for local diagnostics that may
   show private handles.
+- Reviewed Dream/subconscious findings for a current task cue:
+  `aippocampus agent background "task cue" --json`. Treat these as navigation
+  handles only; reopen source before factual, exact, or sensitive claims.
 - Search clean source: `aippocampus search "query" --cwd "$PWD"`.
 - Recover the latest assistant closeout:
   `aippocampus latest-reply --cwd "$PWD"`. Commentary-only output is a
@@ -134,39 +138,28 @@ Useful portable commands:
   `aippocampus update status`.
 - Check state before or after long work: `aippocampus health --cwd "$PWD"`.
 - Check the local provider matrix without writing artifacts:
-  `aippocampus onboard --provider auto --status`.
+  `aippocampus onboard provider-key --plan --json`.
 - If a foreground agent is about to write feedback, a self-note, an action-hint
   cache, or continuity-domain data, use
   `docs/guides/write-like-memory-decision-card.md` to choose the right surface
   and durability before writing.
 
-Repair and setup are explicit operator actions, not ambient prompt behavior:
+Repair, setup, and imports are explicit operator actions, not ambient prompt
+behavior:
 
-- Prefer facade repair cards before direct modules:
+- Prefer compact facade cards before repair recipes:
   `aippocampus health --cwd "$PWD"`, `aippocampus doctor`, `aippocampus storage`,
   `aippocampus import`, or `aippocampus mcp status`.
-- Diagnostic/operator fallbacks use `python3 -m ...` on macOS/Linux, `py -m ...`
-  on Windows, or `python -m ...` only inside an activated virtualenv. Keep them
-  behind this boundary; do not make them the first user path.
-- Build the daily source layer only when a repair card asks for it:
-  `python3 -m aippocampus_runtime.source.clean_source --cwd "$PWD"`.
-- Build or refresh the index only for explicit repair:
-  `python3 -m aippocampus_runtime.recall.index_builder --cwd "$PWD"`.
-- First-install or full-machine onboarding after explicit user consent:
-  `aippocampus onboard --provider codex --all --format json`.
-- Claude Code transcript onboarding uses an explicit provider; preview first,
-  then register only after consent:
-  `aippocampus onboard --provider claude-code --dry-run --format json`, then
-  `aippocampus onboard --provider claude-code --format json`.
-- Generic transcript import is preview-first:
-  `aippocampus import conversation --format generic-jsonl --input "<path>" --dry-run --json`,
-  then rerun without `--dry-run` only after consent.
-- For exact host boundaries, use the repository docs
-  `docs/guides/ecosystem-integration-matrix.md` and
-  `docs/guides/setup/claude-code-mcp.md`; Claude Code onboarding does not imply
-  AIppocampus Claude hook support.
-- Register an old rollout:
-  `python3 -m aippocampus_runtime.registry.api register-rollout --rollout "<rollout.jsonl>" --project "<label>"`.
+- If an import or repair needs a real path, use the CLI chooser/recovery card
+  first; placeholder-bearing templates belong in operator docs or JSON
+  `command_template` fields, not in this bootstrap.
+- Use `references/maintenance-and-operations.md` for health, storage,
+  lifecycle, archive, and raw-rollout audit operations.
+- Use `references/retrieval-and-storage.md` and
+  `docs/guides/public-api.md` for registry, clean-source, explicit transcript
+  import, and host/provider boundaries.
+- Use `docs/guides/ecosystem-integration-matrix.md` and
+  `docs/guides/setup/claude-code-mcp.md` for exact host support boundaries.
 - Inspect MCP only when a plugin or agent host needs it:
   `aippocampus mcp status`; use `aippocampus mcp list-tools --json` for the full
   schema catalog.
@@ -179,15 +172,16 @@ Repair and setup are explicit operator actions, not ambient prompt behavior:
    fresh; use hooks for routine refreshes and explicit commands for repair.
 3. When the user asks for "last reply", use
    `aippocampus latest-reply`; it should return the latest `final_answer`, or
-   clearly mark commentary fallback as not a final closeout. Use the internal
-   module only for explicit operator diagnostics.
-4. When the user asks why a thread is huge, run
-   `aippocampus_runtime.ops.rollout_size_audit` and answer from byte buckets
-   and largest-line evidence.
+   clearly mark commentary fallback as not a final closeout. Keep internal
+   diagnostics in operator references.
+4. When the user asks why a thread is huge, use the maintenance/operations
+   reference to run the narrow audit card or command, then answer from byte
+   buckets and largest-line evidence.
 5. When the user asks what can be kept, compressed, or deleted, run
-   `retention_report.py --write` before `cold_archive.py`.
+   the retention report workflow before any archive or deletion action.
 6. When recall must span old or separate threads, register the rollout or
-   bundle first, then search through the registry.
+   bundle through the documented import/registry surface first, then search
+   through the registry.
 
 ## Reference Map
 

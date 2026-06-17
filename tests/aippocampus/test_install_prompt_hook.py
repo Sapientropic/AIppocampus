@@ -94,6 +94,53 @@ class InstallAmbientRecallHookTests(unittest.TestCase):
             data["hooks"]["PostToolUse"][0]["hooks"][0]["command"], "python existing.py"
         )
 
+    def test_cli_install_json_is_foreground_safe_when_changed(self) -> None:
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            code = installer.main(["install", "--hooks-json", str(self.hooks_json), "--json"])
+
+        payload = json.loads(stdout.getvalue())
+        encoded = json.dumps(payload, ensure_ascii=False)
+
+        self.assertEqual(code, 0, payload)
+        self.assertTrue(payload["installed"])
+        self.assertTrue(payload["changed"])
+        self.assertNotIn("path", payload)
+        self.assertNotIn("command", payload)
+        self.assertFalse(payload["privacy_boundary"]["local_path_serialized"])
+        self.assertFalse(payload["privacy_boundary"]["hook_command_serialized"])
+        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
+        self.assertEqual(payload["foreground_action"]["status"], "installed_ready")
+        self.assertEqual(payload["agent_next_action"]["id"], "no_action_needed")
+        action_ids = [action["id"] for action in payload["safe_next_actions"]]
+        self.assertIn("status", action_ids)
+        self.assertIn("rollback", action_ids)
+        self.assertIn("aippocampus hooks prompt uninstall --json", encoded)
+        self.assertNotIn(str(self.codex_home), encoded)
+        self.assertNotIn(str(SCRIPTS.resolve()), encoded)
+        self.assertNotIn(self.module, encoded)
+
+    def test_cli_install_json_is_foreground_safe_when_already_installed(self) -> None:
+        installer.install(self.hooks_json, timeout=5)
+
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            code = installer.main(["install", "--hooks-json", str(self.hooks_json), "--json"])
+
+        payload = json.loads(stdout.getvalue())
+        encoded = json.dumps(payload, ensure_ascii=False)
+
+        self.assertEqual(code, 0, payload)
+        self.assertTrue(payload["installed"])
+        self.assertFalse(payload["changed"])
+        self.assertEqual(payload["foreground_action"]["status"], "installed_ready")
+        self.assertEqual(payload["agent_next_action"]["id"], "no_action_needed")
+        self.assertNotIn("path", payload)
+        self.assertNotIn("command", payload)
+        self.assertNotIn(str(self.codex_home), encoded)
+        self.assertNotIn(str(SCRIPTS.resolve()), encoded)
+        self.assertNotIn(self.module, encoded)
+
     def test_install_allows_explicit_foreground_budget_override(self) -> None:
         result = installer.install(
             self.hooks_json,
@@ -168,6 +215,50 @@ class InstallAmbientRecallHookTests(unittest.TestCase):
         self.assertTrue(result["commands_redacted"])
         self.assertNotIn(str(self.codex_home), encoded)
         self.assertNotIn(str(SCRIPTS.resolve()), encoded)
+
+    def test_status_has_foreground_action_card_for_installed_missing_and_stale(self) -> None:
+        missing = installer.status(self.hooks_json)
+        self.assertEqual(missing["foreground_action"]["status"], "missing")
+        self.assertEqual(missing["agent_next_action"]["id"], "install_prompt_hook")
+        self.assertTrue(
+            any(action["id"] == "install_prompt_hook" for action in missing["safe_next_actions"])
+        )
+        self.assertEqual(missing["claim_boundary"], "host_setup_not_memory_evidence")
+
+        installer.install(self.hooks_json, timeout=5)
+        installed = installer.status(self.hooks_json)
+        self.assertEqual(installed["foreground_action"]["status"], "installed")
+        self.assertEqual(installed["agent_next_action"]["id"], "no_action_needed")
+        installed_action_ids = [action["id"] for action in installed["safe_next_actions"]]
+        self.assertIn("no_action_needed", installed_action_ids)
+        self.assertIn("rollback_prompt_hook", installed_action_ids)
+
+        self.hooks_json.write_text(
+            json.dumps(
+                {
+                    "hooks": {
+                        "UserPromptSubmit": [
+                            {
+                                "hooks": [
+                                    {
+                                        "type": "command",
+                                        "command": "python ambient_recall_hook.py",
+                                        "timeout": 5,
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+        stale = installer.status(self.hooks_json)
+        encoded = json.dumps(stale, ensure_ascii=False)
+        self.assertEqual(stale["foreground_action"]["status"], "stale")
+        self.assertEqual(stale["agent_next_action"]["id"], "refresh_prompt_hook")
+        self.assertIn("refresh_prompt_hook", [action["id"] for action in stale["safe_next_actions"]])
+        self.assertNotIn("ambient_recall_hook.py", encoded)
 
     def test_uninstall_removes_only_ambient_hook(self) -> None:
         installer.install(self.hooks_json, timeout=5)

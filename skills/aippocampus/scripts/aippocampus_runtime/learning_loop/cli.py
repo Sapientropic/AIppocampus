@@ -11,13 +11,18 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.contracts import foreground_shell_action
 from aippocampus_runtime.hooks.action_hint_cache import refresh_action_hint_cache
 from aippocampus_runtime.learning_loop.dogfood_cases import build_sanitized_repro_package
 from aippocampus_runtime.learning_loop.private_export import (
+    LearningReplayInputError,
     export_private_replay_events,
     load_behavior_event_rows,
 )
-from aippocampus_runtime.learning_loop.private_replay import build_private_history_replay_report
+from aippocampus_runtime.learning_loop.private_replay import (
+    build_private_history_replay_report,
+    replay_recovery_payload,
+)
 from aippocampus_runtime.learning_loop.semantic_learning import (
     build_semantic_learning_dogfood_fixture_report,
 )
@@ -50,6 +55,100 @@ def _privacy_boundary() -> dict[str, Any]:
     }
 
 
+def _learning_discovery_action() -> dict[str, Any]:
+    return foreground_shell_action(
+        action_id="discover_eligible_learning_sources",
+        label="Discover eligible learning sources",
+        command="aippocampus learning discover-history --json",
+        why="Choose an existing sanitized or clean-source learning input before replaying.",
+        mutation_risk="read_only",
+        claim_boundary="learning_guidance_not_source_truth",
+    )
+
+
+def _learning_setup_actions() -> list[dict[str, Any]]:
+    return [
+        _learning_discovery_action(),
+        foreground_shell_action(
+            action_id="inspect_learning_guidance",
+            label="Inspect learning guidance",
+            command="aippocampus learning guidance --json",
+            why="Show prepared and semantic learning guidance without writing a cache.",
+            mutation_risk="read_only",
+            claim_boundary="learning_guidance_not_source_truth",
+        ),
+        foreground_shell_action(
+            action_id="refresh_action_hint_cache",
+            label="Refresh action-hint cache",
+            command="aippocampus hooks action refresh-cache --json",
+            why="Preview action-time hint materialization before using --write.",
+            mutation_risk="read_only",
+            claim_boundary="learning_guidance_not_source_truth",
+        ),
+    ]
+
+
+def discover_history_payload(*, cwd: Path) -> dict[str, Any]:
+    root = cwd.resolve()
+    candidates: list[dict[str, Any]] = []
+    known = [
+        (
+            "clean_source_events",
+            root / ".aippocampus" / "clean-source" / "behavior-events.jsonl",
+            "clean-source behavior events",
+        ),
+        (
+            "sanitized_replay_events",
+            root / ".aippocampus" / "learning-loop" / "sanitized-events.jsonl",
+            "sanitized learning replay events",
+        ),
+        (
+            "learning_findings",
+            root / ".aippocampus" / "learning-loop" / "findings.jsonl",
+            "source-backed learning findings",
+        ),
+        (
+            "effectiveness_ledger",
+            root / ".aippocampus" / "learning-loop" / "effectiveness-ledger.jsonl",
+            "learning effectiveness ledger",
+        ),
+    ]
+    for candidate_id, path, label in known:
+        candidates.append(
+            {
+                "id": candidate_id,
+                "label": label,
+                "status": "available" if path.exists() else "not_found",
+                "path_label": f"workspace/.aippocampus/learning-loop/{path.name}"
+                if "learning-loop" in path.parts
+                else "workspace/.aippocampus/clean-source/behavior-events.jsonl",
+                "raw_private_text_loaded": False,
+            }
+        )
+    return _public_payload(
+        {
+            "kind": KIND,
+            "schema_version": SCHEMA_VERSION,
+            "mode": "discover-history",
+            "ok": True,
+            "status": "source_selection",
+            "candidate_count": len(candidates),
+            "available_candidate_count": sum(1 for row in candidates if row["status"] == "available"),
+            "candidates": candidates,
+            "agent_next_action": {
+                **_learning_setup_actions()[1],
+                "why": "If no candidate is available yet, inspect guidance before exporting or replaying anything.",
+            },
+            "safe_next_actions": _learning_setup_actions(),
+            "privacy_boundary": _privacy_boundary(),
+            "cannot_claim": [
+                "private_history_scanned_by_default",
+                "learned_guidance_as_source_truth",
+            ],
+        }
+    )
+
+
 def status_payload(*, cwd: Path, no_default_learning: bool = False) -> dict[str, Any]:
     report = refresh_action_hint_cache(
         cwd=cwd,
@@ -60,11 +159,8 @@ def status_payload(*, cwd: Path, no_default_learning: bool = False) -> dict[str,
     ledger_intake = dict(report.get("effectiveness_ledger_intake") or {})
     prepared_count = int(intake.get("prepared_record_count") or 0)
     cache_command = "aippocampus hooks action refresh-cache --write --json"
-    replay_command = "aippocampus learning replay --events <sanitized-events.jsonl> --json"
-    current_history_command = (
-        "aippocampus learning replay --clean-source-events <events.jsonl> "
-        "--export-output <sanitized-events.jsonl> --json"
-    )
+    replay_command = "aippocampus learning discover-history --json"
+    current_history_command = "aippocampus learning discover-history --json"
     benchmark_command = "python benchmarks/aippocampus/benchmark_learning_loop_public_companion.py --json"
     lanes = {
         "prepared_guidance": {
@@ -75,6 +171,10 @@ def status_payload(*, cwd: Path, no_default_learning: bool = False) -> dict[str,
         "current_history_extraction": {
             "status": "available_after_explicit_source_choice",
             "command": current_history_command,
+            "export_command_template": (
+                "aippocampus learning replay --clean-source-events selected-events.jsonl "
+                "--export-output sanitized-events.jsonl --json"
+            ),
             "requires_explicit_source": True,
             "raw_private_rollouts_scanned_by_default": False,
             "input_boundary": "operator-selected clean-source behavior events or rollout exported to sanitized events first",
@@ -82,6 +182,9 @@ def status_payload(*, cwd: Path, no_default_learning: bool = False) -> dict[str,
         "sanitized_replay": {
             "status": "available_on_request",
             "command": replay_command,
+            "replay_command_template": (
+                "aippocampus learning replay --events sanitized-events.jsonl --json"
+            ),
             "input_boundary": "sanitized_behavior_events_not_raw_rollout",
         },
         "effectiveness_ledger": {
@@ -161,8 +264,20 @@ def status_payload(*, cwd: Path, no_default_learning: bool = False) -> dict[str,
                     )
                 ),
             },
-            "agent_next_action": cache_command if prepared_count else current_history_command,
+            "agent_next_action": (
+                foreground_shell_action(
+                    action_id="refresh_action_hint_cache",
+                    label="Prepare action-time cache",
+                    command=cache_command,
+                    why="Prepared guidance exists and can be materialized into the local action-hint cache.",
+                    mutation_risk="explicit_local_cache_write",
+                    claim_boundary="learning_guidance_not_source_truth",
+                )
+                if prepared_count
+                else _learning_discovery_action()
+            ),
             "next_actions": next_actions,
+            "safe_next_actions": _learning_setup_actions(),
             "cannot_claim": [
                 "causal_live_behavior_lift",
                 "learned_guidance_as_source_truth",
@@ -176,16 +291,66 @@ def status_payload(*, cwd: Path, no_default_learning: bool = False) -> dict[str,
 def guidance_payload(*, cwd: Path, no_default_learning: bool = False) -> dict[str, Any]:
     payload = status_payload(cwd=cwd, no_default_learning=no_default_learning)
     summary = dict(payload.get("summary") or {})
+    semantic_count = int(summary.get("semantic_action_time_guidance_count") or 0)
+    if summary.get("prepared_action_hint_count"):
+        next_action: Any = foreground_shell_action(
+            action_id="refresh_action_hint_cache",
+            label="Prepare action-time cache",
+            command="aippocampus hooks action refresh-cache --write --json",
+            why="Prepared guidance exists and can be written into the local action-hint cache.",
+            mutation_risk="explicit_local_cache_write",
+            claim_boundary="learning_guidance_not_source_truth",
+        )
+        materialization_status = "prepared_guidance_ready"
+    elif semantic_count:
+        next_action = foreground_shell_action(
+            action_id="review_semantic_guidance_before_cache",
+            label="Review semantic guidance candidates",
+            command="aippocampus learning guidance --json",
+            why="Semantic action-time guidance exists, but source-backed materialization still needs review.",
+            mutation_risk="read_only",
+            claim_boundary="learning_guidance_not_source_truth",
+        )
+        materialization_status = "semantic_guidance_requires_review_before_cache"
+    else:
+        next_action = _learning_discovery_action()
+        materialization_status = "needs_learning_input"
     return _public_payload(
         {
             **payload,
             "mode": "guidance",
-            "agent_next_action": (
-                "write the default local action-hint cache"
-                if summary.get("prepared_action_hint_count")
-                else "produce or provide sanitized learning findings before expecting action-time hints"
-            ),
+            "agent_next_action": next_action,
             "cache_command": "aippocampus hooks action refresh-cache --write --json",
+            "semantic_guidance": {
+                "guidance_count": semantic_count,
+                "materialization_status": materialization_status,
+                "cache_materialization_command": "aippocampus hooks action refresh-cache --json",
+            },
+        }
+    )
+
+
+def replay_needs_source_payload() -> dict[str, Any]:
+    return _public_payload(
+        {
+            "kind": KIND,
+            "schema_version": SCHEMA_VERSION,
+            "mode": "replay",
+            "ok": False,
+            "status": "needs_source_selection",
+            "fixture_input": False,
+            "agent_next_action": _learning_discovery_action(),
+            "safe_next_actions": _learning_setup_actions(),
+            "metrics_boundary": {
+                "fixture_metrics_are_not_real_history": True,
+                "real_history_replay_requires_sanitized_events": True,
+            },
+            "privacy_boundary": _privacy_boundary(),
+            "cannot_claim": [
+                "causal_live_behavior_lift",
+                "private_history_scanned_by_default",
+                "guidance_as_source_truth",
+            ],
         }
     )
 
@@ -247,6 +412,8 @@ def replay_payload(args: argparse.Namespace) -> dict[str, Any]:
         )
         events = load_behavior_event_rows(args.export_output)
         input_origin = str(export_summary.get("input_origin") or "real_sanitized_history")
+    if events is None:
+        return replay_needs_source_payload()
     report = build_private_history_replay_report(
         events,
         input_origin=input_origin,
@@ -258,15 +425,14 @@ def replay_payload(args: argparse.Namespace) -> dict[str, Any]:
         replay_next_actions.append(
             {
                 "label": "run real sanitized replay",
-                "command": "aippocampus learning replay --events <sanitized-events.jsonl> --json",
+                "command": "aippocampus learning discover-history --json",
             }
         )
         replay_next_actions.append(
             {
                 "label": "export private history to sanitized events first",
                 "command": (
-                    "aippocampus learning replay --clean-source-events <events.jsonl> "
-                    "--export-output <sanitized-events.jsonl> --json"
+                    "aippocampus learning discover-history --json"
                 ),
             }
         )
@@ -352,31 +518,67 @@ def repro_package_payload(args: argparse.Namespace) -> dict[str, Any]:
 
 def repro_package_template_payload() -> dict[str, Any]:
     schema = repro_package_input_schema()
+    template = schema["redacted_example"]
+    template_json = json.dumps(template, ensure_ascii=False, indent=2, sort_keys=True)
+    primary = foreground_shell_action(
+        action_id="package_repro_input_file",
+        label="Package a saved repro input JSON file",
+        command="aippocampus repro package --input-json repro-input.json --json",
+        why="Use this after writing the template JSON to repro-input.json and filling expected/actual.",
+        mutation_risk="read_only",
+        claim_boundary="repro_package_not_source_truth",
+    )
     return _public_payload(
         {
             "kind": KIND,
             "schema_version": SCHEMA_VERSION,
             "mode": "repro_package_template",
             "ok": True,
-            "template": schema["redacted_example"],
+            "template": template,
+            "template_json": template_json,
+            "stdin_payload": template_json,
             "expected_input_schema": schema,
-            "agent_next_action": (
-                "save template as repro-input.json, fill expected/actual, then run "
-                "aippocampus repro package --input-json repro-input.json --json"
-            ),
+            "agent_next_action": {
+                "id": "choose_repro_packaging_path",
+                "primary": primary,
+                "no_file_payload_field": "stdin_payload",
+            },
+            "primary_next_action": primary,
+            "safe_next_actions": [
+                primary,
+                foreground_shell_action(
+                    action_id="package_repro_stdin",
+                    label="Package repro JSON through stdin",
+                    command="cat repro-input.json | aippocampus repro package --stdin --json",
+                    why="Portable Unix stdin path when a pipe is preferred.",
+                    mutation_risk="read_only",
+                    claim_boundary="repro_package_not_source_truth",
+                ),
+                foreground_shell_action(
+                    action_id="validate_repro_input_json",
+                    label="Validate repro input JSON",
+                    command="python -m json.tool repro-input.json",
+                    why="Check JSON syntax before packaging.",
+                    mutation_risk="read_only",
+                    claim_boundary="syntax_check_not_source_evidence",
+                ),
+            ],
             "next_actions": [
                 {
-                    "label": "package saved template",
-                    "command": (
-                        "aippocampus repro package --input-json repro-input.json --json"
+                    "label": str(action.get("label") or action.get("id")),
+                    "command": str(action["command"]),
+                    "mutates": False,
+                }
+                for action in [
+                    primary,
+                    foreground_shell_action(
+                        action_id="package_repro_stdin_legacy_list",
+                        label="Package repro JSON through stdin",
+                        command="cat repro-input.json | aippocampus repro package --stdin --json",
+                        mutation_risk="read_only",
+                        claim_boundary="repro_package_not_source_truth",
                     ),
-                    "mutates": False,
-                },
-                {
-                    "label": "pipe a saved JSON object",
-                    "command": "type repro-input.json | aippocampus repro package --stdin --json",
-                    "mutates": False,
-                },
+                ]
             ],
             "privacy_boundary": _privacy_boundary(),
         }
@@ -390,7 +592,7 @@ def repro_package_input_schema() -> dict[str, Any]:
         "optional": ["surface", "source_refs", "privacy_boundary"],
         "redacted_example": {
             "surface": "agent_recall",
-            "command": "aippocampus agent recall \"old cue\" --json",
+            "command": "aippocampus agent recall \"old decision or handoff cue\" --json",
             "output_ref": "saved-output://local/redacted-command-output.json",
             "expected": "source-backed route appears with reopen boundary",
             "actual": "route was missing or degraded",
@@ -427,13 +629,13 @@ def repro_package_recovery_payload(*, malformed_error: str | None = None) -> dic
                     "steps": [
                         "run `aippocampus learning guidance --json` or sanitized replay",
                         "save the relevant command outcome as the expected input schema",
-                        "run `aippocampus repro package --input-json <command-output.json> --json`",
+                        "run `aippocampus repro package --input-json command-output.json --json`",
                     ],
                     "copyable_validate_command": (
-                        "python -m json.tool <command-output.json>"
+                        "python -m json.tool command-output.json"
                     ),
                     "copyable_package_command": (
-                        "aippocampus repro package --input-json <command-output.json> --json"
+                        "aippocampus repro package --input-json command-output.json --json"
                     ),
                     "mutates": False,
                 },
@@ -447,7 +649,7 @@ def repro_package_recovery_payload(*, malformed_error: str | None = None) -> dic
                     "template": repro_package_input_schema()["redacted_example"],
                     "copyable_template_command": "aippocampus repro package --template --json",
                     "copyable_stdin_command": (
-                        "type command-output.json | aippocampus repro package --stdin --json"
+                        "cat command-output.json | aippocampus repro package --stdin --json"
                     ),
                     "mutates": False,
                 },
@@ -498,6 +700,8 @@ def render_human(payload: Mapping[str, Any]) -> str:
             lines.append("origin: synthetic fixture, not real-history evidence")
         elif origin.get("kind"):
             lines.append("origin: " + str(origin.get("kind")))
+    if payload.get("status") == "needs_source_selection":
+        lines.append("status: needs source selection")
     actions = [row for row in payload.get("next_actions") or [] if isinstance(row, Mapping)]
     if actions:
         lines.append("next: " + str(actions[0].get("command") or "continue"))
@@ -525,6 +729,9 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     sub = parser.add_subparsers(dest="command")
+    parser.add_argument("--cwd")
+    parser.add_argument("--no-default-learning", action="store_true")
+    parser.add_argument("--json", action="store_true")
     status = sub.add_parser("status")
     status.add_argument("--cwd")
     status.add_argument("--no-default-learning", action="store_true")
@@ -541,6 +748,10 @@ def build_parser() -> argparse.ArgumentParser:
     replay.add_argument("--rollout", type=Path)
     replay.add_argument("--export-output", type=Path)
     replay.add_argument("--json", action="store_true")
+
+    discover = sub.add_parser("discover-history")
+    discover.add_argument("--cwd")
+    discover.add_argument("--json", action="store_true")
 
     repro = sub.add_parser(
         "repro-package",
@@ -565,8 +776,12 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "replay":
         try:
             payload = replay_payload(args)
+        except LearningReplayInputError as exc:
+            payload = replay_recovery_payload(exc)
         except ValueError as exc:
             parser.error(str(exc))
+    elif args.command == "discover-history":
+        payload = discover_history_payload(cwd=_cwd(args.cwd))
     elif args.command == "repro-package":
         if args.template:
             payload = repro_package_template_payload()

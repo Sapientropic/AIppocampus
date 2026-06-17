@@ -15,11 +15,20 @@ def agent_callable_host_probe_ok(item: dict[str, Any]) -> bool:
     )
 
 
-def _compact_update_action(*, surface: str, reason: str, command: str | None = None) -> dict[str, Any]:
+def _compact_update_action(
+    *,
+    surface: str,
+    reason: str,
+    command: str | None = None,
+    manual_instruction: str | None = None,
+) -> dict[str, Any]:
     result = {
         "surface": surface,
         "reason": compact_text(reason, 220),
         "command": command,
+        "manual_instruction": compact_text(manual_instruction, 220)
+        if manual_instruction
+        else None,
     }
     return {key: value for key, value in result.items() if value not in (None, "")}
 
@@ -50,13 +59,28 @@ def compact_agent_status_report(
         if str(item) not in {"", "agent_callable"}
     ]
     action_hints_ready = action_hints.get("cache_status") == "with_fresh_records"
+    action_hint_recommended_actions = update_actions.action_hint_recommended_actions()
+    action_hint_primary_command = (
+        action_hints.get("next_command")
+        or action_hint_recommended_actions[0]["command"]
+    )
     actions: list[dict[str, Any]] = []
-    if action_hints.get("installed") and not action_hints_ready and action_hints.get("next_command"):
+    if not action_hints_ready:
         actions.append(
             _compact_update_action(
                 surface="action_hints",
                 reason=str(action_hints.get("cache_status") or "action-time hints not ready"),
-                command=str(action_hints.get("next_command")),
+                command=str(action_hint_primary_command),
+            )
+        )
+    agent_next_action = update_actions.agent_callable_foreground_action(agent)
+    if agent.get("status") and (agent.get("next_command") or agent_next_action.get("command")) and not agent.get("ready"):
+        actions.append(
+            _compact_update_action(
+                surface="agent_callable",
+                reason=str(agent.get("status") or "foreground tools not verified"),
+                command=str(agent_next_action.get("command") or agent.get("next_command")),
+                manual_instruction=agent_next_action.get("manual_instruction"),
             )
         )
     for surface in [item for item in needs_action if item != "plugin_cache"][:4]:
@@ -64,14 +88,6 @@ def compact_agent_status_report(
         command = item.get("next_command") or item.get("documented_install_command")
         reason = f"{surface} status is {item.get('status') or 'attention_needed'}"
         actions.append(_compact_update_action(surface=surface, reason=reason, command=command))
-    if agent.get("next_command") and not agent.get("ready"):
-        actions.append(
-            _compact_update_action(
-                surface="agent_callable",
-                reason=str(agent.get("status") or "foreground tools not verified"),
-                command=str(agent.get("next_command")),
-            )
-        )
     cache_refresh = plugin.get("cache_refresh") if isinstance(plugin, dict) else None
     if isinstance(cache_refresh, dict) and cache_refresh.get("ok") is False:
         reason = str(
@@ -111,6 +127,9 @@ def compact_agent_status_report(
                     surface=surface,
                     reason=reason,
                     command=str(command) if command else None,
+                    manual_instruction=str(action.get("manual_instruction") or "")
+                    if action.get("manual_instruction")
+                    else None,
                 )
             )
     agent_ready = (
@@ -167,9 +186,16 @@ def compact_agent_status_report(
             "expired_record_count": int(action_hints.get("expired_record_count") or 0),
             "malformed_cache_line_count": int(action_hints.get("malformed_cache_line_count") or 0),
             "provider_counts": action_hints.get("provider_counts") or {},
-            "optional": True,
-            "next_command": action_hints.get("next_command"),
-            "claim_boundary": "action-time hints are optional PreToolUse cache-backed nudges, not ambient hook readiness or source truth",
+            "optional": False,
+            "setup_role": "ready" if action_hints_ready else "recommended_for_trusted_codex",
+            "fail_open": True,
+            "recall_blocking": False,
+            "next_command": action_hint_primary_command,
+            "recommended_next_actions": action_hint_recommended_actions,
+            "claim_boundary": (
+                "action-time hints are recommended setup for trusted Codex sessions, "
+                "but remain navigation-only and never source truth or a recall blocker"
+            ),
         },
         "agent_callable": {
             "status": agent_status,
@@ -183,8 +209,11 @@ def compact_agent_status_report(
             "live_host_schema_stale": bool(agent.get("live_host_schema_stale")),
             "key_tool_failures": agent.get("key_tool_failures") or [],
             "current_thread_tool_discovery": agent.get("current_thread_tool_discovery"),
+            "foreground_probe_requested": bool(agent.get("foreground_probe_requested")),
+            "foreground_probe_state": agent.get("foreground_probe_state"),
             "foreground_tools_visible": agent.get("foreground_tools_visible"),
-            "next_command": agent.get("next_command"),
+            "next_command": agent_next_action.get("command"),
+            "manual_instruction": agent_next_action.get("manual_instruction"),
             "claim_boundary": agent.get("claim_boundary"),
         },
         "host_conformance": {

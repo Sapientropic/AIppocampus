@@ -47,19 +47,110 @@ def plugin_cache_action_lines(plugin: dict[str, Any]) -> list[str]:
     return lines
 
 
+def action_hint_recommended_actions() -> list[dict[str, str]]:
+    """Executable action-time hint setup choices for trusted Codex installs.
+
+    Action hints remain fail-open route guidance, not source evidence and not a
+    recall blocker. The setup itself is still recommended for trusted Codex
+    environments so a successful prompt/lifecycle install is not misread as the
+    whole foreground experience.
+    """
+
+    return [
+        {
+            "id": "refresh_action_hints",
+            "label": "Refresh action-hint cache",
+            "command": "aippocampus hooks action refresh-cache --write --json",
+        },
+        {
+            "id": "install_action_hints",
+            "label": "Install action-time hints",
+            "command": "aippocampus hooks action install --json",
+        },
+        {
+            "id": "rollback_action_hints",
+            "label": "Rollback action-time hints",
+            "command": "aippocampus hooks action uninstall --json",
+        },
+    ]
+
+
+def _shellish_command(command: Any) -> str | None:
+    text = str(command or "").strip()
+    if not text:
+        return None
+    if text.startswith(("aippocampus ", "python ", "python3 ", "uvx ")):
+        return text
+    return None
+
+
+def agent_callable_foreground_action(item: dict[str, Any]) -> dict[str, str]:
+    """Split foreground-tool verification prose from executable shell commands."""
+
+    status = str(item.get("status") or "")
+    raw_next = str(item.get("next_command") or "")
+    if status in {
+        "host_live_probe_ok_foreground_probe_not_checked",
+        "host_live_probe_ok_current_thread_unverified",
+        "host_registered_tools_unverified",
+    }:
+        return {
+            "command": (
+                "aippocampus update status --foreground-tools-visible "
+                "--foreground-key-tools-callable --agent-json"
+            ),
+            "manual_instruction": (
+                "First call agent_recall and agent_deepen in this foreground thread. "
+                "If either call fails, rerun status with --foreground-key-tool-failure "
+                "\"brief sanitized error\"."
+            ),
+        }
+    if status == "foreground_mcp_runtime_mismatch":
+        return {
+            "command": 'aippocampus agent recall "old decision or handoff cue" --json',
+            "manual_instruction": (
+                "Reload Codex Desktop or restart the MCP transport before trusting "
+                "foreground tools; use the CLI fallback when the foreground tool call fails."
+            ),
+        }
+    if status == "host_live_probe_key_tools_failed":
+        return {
+            "command": "aippocampus plugin install --codex --verify",
+            "manual_instruction": (
+                "Reload Codex Desktop or restart the MCP host after the plugin verify step."
+            ),
+        }
+    shell = _shellish_command(raw_next)
+    if shell:
+        return {"command": shell}
+    return {
+        "command": "aippocampus update status --json",
+        "manual_instruction": raw_next or "Check foreground tool visibility before claiming agent-callable readiness.",
+    }
+
+
 def agent_callable_probe_lines(item: dict[str, Any]) -> list[str]:
     probe = item.get("host_live_probe") or {}
     if item.get("status") == "foreground_mcp_runtime_mismatch":
         lines = ["  warn: current foreground MCP connection failed key agent-native tools"]
-        if item.get("next_command"):
-            lines.append("  next: " + str(item.get("next_command")))
+        action = agent_callable_foreground_action(item)
+        if action.get("manual_instruction"):
+            lines.append("  note: " + action["manual_instruction"])
+        lines.append("  next: " + action["command"])
         return lines
     if item.get("ready") and probe.get("ok"):
         return [f"  host probe: {probe.get('source')} ok"]
     if probe.get("ok"):
-        lines = ["  host probe: ok; current foreground thread tool discovery is unverified"]
-        if item.get("next_command"):
-            lines.append("  next: " + str(item.get("next_command")))
+        if item.get("foreground_probe_state") == "not_requested":
+            lines = [
+                "  host probe: ok; foreground tool discovery was not checked in this status call"
+            ]
+        else:
+            lines = ["  host probe: ok; current foreground thread tool discovery is unverified"]
+        action = agent_callable_foreground_action(item)
+        if action.get("manual_instruction"):
+            lines.append("  note: " + action["manual_instruction"])
+        lines.append("  next: " + action["command"])
         return lines
     if not item.get("ready"):
         return ["  warn: foreground host tool visibility is not confirmed"]
@@ -85,21 +176,31 @@ def foreground_status_cards(report: dict[str, Any]) -> list[dict[str, Any]]:
         action_hints = {}
     cards: list[dict[str, Any]] = []
     if bool(summary.get("agent_callable_host_ready")) and not bool(
-        summary.get("agent_callable_current_thread_visible")
+        summary.get("agent_callable_ready")
     ):
         stale = agent.get("status") == "foreground_mcp_runtime_mismatch"
+        not_checked = agent.get("foreground_probe_state") == "not_requested"
+        action = agent_callable_foreground_action(agent)
         cards.append(
             {
                 "id": "current_thread_tool_discovery",
                 "status": (
                     "foreground_mcp_runtime_mismatch"
                     if stale
+                    else "host_ready_foreground_probe_not_checked"
+                    if not_checked
                     else "host_ready_current_thread_unverified"
                 ),
-                "why": "The host probe passed, but this foreground thread has not proved it can see the AIppocampus tools.",
-                "command": str(
-                    agent.get("next_command")
-                    or "reload Codex Desktop, then run `aippocampus update status --agent-json`"
+                "why": (
+                    "The host probe passed, but this status call did not check whether the foreground thread can see or call AIppocampus tools."
+                    if not_checked
+                    else "The host probe passed, but this foreground thread has not proved it can see and call the AIppocampus tools."
+                ),
+                "command": action["command"],
+                **(
+                    {"manual_instruction": action["manual_instruction"]}
+                    if action.get("manual_instruction")
+                    else {}
                 ),
             }
         )
@@ -133,16 +234,24 @@ def foreground_status_cards(report: dict[str, Any]) -> list[dict[str, Any]]:
                 "command": str(command),
             }
         )
-    if action_hints.get("installed") and action_hints.get("cache_status") != "with_fresh_records":
+    action_hints_ready = action_hints.get("cache_status") == "with_fresh_records"
+    if not action_hints_ready:
+        installed = bool(action_hints.get("installed"))
         cards.append(
             {
-                "id": "action_hint_cache",
-                "status": str(action_hints.get("cache_status") or "action_hints_cache_not_ready"),
-                "why": "Action-time hints are optional PreToolUse nudges; refresh the prepared cache when you want them.",
+                "id": "action_hint_cache" if installed else "action_hint_setup",
+                "status": str(
+                    action_hints.get("cache_status")
+                    or ("action_hints_cache_not_ready" if installed else "not_installed")
+                ),
+                "why": (
+                    "Action-time hints are recommended setup for trusted Codex sessions, but remain fail-open navigation hints rather than source evidence or a recall blocker."
+                ),
                 "command": str(
                     action_hints.get("next_command")
                     or "aippocampus hooks action refresh-cache --write --json"
                 ),
+                "recommended_next_actions": action_hint_recommended_actions(),
             }
         )
     if not bool(summary.get("core_ready")) and summary.get("core_blockers"):
@@ -186,9 +295,12 @@ def post_apply_next_actions(results: list[dict[str, Any]]) -> list[dict[str, Any
                 "before the current foreground thread can see updated tools"
             ),
             "command": (
-                "reload Codex Desktop, then run "
-                "`aippocampus update status --foreground-key-tools-callable --agent-json` "
-                "after this foreground thread successfully calls agent_recall and agent_deepen"
+                "aippocampus update status --foreground-tools-visible "
+                "--foreground-key-tools-callable --agent-json"
+            ),
+            "manual_instruction": (
+                "Reload Codex Desktop after local plugin or hook files change, then call "
+                "agent_recall and agent_deepen in the foreground thread before rerunning status."
             ),
         }
     ]

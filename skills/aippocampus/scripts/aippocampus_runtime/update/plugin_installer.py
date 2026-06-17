@@ -787,7 +787,7 @@ def build_parser() -> argparse.ArgumentParser:
             "Start with:\n"
             "  aippocampus plugin install --codex --verify\n"
             "Then check:\n"
-            "  aippocampus plugin status --agent-json"
+            "  aippocampus plugin status --json"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -805,7 +805,7 @@ def build_parser() -> argparse.ArgumentParser:
             "can be called. It writes local plugin files only; it does not install "
             "hooks, copy private memory data, or configure provider keys.\n\n"
             "After success:\n"
-            "  aippocampus update status --agent-json\n"
+            "  aippocampus update status --json\n"
             "  aippocampus agent recall \"old decision or handoff cue\" --json"
         ),
         epilog=(
@@ -879,7 +879,8 @@ def build_parser() -> argparse.ArgumentParser:
             "Plugin status is the install/readiness card for the local Codex plugin.\n\n"
             "Examples:\n"
             "  aippocampus plugin status\n"
-            "  aippocampus plugin status --agent-json"
+            "  aippocampus plugin status --json\n"
+            "  aippocampus plugin status --operator-json"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )

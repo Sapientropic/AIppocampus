@@ -456,7 +456,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         print("  aippocampus import conversation --format generic-jsonl --input sessions.jsonl --dry-run --json")
         return 0
 
-    if known.status:
+    # Bare/selector-only onboard is a foreground status card. Older behavior
+    # could register or refresh local source just because an agent asked for
+    # `onboard --json`; keep writes behind explicit provider sub-flags such as
+    # --dry-run/--all/apply paths owned by the provider-specific onboarding CLI.
+    selector_only = not remaining
+    if known.status or selector_only:
         detailed = bool(known.details or known.operator_json)
         report = provider_status_report(
             provider=known.provider,
@@ -480,21 +485,24 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     provider = str(known.provider or "auto").strip().replace("_", "-").casefold()
     resolved = normalize_provider_name(provider)
+    provider_remaining = list(remaining)
+    if (known.json_output or known.format == "json") and "--json" not in provider_remaining:
+        provider_remaining.append("--json")
     if resolved == "codex":
         return onboard_codex.main(
-            remaining,
+            provider_remaining,
             provider_name="codex",
             provider=create_conversation_provider("codex", codex_home_dir=codex_home()),
         )
     if resolved == "claude-code":
         return onboard_codex.main(
-            remaining,
+            provider_remaining,
             provider_name="claude-code",
             provider=create_conversation_provider("claude-code"),
         )
     if resolved == "generic-jsonl":
         return onboard_codex.main(
-            remaining,
+            provider_remaining,
             provider_name="generic-jsonl",
             provider=create_conversation_provider("generic-jsonl"),
         )

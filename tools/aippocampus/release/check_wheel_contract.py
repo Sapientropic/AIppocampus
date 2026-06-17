@@ -410,41 +410,69 @@ def check_cli_command_matrix(
 
 
 def check_doctor_config(venv: Path, work_dir: Path, env: dict[str, str], checks: list[Check]) -> None:
-    proc = run_command(
+    compact_proc = run_command(
         [str(venv_executable(venv, "aippocampus")), "doctor", "config", "--json"],
         cwd=work_dir,
         env=env,
     )
-    if proc.returncode != 0:
-        add(checks, "doctor_config", "fail", "doctor config command failed", summarize_command(proc))
+    if compact_proc.returncode != 0:
+        add(checks, "doctor_config", "fail", "doctor config compact command failed", summarize_command(compact_proc))
         return
     try:
-        payload = json_from_stdout(proc)
+        compact = json_from_stdout(compact_proc)
     except json.JSONDecodeError as exc:
         add(
             checks,
             "doctor_config",
             "fail",
-            "doctor config did not emit JSON",
-            {"error": str(exc), **summarize_command(proc)},
+            "doctor config compact command did not emit JSON",
+            {"error": str(exc), **summarize_command(compact_proc)},
         )
         return
-    data = payload.get("data") if isinstance(payload, dict) else {}
+    if not isinstance(compact, dict) or compact.get("kind") != "aippocampus_config_doctor_summary":
+        add(
+            checks,
+            "doctor_config",
+            "fail",
+            "doctor config --json is not the compact foreground card",
+            {"top_level_keys": sorted(compact) if isinstance(compact, dict) else []},
+        )
+        return
+    operator_proc = run_command(
+        [str(venv_executable(venv, "aippocampus")), "doctor", "config", "--operator-json"],
+        cwd=work_dir,
+        env=env,
+    )
+    if operator_proc.returncode != 0:
+        add(checks, "doctor_config", "fail", "doctor config operator command failed", summarize_command(operator_proc))
+        return
+    try:
+        operator = json_from_stdout(operator_proc)
+    except json.JSONDecodeError as exc:
+        add(
+            checks,
+            "doctor_config",
+            "fail",
+            "doctor config operator command did not emit JSON",
+            {"error": str(exc), **summarize_command(operator_proc)},
+        )
+        return
+    data = operator.get("data") if isinstance(operator, dict) else {}
     if not isinstance(data, dict) or data.get("kind") != "aippocampus_config_registry_report":
         add(
             checks,
             "doctor_config",
             "fail",
-            "doctor config JSON does not match the public config report contract",
-            {"top_level_keys": sorted(payload) if isinstance(payload, dict) else []},
+            "doctor config operator JSON does not match the config report contract",
+            {"top_level_keys": sorted(operator) if isinstance(operator, dict) else []},
         )
         return
     add(
         checks,
         "doctor_config",
         "pass",
-        "doctor config public JSON report runs from the wheel",
-        {"knob_count": len(data.get("knobs") or [])},
+        "doctor config compact and operator JSON surfaces run from the wheel",
+        {"compact_kind": compact.get("kind"), "operator_knob_count": len(data.get("knobs") or [])},
     )
 
 

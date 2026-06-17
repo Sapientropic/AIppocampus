@@ -197,6 +197,74 @@ def _privacy_boundary() -> dict[str, Any]:
     }
 
 
+def _write_boundary() -> dict[str, Any]:
+    return {
+        "written": False,
+        "no_write_happened": True,
+        "clean_source_mutation_allowed": False,
+    }
+
+
+def _self_note_recovery_payload() -> dict[str, Any]:
+    return {
+        "kind": "aippocampus_agent_self_note_recovery",
+        "ok": False,
+        "error": {
+            "code": "self_note_command_required",
+            "message": "self-note needs one explicit action: append, search, list, or read.",
+        },
+        "choices": [
+            {
+                "label": "append",
+                "command": 'aippocampus self-note append --current-thread "short direction-only note"',
+                "when": "Leave a weak foreground-agent margin note after an explicit decision.",
+            },
+            {
+                "label": "search",
+                "command": "aippocampus self-note search <cue> --json",
+                "when": "Find direction-only atmosphere for the current workspace.",
+            },
+            {
+                "label": "list",
+                "command": "aippocampus self-note list --json",
+                "when": "Review recent scoped notes without treating them as evidence.",
+            },
+            {
+                "label": "read",
+                "command": "aippocampus self-note read <note_id> --json",
+                "when": "Inspect one known note id with the weak-memory boundary visible.",
+            },
+        ],
+        "agent_next_action": (
+            "Pick append/search/list/read; use `aippocampus agent recall` when you need "
+            "source-backed continuity instead of direction_only atmosphere."
+        ),
+        "source_boundary": {
+            "authority": "direction_only",
+            "direction_only_is_not_source_truth": True,
+            "source_reopen_required_before_claim": True,
+        },
+        "write_boundary": _write_boundary(),
+        "privacy_boundary": _privacy_boundary(),
+    }
+
+
+def _print_self_note_recovery_card(payload: Mapping[str, Any]) -> None:
+    print("AIppocampus self-note")
+    print("decision: choose append, search, list, or read")
+    print("boundary: direction_only notes are weak scent, not source truth")
+    print("")
+    print("Choices:")
+    for choice in payload.get("choices") or []:
+        if not isinstance(choice, Mapping):
+            continue
+        print(f"  {choice.get('label')}: {choice.get('command')}")
+    print("")
+    print("Use source-backed memory instead:")
+    print('  aippocampus agent recall "old decision or handoff cue" --json')
+    print('  aippocampus search "exact phrase" --json')
+
+
 def _scope_card(args: argparse.Namespace) -> dict[str, Any]:
     if args.registry_wide:
         return {
@@ -366,6 +434,24 @@ def _read_not_found_payload(note_id: str) -> dict[str, Any]:
     }
 
 
+def _read_missing_id_payload() -> dict[str, Any]:
+    return {
+        "kind": "aippocampus_agent_self_note_read",
+        "ok": False,
+        "error": {
+            "code": "needs_note_id",
+            "message": "self-note read needs a note_id.",
+        },
+        "agent_next_action": (
+            "Run `aippocampus self-note list --json` to pick a note id, or "
+            "`aippocampus self-note search <cue> --json`; use agent recall/search for "
+            "source-backed facts."
+        ),
+        "write_boundary": _write_boundary(),
+        "privacy_boundary": _privacy_boundary(),
+    }
+
+
 def _read_success_payload(row: Mapping[str, Any]) -> dict[str, Any]:
     return {
         "kind": "aippocampus_agent_self_note_read",
@@ -504,6 +590,13 @@ def main(argv: list[str] | None = None) -> int:
     ):
         _print_command_help(raw_args[0])
         return 0
+    if not raw_args or raw_args == ["--json"]:
+        payload = _self_note_recovery_payload()
+        if "--json" in raw_args:
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
+        else:
+            _print_self_note_recovery_card(payload)
+        return 0
 
     parser = argparse.ArgumentParser(
         prog="aippocampus self-note",
@@ -568,6 +661,14 @@ before quoting or deciding from memory.""",
     scoped_rows = _apply_read_scope(all_rows, args)
     if args.command == "read":
         note_id = text
+        if not note_id:
+            payload = _read_missing_id_payload()
+            if args.json_output:
+                print(json.dumps(payload, ensure_ascii=False, indent=2))
+            else:
+                print("self-note read needs a note_id", file=sys.stderr)
+                print("Next: " + str(payload.get("agent_next_action") or ""), file=sys.stderr)
+            return 2
         row = next(
             (
                 item

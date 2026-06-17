@@ -413,6 +413,9 @@ class AippocampusMaintenanceTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertEqual(payload["maintenance_status"], "ok")
         self.assertEqual(payload["remaining_recommended_action_count"], 0)
+        self.assertFalse(payload["read_only"])
+        self.assertEqual(payload["agent_next_action"]["id"], "inspect_maintenance_status")
+        self.assertFalse(payload["agent_next_action"]["mutates"])
         self.assertIn("build_index_final_catchup", payload["action_ids"])
         self.assertIn("prepare_graphify_corpus_final_catchup", payload["action_ids"])
         self.assertEqual(
@@ -461,6 +464,14 @@ class AippocampusMaintenanceTests(unittest.TestCase):
         self.assertEqual(payload["maintenance_status"], "ok")
         self.assertEqual(payload["mode"], "summary")
         self.assertTrue(payload["read_only"])
+        self.assertEqual(payload["agent_next_action"]["id"], "review_maintenance_plan")
+        self.assertFalse(payload["agent_next_action"]["mutates"])
+        apply_actions = [
+            item for item in payload["safe_next_actions"] if item["id"] == "apply_after_user_consent"
+        ]
+        self.assertEqual(len(apply_actions), 1)
+        self.assertTrue(apply_actions[0]["requires_user_consent"])
+        self.assertTrue(apply_actions[0]["requires_clean_or_intentionally_dirty_worktree"])
         self.assertTrue(payload["command_ok"])
         self.assertTrue(payload["maintenance_ok"])
         self.assertNotIn("health_final", payload)
@@ -516,6 +527,18 @@ class AippocampusMaintenanceTests(unittest.TestCase):
         self.assertTrue(payload["command_ok"])
         self.assertTrue(payload["plan_generated"])
         self.assertEqual(payload["maintenance_status"], "attention_needed")
+        self.assertEqual(payload["agent_next_action"]["id"], "review_maintenance_plan")
+        self.assertFalse(payload["agent_next_action"]["mutates"])
+        self.assertEqual(
+            payload["agent_next_action"]["command"],
+            "aippocampus maintenance plan --summary-json",
+        )
+        apply_action = next(
+            item for item in payload["safe_next_actions"] if item["id"] == "apply_after_user_consent"
+        )
+        self.assertEqual(apply_action["command"], "aippocampus maintenance apply --summary-json")
+        self.assertTrue(apply_action["requires_user_consent"])
+        self.assertIn("git status --short", apply_action["preflight_commands"])
         self.assertNotIn("health_error", payload)
 
     def test_plan_projects_health_state_without_nested_health_error_or_duplicate_actions(self) -> None:
@@ -576,8 +599,16 @@ class AippocampusMaintenanceTests(unittest.TestCase):
                 return (
                     0,
                     {
-                        "ok": False,
-                        "status": "attention_needed",
+                        "ok": True,
+                        "product_readiness": {
+                            "ready": True,
+                            "ordinary_first_recall_usable": True,
+                            "freshness_degraded": True,
+                            "latest_current_thread_may_be_missing": True,
+                            "maintenance_recommended": True,
+                            "maintenance_required_before_recall": False,
+                            "status": "ready_with_freshness_degraded",
+                        },
                         "recommended_actions": [
                             {"id": "build_index", "severity": "warning", "reason": "index stale"}
                         ],
@@ -599,8 +630,57 @@ class AippocampusMaintenanceTests(unittest.TestCase):
         self.assertEqual(seen_modules, ["aippocampus_runtime.health"])
         self.assertEqual(payload["mode"], "status")
         self.assertTrue(payload["read_only"])
+        self.assertTrue(payload["maintenance_ok"])
+        self.assertEqual(payload["maintenance_status"], "degraded")
+        self.assertTrue(payload["user_impact"]["can_continue_normally"])
+        self.assertEqual(payload["user_impact"]["recall_usable"], "yes_latest_may_be_missing")
         self.assertEqual(payload["would_run_action_ids"], ["build_index", "build_cognitive_map"])
         self.assertEqual(payload["apply_command"], "aippocampus maintenance apply --summary-json")
+        self.assertEqual(payload["agent_next_action"]["id"], "review_maintenance_plan")
+        self.assertFalse(payload["agent_next_action"]["mutates"])
+
+    def test_storage_pressure_best_action_routes_to_bounded_audit(self) -> None:
+        def fake_json(cmd: list[str]) -> tuple[int, dict | None, str, str]:
+            if len(cmd) > 2 and cmd[2] == "aippocampus_runtime.health":
+                return (
+                    0,
+                    {
+                        "ok": True,
+                        "product_readiness": {
+                            "ready": True,
+                            "ordinary_first_recall_usable": True,
+                            "maintenance_recommended": True,
+                            "storage_pressure_cleanup_recommended": True,
+                            "status": "ready_with_storage_pressure",
+                        },
+                        "recommended_actions": [
+                            {
+                                "id": "storage_gc_rebuildable_cache",
+                                "severity": "warning",
+                                "reason": "generated cache pressure",
+                            }
+                        ],
+                    },
+                    "{}",
+                    "",
+                )
+            self.fail(f"unexpected JSON command: {cmd}")
+
+        with (
+            mock.patch.object(maintenance, "run_json_checked", side_effect=fake_json),
+            mock.patch("sys.stdout", new=StringIO()) as stdout,
+        ):
+            code = maintenance.main(["status", "--cwd", ".", "--json"])
+
+        payload = json.loads(stdout.getvalue())
+
+        self.assertEqual(code, 0)
+        self.assertEqual(
+            payload["best_next_action"]["command"],
+            "aippocampus storage gc --dry-run --json --top 1 --cwd .",
+        )
+        self.assertEqual(payload["agent_next_action"]["id"], "review_storage_gc_bounded_audit")
+        self.assertFalse(payload["agent_next_action"]["mutates"])
 
     def test_fail_fast_preserves_legacy_raise_on_failed_action(self) -> None:
         with (

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -63,8 +64,14 @@ def pushd(path: Path) -> Iterator[None]:
 
 def run_update(*args: str) -> tuple[int, dict]:
     stdout = StringIO()
+    json_flag = "--json"
+    if args and args[0] in {"status", "plan"}:
+        # These tests inspect the full operator tree. Foreground `--json` is now
+        # intentionally agent-sized, so keep the legacy diagnostic assertions on
+        # the explicit operator surface.
+        json_flag = "--operator-json"
     with redirect_stdout(stdout):
-        code = update_cli.main([*args, "--json"])
+        code = update_cli.main([*args, json_flag])
     payload = json.loads(stdout.getvalue())
     return code, payload
 
@@ -89,6 +96,26 @@ def write_minimal_repo(repo: Path) -> None:
     (skill / "scripts").mkdir(parents=True)
     (skill / "SKILL.md").write_text("# AIppocampus fixture\n", encoding="utf-8")
     (skill / "scripts" / "runtime.py").write_text("print('ok')\n", encoding="utf-8")
+
+
+def init_git_fixture(repo: Path, *, message: str = "fixture") -> None:
+    subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True, text=True)
+    subprocess.run(
+        ["git", "config", "user.email", "aippocampus-test@example.invalid"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "AIppocampus Test"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    subprocess.run(["git", "add", "."], cwd=repo, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "commit", "-m", message], cwd=repo, check=True, capture_output=True, text=True)
 
 
 def write_plugin_package(
@@ -675,19 +702,22 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertFalse(payload["summary"]["agent_callable_ready"])
         self.assertEqual(
             payload["summary"]["agent_callable_status"],
-            "host_live_probe_ok_current_thread_unverified",
+            "host_live_probe_ok_foreground_probe_not_checked",
         )
         self.assertFalse(agent["ready"])
-        self.assertEqual(agent["status"], "host_live_probe_ok_current_thread_unverified")
+        self.assertEqual(agent["status"], "host_live_probe_ok_foreground_probe_not_checked")
         self.assertIsNone(agent["foreground_tools_visible"])
         self.assertEqual(
             agent["foreground_tools_visibility_source"],
-            "current_thread_unverified_after_host_probe",
+            "not_checked_in_this_status_call",
         )
-        self.assertEqual(agent["current_thread_tool_discovery"], "unknown_or_stale")
+        self.assertFalse(agent["foreground_probe_requested"])
+        self.assertEqual(agent["foreground_probe_state"], "not_requested")
+        self.assertEqual(agent["current_thread_tool_discovery"], "foreground_probe_not_checked")
         self.assertEqual(agent["host_live_probe"]["status"], "ok")
         self.assertEqual(agent["host_live_probe"]["source"], "codex_app_server_smoke")
-        self.assertIn("reload Codex Desktop", agent["next_command"])
+        self.assertIn("--foreground-tools-visible", agent["next_command"])
+        self.assertIn("--foreground-key-tools-callable", agent["next_command"])
         self.assertTrue(payload["summary"]["agent_callable_host_ready"])
         self.assertFalse(payload["summary"]["agent_callable_current_thread_visible"])
         self.assertNotIn("agent_callable", payload["summary"]["operator_blockers"])
@@ -696,7 +726,7 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertFalse(by_id["active_recall_ready"]["ready"])
         self.assertEqual(
             by_id["active_recall_ready"]["status"],
-            "host_live_probe_ok_current_thread_unverified",
+            "host_live_probe_ok_foreground_probe_not_checked",
         )
 
     def test_status_keeps_visible_only_foreground_tools_unverified(self) -> None:
@@ -740,6 +770,8 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertEqual(agent["status"], "host_live_probe_ok_current_thread_unverified")
         self.assertEqual(agent["current_thread_tool_discovery"], "tools_visible_key_tools_unverified")
         self.assertEqual(agent["foreground_tools_visibility_source"], "env:AIPPOCAMPUS_FOREGROUND_TOOLS_VISIBLE")
+        self.assertTrue(agent["foreground_probe_requested"])
+        self.assertEqual(agent["foreground_probe_state"], "tools_visible_key_tools_unverified")
         self.assertIn("--foreground-key-tools-callable", agent["next_command"])
         self.assertEqual(len(agent["host_probe_agent_native_tools"]), 4)
 
@@ -781,6 +813,8 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertEqual(agent["status"], "host_live_probe_ok_current_thread_verified")
         self.assertEqual(agent["foreground_tools_visibility_source"], "cli:--foreground-tools-visible")
         self.assertTrue(agent["current_foreground_key_tools_callable"])
+        self.assertTrue(agent["foreground_probe_requested"])
+        self.assertEqual(agent["foreground_probe_state"], "verified_by_current_foreground_key_tool_calls")
         self.assertEqual(
             agent["current_thread_tool_discovery"],
             "verified_by_current_foreground_key_tool_calls",
@@ -828,9 +862,11 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertFalse(payload["summary"]["agent_callable_ready"])
         self.assertTrue(payload["summary"]["agent_callable_host_ready"])
-        self.assertFalse(payload["summary"]["agent_callable_current_thread_visible"])
+        self.assertTrue(payload["summary"]["agent_callable_current_thread_visible"])
         self.assertEqual(agent["status"], "foreground_mcp_runtime_mismatch")
         self.assertEqual(agent["current_thread_tool_discovery"], "foreground_key_tool_call_failed")
+        self.assertTrue(agent["foreground_probe_requested"])
+        self.assertEqual(agent["foreground_probe_state"], "foreground_key_tool_call_failed")
         self.assertFalse(agent["current_foreground_key_tools_callable"])
         self.assertTrue(agent["live_host_schema_stale"])
         self.assertIn("aippocampus agent recall", agent["next_command"])
@@ -989,7 +1025,7 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertEqual(code, 0)
         agent = payload["surfaces"]["agent_callable"]
         self.assertFalse(payload["summary"]["agent_callable_ready"])
-        self.assertEqual(agent["status"], "host_live_probe_ok_current_thread_unverified")
+        self.assertEqual(agent["status"], "host_live_probe_ok_foreground_probe_not_checked")
         self.assertEqual(agent["host_live_probe"]["status"], "ok")
         self.assertEqual(agent["host_live_probe"]["source"], "codex_app_server_smoke")
         self.assertTrue(payload["summary"]["agent_callable_host_ready"])
@@ -1046,19 +1082,47 @@ class UpdateSyncTests(unittest.TestCase):
                 for card in payload["foreground_status_cards"]
             )
         )
+        current_thread_card = next(
+            card
+            for card in payload["foreground_status_cards"]
+            if card["id"] == "current_thread_tool_discovery"
+        )
+        self.assertTrue(current_thread_card["command"].startswith("aippocampus "))
+        self.assertIn("agent_recall", current_thread_card["manual_instruction"])
+        self.assertNotIn("call agent_recall", current_thread_card["command"])
+        self.assertNotIn("<summary>", json.dumps(current_thread_card, ensure_ascii=False))
         self.assertNotIn("agent_callable", payload["summary"]["needs_action"])
         self.assertEqual(
             payload["agent_callable"]["status"],
-            "host_live_probe_ok_current_thread_unverified",
+            "host_live_probe_ok_foreground_probe_not_checked",
         )
         self.assertTrue(payload["agent_callable"]["host_live_probe_ok"])
+        self.assertFalse(payload["agent_callable"]["foreground_probe_requested"])
+        self.assertEqual(payload["agent_callable"]["foreground_probe_state"], "not_requested")
+        self.assertEqual(
+            payload["agent_callable"]["current_thread_tool_discovery"],
+            "foreground_probe_not_checked",
+        )
         self.assertFalse(payload["summary"]["action_hints_ready"])
         self.assertFalse(payload["summary"]["action_hints_installed"])
         self.assertEqual(payload["summary"]["action_hints_status"], "not_installed")
-        self.assertTrue(payload["action_hints"]["optional"])
+        self.assertEqual(payload["action_hints"]["setup_role"], "recommended_for_trusted_codex")
+        self.assertFalse(payload["action_hints"]["optional"])
         self.assertEqual(payload["action_hints"]["status"], "not_installed")
+        self.assertIn(
+            "action_hint_setup",
+            payload["summary"]["foreground_actions"],
+        )
+        recommended = payload["action_hints"]["recommended_next_actions"]
+        self.assertIn("install_action_hints", {item["id"] for item in recommended})
+        self.assertIn("refresh_action_hints", {item["id"] for item in recommended})
         self.assertNotIn("action_hints", payload["summary"]["needs_action"])
         self.assertIsInstance(payload["next_actions"], list)
+        agent_actions = [
+            action for action in payload["next_actions"] if action.get("surface") == "agent_callable"
+        ]
+        self.assertTrue(agent_actions)
+        self.assertTrue(agent_actions[0]["command"].startswith("aippocampus "))
         self.assertNotIn(str(codex_home), raw)
         self.assertNotIn(str(probe), raw)
 
@@ -1292,6 +1356,131 @@ class UpdateSyncTests(unittest.TestCase):
             self.assertFalse((target / "scripts" / "runtime.pyo").exists())
             self.assertFalse((target / ".aippocampus").exists())
             self.assertTrue(payload["applied_surfaces"][0]["ok"])
+
+    def test_apply_blocks_dirty_git_source_before_replacing_skill_target(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, provider_env():
+            root = Path(tmp)
+            repo = root / "repo"
+            codex_home = root / "codex-home"
+            write_minimal_repo(repo)
+            target = codex_home / "skills" / "aippocampus"
+            target.mkdir(parents=True)
+            (target / "SKILL.md").write_text("old target stays\n", encoding="utf-8")
+            init_git_fixture(repo)
+            (repo / "skills" / "aippocampus" / "SKILL.md").write_text(
+                "# dirty source\n",
+                encoding="utf-8",
+            )
+
+            code, payload = run_update(
+                "apply",
+                "--surface",
+                "skill",
+                "--repo-root",
+                str(repo),
+                "--codex-home",
+                str(codex_home),
+                "--no-child-check",
+            )
+
+            self.assertEqual(code, 2, payload)
+            self.assertFalse(payload["ok"])
+            self.assertEqual(payload["status"], "blocked_dirty_worktree")
+            self.assertTrue(payload["dirty_worktree_detected"])
+            self.assertEqual(payload["surface"], "skill")
+            self.assertIn("skills/aippocampus/SKILL.md", payload["dirty_paths"])
+            self.assertIn("source_path", payload["would_write"])
+            self.assertEqual((target / "SKILL.md").read_text(encoding="utf-8"), "old target stays\n")
+            commands = {action["command"] for action in payload["safe_next_actions"]}
+            self.assertIn("git status --short", commands)
+            self.assertIn("aippocampus update plan --json", commands)
+
+    def test_apply_allows_clean_git_source_worktree(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, provider_env():
+            root = Path(tmp)
+            repo = root / "repo"
+            codex_home = root / "codex-home"
+            write_minimal_repo(repo)
+            init_git_fixture(repo)
+
+            code, payload = run_update(
+                "apply",
+                "--surface",
+                "skill",
+                "--repo-root",
+                str(repo),
+                "--codex-home",
+                str(codex_home),
+                "--no-child-check",
+            )
+
+            self.assertEqual(code, 0, payload)
+            self.assertTrue(payload["applied_surfaces"][0]["ok"])
+            self.assertNotIn("dirty_worktree_override", payload["applied_surfaces"][0])
+
+    def test_apply_blocks_dirty_git_target_without_auto_stashing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, provider_env():
+            root = Path(tmp)
+            repo = root / "repo"
+            target_repo = root / "target-repo"
+            write_minimal_repo(repo)
+            target = target_repo / "skills" / "aippocampus"
+            target.mkdir(parents=True)
+            (target / "SKILL.md").write_text("tracked target\n", encoding="utf-8")
+            init_git_fixture(target_repo, message="target fixture")
+            (target / "SKILL.md").write_text("dirty target\n", encoding="utf-8")
+
+            code, payload = run_update(
+                "apply",
+                "--surface",
+                "skill",
+                "--repo-root",
+                str(repo),
+                "--skill-target",
+                str(target),
+                "--codex-home",
+                str(root / "codex-home"),
+                "--no-child-check",
+            )
+
+            self.assertEqual(code, 2, payload)
+            self.assertEqual(payload["status"], "blocked_dirty_worktree")
+            self.assertEqual(payload["surface"], "skill")
+            self.assertEqual((target / "SKILL.md").read_text(encoding="utf-8"), "dirty target\n")
+            self.assertFalse(payload["override_used"])
+            self.assertIn("--force-dirty-worktree", payload["override"])
+
+    def test_apply_force_dirty_worktree_override_is_explicit(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, provider_env():
+            root = Path(tmp)
+            repo = root / "repo"
+            codex_home = root / "codex-home"
+            write_minimal_repo(repo)
+            init_git_fixture(repo)
+            (repo / "skills" / "aippocampus" / "SKILL.md").write_text(
+                "# dirty source but reviewed\n",
+                encoding="utf-8",
+            )
+
+            code, payload = run_update(
+                "apply",
+                "--surface",
+                "skill",
+                "--repo-root",
+                str(repo),
+                "--codex-home",
+                str(codex_home),
+                "--force-dirty-worktree",
+                "--no-child-check",
+            )
+
+            self.assertEqual(code, 0, payload)
+            self.assertTrue(payload["applied_surfaces"][0]["ok"])
+            self.assertTrue(payload["applied_surfaces"][0]["dirty_worktree_override"])
+            self.assertEqual(
+                (codex_home / "skills" / "aippocampus" / "SKILL.md").read_text(encoding="utf-8"),
+                "# dirty source but reviewed\n",
+            )
 
     def test_status_detects_stale_mcp_config_and_flat_script_hooks(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, provider_env():
@@ -2090,7 +2279,7 @@ class UpdateSyncTests(unittest.TestCase):
         action = next(
             item for item in payload["next_actions"] if item["surface"] == "agent_callable"
         )
-        self.assertIn("reload Codex Desktop", action["command"])
+        self.assertIn("Reload Codex Desktop", action["manual_instruction"])
         self.assertIn("--foreground-key-tools-callable --agent-json", action["command"])
 
 

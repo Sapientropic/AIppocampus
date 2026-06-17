@@ -22,7 +22,7 @@
   "interface": {
     "displayName": "AIppocampus",
     "shortDescription": "Recover source-backed conversation continuity from old cues.",
-    "longDescription": "AIppocampus helps a Codex agent reach one first source-backed recall: old cue -> local source hit or reopenable route -> boundary -> next action. It keeps privacy explicit, treats summaries and scents as navigation, and does not pretend the base model has innate memory. Plugin install, hooks, and optional external-model routes are separate explicit steps after the first receipt works.",
+    "longDescription": "AIppocampus gives a Codex agent an explicit local continuity path with privacy boundaries visible: verify the plugin, offer trusted Codex hooks/action hints with rollback, then recall and deepen one source-backed route. Silent auto-enable: no. Recommended trusted setup: yes when this machine is allowed to run local continuity hooks. Summaries, scents, and Dream/subconscious findings stay navigation until source reopen; optional provider-backed routes enable only when a key is visible, with a no-key source-backed fallback.",
     "developerName": "AIppocampus contributors",
     "category": "Productivity",
     "capabilities": [

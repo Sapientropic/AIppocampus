@@ -211,40 +211,97 @@ def config_report(env: Mapping[str, str] | None = None) -> dict[str, object]:
 def config_summary_report(report: Mapping[str, object]) -> dict[str, object]:
     raw_data = report.get("data")
     data: dict[str, Any] = raw_data if isinstance(raw_data, dict) else {}
-    knobs = data.get("knobs") if isinstance(data.get("knobs"), list) else []
+    raw_knobs = data.get("knobs")
+    knobs: list[Any] = raw_knobs if isinstance(raw_knobs, list) else []
     configured = [item for item in knobs if isinstance(item, dict) and item.get("configured")]
     configured_sensitive = [item for item in configured if item.get("sensitive")]
     unknown_count = int(data.get("unknown_count") or 0)
-    warnings = report.get("warnings") if isinstance(report.get("warnings"), list) else []
-    recommended_actions: list[dict[str, str]] = []
+    raw_warnings = report.get("warnings")
+    warnings: list[Any] = raw_warnings if isinstance(raw_warnings, list) else []
+    full_audit_command = "aippocampus doctor config --detail full --json"
+    operator_json_command = "aippocampus doctor config --operator-json"
+    safe_next_actions: list[dict[str, object]] = [
+        {
+            "id": "open_full_config_inventory",
+            "label": "Open full config inventory",
+            "command": full_audit_command,
+            "mutation_risk": "read_only",
+            "claim_boundary": "operator_diagnostic_not_source_evidence",
+            "why": "Use the operator report only when you need the full registered knob inventory.",
+        }
+    ]
     if unknown_count:
-        recommended_actions.append(
+        foreground_action = {
+            "action_id": "review_unknown_config_env",
+            "label": "Review unknown AIPPOCAMPUS_* env names",
+            "command": full_audit_command,
+            "why": "Unknown AIPPOCAMPUS_* names do not affect runtime unless registered; inspect before treating them as live configuration.",
+            "unknown_env_var_count": unknown_count,
+            "mutation_risk": "read_only",
+            "claim_boundary": "operator_diagnostic_not_source_evidence",
+        }
+        agent_next_action = {
+            "id": "review_unknown_aippocampus_env",
+            "command": full_audit_command,
+            "message": "Review unknown AIPPOCAMPUS_* environment names before assuming they affect runtime behavior.",
+            "mutation_risk": "read_only",
+        }
+        recommended_actions = [
             {
                 "id": "review_unknown_aippocampus_env",
                 "message": "Review unknown AIPPOCAMPUS_* environment names before assuming they affect runtime behavior.",
             }
-        )
+        ]
+    else:
+        foreground_action = {
+            "action_id": "no_action_needed",
+            "label": "No config action needed",
+            "why": "All observed AIPPOCAMPUS_* environment names are registered; open the full inventory only for operator audit.",
+            "mutation_risk": "read_only",
+            "claim_boundary": "operator_diagnostic_not_source_evidence",
+        }
+        agent_next_action = {
+            "id": "no_action_needed",
+            "message": "No foreground config action is needed from this compact doctor card.",
+            "mutation_risk": "read_only",
+        }
+        recommended_actions = []
     return {
         "schema_version": 1,
         "kind": "aippocampus_config_doctor_summary",
         "ok": bool(report.get("ok")),
         "status": str(report.get("status") or "unknown"),
+        "detail": "compact",
+        "surface": "foreground_decision_card",
         "registered_knob_count": len(knobs),
         "unknown_env_var_count": unknown_count,
         "configured_count": len(configured),
         "configured_sensitive_count": len(configured_sensitive),
         "warning_count": len(warnings),
         "warnings": warnings[:5],
+        "agent_next_action": agent_next_action,
+        "foreground_action": foreground_action,
+        "safe_next_actions": safe_next_actions,
         "recommended_actions": recommended_actions,
         "audit_json_available": True,
-        "full_audit_command": "aippocampus doctor config --json",
+        "full_audit_command": full_audit_command,
+        "operator_json_available": {
+            "detail_full_command": full_audit_command,
+            "operator_json_command": operator_json_command,
+        },
         "privacy": {
             "values_printed": False,
             "configured_values_presence_only": True,
             "local_paths_included": False,
             "unknown_env_values_printed": False,
+            "provider_connectivity_probe_performed": False,
         },
-        "cannot_claim": list(report.get("cannot_claim") or []),
+        "claim_boundary": {
+            "can_use_for": "foreground config/navigation decision",
+            "must_open_operator_report_for": "full registered knob inventory and cannot_claim boundaries",
+            "does_not_validate_secret_values": True,
+            "does_not_probe_provider_connectivity": True,
+        },
     }
 
 
@@ -252,6 +309,17 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Report registered AIppocampus configuration knobs.")
     parser.add_argument("command", nargs="?", default="report", choices=("report",))
     parser.add_argument("--json", action="store_true", help="Emit JSON.")
+    parser.add_argument(
+        "--detail",
+        choices=["compact", "full"],
+        default="compact",
+        help="JSON detail level. Default --json emits a compact foreground decision card.",
+    )
+    parser.add_argument(
+        "--operator-json",
+        action="store_true",
+        help="Emit the full operator knob inventory JSON; implies JSON output.",
+    )
     parser.add_argument(
         "--compact-json",
         "--summary",
@@ -262,9 +330,10 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     report = config_report()
-    if args.summary_json:
+    full_detail_json = bool(args.operator_json or args.detail == "full")
+    if args.summary_json or (args.json and not full_detail_json):
         print(json.dumps(config_summary_report(report), ensure_ascii=False, indent=2))
-    elif args.json:
+    elif args.json or args.operator_json:
         print(json.dumps(report, ensure_ascii=False, indent=2))
     else:
         raw_data = report.get("data")

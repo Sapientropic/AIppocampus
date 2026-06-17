@@ -126,7 +126,7 @@ def _canonical_action(decision: str, request: Mapping[str, Any]) -> dict[str, An
             "request_index": request_index,
             "last_recall": True,
         },
-        "cli_command": f"aippocampus agent deepen --request {request_index} --last-recall",
+        "cli_command": f"aippocampus agent deepen --request {request_index} --last-recall --json",
         "why": "reopen before using this route",
         "claim_boundary": CLAIM_BOUNDARY,
     }

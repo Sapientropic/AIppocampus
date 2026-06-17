@@ -43,12 +43,60 @@ class ClaudeCodeHooksTests(unittest.TestCase):
         self.assertEqual(status["events"]["UserPromptSubmit"]["status"], "installable")
         self.assertEqual(status["events"]["Stop"]["status"], "installable")
         self.assertEqual(status["events"]["PostToolUse"]["status"], "unsupported_event")
+        self.assertEqual(
+            status["agent_next_action"]["command"],
+            "aippocampus hooks claude-code dry-run --json",
+        )
+        self.assertEqual(
+            status["foreground_action"]["unsupported_events"]["action"],
+            "do_not_install_or_claim_unsupported_events_yet",
+        )
+        self.assertIn("PostToolUse", status["foreground_action"]["unsupported_events"]["events"])
+        self.assertTrue(status["foreground_action"]["claim_boundary"]["no_configuration_mutation_happened"])
         self.assertIn("no_configuration_mutating_installer", status["cannot_claim"])
         self.assertFalse(dry_run["would_write"])
         self.assertIn("handler_command", dry_run)
         self.assertIn("command_resolvable", dry_run["handler_command"])
         self.assertFalse(dry_run["handler_command"]["resolved_executable_path_emitted"])
         self.assertEqual(dry_run["rollback"], "remove the displayed handlers from the selected Claude settings file")
+        self.assertNotIn(str(settings), encoded)
+
+    def test_status_card_switches_to_smoke_when_supported_hooks_are_installed(self) -> None:
+        from aippocampus_runtime.hooks import claude_code
+
+        with tempfile.TemporaryDirectory() as tmp:
+            settings = Path(tmp) / "settings.json"
+            settings.write_text(
+                json.dumps(
+                    {
+                        "hooks": {
+                            "UserPromptSubmit": [
+                                {
+                                    "hooks": [
+                                        {
+                                            "type": "command",
+                                            "command": "aippocampus hooks claude-code handle",
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            status = claude_code.status_report(settings_path=settings)
+
+        self.assertEqual(status["settings"]["status"], "installed")
+        self.assertEqual(
+            status["agent_next_action"]["command"],
+            "aippocampus hooks claude-code smoke --json",
+        )
+        self.assertIn(
+            "UserPromptSubmit",
+            status["foreground_action"]["supported_installed_or_firing_events"],
+        )
+        encoded = json.dumps(status, ensure_ascii=False)
         self.assertNotIn(str(settings), encoded)
 
     def test_dry_run_uses_module_fallback_when_console_script_is_not_on_path(self) -> None:

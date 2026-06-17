@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -232,12 +233,15 @@ class SpendDoctorTests(unittest.TestCase):
         self.assertEqual(report["decision"]["highest_spend_route"]["route"], "warm_ambient")
         self.assertEqual(report["decision"]["lowest_yield_route"]["route"], "warm_ambient")
         self.assertFalse(report["decision"]["estimated_cost_supported"])
-        self.assertEqual(report["decision"]["safe_next_command"], "aippocampus doctor spend --json")
+        self.assertEqual(
+            report["decision"]["safe_next_command"],
+            "aippocampus doctor spend --detail full --json",
+        )
         rendered = spend_doctor.render_text(report)
         self.assertIn("Decision: inspect", rendered)
         self.assertIn("Highest spend: warm_ambient", rendered)
         self.assertIn("Cost: token volume only", rendered)
-        self.assertIn("Next: aippocampus doctor spend --json", rendered)
+        self.assertIn("Next: aippocampus doctor spend --detail full --json", rendered)
         encoded = json.dumps(report, ensure_ascii=False)
         self.assertNotIn(FAKE_PRIVATE_MARKER, encoded)
         self.assertNotIn(FAKE_LOCAL_PATH, encoded)
@@ -369,9 +373,178 @@ class SpendDoctorTests(unittest.TestCase):
 
         self.assertEqual(proc.returncode, 0, proc.stderr)
         payload = json.loads(proc.stdout)
+        self.assertEqual(payload["kind"], "aippocampus_spend_doctor_card")
+        self.assertEqual(payload["detail"], "compact")
+        self.assertEqual(payload["surface"], "foreground_decision_card")
+        self.assertNotIn("routes", payload)
+        self.assertNotIn("budget_guardrails", payload)
+        self.assertNotIn("cannot_claim", payload)
+        self.assertEqual(
+            payload["claim_boundary"]["can_use_for"],
+            "foreground spend/navigation decision",
+        )
+        self.assertIn("decision", payload)
+        self.assertNotIn(str(root), proc.stdout)
+
+    def test_default_compact_json_warns_with_inspect_action_without_self_looping(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            warm_dir = root / "ambient_warm_jobs"
+            warm_dir.mkdir()
+            (warm_dir / "warm_a.result.json").write_text(
+                json.dumps(
+                    {
+                        "status": "suppressed",
+                        "observed_scout_result_count": 5,
+                        "card_count": 5,
+                        "usage": {"total_tokens": 1500},
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+
+            proc = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "aippocampus_runtime.cli.facade",
+                    "doctor",
+                    "spend",
+                    "--registry-dir",
+                    str(root),
+                    "--warning-effective-tokens",
+                    "1000",
+                    "--warning-min-foreground-value-rate",
+                    "0.25",
+                    "--json",
+                ],
+                cwd=SCRIPTS,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                capture_output=True,
+                check=False,
+            )
+
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        payload = json.loads(proc.stdout)
+        self.assertEqual(payload["status"], "warning")
+        self.assertEqual(payload["decision"]["action"], "inspect")
+        self.assertEqual(
+            payload["decision"]["safe_next_command"],
+            "aippocampus doctor spend --detail full --json",
+        )
+        self.assertEqual(payload["foreground_action"]["action_id"], "inspect_spend_route")
+        self.assertEqual(payload["foreground_action"]["route"], "warm_ambient")
+        self.assertIn("warm_ambient", payload["routes_to_pause_or_inspect"])
+        self.assertNotEqual(payload["decision"]["safe_next_command"], "aippocampus doctor spend --json")
+        self.assertLess(len(proc.stdout.encode("utf-8")), 5000)
+
+    def test_blocked_warm_queue_becomes_spend_inspect_action_even_below_threshold(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            warm_dir = root / "ambient_warm_jobs"
+            warm_dir.mkdir()
+            (warm_dir / "warm_stale.json").write_text(
+                json.dumps({"created_at": "2026-06-05T12:00:00Z"}),
+                encoding="utf-8",
+            )
+            stale_mtime = 1780660800
+            (warm_dir / "warm_stale.json").touch()
+            os.utime(warm_dir / "warm_stale.json", (stale_mtime, stale_mtime))
+            (warm_dir / "warm_a.result.json").write_text(
+                json.dumps(
+                    {
+                        "status": "written",
+                        "observed_scout_result_count": 5,
+                        "card_count": 5,
+                        "cache_write": {"status": "written", "card_count": 5},
+                        "usage": {"total_tokens": 900},
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+
+            report = spend_doctor.build_spend_doctor_report(
+                registry_dir=root,
+                now="2026-06-07T12:00:00Z",
+                warn_effective_tokens=999999,
+                warn_min_foreground_value_rate=0.0,
+            )
+            card = spend_doctor.compact_spend_doctor_card(report)
+
+        self.assertEqual(report["status"], "warning")
+        self.assertIn("blocked_warm_queue:warm_ambient", report["warning_codes"])
+        self.assertEqual(report["decision"]["action"], "inspect")
+        self.assertIn("blocked stale queue", report["decision"]["reason"])
+        self.assertIn("warm_ambient", report["decision"]["routes_to_pause_or_inspect"])
+        self.assertEqual(report["decision"]["warm_queue_health"]["queue_state"], "blocked_stale_pending")
+        self.assertEqual(card["foreground_action"]["action_id"], "inspect_warm_ambient_queue")
+        self.assertEqual(card["foreground_action"]["command"], "aippocampus warm status --json")
+        self.assertEqual(card["decision"]["warm_queue_health"]["pending_stale_count"], 1)
+
+    def test_explicit_full_spend_json_keeps_operator_telemetry(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "aippocampus_prompt_hook_skip_telemetry.json").write_text(
+                json.dumps({"updated_at": "2026-06-05T14:10:00Z", "skip_events": 1}),
+                encoding="utf-8",
+            )
+            proc = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "aippocampus_runtime.cli.facade",
+                    "doctor",
+                    "spend",
+                    "--registry-dir",
+                    str(root),
+                    "--detail",
+                    "full",
+                    "--json",
+                ],
+                cwd=SCRIPTS,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                capture_output=True,
+                check=False,
+            )
+
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        payload = json.loads(proc.stdout)
         self.assertEqual(payload["kind"], "aippocampus_spend_doctor")
         self.assertIn("routes", payload)
-        self.assertNotIn(str(root), proc.stdout)
+        self.assertIn("model_telemetry", payload["routes"]["semantic_gate"])
+
+    def test_operator_json_alias_keeps_full_spend_telemetry_without_json_flag(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            proc = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "aippocampus_runtime.cli.facade",
+                    "doctor",
+                    "spend",
+                    "--registry-dir",
+                    str(root),
+                    "--operator-json",
+                ],
+                cwd=SCRIPTS,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                capture_output=True,
+                check=False,
+            )
+
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        payload = json.loads(proc.stdout)
+        self.assertEqual(payload["kind"], "aippocampus_spend_doctor")
+        self.assertIn("routes", payload)
 
 
 if __name__ == "__main__":

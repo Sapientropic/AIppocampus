@@ -19,6 +19,7 @@ from aippocampus_runtime.recall import index_builder
 
 PUBLIC_NO_RAW_PROFILES = {"public-export", "public-metadata"}
 PUBLIC_METADATA_PROFILES = {"public-export", "public-metadata"}
+ALLOWED_REDACTION_PROFILES = ["raw-private", "redacted-local", "public-export", "public-metadata"]
 PRIVATE_EXPORT_COMMAND = "aippocampus export --redaction-profile raw-private --output <bundle.zip>"
 PUBLIC_EXPORT_COMMAND = (
     "aippocampus export --redaction-profile public-export --no-raw --output <bundle.zip>"
@@ -463,7 +464,6 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--redaction-profile",
         default="raw-private",
-        choices=["raw-private", "redacted-local", "public-export", "public-metadata"],
         help=(
             "Project bundle index text. public-export and public-metadata are "
             "metadata-only public-share-safe profiles; use raw-private or redacted-local "
@@ -507,6 +507,45 @@ def _chooser_payload(*, reason: str, public_hint: bool = False) -> dict[str, Any
             "requires_explicit_output": True,
             "raw_private_is_never_selected_by_bare_command": True,
         },
+        "write_performed": False,
+    }
+
+
+def _export_recovery_actions(*, provided: str | None = None) -> list[dict[str, str]]:
+    public_profile = "public-metadata" if provided == "public" else "public-metadata"
+    return [
+        {
+            "id": "public_metadata_export",
+            "command": f"aippocampus export --redaction-profile {public_profile} --no-raw --output <bundle.zip> --json",
+        },
+        {
+            "id": "public_export",
+            "command": "aippocampus export --redaction-profile public-export --no-raw --output <bundle.zip> --json",
+        },
+        {
+            "id": "private_local_transfer",
+            "command": PRIVATE_EXPORT_COMMAND + " --json",
+        },
+    ]
+
+
+def _invalid_redaction_profile_payload(provided: str) -> dict[str, Any]:
+    return {
+        "ok": False,
+        "kind": "aippocampus_export_recovery",
+        "error": {
+            "code": "invalid_redaction_profile",
+            "message": "The selected redaction profile is not recognized. No write happened.",
+            "provided": provided,
+            "allowed": ALLOWED_REDACTION_PROFILES,
+        },
+        "safe_next_actions": _export_recovery_actions(provided=provided),
+        "write_performed": False,
+        "safety": {
+            "no_write_happened": True,
+            "no_traceback": True,
+            "no_secret_values_printed": True,
+        },
     }
 
 
@@ -519,7 +558,10 @@ def _recovery_payload(*, code: str, message: str, next_command: str) -> dict[str
             "message": message,
             "next_command": next_command,
         },
+        "safe_next_actions": _export_recovery_actions(),
+        "write_performed": False,
         "safety": {
+            "no_write_happened": True,
             "no_traceback": True,
             "no_secret_values_printed": True,
         },
@@ -528,6 +570,14 @@ def _recovery_payload(*, code: str, message: str, next_command: str) -> dict[str
 
 def main(argv: list[str] | None = None) -> int:
     args = build_arg_parser().parse_args(argv)
+    if str(args.redaction_profile) not in ALLOWED_REDACTION_PROFILES:
+        if args.json_output:
+            print(json.dumps(_invalid_redaction_profile_payload(str(args.redaction_profile)), ensure_ascii=False, indent=2))
+            return 2
+        build_arg_parser().error(
+            "argument --redaction-profile: invalid choice: "
+            f"{args.redaction_profile!r} (choose from {', '.join(ALLOWED_REDACTION_PROFILES)})"
+        )
     intent = str(getattr(args, "intent", "") or "").strip().casefold()
     public_hint = bool(args.public) or intent in {"public", "public-export", "public-metadata"}
     if intent and intent not in {"public", "public-export", "public-metadata", "private", "raw-private"}:

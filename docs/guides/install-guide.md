@@ -80,9 +80,12 @@ public reports keep their stricter source/privacy boundaries.
 For no-clone package probing, non-Codex hosts, or CLI-only fallback, use the
 [10-minute public API path](public-api.md#ten-minute-public-path): package
 probe, read-only provider status, explicit onboarding only with user consent,
-then clean-source search for a first source-backed snippet. Treat sync, object
-storage, Dream, semantic jobs, and benchmarks as advanced surfaces unless that
-path proves the user actually needs them.
+then clean-source search for a first source-backed snippet. Keep sync, object
+storage, and benchmarks as advanced/operator surfaces unless that path proves
+the user actually needs them. Reviewed foreground background cards, including
+Dream/subconscious findings exposed through `aippocampus agent background`, are
+ordinary continuity navigation when local setup/provider consent allows it; they
+still require source reopen before factual claims.
 
 Enable prompt/lifecycle hooks only after that first receipt works and the user
 trusts this machine for ambient continuity:
@@ -150,7 +153,8 @@ Register local history only after the user explicitly agrees, then choose the
 matching provider path:
 
 ```sh
-uvx aippocampus onboard --provider codex --all
+uvx aippocampus onboard --provider codex --status --json
+# Then follow the explicit write recommendation after consent.
 uvx aippocampus onboard --provider claude-code --dry-run
 uvx aippocampus onboard --provider claude-code
 uvx aippocampus import conversation --format generic-jsonl --input <path> --dry-run --json
@@ -263,8 +267,9 @@ skill copy, MCP config, plugin package, Codex hooks, and optional LLM provider
 key are current. Human output leads with profile-aware readiness:
 
 - `core_ready`: the small source-backed CLI/skill path is usable.
-- `magic_ready`: hooks plus the optional LLM route can power the more ambient
-  external-hippocampus feel.
+- `magic_ready`: current subsystem signal for hook/model plumbing. Do not read
+  this legacy field as "first useful magic moment is ready" unless source
+  search, foreground recall/deepen, and any chosen action hints are also ready.
 - `agent_callable_status`: whether package artifacts are merely current or the
   active host is known to expose AIppocampus tools to the foreground agent.
 - optional/plugin and operator surfaces stay visible without making the default
@@ -548,9 +553,9 @@ ready.
 
 ## First Onboarding
 
-If source is already registered, start with search or `agent recall` rather than
-onboarding. Preview provider readiness before writing only when the first recall
-path is blocked:
+If source is already registered, start with `agent recall`/`agent deepen`, or
+exact search when the user remembers wording, rather than onboarding. Preview
+provider readiness before writing only when the first recall path is blocked:
 
 ```sh
 aippocampus onboard --provider auto --status --cwd "$PWD"
@@ -560,16 +565,18 @@ Then register existing local transcript source and build clean-source indexes
 only after user consent, with an explicit provider:
 
 ```sh
-aippocampus onboard --provider codex --all
-aippocampus onboard --provider claude-code --dry-run --format json
-aippocampus onboard --provider claude-code --format json
+aippocampus onboard --provider codex --status --json
+# Then follow the explicit write recommendation after consent.
+aippocampus onboard --provider claude-code --dry-run --json
+aippocampus onboard --provider claude-code --json
 aippocampus import conversation --format generic-jsonl --input <path> --dry-run --json
 aippocampus import conversation --format generic-jsonl --input <path>
-aippocampus search "a distinctive old phrase"
+aippocampus agent recall "old decision or handoff cue" --json
+aippocampus agent deepen --request 1 --last-recall --json
 ```
 
 Use `--dry-run` before broad imports when you want a preview, and use
-`--format json` for agent/operator automation. Generated memory artifacts
+`--json` for agent/operator automation. Generated memory artifacts
 default to the configured AIppocampus registry
 (`AIPPOCAMPUS_REGISTRY_DIR`, `AIPPOCAMPUS_HOME/registry`, then legacy
 `$CODEX_HOME/aippocampus-registry`) rather than the active project repository.
@@ -641,8 +648,22 @@ starts; it does not prove what a previously started Codex Desktop hook process
 could see. Use `--provider-env-var <NAME>` when you need to test a local route
 override without changing the route configuration.
 
+If the key is visible in the current and child process, keep the normal bridge
+path presence-only and confirm the visible environment source directly:
+
+```sh
+aippocampus onboard provider-key --plan --target codex-hooks --source visible-env-key --provider-env-var DEEPSEEK_API_KEY --json
+aippocampus onboard provider-key --apply --target codex-hooks --source visible-env-key --provider-env-var DEEPSEEK_API_KEY --json
+```
+
+This records only the env-var source metadata and restart boundary. It does not
+print, hash, persist, or validate the secret value. Future hook processes are
+ready only when they are launched from an environment where the same variable is
+visible.
+
 When a key exists somewhere on the machine but the hook-relevant process still
-reports `missing_provider_env_var`, use explicit credential-source discovery:
+reports `missing_provider_env_var`, or when the user explicitly chooses a
+private file, use explicit credential-source discovery:
 
 ```sh
 aippocampus doctor provider --discover-credential-sources --credential-dotenv /path/to/.env --json
@@ -656,8 +677,8 @@ probe; validation is skipped for non-HTTPS routes except loopback HTTP. This
 diagnostic does not install a hook wrapper or bridge credentials into Codex
 Desktop by itself.
 
-To bridge a private key source into future Codex hook processes, use the
-separate onboarding surface:
+To bridge a private file source into future Codex hook processes, use the
+separate explicit onboarding surface:
 
 ```sh
 aippocampus onboard provider-key --plan --target codex-hooks --source explicit-dotenv --credential-dotenv /path/to/.env --json

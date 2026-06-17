@@ -138,7 +138,9 @@ class ForegroundActionCardTests(unittest.TestCase):
             max_routes=1,
         )
         redacted_card = foreground_action_card.redact_public_card(report["foreground_action_card"])
-        public = agent_continuity.public_recall_projection(report)
+        public = agent_continuity.public_recall_projection(
+            {**report, "last_recall_cache_available": True}
+        )
         encoded = json.dumps(public, ensure_ascii=False, sort_keys=True)
         action = public["foreground_action"]
 

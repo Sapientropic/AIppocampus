@@ -26,6 +26,7 @@ from aippocampus_runtime.mcp.source_ref_registry import (
     registry_source_fingerprint_invalidations,
     source_candidate_dirs_for_ref,
 )
+from aippocampus_runtime.privacy import redact_private_paths
 from aippocampus_runtime.recall.active_recall_lock import (
     default_active_recall_lock_path,
     reopen_lock_sources,
@@ -42,7 +43,11 @@ from aippocampus_runtime.recall.continuity_domains import (
 from aippocampus_runtime.recall.query_policy import split_query_terms
 from aippocampus_runtime.registry import api as registry
 from aippocampus_runtime.registry.search import entry_search_score
-from aippocampus_runtime.source.search import iter_clean_messages, search_clean_source
+from aippocampus_runtime.source.search import (
+    iter_clean_messages,
+    process_noise_reason,
+    search_clean_source,
+)
 
 HANDLE_PREFIX = "aippo-nav:"
 HANDLE_SCHEMA_VERSION = 1
@@ -366,7 +371,8 @@ def _boundary() -> dict[str, Any]:
         "clean_source_is_authority": True,
         "handles_are_short_lived": True,
         "no_raw_prompt_text": True,
-        "no_raw_private_paths": True,
+        "private_paths_may_exist_in_source_text": True,
+        "default_projection_redacts_private_paths": True,
     }
 
 
@@ -576,6 +582,14 @@ def _unwrap_navigation_seed(handle: Any) -> Any:
 def normalize_handle(handle: Any) -> dict[str, Any]:
     current = _unwrap_navigation_seed(handle)
     if isinstance(current, str):
+        text = current.strip()
+        if text.startswith("{"):
+            try:
+                parsed = json.loads(text)
+            except json.JSONDecodeError:
+                parsed = None
+            if isinstance(parsed, dict):
+                return normalize_handle(parsed)
         return _decode_handle(current)
     if isinstance(current, dict):
         nested = nested_navigation_handle_value(current, clean_ref=_clean_ref)
@@ -596,6 +610,20 @@ def normalize_handle(handle: Any) -> dict[str, Any]:
                 "kind": "source_ref",
                 "route_id": current.get("route_id") or _stable_id("source_ref", refs),
                 "source_refs": [_clean_ref(ref) for ref in refs if isinstance(ref, dict)],
+                "source_fingerprint": current.get("source_fingerprint"),
+            }
+        if kind == "thread_candidate":
+            thread_key = str(current.get("thread_key") or "").strip()
+            if not thread_key:
+                raise RecallNavigationError(
+                    "malformed_recall_handle",
+                    "thread candidate handles require thread_key.",
+                )
+            return {
+                "schema_version": HANDLE_SCHEMA_VERSION,
+                "kind": "source_ref",
+                "route_id": current.get("route_id") or _stable_id("thread_candidate", thread_key),
+                "source_refs": [{"thread_key": thread_key}],
                 "source_fingerprint": current.get("source_fingerprint"),
             }
         if kind in {"active_recall_lock", "active_lock"}:
@@ -653,6 +681,12 @@ def normalize_handle(handle: Any) -> dict[str, Any]:
 
 
 def _message_matches_ref(message: dict[str, Any], ref: dict[str, Any]) -> bool:
+    if (
+        ref.get("thread_key")
+        and not any(ref.get(key) for key in ("message_id", "turn_id", "turn_index", "line"))
+    ):
+        message_thread = str(message.get("thread_key") or "")
+        return not message_thread or message_thread == str(ref.get("thread_key"))
     if ref.get("message_id") and str(message.get("message_id") or message.get("id") or "") == str(
         ref.get("message_id")
     ):
@@ -683,10 +717,30 @@ def _turn_messages(messages: list[dict[str, Any]], selected: dict[str, Any]) -> 
     return window[:MAX_SOURCE_WINDOW_MESSAGES]
 
 
+def _source_use_class(message: dict[str, Any]) -> str:
+    """Classify reopened source so audit material is not mistaken for continuity."""
+
+    text = str(message.get("text") or "")
+    phase = str(message.get("phase") or "").casefold()
+    role = str(message.get("role") or "").casefold()
+    if process_noise_reason(text) or phase in {"commentary", "analysis", "tool", "debug"}:
+        return "audit_or_commentary_source"
+    if role in {"tool", "system", "developer"}:
+        return "audit_or_commentary_source"
+    if role == "user" or message.get("is_final") or phase == "final_answer":
+        return "foreground_continuity_source"
+    return "clean_source_context"
+
+
 def _public_source_message(message: dict[str, Any]) -> dict[str, Any]:
     clean = dict(message)
+    source_use_class = _source_use_class(message)
     if "text" in clean:
-        clean["text"] = _safe_text(clean.get("text"), 1200)
+        clean["text"] = redact_private_paths(_safe_text(clean.get("text"), 1200))
+    clean["source_use_class"] = source_use_class
+    if source_use_class == "audit_or_commentary_source":
+        clean["claim_boundary"] = "audit_or_commentary_source_reopen_only"
+        clean["ordinary_continuity_priority"] = "low"
     return clean
 
 

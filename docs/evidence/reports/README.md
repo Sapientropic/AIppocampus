@@ -24,4 +24,4 @@ these reports as support for present-tense claims.
 | [`product-usability-dogfood-2026-06-14.md`](product-usability-dogfood-2026-06-14.md) | Local install/readiness/health/CLI/MCP product-usability dogfood; not retrieval-quality benchmark evidence. |
 | [`reflection-aar-v2-hardening-2026-06-05.md`](reflection-aar-v2-hardening-2026-06-05.md) | #332 AAR v2 strategy-reader hardening closeout. |
 | [`sparse-provenance-source-family-economics-2026-06-16.md`](sparse-provenance-source-family-economics-2026-06-16.md) | #1891 source-family economics gate over temporary public-safe 100MB+ synthetic inputs; not GB/TB or private-history readiness. |
-| [`successor-evidence-sweep-2026-06-16.md`](successor-evidence-sweep-2026-06-16.md) | #1918-#1981 live-aware successor evidence closeout gate; bounded validation plus live/provider blockers, not default adoption. |
+| [`successor-evidence-sweep-2026-06-16.md`](successor-evidence-sweep-2026-06-16.md) | #1918-#1981 live-aware successor evidence closeout gate; bounded validation plus live/provider blockers with explicit successor paths, not default adoption. |

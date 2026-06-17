@@ -9,6 +9,7 @@ import importlib.metadata
 import importlib.util
 import json
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -107,12 +108,12 @@ def _update_recovery_payload(*, code: str, message: str, next_command: str) -> d
         "next_actions": [
             {
                 "label": "read update status",
-                "command": "aippocampus update status --agent-json",
+                "command": "aippocampus update status --json",
                 "mutates": False,
             },
             {
                 "label": "preview update plan",
-                "command": "aippocampus update plan --agent-json",
+                "command": "aippocampus update plan --json",
                 "mutates": False,
             },
         ],
@@ -172,6 +173,85 @@ def _path_is_under(child: Path, parent: Path) -> bool:
     except ValueError:
         return False
     return True
+
+
+def _paths_overlap(left: Path, right: Path) -> bool:
+    left_resolved = left.resolve()
+    right_resolved = right.resolve()
+    return (
+        left_resolved == right_resolved
+        or _path_is_under(left_resolved, right_resolved)
+        or _path_is_under(right_resolved, left_resolved)
+    )
+
+
+def _git_root_for(path: Path) -> Path | None:
+    probe = path if path.exists() and path.is_dir() else path.parent
+    try:
+        proc = subprocess.run(
+            ["git", "-C", str(probe), "rev-parse", "--show-toplevel"],
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            check=False,
+        )
+    except OSError:
+        return None
+    if proc.returncode != 0:
+        return None
+    root = proc.stdout.strip()
+    return Path(root).resolve() if root else None
+
+
+def _dirty_git_entries(git_root: Path) -> list[Path]:
+    proc = subprocess.run(
+        ["git", "-C", str(git_root), "status", "--porcelain=v1", "--untracked-files=normal"],
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        capture_output=True,
+        check=False,
+    )
+    if proc.returncode != 0:
+        return []
+    entries: list[Path] = []
+    for line in proc.stdout.splitlines():
+        if len(line) < 4:
+            continue
+        raw_path = line[3:]
+        if " -> " in raw_path:
+            raw_path = raw_path.rsplit(" -> ", 1)[-1]
+        raw_path = raw_path.strip().strip('"')
+        if raw_path:
+            entries.append((git_root / raw_path).resolve())
+    return entries
+
+
+def _dirty_git_overlaps(paths: list[Path]) -> list[dict[str, Any]]:
+    by_root: dict[Path, list[Path]] = {}
+    for path in paths:
+        root = _git_root_for(path.resolve())
+        if root is not None:
+            by_root.setdefault(root, []).append(path.resolve())
+    overlaps: list[dict[str, Any]] = []
+    for root, scoped_paths in by_root.items():
+        for dirty in _dirty_git_entries(root):
+            for scoped in scoped_paths:
+                if _paths_overlap(dirty, scoped):
+                    try:
+                        rel_dirty = dirty.relative_to(root).as_posix()
+                    except ValueError:
+                        rel_dirty = str(dirty)
+                    overlaps.append(
+                        {
+                            "git_root": str(root),
+                            "dirty_path": rel_dirty,
+                            "overlap_path": str(scoped),
+                        }
+                    )
+                    break
+    return overlaps
 
 
 def find_repo_root(start: Path | None = None) -> Path:
@@ -799,7 +879,16 @@ def build_status(args: argparse.Namespace, *, mode: str) -> dict[str, Any]:
             "agent_callable_host_ready": agent_callable_host_probe_ok(
                 surfaces["agent_callable"]
             ),
-            "agent_callable_current_thread_visible": surfaces["agent_callable"]["ready"],
+            "agent_callable_current_thread_visible": (
+                surfaces["agent_callable"].get("foreground_tools_visible") is True
+            ),
+            "agent_callable_current_thread_callable": surfaces["agent_callable"]["ready"],
+            "agent_callable_foreground_probe_requested": bool(
+                surfaces["agent_callable"].get("foreground_probe_requested")
+            ),
+            "agent_callable_foreground_probe_state": surfaces["agent_callable"].get(
+                "foreground_probe_state"
+            ),
             "host_conformance_label": surfaces["host_conformance"]["label"],
             "capability_ladder": capability_ladder,
             "needs_action": actionable,
@@ -1038,6 +1127,96 @@ def detect_only_apply(surface: str, args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
+def _apply_surface_write_paths(surface: str, args: argparse.Namespace) -> dict[str, Path]:
+    repo_root = find_repo_root(Path(args.repo_root).resolve() if args.repo_root else None)
+    codex_home_path = Path(args.codex_home).resolve() if args.codex_home else codex_home()
+    if surface == "skill":
+        return {
+            "source_path": repo_root / "skills" / "aippocampus",
+            "target_path": (
+                Path(args.skill_target).resolve()
+                if args.skill_target
+                else codex_home_path / "skills" / "aippocampus"
+            ),
+        }
+    if surface == "plugin":
+        paths: dict[str, Path] = {
+            "source_path": repo_root / "plugins" / "aippocampus",
+            "package_output_path": (
+                Path(args.plugin_output).resolve()
+                if args.plugin_output
+                else repo_root / DEFAULT_PLUGIN_OUTPUT
+            ),
+        }
+        marketplace_arg = (
+            Path(args.plugin_marketplace_dir).resolve()
+            if args.plugin_marketplace_dir
+            else None
+        )
+        if marketplace_arg is None and bool(getattr(args, "all_local", False)):
+            marketplace_arg = configured_marketplace_root(codex_home_path)
+        installed_arg = _optional_path_or_auto(args.plugin_installed_dir)
+        if isinstance(marketplace_arg, Path):
+            paths["marketplace_path"] = marketplace_arg
+        if isinstance(installed_arg, Path):
+            paths["installed_cache_path"] = installed_arg
+        return paths
+    if surface == "hooks":
+        hooks_path = (
+            Path(args.hooks_json).resolve()
+            if args.hooks_json
+            else install_prompt.hooks_json_path(codex_home_path)
+        )
+        return {"target_path": hooks_path}
+    return {}
+
+
+def _dirty_worktree_recovery(surface: str, write_paths: dict[str, Path], overlaps: list[dict[str, Any]]) -> dict[str, Any]:
+    dirty_paths = sorted({str(item.get("dirty_path") or "") for item in overlaps if item.get("dirty_path")})
+    git_roots = sorted({str(item.get("git_root") or "") for item in overlaps if item.get("git_root")})
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "kind": "aippocampus_update_recovery",
+        "mode": "apply_recovery",
+        "ok": False,
+        "status": "blocked_dirty_worktree",
+        "surface": surface,
+        "dirty_worktree_detected": True,
+        "dirty_paths": dirty_paths,
+        "git_roots": git_roots,
+        "would_write": {key: str(value) for key, value in write_paths.items()},
+        "safe_next_actions": [
+            {
+                "label": "inspect dirty worktree",
+                "command": "git status --short",
+                "mutation_risk": "read_only",
+            },
+            {
+                "label": "preview update plan",
+                "command": "aippocampus update plan --json",
+                "mutation_risk": "read_only",
+            },
+        ],
+        "override": "rerun with --force-dirty-worktree only after human review",
+        "override_used": False,
+        "safety": {
+            "no_write_happened": True,
+            "auto_stash": False,
+            "auto_cleanup": False,
+        },
+    }
+
+
+def _dirty_worktree_blocker(surface: str, args: argparse.Namespace) -> dict[str, Any] | None:
+    write_paths = _apply_surface_write_paths(surface, args)
+    if not write_paths:
+        return None
+    overlaps = _dirty_git_overlaps(list(write_paths.values()))
+    if not overlaps:
+        return None
+    return _dirty_worktree_recovery(surface, write_paths, overlaps)
+
+
 def apply_update(args: argparse.Namespace) -> dict[str, Any]:
     surfaces = list(args.surface or [])
     if args.all_local:
@@ -1051,17 +1230,17 @@ def apply_update(args: argparse.Namespace) -> dict[str, Any]:
                 "update apply is mutating and needs an explicit --surface or --all-local. "
                 "No write happened."
             ),
-            next_command="aippocampus update plan --agent-json",
+            next_command="aippocampus update plan --json",
         )
         report["next_actions"] = [
             {
                 "label": "preview update plan",
-                "command": "aippocampus update plan --agent-json",
+                "command": "aippocampus update plan --json",
                 "mutates": False,
             },
             {
                 "label": "read update status",
-                "command": "aippocampus update status --agent-json",
+                "command": "aippocampus update status --json",
                 "mutates": False,
             },
         ]
@@ -1070,6 +1249,11 @@ def apply_update(args: argparse.Namespace) -> dict[str, Any]:
             "mode": "apply_recovery",
             "valid_surfaces": list(APPLY_SURFACES),
         }
+    if not getattr(args, "force_dirty_worktree", False):
+        for surface in surfaces:
+            blocker = _dirty_worktree_blocker(surface, args)
+            if blocker is not None:
+                return blocker
     results: list[dict[str, Any]] = []
     for surface in surfaces:
         if surface == "skill":
@@ -1089,6 +1273,10 @@ def apply_update(args: argparse.Namespace) -> dict[str, Any]:
                     "status": "unsupported",
                 }
             )
+    if getattr(args, "force_dirty_worktree", False):
+        for item in results:
+            if item.get("applied"):
+                item["dirty_worktree_override"] = True
     post_status = build_status(args, mode="status")
     next_actions = update_actions.post_apply_next_actions(results)
     return {
@@ -1210,7 +1398,12 @@ def _add_common_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--agent-json",
         action="store_true",
-        help="Emit compact agent-facing JSON with readiness tiers and next actions.",
+        help="Compatibility alias for compact foreground JSON.",
+    )
+    parser.add_argument(
+        "--operator-json",
+        action="store_true",
+        help="Emit full local diagnostic JSON; --json stays compact for status/plan.",
     )
 
 
@@ -1222,15 +1415,15 @@ def build_parser() -> argparse.ArgumentParser:
             "Update status readiness card:\n"
             "  Read one foreground-sized view of local skill/plugin/hook/MCP freshness.\n"
             "  Prefer this before judging whether recall is broken; stale host/plugin state can hide fixed tools.\n"
-            "  Ordinary command: aippocampus update status --agent-json\n\n"
+            "  Ordinary command: aippocampus update status --json\n\n"
             "Advanced/operator overrides:\n"
-            "  The path flags below are for maintainer repair, nonstandard Codex homes, or release checks."
+            "  Use --operator-json for full diagnostic trees; the path flags below are for maintainer repair, nonstandard Codex homes, or release checks."
         ),
         "plan": (
             "Update plan action card:\n"
             "  Preview what apply would need before mutating local install surfaces.\n"
-            "  Use --agent-json for a compact machine-readable plan; use --json only for operator detail.\n"
-            "  Ordinary command: aippocampus update plan --agent-json\n\n"
+            "  Use --json for a compact machine-readable plan; use --operator-json only for operator detail.\n"
+            "  Ordinary command: aippocampus update plan --json\n\n"
             "Advanced/operator overrides:\n"
             "  The path flags below are for maintainer repair, nonstandard Codex homes, or release checks."
         ),
@@ -1278,28 +1471,37 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Apply local package/effect surfaces: skill, plugin package, and Codex hooks.",
     )
+    apply_parser.add_argument(
+        "--force-dirty-worktree",
+        action="store_true",
+        help="Override the dirty Git worktree guard after human review; never stashes or cleans.",
+    )
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     raw_argv = list(sys.argv[1:] if argv is None else argv)
-    wants_recovery_json = "--agent-json" in raw_argv or "--json" in raw_argv
-    filtered = [item for item in raw_argv if item not in {"--agent-json", "--json"}]
+    wants_recovery_json = (
+        "--agent-json" in raw_argv or "--json" in raw_argv or "--operator-json" in raw_argv
+    )
+    filtered = [
+        item for item in raw_argv if item not in {"--agent-json", "--json", "--operator-json"}
+    ]
     if not filtered:
         return _emit_update_recovery(
             _update_recovery_payload(
                 code="update_command_required",
                 message="Choose status, plan, or apply. No write happened.",
-                next_command="aippocampus update status --agent-json",
+                next_command="aippocampus update status --json",
             ),
             json_output=wants_recovery_json,
         )
     if filtered[0] in {"check", "dry-run"}:
         code = "update_status_alias" if filtered[0] == "check" else "update_plan_alias"
         command = (
-            "aippocampus update status --agent-json"
+            "aippocampus update status --json"
             if filtered[0] == "check"
-            else "aippocampus update plan --agent-json"
+            else "aippocampus update plan --json"
         )
         return _emit_update_recovery(
             _update_recovery_payload(
@@ -1320,7 +1522,11 @@ def main(argv: list[str] | None = None) -> int:
         # Public CLI output must not echo raw exception text; install/update
         # failures can include local paths or environment-derived diagnostics.
         del exc
-        if getattr(args, "json_output", False) or getattr(args, "agent_json", False):
+        if (
+            getattr(args, "json_output", False)
+            or getattr(args, "agent_json", False)
+            or getattr(args, "operator_json", False)
+        ):
             emit_public_text(
                 json.dumps(
                     {
@@ -1341,10 +1547,14 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     if report.get("kind") == "aippocampus_update_recovery" and (
-        getattr(args, "agent_json", False) or getattr(args, "json_output", False)
+        getattr(args, "agent_json", False)
+        or getattr(args, "json_output", False)
+        or getattr(args, "operator_json", False)
     ):
         emit_public_text(json.dumps(report, ensure_ascii=False, indent=2, default=_json_default))
-    elif args.agent_json:
+    elif args.agent_json or (
+        args.action in {"status", "plan"} and args.json_output and not args.operator_json
+    ):
         emit_public_text(
             json.dumps(
                 compact_agent_status_report(report, schema_version=SCHEMA_VERSION),
@@ -1353,7 +1563,7 @@ def main(argv: list[str] | None = None) -> int:
                 default=_json_default,
             )
         )
-    elif args.json_output:
+    elif args.json_output or args.operator_json:
         emit_public_text(json.dumps(report, ensure_ascii=False, indent=2, default=_json_default))
     else:
         emit_public_text(render_text(report), end="")

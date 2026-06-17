@@ -9,6 +9,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 from aippocampus_runtime.privacy import (
     LOCAL_PATH_REDACTION,
@@ -20,7 +21,10 @@ SCRIPT_DIR = Path(__file__).resolve().parents[2]
 READ_ONLY_OPERATIONS = {"status", "summary", "plan"}
 APPLY_OPERATIONS = {"apply", "run"}
 APPLY_SUMMARY_COMMAND = "aippocampus maintenance apply --summary-json"
+PLAN_SUMMARY_COMMAND = "aippocampus maintenance plan --summary-json"
+STATUS_SUMMARY_COMMAND = "aippocampus maintenance status --summary-json"
 STATUS_COMMAND = "aippocampus maintenance status --json"
+STORAGE_GC_BOUNDED_AUDIT_COMMAND = "aippocampus storage gc --dry-run --json --top 1 --cwd ."
 
 
 def run_json(cmd: list[str]) -> dict:
@@ -155,11 +159,10 @@ def maintenance_status(
         return "failed"
     if failures:
         return "blocked" if skipped else "degraded"
-    if health_final and any(
-        item.get("severity") in {"critical", "warning"}
-        for item in health_final.get("recommended_actions", [])
-    ):
-        return "degraded"
+    if health_final:
+        status = health_maintenance_status(health_final)
+        if status != "ok":
+            return status
     return "ok"
 
 
@@ -197,6 +200,14 @@ def unique_action_ids(action_ids: list[str]) -> list[str]:
 def health_maintenance_status(health: dict | None) -> str:
     if not health:
         return "unavailable"
+    readiness = health.get("product_readiness") or {}
+    if isinstance(readiness, dict) and readiness:
+        if readiness.get("maintenance_required_before_recall"):
+            return "attention_needed"
+        if readiness.get("maintenance_recommended"):
+            return "degraded"
+        if readiness.get("ordinary_first_recall_usable") or readiness.get("ready"):
+            return "ok"
     status = str(health.get("status") or "").strip()
     if status:
         return status
@@ -204,7 +215,15 @@ def health_maintenance_status(health: dict | None) -> str:
 
 
 def health_maintenance_ok(health: dict | None) -> bool:
-    if not health or not bool(health.get("ok")):
+    if not health:
+        return False
+    readiness = health.get("product_readiness") or {}
+    if isinstance(readiness, dict) and readiness:
+        return bool(
+            readiness.get("ordinary_first_recall_usable")
+            and not readiness.get("maintenance_required_before_recall")
+        )
+    if not bool(health.get("ok")):
         return False
     return not any(
         item.get("severity") in {"critical", "warning"}
@@ -216,6 +235,8 @@ def health_maintenance_ok(health: dict | None) -> bool:
 def public_action_command(action_id: str) -> str | None:
     if action_id == "checkpoint":
         return "aippocampus maintenance apply --append-checkpoint --summary-json"
+    if action_id == "storage_gc_rebuildable_cache":
+        return STORAGE_GC_BOUNDED_AUDIT_COMMAND
     if action_id in {
         "build_clean_source",
         "build_index",
@@ -237,9 +258,99 @@ def public_recommended_action(item: dict) -> dict:
     command = public_action_command(action_id)
     if command:
         result["command"] = command
+        if command == STORAGE_GC_BOUNDED_AUDIT_COMMAND:
+            result["mutation_risk"] = "read_only"
+        else:
+            result["mutation_risk"] = "explicit_generated_artifact_write"
+            result["requires_user_consent"] = True
     else:
         result["operator_boundary"] = "inspect the full audit before acting on this item"
     return {key: value for key, value in result.items() if value not in (None, "", [])}
+
+
+def _read_only_plan_action() -> dict[str, Any]:
+    return {
+        "id": "review_maintenance_plan",
+        "kind": "shell_command",
+        "command": PLAN_SUMMARY_COMMAND,
+        "mutates": False,
+        "mutation_risk": "read_only",
+        "reason": "review generated-artifact maintenance before any write-capable apply",
+    }
+
+
+def _apply_with_consent_action() -> dict[str, Any]:
+    return {
+        "id": "apply_after_user_consent",
+        "kind": "shell_command",
+        "command": APPLY_SUMMARY_COMMAND,
+        "mutates": True,
+        "mutation_risk": "explicit_generated_artifact_write",
+        "requires_user_consent": True,
+        "requires_clean_or_intentionally_dirty_worktree": True,
+        "preflight_commands": ["git status --short"],
+        "reason": "apply only after reviewing the plan and confirming local generated-artifact writes are intended",
+    }
+
+
+def maintenance_safe_next_actions(best: dict, *, read_only: bool) -> list[dict[str, Any]]:
+    actions: list[dict[str, Any]] = []
+    if read_only:
+        actions.append(_read_only_plan_action())
+        actions.append(_apply_with_consent_action())
+    else:
+        actions.append(
+            {
+                "id": "inspect_maintenance_status",
+                "kind": "shell_command",
+                "command": STATUS_SUMMARY_COMMAND,
+                "mutates": False,
+                "mutation_risk": "read_only",
+                "reason": "inspect the post-apply maintenance state without writing",
+            }
+        )
+    if best.get("id") == "storage_gc_rebuildable_cache" and best.get("command"):
+        actions.append(
+            {
+                "id": "storage_gc_audit",
+                "kind": "shell_command",
+                "command": str(best["command"]),
+                "mutates": False,
+                "mutation_risk": "read_only",
+                "reason": "audit generated-cache pressure before any storage cleanup apply",
+            }
+        )
+    seen: set[str] = set()
+    unique: list[dict[str, Any]] = []
+    for action in actions:
+        action_id = str(action.get("id") or "")
+        if action_id and action_id not in seen:
+            seen.add(action_id)
+            unique.append(action)
+    return unique
+
+
+def maintenance_agent_next_action(best: dict, *, read_only: bool) -> dict[str, Any]:
+    action_id = str(best.get("id") or "")
+    command = best.get("command")
+    if action_id == "storage_gc_rebuildable_cache" and command:
+        return {
+            "id": "review_storage_gc_bounded_audit",
+            "kind": "shell_command",
+            "command": command,
+            "mutates": False,
+            "reason": "storage pressure needs a bounded audit before apply/no-apply",
+        }
+    if read_only:
+        return _read_only_plan_action()
+    return {
+        "id": "inspect_maintenance_status",
+        "kind": "shell_command",
+        "command": STATUS_SUMMARY_COMMAND,
+        "mutates": False,
+        "mutation_risk": "read_only",
+        "reason": "use maintenance status/summary for a no-write card",
+    }
 
 
 def best_next_action(recommended: list[dict]) -> dict:
@@ -260,6 +371,62 @@ def best_next_action(recommended: list[dict]) -> dict:
 
 
 def user_impact(health: dict | None, recommended: list[dict]) -> dict:
+    readiness = (health or {}).get("product_readiness") if isinstance(health, dict) else {}
+    if isinstance(readiness, dict) and readiness:
+        required_before_recall = bool(
+            readiness.get("maintenance_required_before_recall")
+            or (
+                readiness.get("ready") is False
+                and not readiness.get("ordinary_first_recall_usable")
+            )
+        )
+        if required_before_recall:
+            return {
+                "recall_usable": "degraded",
+                "can_continue_normally": False,
+                "ordinary_first_recall_usable": False,
+                "latest_current_thread_may_be_missing": bool(
+                    readiness.get("latest_current_thread_may_be_missing")
+                ),
+                "maintenance_recommended": True,
+                "maintenance_required_before_recall": True,
+                "summary": (
+                    "Source-backed recall/search may be incomplete until the required "
+                    "maintenance action is applied."
+                ),
+            }
+        if readiness.get("latest_current_thread_may_be_missing"):
+            return {
+                "recall_usable": "yes_latest_may_be_missing",
+                "can_continue_normally": True,
+                "ordinary_first_recall_usable": True,
+                "latest_current_thread_may_be_missing": True,
+                "maintenance_recommended": bool(readiness.get("maintenance_recommended")),
+                "maintenance_required_before_recall": False,
+                "summary": (
+                    "Ordinary source-backed recall/search can continue; run maintenance "
+                    "before relying on the latest current-thread details."
+                ),
+            }
+        if readiness.get("maintenance_recommended"):
+            return {
+                "recall_usable": "yes_with_optional_maintenance",
+                "can_continue_normally": True,
+                "ordinary_first_recall_usable": True,
+                "latest_current_thread_may_be_missing": False,
+                "maintenance_recommended": True,
+                "maintenance_required_before_recall": False,
+                "summary": "Core recall/search can continue; remaining items are optional upkeep.",
+            }
+        return {
+            "recall_usable": "yes",
+            "can_continue_normally": True,
+            "ordinary_first_recall_usable": True,
+            "latest_current_thread_may_be_missing": False,
+            "maintenance_recommended": False,
+            "maintenance_required_before_recall": False,
+            "summary": "Source-backed recall/search can continue normally.",
+        }
     if health_maintenance_ok(health):
         return {
             "recall_usable": "yes",
@@ -293,6 +460,7 @@ def summary_payload(result: dict) -> dict:
         for item in (result.get("remaining_recommended_actions") or [])[:8]
         if isinstance(item, dict)
     ]
+    best = best_next_action(result.get("remaining_recommended_actions") or [])
     return {
         "kind": "aippocampus_maintenance_summary",
         "ok": result.get("maintenance_status") in {"ok", "degraded"},
@@ -315,7 +483,7 @@ def summary_payload(result: dict) -> dict:
             for item in (result.get("action_failures") or [])[:5]
         ],
         "remaining_recommended_actions": remaining,
-        "best_next_action": best_next_action(result.get("remaining_recommended_actions") or []),
+        "best_next_action": best,
         "user_impact": user_impact(
             result.get("health_final"),
             result.get("remaining_recommended_actions") or [],
@@ -323,10 +491,8 @@ def summary_payload(result: dict) -> dict:
         "full_audit_available": True,
         "full_audit_flag": "--json",
         "plan_first_command": STATUS_COMMAND,
-        "agent_next_action": (
-            "Use maintenance status/summary for a no-write card; use maintenance apply when "
-            "the user intentionally wants local generated artifacts refreshed."
-        ),
+        "agent_next_action": maintenance_agent_next_action(best, read_only=False),
+        "safe_next_actions": maintenance_safe_next_actions(best, read_only=False),
     }
 
 
@@ -348,6 +514,7 @@ def plan_payload(
         would_run_ids.append("prepare_graphify_corpus")
     command_ok = health_returncode == 0 and health is not None
     maintenance_ok = command_ok and health_maintenance_ok(health)
+    best = best_next_action(recommended)
     payload = {
         "kind": (
             "aippocampus_maintenance_summary"
@@ -370,7 +537,7 @@ def plan_payload(
             for item in recommended[:8]
             if isinstance(item, dict)
         ],
-        "best_next_action": best_next_action(recommended),
+        "best_next_action": best,
         "user_impact": user_impact(health, recommended),
         "apply_command": APPLY_SUMMARY_COMMAND,
         "full_audit_available": True,
@@ -381,10 +548,8 @@ def plan_payload(
             "writes_performed": False,
             "source_text_included": False,
         },
-        "agent_next_action": (
-            "If this plan matches the intended release gate, apply once with "
-            "`aippocampus maintenance apply --summary-json`; do not repeat broad tests just to inspect status."
-        ),
+        "agent_next_action": maintenance_agent_next_action(best, read_only=True),
+        "safe_next_actions": maintenance_safe_next_actions(best, read_only=True),
     }
     if not command_ok and health_error:
         payload["health_probe"] = {

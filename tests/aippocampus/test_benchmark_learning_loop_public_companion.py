@@ -50,6 +50,22 @@ class LearningLoopPublicCompanionBenchmarkTests(unittest.TestCase):
             0,
         )
         self.assertIn("official_state_bench_score", report["cannot_claim"])
+        actions = {action["gap_id"]: action for action in report["gap_next_actions"]}
+        self.assertIn(
+            "public_sources_do_not_express_environment_workaround_recovery",
+            actions,
+        )
+        self.assertIn("learning_loop/core.py", actions[
+            "public_sources_do_not_express_environment_workaround_recovery"
+        ]["owner_path"])
+        self.assertIn(
+            "state_bench_official_eval_client_not_available_no_score_claim",
+            actions,
+        )
+        self.assertIn("benchmark_state_bench_agent_learning.py", actions[
+            "state_bench_official_eval_client_not_available_no_score_claim"
+        ]["command"])
+        self.assertTrue(all(action["claim_boundary"] for action in actions.values()))
         self.assertIn("benchmark_vcs_future_event_recall.py", " ".join(report["reused_benchmark_files"]))
 
     def test_public_companion_can_still_report_zero_denominator_when_fixture_disabled(self) -> None:

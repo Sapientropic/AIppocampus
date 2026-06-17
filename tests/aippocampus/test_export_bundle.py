@@ -104,6 +104,28 @@ class ExportBundleTests(unittest.TestCase):
                     "aippocampus export --redaction-profile public-export --no-raw --output <bundle.zip>",
                 )
 
+    def test_invalid_redaction_profile_json_returns_recovery_without_argparse_usage(self) -> None:
+        with patch.object(
+            packaged_export_bundle,
+            "export_bundle",
+            side_effect=AssertionError("invalid profile recovery must not write"),
+        ):
+            code, stdout, stderr = self._run_export_main(
+                ["--redaction-profile", "public", "--output", "bundle.zip", "--json"]
+            )
+
+        self.assertEqual(code, 2)
+        self.assertEqual(stderr, "")
+        payload = json.loads(stdout)
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["kind"], "aippocampus_export_recovery")
+        self.assertEqual(payload["error"]["code"], "invalid_redaction_profile")
+        self.assertEqual(payload["error"]["provided"], "public")
+        self.assertIn("public-metadata", payload["error"]["allowed"])
+        self.assertFalse(payload["write_performed"])
+        self.assertIn("safe_next_actions", payload)
+        self.assertNotIn("usage:", stdout.lower())
+
     def test_run_build_index_uses_package_api_without_subprocess(self) -> None:
         seen: dict[str, list[str]] = {}
 

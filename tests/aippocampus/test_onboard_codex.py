@@ -23,6 +23,7 @@ for _path in (
     sys.path.insert(0, str(_path))
 
 from aippocampus_runtime.onboarding import codex as onboard  # noqa: E402
+from aippocampus_runtime.onboarding import facade as onboard_facade  # noqa: E402
 from aippocampus_runtime.onboarding import frontier as onboard_frontier  # noqa: E402
 from aippocampus_runtime.registry import api as registry  # noqa: E402
 from conversation_sources import CodexConversationProvider  # noqa: E402
@@ -662,6 +663,42 @@ class OnboardCodexTests(unittest.TestCase):
         self.assertNotIn("sample_candidates", encoded)
         self.assertNotIn("private frontier", encoded)
         self.assertNotIn(str(self.root), encoded)
+
+    def test_public_dry_run_projection_keeps_explicit_write_next_action(self) -> None:
+        result = {
+            "ok": True,
+            "data": {
+                "dry_run": True,
+                "stats_before": {"thread_count": 1},
+                "plan": {"would_register_count": 1},
+                "boundary": {"frontier": {"status": "not_run"}},
+                "storage_policy": {"default": "CODEX_HOME/aippocampus-registry"},
+            },
+            "next": [
+                'aippocampus search "distinctive old phrase"',
+                "aippocampus onboard --provider codex --all --format json",
+            ],
+            "meta": {"provider": "codex", "duration_ms": 12},
+        }
+
+        public = onboard.public_onboarding_result(result)
+        commands = [item["command"] for item in public["next_actions"]]
+
+        self.assertEqual(public["next_count"], len(public["next_actions"]))
+        self.assertIn("aippocampus onboard --provider codex --all --json", commands)
+        self.assertEqual(public["next_actions"][0]["mutation_risk"], "explicit_registration_write")
+        self.assertNotIn("--format json", json.dumps(public, ensure_ascii=False))
+
+    def test_facade_passes_json_format_to_provider_write_path(self) -> None:
+        with (
+            patch.object(onboard_facade, "create_conversation_provider", return_value=object()),
+            patch.object(onboard_facade.onboard_codex, "main", return_value=0) as provider_main,
+        ):
+            code = onboard_facade.main(["--provider", "codex", "--all", "--format", "json"])
+
+        self.assertEqual(code, 0)
+        self.assertIn("--all", provider_main.call_args.args[0])
+        self.assertIn("--json", provider_main.call_args.args[0])
 
     def test_text_closeout_suggests_first_recall_query_modes(self) -> None:
         result = {

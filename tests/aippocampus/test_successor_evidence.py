@@ -5,6 +5,7 @@ import subprocess
 import unittest
 from unittest.mock import patch
 
+from aippocampus_runtime.ops import successor_evidence
 from aippocampus_runtime.ops.successor_evidence import (
     SUCCESSOR_ISSUE_STATE_MANIFEST,
     SUCCESSOR_ISSUES,
@@ -465,10 +466,42 @@ class SuccessorEvidenceTests(unittest.TestCase):
         ]
 
         self.assertGreaterEqual(len(blocked), 4)
+        self.assertEqual(report["coverage"]["closed_hard_blocker_without_successor_count"], 0)
         for row in blocked:
             self.assertEqual(row["metrics"]["hard_blocker"], "missing_live_provider_or_pretooluse_trace")
             self.assertFalse(row["metrics"]["provider_or_live_trace_available"])
             self.assertFalse(row["default_or_live_claim_allowed"])
+            self.assertTrue(row["closeout_allowed"])
+            self.assertEqual(row["hard_blocker_execution_path"]["path_kind"], "open_successor_issue")
+            self.assertIn(
+                row["hard_blocker_execution_path"]["successor_issue"],
+                {2043, 2044},
+            )
+
+    def test_hard_blocker_rows_require_successor_or_deferred_pointer(self) -> None:
+        with patch.dict(successor_evidence.HARD_BLOCKER_EXECUTION_PATHS, {}, clear=True):
+            report = build_successor_evidence_sweep_report()
+
+        blocked_without_path = report["coverage"]["closed_hard_blocker_without_successor_numbers"]
+        by_issue = {row["issue"]: row for row in report["issues"]}
+
+        self.assertFalse(report["ok"])
+        self.assertGreaterEqual(report["coverage"]["closed_hard_blocker_without_successor_count"], 4)
+        self.assertIn(1942, blocked_without_path)
+        self.assertFalse(by_issue[1942]["closeout_allowed"])
+        self.assertEqual(
+            by_issue[1942]["hard_blocker_execution_path"]["status"],
+            "missing_successor_or_deferred_pointer",
+        )
+
+    def test_e2e50_bounded_validation_keeps_retained_case_successor_pointer(self) -> None:
+        report = build_successor_evidence_sweep_report()
+        by_issue = {row["issue"]: row for row in report["issues"]}
+        row = by_issue[1981]
+
+        self.assertEqual(row["decision"], "bounded_validation_no_default_promotion")
+        self.assertEqual(row["bounded_validation_deferred_path"]["successor_issue"], 2045)
+        self.assertEqual(row["metrics"]["bounded_validation_deferred_path"]["successor_issue"], 2045)
 
     def test_dream_successors_report_observed_boundary_and_wrong_hint_metrics(self) -> None:
         report = build_successor_evidence_sweep_report()

@@ -26,6 +26,7 @@ from aippocampus_runtime.learning_loop.effectiveness_ledger import (
     summarize_effectiveness_ledger,
 )
 from aippocampus_runtime.learning_loop.private_export import (
+    LearningReplayInputError,
     export_private_replay_events,
     load_behavior_event_rows,
     validate_private_replay_export,
@@ -334,6 +335,32 @@ def _load_events(path: Path) -> list[dict[str, Any]]:
     return load_behavior_event_rows(path)
 
 
+def replay_recovery_payload(exc: LearningReplayInputError) -> dict[str, Any]:
+    return {
+        "ok": False,
+        "kind": "aippocampus_learning_frontdoor",
+        "mode": "replay_recovery",
+        "status": "needs_input",
+        "error": {
+            "code": exc.code,
+            "message": str(exc),
+        },
+        "safe_next_actions": [
+            {"id": "learning_status", "command": "aippocampus learning status --json"},
+            {"id": "discover_history", "command": "aippocampus learning discover-history --json"},
+            {
+                "id": "replay_selected_events",
+                "command": "aippocampus learning replay --events <selected-sanitized-events.jsonl> --json",
+            },
+        ],
+        "privacy_boundary": {
+            "local_paths_serialized": False,
+            "raw_rollouts_serialized": False,
+        },
+        "write_performed": False,
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--events", type=Path, help="Sanitized behavior events JSON/JSONL.")
@@ -346,19 +373,27 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     export_summary = None
     input_origin = None
-    events = _load_events(args.events) if args.events else None
-    if args.clean_source_events or args.rollout:
-        if not args.export_output:
-            parser.error("--clean-source-events/--rollout requires --export-output")
-        export_summary = export_private_replay_events(
-            clean_source_events=args.clean_source_events,
-            rollout=args.rollout,
-            output=args.export_output,
-        )
-        events = _load_events(args.export_output)
-        input_origin = str(export_summary.get("input_origin") or "real_sanitized_history")
-    elif events is not None:
-        input_origin = "real_sanitized_history"
+    try:
+        events = _load_events(args.events) if args.events else None
+        if args.clean_source_events or args.rollout:
+            if not args.export_output:
+                parser.error("--clean-source-events/--rollout requires --export-output")
+            export_summary = export_private_replay_events(
+                clean_source_events=args.clean_source_events,
+                rollout=args.rollout,
+                output=args.export_output,
+            )
+            events = _load_events(args.export_output)
+            input_origin = str(export_summary.get("input_origin") or "real_sanitized_history")
+        elif events is not None:
+            input_origin = "real_sanitized_history"
+    except LearningReplayInputError as exc:
+        payload = replay_recovery_payload(exc)
+        if args.json_output:
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
+        else:
+            print(f"private learning-loop replay: {payload['error']['message']}")
+        return 2
     report = build_private_history_replay_report(
         events,
         input_origin=input_origin,

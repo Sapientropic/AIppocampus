@@ -88,11 +88,11 @@ REQUIRED_SKILL_CONTINUITY_TERMS = {
 }
 
 REQUIRED_SKILL_PORTABLE_COMMAND_TERMS = {
-    "use `python3 -m ...` on macOS/Linux": (
-        "SKILL.md missing macOS/Linux python3 module fallback guidance"
+    "Foreground continuity surfaces": "SKILL.md missing foreground continuity surface section",
+    "CLI chooser/recovery card": "SKILL.md missing CLI recovery-card pointer",
+    "references/maintenance-and-operations.md": (
+        "SKILL.md missing maintenance/operator reference pointer"
     ),
-    "on Windows": "SKILL.md missing Windows module fallback guidance",
-    "`py -m ...`": "SKILL.md missing copyable Windows py launcher fallback",
 }
 
 REQUIRED_PROJECT_DOCS = [
@@ -1493,8 +1493,8 @@ def check_docs(root: Path) -> dict[str, Any]:
     for phrase, message in REQUIRED_SKILL_PORTABLE_COMMAND_TERMS.items():
         if phrase not in text and phrase not in flat_text:
             issues.append(message)
-    if "`python -m aippocampus_runtime." in text:
-        issues.append("SKILL.md module fallback examples should use python3/py, not bare python")
+    if re.search(r"`(?:python|python3|py)\s+-m\s+aippocampus_runtime\.", text):
+        issues.append("SKILL.md should point to facade cards/references, not direct runtime module recipes")
     recall_idx = text.find("First recall for a vague handoff or old decision")
     search_idx = text.find("Search clean source")
     health_idx = text.find("Check state before or after long work")
@@ -1512,16 +1512,12 @@ def check_docs(root: Path) -> dict[str, Any]:
                 issues.append(
                     f"SKILL.md should present recall/search before {label} diagnostics"
                 )
-    fallback_boundary_idx = text.find("Diagnostic/operator fallbacks")
-    first_internal_module_idx = text.find("`python3 -m aippocampus_runtime.")
-    if (
-        first_internal_module_idx >= 0
-        and fallback_boundary_idx >= 0
-        and first_internal_module_idx < fallback_boundary_idx
-    ):
-        issues.append(
-            "SKILL.md internal aippocampus_runtime module examples must stay behind the diagnostic/operator fallback boundary"
-        )
+    placeholder_command_markers = ("<path>", "<rollout.jsonl>", "<label>")
+    for marker in placeholder_command_markers:
+        if marker in text:
+            issues.append(
+                f"SKILL.md should not contain placeholder-bearing operator command marker {marker}"
+            )
 
     references_dir = root / "references"
     for filename in REQUIRED_REFERENCES:

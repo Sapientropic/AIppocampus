@@ -206,7 +206,7 @@ class EpisodeArcPrivateAdjudicationTests(unittest.TestCase):
             registry_path.write_text(json.dumps(registry, ensure_ascii=False), encoding="utf-8")
 
             result = facade.run_command(
-                ["episode-arcs", "--registry", str(registry_path), "--json"],
+                ["episode-arcs", "--registry", str(registry_path), "--json", "--top", "5"],
                 capture_output=True,
             )
             human = facade.run_command(
@@ -229,6 +229,29 @@ class EpisodeArcPrivateAdjudicationTests(unittest.TestCase):
         self.assertEqual(summary_payload["complete_arc_count"], 1)
         self.assertEqual(summary_payload["current_validity_counts"]["needs_reopen"], 1)
         self.assertIn("refresh_sources", summary_payload["safe_use_counts"])
+        self.assertEqual(
+            summary_payload["safe_next_actions"][0]["command"],
+            "aippocampus episode-arcs --json --top 5",
+        )
+        self.assertEqual(summary_payload["safe_next_actions"][0]["kind"], "retrieve_actionable_arc_handles")
+        self.assertEqual(summary_payload["foreground_action"], summary_payload["agent_next_action"])
+        self.assertEqual(summary_payload["what_to_do"], "retrieve_actionable_arc_handles")
+        self.assertFalse(summary_payload["no_op"])
+        self.assertEqual(
+            summary_payload["owner_route"]["command"],
+            "aippocampus episode-arcs --json --top 5",
+        )
+        self.assertNotIn("cannot_claim", summary_payload)
+        self.assertIn("current_validity", summary_payload["claim_boundary"]["must_reopen_for"])
+        self.assertEqual(
+            summary_payload["claim_boundary"]["detail_available_with"],
+            "aippocampus episode-arcs --json",
+        )
+        self.assertIn("top_arcs", payload)
+        self.assertEqual(payload["top_arcs"][0]["current_validity"], "needs_reopen")
+        self.assertIn("arc_handle", payload["top_arcs"][0])
+        self.assertIn("source_reopen_action", payload["top_arcs"][0])
+        self.assertNotIn("source_refs", json.dumps(payload["top_arcs"], ensure_ascii=False))
         self.assertNotIn("session:cli-private-arc", result.stdout)
         self.assertNotIn("session:cli-private-arc", summary.stdout)
         self.assertIn("AIppocampus episode-arcs", human.stdout)
@@ -238,6 +261,29 @@ class EpisodeArcPrivateAdjudicationTests(unittest.TestCase):
         self.assertIn("safe use:", human.stdout)
         self.assertNotIn('"metrics"', human.stdout)
         self.assertNotIn("session:cli-private-arc", human.stdout)
+
+    def test_episode_arcs_empty_summary_is_structured_no_op(self) -> None:
+        summary_payload = private_arcs.summary_projection(
+            {
+                "ok": True,
+                "status": "measured_public_safe_aggregate",
+                "metrics": {
+                    "episode_arc_count": 0,
+                    "complete_arc_count": 0,
+                    "gappy_arc_count": 0,
+                },
+                "current_validity_counts": {},
+                "safe_use_counts": {},
+                "privacy_boundary": {"aggregate_only": True},
+            }
+        )
+
+        self.assertTrue(summary_payload["no_op"])
+        self.assertEqual(summary_payload["what_to_do"], "no_episode_arcs_to_route")
+        self.assertEqual(summary_payload["agent_next_action"]["kind"], "no_episode_arcs_to_route")
+        self.assertEqual(summary_payload["safe_next_actions"], [summary_payload["agent_next_action"]])
+        self.assertNotIn("cannot_claim", summary_payload)
+        self.assertIn("current_validity", summary_payload["claim_boundary"]["must_reopen_for"])
 
 
 if __name__ == "__main__":

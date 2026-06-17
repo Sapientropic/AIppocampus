@@ -325,7 +325,8 @@ def registry_cache_pressure_report(cwd: Path, registry_dir: Path) -> dict[str, A
             "generated_index_amplification_ratio": amplification,
             "eviction_candidate_count": candidate_count,
         },
-        "dry_run_command": "aippocampus storage gc --dry-run --summary-json --cwd .",
+        "dry_run_command": "aippocampus storage gc --dry-run --json --top 1 --cwd .",
+        "summary_command": "aippocampus storage gc --dry-run --summary-json --cwd .",
         "repair_command": "aippocampus storage gc --apply --class rebuildable --summary-json --cwd .",
         "source_history_protected": True,
         "foreground_blocking": False,
@@ -692,7 +693,7 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
                     "Generated rebuildable cache pressure is high "
                     f"({metrics.get('reclaimable_rebuildable_human')}, "
                     f"{metrics.get('generated_index_amplification_ratio')}x clean-source ratio). "
-                    "Run the dry-run summary before applying cleanup."
+                    "Run the bounded dry-run audit before applying cleanup."
                 ),
                 storage_pressure["dry_run_command"],
             )
@@ -727,42 +728,83 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
         "last_clean_source_line": visibility.last_clean_source_line,
         "live_delta_tolerance_messages": live_delta_tolerance,
     }
-    # Rebuildable cache pressure is a safe housekeeping warning. It should be
-    # visible in actions, but must not make an otherwise usable current thread
-    # look unavailable or hide the live-delta ready state.
-    blocking_action_count = sum(
+    critical_action_count = sum(
+        1 for item in actions if item["severity"] == "critical"
+    )
+    # Warnings such as stale-but-present source indexes and rebuildable cache
+    # pressure are real maintenance signals, but they should not imply that an
+    # ordinary first recall/search path is unavailable. Reserve "blocking" for
+    # critical missing prerequisites; keep freshness/storage pressure visible as
+    # separate dimensions so agents do not turn health into a maintenance loop.
+    high_severity_action_count = sum(
         1
         for item in actions
         if item["severity"] in {"critical", "warning"}
-        and item.get("id") != "storage_gc_rebuildable_cache"
+    )
+    freshness_action_ids = {"build_index", "build_clean_source", "build_segments"}
+    freshness_action_recommended = any(
+        item.get("id") in freshness_action_ids for item in actions
     )
     live_delta_tolerated = bool(
         freshness["latest_visible_gap"]
-        and blocking_action_count == 0
+        and critical_action_count == 0
+        and not freshness_action_recommended
         and (
             0 < message_delta < stale_message_threshold
             or 0 < clean_source_message_delta < stale_message_threshold
             or 0 < clean_source_turn_delta < stale_message_threshold
         )
     )
+    freshness_degraded = bool(
+        freshness["latest_visible_gap"]
+        or freshness_action_recommended
+    )
+    storage_pressure_cleanup_recommended = bool(storage_pressure.get("pressure"))
+    maintenance_required_before_recall = critical_action_count > 0
+    ordinary_first_recall_usable = not maintenance_required_before_recall
+    maintenance_recommended = bool(actions)
     checkpoint_status = "due_when_idle" if checkpoint_due else "current"
     product_readiness = {
         "status": (
             "needs_maintenance"
-            if blocking_action_count
-            else ("ready_with_live_delta" if live_delta_tolerated else "ready")
+            if maintenance_required_before_recall
+            else "ready_with_live_delta"
+            if live_delta_tolerated
+            else "ready_with_freshness_degraded"
+            if freshness_degraded
+            else "ready_with_storage_pressure"
+            if storage_pressure_cleanup_recommended
+            else "ready_with_optional_maintenance"
+            if maintenance_recommended
+            else "ready"
         ),
-        "ready": blocking_action_count == 0,
-        "blocking_action_count": blocking_action_count,
+        "ready": ordinary_first_recall_usable,
+        "ordinary_first_recall_usable": ordinary_first_recall_usable,
+        "freshness_degraded": freshness_degraded,
+        "latest_current_thread_may_be_missing": bool(freshness["latest_visible_gap"]),
+        "maintenance_recommended": maintenance_recommended,
+        "maintenance_required_before_recall": maintenance_required_before_recall,
+        "storage_pressure_cleanup_recommended": storage_pressure_cleanup_recommended,
+        "blocking_action_count": critical_action_count,
+        "high_severity_action_count": high_severity_action_count,
+        "advisory_action_count": max(0, len(actions) - critical_action_count),
         "live_delta_tolerated": live_delta_tolerated,
         "checkpoint_status": checkpoint_status,
         "next_best_action": (
-            "run_checkpoint_when_idle" if checkpoint_due else "continue"
+            "apply_required_maintenance"
+            if maintenance_required_before_recall
+            else "run_maintenance_when_latest_context_matters"
+            if freshness_degraded and not live_delta_tolerated
+            else "review_storage_gc_dry_run_when_idle"
+            if storage_pressure_cleanup_recommended
+            else "run_checkpoint_when_idle"
+            if checkpoint_due
+            else "continue"
         ),
     }
 
     result: dict[str, Any] = {
-        "ok": blocking_action_count == 0,
+        "ok": ordinary_first_recall_usable,
         "cwd": str(cwd),
         "rollout": {
             "path": str(rollout),
@@ -901,7 +943,15 @@ def missing_rollout_health_report(cwd: str | Path, exc: FileNotFoundError) -> di
         "product_readiness": {
             "status": "no_current_thread",
             "ready": False,
+            "ordinary_first_recall_usable": False,
+            "freshness_degraded": False,
+            "latest_current_thread_may_be_missing": True,
+            "maintenance_recommended": True,
+            "maintenance_required_before_recall": True,
+            "storage_pressure_cleanup_recommended": False,
             "blocking_action_count": 1,
+            "high_severity_action_count": 1,
+            "advisory_action_count": 0,
             "next_best_action": "open_or_register_thread",
         },
         "recommended_actions": [
@@ -1038,6 +1088,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Emit compact agent-facing JSON with next actions instead of operator detail.",
     )
     parser.add_argument(
+        "--detail",
+        choices=["compact", "full"],
+        default="compact",
+        help="JSON detail level. Default --json emits the compact foreground card; --detail full emits operator diagnostics.",
+    )
+    parser.add_argument(
         "--operator-json",
         action="store_true",
         help="Emit the full local operator audit JSON; implies JSON output.",
@@ -1106,7 +1162,8 @@ def main(argv: list[str] | None = None) -> int:
     except FileNotFoundError as exc:
         result = missing_rollout_health_report(args.cwd, exc)
     public_result = public_health_report(result, include_paths=bool(args.include_paths))
-    compact_json = bool(args.agent_json or (args.json_output and not (args.operator_json or args.full)))
+    full_detail_json = bool(args.operator_json or args.full or args.detail == "full")
+    compact_json = bool(args.agent_json or (args.json_output and not full_detail_json))
     if compact_json:
         print(json.dumps(compact_health_payload(public_result), ensure_ascii=False, indent=2))
     elif json_requested:

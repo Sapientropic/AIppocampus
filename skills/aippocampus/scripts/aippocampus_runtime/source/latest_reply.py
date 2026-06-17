@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Sequence
 
 from aippocampus_runtime import core
+from aippocampus_runtime.contracts import foreground_shell_action
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 from aippocampus_runtime.source.rollout import normalize_rollout
 
@@ -76,6 +77,30 @@ def _message_card(
     return redact_sensitive_values(redact_private_paths(card))
 
 
+def _latest_reply_full_action() -> dict[str, Any]:
+    action = foreground_shell_action(
+        action_id="open_latest_reply_operator_source",
+        label="Open latest-reply source locally",
+        command="aippocampus latest-reply --detail full --operator-json",
+        why="Use this local operator view before quoting exact wording from the latest final answer.",
+        mutation_risk="read_only_local_operator_source_open",
+        claim_boundary="source_open_required_before_quoting",
+    )
+    action["authority_after_running"] = "source_open_within_local_rollout_scope"
+    return action
+
+
+def _latest_reply_recall_action() -> dict[str, Any]:
+    return foreground_shell_action(
+        action_id="recall_current_thread_context",
+        label="Recall current-thread context",
+        command='aippocampus agent recall "latest closeout or current handoff" --json',
+        why="Use recall when no final-answer closeout is available from latest-reply.",
+        mutation_risk="read_only",
+        claim_boundary="no_claim_before_reopen",
+    )
+
+
 def public_latest_reply_result(result: dict[str, Any], *, detail: str = "compact") -> dict[str, Any]:
     status = str(result.get("status") or "unknown")
     full = detail == "full"
@@ -99,19 +124,17 @@ def public_latest_reply_result(result: dict[str, Any], *, detail: str = "compact
         },
     }
     if closeout_available:
-        payload["agent_next_action"] = (
-            "Use this final-answer card for orientation; reopen clean source before quoting or "
-            "depending on exact wording."
-        )
+        actions = [_latest_reply_full_action()]
+        payload["agent_next_action"] = actions[0]
+        payload["safe_next_actions"] = actions
         if full:
             payload["message"] = _message_card(message, include_text=True)
     elif status == "only_commentary_found":
         payload["diagnostic_only"] = True
         payload["not_final_closeout"] = True
-        payload["agent_next_action"] = (
-            "No final answer was found. Continue cautiously, run `aippocampus agent recall`, "
-            "or inspect the rollout with --detail full only if the user needs in-progress commentary."
-        )
+        actions = [_latest_reply_recall_action(), _latest_reply_full_action()]
+        payload["agent_next_action"] = actions[0]
+        payload["safe_next_actions"] = actions
         payload["message"] = _message_card(
             message,
             include_text=full,
@@ -120,14 +143,24 @@ def public_latest_reply_result(result: dict[str, Any], *, detail: str = "compact
     else:
         payload["diagnostic_only"] = True
         payload["not_final_closeout"] = True
-        payload["agent_next_action"] = (
-            "No assistant closeout was found. Use source search/recall or ask the user for the "
-            "missing conclusion."
-        )
+        actions = [_latest_reply_recall_action()]
+        payload["agent_next_action"] = actions[0]
+        payload["safe_next_actions"] = actions
     return payload
 
 
 def latest_reply_unavailable_payload(exc: Exception, *, detail: str = "compact") -> dict[str, Any]:
+    actions = [
+        _latest_reply_recall_action(),
+        foreground_shell_action(
+            action_id="check_latest_reply_from_current_scope",
+            label="Retry latest-reply in current scope",
+            command="aippocampus latest-reply --json",
+            why="Use this after changing to the project scope that owns the current rollout.",
+            mutation_risk="read_only",
+            claim_boundary="no_claim_before_reopen",
+        ),
+    ]
     return redact_sensitive_values(
         redact_private_paths(
             {
@@ -142,14 +175,11 @@ def latest_reply_unavailable_payload(exc: Exception, *, detail: str = "compact")
                     "message": str(exc),
                     "path_redacted": True,
                 },
-                "agent_next_action": (
-                    "Pass the correct project --cwd or an explicit --rollout, or run "
-                    "`aippocampus agent recall \"<cue>\" --json` when you need source-backed continuity."
-                ),
+                "agent_next_action": actions[0],
+                "safe_next_actions": actions,
                 "examples": [
-                    "aippocampus latest-reply --cwd <project> --json",
-                    "aippocampus latest-reply --rollout <rollout.jsonl> --json",
-                    "aippocampus agent recall \"<cue>\" --json",
+                    "aippocampus latest-reply --json",
+                    'aippocampus agent recall "old decision or handoff cue" --json',
                 ],
                 "cannot_claim": [
                     "latest_final_answer_available",
@@ -187,7 +217,11 @@ def render_latest_reply_text(payload: dict[str, Any]) -> str:
             f"commentary line {message.get('line')} | turn={message.get('turn_index')} "
             "(text omitted)"
         )
-    lines.append("next: " + str(payload.get("agent_next_action") or "use recall/search"))
+    action = payload.get("agent_next_action")
+    if isinstance(action, dict):
+        lines.append("next: " + str(action.get("command") or action.get("label") or "use recall/search"))
+    else:
+        lines.append("next: " + str(action or "use recall/search"))
     return "\n".join(lines)
 
 

@@ -122,6 +122,43 @@ SUCCESSOR_ISSUES: dict[int, tuple[str, str]] = {
 }
 
 LIVE_OR_PROVIDER_TRACKS = {"external_provider", "live_blocked"}
+
+HARD_BLOCKER_EXECUTION_PATHS: dict[int, dict[str, Any]] = {
+    1929: {
+        "path_kind": "open_successor_issue",
+        "successor_issue": 2043,
+        "blocker": "declared provider/model artifact required for AMemGym fixed-arm score",
+    },
+    1931: {
+        "path_kind": "open_successor_issue",
+        "successor_issue": 2043,
+        "blocker": "declared provider/model artifact required for MemoryAgentBench generation/judge run",
+    },
+    1942: {
+        "path_kind": "open_successor_issue",
+        "successor_issue": 2044,
+        "blocker": "host-faithful private compaction-survival/live trace required",
+    },
+    1944: {
+        "path_kind": "open_successor_issue",
+        "successor_issue": 2044,
+        "blocker": "agency timing and annoyance require live trace evidence",
+    },
+    1945: {
+        "path_kind": "open_successor_issue",
+        "successor_issue": 2044,
+        "blocker": "observed PreToolUse action-time hint behavior requires live host trace",
+    },
+}
+
+BOUNDED_VALIDATION_DEFERRED_PATHS: dict[int, dict[str, Any]] = {
+    1981: {
+        "path_kind": "open_successor_issue",
+        "successor_issue": 2045,
+        "blocker": "retained private/local E2E50 case shortfall",
+    }
+}
+
 COMMON_METRIC_KEYS = {
     "public_replay_case_count",
     "fixture_contract_case_count",
@@ -376,6 +413,50 @@ def _open_issue_numbers(issue_state: Mapping[int, Mapping[str, Any]]) -> list[in
         for number, row in issue_state.items()
         if str(row.get("state") or "open").casefold() == "open"
     )
+
+
+def _execution_path_status(
+    path: Mapping[str, Any] | None,
+    *,
+    live_state: Mapping[int, Mapping[str, Any]],
+    github_state_checked: bool,
+) -> dict[str, Any]:
+    if not path:
+        return {
+            "path_kind": "missing",
+            "ok": False,
+            "status": "missing_successor_or_deferred_pointer",
+        }
+    result = dict(path)
+    successor_issue = int(result.get("successor_issue") or 0)
+    if successor_issue:
+        result["successor_issue"] = successor_issue
+        live_row = live_state.get(successor_issue)
+        if live_row:
+            successor_open = str(live_row.get("state") or "").casefold() == "open"
+            result["status"] = "open_successor" if successor_open else "successor_not_open"
+            result["ok"] = successor_open
+        elif github_state_checked and live_state and successor_issue <= max(live_state):
+            result["status"] = "successor_not_seen_in_live_github_state"
+            result["ok"] = False
+        elif github_state_checked:
+            result["status"] = "declared_successor_outside_live_fixture_range"
+            result["ok"] = True
+        else:
+            result["status"] = "declared_successor_not_live_checked"
+            result["ok"] = True
+        return result
+    if result.get("deferred_pointer"):
+        result["status"] = "deferred_pointer_recorded"
+        result["ok"] = True
+        return result
+    if result.get("reopened_owner"):
+        result["status"] = "reopened_owner_recorded"
+        result["ok"] = True
+        return result
+    result["status"] = "missing_successor_or_deferred_pointer"
+    result["ok"] = False
+    return result
 
 
 def _base_counts(inventory: Mapping[str, Any]) -> dict[str, int]:
@@ -1579,10 +1660,17 @@ def build_successor_evidence_sweep_report(
     missing_top_level = [
         number for number in live_top_level_successors if number not in SUCCESSOR_ISSUES
     ]
-    stale_closed_duplicate = [
+    closed_covered_issue_numbers = [
         number
         for number in covered_numbers
         if str(state.get(number, {}).get("state") or "").casefold().startswith("closed")
+    ]
+    stale_closed_duplicate = [
+        number
+        for number in closed_covered_issue_numbers
+        if str(SUCCESSOR_ISSUE_STATE_MANIFEST.get(number, {}).get("state") or "")
+        .casefold()
+        .startswith("closed_duplicate")
     ]
     redirects = {
         number: int(row["redirect"])
@@ -1625,6 +1713,8 @@ def build_successor_evidence_sweep_report(
         "out_of_scope_high_number_issue_count": len(out_of_scope_high_numbers),
         "out_of_scope_high_number_issue_numbers": out_of_scope_high_numbers,
         "body_parent_fallback_count": body_parent_fallback_count,
+        "closed_covered_issue_count": len(closed_covered_issue_numbers),
+        "closed_covered_issue_numbers": closed_covered_issue_numbers,
         "stale_closed_duplicate_issue_numbers": stale_closed_duplicate,
         "closed_duplicate_redirects_recorded_count": len(redirects),
         "closed_duplicate_redirects": redirects,
@@ -1637,6 +1727,8 @@ def build_successor_evidence_sweep_report(
     decisions: Counter[str] = Counter()
     specific_rows = 0
     generic_rows = 0
+    hard_blocker_without_path: list[int] = []
+    hard_blocker_path_rows: dict[str, Any] = {}
     for number in covered_numbers:
         spec = state.get(number, {})
         track, fallback_title = SUCCESSOR_ISSUES[number]
@@ -1652,28 +1744,50 @@ def build_successor_evidence_sweep_report(
             if live_blocked
             else "bounded_validation_no_default_promotion"
         )
+        hard_blocker_path = None
+        if live_blocked:
+            hard_blocker_path = _execution_path_status(
+                HARD_BLOCKER_EXECUTION_PATHS.get(number),
+                live_state=live_state,
+                github_state_checked=github_state_checked,
+            )
+            hard_blocker_path_rows[str(number)] = hard_blocker_path
+            if not hard_blocker_path.get("ok"):
+                hard_blocker_without_path.append(number)
+        bounded_deferred_path = None
+        if number in BOUNDED_VALIDATION_DEFERRED_PATHS:
+            bounded_deferred_path = _execution_path_status(
+                BOUNDED_VALIDATION_DEFERRED_PATHS.get(number),
+                live_state=live_state,
+                github_state_checked=github_state_checked,
+            )
+            metrics["bounded_validation_deferred_path"] = bounded_deferred_path
         decisions[decision] += 1
-        rows.append(
-            {
-                "issue": number,
-                "track": track,
-                "title": title,
-                "parent": spec.get("parent"),
-                "evidence_shape": "public_replay_or_public_safe_aggregate",
-                "decision": decision,
-                "closeout_allowed": True,
-                "default_or_live_claim_allowed": False,
-                "metrics": metrics,
-                "source_artifacts": [
-                    "benchmark_corpus/public_longitudinal_users/",
-                    "docs/evidence/dream/*.json",
-                    "docs/archive/research/**/*.json",
-                ],
-                "claim_boundary": "validated for successor gating only; not default product adoption",
-            }
-        )
+        closeout_allowed = bool(not live_blocked or (hard_blocker_path and hard_blocker_path.get("ok")))
+        row: dict[str, Any] = {
+            "issue": number,
+            "track": track,
+            "title": title,
+            "parent": spec.get("parent"),
+            "evidence_shape": "public_replay_or_public_safe_aggregate",
+            "decision": decision,
+            "closeout_allowed": closeout_allowed,
+            "default_or_live_claim_allowed": False,
+            "metrics": metrics,
+            "source_artifacts": [
+                "benchmark_corpus/public_longitudinal_users/",
+                "docs/evidence/dream/*.json",
+                "docs/archive/research/**/*.json",
+            ],
+            "claim_boundary": "validated for successor gating only; not default product adoption",
+        }
+        if hard_blocker_path is not None:
+            row["hard_blocker_execution_path"] = hard_blocker_path
+        if bounded_deferred_path is not None:
+            row["bounded_validation_deferred_path"] = bounded_deferred_path
+        rows.append(row)
 
-    by_issue = {int(row["issue"]): row for row in rows}
+    by_issue: dict[int, dict[str, Any]] = {int(row["issue"]): row for row in rows}
     nested_metric_coverage: dict[str, Any] = {}
     nested_missing: list[int] = []
     for child in nested_child_numbers:
@@ -1703,10 +1817,22 @@ def build_successor_evidence_sweep_report(
     coverage["nested_child_parent_metric_coverage"] = nested_metric_coverage
     coverage["specific_acceptance_metrics_present_count"] = specific_rows
     coverage["generic_placeholder_metric_row_count"] = generic_rows
+    coverage["closed_hard_blocker_without_successor_count"] = len(hard_blocker_without_path)
+    coverage["closed_hard_blocker_without_successor_numbers"] = hard_blocker_without_path
+    coverage["hard_blocker_execution_paths"] = hard_blocker_path_rows
+    coverage["hard_blocker_successor_issue_numbers"] = sorted(
+        {
+            int(path.get("successor_issue") or 0)
+            for path in hard_blocker_path_rows.values()
+            if int(path.get("successor_issue") or 0)
+        }
+    )
     for issue_number in (1918, 1958):
-        row = by_issue.get(issue_number)
-        if row:
-            metrics = row["metrics"]
+        update_row = by_issue.get(issue_number)
+        if update_row:
+            raw_metrics = update_row.get("metrics")
+            metrics = raw_metrics if isinstance(raw_metrics, dict) else {}
+            update_row["metrics"] = metrics
             for key in (
                 "live_issue_scope",
                 "native_parent_graph_checked",
@@ -1719,7 +1845,11 @@ def build_successor_evidence_sweep_report(
                 "native_parent_link_verified_count",
             ):
                 metrics[key] = coverage.get(key)
-    ok = not missing_top_level and not stale_closed_duplicate and not nested_missing
+    ok = (
+        not missing_top_level
+        and not nested_missing
+        and not hard_blocker_without_path
+    )
     return {
         "kind": "aippocampus_successor_evidence_sweep_report",
         "schema_version": "successor-evidence-sweep-v2",

@@ -124,21 +124,26 @@ def log_health_report(
     ]
     items.sort(key=lambda item: (not item["oversized"], -int(item["size_bytes"]), item["artifact_rel"]))
     oversized_count = sum(1 for item in items if item["oversized"])
-    return {
+    report = {
         "available": True,
+        "status": "needs_cleanup" if oversized_count else "healthy",
         "max_bytes": resolved_max,
         "backups": resolved_backups,
         "oversized": oversized_count > 0,
         "oversized_count": oversized_count,
         "total_bytes": sum(int(item["size_bytes"]) for item in items),
         "items": items,
-        "remediation_command": "aippocampus logs rotate --dry-run",
         "privacy_boundary": {
             "log_contents_emitted": False,
             "local_paths_emitted": False,
             "raw_prompt_or_source_snippets_emitted": False,
         },
     }
+    if oversized_count:
+        report["remediation_command"] = "aippocampus logs rotate --dry-run"
+    else:
+        report["agent_next_action"] = "no_cleanup_needed"
+    return report
 
 
 def add_health_action(
@@ -365,24 +370,29 @@ def rotation_plan(
     backups: int | None = None,
 ) -> dict[str, Any]:
     health = log_health_report(root, max_bytes=max_bytes, backups=backups)
-    return {
+    would_rotate_count = int(health["oversized_count"])
+    plan = {
         "kind": "aippocampus_logs_rotation_plan",
         "ok": True,
         "read_only": True,
-        "apply_required": True,
+        "status": "cleanup_available" if would_rotate_count else "no_cleanup_needed",
+        "apply_required": would_rotate_count > 0,
         "oversized_count": health["oversized_count"],
-        "would_rotate_count": health["oversized_count"],
+        "would_rotate_count": would_rotate_count,
         "max_bytes": health["max_bytes"],
         "backups": health["backups"],
         "items": [item for item in health["items"] if item["oversized"]],
-        "apply_command": "aippocampus logs rotate --apply",
         "privacy_boundary": health["privacy_boundary"]
         | {"writes_performed": False, "local_paths_emitted": False},
-        "agent_next_action": (
+        "agent_next_action": "no_cleanup_needed",
+    }
+    if would_rotate_count:
+        plan["apply_command"] = "aippocampus logs rotate --apply"
+        plan["agent_next_action"] = (
             "If these log artifacts are the intended cleanup target, apply once with "
             "`aippocampus logs rotate --apply`; status remains read-only."
-        ),
-    }
+        )
+    return plan
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -492,7 +502,10 @@ def main(argv: list[str] | None = None) -> int:
                 print(json.dumps(result, ensure_ascii=False, indent=2))
             else:
                 print(f"logs rotation plan: {result['would_rotate_count']} would rotate")
-                print(f"next: {result['apply_command']}")
+                if result.get("apply_command"):
+                    print(f"next: {result['apply_command']}")
+                else:
+                    print("next: no_cleanup_needed")
             return 0
         result = rotate_known_logs(root, max_bytes=args.max_bytes, backups=args.backups)
         if args.json_output:

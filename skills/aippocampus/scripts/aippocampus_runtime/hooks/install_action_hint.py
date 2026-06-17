@@ -17,10 +17,17 @@ from typing import Any
 from aippocampus_runtime.core import codex_home
 from aippocampus_runtime.hooks.action_hint_cache import (
     DEFAULT_ACTION_HINT_CACHE_LABEL,
+    action_hint_cache_resolution,
     default_action_hint_cache_path,
     load_action_hint_records_with_diagnostics,
 )
 from aippocampus_runtime.hooks.action_hint_cache_records import BLOCKED_STATES
+from aippocampus_runtime.hooks.foreground_status import (
+    action_hint_cache_refresh_primary,
+    action_hint_status_contract,
+    hook_install_closeout_contract,
+    no_action_needed_install_primary,
+)
 from aippocampus_runtime.hooks.host_boundary import add_host_integration
 from aippocampus_runtime.hooks.install_prompt import (
     load_hooks,
@@ -103,7 +110,25 @@ def cache_path_from_command(command: str) -> Path | None:
     return Path(raw)
 
 
-def _cache_status(commands: list[str]) -> dict[str, Any]:
+def _cache_path_label(path: Path, *, codex_home_path: Path | None = None) -> dict[str, str]:
+    default_path = default_action_hint_cache_path(Path.cwd(), home=codex_home_path)
+    try:
+        if path.resolve() == default_path.resolve():
+            return {
+                "cache_path_label": DEFAULT_ACTION_HINT_CACHE_LABEL,
+                "cache_scope": "current_workspace",
+                "cache_path_source": "default_registry",
+            }
+    except OSError:
+        pass
+    return {
+        "cache_path_label": "explicit-cache-jsonl",
+        "cache_scope": "explicit_override",
+        "cache_path_source": "argument_or_existing_hook",
+    }
+
+
+def _cache_status(commands: list[str], *, codex_home_path: Path | None = None) -> dict[str, Any]:
     paths = [cache_path_from_command(command) for command in commands]
     valid_paths = [path for path in paths if path is not None]
     if not valid_paths:
@@ -118,9 +143,12 @@ def _cache_status(commands: list[str]) -> dict[str, Any]:
             "provider_counts": {},
             "cache_path": "",
             "cache_path_label": DEFAULT_ACTION_HINT_CACHE_LABEL,
+            "cache_scope": "not_configured",
+            "cache_path_source": "missing_hook_argument",
             "next_command": "aippocampus hooks action refresh-cache --write --json",
         }
     path = valid_paths[0]
+    path_meta = _cache_path_label(path, codex_home_path=codex_home_path)
     if not path.exists():
         return {
             "cache_status": "with_missing_cache_file",
@@ -132,7 +160,7 @@ def _cache_status(commands: list[str]) -> dict[str, Any]:
             "malformed_cache_line_count": 0,
             "provider_counts": {},
             "cache_path": str(path),
-            "cache_path_label": DEFAULT_ACTION_HINT_CACHE_LABEL,
+            **path_meta,
             "next_command": "aippocampus hooks action refresh-cache --write --json",
         }
     cache = load_action_hint_records_with_diagnostics(path)
@@ -170,7 +198,7 @@ def _cache_status(commands: list[str]) -> dict[str, Any]:
         "malformed_cache_line_count": int(cache.get("malformed_cache_line_count") or 0),
         "provider_counts": provider_counts,
         "cache_path": str(path),
-        "cache_path_label": DEFAULT_ACTION_HINT_CACHE_LABEL,
+        **path_meta,
         "next_command": "aippocampus hooks action refresh-cache --write --json",
     }
 
@@ -234,15 +262,20 @@ def action_hint_frontstage_card(status_result: Mapping[str, Any]) -> dict[str, A
         "status": "ready" if ready else cache_status,
         "installed": installed,
         "ready": ready,
-        "optional": True,
+        "setup_role": "ready" if ready else "recommended_for_trusted_codex",
+        "optional": False,
         "fail_open": True,
+        "recall_blocking": False,
         "authority": "navigation_only",
         "event": ACTION_HINT_EVENT,
         "cache_status": cache_status,
-        "cache_path_label": str(status_result.get("cache_path_label") or DEFAULT_ACTION_HINT_CACHE_LABEL),
+        "cache_path_label": str(
+            status_result.get("cache_path_label") or DEFAULT_ACTION_HINT_CACHE_LABEL
+        ),
+        "cache_scope": str(status_result.get("cache_scope") or "unknown"),
         "cache_record_count": int(status_result.get("cache_record_count") or 0),
         "fresh_record_count": int(status_result.get("fresh_record_count") or 0),
-        "purpose": "Small PreToolUse nudges for learned source routes; never source evidence.",
+        "purpose": "Recommended trusted-Codex PreToolUse nudges for learned source routes; never source evidence.",
         "when_useful": [
             "after learning-loop or AIppo guidance has prepared action hints",
             "before broad tests, retries, or source-sensitive edits",
@@ -265,7 +298,10 @@ def install(
     if host != SUPPORTED_HOST:
         return _unsupported(path, host=host)
     if cache_jsonl is None:
-        cache_jsonl = default_action_hint_cache_path(Path.cwd())
+        cache_jsonl = default_action_hint_cache_path(Path.cwd(), home=path.parent)
+        cache_meta = action_hint_cache_resolution(cwd=Path.cwd(), home=path.parent)
+    else:
+        cache_meta = action_hint_cache_resolution(cache_jsonl, cwd=Path.cwd(), home=path.parent)
     data = load_hooks(path)
     groups = event_groups(data)
     target = action_hint_hook(module=module, cache_jsonl=cache_jsonl, timeout=timeout)
@@ -290,7 +326,9 @@ def install(
                         "event_supported": True,
                         "support_status": "supported_by_codex_hooks_json",
                         "command": target["command"],
-                        "cache_path_label": DEFAULT_ACTION_HINT_CACHE_LABEL,
+                        "cache_path_label": cache_meta["path_label"],
+                        "cache_scope": cache_meta["scope"],
+                        "cache_path_source": cache_meta["path_source"],
                     }
                 )
             group["hooks"] = [
@@ -327,7 +365,9 @@ def install(
             "event_supported": True,
             "support_status": "supported_by_codex_hooks_json",
             "command": target["command"],
-            "cache_path_label": DEFAULT_ACTION_HINT_CACHE_LABEL,
+            "cache_path_label": cache_meta["path_label"],
+            "cache_scope": cache_meta["scope"],
+            "cache_path_source": cache_meta["path_source"],
         }
     )
 
@@ -419,22 +459,29 @@ def status(
                 "event_supported": True,
                 "support_status": "supported_by_codex_hooks_json",
                 "commands": commands,
-                **(_cache_status(commands) if commands else {
-                    "cache_status": "not_installed",
-                    "cache_path_configured": False,
-                    "cache_exists": False,
-                    "cache_record_count": 0,
-                    "fresh_record_count": 0,
-                    "expired_record_count": 0,
-                    "malformed_cache_line_count": 0,
-                "provider_counts": {},
-                "cache_path": "",
-                    "cache_path_label": DEFAULT_ACTION_HINT_CACHE_LABEL,
-                    "next_command": "aippocampus hooks action refresh-cache --write --json",
-                }),
+                **(
+                    _cache_status(commands, codex_home_path=path.parent)
+                    if commands
+                    else {
+                        "cache_status": "not_installed",
+                        "cache_path_configured": False,
+                        "cache_exists": False,
+                        "cache_record_count": 0,
+                        "fresh_record_count": 0,
+                        "expired_record_count": 0,
+                        "malformed_cache_line_count": 0,
+                        "provider_counts": {},
+                        "cache_path": "",
+                        "cache_path_label": DEFAULT_ACTION_HINT_CACHE_LABEL,
+                        "cache_scope": "not_configured",
+                        "cache_path_source": "missing_hook_argument",
+                        "next_command": "aippocampus hooks action refresh-cache --write --json",
+                    }
+                ),
             }
         )
     result["frontstage_card"] = action_hint_frontstage_card(result)
+    result.update(action_hint_status_contract(result["frontstage_card"]))
     return result if include_private_paths else redact_public_result(result, path=path)
 
 
@@ -461,6 +508,43 @@ def redact_public_result(result: Mapping[str, Any], *, path: Path) -> dict[str, 
     return public
 
 
+def public_install_result(result: Mapping[str, Any], *, path: Path) -> dict[str, Any]:
+    public = redact_public_result(result, path=path)
+    ready = bool((public.get("frontstage_card") or {}).get("ready"))
+    primary = (
+        no_action_needed_install_primary(
+            label="Action-time hints installed",
+            message="No foreground action-hint setup action is needed.",
+        )
+        if ready
+        else action_hint_cache_refresh_primary(
+            claim_boundary=str(public.get("claim_boundary") or "host_setup_not_memory_evidence")
+        )
+    )
+    public.pop("path", None)
+    public.pop("commands", None)
+    public.pop("commands_redacted", None)
+    public["local_private_fields"] = ["path", "commands", "command"]
+    public["operator_json_available"] = True
+    public.update(
+        hook_install_closeout_contract(
+            surface="action_hint_hook_install",
+            title="Action-time hint install",
+            status="installed_ready" if ready else "installed_but_not_ready",
+            primary=primary,
+            status_command="aippocampus hooks action status --json",
+            rollback_command="aippocampus hooks action uninstall --json",
+            extra={
+                "ready": ready,
+                "cache_status": str(public.get("cache_status") or "unknown"),
+                "cache_path_label": str(public.get("cache_path_label") or ""),
+                "cache_scope": str(public.get("cache_scope") or ""),
+            },
+        )
+    )
+    return public
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         epilog=(
@@ -480,6 +564,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--cache-jsonl")
     parser.add_argument("--timeout", type=positive_timeout, default=DEFAULT_ACTION_HINT_TIMEOUT_SECONDS)
     parser.add_argument("--include-private-paths", action="store_true")
+    parser.add_argument(
+        "--operator-json",
+        action="store_true",
+        dest="operator_json",
+        help="Emit raw local hooks.json path and hook command for local diagnostics.",
+    )
     parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args(argv)
 
@@ -498,7 +588,10 @@ def main(argv: list[str] | None = None) -> int:
         result = uninstall(path)
     else:
         result = status(path, host=args.host, include_private_paths=True)
-    if not args.include_private_paths:
+    include_private_paths = args.include_private_paths or args.operator_json
+    if args.action == "install" and not include_private_paths:
+        result = public_install_result(result, path=path)
+    elif not include_private_paths:
         result = redact_public_result(result, path=path)
     if args.json_output:
         print(json.dumps(result, ensure_ascii=False, indent=2))

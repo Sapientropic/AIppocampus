@@ -67,6 +67,15 @@ RAW_BLOCKED_KEYS = {
     "tool_response",
 }
 LOCAL_PATH_SENTINELS = ("E:/", "C:/", "\\Users\\", "/Users/", "/home/", "/tmp/")
+BEHAVIOR_EVENT_REQUIRED_ANY = ("status", "hard_event_kind", "event_kind", "command_family")
+
+
+class LearningReplayInputError(ValueError):
+    """Raised for operator-selected replay inputs that need JSON recovery, not tracebacks."""
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code
 
 
 def _stable_id(prefix: str, *parts: Any) -> str:
@@ -163,19 +172,64 @@ def validate_private_replay_export(rows: Iterable[Mapping[str, Any]]) -> dict[st
     }
 
 
+def _read_text_for_replay(path: Path) -> str:
+    try:
+        return path.read_text(encoding="utf-8")
+    except FileNotFoundError as exc:
+        raise LearningReplayInputError(
+            "learning_events_file_not_found",
+            "The selected sanitized events file was not found.",
+        ) from exc
+    except OSError as exc:
+        raise LearningReplayInputError(
+            "learning_events_file_unreadable",
+            "The selected sanitized events file could not be read.",
+        ) from exc
+
+
+def _validate_behavior_event_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    for index, row in enumerate(rows, start=1):
+        if not any(row.get(key) not in (None, "", []) for key in BEHAVIOR_EVENT_REQUIRED_ANY):
+            raise LearningReplayInputError(
+                "learning_events_missing_required_fields",
+                f"Behavior event row {index} is missing required event fields.",
+            )
+    return rows
+
+
 def load_behavior_event_rows(path: Path) -> list[dict[str, Any]]:
+    text = _read_text_for_replay(path)
     if path.suffix.lower() == ".jsonl":
-        return [
-            dict(json.loads(line))
-            for line in path.read_text(encoding="utf-8").splitlines()
-            if line.strip()
-        ]
-    payload = json.loads(path.read_text(encoding="utf-8"))
+        rows: list[dict[str, Any]] = []
+        for line_number, line in enumerate(text.splitlines(), start=1):
+            if not line.strip():
+                continue
+            try:
+                item = json.loads(line)
+            except json.JSONDecodeError as exc:
+                raise LearningReplayInputError(
+                    "learning_events_malformed_jsonl",
+                    f"Behavior events JSONL is malformed at line {line_number}.",
+                ) from exc
+            if not isinstance(item, Mapping):
+                raise LearningReplayInputError(
+                    "learning_events_malformed_jsonl",
+                    f"Behavior events JSONL row {line_number} is not an object.",
+                )
+            rows.append(dict(item))
+        return _validate_behavior_event_rows(rows)
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise LearningReplayInputError(
+            "learning_events_malformed_json",
+            "Behavior events JSON is malformed.",
+        ) from exc
     if isinstance(payload, list):
-        return [dict(row) for row in payload if isinstance(row, Mapping)]
+        return _validate_behavior_event_rows([dict(row) for row in payload if isinstance(row, Mapping)])
     if isinstance(payload, Mapping):
         rows = payload.get("events") or payload.get("behavior_events") or payload.get("rows") or []
-        return [dict(row) for row in rows if isinstance(row, Mapping)]
+        return _validate_behavior_event_rows([dict(row) for row in rows if isinstance(row, Mapping)])
     return []
 
 
@@ -210,6 +264,7 @@ def export_private_replay_events(
 
 __all__ = [
     "export_private_replay_events",
+    "LearningReplayInputError",
     "load_behavior_event_rows",
     "sanitize_events_for_private_replay",
     "validate_private_replay_export",

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
@@ -426,27 +428,59 @@ class ActionHintCacheTests(unittest.TestCase):
     def test_refresh_cache_write_uses_default_cache_path_when_none_is_supplied(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            result = cache.refresh_action_hint_cache(
-                cwd=root,
-                write=True,
-                learning_guidance=[
-                    {
-                        "guidance_id": "default-cache-guidance",
-                        "next_action": "run_preflight_before_broad_test",
-                        "source_refs": [source_ref("default-cache")],
-                        "command_terms": ["pytest"],
-                    }
-                ],
-                now_unix=1000,
-            )
-            default_path = cache.default_action_hint_cache_path(root)
+            registry = root / "registry"
+            with patch.dict(os.environ, {"AIPPOCAMPUS_REGISTRY_DIR": str(registry)}):
+                result = cache.refresh_action_hint_cache(
+                    cwd=root,
+                    write=True,
+                    learning_guidance=[
+                        {
+                            "guidance_id": "default-cache-guidance",
+                            "next_action": "run_preflight_before_broad_test",
+                            "source_refs": [source_ref("default-cache")],
+                            "command_terms": ["pytest"],
+                        }
+                    ],
+                    now_unix=1000,
+                )
+                default_path = cache.default_action_hint_cache_path(root)
             records = cache.load_action_hint_records(default_path)
 
         self.assertTrue(result["ok"], result)
         self.assertTrue(result["default_cache_path_used"])
-        self.assertEqual(result["cache_path_label"], ".aippocampus/action-hints/pretooluse-cache.jsonl")
+        self.assertEqual(
+            result["cache_path_label"],
+            "registry/action-hints/<workspace-scope>/pretooluse-cache.jsonl",
+        )
+        self.assertEqual(result["cache_path_source"], "default_registry")
+        self.assertEqual(result["cache_scope"], "current_workspace")
+        self.assertTrue(default_path.is_relative_to(registry))
+        self.assertFalse((root / ".aippocampus" / "action-hints").exists())
         self.assertEqual(result["cache_status"], "with_cache_records")
         self.assertEqual(len(records), 1)
+
+    def test_empty_refresh_cache_reports_learning_input_recovery_actions(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            result = cache.refresh_action_hint_cache(
+                cwd=root,
+                write=False,
+                include_default_learning=True,
+                include_default_effectiveness_ledger=True,
+                now_unix=1000,
+            )
+
+        self.assertTrue(result["ok"], result)
+        self.assertEqual(result["cache"]["record_count"], 0)
+        self.assertEqual(result["foreground_action"]["id"], "discover_learning_sources")
+        action_ids = [item["id"] for item in result["safe_next_actions"]]
+        self.assertIn("discover_learning_sources", action_ids)
+        self.assertIn("inspect_learning_guidance", action_ids)
+        self.assertIn("activate_aippo_guidance", action_ids)
+        self.assertEqual(result["empty_cache_recovery"]["reason"], "no_learning_or_effectiveness_inputs_found")
+        encoded = json.dumps(result, ensure_ascii=False)
+        self.assertNotIn("<events.jsonl>", encoded)
+        self.assertNotIn(str(root), encoded)
 
 
 if __name__ == "__main__":

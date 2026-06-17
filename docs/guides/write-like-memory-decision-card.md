@@ -9,12 +9,17 @@ intent.
 
 | Intent | Use | Writes | Durability | Authority | Next Action |
 | --- | --- | --- | --- | --- | --- |
-| Mark whether a route helped or was wrong | `aippocampus agent feedback <route_id> --outcome helped --feedback-jsonl <local-feedback.jsonl> --json` | yes, to the chosen local JSONL | durable only with an explicit path | low-authority navigation metadata | keep working; reopen source before claims |
-| Quiet a route or ticket here | `aippocampus do-not-use-here <route-or-ticket-id> --feedback-jsonl <local-feedback.jsonl> --json` | yes, to the chosen local feedback lane | scoped activation pressure, not deletion | low-authority suppression hint | use why-not/why-recall for explanation; reopen source before claims |
+| Mark whether a route helped or was wrong | `aippocampus agent feedback <route_id> --outcome helped --json` | yes, to the scoped default feedback lane | durable local low-authority feedback | low-authority navigation metadata | keep working; reopen source before claims |
+| Quiet a route or ticket here | `aippocampus do-not-use-here <route-or-ticket-id> --json` | yes, to the scoped default control lane | scoped activation pressure, not deletion | low-authority suppression hint | use why-not/why-recall for explanation; reopen source before claims |
 | Leave a margin note for a later agent | `aippocampus self-note append --current-thread "short note"` | yes | local low-authority note | `direction_only` scent | use as posture; reopen source for facts |
 | Prepare action-time hints | `aippocampus hooks action refresh-cache --write --json` | cache only | prepared default local navigation cache | navigation only | install/status the action hook if desired |
 | Inspect continuity-domain candidates | `aippocampus continuity-domain report --json` | no | read/report first; append/publish is operator work | route planning, not fact text | use scoped preview before any append/publish |
 | Sync or register the local tool surface | `aippocampus update status` / `aippocampus plugin install --codex --verify` | control-plane artifacts | explicit local setup | not memory truth | verify foreground tool visibility |
+
+`--feedback-jsonl` is an advanced/operator override for tests, exports, or
+custom feedback routing. It is not the ordinary foreground path. For normal
+agent route feedback and quieting, use the scoped default local lane above so
+the product can stay durable without asking the user to invent a JSONL path.
 
 When not to write:
 
@@ -29,3 +34,9 @@ When not to write:
 The rule of thumb: feedback tunes routes, self-notes carry posture, caches help
 tool-time nudges, continuity domains preserve routes, and source remains the
 ground.
+
+Related lifecycle references: [agent-context.md](../agent-context.md) describes
+feedback/control as low-authority scoped feedback, and
+[public-api.md](public-api.md) keeps `agent feedback` CLI-only rather than an
+MCP write tool. Use `why-recall` / `why-not-recall` to inspect route behavior
+without making feedback into source truth.

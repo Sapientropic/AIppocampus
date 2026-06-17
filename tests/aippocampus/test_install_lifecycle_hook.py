@@ -98,6 +98,32 @@ class InstallMemoryMaintenanceHookTests(unittest.TestCase):
         ]
         self.assertEqual(prompt_commands, ["python aippocampus_prompt_hook.py"])
 
+    def test_cli_install_json_is_foreground_safe_and_path_redacted(self) -> None:
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            code = installer.main(["install", "--hooks-json", str(self.hooks_json), "--json"])
+
+        payload = json.loads(stdout.getvalue())
+        encoded = json.dumps(payload, ensure_ascii=False)
+
+        self.assertEqual(code, 0, payload)
+        self.assertTrue(payload["installed"])
+        self.assertTrue(payload["changed"])
+        self.assertNotIn("path", payload)
+        self.assertNotIn("command", payload)
+        self.assertFalse(payload["privacy_boundary"]["local_path_serialized"])
+        self.assertFalse(payload["privacy_boundary"]["hook_command_serialized"])
+        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
+        self.assertEqual(payload["foreground_action"]["status"], "installed_ready")
+        self.assertEqual(payload["agent_next_action"]["id"], "no_action_needed")
+        action_ids = [action["id"] for action in payload["safe_next_actions"]]
+        self.assertIn("status", action_ids)
+        self.assertIn("rollback", action_ids)
+        self.assertIn("aippocampus hooks lifecycle uninstall --json", encoded)
+        self.assertNotIn(str(self.hooks_json), encoded)
+        self.assertNotIn(str(SCRIPTS.resolve()), encoded)
+        self.assertNotIn(self.module, encoded)
+
     def test_status_reports_codex_host_integration_boundary(self) -> None:
         result = installer.status(self.hooks_json)
 
@@ -110,6 +136,34 @@ class InstallMemoryMaintenanceHookTests(unittest.TestCase):
                 "unsupported_hosts": ["claude-code", "generic-jsonl"],
             },
         )
+
+    def test_public_status_has_foreground_action_card_for_missing_installed_and_partial(self) -> None:
+        missing = installer.public_lifecycle_result(installer.status(self.hooks_json))
+        self.assertEqual(missing["foreground_action"]["status"], "missing")
+        self.assertEqual(missing["agent_next_action"]["id"], "install_lifecycle_hooks")
+        self.assertEqual(missing["claim_boundary"], "host_setup_not_memory_evidence")
+        self.assertTrue(
+            any(action["id"] == "install_lifecycle_hooks" for action in missing["safe_next_actions"])
+        )
+
+        installer.install(self.hooks_json, timeout=12)
+        installed = installer.public_lifecycle_result(installer.status(self.hooks_json))
+        self.assertEqual(installed["foreground_action"]["status"], "installed")
+        self.assertEqual(installed["agent_next_action"]["id"], "no_action_needed")
+        installed_action_ids = [action["id"] for action in installed["safe_next_actions"]]
+        self.assertIn("no_action_needed", installed_action_ids)
+        self.assertIn("rollback_lifecycle_hooks", installed_action_ids)
+
+        data = self.read_hooks()
+        data["hooks"].pop("PostCompact", None)
+        self.hooks_json.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+        partial = installer.public_lifecycle_result(installer.status(self.hooks_json))
+        encoded = json.dumps(partial, ensure_ascii=False)
+        self.assertEqual(partial["foreground_action"]["status"], "partial")
+        self.assertEqual(partial["agent_next_action"]["id"], "refresh_lifecycle_hooks")
+        self.assertIn("PostCompact", partial["foreground_action"]["missing_events"])
+        self.assertNotIn(str(self.hooks_json), encoded)
+        self.assertNotIn("aippocampus_runtime.hooks.lifecycle", encoded)
 
     def test_status_treats_provider_bridge_wrapper_as_installed(self) -> None:
         root = Path(self.tmp.name)

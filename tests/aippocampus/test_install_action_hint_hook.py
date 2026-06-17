@@ -14,6 +14,8 @@ sys.path.insert(0, str(SCRIPTS))
 
 from aippocampus_runtime.hooks import install_action_hint as installer  # noqa: E402
 
+DEFAULT_CACHE_LABEL = "registry/action-hints/<workspace-scope>/pretooluse-cache.jsonl"
+
 
 class InstallActionHintHookTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -73,9 +75,12 @@ class InstallActionHintHookTests(unittest.TestCase):
         card = result["frontstage_card"]
         self.assertEqual(card["authority"], "navigation_only")
         self.assertTrue(card["fail_open"])
-        self.assertTrue(card["optional"])
+        self.assertFalse(card["optional"])
+        self.assertFalse(card["recall_blocking"])
+        self.assertEqual(card["setup_role"], "recommended_for_trusted_codex")
         self.assertEqual(card["cache_status"], "with_missing_cache_file")
-        self.assertEqual(card["cache_path_label"], ".aippocampus/action-hints/pretooluse-cache.jsonl")
+        self.assertEqual(card["cache_path_label"], DEFAULT_CACHE_LABEL)
+        self.assertEqual(card["cache_scope"], "current_workspace")
         commands = [step["command"] for step in card["next_steps"]]
         self.assertTrue(any("refresh-cache" in command for command in commands))
         self.assertTrue(any("--write --json" in command for command in commands))
@@ -113,10 +118,40 @@ class InstallActionHintHookTests(unittest.TestCase):
         self.assertEqual(result["expired_record_count"], 0)
         self.assertEqual(result["provider_counts"], {"learning_loop": 1})
         self.assertEqual(result["cache_path"], "<redacted:cache-jsonl>")
+        self.assertEqual(result["cache_path_label"], "explicit-cache-jsonl")
+        self.assertEqual(result["cache_scope"], "explicit_override")
         self.assertTrue(result["cache_path_redacted"])
         self.assertEqual(result["frontstage_card"]["status"], "ready")
         self.assertTrue(result["frontstage_card"]["ready"])
+        self.assertEqual(result["agent_next_action"]["id"], "no_action_needed")
+        self.assertIn("safe_next_actions", result)
+        self.assertIn("no_action_needed", [action["id"] for action in result["safe_next_actions"]])
+        self.assertEqual(result["claim_boundary"], result["frontstage_card"]["claim_boundary"])
         self.assertNotIn(str(cache_path), encoded)
+
+    def test_status_aliases_frontstage_next_steps_to_shared_action_contract(self) -> None:
+        installer.install(self.hooks_json, timeout=3)
+
+        result = installer.status(self.hooks_json)
+        card_steps = result["frontstage_card"]["next_steps"]
+        action_ids = [action["id"] for action in result["safe_next_actions"]]
+
+        self.assertEqual(result["foreground_action"]["status"], "with_missing_cache_file")
+        self.assertEqual(result["agent_next_action"]["id"], "refresh_action_hint_cache")
+        self.assertIn("refresh_action_hint_cache", action_ids)
+        self.assertIn("rollback_action_hint_hook", action_ids)
+        self.assertEqual(
+            {
+                step["command"]
+                for step in card_steps
+                if step.get("command") and step.get("label") != "check"
+            },
+            {
+                action["command"]
+                for action in result["safe_next_actions"]
+                if action.get("command") and action["id"] != "check_action_hint_status"
+            },
+        )
 
     def test_status_distinguishes_missing_empty_expired_and_malformed_cache(self) -> None:
         missing = self.codex_home / "missing-action-hints.jsonl"
@@ -191,8 +226,49 @@ class InstallActionHintHookTests(unittest.TestCase):
         self.assertTrue(payload["changed"])
         self.assertEqual(payload["cache_status"], "with_missing_cache_file")
         self.assertEqual(payload["cache_path"], "<redacted:cache-jsonl>")
+        self.assertFalse(payload["privacy_boundary"]["local_path_serialized"])
+        self.assertFalse(payload["privacy_boundary"]["hook_command_serialized"])
+        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
+        self.assertEqual(payload["foreground_action"]["status"], "installed_but_not_ready")
+        self.assertEqual(payload["agent_next_action"]["id"], "refresh_action_hint_cache")
+        action_ids = [action["id"] for action in payload["safe_next_actions"]]
+        self.assertIn("status", action_ids)
+        self.assertIn("rollback", action_ids)
+        self.assertIn("aippocampus hooks action uninstall --json", encoded)
         self.assertNotIn(str(self.codex_home), encoded)
         self.assertNotIn(str(cache_path), encoded)
+        self.assertNotIn("aippocampus_runtime.hooks.action_hint", encoded)
+
+    def test_cli_install_json_reports_empty_cache_as_not_ready_closeout(self) -> None:
+        cache_path = self.codex_home / "empty-action-hints.jsonl"
+        cache_path.write_text("", encoding="utf-8")
+
+        stdout = StringIO()
+        with redirect_stdout(stdout):
+            code = installer.main(
+                [
+                    "install",
+                    "--codex-home",
+                    str(self.codex_home),
+                    "--cache-jsonl",
+                    str(cache_path),
+                    "--json",
+                ]
+            )
+
+        payload = json.loads(stdout.getvalue())
+        encoded = json.dumps(payload, ensure_ascii=False)
+
+        self.assertEqual(code, 0, payload)
+        self.assertTrue(payload["installed"])
+        self.assertEqual(payload["cache_status"], "with_empty_cache")
+        self.assertEqual(payload["foreground_action"]["status"], "installed_but_not_ready")
+        self.assertEqual(payload["agent_next_action"]["id"], "refresh_action_hint_cache")
+        self.assertIn("aippocampus hooks action refresh-cache --write --json", encoded)
+        self.assertIn("aippocampus hooks action status --json", encoded)
+        self.assertIn("aippocampus hooks action uninstall --json", encoded)
+        self.assertNotIn(str(cache_path), encoded)
+        self.assertNotIn(str(SCRIPTS.resolve()), encoded)
         self.assertNotIn("aippocampus_runtime.hooks.action_hint", encoded)
 
     def test_cli_status_human_frontstage_card_names_action_time_hints(self) -> None:
@@ -234,7 +310,8 @@ class InstallActionHintHookTests(unittest.TestCase):
         self.assertEqual(code, 0, payload)
         self.assertTrue(payload["installed"])
         self.assertTrue(payload["cache_path_configured"])
-        self.assertEqual(payload["frontstage_card"]["cache_path_label"], ".aippocampus/action-hints/pretooluse-cache.jsonl")
+        self.assertEqual(payload["frontstage_card"]["cache_path_label"], DEFAULT_CACHE_LABEL)
+        self.assertEqual(payload["frontstage_card"]["cache_scope"], "current_workspace")
         self.assertIn("--cache-jsonl", command)
         self.assertNotIn("<local-cache.jsonl>", encoded)
         self.assertNotIn(str(self.codex_home), encoded)

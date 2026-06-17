@@ -46,6 +46,10 @@ class ContinuityDensityCurveBenchmarkTests(unittest.TestCase):
         self.assertFalse(lint["boundary_only_projection"])
         self.assertIn("supports", report)
         self.assertIn("private_real_history_density_curve", report["cannot_claim"])
+        self.assertEqual(
+            report["review_next_actions"][0]["id"],
+            "review_continuity_density_synthetic_report",
+        )
 
     def test_replay_measurement_computes_density_tiers_from_counts(self) -> None:
         report = density_curve.build_replay_backed_density_report()
@@ -139,6 +143,10 @@ class ContinuityDensityCurveBenchmarkTests(unittest.TestCase):
         self.assertEqual(report["metrics"]["noisy_saturation_regression_count"], 0)
         self.assertGreaterEqual(report["metrics"]["no_help_correctly_ignored_count"], 1)
         self.assertIn("runtime_policy_adoption", report["cannot_claim"])
+        self.assertEqual(
+            report["review_next_actions"][0]["id"],
+            "review_continuity_density_heldout_report",
+        )
 
 
 if __name__ == "__main__":

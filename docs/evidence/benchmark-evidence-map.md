@@ -1230,7 +1230,9 @@ empty output. The PR-tier guard for this contract is
 - **Reads / updates:** `docs/evidence/reports/successor-evidence-sweep-2026-06-16.md`,
   #1918-#1981
 - **Boundary:** executable closeout gate for proxy-successor issues; not a
-  benchmark score, live product-lift claim, or default-adoption proof.
+  benchmark score, live product-lift claim, or default-adoption proof. Hard
+  blocker rows must keep an open successor/reopened owner/deferred pointer; a
+  recorded blocker alone is not a completed issue.
 
 ### Warm ambient case-pack builder
 

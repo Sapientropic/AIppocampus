@@ -8,8 +8,21 @@ import json
 import os
 from typing import Any, Mapping
 
+from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 from aippocampus_runtime.recall.why_diagnostics import recall_diagnostic_report
 from aippocampus_runtime.recall.why_reason_codes import DEFAULT_MAX_ROUTES
+
+
+def _quoted(value: str) -> str:
+    return json.dumps(str(value or ""), ensure_ascii=False)
+
+
+def _cue_for_command(cue: str) -> str:
+    raw = str(cue or "")
+    redacted = str(redact_sensitive_values(redact_private_paths(raw)))
+    if redacted != raw:
+        return "redacted cue from current prompt"
+    return raw
 
 
 def render_text(payload: Mapping[str, Any]) -> str:
@@ -164,6 +177,82 @@ def _recovery_payload(mode: str) -> dict[str, Any]:
     }
 
 
+def _attach_foreground_actions(payload: dict[str, Any], *, cue: str) -> dict[str, Any]:
+    cue_arg = _quoted(_cue_for_command(cue))
+    recall_command = f"aippocampus agent recall {cue_arg} --json"
+    search_command = f"aippocampus search {cue_arg} --json"
+    onboard_command = "aippocampus onboard --provider auto --status --json"
+    deepen_command = "aippocampus agent deepen --request 1 --last-recall --json"
+    next_safe = str(payload.get("next_safe_action") or "")
+    decision = str(payload.get("decision") or "")
+    if next_safe == "run_onboard_or_build_clean_source":
+        primary = {
+            "id": "check_onboarding_status",
+            "command": onboard_command,
+            "why": "Clean source or registration is missing; status is the next executable repair check.",
+            "mutation_risk": "read_only",
+        }
+    elif decision == "surfaced" or next_safe == "reopen_source":
+        primary = {
+            "id": "recall_same_cue",
+            "command": recall_command,
+            "why": "Recall surfaced route-shaped context; reopen/deepen before claims.",
+            "mutation_risk": "read_only",
+        }
+    else:
+        primary = {
+            "id": "search_same_cue",
+            "command": search_command,
+            "why": "No route is claim-ready; use the same cue as a bounded source search before broadening.",
+            "mutation_risk": "read_only",
+        }
+    candidate_actions = [
+        primary,
+        {
+            "id": "recall_same_cue",
+            "command": recall_command,
+            "why": "Use recall when the cue is fuzzy or route-shaped.",
+            "mutation_risk": "read_only",
+        },
+        {
+            "id": "deepen_after_recall",
+            "command": deepen_command,
+            "why": "Use after recall writes a same-machine last-recall request cache.",
+            "depends_on": "recall_same_cue",
+            "mutation_risk": "read_only",
+        },
+    ]
+    if primary["id"] != "check_onboarding_status":
+        candidate_actions.append(
+            {
+                "id": "check_onboarding_status",
+                "command": onboard_command,
+                "why": "Use if clean source or registration appears missing.",
+                "mutation_risk": "read_only",
+            }
+        )
+    actions: list[dict[str, str]] = []
+    seen_ids: set[str] = set()
+    for action in candidate_actions:
+        action_id = str(action.get("id") or "")
+        if action_id in seen_ids:
+            continue
+        seen_ids.add(action_id)
+        actions.append(action)
+    action_card = payload.get("action_card")
+    if isinstance(action_card, dict):
+        action_card["next_command"] = primary["command"]
+        action_card["primary_action"] = primary["id"]
+        action_card["claim_boundary"] = "diagnostic_not_source_evidence"
+    if next_safe:
+        payload["authority_next_safe_action"] = next_safe
+    payload["agent_next_action"] = primary
+    payload["safe_next_actions"] = actions
+    payload["foreground_next_action"] = primary["id"]
+    payload["next_safe_action"] = primary["id"]
+    return payload
+
+
 def render_recovery_text(payload: Mapping[str, Any]) -> str:
     mode = str(payload.get("mode") or "why-recall")
     actions = [row for row in payload.get("next_actions") or [] if isinstance(row, Mapping)]
@@ -219,6 +308,7 @@ def main(argv: list[str] | None = None) -> int:
         semantic_gate_mode=args.semantic_gate_mode,
         semantic_timeout=args.semantic_timeout,
     )
+    payload = _attach_foreground_actions(payload, cue=args.cue)
     if args.json:
         print(json.dumps(payload, ensure_ascii=False, indent=2))
     else:

@@ -86,6 +86,24 @@ class LogRetentionTests(unittest.TestCase):
             self.assertEqual(plan["would_rotate_count"], 1)
             self.assertEqual(plan["apply_command"], "aippocampus logs rotate --apply")
 
+    def test_healthy_logs_do_not_suggest_cleanup_or_apply(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            log = root / "logs" / "build_associations_hook.log"
+            log.parent.mkdir()
+            log.write_bytes(b"small")
+
+            status = log_retention.log_health_report(root, max_bytes=20)
+            plan = log_retention.rotation_plan(root, max_bytes=20)
+
+            self.assertFalse(status["oversized"])
+            self.assertEqual(status["oversized_count"], 0)
+            self.assertEqual(status["status"], "healthy")
+            self.assertNotIn("remediation_command", status)
+            self.assertEqual(plan["would_rotate_count"], 0)
+            self.assertEqual(plan["agent_next_action"], "no_cleanup_needed")
+            self.assertNotIn("apply_command", plan)
+
     def test_rotate_json_defaults_to_plan_and_requires_explicit_apply(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

@@ -42,10 +42,10 @@ Every host status or support row should answer these dimensions:
 `summary.host_conformance_label` and the full readout under
 `surfaces.host_conformance`.
 
-`aippocampus update status --agent-json` projects the same label and dimensions
-without local paths. Treat `tools_visible=true` and `key_tools_callable=false`
-as a stale or mixed live-host state: reload the host/plugin/MCP process before
-asking the user to debug recall quality.
+`aippocampus update status --agent-json` remains a compatibility alias for the
+same compact projection. Treat `tools_visible=true` and
+`key_tools_callable=false` as a stale or mixed live-host state: reload the
+host/plugin/MCP process before asking the user to debug recall quality.
 
 ## Contract Boundaries
 
