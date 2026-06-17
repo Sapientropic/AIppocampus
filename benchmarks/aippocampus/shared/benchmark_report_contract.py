@@ -5,6 +5,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
+from benchmarks.aippocampus.shared.claim_boundary_refs import claim_boundary_ref
+
 MEASUREMENT_LIVE_AGENT_OBSERVED = "live_agent_observed"
 MEASUREMENT_MODEL_JUDGED = "model_judged"
 MEASUREMENT_DERIVED_FROM_ARM = "derived_from_arm"
@@ -32,6 +34,33 @@ DECISION_IMPACT_FIELDS = (
     "runtime_policy_adoption_gate_ok",
     "decision_impact_not_applicable",
 )
+
+FOLLOWUP_ACTION_FIELDS = (
+    "review_next_actions",
+    "issue_actions",
+    "gap_next_actions",
+    "fidelity_gap_actions",
+)
+OWNER_ROUTE_ISSUE_FIELDS = (
+    "issue_url",
+    "issue_refs",
+    "current_issue_url",
+    "current_issue",
+    "successor_issue_url",
+    "successor_issue",
+)
+NO_ACTION_REASON_FIELDS = (
+    "no_action_reason",
+    "no_open_followup_reason",
+)
+OWNER_STATUS_FIELDS = (
+    "closeout_allowed",
+    "closeout_eligible",
+    "requires_human_review_before_closeout",
+    "successor_required",
+)
+HIGH_SIGNAL_CANNOT_CLAIM_THRESHOLD = 4
+HIGH_SIGNAL_METRICS_THRESHOLD = 5
 
 
 def measurement_origin_metadata(
@@ -82,6 +111,89 @@ def _field_value(report: Mapping[str, Any], field: str) -> Any:
 
 def _has_any_field(report: Mapping[str, Any], fields: tuple[str, ...]) -> bool:
     return any(_field_value(report, field) is not None for field in fields)
+
+
+def _is_nonempty(value: Any) -> bool:
+    return value not in (None, "", [], {})
+
+
+def _count_nonempty_items(value: Any) -> int:
+    if isinstance(value, Mapping):
+        return 1 if value else 0
+    if isinstance(value, (list, tuple, set)):
+        return sum(1 for item in value if _is_nonempty(item))
+    return 1 if _is_nonempty(value) else 0
+
+
+def _metric_leaf_count(value: Any) -> int:
+    if isinstance(value, Mapping):
+        return sum(_metric_leaf_count(child) for child in value.values())
+    if isinstance(value, (list, tuple, set)):
+        return sum(_metric_leaf_count(child) for child in value)
+    return 1 if _is_nonempty(value) else 0
+
+
+def _cannot_claim_count(report: Mapping[str, Any]) -> int:
+    return _count_nonempty_items(_field_value(report, "cannot_claim"))
+
+
+def _metrics_count(report: Mapping[str, Any]) -> int:
+    metrics = report.get("metrics")
+    if not isinstance(metrics, Mapping):
+        return 0
+    return _metric_leaf_count(metrics)
+
+
+def benchmark_report_followup_counts(report: Mapping[str, Any]) -> dict[str, int]:
+    """Count owner/action surfaces without treating warnings as work closure.
+
+    Benchmark reports often carry many careful claim boundaries. These counts
+    make the complementary maintenance route visible to later agents: a real
+    action list, an owner path tied to an issue, or an explicit no-action
+    reason for archived/background-only output.
+    """
+
+    followup_action_count = 0
+    owner_route_count = 0
+    no_action_reason_count = 0
+    for mapping in _walk_mappings(report):
+        for field in FOLLOWUP_ACTION_FIELDS:
+            followup_action_count += _count_nonempty_items(mapping.get(field))
+        for field in NO_ACTION_REASON_FIELDS:
+            no_action_reason_count += _count_nonempty_items(mapping.get(field))
+        if _is_nonempty(mapping.get("owner_path")) and any(
+            _is_nonempty(mapping.get(field)) for field in OWNER_ROUTE_ISSUE_FIELDS
+        ):
+            owner_route_count += 1
+
+    return {
+        "followup_action_count": followup_action_count,
+        "owner_route_count": owner_route_count,
+        "no_action_reason_count": no_action_reason_count,
+        "followup_surface_count": (
+            followup_action_count + owner_route_count + no_action_reason_count
+        ),
+    }
+
+
+def _closed_or_historical_issue_signal(report: Mapping[str, Any]) -> bool:
+    for mapping in _walk_mappings(report):
+        for field in ("issue_state", "source_issue_state", "owner_issue_state"):
+            value = str(mapping.get(field) or "").lower()
+            if "closed" in value or "historical" in value:
+                return True
+    return False
+
+
+def _owner_status_requires_followup(report: Mapping[str, Any]) -> bool:
+    if any(bool(_field_value(report, field)) for field in OWNER_STATUS_FIELDS):
+        return True
+    decision_impact = str(_field_value(report, "decision_impact") or "")
+    return bool(
+        decision_impact
+        and decision_impact
+        not in {"diagnostic_only", "docs_only", "not_applicable"}
+    )
 
 
 def _sample_size(report: Mapping[str, Any]) -> Any:
@@ -186,11 +298,24 @@ def benchmark_report_contract_lint(report: Mapping[str, Any]) -> dict[str, Any]:
     positive_support_present = _has_any_field(report, POSITIVE_SUPPORT_FIELDS)
     cannot_claim_present = _field_value(report, "cannot_claim") is not None
     boundary_only_projection = bool(cannot_claim_present and not positive_support_present)
+    cannot_claim_count = _cannot_claim_count(report)
+    metrics_count = _metrics_count(report)
+    followup_counts = benchmark_report_followup_counts(report)
+    followup_present = bool(followup_counts["followup_surface_count"])
+    closed_or_historical_issue = _closed_or_historical_issue_signal(report)
     findings: list[str] = []
     if missing_fields:
         findings.append("missing_contract_metadata")
     if boundary_only_projection:
         findings.append("boundary_only_projection_without_positive_support")
+    if not followup_present and cannot_claim_count >= HIGH_SIGNAL_CANNOT_CLAIM_THRESHOLD:
+        findings.append("cannot_claim_without_followup")
+    if not followup_present and metrics_count >= HIGH_SIGNAL_METRICS_THRESHOLD:
+        findings.append("metrics_without_owner_action")
+    if not followup_present and _owner_status_requires_followup(report):
+        findings.append("owner_status_without_followup")
+    if not followup_present and closed_or_historical_issue:
+        findings.append("closed_issue_without_open_followup")
 
     public_quality_claimed = bool(_field_value(report, "public_quality_gate_ok"))
     if public_quality_claimed:
@@ -223,16 +348,21 @@ def benchmark_report_contract_lint(report: Mapping[str, Any]) -> dict[str, Any]:
         "ok": not findings,
         "findings": findings,
         "missing_fields": missing_fields,
+        "cannot_claim_ref": claim_boundary_ref(),
         "positive_support_fields": [
             field for field in POSITIVE_SUPPORT_FIELDS if _field_value(report, field) is not None
         ],
         "positive_support_present": positive_support_present,
+        "cannot_claim_count": cannot_claim_count,
+        "metrics_count": metrics_count,
+        **followup_counts,
         "public_quality_denominator_ok": (
             _valid_public_quality_denominator(report)[0]
             if bool(_field_value(report, "public_quality_gate_ok"))
             else None
         ),
         "boundary_only_projection": boundary_only_projection,
+        "closed_or_historical_issue": closed_or_historical_issue,
         "decision_impact": decision_impact or "not_declared",
         "decision_impact_gate_ok": bool(decision_gate) if decision_gate is not None else None,
         "requires_human_review_before_closeout": requires_review,
@@ -265,6 +395,7 @@ def benchmark_cli_summary(
         or coverage.get("case_count")
         or metrics.get("case_count")
     )
+    followup_counts = benchmark_report_followup_counts(report)
     return {
         "kind": kind,
         "schema_version": schema_version,
@@ -290,6 +421,7 @@ def benchmark_cli_summary(
         "sample_size": int(sample_size or 0),
         "cannot_claim_count": len(report.get("cannot_claim") or []),
         "cannot_claim": list(report.get("cannot_claim") or []),
+        **followup_counts,
         "contract_lint": benchmark_report_contract_lint(report),
         "full_report_available": bool(full_report_available),
         "full_report_flag": full_report_flag,

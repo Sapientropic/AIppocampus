@@ -13,6 +13,7 @@ from typing import Any
 
 from aippocampus_runtime.core import codex_home
 from aippocampus_runtime.hooks.debug_log import prompt_hook_audit_status
+from aippocampus_runtime.hooks.foreground_status import prompt_status_contract
 from aippocampus_runtime.hooks.host_boundary import (
     add_host_integration,
     host_integration_text_lines,
@@ -370,6 +371,15 @@ def status(
     # Status must therefore match install/update readiness semantics instead of
     # reporting a healthy bridge-only setup as missing.
     installed = bool(commands)
+    stale = any(
+        not (
+            is_provider_bridge_handler({"command": command})
+            or bool(module and module in command)
+            or bool(script is not None and str(script.resolve()) in command)
+        )
+        for command in commands
+    )
+    foreground_status = "missing" if not installed else "stale" if stale else "installed"
     result: dict[str, Any] = add_host_integration(
         {
             "installed": installed,
@@ -392,6 +402,14 @@ def status(
             log_path=log_path,
             status_path=status_path,
         )
+    result.update(
+        prompt_status_contract(
+            status=foreground_status,
+            installed=installed,
+            command_count=len(commands),
+            provider_key_bridge_installed=bool(bridge_commands),
+        )
+    )
     return result
 
 

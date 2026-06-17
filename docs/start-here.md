@@ -49,7 +49,9 @@ the [10-minute public path](guides/public-api.md#ten-minute-public-path), or the
 Read [Magic Moments, Claim-Bounded](evidence/magic-moments.md) for why the
 first source-backed moment should feel worth the setup. Use
 [Product Profiles](architecture/host/product-profiles.md) before promoting
-hooks, sync, Dream, or governed/high-risk behavior into the ordinary path.
+sync, governed/high-risk behavior, or unreviewed background work into the
+ordinary path. Reviewed foreground background cards may support ordinary
+continuity after setup, but remain navigation until source is reopened.
 
 You do not need benchmark ledgers, Dream design, cognitive maps, or release
 evidence before the first recall moment.

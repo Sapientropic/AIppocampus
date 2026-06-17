@@ -77,10 +77,12 @@ this section remains the no-clone/API-stability path.
    repositories should not receive raw rollouts, registry exports, generated
    indexes, sync bundles, or private local paths.
 
-This path intentionally does not require MCP, Dream, cognitive-map jobs,
-semantic gates, sync, plugin packaging, benchmark runners, or hook installation.
-Those surfaces can be useful, but they are not the ordinary 10-minute dependency
-story.
+This path intentionally does not require MCP, cognitive-map jobs, sync, plugin
+packaging, benchmark runners, or hook installation. Unreviewed Dream,
+subconscious, and semantic jobs remain outside the 10-minute dependency story.
+Reviewed foreground cards such as `aippocampus agent background "task cue"
+--json` can still be product-visible continuity navigation when setup permits;
+they are not source evidence until source is reopened.
 
 The default control vocabulary for the personal path is pause / forget /
 do-not-use-here / export / why-not. `export`, `why-not`, and

@@ -19,6 +19,7 @@ from aippocampus_runtime.ops.observatory_cognitive_load import (
 from aippocampus_runtime.ops.observatory_control_authority import (
     observatory_control_authority_audit,
 )
+from aippocampus_runtime.ops import observatory_boundary
 from aippocampus_runtime.ops.route_readiness import (
     ROUTE_READINESS_KIND,
     fixture_route_readiness_report,
@@ -458,7 +459,10 @@ def cognitive_observatory_readout(
         activation_surfaces=activation_surfaces or [],
         activation_authority=authority,
     )
-    foreground_action = _foreground_action()
+    readiness = observatory_boundary.with_boundary_detail(readiness)
+    control_authority = observatory_boundary.with_boundary_detail(control_authority)
+    readout_state = observatory_boundary.readout_state(readiness, metrics)
+    foreground_action = _foreground_action(no_rows=readout_state["status"] == "no_rows")
     report = {
         "kind": OBSERVATORY_KIND,
         "schema_version": OBSERVATORY_SCHEMA_VERSION,
@@ -475,9 +479,12 @@ def cognitive_observatory_readout(
         "query_pattern_routes": query_routes,
         "cognitive_load_calibration": cognitive_load,
         "metrics": metrics,
+        "readout_state": readout_state,
         "foreground_action": foreground_action,
         "agent_next_action": foreground_action,
+        "safe_next_actions": [foreground_action],
         "claim_boundary": _compact_claim_boundary(),
+        "boundary_detail": observatory_boundary.boundary_detail(route_readiness=readiness, control_authority=control_authority),
         "contract": {
             "read_only_report": True,
             "not_control_plane": True,
@@ -494,29 +501,10 @@ def cognitive_observatory_readout(
             "local_paths_serialized": False,
             "sensitive_values_serialized": False,
         },
-        "can_claim": [
-            "public_safe_route_readiness_diagnostic_exists",
-            "read_only_observatory_readout_exists",
-            "public_safe_static_observatory_export_exists",
-            "suppressed_prewarm_reason_codes_are_reported",
-            "public_safe_query_pattern_route_observability_exists",
-            "public_safe_cognitive_load_calibration_observability_exists",
-            "campus_usefulness_panels_show_safe_but_useless_routes",
-        ],
-        "cannot_claim": [
-            "complete_cognitive_observatory_ui_exists",
-            "prewarm_route_is_source_backed_evidence",
-            "sleep_cycle_anticipatory_planner_is_live",
-            "observatory_rows_can_mutate_control_state",
-            "diagnostic_roi_proves_memory_quality",
-            "query_pattern_route_is_source_truth",
-            "cognitive_load_calibration_proves_user_visible_lift",
-            "cognitive_load_signal_is_source_truth",
-            "campus_panels_are_control_or_truth_surface",
-        ],
+        "can_claim": observatory_boundary.CAN_CLAIM,
     }
-    return redact_sensitive_values(redact_private_paths(report))
 
+    return redact_sensitive_values(redact_private_paths(report))
 
 def _html(value: Any) -> str:
     if value is True:
@@ -856,7 +844,16 @@ def _panel_previews(report: Mapping[str, Any], *, limit: int = 3) -> dict[str, l
     return previews
 
 
-def _foreground_action() -> dict[str, Any]:
+def _foreground_action(*, no_rows: bool = False) -> dict[str, Any]:
+    if no_rows:
+        return {
+            "id": "no_observatory_rows_to_route",
+            "kind": "no_op",
+            "command": "no-op",
+            "mutation_risk": "none",
+            "claim_boundary": "observatory_readout_not_source_truth_or_control_plane",
+            "why": "No ready/useful observatory rows are present in this compact readout.",
+        }
     return {
         "id": "use_observatory_as_read_only_navigation",
         "kind": "shell_command",
@@ -877,7 +874,12 @@ def _compact_claim_boundary() -> dict[str, Any]:
 
 def summary_projection(report: Mapping[str, Any]) -> dict[str, Any]:
     metrics = report.get("metrics") or {}
-    action = _foreground_action()
+    readout_state = report.get("readout_state")
+    no_rows = (
+        isinstance(readout_state, Mapping)
+        and str(readout_state.get("status") or "") == "no_rows"
+    )
+    action = _foreground_action(no_rows=no_rows)
     return {
         "kind": "aippocampus_cognitive_observatory_summary",
         "ok": bool(report.get("ok")),

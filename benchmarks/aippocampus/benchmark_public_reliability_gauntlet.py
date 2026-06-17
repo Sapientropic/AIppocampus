@@ -29,8 +29,12 @@ import benchmark_knowledge_pollution
 import benchmark_semantic_robustness
 from aippocampus_runtime.core import now_utc
 from benchmarks.aippocampus.shared import auto_hook_pollution
+from shared.report_actions import report_next_action
 
 SCHEMA_VERSION = 1
+OWNER_PATH = "benchmarks/aippocampus/benchmark_public_reliability_gauntlet.py"
+HISTORICAL_SOURCE_ISSUE = "https://github.com/Sapientropic/AIppocampus/issues/1102"
+CURRENT_ISSUE_URL = "https://github.com/Sapientropic/AIppocampus/issues/2101"
 LONGMEMEVAL_500_SOURCE_REPORT = "docs/evidence/benchmarks/longmemeval.md#current-published-result"
 LONGMEMEVAL_500_COMMAND_REPORT = "docs/evidence/benchmarks/longmemeval.md#commands"
 
@@ -555,6 +559,55 @@ def _privacy_boundary() -> dict[str, Any]:
     }
 
 
+def _review_next_actions() -> list[dict[str, Any]]:
+    return [
+        report_next_action(
+            action_id="review_public_reliability_gauntlet_successor",
+            label="Review public reliability gauntlet successor",
+            status="open_successor",
+            reason=(
+                "#1102 is closed/historical; #2101 is the current owner route for "
+                "gauntlet action follow-up without broadening the reliability claim."
+            ),
+            command="gh issue view 2101 --comments",
+            owner_path=OWNER_PATH,
+            issue_url=CURRENT_ISSUE_URL,
+            claim_boundary="owner_route_not_public_reliability_claim",
+        ),
+        report_next_action(
+            action_id="rerun_public_reliability_gauntlet_json",
+            label="Rerun public reliability gauntlet JSON",
+            reason=(
+                "Refresh the public-safe axis report before changing claim posture "
+                "or writing a review packet."
+            ),
+            command=(
+                "python benchmarks/aippocampus/benchmark_public_reliability_gauntlet.py --json"
+            ),
+            owner_path=OWNER_PATH,
+            issue_url=CURRENT_ISSUE_URL,
+            claim_boundary="diagnostic_rerun_not_public_reliability_claim",
+        ),
+    ]
+
+
+def _issue_actions() -> list[dict[str, Any]]:
+    return [
+        report_next_action(
+            action_id="map_cannot_claim_families_to_current_owner",
+            label="Map cannot-claim families to current owner",
+            status="actionable",
+            reason=(
+                "The gauntlet has useful boundaries; #2101 owns converting those "
+                "boundaries into review routes or explicit no-action reasons."
+            ),
+            owner_path=OWNER_PATH,
+            issue_url=CURRENT_ISSUE_URL,
+            claim_boundary="issue_triage_action_not_quality_evidence",
+        )
+    ]
+
+
 def run_public_reliability_gauntlet(
     *,
     run_question_tracking: bool = True,
@@ -589,21 +642,82 @@ def run_public_reliability_gauntlet(
             "competitor_superiority",
         ]
     )
+    review_next_actions = _review_next_actions()
+    issue_actions = _issue_actions()
     return {
         "schema_version": SCHEMA_VERSION,
         "kind": "aippocampus_public_reliability_gauntlet",
         "generated_at": now_utc(),
-        "source_issue": "https://github.com/Sapientropic/AIppocampus/issues/1102",
+        "benchmark_maturity_level": "diagnostic_aggregate",
+        "measurement_origin": "scripted_proxy",
+        "observed_agent_behavior": False,
+        "contract_gate_ok": ok,
+        "public_quality_gate_ok": False,
+        "quality_gate_ok": False,
+        "decision_impact": "diagnostic_only",
+        "decision_impact_gate_ok": False,
+        "decision_impact_reason": (
+            "public-safe aggregate axes are review input only; they do not close "
+            "public reliability, private-history, or live-hook quality questions"
+        ),
+        "case_count": int(longmemeval_ref["metrics"]["question_count"]),
+        "source_issue": HISTORICAL_SOURCE_ISSUE,
+        "historical_source_issue": HISTORICAL_SOURCE_ISSUE,
+        "current_issue_url": CURRENT_ISSUE_URL,
+        "owner_path": OWNER_PATH,
+        "issue_refs": [
+            {
+                "issue_url": HISTORICAL_SOURCE_ISSUE,
+                "issue_state": "closed_historical",
+                "role": "historical_source",
+            },
+            {
+                "issue_url": CURRENT_ISSUE_URL,
+                "issue_state": "open_current",
+                "role": "current_owner_action_route",
+            },
+        ],
         "status": "public_safe_gauntlet_passed_with_boundaries" if ok else "axis_failed",
         "ok": ok,
         "axis_names": list(axes),
         "axes": axes,
+        "metrics": {
+            "axis_count": len(axes),
+            "longmemeval_question_count": longmemeval_ref["metrics"]["question_count"],
+            "runtime_warning_count": axes["runtime_stability"]["metrics"][
+                "warning_count"
+            ],
+            "runtime_blocker_count": axes["runtime_stability"]["metrics"][
+                "blocker_count"
+            ],
+            "cannot_claim_count": len(cannot_claim),
+        },
         "privacy_boundary": _privacy_boundary(),
         "claim_boundary": (
             "A public-safe reliability gate exists for runtime pressure, mis-recall "
             "diagnostics, and pollution hygiene. The axes are intentionally not "
             "collapsed into a single score."
         ),
+        "supports": [
+            "public-safe runtime, mis-recall, and pollution axes are reported separately",
+            "closed historical source issue is paired with a current owner/action route",
+        ],
+        "useful_now": [
+            "use as a bounded review packet for #2101",
+            "keep aggregate reliability and private-history quality unclaimed",
+        ],
+        "agent_action": "open_current_issue_route_before_using_gauntlet_for_review",
+        "can_claim": [
+            "public_safe_gauntlet_axes_are_available",
+            "axis_report_keeps_runtime_mis_recall_and_pollution_boundaries_separate",
+        ],
+        "material_limits": [
+            "no single aggregate reliability score",
+            "no private-history quality measurement",
+            "no real GB/TB registry runtime proof",
+        ],
+        "review_next_actions": review_next_actions,
+        "issue_actions": issue_actions,
         "cannot_claim": cannot_claim,
         "elapsed_ms": round((time.perf_counter() - started) * 1000, 2),
     }

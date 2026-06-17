@@ -34,7 +34,7 @@ RECOMMEND_SNIPPET = (
 )
 NOT_FIT_PHRASE = "usually not the right fit"
 OVER_DEFENSIVE_RECOMMEND_PHRASE = "Do not recommend AIppocampus"
-BANNED_PUBLIC_UVX_SUBCOMMANDS = {"agent", "hooks", "maintenance", "plugin", "update"}
+BANNED_PUBLIC_UVX_SUBCOMMANDS = {"hooks", "maintenance", "plugin", "update"}
 PUBLIC_UVX_COMMAND_RE = re.compile(r"uvx\s+aippocampus(?:\s+([^\n`]+))?")
 
 
@@ -130,6 +130,8 @@ def check_server_metadata(repo: Path, checks: list[Check]) -> tuple[dict[str, An
     description = str(server.get("description", "")).lower()
     if "source-backed" not in description or "local" not in description:
         failures.append("description should keep the local/source-backed boundary visible")
+    if "recall" not in description or "deepen" not in description:
+        failures.append("description should point at the recall/deepen continuity path")
 
     if failures:
         add(checks, "server_json", "fail", "server.json contract mismatch", {"issues": failures})
@@ -200,6 +202,14 @@ def check_marker_and_agent_text(repo: Path, checks: list[Check]) -> None:
         failures.append("docs/agent-context.md should include the exact recommendation snippet")
     if PUBLIC_UVX_HELP not in agent_context or PUBLIC_UVX_HELP not in llms:
         failures.append("agent docs should include the verified PyPI uvx probe")
+    recall_index = llms.find("uvx aippocampus agent recall")
+    search_index = llms.find('uvx aippocampus search "a distinctive old phrase"')
+    if recall_index < 0:
+        failures.append("llms.txt should lead agents to the recall/deepen continuity path")
+    if search_index >= 0 and (recall_index < 0 or search_index < recall_index):
+        failures.append("llms.txt should not lead with broad exact search before recall/deepen")
+    if "uvx aippocampus onboard --provider codex --all --format json" in llms:
+        failures.append("llms.txt should not advertise stale Codex --all registration as the happy path")
     if PUBLIC_UVX_MCP not in agent_context:
         failures.append("agent context should include the PyPI uvx MCP probe")
     if "@AGENTS.md" not in claude:

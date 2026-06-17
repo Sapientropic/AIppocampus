@@ -189,7 +189,11 @@ class RouteReadinessObservatoryTests(unittest.TestCase):
         self.assertNotIn("this field must never be serialized", encoded)
         self.assertNotIn("private\\thread", encoded)
         self.assertNotIn(str(REPO_ROOT), encoded)
-        self.assertIn("complete_cognitive_observatory_ui_exists", report["cannot_claim"])
+        self.assertNotIn("cannot_claim", report)
+        self.assertIn(
+            "complete_cognitive_observatory_ui_exists",
+            report["boundary_detail"]["cannot_claim"],
+        )
         self.assertFalse(report["privacy_boundary"]["sensitive_values_serialized"])
 
     def test_observatory_public_output_redacts_sensitive_values(self) -> None:
@@ -500,7 +504,11 @@ class RouteReadinessObservatoryTests(unittest.TestCase):
         self.assertEqual(audit["metrics"]["activation_truth_status_mutation_attempt_count"], 1)
         self.assertEqual(audit["issue_readouts"]["github_576"]["control_authority"], "diagnostic_only_not_control_plane")
         self.assertFalse(audit["issue_readouts"]["github_576"]["closeout_eligible"])
-        self.assertIn("observatory_control_plane", audit["cannot_claim"])
+        self.assertNotIn("cannot_claim", audit)
+        self.assertIn(
+            "observatory_control_plane",
+            audit["boundary_detail"]["cannot_claim"],
+        )
 
         encoded = json.dumps(report, ensure_ascii=False, sort_keys=True)
         self.assertNotIn("PRIVATE_OBSERVATORY_CONTROL_SENTINEL", encoded)
@@ -517,7 +525,43 @@ class RouteReadinessObservatoryTests(unittest.TestCase):
             payload["foreground_action"]["claim_boundary"],
             "observatory_readout_not_source_truth_or_control_plane",
         )
+        self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
         self.assertIn("source_backed_claims", payload["claim_boundary"]["must_reopen_for"])
+        self.assertNotIn("cannot_claim", payload)
+        self.assertNotIn("cannot_claim", payload["route_readiness"])
+        self.assertNotIn("cannot_claim", payload["control_authority_audit"])
+        self.assertIn("cannot_claim", payload["boundary_detail"])
+        self.assertIn("cannot_claim", payload["route_readiness"]["boundary_detail"])
+        self.assertIn("cannot_claim", payload["control_authority_audit"]["boundary_detail"])
+
+    def test_cli_facade_exposes_empty_observatory_json_as_compact_action_card(self) -> None:
+        result = facade.run_command(["observatory", "--json"], capture_output=True)
+
+        self.assertTrue(result.ok, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["readout_state"]["status"], "no_rows")
+        self.assertEqual(payload["route_readiness"]["rows"], [])
+        self.assertEqual(payload["metrics"]["activation_surface_count"], 0)
+        self.assertEqual(payload["metrics"]["campus_useful_now_count"], 0)
+        self.assertEqual(payload["agent_next_action"], payload["foreground_action"])
+        self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
+        self.assertEqual(payload["foreground_action"]["kind"], "no_op")
+        self.assertEqual(payload["foreground_action"]["id"], "no_observatory_rows_to_route")
+        self.assertNotIn("cannot_claim", payload)
+        self.assertNotIn("cannot_claim", payload["route_readiness"])
+        self.assertNotIn("cannot_claim", payload["control_authority_audit"])
+        self.assertIn(
+            "prewarm_route_is_source_backed_evidence",
+            payload["route_readiness"]["boundary_detail"]["cannot_claim"],
+        )
+        self.assertIn(
+            "observatory_control_plane",
+            payload["control_authority_audit"]["boundary_detail"]["cannot_claim"],
+        )
+        self.assertIn(
+            "complete_cognitive_observatory_ui_exists",
+            payload["boundary_detail"]["cannot_claim"],
+        )
 
     def test_default_text_explains_no_input_and_fixture_panels(self) -> None:
         empty = facade.run_command(["observatory"], capture_output=True)

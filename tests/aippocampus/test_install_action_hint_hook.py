@@ -123,7 +123,35 @@ class InstallActionHintHookTests(unittest.TestCase):
         self.assertTrue(result["cache_path_redacted"])
         self.assertEqual(result["frontstage_card"]["status"], "ready")
         self.assertTrue(result["frontstage_card"]["ready"])
+        self.assertEqual(result["agent_next_action"]["id"], "no_action_needed")
+        self.assertIn("safe_next_actions", result)
+        self.assertIn("no_action_needed", [action["id"] for action in result["safe_next_actions"]])
+        self.assertEqual(result["claim_boundary"], result["frontstage_card"]["claim_boundary"])
         self.assertNotIn(str(cache_path), encoded)
+
+    def test_status_aliases_frontstage_next_steps_to_shared_action_contract(self) -> None:
+        installer.install(self.hooks_json, timeout=3)
+
+        result = installer.status(self.hooks_json)
+        card_steps = result["frontstage_card"]["next_steps"]
+        action_ids = [action["id"] for action in result["safe_next_actions"]]
+
+        self.assertEqual(result["foreground_action"]["status"], "with_missing_cache_file")
+        self.assertEqual(result["agent_next_action"]["id"], "refresh_action_hint_cache")
+        self.assertIn("refresh_action_hint_cache", action_ids)
+        self.assertIn("rollback_action_hint_hook", action_ids)
+        self.assertEqual(
+            {
+                step["command"]
+                for step in card_steps
+                if step.get("command") and step.get("label") != "check"
+            },
+            {
+                action["command"]
+                for action in result["safe_next_actions"]
+                if action.get("command") and action["id"] != "check_action_hint_status"
+            },
+        )
 
     def test_status_distinguishes_missing_empty_expired_and_malformed_cache(self) -> None:
         missing = self.codex_home / "missing-action-hints.jsonl"

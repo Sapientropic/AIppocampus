@@ -34,7 +34,9 @@ Registry.
    <!-- mcp-name: io.github.Sapientropic/aippocampus -->
    ```
 
-3. Validate `server.json` against the current official schema.
+3. Validate `server.json` against the current official schema and confirm the
+   description still points at the trusted recall/deepen continuity path rather
+   than a generic catalog/status surface.
 4. Run the package through a fresh environment:
 
    ```sh
@@ -75,6 +77,12 @@ Run the repeatable readiness probe before and after external publication:
 ```sh
 python tools/aippocampus/release/check_agent_discovery_release.py --json
 ```
+
+That probe also guards the agent-facing product posture: `llms.txt` must lead
+with recall/deepen before exact-search fallback, stale `codex --all`
+registration commands must stay out of the happy path, and package/MCP metadata
+must keep explicit setup, rollback, no-key fallback, and source-reopen
+boundaries visible.
 
 Before the next PyPI/MCP publication it should report local checks as passing
 and public package/registry checks for the current target version as `pending`.

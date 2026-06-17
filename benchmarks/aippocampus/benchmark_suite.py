@@ -34,6 +34,7 @@ from shared.benchmark_report_contract import (
     benchmark_report_contract_lint,
 )
 from shared.benchmark_suite_quality import suite_quality_summary
+from shared.report_actions import benchmark_suite_contract_fields
 from suite_status import suite_status_fields
 
 SCHEMA_VERSION = 1
@@ -1083,9 +1084,7 @@ def run_benchmark_suite_with_config(config: BenchmarkSuiteConfig) -> dict[str, A
     else:
         status = "baseline_capture_failed"
 
-    track_statuses = {
-        name: track_status(name, payload) for name, payload in tracks.items()
-    }
+    track_statuses = {name: track_status(name, payload) for name, payload in tracks.items()}
     known_gaps = collect_known_gaps(tracks)
     rate_estimates = collect_rate_estimates(tracks)
     cannot_claim_by_track = collect_cannot_claim_by_track(tracks)
@@ -1112,10 +1111,20 @@ def run_benchmark_suite_with_config(config: BenchmarkSuiteConfig) -> dict[str, A
         )
     )
     runner_ok = bool(baseline_captured)
+    suite_contract = benchmark_suite_contract_fields(
+        profile=config.profile,
+        track_count=len(tracks),
+        known_gap_count=len(known_gaps),
+        cannot_claim_count=len(cannot_claim),
+        contract_lint_failure_count=sum(
+            1 for item in benchmark_contract_lint.values() if not item.get("ok")
+        ),
+    )
     return {
         "schema_version": SCHEMA_VERSION,
         "kind": "aippocampus_benchmark_suite",
         "generated_at": now_utc(),
+        **suite_contract,
         "status": status,
         **suite_status_fields(
             runner_ok=runner_ok,

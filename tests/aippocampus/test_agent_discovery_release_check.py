@@ -44,6 +44,7 @@ def write_minimal_repo(repo: Path, *, marker: str | None = None, version: str = 
                 "AIppocampus is source-backed continuity.",
                 "Use source-reachable action guidance.",
                 "AIppocampus is usually not the right fit when the user only needs a simple vector store.",
+                'uvx aippocampus agent recall "old decision or handoff cue" --json',
                 release_check.PUBLIC_UVX_HELP,
                 "",
             ]
@@ -108,7 +109,7 @@ def write_minimal_repo(repo: Path, *, marker: str | None = None, version: str = 
         f"""\
 {{
   "name": "io.github.Sapientropic/aippocampus",
-  "description": "Local-first, source-backed continuity for AI agents via stdio MCP.",
+  "description": "Local-first, source-backed continuity for AI agents: recall and deepen routes via stdio MCP.",
   "version": "{version}",
   "packages": [
     {{
@@ -149,6 +150,31 @@ class AgentDiscoveryReleaseCheckTests(unittest.TestCase):
         self.assertTrue(
             any(check["id"] == "readme_mcp_marker" and check["status"] == "fail" for check in result["checks"])
         )
+
+    def test_llms_proof_first_or_stale_commands_fail(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            write_minimal_repo(repo)
+            (repo / "llms.txt").write_text(
+                "\n".join(
+                    [
+                        "AIppocampus is source-backed continuity.",
+                        "Use source-reachable action guidance.",
+                        "AIppocampus is usually not the right fit when the user only needs a simple vector store.",
+                        'uvx aippocampus search "a distinctive old phrase"',
+                        "uvx aippocampus onboard --provider codex --all --format json",
+                        release_check.PUBLIC_UVX_HELP,
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = release_check.check_repo(repo, offline=True)
+
+        truth_pack = next(check for check in result["checks"] if check["id"] == "agent_truth_pack")
+        self.assertEqual(truth_pack["status"], "fail")
+        self.assertIn("llms.txt should not lead with broad exact search before recall/deepen", str(truth_pack["details"]))
 
     def test_version_mismatch_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

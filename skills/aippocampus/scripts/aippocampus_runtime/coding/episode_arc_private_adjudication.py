@@ -483,23 +483,44 @@ def render_text(report: dict[str, Any]) -> str:
 
 def summary_projection(report: Mapping[str, Any]) -> dict[str, Any]:
     metrics = _as_mapping(report.get("metrics"))
-    action = {
+    episode_arc_count = int(metrics.get("episode_arc_count") or 0)
+    owner_route = {
+        "kind": "current_owner_route",
+        "command": "aippocampus episode-arcs --json --top 5",
+        "mutation_risk": "read_only",
+        "claim_boundary": "sequence_hint_not_source_truth",
+        "why": "Use this owner route when there are actionable arc handles to inspect.",
+    }
+    route_action = {
         "kind": "retrieve_actionable_arc_handles",
         "command": "aippocampus episode-arcs --json --top 5",
         "mutation_risk": "read_only",
         "claim_boundary": "sequence_hint_not_source_truth",
         "why": "Aggregate counts are only a signal; retrieve a small redacted handle set before acting on an arc.",
     }
+    no_op_action = {
+        "kind": "no_episode_arcs_to_route",
+        "command": "no-op",
+        "mutation_risk": "none",
+        "claim_boundary": "sequence_hint_not_source_truth",
+        "why": "No episode arcs are currently present in the scoped aggregate readout.",
+    }
+    no_op = episode_arc_count == 0
+    action = no_op_action if no_op else route_action
     return {
         "kind": "aippocampus_episode_arcs_summary",
         "ok": bool(report.get("ok")),
         "status": report.get("status"),
-        "episode_arc_count": metrics.get("episode_arc_count", 0),
+        "episode_arc_count": episode_arc_count,
         "complete_arc_count": metrics.get("complete_arc_count", 0),
         "gappy_arc_count": metrics.get("gappy_arc_count", 0),
         "current_validity_counts": dict(_as_mapping(report.get("current_validity_counts"))),
         "safe_use_counts": dict(_as_mapping(report.get("safe_use_counts"))),
         "next_action": "Use arcs as navigation-only sequence hints; retrieve handles before source reopen.",
+        "what_to_do": "no_episode_arcs_to_route" if no_op else "retrieve_actionable_arc_handles",
+        "no_op": no_op,
+        "owner_route": owner_route,
+        "foreground_action": action,
         "agent_next_action": action,
         "safe_next_actions": [action],
         "full_audit_flag": "--json",

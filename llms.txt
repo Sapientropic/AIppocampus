@@ -17,18 +17,19 @@ before operator diagnostics.
 
 For integration decisions, use
 `docs/guides/public-api.md#which-layer-should-i-depend-on` before recommending
-advanced hooks, sync, Dream, semantic jobs, benchmarks, or helper-module
-imports.
+sync, benchmarks, helper-module imports, or provider-backed background jobs.
+Reviewed foreground cards such as `agent background` can be product-visible
+navigation, but they are not source evidence until source is reopened.
 For neuroscience-adjacent metaphor boundaries, use
 `docs/architecture/architecture-overview.md#metaphor-discipline`.
 
 ## First Recall Agent Probe
 
 Start with the first useful continuity moment, then inspect package or schema
-details only when the task needs them:
+details only when the task needs them. In a trusted local Codex context, verify
+the plugin or hooks when needed, then pull and deepen a source-backed route:
 
 ```sh
-uvx aippocampus search "a distinctive old phrase"
 uvx aippocampus agent recall "the old decision or handoff to continue" --json
 uvx aippocampus agent deepen --request 1 --last-recall --json
 ```
@@ -47,21 +48,22 @@ uvx aippocampus onboard --provider auto --status --format json
 This is a provider-matrix readiness probe. It may list Codex, Claude Code, and
 generic JSONL providers, but it does not register all detected providers.
 
-To verify the package entrypoint itself:
+For no-clone/package verification, keep the smoke path separate from the local
+continuity path:
 
 ```sh
 uvx aippocampus --help
+uvx aippocampus search "a distinctive old phrase" --json
 ```
 
 Use one of these commands only after the user agrees to register selected local
-history:
+history. Do not paste placeholder paths as runnable commands; use a real file
+chosen by the user/operator:
 
 ```sh
-uvx aippocampus onboard --provider codex --all --format json
+uvx aippocampus onboard --provider codex --status --json
 uvx aippocampus onboard --provider claude-code --dry-run --format json
 uvx aippocampus onboard --provider claude-code --format json
-uvx aippocampus import conversation --format generic-jsonl --input <path> --dry-run --json
-uvx aippocampus import conversation --format generic-jsonl --input <path>
 ```
 
 Codex is the complete prompt/lifecycle hook path today. Claude Code support is
@@ -100,25 +102,29 @@ memory use as suspicious by default.
 
 ## MCP
 
-AIppocampus provides a local stdio MCP server through the packaged CLI:
+AIppocampus provides a local stdio MCP server through the packaged CLI. The
+point of the interface is continuity: use recall/deepen tools first, and schema
+or catalog commands only when wiring an MCP host.
 
 ```sh
 uvx aippocampus mcp status --json
 ```
 
-Use the full schema catalog only when an MCP host or integration task needs it:
+The continuity tools are `agent_recall`, `agent_aippo`, `agent_deepen`,
+`agent_explain`, `search_memory`, `recall_context`, `recall_deepen`, and
+`latest_reply`. Use the full schema catalog only when an MCP host or
+integration task needs it:
 
 ```sh
 uvx aippocampus mcp list-tools --json
 ```
 
-The MCP surface is read-mostly by default and exposes tools such as
-`agent_recall`, `agent_aippo`, `agent_deepen`, `agent_explain`,
-`search_memory`, `recall_context`, `recall_deepen`, `recall_diagnostic`,
-`latest_reply`, `get_turn_context`, `list_threads`, `register_thread`,
+The MCP surface is read-mostly by default. Additional tools such as
+`recall_diagnostic`, `get_turn_context`, `list_threads`, `register_thread`,
 `sync_status`, `memory_health`, `list_telepathy_handoffs`, and
-`deepen_telepathy_handoff`. Outcome feedback stays on the explicit CLI/local
-JSONL lane today; do not infer an MCP feedback-write tool.
+`deepen_telepathy_handoff` are integration or recovery surfaces. Outcome
+feedback stays on the explicit CLI/local JSONL lane today; do not infer an MCP
+feedback-write tool.
 
 ## Important Boundaries
 

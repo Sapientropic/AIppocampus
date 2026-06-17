@@ -188,10 +188,11 @@ aippocampus hooks prompt uninstall
 aippocampus hooks lifecycle uninstall
 ```
 
-Local hook install does not require an external model key. Optional semantic,
-warm, subconscious, or Dream-style routes remain separate opt-in surfaces and
-must not be treated as source-backed evidence until the original source is
-reopened.
+Local hook install does not require an external model key. Reviewed foreground
+cards from semantic, warm, subconscious, or Dream-style systems can be part of
+the ordinary continuity experience when local setup and provider consent allow
+it. Their output remains navigation/scent, not source-backed evidence, until
+the original source is reopened.
 
 The short readiness ladder is:
 

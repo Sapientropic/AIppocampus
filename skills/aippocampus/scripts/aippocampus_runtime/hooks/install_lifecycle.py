@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.core import codex_home
+from aippocampus_runtime.hooks.foreground_status import lifecycle_status_contract
 from aippocampus_runtime.hooks.host_boundary import (
     add_host_integration,
     host_integration_text_lines,
@@ -381,7 +382,17 @@ def status(
     # provider env and delegate to the lifecycle module. Keep low-level status
     # aligned with install/update so bridge-only setups are not diagnosed as
     # missing hooks.
-    return add_host_integration(
+    missing_events = [event for event in EVENTS if event not in installed_events]
+    foreground_status = (
+        "missing"
+        if not installed_events
+        else "partial"
+        if missing_events
+        else "stale"
+        if hidden_status == "needs_reinstall"
+        else "installed"
+    )
+    result = add_host_integration(
         {
             "installed": installed,
             "path": str(path),
@@ -407,6 +418,16 @@ def status(
             },
         }
     )
+    result.update(
+        lifecycle_status_contract(
+            status=foreground_status,
+            installed_events=sorted(installed_events),
+            missing_events=missing_events,
+            provider_key_bridge_installed=bool(bridge_events),
+            windows_hidden_launch_status=hidden_status,
+        )
+    )
+    return result
 
 
 def public_lifecycle_result(result: dict[str, Any]) -> dict[str, Any]:

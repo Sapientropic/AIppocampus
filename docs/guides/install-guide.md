@@ -80,9 +80,12 @@ public reports keep their stricter source/privacy boundaries.
 For no-clone package probing, non-Codex hosts, or CLI-only fallback, use the
 [10-minute public API path](public-api.md#ten-minute-public-path): package
 probe, read-only provider status, explicit onboarding only with user consent,
-then clean-source search for a first source-backed snippet. Treat sync, object
-storage, Dream, semantic jobs, and benchmarks as advanced surfaces unless that
-path proves the user actually needs them.
+then clean-source search for a first source-backed snippet. Keep sync, object
+storage, and benchmarks as advanced/operator surfaces unless that path proves
+the user actually needs them. Reviewed foreground background cards, including
+Dream/subconscious findings exposed through `aippocampus agent background`, are
+ordinary continuity navigation when local setup/provider consent allows it; they
+still require source reopen before factual claims.
 
 Enable prompt/lifecycle hooks only after that first receipt works and the user
 trusts this machine for ambient continuity:

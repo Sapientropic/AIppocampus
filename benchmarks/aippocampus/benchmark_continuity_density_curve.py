@@ -9,7 +9,10 @@ from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
+from shared.report_actions import BENCHMARK_CONTRACT_ISSUE_URL, report_next_action
+
 SCHEMA_VERSION = 1
+DENSITY_OWNER_PATH = "benchmarks/aippocampus/benchmark_continuity_density_curve.py"
 
 
 SYNTHETIC_TIERS: list[dict[str, Any]] = [
@@ -326,6 +329,23 @@ def _source_unit_count(record: Mapping[str, Any]) -> int:
     )
 
 
+def _review_actions(mode: str) -> list[dict[str, Any]]:
+    return [
+        report_next_action(
+            action_id=f"review_continuity_density_{mode}_report",
+            label=f"Review continuity density {mode} report",
+            reason=(
+                "Continuity-density results can guide issue closeout or policy candidates, "
+                "but they need source/report review before public quality or runtime claims."
+            ),
+            command=f"python {DENSITY_OWNER_PATH} --mode {mode} --json",
+            owner_path=DENSITY_OWNER_PATH,
+            issue_url=BENCHMARK_CONTRACT_ISSUE_URL,
+            claim_boundary="density_report_review_not_runtime_or_public_quality_claim",
+        )
+    ]
+
+
 def _context_pressure(record: Mapping[str, Any]) -> float:
     budget = _safe_int(record, "context_budget_token_count")
     if budget <= 0:
@@ -526,7 +546,10 @@ def build_density_curve_report() -> dict[str, Any]:
         "quality_gate_ok": quality_gate_ok,
         "runtime_policy_adoption_gate_ok": False,
         "decision_impact": "issue_closeout_candidate",
+        "requires_human_review_before_closeout": True,
         "case_count": len(tiers),
+        "owner_path": DENSITY_OWNER_PATH,
+        "current_issue_url": BENCHMARK_CONTRACT_ISSUE_URL,
         "scenario_provenance": {
             "source": "public_synthetic_density_tiers",
             "tuning_visible": True,
@@ -567,6 +590,7 @@ def build_density_curve_report() -> dict[str, Any]:
             "innate_model_memory",
             "noise_free_saturation",
         ],
+        "review_next_actions": _review_actions("synthetic"),
         "regressions": regressions,
     }
 
@@ -648,6 +672,8 @@ def build_replay_backed_density_report(
         "runtime_policy_adoption_gate_ok": False,
         "decision_impact": "diagnostic_only",
         "case_count": len(replay_rows),
+        "owner_path": DENSITY_OWNER_PATH,
+        "current_issue_url": BENCHMARK_CONTRACT_ISSUE_URL,
         "scenario_provenance": {
             "source": "public_safe_aggregate_replay_rows",
             "tuning_visible": True,
@@ -692,6 +718,7 @@ def build_replay_backed_density_report(
             "noise_free_saturation",
             "more_memory_is_always_better",
         ],
+        "review_next_actions": _review_actions("replay"),
         "missing_tiers": missing_tiers,
         "regressions": regressions,
     }
@@ -786,9 +813,12 @@ def build_heldout_density_behavior_report(
         "quality_gate_ok": public_quality_gate_ok,
         "runtime_policy_adoption_gate_ok": False,
         "decision_impact": "policy_candidate_no_runtime_adoption",
+        "requires_human_review_before_closeout": True,
         "case_count": len(rows),
         "heldout_case_count": len(rows),
         "density_policy_arm_count": len(by_arm),
+        "owner_path": DENSITY_OWNER_PATH,
+        "current_issue_url": BENCHMARK_CONTRACT_ISSUE_URL,
         "scenario_provenance": {
             "source": "public_safe_heldout_replay_behavior_rows",
             "tuning_visible": False,
@@ -839,6 +869,7 @@ def build_heldout_density_behavior_report(
             "more_memory_is_always_better",
             "private_real_history_density_curve",
         ],
+        "review_next_actions": _review_actions("heldout"),
         "missing_arms": missing_arms,
     }
 

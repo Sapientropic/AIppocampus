@@ -22,6 +22,7 @@ from aippocampus_runtime.hooks.action_hint_cache import (
     load_action_hint_records_with_diagnostics,
 )
 from aippocampus_runtime.hooks.action_hint_cache_records import BLOCKED_STATES
+from aippocampus_runtime.hooks.foreground_status import action_hint_status_contract
 from aippocampus_runtime.hooks.host_boundary import add_host_integration
 from aippocampus_runtime.hooks.install_prompt import (
     load_hooks,
@@ -475,6 +476,7 @@ def status(
             }
         )
     result["frontstage_card"] = action_hint_frontstage_card(result)
+    result.update(action_hint_status_contract(result["frontstage_card"]))
     return result if include_private_paths else redact_public_result(result, path=path)
 
 

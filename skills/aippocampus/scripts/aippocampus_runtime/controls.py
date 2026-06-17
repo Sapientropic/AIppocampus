@@ -26,7 +26,7 @@ from aippocampus_runtime.recall.agent_continuity_cli_support import (
 KIND = "aippocampus_personal_control"
 SCHEMA_VERSION = 1
 def _json_out(payload: Mapping[str, Any]) -> None:
-    print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
+    print(json.dumps(payload, ensure_ascii=False, indent=2))
 
 
 def _public_payload(payload: Any) -> Any:
@@ -47,80 +47,142 @@ def _boundary() -> dict[str, Any]:
     }
 
 
+def _template_action(
+    *,
+    action_id: str,
+    label: str,
+    command_template: str,
+    requires: list[str],
+    why: str,
+    mutation_risk: str = "read_only",
+    claim_boundary: str = "no_claim_before_reopen",
+) -> dict[str, Any]:
+    return {
+        "id": action_id,
+        "label": label,
+        "command_template": command_template,
+        "requires": list(requires),
+        "why": why,
+        "mutation_risk": mutation_risk,
+        "claim_boundary": claim_boundary,
+    }
+
+
+def _claim_boundary(command: str, *, scoped: bool = False) -> dict[str, Any]:
+    return {
+        "can_use_for": [
+            f"{command}_one_explicit_route_or_ticket" if scoped else f"plan_scoped_{command}",
+            "review_local_control_boundary",
+        ],
+        "must_scope": ["explicit_route_or_ticket", "local_workspace_feedback_lane"],
+        "must_reopen_for": ["source_backed_claims", "historical_deletion_claims"],
+        "detail_key": "boundary_detail",
+    }
+
+
+def _with_boundary_detail(
+    payload: Mapping[str, Any],
+    *,
+    cannot_claim: list[str],
+    scoped: bool = False,
+) -> dict[str, Any]:
+    projected = dict(payload)
+    command = str(projected.get("mode") or projected.get("control") or "control")
+    boundary = projected.pop("boundary", _boundary())
+    actions = projected.get("safe_next_actions") or []
+    if actions and isinstance(actions[0], Mapping):
+        projected.setdefault("agent_next_action", actions[0])
+        projected.setdefault("foreground_action", actions[0])
+    projected["claim_boundary"] = _claim_boundary(command, scoped=scoped)
+    projected["boundary_detail"] = {
+        "boundary": boundary,
+        "cannot_claim": list(cannot_claim),
+        "operator_note": (
+            "These limits remain active; compact control cards keep them drillable "
+            "so the foreground card can lead with scoped agency."
+        ),
+    }
+    return projected
+
+
 def _safe_plan_card(command: str, *, target: str = "") -> dict[str, Any]:
     if command == "pause":
-        return {
-            "kind": KIND,
-            "schema_version": SCHEMA_VERSION,
-            "mode": "pause",
-            "status": "needs_scope",
-            "ok": True,
-            "control": "pause",
-            "target": target,
-            "what_it_can_do_now": [
-                "pause influence for one explicit route or ticket through local low-authority feedback",
-                "show the safe boundary for broader pause decisions without mutating source truth",
-            ],
-            "cannot_claim": [
-                "ambient continuity is paused globally",
-                "existing source or audit material was deleted",
-            ],
-            "safe_next_actions": [
-                foreground_shell_action(
-                    action_id="find_pause_target",
-                    label="Find the route to pause here",
-                    command='aippocampus agent recall "route to pause" --json',
-                    why="Use recall to get a concrete route id before writing scoped feedback.",
-                    mutation_risk="read_only",
-                    claim_boundary="no_claim_before_reopen",
-                ),
-                foreground_shell_action(
-                    action_id="review_control_boundary",
-                    label="Review the control frontdoor",
-                    command="aippocampus controls --json",
-                    why="Use this when choosing between pause, forget, and do-not-use-here.",
-                    mutation_risk="read_only",
-                    claim_boundary="operator_diagnostic_not_source_evidence",
-                ),
-            ],
-            "boundary": _boundary(),
-        }
-    return {
-        "kind": KIND,
-        "schema_version": SCHEMA_VERSION,
-        "mode": "forget",
-        "status": "needs_scope",
-        "ok": True,
-        "control": "forget",
-        "target": target,
-        "what_it_can_do_now": [
-            "plan a non-destructive hide/suppress/tombstone decision",
-            "route scoped quieting to do-not-use-here when the target is a route or ticket",
-        ],
-        "cannot_claim": [
-            "raw audit history was physically deleted",
-            "all copies on other devices or backups were removed",
-        ],
-        "safe_next_actions": [
-            foreground_shell_action(
-                action_id="find_forget_target",
-                label="Find the route to forget here",
-                command='aippocampus agent recall "route to forget here" --json',
-                why="Use recall to get a concrete route id before scoped quieting.",
-                mutation_risk="read_only",
-                claim_boundary="no_claim_before_reopen",
+        actions = [
+            _template_action(
+                action_id="find_pause_target",
+                label="Find pause target",
+                command_template='aippocampus agent recall "{cue_for_route_to_pause}" --json',
+                requires=["cue_for_route_to_pause"],
+                why="Use a real cue to get a concrete route id before writing scoped feedback.",
             ),
-                foreground_shell_action(
-                    action_id="preview_export_for_review",
-                    label="Review export boundary",
-                    command="aippocampus export --help",
-                why="Use export only when reviewing or transferring explicit local material.",
+            foreground_shell_action(
+                action_id="review_control_boundary",
+                label="Review the control frontdoor",
+                command="aippocampus controls --json",
+                why="Use this when choosing between pause, forget, and do-not-use-here.",
                 mutation_risk="read_only",
                 claim_boundary="operator_diagnostic_not_source_evidence",
             ),
+        ]
+        return _with_boundary_detail(
+            {
+                "kind": KIND,
+                "schema_version": SCHEMA_VERSION,
+                "mode": "pause",
+                "status": "needs_scope",
+                "ok": True,
+                "control": "pause",
+                "target": target,
+                "what_it_can_do_now": [
+                    "pause influence for one explicit route or ticket through local low-authority feedback",
+                    "show the safe boundary for broader pause decisions without mutating source truth",
+                ],
+                "safe_next_actions": actions,
+                "boundary": _boundary(),
+            },
+            cannot_claim=[
+                "ambient continuity is paused globally",
+                "existing source or audit material was deleted",
+            ],
+        )
+    actions = [
+        _template_action(
+            action_id="find_forget_target",
+            label="Find forget target",
+            command_template='aippocampus agent recall "{cue_for_route_to_forget}" --json',
+            requires=["cue_for_route_to_forget"],
+            why="Use a real cue to get a concrete route id before scoped quieting.",
+        ),
+        foreground_shell_action(
+            action_id="review_control_boundary",
+            label="Review the control frontdoor",
+            command="aippocampus controls --json",
+            why="Use this when choosing between forget, do-not-use-here, and export review.",
+            mutation_risk="read_only",
+            claim_boundary="operator_diagnostic_not_source_evidence",
+        ),
+    ]
+    return _with_boundary_detail(
+        {
+            "kind": KIND,
+            "schema_version": SCHEMA_VERSION,
+            "mode": "forget",
+            "status": "needs_scope",
+            "ok": True,
+            "control": "forget",
+            "target": target,
+            "what_it_can_do_now": [
+                "plan a non-destructive hide/suppress/tombstone decision",
+                "route scoped quieting to do-not-use-here when the target is a route or ticket",
+            ],
+            "safe_next_actions": actions,
+            "boundary": _boundary(),
+        },
+        cannot_claim=[
+            "raw audit history was physically deleted",
+            "all copies on other devices or backups were removed",
         ],
-        "boundary": _boundary(),
-    }
+    )
 
 
 def _scoped_control_payload(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
@@ -134,11 +196,6 @@ def _scoped_control_payload(args: argparse.Namespace) -> tuple[dict[str, Any], i
             "status": "scoped_control_captured"
             if payload.get("write_boundary", {}).get("wrote_event")
             else "not_quieted_yet",
-            "cannot_claim": [
-                "raw audit history was physically deleted",
-                "all copies on other devices or backups were removed",
-                "source truth changed because of this control",
-            ],
             "agent_next_action": (
                 "continue the task; this scoped local feedback can reduce future route pressure"
                 if payload.get("write_boundary", {}).get("wrote_event")
@@ -146,19 +203,31 @@ def _scoped_control_payload(args: argparse.Namespace) -> tuple[dict[str, Any], i
             ),
         }
     )
+    scoped = _with_boundary_detail(
+        scoped,
+        cannot_claim=[
+            "raw audit history was physically deleted",
+            "all copies on other devices or backups were removed",
+            "source truth changed because of this control",
+        ],
+        scoped=True,
+    )
     return _public_payload(scoped), code
 
 
 def _render_plan_card(payload: Mapping[str, Any]) -> str:
+    raw_detail = payload.get("boundary_detail")
+    detail = raw_detail if isinstance(raw_detail, Mapping) else {}
+    cannot_claim = detail.get("cannot_claim") or payload.get("cannot_claim") or []
     lines = [
         f"AIppocampus {payload.get('mode')}: {payload.get('status')}",
         "what it can do now: " + "; ".join(str(item) for item in payload.get("what_it_can_do_now") or []),
-        "cannot claim: " + "; ".join(str(item) for item in payload.get("cannot_claim") or []),
+        "cannot claim: " + "; ".join(str(item) for item in cannot_claim),
         "next:",
     ]
     for action in payload.get("safe_next_actions") or []:
         if isinstance(action, Mapping):
-            lines.append("  " + str(action.get("command") or action.get("label") or ""))
+            lines.append("  " + str(action.get("command") or action.get("command_template") or action.get("label") or ""))
     lines.append("boundary: feedback or suppression changes future activation pressure, not source truth.")
     return "\n".join(lines)
 

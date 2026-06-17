@@ -262,6 +262,14 @@ class BenchmarkSuiteTests(unittest.TestCase):
             "track_statuses": {"gate_decision": "sufficient"},
             "profile_metadata": {"selected_profile": {"name": "public-fast"}},
             "cannot_claim": ["public_fast_profile_track_b_quality"],
+            "review_next_actions": [
+                {
+                    "id": "escalate_release_evidence",
+                    "label": "Escalate release evidence",
+                    "owner_path": "benchmarks/aippocampus/benchmark_suite.py",
+                    "issue_url": "https://github.com/Sapientropic/AIppocampus/issues/2100",
+                }
+            ],
             "tracks": {"large_track": {"cases": ["x" * 10_000]}},
         }
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -290,6 +298,9 @@ class BenchmarkSuiteTests(unittest.TestCase):
         self.assertEqual(summary["kind"], "aippocampus_benchmark_suite_cli_summary")
         self.assertEqual(summary["full_report_route"], str(output))
         self.assertEqual(summary["cannot_claim_count"], 1)
+        self.assertEqual(summary["followup_action_count"], 1)
+        self.assertEqual(summary["owner_route_count"], 1)
+        self.assertEqual(summary["no_action_reason_count"], 0)
         self.assertNotIn("tracks", summary)
         self.assertIn("tracks", full_report)
 
@@ -560,6 +571,57 @@ class BenchmarkSuiteTests(unittest.TestCase):
         )
         self.assertTrue(accepted["ok"])
         self.assertTrue(accepted["positive_support_present"])
+
+    def test_benchmark_contract_linter_requires_owner_action_for_high_signal_reports(self) -> None:
+        high_signal_without_followup = {
+            "benchmark_maturity_level": "diagnostic_proxy",
+            "measurement_origin": "scripted_proxy",
+            "observed_agent_behavior": False,
+            "contract_gate_ok": True,
+            "public_quality_gate_ok": False,
+            "quality_gate_ok": False,
+            "decision_impact": "diagnostic_only",
+            "case_count": 6,
+            "metrics": {
+                "case_count": 6,
+                "route_count": 6,
+                "bounded_count": 5,
+                "blocked_count": 1,
+                "warning_count": 0,
+                "success_rate": 0.8333,
+            },
+            "privacy_boundary": {"raw_text_emitted": False},
+            "supports": ["bounded diagnostic route triage"],
+            "cannot_claim": [
+                "live_agent_behavior",
+                "public_quality_lift",
+                "owner_status_closeout",
+                "current_issue_route",
+            ],
+        }
+        high_signal_with_followup = {
+            **high_signal_without_followup,
+            "review_next_actions": [
+                {
+                    "id": "route_owner_review",
+                    "label": "Route owner review",
+                    "owner_path": "benchmarks/aippocampus/example.py",
+                    "issue_url": "https://github.com/Sapientropic/AIppocampus/issues/2100",
+                }
+            ],
+        }
+
+        rejected = benchmark_report_contract_lint(high_signal_without_followup)
+        accepted = benchmark_report_contract_lint(high_signal_with_followup)
+
+        self.assertFalse(rejected["ok"])
+        self.assertIn("cannot_claim_without_followup", rejected["findings"])
+        self.assertIn("metrics_without_owner_action", rejected["findings"])
+        self.assertEqual(rejected["followup_action_count"], 0)
+        self.assertEqual(rejected["owner_route_count"], 0)
+        self.assertTrue(accepted["ok"], accepted)
+        self.assertEqual(accepted["followup_action_count"], 1)
+        self.assertEqual(accepted["owner_route_count"], 1)
 
     def test_linter_accepts_bounded_support_fields_without_public_quality_claim(self) -> None:
         bounded = {

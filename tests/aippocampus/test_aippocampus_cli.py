@@ -142,6 +142,7 @@ class AippocampusCliTests(unittest.TestCase):
     def test_personal_control_and_learning_frontdoors_are_executable(self) -> None:
         pause_help = self.run_cli("pause", "--help")
         pause = self.run_cli("pause", "--json")
+        forget_plan = self.run_cli("forget", "--json")
         forget = self.run_cli("forget", "route:test", "--json")
         privacy = self.run_cli("privacy", "--help")
         why_not = self.run_cli("why-not", "old cue", "--json")
@@ -168,6 +169,41 @@ class AippocampusCliTests(unittest.TestCase):
                 self.assertNotIn("route_to_", action["command"])
         self.assertNotIn("hooks --help", pause_encoded)
         self.assertIn("safe_next_actions", pause_payload)
+        self.assertEqual(pause_payload["agent_next_action"], pause_payload["safe_next_actions"][0])
+        self.assertEqual(pause_payload["foreground_action"], pause_payload["safe_next_actions"][0])
+        self.assertNotIn("cannot_claim", pause_payload)
+        self.assertIn("claim_boundary", pause_payload)
+        self.assertIn("boundary_detail", pause_payload)
+        self.assertIn(
+            "ambient continuity is paused globally",
+            pause_payload["boundary_detail"]["cannot_claim"],
+        )
+        self.assertEqual(
+            pause_payload["agent_next_action"]["command_template"],
+            'aippocampus agent recall "{cue_for_route_to_pause}" --json',
+        )
+        self.assertEqual(pause_payload["agent_next_action"]["requires"], ["cue_for_route_to_pause"])
+        self.assertNotIn("route to pause", pause_encoded)
+
+        self.assertEqual(forget_plan.returncode, 0, forget_plan.stderr)
+        forget_plan_payload = json.loads(forget_plan.stdout)
+        self.assertEqual(forget_plan_payload["mode"], "forget")
+        self.assertEqual(forget_plan_payload["status"], "needs_scope")
+        self.assertEqual(
+            forget_plan_payload["agent_next_action"],
+            forget_plan_payload["safe_next_actions"][0],
+        )
+        self.assertNotIn("cannot_claim", forget_plan_payload)
+        self.assertIn(
+            "raw audit history was physically deleted",
+            forget_plan_payload["boundary_detail"]["cannot_claim"],
+        )
+        self.assertEqual(
+            forget_plan_payload["agent_next_action"]["command_template"],
+            'aippocampus agent recall "{cue_for_route_to_forget}" --json',
+        )
+        self.assertNotIn("route to forget here", forget_plan.stdout)
+        self.assertNotIn("export --help", forget_plan.stdout)
 
         self.assertEqual(forget.returncode, 0, forget.stderr)
         forget_payload = json.loads(forget.stdout)
@@ -176,7 +212,10 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertNotEqual(forget_payload["status"], "plan_card")
         self.assertTrue(forget_payload["write_boundary"]["wrote_event"])
         self.assertTrue(forget_payload["quieted_future_routes"])
-        self.assertIn("raw audit history was physically deleted", forget_payload["cannot_claim"])
+        self.assertNotIn("cannot_claim", forget_payload)
+        self.assertIn("claim_boundary", forget_payload)
+        self.assertIn("boundary_detail", forget_payload)
+        self.assertIn("raw audit history was physically deleted", forget_payload["boundary_detail"]["cannot_claim"])
         self.assertNotIn("<route-or-ticket-id>", forget.stdout)
 
         self.assertEqual(privacy.returncode, 0, privacy.stderr)
