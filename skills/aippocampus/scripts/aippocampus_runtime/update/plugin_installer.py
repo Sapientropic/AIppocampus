@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any, Callable, cast
 
 from aippocampus_runtime.core import codex_home
+from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 from aippocampus_runtime.update.agent_callable import (
     default_host_probe_report_path as _default_host_probe_report_path,
 )
@@ -892,37 +893,40 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _public_text(value: Any) -> str:
+    return str(redact_sensitive_values(redact_private_paths(str(value or ""))))
+
+
 def _emit_result(result: dict[str, Any], *, json_output: bool) -> None:
     if json_output:
         print(json.dumps(result, ensure_ascii=False, indent=2, default=_json_default))
         return
     if result["kind"] == "aippocampus_plugin_install_recovery":
         print("plugin install needs attention")
-        print(f"error: {result['error']['code']}")
-        print(f"next: {result['next_actions'][0]['command']}")
+        print(f"error: {_public_text(result['error']['code'])}")
+        print(f"next: {_public_text(result['next_actions'][0]['command'])}")
         print("boundary: no private memory copied; local paths are hidden unless --operator-json is used.")
         return
     if result["kind"] == "aippocampus_plugin_install_public_summary":
-        print(f"plugin: {result['plugin']['action']} {result['plugin']['id']}")
-        print(f"agent callable: {result['agent_callable_status']}")
+        print(f"plugin: {_public_text(result['plugin']['action'])} {_public_text(result['plugin']['id'])}")
+        print(f"agent callable: {_public_text(result['agent_callable_status'])}")
         probe = result.get("host_probe") or {}
         warnings = (probe.get("warning_summary") or {}).get("warning_count", 0)
-        print(f"host probe: tools={probe.get('tool_count')} warnings={warnings}")
-        print(f"rollback: {result['rollback_command']}")
+        print(f"host probe: tools={_public_text(probe.get('tool_count'))} warnings={_public_text(warnings)}")
+        print(f"rollback: {_public_text(result['rollback_command'])}")
     elif result["kind"] == "aippocampus_plugin_install":
-        print(f"plugin: {result['plugin']['action']} {result['plugin']['id']}")
-        print(f"marketplace: {result['marketplace']['name']}")
-        print(f"agent callable: {result['agent_callable_status']}")
-        print(f"rollback: {result['rollback_command']}")
+        print(f"plugin: {_public_text(result['plugin']['action'])} {_public_text(result['plugin']['id'])}")
+        print(f"agent callable: {_public_text(result['agent_callable_status'])}")
+        print(f"rollback: {_public_text(result['rollback_command'])}")
     else:
         if result["kind"] == "aippocampus_plugin_uninstall_preview":
             print("plugin uninstall: dry run")
-            print(f"would remove installed cache: {result['would_remove_installed_cache']}")
-            print(f"would remove marketplace: {result['would_remove_marketplace_root']}")
-            print(f"execute: {result['execute_command']}")
+            print(f"would remove installed cache: {_public_text(result['would_remove_installed_cache'])}")
+            print(f"would remove marketplace: {_public_text(result['would_remove_marketplace_root'])}")
+            print(f"execute: {_public_text(result['execute_command'])}")
             return
         print("plugin: removed")
-        print(f"marketplace removed: {result['removed_marketplace_root']}")
+        print(f"marketplace removed: {_public_text(result['removed_marketplace_root'])}")
 
 
 def main(argv: list[str] | None = None) -> int:
