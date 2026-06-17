@@ -60,6 +60,7 @@ from aippocampus_runtime.update.plugin_marketplace import (
 from aippocampus_runtime.update.plugin_public_summary import (
     public_install_summary,
     public_uninstall_summary,
+    with_operator_stdout_boundary,
 )
 from aippocampus_runtime.update.plugin_recovery import plugin_install_recovery
 from aippocampus_runtime.update.plugin_uninstall_preview import (
@@ -819,8 +820,8 @@ def build_parser() -> argparse.ArgumentParser:
             "  aippocampus plugin uninstall --codex\n\n"
             "Advanced overrides such as --repo-root, --codex-home, marketplace "
             "paths, and --codex-command are for maintainer/nonstandard setups. "
-            "Use --json/--compact-json for the public-safe summary and "
-            "--operator-json for full local install/probe diagnostics."
+            "Use --json/--compact-json for the public-safe summary. "
+            "--operator-json marks an operator request while keeping stdout path-safe."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -838,7 +839,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--full-json",
         action="store_true",
         dest="operator_json",
-        help="Emit full operator install/probe details; default JSON is a compact success summary.",
+        help="Mark JSON as operator-requested while keeping plugin stdout path-safe.",
     )
     install.add_argument(
         "--compact-json",
@@ -874,7 +875,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--full-json",
         action="store_true",
         dest="operator_json",
-        help="Emit raw local Codex/plugin paths for operator diagnostics.",
+        help="Mark JSON as operator-requested while keeping plugin stdout path-safe.",
     )
     status = subparsers.add_parser(
         "status",
@@ -892,22 +893,14 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _emit_result(result: dict[str, Any], *, json_output: bool, operator_json: bool = False) -> None:
-    if json_output and operator_json:
-        # Explicit local diagnostics lane; default JSON must be projected first.
-        # codeql[py/clear-text-logging-sensitive-data]
-        print(json.dumps(result, ensure_ascii=False, indent=2, default=_json_default))
-        return
+def _emit_result(result: dict[str, Any], *, json_output: bool) -> None:
     if json_output:
         print(json.dumps(result, ensure_ascii=False, indent=2, default=_json_default))
         return
     if result["kind"] == "aippocampus_plugin_install_recovery":
-        code = "plugin_install_failed"
-        error = result.get("error")
-        if isinstance(error, dict):
-            code = str(error.get("code") or code)
         print("plugin install needs attention")
-        print(f"reason: {code}")
+        print("reason: see JSON error.code")
+        print("common: plugin_package_write_denied, plugin_package_locked, plugin_package_write_failed")
         print("next: aippocampus plugin install --codex --verify --json")
         print("boundary: no private memory copied; local paths are hidden unless --operator-json is used.")
         return
@@ -947,7 +940,9 @@ def main(argv: list[str] | None = None) -> int:
                 codex_command=args.codex_command,
                 verify=args.verify,
             )
-            if args.public_summary or (args.json_output and not args.operator_json):
+            if args.operator_json:
+                result = with_operator_stdout_boundary(public_install_summary(result))
+            elif args.public_summary or args.json_output:
                 result = public_install_summary(result)
         else:
             if args.dry_run:
@@ -966,18 +961,21 @@ def main(argv: list[str] | None = None) -> int:
                     codex_command=args.codex_command,
                     keep_marketplace=args.keep_marketplace,
                 )
-            if args.json_output and not args.operator_json:
+            if args.operator_json:
+                result = with_operator_stdout_boundary(public_uninstall_summary(result))
+            elif args.json_output:
                 result = public_uninstall_summary(result)
     except Exception as exc:
         error = plugin_install_recovery(
             exc,
-            operator=bool(getattr(args, "operator_json", False)),
+            operator=False,
         )
+        if bool(getattr(args, "operator_json", False)):
+            error = with_operator_stdout_boundary(error)
         _emit_result(
             error,
             json_output=bool(getattr(args, "json_output", False))
             or bool(getattr(args, "operator_json", False)),
-            operator_json=bool(getattr(args, "operator_json", False)),
         )
         return 1
     _emit_result(
@@ -987,7 +985,6 @@ def main(argv: list[str] | None = None) -> int:
             or bool(getattr(args, "public_summary", False))
             or bool(getattr(args, "operator_json", False))
         ),
-        operator_json=bool(getattr(args, "operator_json", False)),
     )
     return 0 if result.get("ok") else 1
 

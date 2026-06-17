@@ -200,3 +200,25 @@ def public_uninstall_summary(result: dict[str, Any]) -> dict[str, Any]:
             "operator_json_required_for_raw_paths": True,
         },
     }
+
+
+def with_operator_stdout_boundary(result: dict[str, Any]) -> dict[str, Any]:
+    """Mark an operator JSON request while keeping plugin stdout path-safe."""
+
+    payload = dict(result)
+    privacy = payload.get("privacy_boundary")
+    privacy_payload = dict(privacy) if isinstance(privacy, dict) else {}
+    privacy_payload.update(
+        {
+            "operator_json_requested": True,
+            "local_paths_serialized": False,
+            "raw_exception_serialized": False,
+        }
+    )
+    payload["privacy_boundary"] = privacy_payload
+    payload["operator_diagnostics"] = {
+        "raw_stdout_disabled": True,
+        "reason": "plugin install stdout stays public-safe even for operator JSON",
+        "next_status_command": "aippocampus plugin status --operator-json",
+    }
+    return payload
