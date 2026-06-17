@@ -124,7 +124,7 @@ class DocsHealthTests(unittest.TestCase):
         self.assertIn("ignore_or_blocked", skill_text)
         self.assertIn("Active Path Packets", skill_text)
         self.assertIn("before broad manual search", " ".join(skill_text.split()))
-        self.assertIn("Foreground continuity surfaces", skill_text)
+        self.assertIn("Primary foreground path", skill_text)
         self.assertIn("CLI chooser/recovery card", skill_text)
         self.assertNotIn("python3 -m", skill_text)
         self.assertNotIn("py -m", skill_text)
@@ -134,16 +134,16 @@ class DocsHealthTests(unittest.TestCase):
         self.assertNotIn("<label>", skill_text)
         self.assertNotIn("`python -m aippocampus_runtime.", skill_text)
         self.assertLess(
-            skill_text.index("First recall for a vague handoff or old decision"),
-            skill_text.index("Check state before or after long work"),
+            skill_text.index('aippocampus agent recall "query" --json'),
+            skill_text.index("Repair, setup, status, provider, storage"),
         )
         self.assertLess(
-            skill_text.index("Search clean source"),
-            skill_text.index("Check the local provider matrix"),
+            skill_text.index("direct clean-source search"),
+            skill_text.index("Repair, setup, status, provider, storage"),
         )
         self.assertLess(
-            skill_text.index("Foreground continuity surfaces"),
-            skill_text.index("Repair, setup, and imports"),
+            skill_text.index("Primary foreground path"),
+            skill_text.index("Repair, setup, status, provider, storage"),
         )
         self.assertIn("suggested_agent_action", skill_text)
         self.assertIn("not_enough_for_claim", skill_text)

@@ -32,10 +32,13 @@ this section remains the no-clone/API-stability path.
 2. If local source is already registered, try the useful source-backed moment:
 
    ```sh
-   uvx aippocampus search "a distinctive old phrase"
    uvx aippocampus agent recall "old decision or handoff cue" --json
    uvx aippocampus agent deepen --request 1 --last-recall --json
+   uvx aippocampus search "a distinctive old phrase"
    ```
+
+   Use exact search when the user remembers wording or the recall route is
+   blocked. The primary agent continuity path is recall, then deepen.
 
 3. If source is missing or blocked, check whether a local provider has usable
    source without registering new history. Human-readable output is the
@@ -45,22 +48,23 @@ this section remains the no-clone/API-stability path.
    uvx aippocampus onboard --provider auto --status
    ```
 
-4. After explicit user consent, register selected local history and search for the first
-   source-backed snippet:
+4. After explicit user consent, register selected local history and ask for one
+   source-backed continuity route:
 
    ```sh
    uvx aippocampus onboard --provider codex --status --json
    # Then follow the explicit write recommendation after consent.
    uvx aippocampus onboard --provider claude-code --dry-run
    uvx aippocampus onboard --provider claude-code
-   uvx aippocampus import conversation --format generic-jsonl --input <path> --dry-run --json
-   uvx aippocampus import conversation --format generic-jsonl --input <path>
-   uvx aippocampus search "a distinctive old phrase"
+   uvx aippocampus import conversation --format generic-jsonl --input ./conversation.jsonl --dry-run --json
+   uvx aippocampus import conversation --format generic-jsonl --input ./conversation.jsonl
+   uvx aippocampus agent recall "old decision or handoff cue" --json
+   uvx aippocampus agent deepen --request 1 --last-recall --json
    ```
 
-   Use an exact phrase when possible. If the user only remembers a vague cue,
-   search a project cue or time cue, but treat that as candidate navigation
-   until a source-backed snippet appears.
+   Use exact search when the user remembers wording. If the user only remembers
+   a vague cue, use recall/deepen and treat the route as candidate navigation
+   until a source-backed snippet or opened source appears.
 
 5. Only when an agent host, plugin, or operator check needs those surfaces,
    inspect the MCP catalog or run health checks:
@@ -231,9 +235,10 @@ The CLI contract applies to documented operator commands, especially:
 - `aippocampus continuity-domain produce|append|publish|report` as the
   explicit local producer, authoring, and snapshot-publish path for Contract v1
   continuity domains
-- `aippocampus import conversation --format generic-jsonl --input <path> --dry-run --json`
+- `aippocampus import conversation --format generic-jsonl --input ./conversation.jsonl --dry-run --json`
   as the preview-first explicit file import path; omit `--dry-run` only after
-  the selected local history is safe to register
+  replacing the example filename with a user-selected export and confirming the
+  selected local history is safe to register
 - `aippocampus doctor provider` as a no-model-call visibility diagnostic for
   optional external-model route key environment variables
 - `aippocampus smoke recall-funnel "<cue>"` as a no-write progressive recall
@@ -814,11 +819,10 @@ contract that does not require callers to parse human prose.
 
 Explicit file or directory import is a separate provider-neutral CLI operation:
 preview first with
-`aippocampus import conversation --format generic-jsonl --input <path> --dry-run --json`,
+`aippocampus import conversation --format generic-jsonl --input ./conversation.jsonl --dry-run --json`,
 then register only after consent with
-`aippocampus import conversation --format generic-jsonl --input <path>` for an
-exported transcript. Internal registry modules may be used by trusted operators
-for repair, but they are not the public generic ingest contract.
+`aippocampus import conversation --format generic-jsonl --input ./conversation.jsonl`
+for a user-selected exported transcript. Internal registry modules may be used by trusted operators for repair, but they are not the public generic ingest contract.
 `register_thread` is for attaching/building the selected current provider
 session through the MCP control plane; it is not a generic arbitrary-file
 ingest endpoint.

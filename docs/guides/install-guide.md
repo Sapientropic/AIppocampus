@@ -8,8 +8,8 @@ operator reference map.
 
 Give this path to the active local agent when Codex is the intended host. The
 agent should install the source-checkout / editable local plugin package, verify foreground MCP tool
-visibility, then show one source-backed recall/search receipt before offering
-hooks or provider choices:
+visibility, then show one recall/deepen continuity route before offering
+operator status, provider choices, or public demo receipts:
 
 ```sh
 aippocampus plugin install --codex --verify
@@ -33,20 +33,19 @@ without local paths, raw stderr tails, command arrays, or unrelated plugin
 paths. `--public`, `--compact-json`, and `--summary` remain explicit aliases;
 use `--operator-json` only for deep install/probe debugging.
 
-After verify, show the first useful receipt. From a source checkout, the public
-bundle is safe and does not read private history:
+After verify, show the first useful route:
+
+```sh
+aippocampus agent recall "old decision or handoff cue" --json
+aippocampus agent deepen --request 1 --last-recall --json
+```
+
+Use exact search when the user remembers wording or the route is blocked. From
+a source checkout, the public bundle is a safe demo receipt that does not read
+private history:
 
 ```sh
 aippocampus search "without pretending it has innate memory" --clean-source-dir ./examples/public-memory-bundle/clean-source --json
-```
-
-For real local history that is already registered, use the same source-backed
-shape:
-
-```sh
-aippocampus search "a distinctive old phrase"
-aippocampus agent recall "old decision or handoff cue" --json
-aippocampus agent deepen --request 1 --last-recall --json
 ```
 
 ## Before Advanced Setup
@@ -128,14 +127,17 @@ compliance policy setup before this first-recall path. Heavier profile
 boundaries are defined in
 [public-core-boundary.md](public-core-boundary.md#product-profile-boundary).
 
-If local source is already registered, try the useful moment before deeper
+If local source is already registered, try the useful route before deeper
 setup:
 
 ```sh
-uvx aippocampus search "a distinctive old phrase"
 uvx aippocampus agent recall "old decision or handoff cue" --json
 uvx aippocampus agent deepen --request 1 --last-recall --json
+uvx aippocampus search "a distinctive old phrase"
 ```
+
+Use the search line only when the user remembers exact wording or the route is
+blocked.
 
 If no source is registered or the route is blocked, check local provider status
 without writing memory artifacts:
@@ -160,23 +162,24 @@ uvx aippocampus onboard --provider codex --status --json
 # Then follow the explicit write recommendation after consent.
 uvx aippocampus onboard --provider claude-code --dry-run
 uvx aippocampus onboard --provider claude-code
-uvx aippocampus import conversation --format generic-jsonl --input <path> --dry-run --json
-uvx aippocampus import conversation --format generic-jsonl --input <path>
-uvx aippocampus search "a distinctive old phrase"
+uvx aippocampus import conversation --format generic-jsonl --input ./conversation.jsonl --dry-run --json
+uvx aippocampus import conversation --format generic-jsonl --input ./conversation.jsonl
+uvx aippocampus agent recall "old decision or handoff cue" --json
+uvx aippocampus agent deepen --request 1 --last-recall --json
 ```
 
-Try an exact phrase first. If the wording is fuzzy, use a project cue
-(`repo / feature / object / topic`) or a time cue (`recent`, `last month`, or a
-known period). Those cues are candidate navigation until search returns a
-source-backed snippet with source/date/turn metadata. Use `--format json` only
-for automation. Use the GitHub `uvx --from git+...` form only when intentionally
-testing an unreleased main-branch snapshot.
+Use exact search when the user remembers wording. If the wording is fuzzy, use
+a project cue (`repo / feature / object / topic`) or a time cue (`recent`,
+`last month`, or a known period) through recall/deepen. Those cues are candidate
+navigation until a source-backed snippet or opened source appears. Use
+`--format json` only for automation. Use the GitHub `uvx --from git+...` form
+only when intentionally testing an unreleased main-branch snapshot.
 
 ## Core Hook Setup
 
-Manual onboarding and search prove that local source can be found. Prompt and
-lifecycle hooks are the Codex trusted setup that keeps AIppocampus from feeling
-like a manual grep tool in the next Codex conversation. Claude Code uses
+Recall/deepen is the first living continuity move. Prompt and lifecycle hooks
+are the Codex trusted setup that keeps AIppocampus from falling back into manual
+grep in the next Codex conversation. Claude Code uses
 local-history onboarding, MCP/project-skill setup, and optional explicit
 `aippocampus hooks claude-code install --json` for scoped `UserPromptSubmit` /
 `Stop` handlers; see
@@ -574,15 +577,16 @@ aippocampus onboard --provider codex --status --json
 # Then follow the explicit write recommendation after consent.
 aippocampus onboard --provider claude-code --dry-run --json
 aippocampus onboard --provider claude-code --json
-aippocampus import conversation --format generic-jsonl --input <path> --dry-run --json
-aippocampus import conversation --format generic-jsonl --input <path>
+aippocampus import conversation --format generic-jsonl --input ./conversation.jsonl --dry-run --json
+aippocampus import conversation --format generic-jsonl --input ./conversation.jsonl
 aippocampus agent recall "old decision or handoff cue" --json
 aippocampus agent deepen --request 1 --last-recall --json
 ```
 
-Use `--dry-run` before broad imports when you want a preview, and use
-`--json` for agent/operator automation. Generated memory artifacts
-default to the configured AIppocampus registry
+Replace `./conversation.jsonl` with the user-selected export. Use `--dry-run`
+before broad imports when you want a preview, and use `--json` for
+agent/operator automation. Generated memory artifacts default to the configured
+AIppocampus registry
 (`AIPPOCAMPUS_REGISTRY_DIR`, `AIPPOCAMPUS_HOME/registry`, then legacy
 `$CODEX_HOME/aippocampus-registry`) rather than the active project repository.
 Codex onboarding now runs through the provider-aware facade or the package owner

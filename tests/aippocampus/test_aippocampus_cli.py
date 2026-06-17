@@ -296,6 +296,28 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertEqual(guidance_payload["mode"], "guidance")
         self.assertIn("semantic_guidance", guidance_payload)
         self.assertGreaterEqual(guidance_payload["semantic_guidance"]["guidance_count"], 1)
+        self.assertEqual(
+            guidance_payload["semantic_guidance"]["lifecycle"]["contract"],
+            "semantic-guidance-lifecycle-v1",
+        )
+        self.assertGreaterEqual(
+            guidance_payload["semantic_guidance"]["lifecycle"]["candidate_count"],
+            1,
+        )
+        self.assertEqual(
+            guidance_payload["semantic_guidance"]["lifecycle"]["candidate_actions"][0][
+                "materialization_gate"
+            ],
+            "requires_review_before_cache",
+        )
+        self.assertEqual(
+            guidance_payload["agent_next_action"]["id"],
+            "preview_action_hint_cache_bridge",
+        )
+        self.assertNotEqual(
+            guidance_payload["agent_next_action"]["command"],
+            "aippocampus learning guidance --json",
+        )
         self.assertNotEqual(
             guidance_payload["agent_next_action"],
             "produce or provide sanitized learning findings before expecting action-time hints",

@@ -107,45 +107,39 @@ Use the installed `aippocampus` CLI or the AIppocampus MCP tools. If those are
 missing, follow install/update cards or the narrow reference docs instead of
 dropping straight into runtime modules.
 
-Start route-first:
+Primary foreground path:
 
-- Prefer ambient cards, Active Path Packets, active locks, route handles,
-  continuity domain pointers, or progressive MCP tools before inventing broad
-  manual searches.
-- Use `get_turn_context`, `recall_context`, `recall_deepen`, and
-  `search_memory` when an agent client exposes them.
-- Use direct clean-source search when the user gives exact wording, no route
-  exists, or a route is blocked and a bounded manual search is still justified.
-- Drop to raw/indexed rollout only for exact repair, tool provenance, byte
-  accounting, missing evidence, or audit questions, and treat that as an
-  operator/audit path.
+1. Confirm the host can see AIppocampus. In Codex, use
+   `aippocampus plugin install --codex --verify` when the user is setting up or
+   refreshing the plugin.
+2. Pull continuity with `aippocampus agent recall "query" --json`, or with
+   `agent_recall` / `recall_context` when an MCP client exposes those tools.
+3. Deepen the selected route before claims with
+   `aippocampus agent deepen --request 1 --last-recall --json`, or
+   `agent_deepen` / `recall_deepen` in MCP.
 
-Foreground continuity surfaces:
+Prefer ambient cards, Active Path Packets, active locks, route handles,
+continuity domain pointers, or progressive MCP tools before inventing broad
+manual searches. Use direct clean-source search only when the user gives exact
+wording, no route exists, or a route is blocked and a bounded manual search is
+still justified. Drop to raw/indexed rollout only for exact repair, tool
+provenance, byte accounting, missing evidence, or audit questions, and treat
+that as an operator/audit path.
 
-- First recall for a vague handoff or old decision:
-  `aippocampus agent recall "query" --json`. This default is a bounded
-  foreground projection. Use `--detail full` only for local diagnostics that may
-  show private handles.
+Useful foreground follow-ups:
+
 - Reviewed Dream/subconscious findings for a current task cue:
   `aippocampus agent background "task cue" --json`. Treat these as navigation
   handles only; reopen source before factual, exact, or sensitive claims.
-- Search clean source: `aippocampus search "query" --cwd "$PWD"`.
-- Recover the latest assistant closeout:
-  `aippocampus latest-reply --cwd "$PWD"`. Commentary-only output is a
-  diagnostic card, not a final closeout.
-- Install or sync the local Codex plugin, then verify the front door:
-  `aippocampus plugin install --codex --verify`, then
-  `aippocampus update status`.
-- Check state before or after long work: `aippocampus health --cwd "$PWD"`.
-- Check the local provider matrix without writing artifacts:
-  `aippocampus onboard provider-key --plan --json`.
+- Recover the latest assistant closeout with `aippocampus latest-reply`.
+  Commentary-only output is a diagnostic card, not a final closeout.
 - If a foreground agent is about to write feedback, a self-note, an action-hint
   cache, or continuity-domain data, use
   `docs/guides/write-like-memory-decision-card.md` to choose the right surface
   and durability before writing.
 
-Repair, setup, and imports are explicit operator actions, not ambient prompt
-behavior:
+Repair, setup, status, provider, storage, MCP catalog, and imports are explicit
+secondary/operator actions, not ambient prompt behavior:
 
 - Prefer compact facade cards before repair recipes:
   `aippocampus health --cwd "$PWD"`, `aippocampus doctor`, `aippocampus storage`,

@@ -20,14 +20,20 @@ with honest continuity instead of pretending there was never a break.
 
 > Source is the ground. Summaries are weather.
 
-First useful receipt from a source checkout:
+First useful continuity move after AIppocampus is visible to an agent:
+
+```sh
+aippocampus agent recall "old decision or handoff cue" --json
+aippocampus agent deepen --request 1 --last-recall --json
+```
+
+That turns an old cue into a route the agent can deepen before making claims.
+From a public source checkout, an exact-search demo can still show the source
+substrate without touching private history:
 
 ```sh
 aippocampus search "without pretending it has innate memory" --clean-source-dir ./examples/public-memory-bundle/clean-source --json
 ```
-
-That returns a public clean-source hit for `msg_public_001`: an old cue becomes
-a source-backed snippet, with a boundary and a next action.
 
 In ordinary use, AIppocampus should feel less like a control panel than a
 remembered doorway. It helps an agent ask: where did this come from, what did
@@ -50,12 +56,15 @@ maze. Use the canonical
 human or agent needs the shortest safe path.
 
 If the `aippocampus` command already exists from a source checkout or editable
-install, start with the foreground chooser. It picks the first useful continuity
-path and sends setup/status work to recovery when needed.
+install, start with the foreground chooser, verify the Codex plugin when this
+is a trusted Codex setup, then pull and deepen one route. Status and repair
+cards come after the route is blocked or the host does not expose the tools.
 
 ```sh
 aippocampus start --json
 aippocampus plugin install --codex --verify
+aippocampus agent recall "old decision or handoff cue" --json
+aippocampus agent deepen --request 1 --last-recall --json
 ```
 
 If the command does not exist yet, use the no-clone probe first:
@@ -78,39 +87,11 @@ aippocampus plugin install --codex --verify --json
 public-safe summary. Use `--operator-json` only when you need the full
 marketplace/cache/host-probe detail.
 
-Then make the useful moment visible. From a source checkout, the bundled public
-example produces a source-backed receipt without touching private history. In
-trusted Codex setups, prefer the agent-mediated recall/deepen route for vague
-old-context cues; use exact search as the public-safe demo or fallback:
-
-```sh
-aippocampus agent recall "old decision or handoff cue" --json
-aippocampus agent deepen --request 1 --last-recall --json
-aippocampus search "without pretending it has innate memory" --clean-source-dir ./examples/public-memory-bundle/clean-source --json
-```
-
-With local source already registered, use the same receipt shape on a real old
-cue. Exact phrase search is still useful, but it should not replace the core
-agent continuity path:
-
-```sh
-aippocampus search "a distinctive old phrase"
-aippocampus agent recall "old decision or handoff cue" --json
-aippocampus agent deepen --request 1 --last-recall --json
-```
-
-For the felt product shape after that first receipt, read
-[Magic Moments, Claim-Bounded](docs/evidence/magic-moments.md). For the current
-proof map, use the [Can-Claim Ladder](docs/evidence/can-claim-ladder.md). For a
-compact origin and current-value trail, use the
-[Public Provenance And Current Value Ledger](docs/evidence/public-provenance-ledger.md).
-
 If this machine is trusted for ambient continuity, make hook/action-hint setup
-the visible next setup choice after plugin verification. Hooks are never
-installed silently, and rollback stays explicit:
+the visible next setup choice after plugin verification and the first route.
+Hooks are never installed silently, and rollback stays explicit:
 
 ```sh
-aippocampus update status
 aippocampus update apply --surface hooks
 ```
 
@@ -119,6 +100,21 @@ aippocampus plugin uninstall --codex
 aippocampus hooks prompt uninstall
 aippocampus hooks lifecycle uninstall
 ```
+
+Then make the public-safe demo receipt visible when you need a no-private-data
+example. Exact phrase search is useful, but it should not replace the core
+agent continuity path:
+
+```sh
+aippocampus search "without pretending it has innate memory" --clean-source-dir ./examples/public-memory-bundle/clean-source --json
+aippocampus search "a distinctive old phrase"
+```
+
+For the felt product shape after that first route, read
+[Magic Moments, Claim-Bounded](docs/evidence/magic-moments.md). For the current
+proof map, use the [Can-Claim Ladder](docs/evidence/can-claim-ladder.md). For a
+compact origin and current-value trail, use the
+[Public Provenance And Current Value Ledger](docs/evidence/public-provenance-ledger.md).
 
 External-model semantic/background routes are a separate first-run choice. Ask
 once whether to enable an LLM-backed route with a key; if the answer is no or
@@ -130,10 +126,13 @@ source-backed moment if local source is already registered:
 
 ```sh
 uvx aippocampus --help
-uvx aippocampus search "a distinctive old phrase"
 uvx aippocampus agent recall "old decision or handoff cue" --json
 uvx aippocampus agent deepen --request 1 --last-recall --json
+uvx aippocampus search "a distinctive old phrase"
 ```
+
+Use the search line when the user remembers exact wording or the route is
+blocked.
 
 If source is missing or stale, use the status card:
 
@@ -157,11 +156,10 @@ uvx aippocampus onboard --provider codex --status --json
 uvx aippocampus onboard --provider claude-code --dry-run
 uvx aippocampus onboard --provider claude-code
 
-# Generic visible-message export.
-uvx aippocampus import conversation --format generic-jsonl --input {input_path} --dry-run --json
-uvx aippocampus import conversation --format generic-jsonl --input {input_path}
+# Generic visible-message export from a user-selected local JSONL file.
+uvx aippocampus import conversation --format generic-jsonl --input ./conversation.jsonl --dry-run --json
+uvx aippocampus import conversation --format generic-jsonl --input ./conversation.jsonl
 
-uvx aippocampus search "a distinctive old phrase"
 uvx aippocampus agent recall "old decision or handoff cue" --json
 uvx aippocampus agent deepen --request 1 --last-recall --json
 ```
@@ -242,10 +240,13 @@ diagnostic tour:
 
 ```sh
 uvx aippocampus --help
-uvx aippocampus search "a distinctive old phrase"
 uvx aippocampus agent recall "old decision or handoff cue" --json
 uvx aippocampus agent deepen --request 1 --last-recall --json
+uvx aippocampus search "a distinctive old phrase"
 ```
+
+Use exact search as a fallback when the user remembers wording or the recall
+route is blocked.
 
 For a read-only local onboarding/status check:
 
@@ -262,8 +263,8 @@ uvx aippocampus onboard --provider codex --status --json
 # Then follow the explicit write recommendation after consent.
 uvx aippocampus onboard --provider claude-code --dry-run --json
 uvx aippocampus onboard --provider claude-code --json
-uvx aippocampus import conversation --format generic-jsonl --input {input_path} --dry-run --json
-uvx aippocampus import conversation --format generic-jsonl --input {input_path}
+uvx aippocampus import conversation --format generic-jsonl --input ./conversation.jsonl --dry-run --json
+uvx aippocampus import conversation --format generic-jsonl --input ./conversation.jsonl
 ```
 
 For human-facing demos, omit `--format json` so onboarding and search show the

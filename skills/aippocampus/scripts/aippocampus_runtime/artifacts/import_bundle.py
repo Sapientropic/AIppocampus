@@ -192,7 +192,7 @@ def _transcript_intent_payload(format_guess: str) -> dict[str, Any]:
             ),
             "next_command": (
                 "aippocampus import conversation --format "
-                f"{canonical_format} --input <path> --dry-run --json"
+                f"{canonical_format} --input {{input_path}} --dry-run --json"
             ),
         },
         "safety": {
@@ -202,7 +202,7 @@ def _transcript_intent_payload(format_guess: str) -> dict[str, Any]:
         "privacy_boundary": {
             "local_paths_included": False,
             "path_redaction": LOCAL_PATH_REDACTION,
-            "operator_input": "private transcript path supplied explicitly with --input <path>",
+            "operator_input": "private transcript path supplied explicitly with --input",
         },
     }
 

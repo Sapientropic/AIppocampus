@@ -15,10 +15,13 @@ make sense under that branch's assumptions.
   ```sh
   aippocampus start --json
   aippocampus plugin install --codex --verify
-  aippocampus update status --json
   aippocampus agent recall "old decision or handoff cue" --json
   aippocampus agent deepen --request 1 --last-recall --json
   ```
+
+  After that first route works, offer trusted hook/action-hint setup with
+  rollback visible. Use `aippocampus update status --json` only when the plugin
+  or hooks feel installed but not visible to the foreground agent.
 
 - No-clone or read-only probe:
 
@@ -33,8 +36,10 @@ make sense under that branch's assumptions.
   aippocampus start --json
   aippocampus agent recall "old decision or handoff cue" --json
   aippocampus agent deepen --request 1 --last-recall --json
-  aippocampus search "a distinctive old phrase"
   ```
+
+  Use `aippocampus search "a distinctive old phrase"` when the user remembers
+  exact wording or the recall route is blocked.
 
 Use the recall output as a route. Deepen/reopen source before exact wording,
 public claims, sensitive facts, stale disputes, or high-risk action.

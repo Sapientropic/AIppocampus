@@ -1376,8 +1376,8 @@ def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="aippocampus agent",
         description=(
-            "Opt-in agent recall, AIppo activation, reviewed background findings, "
-            "deepen, explain, and feedback."
+            "Agent continuity path: recall old context, deepen source, then use "
+            "AIppo/background/explain/feedback as supporting actions."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(

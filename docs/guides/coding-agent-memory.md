@@ -151,15 +151,16 @@ uvx aippocampus onboard --provider codex --status --json
 # Then follow the explicit write recommendation after consent.
 uvx aippocampus onboard --provider claude-code --dry-run
 uvx aippocampus onboard --provider claude-code
-uvx aippocampus import conversation --format generic-jsonl --input <path> --dry-run --json
-uvx aippocampus import conversation --format generic-jsonl --input <path>
+uvx aippocampus import conversation --format generic-jsonl --input ./conversation.jsonl --dry-run --json
+uvx aippocampus import conversation --format generic-jsonl --input ./conversation.jsonl
 uvx aippocampus agent recall "old decision or handoff cue" --json
 uvx aippocampus agent deepen --request 1 --last-recall --json
 ```
 
-Use exact search when the user remembers wording. If the user only remembers a
-project cue or time cue, treat the first result as candidate navigation until
-the CLI or MCP surface returns a source-backed snippet or opened source.
+Replace `./conversation.jsonl` with the user-selected export. Use exact search
+when the user remembers wording. If the user only remembers a project cue or
+time cue, treat the first result as candidate navigation until the CLI or MCP
+surface returns a source-backed snippet or opened source.
 
 ### Agent-Host Wiring Check
 

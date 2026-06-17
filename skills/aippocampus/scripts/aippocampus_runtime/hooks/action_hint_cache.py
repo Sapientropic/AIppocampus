@@ -126,8 +126,18 @@ def _empty_cache_recovery(
             "reason": reason,
             "record_count": int((result.get("cache") or {}).get("record_count") or 0),
             "write_requested": bool(write_requested),
+            "wrote_empty_cache": bool(write_requested),
+            "action_hints_ready": False,
+            "semantic_guidance_present_but_not_materialized": bool(semantic_count),
+            "bridge_status": (
+                "blocked_pending_semantic_guidance_review"
+                if semantic_count
+                else "needs_learning_input"
+            ),
             "semantic_guidance": semantic_summary,
         },
+        "action_hints_ready": False,
+        "wrote_empty_cache": bool(write_requested),
         "foreground_action": review_semantic_action if semantic_count else actions[1],
         "safe_next_actions": actions,
     }
