@@ -598,6 +598,7 @@ def compact_aippo_guidance_card(payload: Mapping[str, Any], *, task: str = "") -
         else None
     )
     task_text = str(task or "").strip()
+    foreground_action: dict[str, Any]
     if use_hint_available or (status == "ok" and direct_guidance_available):
         foreground_action = {
             "id": next_action or "use_aippo_working_contract_guidance",

@@ -181,9 +181,10 @@ def _skill_clause_source_row(
     support_grade = "source_supported" if ripens else "candidate_only"
     refs: list[dict[str, Any]] = []
     if ripens:
+        observed = observed_row or {}
         support = _mapping_field(observed_row or {}, "source_support")
         feedback_source_ref = _text(
-            support.get("source_ref") or observed_row.get("foreground_feedback_signal"), 180
+            support.get("source_ref") or observed.get("foreground_feedback_signal"), 180
         )
         refs = [
             {
@@ -192,7 +193,7 @@ def _skill_clause_source_row(
                 "kind": "skill_instruction_source",
             },
             {
-                "source_ref": f"feedback:{observed_row.get('activation_id') if observed_row else 'missing'}",
+                "source_ref": f"feedback:{observed.get('activation_id') or 'missing'}",
                 "path": feedback_source_ref or "foreground_feedback_event",
                 "kind": "observed_use_feedback",
             },
@@ -313,6 +314,7 @@ def build_skill_observed_use_report(
     loaded_feedback_rows, invalid_feedback_line_count = skill_observed_feedback.load_jsonl_rows(
         foreground_feedback_path
     )
+    observed_rows: Sequence[Mapping[str, Any]]
     if observed_use_rows is not None:
         observed_rows_are_synthetic = False
         observed_rows = list(observed_use_rows)

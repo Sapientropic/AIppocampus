@@ -522,6 +522,7 @@ def foreground_action_card(
         for event in SUPPORTED_HANDLER_EVENTS
         if events.get(event, {}).get("status") in {"installed", "firing"}
     ]
+    primary: dict[str, Any]
     if settings_status == "blocked":
         primary = {
             "id": "repair_claude_code_settings_json",

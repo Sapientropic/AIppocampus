@@ -32,7 +32,8 @@ def render_text(payload: Mapping[str, Any]) -> str:
     diagnostic = str(payload.get("diagnostic_class") or "unknown")
     reasons = [str(item) for item in payload.get("reasons") or []][:3]
     specificity = payload.get("route_specificity") or "unknown"
-    action_card = payload.get("action_card") if isinstance(payload.get("action_card"), Mapping) else {}
+    raw_action_card = payload.get("action_card")
+    action_card: Mapping[str, Any] = raw_action_card if isinstance(raw_action_card, Mapping) else {}
     if mode == "why-not-recall" and diagnostic == "surfaced_but_low_specificity":
         happened = "A route did surface, but it was too broad to treat as a good recall answer."
         next_command = "aippocampus why-recall \"<more specific cue>\""
@@ -202,7 +203,8 @@ def _attach_foreground_actions(payload: dict[str, Any], *, cue: str) -> dict[str
     decision = str(payload.get("decision") or "")
     diagnostic = str(payload.get("diagnostic_class") or "")
     specificity = str(payload.get("route_specificity") or "")
-    tighten_action = {
+    primary: dict[str, Any]
+    tighten_action: dict[str, Any] = {
         "id": "tighten_cue",
         "label": "Tighten the diagnostic cue",
         "command_template": 'aippocampus why-recall "{more_specific_cue}" --json',

@@ -157,7 +157,7 @@ def log_health_report(
     ]
     items.sort(key=lambda item: (not item["oversized"], -int(item["size_bytes"]), item["artifact_rel"]))
     oversized_count = sum(1 for item in items if item["oversized"])
-    report = {
+    report: dict[str, Any] = {
         "available": True,
         "status": "needs_cleanup" if oversized_count else "healthy",
         "max_bytes": resolved_max,

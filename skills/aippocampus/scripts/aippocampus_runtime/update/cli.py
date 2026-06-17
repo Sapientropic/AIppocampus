@@ -1373,7 +1373,8 @@ def render_text(report: dict[str, Any]) -> str:
         lines.append("- First-run readiness:")
         for item in summary.get("capability_ladder") or []:
             lines.append(f"  {item.get('id')}: {item.get('status')}")
-    for name in update_actions.render_surface_names(mode, summary):
+    render_mode = str(mode or "status")
+    for name in update_actions.render_surface_names(render_mode, summary):
         item = surfaces.get(name) or {}
         lines.append(f"- {name}: {item.get('status')}")
         if name == "llm" and not item.get("ready"):
