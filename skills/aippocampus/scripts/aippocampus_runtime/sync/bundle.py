@@ -84,15 +84,18 @@ def missing_manifest_recovery_payload() -> dict[str, Any]:
         "safe_next_actions": [
             {
                 "id": "sync_status",
-                "command": "aippocampus sync status --sync-dir <folder> --json",
+                "command_template": "aippocampus sync status --sync-dir {sync_dir} --json",
+                "requires": ["sync_dir"],
             },
             {
                 "id": "repair_plan",
-                "command": "aippocampus sync repair --plan --sync-dir <folder> --json",
+                "command_template": "aippocampus sync repair --plan --sync-dir {sync_dir} --json",
+                "requires": ["sync_dir"],
             },
             {
                 "id": "push_plan",
-                "command": "aippocampus sync push --plan --sync-dir <folder> --json",
+                "command_template": "aippocampus sync push --plan --sync-dir {sync_dir} --json",
+                "requires": ["sync_dir"],
             },
         ],
     }
@@ -826,7 +829,8 @@ def available_requires_sync_dir_status() -> dict[str, Any]:
         "backend": "local_folder",
         "backends": ["local_folder", "http_object_store"],
         "commands": ["status", "push", "pull", "repair"],
-        "next_command": "aippocampus sync status --sync-dir <folder> --json",
+        "next_command_template": "aippocampus sync status --sync-dir {sync_dir} --json",
+        "requires": ["sync_dir"],
         "raw_rollout_sync": "explicit_only",
         "claim_boundary": "sync capability exists, but no local sync backend is selected",
     }

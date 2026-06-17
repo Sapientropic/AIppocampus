@@ -25,6 +25,7 @@ for _path in (
 from aippocampus_runtime.onboarding import codex as onboard  # noqa: E402
 from aippocampus_runtime.onboarding import facade as onboard_facade  # noqa: E402
 from aippocampus_runtime.onboarding import frontier as onboard_frontier  # noqa: E402
+from aippocampus_runtime.contracts import executable_command_violations  # noqa: E402
 from aippocampus_runtime.registry import api as registry  # noqa: E402
 from conversation_sources import CodexConversationProvider  # noqa: E402
 
@@ -280,13 +281,16 @@ class OnboardCodexTests(unittest.TestCase):
             providers["claude-code"]["next_action_code"],
             "try_search_existing_registry",
         )
-        self.assertIn("aippocampus search", providers["claude-code"]["search_command"])
+        self.assertIn("aippocampus search", providers["claude-code"]["search_command_template"])
+        self.assertEqual(providers["claude-code"]["requires"], ["exact_phrase"])
         primary = data["data"]["primary_next_action"]
         self.assertEqual(data["primary_next_action"], primary)
         self.assertEqual(data["agent_next_action"], primary["agent_next_action"])
         self.assertEqual(primary["provider"], "codex")
         self.assertEqual(primary["code"], "search_existing_registered_memory")
-        self.assertIn("aippocampus search", primary["command"])
+        self.assertIn("aippocampus search", primary["command_template"])
+        self.assertEqual(primary["requires"], ["exact_phrase"])
+        self.assertEqual(executable_command_violations(data), [])
         self.assertIn("blocked", data["data"]["state_legend"])
         self.assertEqual(data["data"]["storage"]["source"], "AIPPOCAMPUS_HOME/registry")
         self.assertFalse(data["data"]["storage"]["legacy_fallback"])
@@ -440,8 +444,14 @@ class OnboardCodexTests(unittest.TestCase):
         self.assertEqual(primary["provider"], "generic-jsonl")
         self.assertEqual(primary["code"], "import_conversation_preview")
         self.assertEqual(provider["next_action_code"], "import_conversation_preview")
-        self.assertIn("import conversation --format generic-jsonl", primary["command"])
-        self.assertIn("import conversation --format generic-jsonl", provider["preview_command"])
+        self.assertIn("import conversation --format generic-jsonl", primary["command_template"])
+        self.assertEqual(primary["requires"], ["input_path"])
+        self.assertIn(
+            "import conversation --format generic-jsonl",
+            provider["preview_command_template"],
+        )
+        self.assertEqual(provider["requires"], ["input_path"])
+        self.assertEqual(executable_command_violations(data), [])
         self.assertNotIn("onboard --provider generic-jsonl --dry-run", encoded)
 
     def test_onboard_status_reports_missing_non_codex_providers_as_blocked(self) -> None:

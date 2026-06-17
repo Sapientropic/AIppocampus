@@ -333,10 +333,9 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertNotIn("agent deepen", encoded)
         self.assertEqual(public["foreground_action"]["action_id"], "recover_recall_miss")
         self.assertEqual(public["foreground_action"]["tool_name"], "search_memory")
-        self.assertEqual(
-            public["foreground_action"]["cli_command"],
-            'aippocampus search "distinctive exact phrase" --json',
-        )
+        self.assertEqual(public["foreground_action"]["cli_command_template"], 'aippocampus search "{exact_phrase}" --json')
+        self.assertEqual(public["foreground_action"]["arguments_template"]["query"], "{exact_phrase}")
+        self.assertEqual(public["foreground_action"]["requires"], ["exact_phrase"])
         self.assertEqual(public["miss_recovery_card"]["miss_class"], "no_route")
         self.assertIn("refine", " ".join(public["miss_recovery_card"]["recovery_actions"]))
         self.assertIn(

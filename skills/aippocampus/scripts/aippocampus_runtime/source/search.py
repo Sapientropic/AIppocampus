@@ -12,6 +12,7 @@ from typing import Any
 from aippocampus_runtime.contracts import (
     foreground_recovery_card,
     foreground_shell_action,
+    foreground_template_action,
 )
 from aippocampus_runtime.core import (
     compact_text,
@@ -508,18 +509,20 @@ def search_recovery_payload() -> dict[str, Any]:
         error_code="search_cue_required",
         message="Provide a cue or exact phrase before running clean-source search.",
         safe_next_actions=[
-            foreground_shell_action(
+            foreground_template_action(
                 action_id="search_exact_phrase",
                 label="Search exact remembered wording",
-                command='aippocampus search "distinctive exact phrase" --json',
-                why="Use search when the user or issue includes concrete old wording.",
+                command_template='aippocampus search "{exact_phrase}" --json',
+                requires=["exact_phrase"],
+                why="Use search when the user or issue includes concrete source wording.",
                 mutation_risk="read_only",
                 claim_boundary="source_reopen_required_before_quoting",
             ),
-            foreground_shell_action(
+            foreground_template_action(
                 action_id="recall_vague_cue",
                 label="Recall from a vague continuity cue",
-                command='aippocampus agent recall "old decision or handoff cue" --json',
+                command_template='aippocampus agent recall "{cue}" --json',
+                requires=["cue"],
                 why="Use recall first when the cue is fuzzy and needs route selection.",
                 mutation_risk="read_only",
                 claim_boundary="no_claim_before_reopen",

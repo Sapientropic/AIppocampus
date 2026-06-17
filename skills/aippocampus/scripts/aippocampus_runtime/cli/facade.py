@@ -174,17 +174,19 @@ def import_recovery_payload() -> dict[str, Any]:
         "choices": {
             "bundle_import": {
                 "label": "private AIppocampus bundle import",
-                "command": "aippocampus import <bundle.zip> --dest <folder>",
+                "command_template": "aippocampus import {bundle_zip} --dest {destination_folder}",
+                "requires": ["bundle_zip", "destination_folder"],
                 "boundary": "imports an explicit local AIppocampus bundle; paths stay redacted by default",
             },
             "conversation_import": {
                 "label": "generic conversation transcript import",
-                "preview_command": (
-                    "aippocampus import conversation --format generic-jsonl --input <path> --dry-run --json"
+                "preview_command_template": (
+                    "aippocampus import conversation --format generic-jsonl --input {input_path} --dry-run --json"
                 ),
-                "write_command": (
-                    "aippocampus import conversation --format generic-jsonl --input <path>"
+                "write_command_template": (
+                    "aippocampus import conversation --format generic-jsonl --input {input_path}"
                 ),
+                "requires": ["input_path"],
                 "boundary": "preview first; the input transcript stays local operator material",
             },
         },

@@ -108,9 +108,9 @@ def sync_direction_plan(
     file_count_breakdown: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     command = str(args.command)
-    command_preview = f"aippocampus sync {command} --sync-dir <folder>"
+    command_preview = f"aippocampus sync {command} --sync-dir {{sync_dir}}"
     if command == "status":
-        command_preview = "aippocampus sync status --sync-dir <folder> --json"
+        command_preview = "aippocampus sync status --sync-dir {sync_dir} --json"
     breakdown = file_count_breakdown or []
     next_safe_action = command_preview
     if estimated_file_count is not None and estimated_file_count >= HUGE_PLAN_FILE_COUNT:
@@ -145,7 +145,8 @@ def sync_direction_plan(
             "plan mode performs no writes; apply-time safety checks prevent unmanaged overwrite "
             "of existing managed sync dirs"
         ),
-        "next_command": command_preview,
+        "next_command_template": command_preview,
+        "requires": ["sync_dir"],
         "next_safe_action": next_safe_action,
         "privacy_boundary": {
             "local_paths_included": False,
@@ -166,12 +167,12 @@ def print_sync_human_result(command: str, result: dict[str, Any]) -> None:
             print(f"- {item.get('category')}: {item.get('count')} ({included})")
         print(f"raw rollout: {result.get('raw_rollout_boundary')}")
         print(f"boundary: {result.get('conflict_boundary')}")
-        if result.get("next_safe_action") != result.get("next_command"):
+        if result.get("next_safe_action") != result.get("next_command_template"):
             print(f"next safe action: {result.get('next_safe_action')}")
-        print(f"next: {result.get('next_command')}")
+        print(f"template: {result.get('next_command_template')}")
     elif result.get("status") == "available_requires_sync_dir":
         print("sync status: capability available; no sync folder selected")
-        print(f"next: {result.get('next_command')}")
+        print(f"template: {result.get('next_command_template')}")
         print(f"boundary: {result.get('claim_boundary')}")
     else:
         print(f"sync {command}: {'ok' if result.get('ok') else 'needs attention'}")

@@ -63,11 +63,14 @@ class AgentFeedbackMacroCliTests(unittest.TestCase):
         self.assertEqual(payload["status"], "needs_input")
         self.assertEqual(payload["error"]["code"], "agent_recall_cue_required")
         self.assertEqual(payload["agent_next_action"]["id"], "recall_vague_cue")
-        commands = [item["command"] for item in payload["safe_next_actions"]]
-        self.assertIn('aippocampus agent recall "old decision or handoff cue" --json', commands)
-        self.assertIn('aippocampus search "distinctive exact phrase" --json', commands)
+        templates = [item["command_template"] for item in payload["safe_next_actions"] if item.get("command_template")]
+        commands = [item["command"] for item in payload["safe_next_actions"] if item.get("command")]
+        self.assertIn('aippocampus agent recall "{cue}" --json', templates)
+        self.assertIn('aippocampus search "{exact_phrase}" --json', templates)
         self.assertIn("aippocampus onboard --provider auto --status --json", commands)
-        self.assertNotIn("<", json.dumps(payload, ensure_ascii=False))
+        encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertNotIn("old decision or handoff cue", encoded)
+        self.assertNotIn("distinctive exact phrase", encoded)
 
     def test_cli_agent_feedback_default_json_is_durable_scoped_lane(self) -> None:
         registry = self.cwd / "registry"

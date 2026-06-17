@@ -4,12 +4,15 @@ from __future__ import annotations
 
 from typing import Any
 
+from aippocampus_runtime.contracts import command_value_needs_input
+
 PLUGIN_CACHE_ACTION_STATUSES = {
     "missing",
     "missing_manifest",
     "stale_version",
     "stale_hash",
 }
+PLUGIN_CACHE_DEFAULT_REPAIR_COMMAND = "aippocampus plugin install --codex --verify --compact-json"
 
 
 def plugin_cache_needs_action(plugin: dict[str, Any]) -> bool:
@@ -35,6 +38,37 @@ def unique_names(names: list[str]) -> list[str]:
         if name and name not in result:
             result.append(name)
     return result
+
+
+def plan_surface_filter(mode: str, values: list[Any] | None) -> list[str]:
+    return unique_names([str(item) for item in values or []]) if mode == "plan" else []
+
+
+def filter_plan_surface_groups(
+    plan_filter: list[str],
+    actionable: list[str],
+    core_blockers: list[str],
+    magic_blockers: list[str],
+    optional_surfaces: list[str],
+    operator_blockers: list[str],
+) -> tuple[list[str], list[str], list[str], list[str], list[str]]:
+    if not plan_filter:
+        return actionable, core_blockers, magic_blockers, optional_surfaces, operator_blockers
+    filter_set = set(plan_filter)
+    keep = lambda names: [name for name in names if name in filter_set]
+    return (
+        [name for name in actionable if name in filter_set or (name == "plugin_cache" and "plugin" in filter_set)],
+        keep(core_blockers),
+        keep(magic_blockers),
+        keep(optional_surfaces),
+        keep(operator_blockers),
+    )
+
+
+def render_surface_names(mode: str, summary: dict[str, Any]) -> tuple[str, ...] | list[str]:
+    if mode == "plan" and summary.get("plan_surface_filter"):
+        return list(summary.get("plan_surface_filter") or [])
+    return ("skill", "hooks", "llm", "cli", "mcp", "plugin", "agent_callable")
 
 
 def plugin_cache_action_lines(plugin: dict[str, Any]) -> list[str]:
@@ -73,6 +107,56 @@ def action_hint_recommended_actions() -> list[dict[str, str]]:
             "command": "aippocampus hooks action uninstall --json",
         },
     ]
+
+
+def _extract_command_template(value: str) -> str:
+    if "`" in value:
+        parts = value.split("`")
+        if len(parts) >= 3 and parts[1].strip():
+            return parts[1].strip()
+    text = value.strip()
+    if text.casefold().startswith("run "):
+        text = text[4:].strip()
+    return text
+
+
+def _requires_for_command_template(template: str) -> list[str]:
+    lowered = template.casefold()
+    requires: list[str] = []
+    if "<path>" in lowered:
+        requires.append("local_path")
+    if "--plugin-marketplace-dir" in lowered:
+        requires.append("plugin_marketplace_dir")
+    if "--plugin-installed-dir" in lowered:
+        requires.append("plugin_installed_dir")
+    return requires or ["operator_input"]
+
+
+def executable_update_action_fields(
+    command: Any,
+    *,
+    fallback_command: str | None = None,
+    manual_instruction: str | None = None,
+) -> dict[str, Any]:
+    raw = str(command or "").strip()
+    if not raw:
+        return {}
+    if not command_value_needs_input(raw):
+        result: dict[str, Any] = {"command": raw}
+        if manual_instruction:
+            result["manual_instruction"] = manual_instruction
+        return result
+    template = _extract_command_template(raw)
+    result = {
+        "command_template": template,
+        "requires": _requires_for_command_template(template),
+        "template_only": fallback_command is None,
+        "manual_instruction": manual_instruction or raw,
+    }
+    if fallback_command:
+        result["command"] = fallback_command
+        result["template_only"] = False
+    return result
 
 
 def _shellish_command(command: Any) -> str | None:
@@ -210,29 +294,42 @@ def foreground_status_cards(report: dict[str, Any]) -> list[dict[str, Any]]:
         reason = str(cache_refresh.get("blocked_reason") or "plugin_cache_auto_resolution_blocked")
         if cache_refresh.get("candidate_count"):
             reason = f"{reason}: {int(cache_refresh.get('candidate_count') or 0)} candidates"
+        command_fields = executable_update_action_fields(
+            cache_refresh.get("next_command") or PLUGIN_CACHE_DEFAULT_REPAIR_COMMAND,
+            fallback_command=PLUGIN_CACHE_DEFAULT_REPAIR_COMMAND,
+            manual_instruction=(
+                "If the ordinary Codex refresh is not the intended cache, use the template "
+                "with an explicit local plugin cache path."
+            ),
+        )
         cards.append(
             {
                 "id": "plugin_cache_recovery",
                 "status": reason,
                 "why": "The plugin package can be current while the installed Codex cache still needs a human-friendly refresh path.",
-                "command": str(
-                    cache_refresh.get("next_command")
-                    or "aippocampus plugin install --codex --verify --compact-json"
-                ),
+                **command_fields,
             }
         )
     elif summary.get("plugin_cache_needs_action"):
         command = (
             (plugin.get("plugin_cache_recommended_actions") or [None])[0]
             or (summary.get("plugin_cache_recommended_actions") or [None])[0]
-            or "aippocampus plugin install --codex --verify --compact-json"
+            or PLUGIN_CACHE_DEFAULT_REPAIR_COMMAND
+        )
+        command_fields = executable_update_action_fields(
+            command,
+            fallback_command=PLUGIN_CACHE_DEFAULT_REPAIR_COMMAND,
+            manual_instruction=(
+                "Use the ordinary Codex plugin refresh unless a custom marketplace/cache path "
+                "is intentionally being repaired."
+            ),
         )
         cards.append(
             {
                 "id": "plugin_cache_recovery",
                 "status": "plugin_cache_needs_refresh",
                 "why": "The local package is separate from the Codex plugin cache used by the host.",
-                "command": str(command),
+                **command_fields,
             }
         )
     action_hints_ready = action_hints.get("cache_status") == "with_fresh_records"

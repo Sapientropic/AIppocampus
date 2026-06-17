@@ -16,6 +16,7 @@ sys.path.insert(0, str(SCRIPTS))
 
 from aippocampus_runtime.artifacts import export_bundle as export_bundle  # noqa: E402
 from aippocampus_runtime.artifacts import export_bundle as packaged_export_bundle  # noqa: E402
+from aippocampus_runtime.contracts import executable_command_violations  # noqa: E402
 
 
 class ExportBundleTests(unittest.TestCase):
@@ -107,9 +108,11 @@ class ExportBundleTests(unittest.TestCase):
                 payload = json.loads(stdout)
                 self.assertTrue(payload["safety"]["no_write_happened"])
                 self.assertEqual(
-                    payload["recommended_public_command"],
+                    payload["recommended_public_command_template"],
                     "aippocampus export --redaction-profile public-export --no-raw --output <bundle.zip>",
                 )
+                self.assertEqual(payload["recommended_public_requires"], ["output_path"])
+                self.assertEqual(executable_command_violations(payload), [])
 
     def test_invalid_redaction_profile_json_returns_recovery_without_argparse_usage(self) -> None:
         with patch.object(

@@ -22,14 +22,22 @@ def _compact_update_action(
     command: str | None = None,
     manual_instruction: str | None = None,
 ) -> dict[str, Any]:
+    command_fields = update_actions.executable_update_action_fields(
+        command,
+        fallback_command=(
+            update_actions.PLUGIN_CACHE_DEFAULT_REPAIR_COMMAND
+            if surface == "plugin_cache"
+            else None
+        ),
+        manual_instruction=manual_instruction,
+    )
     result = {
         "surface": surface,
         "reason": compact_text(reason, 220),
-        "command": command,
-        "manual_instruction": compact_text(manual_instruction, 220)
-        if manual_instruction
-        else None,
+        **command_fields,
     }
+    if "manual_instruction" in result:
+        result["manual_instruction"] = compact_text(str(result["manual_instruction"]), 220)
     return {key: value for key, value in result.items() if value not in (None, "")}
 
 

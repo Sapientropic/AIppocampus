@@ -15,6 +15,7 @@ from aippocampus_runtime.contracts import (
     FOREGROUND_ACTION_CONTRACT_VERSION,
     foreground_recovery_card,
     foreground_shell_action,
+    foreground_template_action,
 )
 from aippocampus_runtime.macro import state as macro_state
 from aippocampus_runtime.mcp.public_projection import compact_agent_recall_payload
@@ -107,19 +108,21 @@ def agent_recall_missing_query_payload(
         error_code="agent_recall_cue_required",
         message="agent recall needs a cue, old decision, issue title, or handoff phrase.",
         safe_next_actions=[
-            foreground_shell_action(
+            foreground_template_action(
                 action_id="recall_vague_cue",
                 label="Run agent recall with a continuity cue",
-                command='aippocampus agent recall "old decision or handoff cue" --json',
+                command_template='aippocampus agent recall "{cue}" --json',
+                requires=["cue"],
                 why="Use recall for fuzzy continuity, unfinished work, and old route context.",
                 mutation_risk="read_only",
                 claim_boundary="no_claim_before_reopen",
             ),
-            foreground_shell_action(
+            foreground_template_action(
                 action_id="search_exact_phrase",
                 label="Search exact clean-source wording",
-                command='aippocampus search "distinctive exact phrase" --json',
-                why="Use search when you know a distinctive exact phrase.",
+                command_template='aippocampus search "{exact_phrase}" --json',
+                requires=["exact_phrase"],
+                why="Use search when you know concrete source wording.",
                 mutation_risk="read_only",
                 claim_boundary="search_result_requires_source_boundary",
             ),
@@ -143,7 +146,8 @@ def agent_recall_missing_query_payload(
             "claim_boundary": {
                 "can_use_for": ["asking_for_a_cue", "choosing_a_read_only_next_action"],
                 "must_reopen_for": ["source_backed_claims", "absence_of_memory_claims"],
-                "detail_available_with": 'aippocampus agent recall "old decision or handoff cue" --json --detail full',
+                "detail_available_with_template": 'aippocampus agent recall "{cue}" --json --detail full',
+                "detail_requires": ["cue"],
             },
         }
     )

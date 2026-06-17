@@ -2065,7 +2065,7 @@ class AippocampusCliTests(unittest.TestCase):
 
         self.assertEqual(proc.returncode, 0)
         self.assertIn("capability available; no sync folder selected", proc.stdout)
-        self.assertIn("next: aippocampus sync status --sync-dir <folder> --json", proc.stdout)
+        self.assertIn("template: aippocampus sync status --sync-dir {sync_dir} --json", proc.stdout)
         self.assertNotIn("sync status: ok", proc.stdout)
 
     def test_sync_status_preserves_child_exit_code_and_json(self) -> None:

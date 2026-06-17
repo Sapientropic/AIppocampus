@@ -856,22 +856,8 @@ def build_status(args: argparse.Namespace, *, mode: str) -> dict[str, Any]:
         for name in OPERATOR_SURFACES
         if surface_summary_blocker(name, surfaces.get(name) or {})
     ]
-    plan_surface_filter = (
-        update_actions.unique_names([str(item) for item in getattr(args, "surface", []) or []])
-        if mode == "plan"
-        else []
-    )
-    if plan_surface_filter:
-        filter_set = set(plan_surface_filter)
-        actionable = [
-            name
-            for name in actionable
-            if name in filter_set or (name == "plugin_cache" and "plugin" in filter_set)
-        ]
-        core_blockers = [name for name in core_blockers if name in filter_set]
-        magic_blockers = [name for name in magic_blockers if name in filter_set]
-        optional_surfaces = [name for name in optional_surfaces if name in filter_set]
-        operator_blockers = [name for name in operator_blockers if name in filter_set]
+    plan_surface_filter = update_actions.plan_surface_filter(mode, getattr(args, "surface", []))
+    actionable, core_blockers, magic_blockers, optional_surfaces, operator_blockers = update_actions.filter_plan_surface_groups(plan_surface_filter, actionable, core_blockers, magic_blockers, optional_surfaces, operator_blockers)
     core_ready = not core_blockers
     magic_ready = not magic_blockers
     capability_ladder = build_capability_ladder(surfaces, core_ready=core_ready)
@@ -1387,12 +1373,7 @@ def render_text(report: dict[str, Any]) -> str:
         lines.append("- First-run readiness:")
         for item in summary.get("capability_ladder") or []:
             lines.append(f"  {item.get('id')}: {item.get('status')}")
-    render_surfaces = (
-        summary.get("plan_surface_filter")
-        if mode == "plan" and summary.get("plan_surface_filter")
-        else ("skill", "hooks", "llm", "cli", "mcp", "plugin", "agent_callable")
-    )
-    for name in render_surfaces:
+    for name in update_actions.render_surface_names(mode, summary):
         item = surfaces.get(name) or {}
         lines.append(f"- {name}: {item.get('status')}")
         if name == "llm" and not item.get("ready"):
@@ -1492,12 +1473,7 @@ def build_parser() -> argparse.ArgumentParser:
         )
         _add_common_options(child)
         if action == "plan":
-            child.add_argument(
-                "--surface",
-                action="append",
-                choices=APPLY_SURFACES,
-                help="Preview only the named local surface. Repeat for multiple surfaces.",
-            )
+            child.add_argument("--surface", action="append", choices=APPLY_SURFACES, help="Preview only the named local surface. Repeat for multiple surfaces.")
     apply_parser = subparsers.add_parser(
         "apply",
         usage="aippocampus update apply [--surface SURFACE] [--all-local] [--agent-json|--json]",

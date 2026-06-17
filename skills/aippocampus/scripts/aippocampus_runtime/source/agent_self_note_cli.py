@@ -222,12 +222,16 @@ def _self_note_recovery_payload() -> dict[str, Any]:
         "choices": [
             {
                 "label": "append",
-                "command": 'aippocampus self-note append --current-thread "short direction-only note"',
+                "command_template": 'aippocampus self-note append --current-thread "{note_text}"',
+                "requires": ["note_text"],
+                "template_only": True,
                 "when": "Leave a weak foreground-agent margin note after an explicit decision.",
             },
             {
                 "label": "search",
-                "command": "aippocampus self-note search <cue> --json",
+                "command_template": 'aippocampus self-note search "{cue}" --json',
+                "requires": ["cue"],
+                "template_only": True,
                 "when": "Find direction-only atmosphere for the current workspace.",
             },
             {
@@ -237,7 +241,9 @@ def _self_note_recovery_payload() -> dict[str, Any]:
             },
             {
                 "label": "read",
-                "command": "aippocampus self-note read <note_id> --json",
+                "command_template": "aippocampus self-note read {note_id} --json",
+                "requires": ["note_id"],
+                "template_only": True,
                 "when": "Inspect one known note id with the weak-memory boundary visible.",
             },
         ],
@@ -264,7 +270,8 @@ def _print_self_note_recovery_card(payload: Mapping[str, Any]) -> None:
     for choice in payload.get("choices") or []:
         if not isinstance(choice, Mapping):
             continue
-        print(f"  {choice.get('label')}: {choice.get('command')}")
+        command = choice.get("command") or choice.get("command_template")
+        print(f"  {choice.get('label')}: {command}")
     print("")
     print("Use source-backed memory instead:")
     print('  aippocampus agent recall "old decision or handoff cue" --json')

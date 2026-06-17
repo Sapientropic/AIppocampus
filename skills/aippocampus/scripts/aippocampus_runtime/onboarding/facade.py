@@ -60,9 +60,9 @@ def _provider_registration_error(provider: str) -> dict:
 
 FRONTSTAGE_PROVIDER_SAMPLE_LIMIT = 3
 FRONTSTAGE_PROVIDER_SCAN_BUDGET_SECONDS = 0.75
-SEARCH_EXISTING_MEMORY_COMMAND = 'aippocampus search "distinctive old phrase" --json'
-GENERIC_JSONL_IMPORT_PREVIEW_COMMAND = (
-    "aippocampus import conversation --format generic-jsonl --input <path> --dry-run --json"
+SEARCH_EXISTING_MEMORY_COMMAND_TEMPLATE = 'aippocampus search "{exact_phrase}" --json'
+GENERIC_JSONL_IMPORT_PREVIEW_COMMAND_TEMPLATE = (
+    "aippocampus import conversation --format generic-jsonl --input {input_path} --dry-run --json"
 )
 
 
@@ -211,7 +211,8 @@ def _with_provider_next_action(item: dict) -> dict:
             "Generic JSONL is explicit file import. Use it when the user has an export "
             "file, preview the import path, and avoid no-input provider scans."
         )
-        public["preview_command"] = GENERIC_JSONL_IMPORT_PREVIEW_COMMAND
+        public["preview_command_template"] = GENERIC_JSONL_IMPORT_PREVIEW_COMMAND_TEMPLATE
+        public["requires"] = ["input_path"]
         public["broad_scan_boundary"] = (
             "file/input-shaped import only; not an ordinary no-input provider scan"
         )
@@ -222,7 +223,8 @@ def _with_provider_next_action(item: dict) -> dict:
             "Use `aippocampus search` or `aippocampus agent recall` for old/source-backed "
             "memory before previewing new registration."
         )
-        public["search_command"] = SEARCH_EXISTING_MEMORY_COMMAND
+        public["search_command_template"] = SEARCH_EXISTING_MEMORY_COMMAND_TEMPLATE
+        public["requires"] = ["exact_phrase"]
         return public
     if detected and not current_match and dry_run and state != "blocked":
         public["next_action_code"] = "preview_current_project_registration"
@@ -231,7 +233,8 @@ def _with_provider_next_action(item: dict) -> dict:
             "registered memory if the cue is global; otherwise preview current-project "
             "registration before writing."
         )
-        public["search_command"] = SEARCH_EXISTING_MEMORY_COMMAND
+        public["search_command_template"] = SEARCH_EXISTING_MEMORY_COMMAND_TEMPLATE
+        public["requires"] = ["exact_phrase"]
         public["preview_command"] = f"aippocampus onboard --provider {provider} --dry-run --json"
         public["broad_scan_boundary"] = (
             "dry-run may inspect local provider transcripts; preview before any registration write"
@@ -262,7 +265,8 @@ def _provider_status_primary_decision(providers: list[dict], provider_scope: str
                 "Use generic JSONL only when the user has an export file; preview "
                 "that file import before writing."
             ),
-            "command": GENERIC_JSONL_IMPORT_PREVIEW_COMMAND,
+            "command_template": GENERIC_JSONL_IMPORT_PREVIEW_COMMAND_TEMPLATE,
+            "requires": ["input_path"],
             "broad_scan_boundary": (
                 "generic JSONL is file/input-shaped, not a no-input foreground scan"
             ),
@@ -278,7 +282,8 @@ def _provider_status_primary_decision(providers: list[dict], provider_scope: str
                     "Search existing source-backed memory for the cue before previewing "
                     "another registration write."
                 ),
-                "command": SEARCH_EXISTING_MEMORY_COMMAND,
+                "command_template": SEARCH_EXISTING_MEMORY_COMMAND_TEMPLATE,
+                "requires": ["exact_phrase"],
             }
 
     for item in providers:
@@ -305,7 +310,8 @@ def _provider_status_primary_decision(providers: list[dict], provider_scope: str
             "Search existing registered memory first; configure or import a provider only "
             "if no source-backed result appears."
         ),
-        "command": SEARCH_EXISTING_MEMORY_COMMAND,
+        "command_template": SEARCH_EXISTING_MEMORY_COMMAND_TEMPLATE,
+        "requires": ["exact_phrase"],
     }
 
 
@@ -320,7 +326,14 @@ def _provider_status_next_actions(providers: list[dict]) -> list[dict]:
             "code": code,
             "agent_next_action": item.get("agent_next_action"),
         }
-        for key in ("search_command", "preview_command", "broad_scan_boundary"):
+        for key in (
+            "search_command",
+            "search_command_template",
+            "preview_command",
+            "preview_command_template",
+            "requires",
+            "broad_scan_boundary",
+        ):
             if item.get(key):
                 action[key] = item[key]
         actions.append(action)

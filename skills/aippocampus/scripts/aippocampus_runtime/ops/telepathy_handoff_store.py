@@ -16,6 +16,7 @@ from aippocampus_runtime import core
 from aippocampus_runtime.contracts import (
     foreground_recovery_card,
     foreground_shell_action,
+    foreground_template_action,
 )
 from aippocampus_runtime.ops import coordination_topology
 from aippocampus_runtime.ops import telepathy_coordination_packet as packets
@@ -448,18 +449,20 @@ def missing_command_payload() -> dict[str, Any]:
                 mutation_risk="read_only",
                 claim_boundary="navigation_only_not_fact",
             ),
-            foreground_shell_action(
+            foreground_template_action(
                 action_id="create_handoff_after_explicit_request",
                 label="Create a handoff card after explicit request",
-                command='aippocampus telepathy create --preset handoff --scope "issue:#123" --owner codex --json',
+                command_template='aippocampus telepathy create --preset handoff --scope "{scope}" --owner codex --json',
+                requires=["scope"],
                 why="Only create when a human/upstream agent wants local coordination state.",
                 mutation_risk="explicit_local_write",
                 claim_boundary="navigation_only_not_fact",
             ),
-            foreground_shell_action(
+            foreground_template_action(
                 action_id="deepen_existing_handoff",
                 label="Read one handoff card",
-                command="aippocampus telepathy deepen <card_id> --json",
+                command_template="aippocampus telepathy deepen {card_id} --json",
+                requires=["card_id"],
                 why="Use an existing card id from list before treating it as a route.",
                 mutation_risk="read_only",
                 claim_boundary="source_reopen_required_before_claims",
