@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any, Callable, TextIO
 
 from aippocampus_runtime.cli.recovery_cards import (
+    import_recovery_payload,
     object_sync_chooser_payload,
     storage_chooser_payload,
     storage_gc_recovery_payload,
@@ -142,54 +143,6 @@ def print_import_recovery_card(*, file: TextIO | None = None) -> None:
         "boundary: no write happens from the bare chooser; preview transcript imports before registering new source.",
         file=target,
     )
-
-
-def import_recovery_payload() -> dict[str, Any]:
-    return {
-        "kind": "aippocampus_import_recovery",
-        "ok": False,
-        "error": {
-            "code": "import_choice_required",
-            "message": "Choose a private AIppocampus bundle import or a preview-first conversation import.",
-        },
-        "choices": {
-            "bundle_import": {
-                "label": "private AIppocampus bundle import",
-                "command_template": "aippocampus import {bundle_zip} --dest {destination_folder}",
-                "requires": ["bundle_zip", "destination_folder"],
-                "boundary": "imports an explicit local AIppocampus bundle; paths stay redacted by default",
-            },
-            "conversation_import": {
-                "label": "generic conversation transcript import",
-                "preview_command_template": (
-                    "aippocampus import conversation --format generic-jsonl --input {input_path} --dry-run --json"
-                ),
-                "write_command_template": (
-                    "aippocampus import conversation --format generic-jsonl --input {input_path}"
-                ),
-                "requires": ["input_path"],
-                "boundary": "preview first; the input transcript stays local operator material",
-            },
-        },
-        "agent_next_action": (
-            "Preview conversation imports with --dry-run --json before any registry write; "
-            "pass an explicit bundle path for private AIppocampus bundle transfer."
-        ),
-        "safety": {
-            "no_write_happened": True,
-            "preview_before_write": True,
-            "explicit_input_required": True,
-        },
-        "write_boundary": {
-            "written": False,
-            "no_write_happened": True,
-        },
-        "privacy_boundary": {
-            "raw_local_paths_emitted": False,
-            "local_path_redaction_required": True,
-            "private_transcript_material_loaded": False,
-        },
-    }
 
 
 def plugin_chooser_payload() -> dict[str, Any]:

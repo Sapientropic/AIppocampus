@@ -108,9 +108,9 @@ def object_sync_help_card(command: str | None = None) -> str:
 
 def object_sync_direction_plan(args: Namespace) -> dict[str, Any]:
     command = str(args.command)
-    command_preview = f"aippocampus object-sync {command} --object-store-url <url>"
+    command_preview = f"aippocampus object-sync {command} --object-store-url {{object_store_url}} --json"
     if command == "status":
-        command_preview = "aippocampus object-sync status --object-store-url <url> --json"
+        command_preview = "aippocampus object-sync status --object-store-url {object_store_url} --json"
     safe_store = (
         safe_endpoint_label(args.object_store_url)
         if args.object_store_url
@@ -127,7 +127,8 @@ def object_sync_direction_plan(args: Namespace) -> dict[str, Any]:
         "registry_dir": "<local-path-redacted>" if args.registry_dir else None,
         "raw_rollout_included": bool(args.include_raw),
         "encryption_requested": bool(args.encrypt or args.require_encrypted),
-        "next_command": command_preview,
+        "next_command_template": command_preview,
+        "requires": ["object_store_url"],
         "privacy_boundary": {
             "local_paths_included": False,
             "endpoint_included": False,
@@ -135,6 +136,43 @@ def object_sync_direction_plan(args: Namespace) -> dict[str, Any]:
             "writes_performed": False,
         },
     }
+
+
+def _object_sync_status_actions() -> list[dict[str, Any]]:
+    return [
+        {
+            "id": "preview_object_sync_push",
+            "label": "Preview object sync push",
+            "command": "aippocampus object-sync push --plan --json",
+            "mutation_risk": "read_only",
+            "claim_boundary": "object_sync_plan_not_source_evidence",
+            "why": "Use when the object-store manifest is missing and local registry upload may be intended.",
+        },
+        {
+            "id": "preview_object_sync_pull",
+            "label": "Preview object sync pull",
+            "command": "aippocampus object-sync pull --plan --json",
+            "mutation_risk": "read_only",
+            "claim_boundary": "object_sync_plan_not_source_evidence",
+            "why": "Use when an object-store bundle may already exist but needs explicit selection.",
+        },
+        {
+            "id": "preview_object_sync_repair",
+            "label": "Preview object sync repair",
+            "command": "aippocampus object-sync repair --plan --json",
+            "mutation_risk": "read_only",
+            "claim_boundary": "object_sync_plan_not_source_evidence",
+            "why": "Use only after status indicates manifest or object-store metadata needs repair.",
+        },
+        {
+            "id": "inspect_object_sync_operator_detail",
+            "label": "Inspect object-sync operator detail",
+            "command": "aippocampus object-sync status --operator-json",
+            "mutation_risk": "read_only_operator_diagnostic",
+            "claim_boundary": "operator_diagnostic_not_source_evidence",
+            "why": "Use locally when endpoint/prefix diagnostics are needed; default JSON keeps them redacted.",
+        },
+    ]
 
 
 def object_provider_kwargs(
@@ -169,11 +207,14 @@ def _public_object_sync_issue(issue: dict[str, Any]) -> dict[str, Any]:
 
 
 def public_object_sync_status(result: dict[str, Any]) -> dict[str, Any]:
+    actions = _object_sync_status_actions()
     return {
         "kind": "aippocampus_object_sync_status",
         "ok": bool(result.get("ok")),
         "backend": result.get("backend", OBJECT_BACKEND),
         "status": "ready" if result.get("ok") else "needs_attention",
+        "surface_class": "foreground_status_card",
+        "foreground_action_contract": "foreground-action-v1",
         "object_store": "<object-store-redacted>" if result.get("object_store") else None,
         "object_prefix": "<object-prefix-redacted>" if result.get("object_prefix") else None,
         "object_config_source": result.get("object_config_source"),
@@ -194,9 +235,9 @@ def public_object_sync_status(result: dict[str, Any]) -> dict[str, Any]:
             "bucket_or_account_included": False,
             "writes_performed": False,
         },
-        "agent_next_action": (
-            "Use object-sync push/pull/repair with --plan first; use --operator-json only for local endpoint diagnostics."
-        ),
+        "agent_next_action": actions[0],
+        "foreground_action": actions[0],
+        "safe_next_actions": actions,
     }
 
 
@@ -205,7 +246,7 @@ def print_object_sync_human_result(command: str, result: dict[str, Any]) -> None
         print(f"object sync {command}: plan only")
         print(f"read: {result.get('source_side')}")
         print(f"write: {', '.join(result.get('mutates') or []) or 'none'}")
-        print(f"next: {result.get('next_command')}")
+        print(f"next: {result.get('next_command') or result.get('next_command_template')}")
     elif command == "status":
         public = public_object_sync_status(result)
         print(f"object sync status: {public.get('status')}")
@@ -219,10 +260,11 @@ def print_object_sync_human_result(command: str, result: dict[str, Any]) -> None
         print(f"raw rollout: {str(public.get('raw_rollout_included')).lower()}")
         for issue in public.get("issues") or []:
             print(f"- {issue.get('code')}: {issue.get('path') or issue.get('message')}")
-        print(f"next: {public.get('agent_next_action')}")
+        action = public.get("agent_next_action") if isinstance(public.get("agent_next_action"), dict) else {}
+        print(f"next: {action.get('command') or action.get('label') or 'aippocampus object-sync push --plan --json'}")
         print(
-            "boundary: endpoint/prefix/path hidden by default; rerun status with "
-            "--operator-json only for local endpoint diagnostics."
+            "boundary: endpoint/prefix/path hidden by default; preview push/pull/repair with --plan first; "
+            "rerun status with --operator-json only for local endpoint diagnostics."
         )
     else:
         print(f"object sync {command}: {'ok' if result.get('ok') else 'needs attention'}")

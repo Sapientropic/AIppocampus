@@ -693,11 +693,19 @@ class AippocampusMcpServerTests(unittest.TestCase):
 
         self.assertTrue(empty_response["result"]["isError"])
         self.assertTrue(missing_confirm_response["result"]["isError"])
-        self.assertEqual(self.tool_payload(empty_response)["error"]["code"], "explicit_write_required")
-        self.assertEqual(
-            self.tool_payload(missing_confirm_response)["error"]["code"],
-            "explicit_write_required",
-        )
+        empty_payload = self.tool_payload(empty_response)
+        missing_confirm_payload = self.tool_payload(missing_confirm_response)
+        self.assertEqual(empty_payload["error"]["code"], "explicit_write_required")
+        self.assertEqual(missing_confirm_payload["error"]["code"], "explicit_write_required")
+        for payload in (empty_payload, missing_confirm_payload):
+            self.assertEqual(payload["status"], "needs_input")
+            self.assertEqual(payload["surface_class"], "foreground_recovery_card")
+            self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
+            self.assertEqual(payload["agent_next_action"], payload["foreground_action"])
+            self.assertEqual(payload["safe_next_actions"][0]["tool_name"], "list_threads")
+            self.assertTrue(payload["safe_next_actions"][1]["template_only"])
+            self.assertEqual(payload["safe_next_actions"][1]["requires"], ["cwd", "provider", "confirm_write"])
+            self.assertEqual(executable_command_violations(payload), [])
         register.assert_not_called()
 
     def test_register_thread_passes_explicit_provider_to_registry(self) -> None:
@@ -1568,7 +1576,9 @@ class AippocampusMcpServerTests(unittest.TestCase):
 
         self.assertTrue(agent_response["result"]["isError"])
         agent_payload = self.tool_payload(agent_response)
-        self.assertEqual(agent_payload["status"], "cannot_verify")
+        self.assertEqual(agent_payload["status"], "needs_input")
+        self.assertEqual(agent_payload["surface_class"], "foreground_recovery_card")
+        self.assertEqual(agent_payload["foreground_action_contract"], "foreground-action-v1")
         self.assertEqual(agent_payload["result"]["error"]["code"], "missing_recall_handle")
         assert_recall_template_action(self, agent_payload["foreground_action"])
         self.assertEqual(agent_payload["agent_next_action"], agent_payload["foreground_action"])

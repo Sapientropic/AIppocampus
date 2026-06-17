@@ -25,6 +25,7 @@ from aippocampus_runtime.core import (
     resolve_artifact_path,
 )
 from aippocampus_runtime.ops import storage_capacity_report
+from aippocampus_runtime.ops import storage_governance_actions as gc_actions
 from aippocampus_runtime.ops.storage_eviction import apply_rebuildable_evictions
 from aippocampus_runtime.ops.storage_governance_contract import (
     CLASS_ALL,
@@ -249,10 +250,9 @@ def _capacity_candidates(
                     thread,
                     include_active=include_active,
                 ),
-                "rebuild_command": (
-                    "Rebuild generated index/vector/semantic caches from exact source for this "
-                    "registered thread; exact command depends on the cache class."
-                ),
+                "actionability": "plan_only_aggregate",
+                "plan_only_reason": gc_actions.CAPACITY_AGGREGATE_PLAN_ONLY_REASON,
+                "rebuild_note": gc_actions.CAPACITY_AGGREGATE_REBUILD_NOTE,
                 "expected_rebuild_cost": {"class": "medium", "seconds": None},
             }
         )
@@ -431,10 +431,18 @@ def build_plan(
         candidate for candidate in all_candidates if matches_class(candidate, class_filter)
     ]
 
+    foreground_actions = gc_actions.storage_gc_foreground_actions(
+        retention_report_available=retention_report is not None,
+    )
+    safe_next_actions = foreground_actions["safe_next_actions"]
+    next_steps = foreground_actions["next_steps"]
+
     return {
         "schema_version": SCHEMA_VERSION,
         "ok": True,
         "status": "dry_run_ready",
+        "surface_class": "foreground_storage_gc_plan",
+        "foreground_action_contract": "foreground-action-v1",
         "created_at": now_utc(),
         "mode": "dry_run",
         "requested_class": class_filter,
@@ -488,11 +496,10 @@ def build_plan(
             ]
             if item
         ],
-        "next_steps": [
-            "Review candidate preconditions before any manual cleanup.",
-            "Run retention_report.py --write when path-level candidates are needed.",
-            "Use --apply only for rebuildable cache candidates with deterministic source, lease, active-thread, and manifest checks.",
-        ],
+        "next_steps": next_steps,
+        "agent_next_action": safe_next_actions[0],
+        "foreground_action": safe_next_actions[0],
+        "safe_next_actions": safe_next_actions,
     }
 
 

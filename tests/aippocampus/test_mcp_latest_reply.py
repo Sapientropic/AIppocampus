@@ -133,7 +133,9 @@ class McpLatestReplyTests(unittest.TestCase):
         self.assertTrue(payload["not_final_closeout"])
         self.assertNotIn(commentary_text, encoded)
         self.assertNotIn("preview", payload["message"])
-        self.assertIn("agent recall", payload["safe_next_actions"][0]["command"])
+        self.assertEqual(payload["safe_next_actions"][0]["requires"], ["cue"])
+        self.assertIn("agent recall", payload["safe_next_actions"][0]["command_template"])
+        self.assertNotIn("latest closeout or current handoff", encoded)
 
     def test_latest_reply_mcp_no_rollout_returns_recovery_card(self) -> None:
         missing = self.cwd / "missing-project"
@@ -152,7 +154,8 @@ class McpLatestReplyTests(unittest.TestCase):
         self.assertTrue(response["result"]["isError"])
         self.assertEqual(payload["status"], "no_latest_reply_source_found")
         self.assertEqual(payload["error"]["code"], "no_rollout_for_cwd")
-        self.assertIn("agent recall", payload["agent_next_action"]["command"])
+        self.assertEqual(payload["agent_next_action"]["requires"], ["cue"])
+        self.assertIn("agent recall", payload["agent_next_action"]["command_template"])
         self.assertNotIn(str(missing), encoded)
 
 

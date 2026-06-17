@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, Sequence
 
 from aippocampus_runtime import core
-from aippocampus_runtime.contracts import foreground_shell_action
+from aippocampus_runtime.contracts import foreground_shell_action, foreground_template_action
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 from aippocampus_runtime.source.rollout import normalize_rollout
 
@@ -91,11 +91,12 @@ def _latest_reply_full_action() -> dict[str, Any]:
 
 
 def _latest_reply_recall_action() -> dict[str, Any]:
-    return foreground_shell_action(
+    return foreground_template_action(
         action_id="recall_current_thread_context",
         label="Recall current-thread context",
-        command='aippocampus agent recall "latest closeout or current handoff" --json',
-        why="Use recall when no final-answer closeout is available from latest-reply.",
+        command_template='aippocampus agent recall "{cue}" --json',
+        requires=["cue"],
+        why="Use a real cue from the user/task when no final-answer closeout is available from latest-reply.",
         mutation_risk="read_only",
         claim_boundary="no_claim_before_reopen",
     )
@@ -177,10 +178,7 @@ def latest_reply_unavailable_payload(exc: Exception, *, detail: str = "compact")
                 },
                 "agent_next_action": actions[0],
                 "safe_next_actions": actions,
-                "examples": [
-                    "aippocampus latest-reply --json",
-                    'aippocampus agent recall "old decision or handoff cue" --json',
-                ],
+                "examples": ["aippocampus latest-reply --json"],
                 "cannot_claim": [
                     "latest_final_answer_available",
                     "source_backed_claim",
