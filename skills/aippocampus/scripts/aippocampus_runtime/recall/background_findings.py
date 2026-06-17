@@ -9,7 +9,6 @@ substrate; do not turn Dream into a parallel recall authority.
 
 from __future__ import annotations
 
-import json
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -18,7 +17,7 @@ from aippocampus_runtime import core
 from aippocampus_runtime.contracts import foreground_recovery_card, foreground_shell_action
 from aippocampus_runtime.dream import working_memory_publication
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
-from aippocampus_runtime.recall import background_finding_projection
+from aippocampus_runtime.recall import background_finding_actions, background_finding_projection
 from aippocampus_runtime.subconscious import candidate_router
 
 DEFAULT_BACKGROUND_FINDINGS_LIMIT = 4
@@ -26,10 +25,6 @@ DEFAULT_BACKGROUND_FINDINGS_LIMIT = 4
 
 def _public_payload(payload: Any) -> Any:
     return redact_sensitive_values(redact_private_paths(payload))
-
-
-def _shell_quote(text: str) -> str:
-    return json.dumps(text, ensure_ascii=False)
 
 
 def _registry_dir(value: str | Path | None) -> Path | None:
@@ -48,33 +43,6 @@ def _working_memory_path(
     return candidate_router.default_working_memory_path(registry_dir=_registry_dir(registry_dir))
 
 
-def _source_summary(row: Mapping[str, Any]) -> dict[str, Any]:
-    refs = [item for item in row.get("source_refs") or [] if isinstance(item, Mapping)]
-    source_finding_ids = [
-        str(item)
-        for item in row.get("source_finding_ids") or []
-        if str(item).strip()
-    ]
-    strength = row.get("source_strength")
-    strength_map = strength if isinstance(strength, Mapping) else {}
-    return {
-        "source_ref_count": int(strength_map.get("source_ref_count") or len(refs)),
-        "source_finding_ids": source_finding_ids[:4],
-        "source_finding_count": len(source_finding_ids),
-        "source_reopen_required_before_claims": True,
-        "raw_source_refs_emitted": False,
-    }
-
-
-def _route_action_grammar(row: Mapping[str, Any]) -> str:
-    route = str(row.get("route") or "").strip()
-    if route == candidate_router.USE_WITH_SOURCE:
-        return "reopenable_route"
-    if route in {candidate_router.USE_SILENTLY, candidate_router.CONFIRM_WHEN_RELEVANT}:
-        return "direction_only"
-    return "ignore_or_blocked"
-
-
 def _finding_surface(row: Mapping[str, Any]) -> str:
     return (
         "dream_working_memory"
@@ -91,55 +59,11 @@ def _finding_boundary(row: Mapping[str, Any]) -> dict[str, Any]:
             if is_dream
             else "reviewed_working_memory_navigation_not_fact"
         ),
-        "action_grammar": _route_action_grammar(row),
+        "action_grammar": background_finding_actions.route_action_grammar(row),
         "navigation_only": True,
         "source_backed_claim_allowed": False,
         "source_reopen_required_before_claims": True,
     }
-
-
-def _finding_next_actions(
-    row: Mapping[str, Any],
-    *,
-    cue: str,
-) -> list[dict[str, Any]]:
-    finding_id = str(row.get("candidate_key") or row.get("route_id") or "").strip()
-    recall_command = f"aippocampus agent recall {_shell_quote(cue)} --json"
-    actions = [
-        foreground_shell_action(
-            action_id="reopen_relevant_source_route",
-            label="Recall and deepen source before claims",
-            command=recall_command,
-            why="Use the background finding only to choose a recall route; deepen before factual claims.",
-            mutation_risk="read_only",
-            claim_boundary="no_claim_before_reopen",
-        ),
-        foreground_shell_action(
-            action_id="mark_background_finding_helpful",
-            label="Mark this route helpful",
-            command=f"aippocampus agent feedback {finding_id} --outcome helped --json",
-            why="Helpful/wrong feedback is low-authority calibration, not source truth.",
-            mutation_risk="durable_low_authority_feedback_write",
-            claim_boundary="feedback_is_not_source_truth",
-        ),
-        foreground_shell_action(
-            action_id="mark_background_finding_wrong",
-            label="Mark this route wrong",
-            command=f"aippocampus agent feedback {finding_id} --outcome wrong --json",
-            why="Use when the background route is distracting or irrelevant for this task.",
-            mutation_risk="durable_low_authority_feedback_write",
-            claim_boundary="feedback_is_not_source_truth",
-        ),
-        foreground_shell_action(
-            action_id="preview_action_hint_materialization",
-            label="Preview action-hint cache refresh",
-            command="aippocampus hooks action refresh-cache --json",
-            why="Materialization remains explicit; preview before writing any action-time cache.",
-            mutation_risk="read_only",
-            claim_boundary="candidate_guidance_not_source_truth",
-        ),
-    ]
-    return [dict(action) for action in actions]
 
 
 def _project_finding(row: Mapping[str, Any], *, cue: str, index: int) -> dict[str, Any]:
@@ -168,8 +92,8 @@ def _project_finding(row: Mapping[str, Any], *, cue: str, index: int) -> dict[st
         "review_state": row.get("review_state"),
         "dream_function": row.get("dream_function"),
         "boundary": _finding_boundary(row),
-        "source": _source_summary(row),
-        "next_actions": _finding_next_actions(row, cue=cue),
+        "source": background_finding_actions.source_summary(row),
+        "next_actions": background_finding_actions.finding_next_actions(row, cue=cue),
     }
 
 
@@ -227,7 +151,7 @@ def background_findings_card(
         else foreground_shell_action(
             action_id="ordinary_recall",
             label="Use ordinary source-backed recall",
-            command=f"aippocampus agent recall {_shell_quote(task)} --json",
+            command=f"aippocampus agent recall {background_finding_actions.shell_quote(task)} --json",
             why="No reviewed background finding matched; use ordinary recall/search before claims.",
             mutation_risk="read_only",
             claim_boundary="no_claim_before_reopen",

@@ -64,6 +64,41 @@ class AgentBackgroundTests(unittest.TestCase):
         self.assertNotEqual(finding["matched_terms"], ["action"])
         self.assertIn("action-time learning", finding["matched_terms"])
 
+    def test_agent_background_actions_target_the_selected_finding(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            working_memory = Path(tmp) / "working_memory.jsonl"
+            write_background_working_memory(working_memory)
+
+            payload = background_findings.background_findings_card(
+                "repeated coding mistakes and action-time learning",
+                working_memory_path=working_memory,
+            )
+
+        finding = payload["findings"][0]
+        actions = {action["id"]: action for action in finding["next_actions"]}
+        self.assertEqual(payload["agent_next_action"], finding["next_actions"][0])
+        self.assertEqual(
+            actions["reopen_background_finding_source_route"]["target"]["finding_id"],
+            "wm_action_time_learning",
+        )
+        self.assertEqual(
+            actions["reopen_background_finding_source_route"]["target"]["source_finding_ids"],
+            ["finding_action_learning"],
+        )
+        self.assertIn("finding_action_learning", actions["reopen_background_finding_source_route"]["command"])
+        self.assertEqual(
+            actions["mark_background_finding_helpful"]["target"]["finding_id"],
+            "wm_action_time_learning",
+        )
+        self.assertEqual(
+            actions["materialize_action_hint_from_finding"]["target"]["source_finding_ids"],
+            ["finding_action_learning"],
+        )
+        self.assertEqual(
+            actions["materialize_action_hint_from_finding"]["mutation_risk"],
+            "explicit_local_cache_write",
+        )
+
     def test_mcp_exposes_agent_background_tool_schema(self) -> None:
         listed = mcp.handle_request({"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
         by_name = {tool["name"]: tool for tool in listed["result"]["tools"]}

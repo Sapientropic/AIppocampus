@@ -308,7 +308,19 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertFalse(finding["boundary"]["source_backed_claim_allowed"])
         self.assertTrue(finding["source"]["source_reopen_required_before_claims"])
         self.assertFalse(finding["source"]["raw_source_refs_emitted"])
-        self.assertEqual(payload["agent_next_action"]["command"], 'aippocampus agent recall "AIppocampus continuity source refs" --json')
+        self.assertEqual(
+            payload["agent_next_action"]["id"],
+            "reopen_background_finding_source_route",
+        )
+        self.assertIn("dreamfinding_continuity", payload["agent_next_action"]["command"])
+        self.assertEqual(
+            payload["agent_next_action"]["target"]["finding_id"],
+            "wm_dream_continuity",
+        )
+        self.assertNotIn(
+            "materialize_action_hint_from_finding",
+            {action["id"] for action in finding["next_actions"]},
+        )
         self.assertNotIn("session:a", encoded)
         self.assertNotIn("msg-a", encoded)
         self.assertNotIn(str(working_memory), encoded)
