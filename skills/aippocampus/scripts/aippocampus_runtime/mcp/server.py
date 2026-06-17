@@ -13,6 +13,7 @@ from typing import Any
 
 from aippocampus_runtime import core
 from aippocampus_runtime import health as aippocampus_health
+from aippocampus_runtime.mcp import memory_health_recovery
 from aippocampus_runtime.mcp.mutation_boundary import UNSUPPORTED_MUTATION_TOOLS
 from aippocampus_runtime.mcp.provider_key_bridge import (
     maybe_apply_provider_key_bridge_for_semantic_diagnostic,
@@ -890,54 +891,7 @@ def call_memory_health(arguments: dict[str, Any]) -> dict[str, Any]:
         payload = aippocampus_health.health_report(cwd_arg(arguments))
     except Exception as exc:
         del exc
-        payload = {
-            "kind": "aippocampus_memory_health_recovery",
-            "ok": False,
-            "status": "unavailable",
-            "error": {
-                "code": "health_unavailable",
-                "message": "Memory health could not find usable local source artifacts for this scope.",
-            },
-            "agent_next_action": {
-                "id": "recover_or_continue_without_memory",
-                "label": "Check provider/onboarding status, register/sync a thread if this is setup, or continue without memory.",
-                "command": "aippocampus onboard --provider auto --status --json",
-                "mutation_risk": "read_only",
-                "claim_boundary": "setup_status_not_memory_evidence",
-            },
-            "safe_next_actions": [
-                {
-                    "id": "check_onboarding_status",
-                    "command": "aippocampus onboard --provider auto --status --json",
-                    "mutation_risk": "read_only",
-                    "claim_boundary": "setup_status_not_memory_evidence",
-                },
-                {
-                    "id": "list_mcp_tools",
-                    "command": "aippocampus mcp list-tools --compact",
-                    "mutation_risk": "read_only",
-                    "claim_boundary": "tool_discovery_not_memory_evidence",
-                },
-                {
-                    "id": "search_exact_phrase",
-                    "command_template": 'aippocampus search "{exact_phrase}" --json',
-                    "requires": ["exact_phrase"],
-                    "template_only": True,
-                    "mutation_risk": "read_only",
-                    "claim_boundary": "source_reopen_required_before_quoting",
-                },
-                {
-                    "id": "continue_without_memory",
-                    "manual_instruction": "Continue without memory when no local source exists.",
-                    "mutation_risk": "read_only",
-                    "claim_boundary": "no_local_source_available",
-                },
-            ],
-            "source_boundary": {
-                "no_rollout_found_is_not_a_recall_quality_claim": True,
-                "local_paths_serialized": False,
-            },
-        }
+        payload = memory_health_recovery.payload_for_health_exception(arguments)
         return text_result(public_payload(arguments, payload), is_error=False)
 
     if detail_arg(arguments) == "compact" and not arguments.get("include_private_paths"):
