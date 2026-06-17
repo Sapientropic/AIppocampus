@@ -22,6 +22,10 @@ surfaces. `aippocampus_runtime.recall.candidate_survival` separately reports
 over-conservative filtering: a candidate can survive as navigation-only without
 becoming evidence or foreground profile truth.
 
+For broad agent-facing UX review and issue triage, use the
+[AIppocampus UX charter](../../../skills/aippocampus-ux/references/agent-facing-ux-charter.md)
+instead of duplicating this page's packet-budget rules into every issue.
+
 ## Budget
 
 Default V0 budget:

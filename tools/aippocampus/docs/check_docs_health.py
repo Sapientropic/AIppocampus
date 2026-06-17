@@ -110,6 +110,9 @@ REQUIRED_PROJECT_DOCS = [
     "docs/planning/technical-differentiation-analysis.md",
 ]
 
+AGENT_FACING_UX_CHARTER = "skills/aippocampus-ux/references/agent-facing-ux-charter.md"
+AGENT_FACING_UX_DISCOVERY_DOCS = (("docs/architecture/recall/README.md", "recall architecture index missing agent-facing UX charter pointer"), ("docs/architecture/recall/foreground-memory-ux-budget.md", "foreground memory UX budget missing agent-facing UX charter pointer"))
+
 EVIDENCE_LEDGER_LINE_LENGTH_LIMIT = 1000
 LINE_ADDRESSABLE_EVIDENCE_LEDGERS = [
     "docs/evidence/current-claims.md",
@@ -873,6 +876,19 @@ def public_core_schema_contract_issues(repo_root: Path) -> list[str]:
     return issues
 
 
+def agent_facing_ux_charter_issues(repo_root: Path) -> list[str]:
+    if not (repo_root / AGENT_FACING_UX_CHARTER).exists():
+        return [f"missing agent-facing UX charter: {AGENT_FACING_UX_CHARTER}"]
+    issues: list[str] = []
+    for rel_path, issue in AGENT_FACING_UX_DISCOVERY_DOCS:
+        path = repo_root / rel_path
+        if not path.exists():
+            issues.append(f"missing agent-facing UX discovery doc: {rel_path}")
+        elif "agent-facing-ux-charter.md" not in path.read_text(encoding="utf-8"):
+            issues.append(issue)
+    return issues
+
+
 def python_version_contract_issues(repo_root: Path) -> list[str]:
     issues: list[str] = []
 
@@ -1280,6 +1296,7 @@ def check_repo_docs(repo_root: Path) -> tuple[list[str], dict[str, Any]]:
     issues.extend(public_first_touch_order_issues(repo_root))
     issues.extend(product_profile_contract_issues(repo_root))
     issues.extend(public_core_schema_contract_issues(repo_root))
+    issues.extend(agent_facing_ux_charter_issues(repo_root))
     issues.extend(public_core_product_profile_issues(repo_root))
     issues.extend(python_version_contract_issues(repo_root))
     issues.extend(development_status_classifier_issues(repo_root))

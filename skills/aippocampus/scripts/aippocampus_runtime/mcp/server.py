@@ -900,6 +900,8 @@ def call_memory_health(arguments: dict[str, Any]) -> dict[str, Any]:
         payload = compact_health_payload(payload)
     elif isinstance(payload, dict):
         payload = {"detail": "full", **payload}
+    if isinstance(payload, dict):
+        payload = memory_health_recovery.recall_first_health_payload(arguments, payload)
     return text_result(public_payload(arguments, payload))
 
 

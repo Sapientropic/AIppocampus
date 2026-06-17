@@ -4,7 +4,10 @@ Role: recall and foreground-memory contract index.
 Status: current architecture layer.
 
 Use this folder when changing how agents request, rank, display, or deepen
-memory routes. Source authority still belongs to the source layer.
+memory routes. Source authority still belongs to the source layer. For the
+agent-facing UX review checklist across foreground cards, hooks, MCP/CLI, and
+recovery flows, use the
+[AIppocampus UX charter](../../../skills/aippocampus-ux/references/agent-facing-ux-charter.md).
 
 | File | Use |
 | --- | --- |
