@@ -68,6 +68,15 @@ Cross-layer projections keep the same authority or lower it. They may explain
 which source trail to reopen; they may not promote a finding into truth because
 more runtime layers noticed it.
 
+Task Orientation Packets consume this layer only through mature, compact
+constraint refs. The default `aippocampus agent orient "<task>" --json` packet
+can include semantic-learning guidance, AIppo seed rows, and ripe
+source-backed lesson constraints when they are relevant to the task, but each
+item remains `navigation_only_not_fact` and points to an effectiveness-ledger
+feedback route instead of becoming a fact. Unripe/private aggregate signals
+remain suppressed; aggregate replay is available only through explicit
+`agent orient --eval --private-replay-aggregate` or sanitized event input.
+
 Effectiveness reports are diagnostic. A fixture can show the route was surfaced
 and that the next synthetic attempt used a better order; it cannot prove live
 causal behavior lift.

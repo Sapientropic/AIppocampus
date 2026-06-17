@@ -46,12 +46,20 @@ issue-scale work by combining:
 - issue-work guard owner refs;
 - AIppo working-contract constraints;
 - external source anchor roles;
-- Active Path Packet selection.
+- Active Path Packet selection;
+- the compact projection of `aippocampus_understanding_state.v1`.
 
 The packet is intentionally derived and no-write. It may say which source route
 to try first, which stale anchors should not rank as current, and which private
 replay aggregate could be used later. It must not serialize raw private
 history, local paths, source handles, or live quality-lift claims.
+
+The full Understanding State read model is richer than the default foreground
+packet. It may compose continuity domains, pathlets, Journey, Episode/Arc,
+repo familiarity, external anchors, and mature learning constraints, but the
+default packet should carry only component status, the small foreground route
+projection, and the short boundary needed to start well. Detailed lifecycle,
+gap, and audit fields belong behind progressive disclosure.
 
 `aippocampus agent orient --eval --json` is a deterministic public fixture. It
 compares route-only recall, static summary context, Task Orientation Packets,
@@ -59,7 +67,9 @@ and Task Orientation Packets plus mature constraints. It can show that the
 packet shape reduces broad manual search inside the fixture while preserving
 source-truth overclaim rate. It cannot claim live recall improvement. Private
 history replay remains opt-in, aggregate-only, and outside the default
-foreground packet.
+foreground packet; `--private-replay-aggregate` and
+`--private-replay-events <sanitized-events.jsonl>` project only aggregate
+learning-loop replay metrics.
 
 ## Closing Issues
 
