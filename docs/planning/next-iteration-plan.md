@@ -1,8 +1,9 @@
 # Next Iteration Plan
 
-Role: active handoff for next development slices and issue-queue orientation.
-Status: current planning owner for near-term execution context; GitHub Issues
-and the Project remain the executable queue.
+Role: source-backed handoff for next development slices, not an issue-state
+queue.
+Status: current planning context for durable constraints and near-term themes;
+GitHub Issues and the Project remain the executable queue.
 
 This is the short handoff for the next development slice after the current
 technical-debt baseline. It points to canonical docs instead of duplicating
@@ -12,11 +13,12 @@ Keep this file as a task queue and preservation checklist. Detailed Stage 0-5
 evidence belongs in `stage-0-5-readiness.md`; dated command evidence belongs in
 `public-readiness-verification.md`.
 
-Active planning view: the public GitHub Project
+Current execution view: the public GitHub Project
 [`AIppocampus Roadmap`](https://github.com/users/Sapientropic/projects/1)
 tracks the issue slices extracted from this file and related roadmap/readiness
-docs. Use the Project for status/filtering; keep this file as the source-backed
-handoff context.
+docs. Use the Project for live status/filtering; keep this file as
+source-backed handoff context. Do not treat old closeout language below as the
+current queue without checking the linked GitHub issue state first.
 
 ## Current Product Focus
 
@@ -31,18 +33,23 @@ fixture, doc, CLI, runtime slice, or verified cleanup within 1-2 weeks, park it
 as a Discussion or a seed under `docs/research/seeds/` until it can be cut
 smaller.
 
-### Open Issue Cleanup Review
+### Historical Issue-State Review
 
-As of the 2026-06-06 issue-cleanup implementation pass, every open issue body
-and comment should be treated as a hypothesis until checked against code,
-docs, and evidence. Recent owner comments explicitly reopened several broad
-parents for sliced execution; those comments override older cleanup rows that
-called the same issues complete or moved out of the foreground.
+The table below is retained as a 2026-06 cleanup-history map. It is background
+context, not an active queue and not authority to close or reopen anything on
+its own. Every issue body and comment should be treated as a hypothesis until
+checked against current code, docs, evidence, and GitHub state. Recent owner
+comments override older cleanup rows that called the same issues complete or
+moved them out of the foreground.
 
 Open issues remain an execution queue, not an idea vault. Close an issue only
 when the branch supplies the evidence its latest comments require, or when the
 work is deliberately moved to a canonical roadmap/research surface with a clear
 reason that it should no longer be an open executable item.
+
+If a future agent needs current work, start from GitHub Issues/Project and the
+current roadmap. Use this historical table only to understand why broad owner
+issues were once considered bounded, deferred, or superseded.
 
 | Layer | Current issues | Current disposition |
 |---|---|---|

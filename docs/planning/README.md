@@ -10,7 +10,7 @@ handoff context.
 
 | File | Classification | Use |
 | --- | --- | --- |
-| [next-iteration-plan.md](next-iteration-plan.md) | active handoff | Current development-slice orientation and open-issue cleanup boundary. |
+| [next-iteration-plan.md](next-iteration-plan.md) | source-backed handoff | Durable development-slice context plus historical issue-state review; use GitHub Issues/Project for the live queue. |
 | [agent-discoverability-release.md](agent-discoverability-release.md) | active handoff | PyPI, MCP Registry, one-command install, and agent recommendation publication gates. |
 | [standalone-binary-packaging.md](standalone-binary-packaging.md) | active handoff | Optional Python-free binary claim boundary and cross-platform smoke matrix. |
 | [encrypted-sync-follow-up-rfc.md](encrypted-sync-follow-up-rfc.md) | implemented follow-up RFC | Historical-to-current bridge for device-key UX, plaintext migration, and sync follow-up owners. |

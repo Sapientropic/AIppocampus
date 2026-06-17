@@ -202,15 +202,17 @@ frontstage recall command.
 
 ## Issue Slices
 
-Recommended public issues from this run:
+This section is a dated intake map from the 2026-06-14 dogfood run, not a live
+backlog. GitHub Issues and the Project remain the execution queue; future
+agents should use this table only to understand where each recommendation went.
 
-1. Agent-callable install/readiness regression after host live probe.
-2. Local path redaction and privacy-boundary consistency across health/search
-   and MCP tools.
-3. Tolerant, action-complete health/maintenance frontstage for active threads.
-4. CLI/MCP command contract cleanup for first-run personal workflows.
-5. Optional follow-up under the existing AIppo/agent-affordance track for hook
-   wording and lazy tool discovery.
+| Slice from this run | Current route |
+| --- | --- |
+| Agent-callable install/readiness regression after host live probe | Covered by the update/plugin readiness work around #2012, #2028, #1999, and the broader readiness-model follow-up #2058. Use the latest issue comments rather than this report for open work. |
+| Local path redaction and privacy-boundary consistency across health/search and MCP tools | Runtime JSON command/template and redaction cleanup was tracked through #2071, #2040, and #2081. New runtime regressions should become narrow command-specific issues, not a reopen of this dated report. |
+| Tolerant, action-complete health/maintenance frontstage for active threads | Covered by #2081, #2082, #2023, and the compact claim-boundary issue #2089. This report is evidence for why the split matters, not the acceptance source. |
+| CLI/MCP command contract cleanup for first-run personal workflows | Covered by #2057 plus narrower surface fixes such as #2056, #2053, #2052, and #2151. Keep future fixes attached to the current surface issue. |
+| AIppo/agent-affordance hook wording and lazy tool discovery | Narrowed to #2147 for prompt-hook lazy-tool fallback and #1997 for default-hook recall drag. No extra issue should be generated from this row unless fresh dogfood finds a new failure mode. |
 
 ## Cannot Claim
 

@@ -103,7 +103,8 @@ aippocampus hooks lifecycle uninstall
 
 Then make the public-safe demo receipt visible when you need a no-private-data
 example. Exact phrase search is useful, but it should not replace the core
-agent continuity path:
+agent continuity path. The short public walkthrough lives in
+[Demo Scenarios](docs/guides/demo-scenarios.md#first-useful-recall-demo):
 
 ```sh
 aippocampus search "without pretending it has innate memory" --clean-source-dir ./examples/public-memory-bundle/clean-source --json
