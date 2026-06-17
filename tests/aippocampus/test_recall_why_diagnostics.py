@@ -391,6 +391,19 @@ class RecallWhyDiagnosticsTests(unittest.TestCase):
         self.assertEqual(payload["foreground_next_action"], card["primary_action"])
 
     def test_mcp_recall_diagnostic_returns_public_safe_payload(self) -> None:
+        cue = "clean source continuity"
+        cli_result = facade.run_command(
+            [
+                "why-recall",
+                cue,
+                "--cwd",
+                str(self.cwd),
+                "--clean-source-dir",
+                str(self.clean),
+                "--json",
+            ],
+            capture_output=True,
+        )
         response = mcp.handle_request(
             {
                 "jsonrpc": "2.0",
@@ -399,7 +412,7 @@ class RecallWhyDiagnosticsTests(unittest.TestCase):
                 "params": {
                     "name": "recall_diagnostic",
                     "arguments": {
-                        "cue": "SECRET_TOKEN=abc123 clean source continuity",
+                        "cue": cue,
                         "mode": "why-recall",
                         "cwd": str(self.cwd),
                         "clean_source_dir": str(self.clean),
@@ -408,12 +421,68 @@ class RecallWhyDiagnosticsTests(unittest.TestCase):
             }
         )
 
+        self.assertTrue(cli_result.ok, cli_result.stderr)
+        cli_payload = json.loads(cli_result.stdout)
         payload = json.loads(response["result"]["content"][0]["text"])
         encoded = json.dumps(payload, ensure_ascii=False)
         self.assertFalse(response["result"].get("isError", False))
         self.assertEqual(payload["kind"], "aippocampus_recall_diagnostic")
         self.assertIn("source_reopen_required", payload["reasons"])
+        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
+        self.assertEqual(payload["agent_next_action"], cli_payload["agent_next_action"])
+        self.assertEqual(payload["foreground_action"], cli_payload["foreground_action"])
+        self.assertEqual(payload["safe_next_actions"], cli_payload["safe_next_actions"])
+        self.assertEqual(payload["action_card"]["next_command"], payload["agent_next_action"]["command"])
+        self.assertNotIn('"<cue>"', encoded)
+        self.assertNotIn(";", payload["action_card"]["next_command"])
         self.assertNotIn("SECRET_TOKEN", encoded)
+        self.assertNotIn(str(self.cwd), encoded)
+
+    def test_mcp_recall_diagnostic_matches_cli_recovery_projection(self) -> None:
+        missing_clean = self.cwd / "missing-clean-source"
+        cli_result = facade.run_command(
+            [
+                "why-not-recall",
+                "old correction",
+                "--cwd",
+                str(self.cwd),
+                "--clean-source-dir",
+                str(missing_clean),
+                "--json",
+            ],
+            capture_output=True,
+        )
+        response = mcp.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 679,
+                "method": "tools/call",
+                "params": {
+                    "name": "recall_diagnostic",
+                    "arguments": {
+                        "cue": "old correction",
+                        "mode": "why-not-recall",
+                        "cwd": str(self.cwd),
+                        "clean_source_dir": str(missing_clean),
+                    },
+                },
+            }
+        )
+
+        self.assertTrue(cli_result.ok, cli_result.stderr)
+        cli_payload = json.loads(cli_result.stdout)
+        payload = json.loads(response["result"]["content"][0]["text"])
+        encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertFalse(response["result"].get("isError", False))
+        self.assertEqual(payload["decision"], "missing")
+        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
+        self.assertEqual(payload["agent_next_action"], cli_payload["agent_next_action"])
+        self.assertEqual(payload["foreground_action"], cli_payload["foreground_action"])
+        self.assertEqual(payload["safe_next_actions"], cli_payload["safe_next_actions"])
+        self.assertEqual(payload["agent_next_action"]["id"], "check_onboarding_status")
+        self.assertLessEqual(len(payload["cannot_claim"]), 4)
+        self.assertNotIn('"<cue>"', encoded)
+        self.assertNotIn(";", payload["action_card"]["next_command"])
         self.assertNotIn(str(self.cwd), encoded)
 
 

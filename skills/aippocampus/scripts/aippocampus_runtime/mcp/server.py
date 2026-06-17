@@ -43,6 +43,7 @@ from aippocampus_runtime.mcp.tool_readiness import (
 )
 from aippocampus_runtime.ops import telepathy_handoff_store
 from aippocampus_runtime.privacy import LOCAL_PATH_REDACTION
+from aippocampus_runtime.recall import why_cli
 from aippocampus_runtime.recall.agent_continuity_cli_support import (
     RouteLimitError,
     agent_recall_missing_query_payload,
@@ -587,6 +588,7 @@ def call_recall_diagnostic(arguments: dict[str, Any]) -> dict[str, Any]:
     )
     if provider_bridge_report is not None:
         payload["provider_key_bridge"] = provider_bridge_report
+    payload = why_cli.attach_foreground_actions(payload, cue=cue)
     return text_result(public_payload(arguments, payload))
 
 

@@ -283,6 +283,10 @@ def _attach_foreground_actions(payload: dict[str, Any], *, cue: str) -> dict[str
     return payload
 
 
+def attach_foreground_actions(payload: dict[str, Any], *, cue: str) -> dict[str, Any]:
+    return _attach_foreground_actions(payload, cue=cue)
+
+
 def render_recovery_text(payload: Mapping[str, Any]) -> str:
     mode = str(payload.get("mode") or "why-recall")
     actions = [row for row in payload.get("next_actions") or [] if isinstance(row, Mapping)]
