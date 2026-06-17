@@ -368,6 +368,7 @@ Avoid overclaims:
 - `docs/guides/coding-agent-memory.md`: narrow coding-agent product lane,
   demo path, evidence drawer, and recommendation boundary.
 - `docs/guides/install-guide.md`: full install paths.
+- `docs/guides/ten-minute-public-path.md`: public no-clone and first-use probe.
 - `docs/guides/public-api.md`: supported CLI, MCP, env, JSON, and import
   boundary.
 - `docs/guides/ecosystem-integration-matrix.md`: host-family support status and

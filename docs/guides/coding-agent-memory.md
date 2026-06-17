@@ -73,8 +73,11 @@ The current narrow lane can:
 
 Codex has the most complete host path today: local history onboarding,
 MCP/progressive recall, plugin packaging, and opt-in prompt/lifecycle hooks.
-Claude Code has local-history onboarding plus the MCP/project-skill path; it
-does not have AIppocampus Claude hook support. Keep the precise support table in
+Claude Code supports local-history onboarding, MCP/project-skill setup, and
+scoped explicit AIppocampus hook handlers for `UserPromptSubmit` and `Stop`.
+Do not claim real-host firing, `PostToolUse` / `PostToolBatch` capture,
+compaction hook utility, all Claude Code versions, or broad native ambient
+quality without source/event evidence. Keep the precise support table in
 [`ecosystem-integration-matrix.md`](ecosystem-integration-matrix.md), with
 Claude Code setup details in [`claude-code-mcp.md`](setup/claude-code-mcp.md).
 

@@ -153,7 +153,7 @@ provider path and then ask for one old source-backed continuity route:
 uvx aippocampus onboard --provider codex --status --json
 # Then follow the explicit write recommendation after consent.
 
-# Claude Code: local transcript onboarding; no AIppocampus Claude hooks claimed.
+# Claude Code: local transcript onboarding plus scoped explicit hooks.
 uvx aippocampus onboard --provider claude-code --dry-run
 uvx aippocampus onboard --provider claude-code
 
@@ -166,15 +166,19 @@ uvx aippocampus agent deepen --request 1 --last-recall --json
 ```
 
 Manual search demonstrates the source substrate; agent recall/deepen is the
-foreground continuity route. Codex is currently the
-host with AIppocampus prompt/lifecycle hooks: prompt hooks notice recall scents
-as a conversation starts, and lifecycle hooks refresh clean source and indexes
-after session events. Claude Code currently has local-history onboarding plus
-the MCP/project-skill path, not AIppocampus Claude hook support; see the
+foreground continuity route. Codex is currently the complete
+AIppocampus prompt/lifecycle hook path: prompt hooks notice recall scents as a
+conversation starts, and lifecycle hooks refresh clean source and indexes after
+session events. Claude Code supports local-history onboarding, MCP/project-skill
+setup, and scoped explicit AIppocampus hook handlers for `UserPromptSubmit` and
+`Stop`; see the
 [Ecosystem Integration Matrix](docs/guides/ecosystem-integration-matrix.md)
-and [Claude Code MCP guide](docs/guides/setup/claude-code-mcp.md). Hooks are never
-installed silently; review status first, then install them only when this
-machine is allowed to let AIppocampus touch Codex hooks:
+and [Claude Code MCP guide](docs/guides/setup/claude-code-mcp.md). Do not claim
+real-host firing, `PostToolUse` / `PostToolBatch` capture, compaction hook
+utility, all Claude Code versions, or broad native ambient quality without
+source/event evidence. Hooks are never installed silently; review status first,
+then install them only when this machine is allowed to let AIppocampus touch the
+relevant host settings:
 
 ```sh
 aippocampus update status
@@ -213,7 +217,7 @@ Do not publish or commit raw rollouts, registry exports, `.aippocampus/` output,
 API keys, cookies, or sync bundles while following the quick path.
 
 If you are deciding which AIppocampus surface another tool should depend on,
-use the [10-minute public API path](docs/guides/public-api.md#ten-minute-public-path).
+use the [10-minute public path](docs/guides/ten-minute-public-path.md).
 If you are deciding whether a feature belongs in the low-friction personal path
 or in governed/high-risk opt-in behavior, use
 [Product Profiles](docs/architecture/host/product-profiles.md).
@@ -339,8 +343,8 @@ continuity resumed.
 - Benchmark and smoke evidence:
   [Benchmark And Evidence Map](docs/evidence/benchmark-evidence-map.md).
 - Supported public surface:
-  [Public API](docs/guides/public-api.md), including the
-  [10-minute path](docs/guides/public-api.md#ten-minute-public-path), and
+  [10-minute public path](docs/guides/ten-minute-public-path.md),
+  [Public API](docs/guides/public-api.md), and
   [Public Core Boundary](docs/guides/public-core-boundary.md).
 - Ecosystem support status:
   [Ecosystem Integration Matrix](docs/guides/ecosystem-integration-matrix.md).

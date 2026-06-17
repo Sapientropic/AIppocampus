@@ -34,7 +34,7 @@ from today.
 | Today AIppocampus can claim | Strongest current route | Boundary |
 | --- | --- | --- |
 | It is a working local, source-backed continuity layer, not only a concept document. | [`can-claim-ladder.md`](can-claim-ladder.md) and [`readiness/stage-0-5-readiness.md`](readiness/stage-0-5-readiness.md). | Not hosted memory, innate model memory, or universal recall quality. |
-| It can import/search/reopen local clean source after explicit user consent. | [`README.md`](../../README.md#quick-start) and [`docs/guides/public-api.md`](../guides/public-api.md#ten-minute-public-path). | Manual search is source substrate proof, not live hook lift. |
+| It can import/search/reopen local clean source after explicit user consent. | [`README.md`](../../README.md#quick-start) and [`docs/guides/ten-minute-public-path.md`](../guides/ten-minute-public-path.md). | Manual search is source substrate proof, not live hook lift. |
 | It can expose source-backed recall routes to agents. | `recall_navigation.progressive_route_follow_through` in [`current-claims.md`](current-claims.md). | Not guaranteed default foreground usefulness or broad private-history quality. |
 | It keeps generated summaries and route hints below source reopen. | Source-discipline rows in [`current-claims.md`](current-claims.md), especially Track S, hard-negative, multimodal evidence-pool, and attention-router rows. | Not human-level semantic understanding or high-risk answer certification. |
 | It has public-safe benchmark fixtures and external adapter paths. | [`benchmark-evidence-map.md`](benchmark-evidence-map.md) and [`benchmarks/README.md`](benchmarks/README.md). | Adapter feasibility and contract fixtures are not official benchmark superiority. |
@@ -114,7 +114,7 @@ quality, or private history benchmark performance.
 For a no-private-data demo path, use
 [`docs/guides/demo-scenarios.md`](../guides/demo-scenarios.md). For dependency
 decisions, use the
-[`10-minute public API path`](../guides/public-api.md#ten-minute-public-path).
+[`10-minute public path`](../guides/ten-minute-public-path.md).
 
 ## Field-Report Index
 

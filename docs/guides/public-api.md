@@ -16,85 +16,14 @@ and governed/high-risk controls, see
 
 ## Ten-Minute Public Path
 
-Use this path when an external user, agent host, or downstream script needs the
-smallest dependable AIppocampus surface before learning the research features.
-For an ordinary Codex setup where the user has asked an agent to install
-AIppocampus locally, the product-first path is the
-[agent-mediated Codex plugin path](install-guide.md#agent-mediated-codex-plugin-path);
-this section remains the no-clone/API-stability path.
+Use [ten-minute-public-path.md](ten-minute-public-path.md) when an external
+user, agent host, or downstream script needs the smallest dependable
+AIppocampus probe before learning this full stability contract.
 
-1. Verify the packaged CLI without cloning or writing local memory artifacts:
-
-   ```sh
-   uvx aippocampus --help
-   ```
-
-2. If local source is already registered, try the useful source-backed moment:
-
-   ```sh
-   uvx aippocampus agent recall "old decision or handoff cue" --json
-   uvx aippocampus agent deepen --request 1 --last-recall --json
-   uvx aippocampus search "a distinctive old phrase"
-   ```
-
-   Use exact search when the user remembers wording or the recall route is
-   blocked. The primary agent continuity path is recall, then deepen.
-
-3. If source is missing or blocked, check whether a local provider has usable
-   source without registering new history. Human-readable output is the
-   default; add `--format json` only for automation:
-
-   ```sh
-   uvx aippocampus onboard --provider auto --status
-   ```
-
-4. After explicit user consent, register selected local history and ask for one
-   source-backed continuity route:
-
-   ```sh
-   uvx aippocampus onboard --provider codex --status --json
-   # Then follow the explicit write recommendation after consent.
-   uvx aippocampus onboard --provider claude-code --dry-run
-   uvx aippocampus onboard --provider claude-code
-   uvx aippocampus import conversation --format generic-jsonl --input ./conversation.jsonl --dry-run --json
-   uvx aippocampus import conversation --format generic-jsonl --input ./conversation.jsonl
-   uvx aippocampus agent recall "old decision or handoff cue" --json
-   uvx aippocampus agent deepen --request 1 --last-recall --json
-   ```
-
-   Use exact search when the user remembers wording. If the user only remembers
-   a vague cue, use recall/deepen and treat the route as candidate navigation
-   until a source-backed snippet or opened source appears.
-
-5. Only when an agent host, plugin, or operator check needs those surfaces,
-   inspect the MCP catalog or run health checks:
-
-   ```sh
-   aippocampus health --cwd "$PWD" --json
-   aippocampus mcp status
-   aippocampus mcp list-tools --json
-   ```
-
-6. Know where data lives before enabling writes. Generated memory artifacts use
-   the configured AIppocampus registry: `AIPPOCAMPUS_REGISTRY_DIR`, then
-   `AIPPOCAMPUS_HOME/registry`, then legacy Codex registry fallback. Project
-   repositories should not receive raw rollouts, registry exports, generated
-   indexes, sync bundles, or private local paths.
-
-This path intentionally does not require MCP, cognitive-map jobs, sync, plugin
-packaging, or benchmark runners. Hook installation is still explicit opt-in, but
-trusted Codex users should review action-time hint status during setup with
-`aippocampus hooks action status --json`; install only after that review.
-Unreviewed Dream, subconscious, and semantic jobs remain outside the 10-minute dependency story.
-Reviewed foreground cards such as `aippocampus agent background "task cue"
---json` can still be product-visible continuity navigation when setup permits;
-they are not source evidence until source is reopened.
-
-The default control vocabulary for the personal path is pause / forget /
-do-not-use-here / export / why-not. `export`, `why-not`, and
-`do-not-use-here` have concrete public command surfaces today. `pause` and
-`forget` are safe foreground control cards first: they explain the boundary and
-nearest explicit route without claiming global pause or destructive deletion.
+This document remains the canonical API and dependency boundary. Stay here when
+you are deciding which CLI, MCP, JSON, environment, or Python import surface a
+tool should depend on. Use the short path for first-use and return here only
+when integration or operator decisions need the larger contract.
 
 ## Which Layer Should I Depend On?
 

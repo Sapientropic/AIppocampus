@@ -77,7 +77,7 @@ rollback instead of repeated per-event confirmation, while prompt hooks and
 public reports keep their stricter source/privacy boundaries.
 
 For no-clone package probing, non-Codex hosts, or CLI-only fallback, use the
-[10-minute public API path](public-api.md#ten-minute-public-path): package
+[10-minute public path](ten-minute-public-path.md): package
 probe, read-only provider status, explicit onboarding only with user consent,
 then clean-source search for a first source-backed snippet. Keep sync, object
 storage, and benchmarks as advanced/operator surfaces unless that path proves

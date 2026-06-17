@@ -1456,12 +1456,21 @@ def print_hooks_help(kind: str | None = None, *, file: TextIO | None = None) -> 
         print("  aippocampus hooks action refresh-cache --write --json", file=target)
         return
     if kind == "claude-code":
-        print("usage: aippocampus hooks claude-code [status|dry-run] [options]", file=target)
+        print(
+            "usage: aippocampus hooks claude-code "
+            "[status|dry-run|install|uninstall|smoke] [options]",
+            file=target,
+        )
         print("", file=target)
-        print("Claude Code hook helper: host-specific status/dry-run, not Codex hook install.", file=target)
+        print("Claude Code hook helper: scoped UserPromptSubmit/Stop handlers.", file=target)
+        print("Install/uninstall mutate only AIppocampus-owned Claude settings entries.", file=target)
+        print("Codex prompt/lifecycle hook installers stay Codex-only.", file=target)
         print("Common:", file=target)
         print("  aippocampus hooks claude-code status --json", file=target)
         print("  aippocampus hooks claude-code dry-run --json", file=target)
+        print("  aippocampus hooks claude-code install --json", file=target)
+        print("  aippocampus hooks claude-code uninstall --json", file=target)
+        print("  aippocampus hooks claude-code smoke --json", file=target)
         return
     print("usage: aippocampus hooks [prompt|lifecycle|action|claude-code] ...", file=target)
     print("", file=target)
@@ -1469,7 +1478,7 @@ def print_hooks_help(kind: str | None = None, *, file: TextIO | None = None) -> 
     print("  prompt       Codex UserPromptSubmit recall affordance hook", file=target)
     print("  lifecycle    Codex session maintenance hooks", file=target)
     print("  action       Optional PreToolUse action-time hints and cache refresh", file=target)
-    print("  claude-code  Host-specific Claude Code hook status/dry-run helper", file=target)
+    print("  claude-code  Scoped Claude Code UserPromptSubmit/Stop hook helper", file=target)
     print("", file=target)
     print("Examples:", file=target)
     print("  aippocampus hooks prompt status --last", file=target)

@@ -49,7 +49,7 @@ blocked.
 
 For the longer version, use the
 [agent-mediated Codex plugin path](guides/install-guide.md#agent-mediated-codex-plugin-path),
-the [10-minute public path](guides/public-api.md#ten-minute-public-path), or the
+the [10-minute public path](guides/ten-minute-public-path.md), or the
 [first recall install path](guides/install-guide.md#first-recall-path) with the
 [first recall decision card](guides/first-recall-decision-card.md).
 For a public-safe walkthrough that shows the first useful recall moment before
@@ -73,8 +73,9 @@ Goal: decide whether AIppocampus helps Codex/Claude-style long-running work.
 1. Start with [Coding-Agent Memory Lane](guides/coding-agent-memory.md).
 2. Use [Agent Context](agent-context.md) for the compact recommendation and
    comparison boundary that an AI assistant can read.
-3. Use [Public API](guides/public-api.md) only when another tool needs a stable
-   CLI, MCP, JSON, SDK, or Python import contract.
+3. Use [Ten-Minute Public Path](guides/ten-minute-public-path.md) for first-use
+   probes, then [Public API](guides/public-api.md) only when another tool needs
+   a stable CLI, MCP, JSON, SDK, or Python import contract.
 
 Recall scents, familiarity, and model-organized packets are navigation until
 source is reopened.
