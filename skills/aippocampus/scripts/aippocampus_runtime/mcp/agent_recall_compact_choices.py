@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
 from aippocampus_runtime import core
-from aippocampus_runtime.contracts import command_value_needs_input, normalize_foreground_action
+from aippocampus_runtime.contracts import (
+    command_value_needs_input,
+    normalize_foreground_action,
+    shell_quote,
+)
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 
 
@@ -120,7 +123,7 @@ def with_low_specificity_foreground_action(
     if clean_cue and not command_value_needs_input(clean_cue):
         next_action["arguments"] = {"query": clean_cue, "max": 3}
         next_action["command"] = (
-            f"aippocampus agent recall {json.dumps(clean_cue, ensure_ascii=False)} --json"
+            f"aippocampus agent recall {shell_quote(clean_cue)} --json"
         )
         next_action["same_cue_fallback"] = "low_confidence_not_a_substitute_for_tighter_cue"
     else:

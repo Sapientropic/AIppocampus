@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.core import now_utc
+from aippocampus_runtime.io_mtime_cache import load_json_object
 from aippocampus_runtime.registry.api import load_registry, registry_paths, unique_preserve
 
 ASSOCIATION_SCHEMA_VERSION = 1
@@ -179,7 +180,7 @@ def load_associations(path: Path) -> dict[str, Any]:
     if not path.exists():
         return {"schema_version": ASSOCIATION_SCHEMA_VERSION, "updated_at": None, "terms": {}}
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
+        data = load_json_object(path)
     except Exception:
         return {"schema_version": ASSOCIATION_SCHEMA_VERSION, "updated_at": None, "terms": {}}
     if not isinstance(data, dict):

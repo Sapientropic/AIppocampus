@@ -15,6 +15,7 @@ from aippocampus_runtime.contracts import (
     command_value_needs_input,
     foreground_shell_action,
     foreground_template_action,
+    shell_quote,
 )
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 from aippocampus_runtime.source.rollout import normalize_rollout
@@ -110,7 +111,7 @@ def _latest_reply_recall_action(cue: Any = None) -> dict[str, Any]:
         return foreground_shell_action(
             action_id="recall_current_thread_context",
             label="Recall current-thread context",
-            command=f"aippocampus agent recall {json.dumps(clean_cue, ensure_ascii=False)} --json",
+            command=f"aippocampus agent recall {shell_quote(clean_cue)} --json",
             why="Use the latest user turn as the continuity cue when no final-answer closeout is available.",
             mutation_risk="read_only",
             claim_boundary="no_claim_before_reopen",

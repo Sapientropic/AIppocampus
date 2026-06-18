@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -1250,7 +1251,10 @@ class AippocampusCliRecoveryCardTests(unittest.TestCase):
         self.assertEqual(proc.returncode, 2)
         payload = json.loads(proc.stdout)
         self.assertEqual(payload["error"]["code"], "macro_positional_cue_not_supported")
-        self.assertEqual(payload["agent_next_action"]["command"], 'aippocampus agent recall "old cue" --json')
+        self.assertEqual(
+            shlex.split(payload["agent_next_action"]["command"]),
+            ["aippocampus", "agent", "recall", "old cue", "--json"],
+        )
         self.assertIn("macro --explain-schema", json.dumps(payload, ensure_ascii=False))
 
     def test_sync_plan_outputs_direction_cards_without_private_paths(self) -> None:

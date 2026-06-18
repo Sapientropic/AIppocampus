@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shlex
 import sys
 import unittest
 from pathlib import Path
@@ -11,6 +12,10 @@ sys.path.insert(0, str(SCRIPTS))
 
 from aippocampus_runtime.contracts import executable_command_violations  # noqa: E402
 from aippocampus_runtime.recall import agent_continuity, foreground_action_card  # noqa: E402
+
+
+def assert_command_args(test: unittest.TestCase, command: str, expected: list[str]) -> None:
+    test.assertEqual(shlex.split(command), expected)
 
 
 class AgentRecallCompactProjectionTests(unittest.TestCase):
@@ -76,9 +81,10 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
         self.assertNotIn("action_id", action)
         self.assertEqual(action["tool_name"], "agent_recall")
         self.assertEqual(action["arguments"]["query"], "dashboard mobile continuity state")
-        self.assertEqual(
+        assert_command_args(
+            self,
             action["command"],
-            'aippocampus agent recall "dashboard mobile continuity state" --json',
+            ["aippocampus", "agent", "recall", "dashboard mobile continuity state", "--json"],
         )
         self.assertNotIn("requires", action)
         self.assertNotIn("command_template", action)
@@ -201,12 +207,20 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
         self.assertEqual(no_route["safe_next_actions"][0], no_route["foreground_action"])
         self.assertEqual(no_route["foreground_action"]["id"], "recover_recall_miss")
         self.assertNotIn("action_id", no_route["foreground_action"])
-        self.assertEqual(no_route["foreground_action"]["command"], 'aippocampus search "unlikely-no-match-token-xyz-12345" --json')
+        assert_command_args(
+            self,
+            no_route["foreground_action"]["command"],
+            ["aippocampus", "search", "unlikely-no-match-token-xyz-12345", "--json"],
+        )
         self.assertEqual(weak_route["foreground_action_contract"], "foreground-action-v1")
         self.assertEqual(weak_route["foreground_action"], weak_route["agent_next_action"])
         self.assertEqual(weak_route["safe_next_actions"][0], weak_route["foreground_action"])
         self.assertEqual(weak_route["foreground_action"]["id"], "recover_weak_route")
-        self.assertEqual(weak_route["foreground_action"]["command"], 'aippocampus search "broad direction route" --json')
+        assert_command_args(
+            self,
+            weak_route["foreground_action"]["command"],
+            ["aippocampus", "search", "broad direction route", "--json"],
+        )
         self.assertEqual(executable_command_violations(no_route), [])
         self.assertEqual(executable_command_violations(weak_route), [])
 
@@ -220,9 +234,10 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
 
         self.assertEqual(card["decision"], "recover_no_route")
         self.assertEqual(card["canonical_action"]["tool_name"], "search_memory")
-        self.assertEqual(
+        assert_command_args(
+            self,
             card["canonical_action"]["cli_command"],
-            'aippocampus search "unlikely-no-match-token-xyz-12345" --json',
+            ["aippocampus", "search", "unlikely-no-match-token-xyz-12345", "--json"],
         )
         self.assertEqual(card["safe_next_actions"][0], card["canonical_action"])
         self.assertEqual(executable_command_violations(card), [])
@@ -249,9 +264,18 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
         )
         encoded = json.dumps(projected, ensure_ascii=False)
         self.assertNotIn("<same cue>", encoded)
-        self.assertEqual(
+        assert_command_args(
+            self,
             projected["foreground_action"]["command"],
-            'aippocampus agent recall "missing cache source cue" --json --detail full',
+            [
+                "aippocampus",
+                "agent",
+                "recall",
+                "missing cache source cue",
+                "--json",
+                "--detail",
+                "full",
+            ],
         )
         self.assertEqual(executable_command_violations(projected), [])
 

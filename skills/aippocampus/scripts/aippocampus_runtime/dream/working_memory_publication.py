@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping
 
 from aippocampus_runtime.core import now_utc
+from aippocampus_runtime.io_mtime_cache import load_jsonl_objects
 
 POINTER_KIND = "aippocampus_dream_working_memory_publication_pointer"
 WORKING_MEMORY_KIND = "aippocampus_working_memory"
@@ -111,6 +112,9 @@ def publish_working_memory_snapshot(
 def read_jsonl_rows(path: Path, *, strict: bool = False) -> tuple[list[dict[str, Any]], int]:
     if not path.exists():
         return [], 0
+    cached = load_jsonl_objects(path, strict=strict)
+    if cached is not None:
+        return cached
     rows: list[dict[str, Any]] = []
     invalid = 0
     with path.open("r", encoding="utf-8") as fh:

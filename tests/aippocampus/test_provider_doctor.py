@@ -15,7 +15,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-from aippocampus_runtime.ops import provider_doctor  # noqa: E402
+from aippocampus_runtime.ops import doctor_preflight, provider_doctor  # noqa: E402
 
 PROVIDER_ENV_NAMES = [
     "AIPPOCAMPUS_DEEPSEEK_API_KEY",
@@ -64,6 +64,42 @@ def provider_env(extra: dict[str, str] | None = None) -> Iterator[None]:
 
 
 class ProviderDoctorTests(unittest.TestCase):
+    def test_preflight_reports_one_console_script_blocker_without_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, patch.object(
+            doctor_preflight.shutil,
+            "which",
+            return_value=None,
+        ):
+            report = provider_doctor.build_preflight_report(registry_dir=tmp)
+
+        encoded = json.dumps(report, ensure_ascii=False)
+        self.assertFalse(report["ok"])
+        self.assertEqual(report["status"], "blocked")
+        self.assertEqual(report["blocking_issue"]["id"], "aippocampus_console_script")
+        self.assertEqual(report["foreground_action"]["command"], "python -m pip install -e .")
+        self.assertIn("fallback_command", report["foreground_action"])
+        self.assertFalse(report["privacy"]["local_paths_emitted"])
+        self.assertNotIn(str(tmp), encoded)
+
+    def test_preflight_ready_when_core_tools_and_registry_are_available(self) -> None:
+        def fake_which(command: str) -> str | None:
+            return f"/redacted/bin/{command}"
+
+        with tempfile.TemporaryDirectory() as tmp, patch.object(
+            doctor_preflight.shutil,
+            "which",
+            side_effect=fake_which,
+        ):
+            report = provider_doctor.build_preflight_report(registry_dir=tmp)
+
+        encoded = json.dumps(report, ensure_ascii=False)
+        self.assertTrue(report["ok"], report)
+        self.assertEqual(report["status"], "ready")
+        self.assertIsNone(report["blocking_issue"])
+        self.assertEqual(report["foreground_action"]["id"], "continue_with_install_or_recall")
+        self.assertFalse(report["checks"]["registry_dir"]["local_path_emitted"])
+        self.assertNotIn(str(tmp), encoded)
+
     def test_missing_default_key_reports_hook_env_boundary_without_secret_values(self) -> None:
         with provider_env():
             report = provider_doctor.build_provider_doctor_report(model_route="default")

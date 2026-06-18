@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shlex
 import sys
 import unittest
 from io import StringIO
@@ -30,6 +31,7 @@ from aippocampus_runtime.contracts import (  # noqa: E402
     foreground_action_contract_violations,
     foreground_chooser_card,
     public_envelope,
+    shell_quote,
 )
 from aippocampus_runtime.registry import store as registry_store  # noqa: E402
 
@@ -118,6 +120,16 @@ class RuntimeContractsAndConfigRegistryTests(unittest.TestCase):
         self.assertEqual(fields["agent_next_action"], primary)
         self.assertEqual(fields["safe_next_actions"][0], primary)
         self.assertEqual(foreground_action_contract_violations(fields), [])
+
+    def test_shell_quote_keeps_recall_cues_single_argument(self) -> None:
+        cue = 'a";$(echo PWNED); #'
+        command = f"aippocampus agent recall {shell_quote(cue)} --json"
+
+        self.assertEqual(
+            shlex.split(command),
+            ["aippocampus", "agent", "recall", cue, "--json"],
+        )
+        self.assertIn(shell_quote(cue), command)
 
     def test_foreground_action_contract_lint_rejects_competing_aliases(self) -> None:
         payload = {

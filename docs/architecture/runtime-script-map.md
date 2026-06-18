@@ -97,6 +97,7 @@ to be reviewed as an owner-boundary decision. The current reviewed imports are:
 | `aippocampus_runtime.ops.presence_first_matrix_fixtures` | fixture runner | May render hook-context fixtures and authority taxonomy examples; fixture output is evidence scaffolding, not live policy. |
 | `aippocampus_runtime.ops.provider_doctor` | provider doctor | May inspect semantic-gate availability/configuration; it reports readiness only. |
 | `aippocampus_runtime.ops.provider_key_bridge` | hook handoff | May coordinate explicit hook installer/status surfaces for provider key bridging; it must not install hooks without an operator command. |
+| `aippocampus_runtime.ops.uninstall` | host cleanup | May call Claude Code hook uninstall helpers only from an explicit uninstall command; it reports AIppocampus-owned artifacts separately from user registry data. |
 | `aippocampus_runtime.ops.recall_navigation_attention` | fixture runner | May reuse recall query-policy token splitting while projecting deterministic attention-router comparison arms; it must not become foreground recall ranking or source evidence. |
 | `aippocampus_runtime.ops.recall_navigation_comparison` | diagnostic/reporting | May compare navigation authority taxonomies; it must not become a retrieval ranker. |
 | `aippocampus_runtime.ops.recall_navigation_comparison_fixtures` | fixture runner | May reuse ambient-card and prompt-context fixture helpers; fixture rows stay public-safe and non-hot-path. |

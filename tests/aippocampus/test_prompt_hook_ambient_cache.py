@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from aippocampus_runtime.recall import feedback_events
 from tests.aippocampus.prompt_hook_fixtures import (
     AmbientRecallHookCase,
     hook,
     json,
+    os,
     patch,
     thread_cache,
 )
@@ -239,6 +241,105 @@ class PromptHookAmbientCacheTests(AmbientRecallHookCase):
         self.assertEqual(second["ambient_recall"]["cards"][0]["cached_origin"], "unknown")
         self.assertNotIn("warm_background", second["ambient_recall"])
 
+    def test_prompt_hook_frequency_caps_cached_warm_card_without_policy_key(self) -> None:
+        cache_path = self.root / "ambient-cache-fallback-policy.json"
+        thread_cache.write_thread_cache(
+            cache_path,
+            thread_id="thread-a",
+            workspace=str(self.workspace),
+            topic_epoch="epoch-fallback-policy",
+            cards=[
+                {
+                    "card_id": "fallback-policy-card",
+                    "theme": "cached warm context",
+                    "support_level": "candidate",
+                    "visibility": "active_gentle_nudge",
+                    "matched_terms": ["ambient recall"],
+                }
+            ],
+            mode="active_gentle_nudge",
+            confidence="medium",
+            query_aliases=["cached alias"],
+        )
+
+        first = hook.assess_prompt(
+            "hook 机制就像人类的触发式联想，我们可以把小海马体做得更主动一点",
+            cwd=self.workspace,
+            registry_path=self.registry,
+            thread_id="thread-a",
+            topic_epoch="epoch-fallback-policy",
+            ambient_cache_path=cache_path,
+            warm_background=False,
+            search_budget=0,
+        )
+        second = hook.assess_prompt(
+            "hook 机制就像人类的触发式联想，我们可以把小海马体做得更主动一点",
+            cwd=self.workspace,
+            registry_path=self.registry,
+            thread_id="thread-a",
+            topic_epoch="epoch-fallback-policy",
+            ambient_cache_path=cache_path,
+            warm_background=False,
+            search_budget=0,
+        )
+
+        self.assertEqual(first["ambient_recall"]["cards"][0]["card_id"], "fallback-policy-card")
+        self.assertGreaterEqual(second["ambient_recall"]["policy_filter"]["frequency_capped"], 1)
+        self.assertNotIn(
+            "fallback-policy-card",
+            [card.get("card_id") for card in second["ambient_recall"]["cards"]],
+        )
+
+    def test_prompt_hook_filters_cached_warm_card_from_feedback_lane(self) -> None:
+        cache_path = self.root / "ambient-cache-feedback.json"
+        feedback_path = self.root / "route-feedback.jsonl"
+        event = feedback_events.active_flow_event(
+            route_id="cached-card-to-quiet",
+            route_kind="active_path",
+            signal="wrong_route_drag",
+        )
+        feedback_path.write_text(
+            json.dumps(event, ensure_ascii=False, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        thread_cache.write_thread_cache(
+            cache_path,
+            thread_id="thread-a",
+            workspace=str(self.workspace),
+            topic_epoch="epoch-feedback",
+            cards=[
+                {
+                    "card_id": "cached-card-to-quiet",
+                    "theme": "cached warm context",
+                    "support_level": "candidate",
+                    "visibility": "active_gentle_nudge",
+                    "matched_terms": ["ambient recall"],
+                }
+            ],
+            mode="active_gentle_nudge",
+            confidence="medium",
+        )
+
+        with patch.dict(os.environ, {"AIPPOCAMPUS_FEEDBACK_JSONL": str(feedback_path)}):
+            result = hook.assess_prompt(
+                "please recall a zephyr calibration route",
+                cwd=self.workspace,
+                registry_path=self.registry,
+                thread_id="thread-a",
+                topic_epoch="epoch-feedback",
+                ambient_cache_path=cache_path,
+                warm_background=False,
+                search_budget=0,
+            )
+
+        ambient = result["ambient_recall"]
+        self.assertNotIn(
+            "cached-card-to-quiet",
+            [card.get("card_id") for card in ambient["cards"]],
+        )
+        self.assertEqual(ambient["feedback_filter"]["load_status"], "loaded")
+        self.assertEqual(ambient["feedback_filter"]["quieted_card_count"], 1)
+
     def test_prompt_hook_debug_log_summarizes_ambient_cache_without_raw_prompt(self) -> None:
         result = {
             "decision": "scent",
@@ -289,4 +390,3 @@ class PromptHookAmbientCacheTests(AmbientRecallHookCase):
         self.assertEqual(event["ambient_recall"]["source_validation_statuses"]["supported"], 1)
         self.assertEqual(event["ambient_recall"]["provenance_counts"]["cached_warm_card"], 1)
         self.assertEqual(event["ambient_recall"]["support_level_counts"]["candidate"], 1)
-

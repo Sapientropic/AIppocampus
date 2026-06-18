@@ -90,6 +90,25 @@ def mcp_command_repair_options(command: str) -> list[str]:
     return unique
 
 
+def mcp_command_preflight(command: str = "aippocampus") -> dict[str, Any]:
+    availability = command_availability(command)
+    repair_options = mcp_command_repair_options(command)
+    resolves = bool(availability.get("resolves"))
+    return {
+        "kind": "aippocampus_mcp_command_preflight",
+        "command": command,
+        "resolves": resolves,
+        "status": "ready" if resolves else "console_script_not_resolvable",
+        "repair_options": repair_options,
+        "primary_repair_command": repair_options[0] if repair_options else "python -m pip install -e .",
+        "claim_boundary": (
+            "Codex plugin host-probe success does not prove that a bare MCP command "
+            "will resolve in every host process."
+        ),
+        "privacy": {"resolved_path_emitted": False},
+    }
+
+
 def load_json_file(path: Path | None) -> dict[str, Any] | None:
     if path is None or not path.exists():
         return None

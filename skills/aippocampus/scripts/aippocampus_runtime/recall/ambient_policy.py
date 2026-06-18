@@ -9,6 +9,7 @@ open when the overlay is missing, corrupt, or read-only.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import time
@@ -34,7 +35,8 @@ FRONTIER_CAP_SECONDS = 14 * 24 * 60 * 60
 
 QUESTION_TYPES = {"question_link", "theme_candidate"}
 FRONTIER_TYPES = {"frontier_marker"}
-TRACKED_TYPES = QUESTION_TYPES | FRONTIER_TYPES
+AMBIENT_CARD_TYPES = {"ambient_card"}
+TRACKED_TYPES = QUESTION_TYPES | FRONTIER_TYPES | AMBIENT_CARD_TYPES
 
 DISMISS_PATTERNS = (
     r"\bstop tracking\b(?P<target>.*)",
@@ -83,6 +85,28 @@ FRONTIER_INTENT_TERMS = {
     "从哪继续",
     "下次从哪",
     "收尾",
+}
+CONTINUATION_INTENT_TERMS = {
+    "continue",
+    "resume",
+    "revisit",
+    "pick up",
+    "keep going",
+    "继续",
+    "续接",
+    "接着",
+    "恢复",
+}
+CURRENT_TOPIC_POINTER_TERMS = THIS_TERMS | {
+    "same",
+    "current",
+    "this topic",
+    "this route",
+    "this thread",
+    "这个方向",
+    "这个话题",
+    "这件事",
+    "这边",
 }
 
 
@@ -207,12 +231,14 @@ def filter_ambient_cards(
     diagnostics = {
         "dismissed": 0,
         "frequency_capped": 0,
+        "frequency_cap_bypassed_for_current_continuation": 0,
         "frontier_not_requested": 0,
         "policy_event_count": len(events),
     }
+    current_continuation = current_topic_continuation_intent(prompt)
     for card in cards:
-        keys = policy_keys_from_card(card)
-        target_kind = policy_kind_from_card(card)
+        keys = surface_keys_from_card(card)
+        target_kind = surface_kind_from_card(card)
         if not keys or target_kind not in TRACKED_TYPES:
             filtered.append(card)
             continue
@@ -223,6 +249,14 @@ def filter_ambient_cards(
             diagnostics["frontier_not_requested"] += 1
             continue
         if any(frequency_cap_active(key, target_kind, events, now_unix=now_unix) for key in keys):
+            # Surface events are anti-nag hints, not hard dismissals. If the
+            # user explicitly points back to "this/current" route, keep cached
+            # ambient continuity available; otherwise the cap can swallow the
+            # exact next-turn handoff it was meant to make less noisy.
+            if target_kind in AMBIENT_CARD_TYPES and current_continuation:
+                diagnostics["frequency_cap_bypassed_for_current_continuation"] += 1
+                filtered.append(card)
+                continue
             diagnostics["frequency_capped"] += 1
             continue
         filtered.append(card)
@@ -240,10 +274,10 @@ def surface_events_for_cards(
     timestamp = created_at or now_utc()
     seen: set[str] = set()
     for card in cards:
-        target_kind = policy_kind_from_card(card)
+        target_kind = surface_kind_from_card(card)
         if target_kind not in TRACKED_TYPES:
             continue
-        for target_key in policy_keys_from_card(card):
+        for target_key in surface_keys_from_card(card):
             if target_key in seen:
                 continue
             seen.add(target_key)
@@ -323,8 +357,8 @@ def policy_targets(
     targets: list[dict[str, Any]] = []
     if intent.this_reference:
         for card in cached_cards:
-            target_kind = policy_kind_from_card(card)
-            for key in policy_keys_from_card(card):
+            target_kind = surface_kind_from_card(card)
+            for key in surface_keys_from_card(card):
                 targets.append(
                     {
                         "target_key": key,
@@ -386,9 +420,68 @@ def policy_keys_from_card(card: dict[str, Any]) -> list[str]:
     )
 
 
+def fallback_surface_keys_from_card(card: dict[str, Any]) -> list[str]:
+    """Return privacy-safe anti-nag keys for cards without explicit policy keys.
+
+    Warm scout and cached ambient cards are often source-backed but not born
+    from working-memory rows, so they lack ``ambient_policy.target_keys``. The
+    fallback key is intentionally a hash over stable route/card/source handles:
+    enough to avoid repeating the same foreground nudge, not enough to become a
+    new memory fact or store raw prompt/source text in the policy overlay.
+    """
+
+    material: list[str] = []
+    for key in (
+        "card_id",
+        "route_id",
+        "query_pattern_route_id",
+        "domain_id",
+        "lock_id",
+        "path_id",
+    ):
+        value = str(card.get(key) or "").strip()
+        if value:
+            material.append(f"{key}:{value}")
+    for ref in card.get("source_refs") or []:
+        if not isinstance(ref, dict):
+            continue
+        ref_parts = [
+            str(ref.get(name) or "")
+            for name in (
+                "thread_key",
+                "source_id",
+                "message_id",
+                "turn_id",
+                "turn_index",
+                "line",
+            )
+        ]
+        if any(ref_parts):
+            material.append("source_ref:" + "|".join(ref_parts))
+    if not material:
+        theme = compact_text(str(card.get("theme") or card.get("title") or ""), 160)
+        support = compact_text(str(card.get("support_level") or ""), 40)
+        if theme or support:
+            material.append(f"theme:{theme}|support:{support}")
+    if not material:
+        return []
+    digest = hashlib.sha256("\n".join(material).encode("utf-8", errors="replace")).hexdigest()
+    return [f"ambient_card_{digest[:18]}"]
+
+
+def surface_keys_from_card(card: dict[str, Any]) -> list[str]:
+    keys = policy_keys_from_card(card)
+    return keys if keys else fallback_surface_keys_from_card(card)
+
+
 def policy_kind_from_card(card: dict[str, Any]) -> str:
     policy = card.get("ambient_policy")
     return str((policy or {}).get("target_kind") or "") if isinstance(policy, dict) else ""
+
+
+def surface_kind_from_card(card: dict[str, Any]) -> str:
+    target_kind = policy_kind_from_card(card)
+    return target_kind if target_kind else "ambient_card"
 
 
 def policy_source_ids_from_card(card: dict[str, Any]) -> list[str]:
@@ -434,6 +527,13 @@ def frontier_prompt_intent(prompt: str) -> bool:
     return any(term in low for term in FRONTIER_INTENT_TERMS)
 
 
+def current_topic_continuation_intent(prompt: str) -> bool:
+    low = str(prompt or "").casefold()
+    return any(term in low for term in CONTINUATION_INTENT_TERMS) and any(
+        term in low for term in CURRENT_TOPIC_POINTER_TERMS
+    )
+
+
 def _policy_event(
     *,
     action: str,
@@ -451,8 +551,6 @@ def _policy_event(
     # reviewed target key. Do not add raw prompt text here: this file can live in
     # the private registry for a long time and only needs enough auditability to
     # explain why a candidate stopped surfacing.
-    import hashlib
-
     return {
         "kind": "aippocampus_ambient_policy_event",
         "schema_version": POLICY_SCHEMA_VERSION,

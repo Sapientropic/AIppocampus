@@ -21,6 +21,7 @@ from aippocampus_runtime.contracts import (
     canonical_foreground_action_fields,
     foreground_recovery_card,
     foreground_shell_action,
+    shell_quote,
 )
 from aippocampus_runtime.core import compact_text
 from aippocampus_runtime.ops.route_readiness import safe_source_refs
@@ -528,7 +529,7 @@ def _producer_candidate_previews(payload: MappingPayload) -> list[MappingPayload
         if reason:
             preview["suppression_reason"] = reason
         if quality == "actionable" and cue:
-            recall_command = f"aippocampus agent recall {json.dumps(cue, ensure_ascii=False)} --json"
+            recall_command = f"aippocampus agent recall {shell_quote(cue)} --json"
             preview["foreground_actions"] = [
                     foreground_shell_action(
                         action_id="recall_candidate_cue",

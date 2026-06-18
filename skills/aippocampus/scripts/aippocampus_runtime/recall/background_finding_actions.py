@@ -8,16 +8,16 @@ later agent can deepen the exact route instead of looping on the broad cue.
 
 from __future__ import annotations
 
-import json
 from collections.abc import Mapping
 from typing import Any
 
 from aippocampus_runtime.contracts import foreground_shell_action
+from aippocampus_runtime.contracts import shell_quote as _shell_quote
 from aippocampus_runtime.subconscious import candidate_router
 
 
 def shell_quote(text: str) -> str:
-    return json.dumps(text, ensure_ascii=False)
+    return _shell_quote(text)
 
 
 def source_summary(row: Mapping[str, Any]) -> dict[str, Any]:
@@ -84,6 +84,7 @@ def finding_next_actions(row: Mapping[str, Any], *, cue: str) -> list[dict[str, 
         item for item in [cue, finding_id, *source_finding_ids[:2]] if item
     )
     recall_command = f"aippocampus agent recall {shell_quote(route_cue)} --json"
+    quoted_finding_id = shell_quote(finding_id)
     actions = [
         foreground_shell_action(
             action_id="reopen_background_finding_source_route",
@@ -99,7 +100,7 @@ def finding_next_actions(row: Mapping[str, Any], *, cue: str) -> list[dict[str, 
         foreground_shell_action(
             action_id="mark_background_finding_helpful",
             label="Mark this route helpful",
-            command=f"aippocampus agent feedback {finding_id} --outcome helped --json",
+            command=f"aippocampus agent feedback {quoted_finding_id} --outcome helped --json",
             why="Helpful/wrong feedback is low-authority calibration, not source truth.",
             mutation_risk="durable_low_authority_feedback_write",
             claim_boundary="feedback_is_not_source_truth",
@@ -107,7 +108,7 @@ def finding_next_actions(row: Mapping[str, Any], *, cue: str) -> list[dict[str, 
         foreground_shell_action(
             action_id="mark_background_finding_wrong",
             label="Mark this route wrong",
-            command=f"aippocampus agent feedback {finding_id} --outcome wrong --json",
+            command=f"aippocampus agent feedback {quoted_finding_id} --outcome wrong --json",
             why="Use when the background route is distracting or irrelevant for this task.",
             mutation_risk="durable_low_authority_feedback_write",
             claim_boundary="feedback_is_not_source_truth",
@@ -115,7 +116,7 @@ def finding_next_actions(row: Mapping[str, Any], *, cue: str) -> list[dict[str, 
         foreground_shell_action(
             action_id="keep_background_finding_quiet",
             label="Keep this route quiet",
-            command=f"aippocampus agent feedback {finding_id} --outcome ignored --json",
+            command=f"aippocampus agent feedback {quoted_finding_id} --outcome ignored --json",
             why="Use when the finding is not wrong, but should not keep interrupting this task shape.",
             mutation_risk="durable_low_authority_feedback_write",
             claim_boundary="feedback_is_not_source_truth",

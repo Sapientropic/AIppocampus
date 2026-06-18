@@ -34,6 +34,7 @@ from aippocampus_runtime.model.routing import (
     ModelRoute,
     resolve_model_route,
 )
+from aippocampus_runtime.ops.doctor_preflight import build_preflight_report
 from aippocampus_runtime.ops.provider_credentials import (
     CredentialValidator,
     build_credential_discovery_report,
@@ -506,6 +507,7 @@ def main(argv: list[str] | None = None) -> int:
         prog="aippocampus doctor",
         description=(
             "Task-first diagnostics:\n"
+            "  preflight Check host prerequisites before install/sync/recall setup.\n"
             "  provider  Check whether optional LLM/provider keys are visible to this launcher.\n"
             "  spend     Review local model-spend/yield aggregates without prompts or keys.\n"
             "  config    Audit registered AIPPOCAMPUS_* knobs without printing values."
@@ -517,6 +519,18 @@ def main(argv: list[str] | None = None) -> int:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
+    preflight_parser = subparsers.add_parser(
+        "preflight",
+        usage="aippocampus doctor preflight [--json] [--registry-dir <path>]",
+        help="Check host prerequisites in one pass before setup.",
+        description=(
+            "Preflight answers: is this host ready enough for AIppocampus install, "
+            "sync, hooks, and recall setup? It returns one blocker and one next fix."
+        ),
+        epilog="Privacy boundary: local paths and secret values are not printed.",
+    )
+    preflight_parser.add_argument("--registry-dir")
+    preflight_parser.add_argument("--json", action="store_true", dest="json_output")
     provider_parser = subparsers.add_parser(
         "provider",
         usage="aippocampus doctor provider [--json] [--detail compact|full] [--operator-json] [advanced diagnostics]",
@@ -634,6 +648,23 @@ def main(argv: list[str] | None = None) -> int:
         help="Legacy alias for the compact foreground decision card.",
     )
     args = parser.parse_args(argv)
+
+    if args.command == "preflight":
+        report = build_preflight_report(registry_dir=args.registry_dir)
+        if args.json_output:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            issue = _as_dict(report.get("blocking_issue"))
+            if issue:
+                print("AIppocampus doctor preflight")
+                print(f"- Status: {report['status']}")
+                print(f"- Blocker: {issue.get('message')}")
+                print(f"- Next: {issue.get('fix_command')}")
+            else:
+                print("AIppocampus doctor preflight")
+                print("- Status: ready")
+                print("- Next: aippocampus update status --json")
+        return 0 if report["ok"] else 2
 
     if args.command == "spend":
         from aippocampus_runtime.ops import spend_doctor  # noqa: PLC0415

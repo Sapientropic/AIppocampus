@@ -19,6 +19,7 @@ from aippocampus_runtime.contracts import (
     foreground_recovery_card,
     foreground_shell_action,
     foreground_template_action,
+    shell_quote,
 )
 from aippocampus_runtime.io_integrity import atomic_write_json
 from aippocampus_runtime.macro import state as macro_state
@@ -237,7 +238,7 @@ def last_recall_cache_recovery_fields(mode: str, *, cue: str | None = None) -> d
         action = foreground_shell_action(
             action_id="recall_with_cue_full_detail",
             label="Rerun agent recall with full detail",
-            command=f"aippocampus agent recall {json.dumps(clean_cue, ensure_ascii=False)} --json --detail full",
+            command=f"aippocampus agent recall {shell_quote(clean_cue)} --json --detail full",
             why="The last-recall cache was unavailable; rerun recall for a fresh route.",
             mutation_risk="read_only",
             claim_boundary="no_claim_before_reopen",
@@ -507,7 +508,7 @@ def missing_feedback_route_payload(
             "id": f"feedback_last_recall_route_{choice['request_index']}",
             "label": f"Record feedback on last recall route {choice['request_index']}",
             "command_template": (
-                f"aippocampus agent feedback {choice['route_id']} "
+                f"aippocampus agent feedback {shell_quote(choice['route_id'])} "
                 "--outcome {{feedback_outcome}} --json"
             ),
             "requires": ["feedback_outcome"],
@@ -616,7 +617,7 @@ def public_recall_projection(payload: Mapping[str, Any], *, query: str | None = 
             repair_action.update(
                 {
                     "arguments": {"query": recovery_cue, "detail": "full"},
-                    "command": f"aippocampus agent recall {json.dumps(recovery_cue, ensure_ascii=False)} --json --detail full",
+                    "command": f"aippocampus agent recall {shell_quote(recovery_cue)} --json --detail full",
                 }
             )
         else:
@@ -703,7 +704,7 @@ def compact_aippo_guidance_card(payload: Mapping[str, Any], *, task: str = "") -
                 "action_id": "run_agent_recall_if_prior_source_matters",
                 "tool_name": "agent_recall",
                 "arguments": {"query": task_text},
-                "cli_command": f'aippocampus agent recall "{task_text}" --json',
+                "cli_command": f"aippocampus agent recall {shell_quote(task_text)} --json",
                 "claim_boundary": "no_aippo_guidance_no_claim",
                 "why": "No active AIppo working contract matched strongly enough.",
             }
@@ -1230,7 +1231,7 @@ def render_aippo_human(payload: Mapping[str, Any]) -> str:
         lines.append("No compact guidance surfaced.")
     deepen_route = str(activation.get("deepen_route_id") or "").strip()
     if deepen_route:
-        lines.append(f"Next: aippocampus agent deepen {deepen_route}")
+        lines.append(f"Next: aippocampus agent deepen {shell_quote(deepen_route)}")
     else:
         lines.append("Next: continue normally; use --json for diagnostics.")
     lines.append("Boundary: working guidance only; reopen source before factual claims.")
@@ -1246,7 +1247,7 @@ def render_macro_human(payload: Mapping[str, Any]) -> str:
         lines.append(core.compact_text(str(packet.get("foreground_text") or "Macro route available."), 160))
         deepen_route = str(packet.get("deepen_route_id") or "").strip()
         if deepen_route:
-            lines.append(f"Next: aippocampus agent deepen {deepen_route}")
+            lines.append(f"Next: aippocampus agent deepen {shell_quote(deepen_route)}")
     else:
         diagnostics = [str(item) for item in payload.get("diagnostics") or [] if str(item)]
         if diagnostics:

@@ -21,6 +21,7 @@ from aippocampus_runtime.update.agent_callable import (
     default_host_probe_report_path as _default_host_probe_report_path,
 )
 from aippocampus_runtime.update.agent_callable import (
+    mcp_command_preflight,
     write_host_probe_report,
 )
 from aippocampus_runtime.update.cli import (
@@ -760,6 +761,7 @@ def install_codex_plugin(
         "reason": "verify_not_requested",
     }
     agent_status = _agent_callable_status(probe, verify)
+    mcp_preflight = mcp_command_preflight("aippocampus")
     return {
         "kind": "aippocampus_plugin_install",
         "ok": agent_status != "host_live_probe_failed",
@@ -775,6 +777,7 @@ def install_codex_plugin(
         "host_probe": probe,
         "host_probe_report": host_probe_report,
         "agent_callable_status": agent_status,
+        "mcp_command_preflight": mcp_preflight,
         "hooks_auto_enabled": False,
         "rollback_command": "aippocampus plugin uninstall --codex",
         "rollback_preview_command": "aippocampus plugin uninstall --codex --dry-run --json",

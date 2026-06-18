@@ -99,6 +99,47 @@ def successful_probe_with_noisy_stderr() -> dict:
 
 
 class PluginInstallerTests(unittest.TestCase):
+    def test_plugin_install_summary_surfaces_mcp_command_path_repair(self) -> None:
+        summary = plugin_installer.public_install_summary(
+            {
+                "ok": True,
+                "agent_callable_status": "host_live_probe_ok",
+                "plugin": {
+                    "id": "aippocampus@aippocampus-local",
+                    "version": "0.3.3",
+                    "action": "marketplace_refreshed",
+                    "installed": True,
+                    "enabled": True,
+                },
+                "host_probe": {
+                    "validation_ok": True,
+                    "mcp_status": {"tool_names": ["agent_recall", "agent_background"]},
+                    "key_tool_smokes": [{"tool": "agent_recall", "ok": True}],
+                    "warning_summary": {"validation_ok": True},
+                },
+                "mcp_command_preflight": {
+                    "command": "aippocampus",
+                    "resolves": False,
+                    "status": "console_script_not_resolvable",
+                    "primary_repair_command": (
+                        "python -m aippocampus_runtime.cli.facade mcp"
+                    ),
+                    "repair_options": [
+                        "python -m aippocampus_runtime.cli.facade mcp",
+                    ],
+                },
+            }
+        )
+
+        self.assertTrue(summary["ok"])
+        self.assertTrue(summary["aippocampus_action_required"])
+        self.assertEqual(
+            summary["next_action"],
+            "python -m aippocampus_runtime.cli.facade mcp",
+        )
+        self.assertFalse(summary["mcp_command_preflight"]["resolves"])
+        self.assertFalse(summary["mcp_command_preflight"]["resolved_path_emitted"])
+
     def test_plugin_install_and_uninstall_help_show_rollback_and_dry_run_paths(self) -> None:
         install = subprocess.run(
             [

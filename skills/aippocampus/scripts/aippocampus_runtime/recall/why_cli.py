@@ -9,14 +9,14 @@ import os
 import sys
 from typing import Any, Mapping
 
-from aippocampus_runtime.contracts import FOREGROUND_ACTION_CONTRACT_VERSION
+from aippocampus_runtime.contracts import FOREGROUND_ACTION_CONTRACT_VERSION, shell_quote
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 from aippocampus_runtime.recall.why_diagnostics import recall_diagnostic_report
 from aippocampus_runtime.recall.why_reason_codes import DEFAULT_MAX_ROUTES
 
 
 def _quoted(value: str) -> str:
-    return json.dumps(str(value or ""), ensure_ascii=False)
+    return shell_quote(value)
 
 
 def _cue_for_command(cue: str) -> str:
@@ -53,7 +53,7 @@ def render_text(payload: Mapping[str, Any]) -> str:
         next_command = "aippocampus agent recall \"<cue>\" --public; then deepen before claims"
     display_cue = str(payload.get("_display_cue") or "").strip()
     if display_cue:
-        quoted = json.dumps(display_cue, ensure_ascii=False)
+        quoted = _quoted(display_cue)
         next_command = next_command.replace('"<cue>"', quoted)
         next_command = next_command.replace('"<distinctive exact phrase>"', quoted)
         next_command = next_command.replace('" <cue> "', f" {quoted} ")
