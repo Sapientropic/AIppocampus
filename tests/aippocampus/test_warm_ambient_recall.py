@@ -548,6 +548,9 @@ class WarmAmbientRecallTests(unittest.TestCase):
         self.assertEqual(payload["action_code"], "wait_or_run_worker_when_ready")
         self.assertTrue(payload["ordinary_recall_usable"])
         self.assertEqual(payload["next_command"], "aippocampus warm status --json")
+        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
+        self.assertEqual(payload["foreground_action"], payload["agent_next_action"])
+        self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
         self.assertEqual(payload["agent_next_action"]["id"], "check_warm_status")
 
     def test_warm_status_accepts_cwd_as_machine_wide_noop(self) -> None:
@@ -591,9 +594,11 @@ class WarmAmbientRecallTests(unittest.TestCase):
         self.assertEqual(payload["action_code"], "provider_or_worker_unavailable_optional")
         self.assertTrue(payload["ordinary_recall_usable"])
         self.assertEqual(payload["next_command"], "aippocampus doctor provider --json")
+        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
         self.assertEqual(payload["agent_next_action"]["id"], "inspect_provider_status")
         self.assertEqual(payload["agent_next_action"]["command"], "aippocampus doctor provider --json")
         self.assertEqual(payload["foreground_action"], payload["agent_next_action"])
+        self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
         action_ids = [action["id"] for action in payload["safe_next_actions"]]
         self.assertEqual(action_ids[0], "inspect_provider_status")
         self.assertIn("recheck_warm_status", action_ids)

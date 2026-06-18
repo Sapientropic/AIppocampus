@@ -20,6 +20,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
+from aippocampus_runtime.contracts import canonical_foreground_action_fields
 from aippocampus_runtime.core import (
     now_utc,
     sanitize_external_model_payload,
@@ -275,6 +276,8 @@ def warm_status_payload(
         status = "complete"
     else:
         status = "idle"
+    agent_next_action: dict[str, Any]
+    safe_next_actions: list[dict[str, Any]]
     if status == "blocked":
         action_code = "provider_or_worker_unavailable_optional"
         next_command = WARM_REPAIR_COMMAND
@@ -366,6 +369,10 @@ def warm_status_payload(
             "why": "Warm ambient has no blocking foreground action.",
         }
         safe_next_actions = [agent_next_action]
+    action_fields = canonical_foreground_action_fields(
+        agent_next_action,
+        safe_next_actions=safe_next_actions,
+    )
     return {
         "kind": "aippocampus_warm_ambient_status",
         "ok": status != "blocked",
@@ -374,9 +381,7 @@ def warm_status_payload(
         "job_activity": activity,
         "action_code": action_code,
         "next_command": next_command,
-        "agent_next_action": agent_next_action,
-        "foreground_action": agent_next_action,
-        "safe_next_actions": safe_next_actions,
+        **action_fields,
         "ordinary_recall_usable": True,
         "ordinary_recall_note": "Warm ambient is optional; aippocampus search and agent recall can still use source-backed routes.",
         "privacy_boundary": {

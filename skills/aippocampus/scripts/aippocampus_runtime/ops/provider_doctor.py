@@ -668,14 +668,10 @@ def main(argv: list[str] | None = None) -> int:
 
         report = config_registry.config_report()
         full_detail_json = bool(args.operator_json or args.detail == "full")
-        if args.summary_json or (args.json_output and not full_detail_json):
-            print(
-                json.dumps(
-                    config_registry.config_summary_report(report),
-                    ensure_ascii=False,
-                    indent=2,
-                )
-            )
+        if args.summary_json:
+            print(json.dumps(config_registry.config_summary_report(report), ensure_ascii=False))
+        elif args.json_output and not full_detail_json:
+            print(json.dumps(config_registry.config_summary_report(report), ensure_ascii=False, indent=2))
         elif args.json_output or args.operator_json:
             print(json.dumps(report, ensure_ascii=False, indent=2))
         else:

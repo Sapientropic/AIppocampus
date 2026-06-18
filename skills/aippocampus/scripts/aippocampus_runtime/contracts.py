@@ -275,6 +275,45 @@ def foreground_shell_action(
     return payload
 
 
+def normalize_foreground_action(action: Mapping[str, object]) -> dict[str, object]:
+    """Return the canonical foreground-action vocabulary for one action object.
+
+    Older recall/search and diagnostic surfaces used ``action_id`` plus
+    ``cli_command`` names before ``foreground-action-v1`` settled on ``id`` and
+    ``command``/``command_template``. Keep that compatibility at the boundary:
+    action producers may still carry historical fields internally, but public
+    compact cards should present one vocabulary so host agents do not have to
+    special-case the flagship recall path.
+    """
+
+    payload = dict(action)
+    if "id" not in payload and payload.get("action_id"):
+        payload["id"] = payload.get("action_id")
+    if "command" not in payload and payload.get("cli_command"):
+        payload["command"] = payload.get("cli_command")
+    if "command_template" not in payload and payload.get("cli_command_template"):
+        payload["command_template"] = payload.get("cli_command_template")
+    if "original_id" not in payload and payload.get("original_action_id"):
+        payload["original_id"] = payload.get("original_action_id")
+
+    for legacy_key in (
+        "action_id",
+        "cli_command",
+        "cli_command_template",
+        "original_action_id",
+    ):
+        payload.pop(legacy_key, None)
+
+    for nested_key in ("secondary_action", "primary_action"):
+        nested = payload.get(nested_key)
+        if isinstance(nested, Mapping):
+            payload[nested_key] = normalize_foreground_action(nested)
+    template = payload.get("tighter_cue_template")
+    if isinstance(template, Mapping):
+        payload["tighter_cue_template"] = normalize_foreground_action(template)
+    return payload
+
+
 def canonical_foreground_action_fields(
     foreground_action: Mapping[str, object],
     *,
@@ -290,8 +329,12 @@ def canonical_foreground_action_fields(
     alternates after it.
     """
 
-    primary = dict(foreground_action)
-    alternates = [dict(action) for action in (safe_next_actions or []) if action]
+    primary = normalize_foreground_action(foreground_action)
+    alternates = [
+        normalize_foreground_action(action)
+        for action in (safe_next_actions or [])
+        if action
+    ]
     if not alternates or alternates[0] != primary:
         alternates = [primary, *[action for action in alternates if action != primary]]
     payload: dict[str, object] = {
@@ -399,15 +442,23 @@ def foreground_recovery_card(
     source_boundary: dict[str, object] | None = None,
 ) -> dict[str, object]:
     primary = safe_next_actions[0] if safe_next_actions else {}
+    action_fields = (
+        canonical_foreground_action_fields(primary, safe_next_actions=safe_next_actions)
+        if primary
+        else {
+            "foreground_action_contract": FOREGROUND_ACTION_CONTRACT_VERSION,
+            "foreground_action": {},
+            "agent_next_action": {},
+            "safe_next_actions": [],
+        }
+    )
     return {
         "kind": kind,
         "ok": False,
         "status": status,
         "surface_class": surface_class,
-        "foreground_action_contract": FOREGROUND_ACTION_CONTRACT_VERSION,
         "error": {"code": error_code, "message": message},
-        "agent_next_action": primary,
-        "safe_next_actions": list(safe_next_actions),
+        **action_fields,
         "source_boundary": dict(
             source_boundary
             or {
@@ -456,15 +507,24 @@ def foreground_chooser_card(
     no_write_happened: bool = True,
 ) -> dict[str, object]:
     primary = choices[0] if choices else {}
+    action_fields = (
+        canonical_foreground_action_fields(primary, safe_next_actions=choices)
+        if primary
+        else {
+            "foreground_action_contract": FOREGROUND_ACTION_CONTRACT_VERSION,
+            "foreground_action": {},
+            "agent_next_action": {},
+            "safe_next_actions": [],
+        }
+    )
     return {
         "kind": kind,
         "ok": True,
         "status": status,
         "surface_class": surface_class,
-        "foreground_action_contract": FOREGROUND_ACTION_CONTRACT_VERSION,
         "decision": decision,
-        "agent_next_action": primary,
         "choices": list(choices),
+        **action_fields,
         "write_boundary": {
             "written": False,
             "no_write_happened": bool(no_write_happened),

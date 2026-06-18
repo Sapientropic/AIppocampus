@@ -233,12 +233,13 @@ def bounded_cli_projection(
             },
             **action_fields,
             "safe_next_action": {
-                "decision": "inspect bounded audit sample before any apply",
-                "command": audit_command,
+                "decision": "continue without cleanup unless the user explicitly wants storage detail",
+                "command": str(summary_actions[0].get("command") or "continue-without-cleanup"),
             },
             "comparable_metrics_command": audit_command,
             "warnings": list(report.get("warnings") or [])[:6],
             "next_steps": [
+                "Continue normal work when cleanup was not the user goal.",
                 "Use the bounded audit sample only if the reclaimable amount is worth inspecting.",
                 "Use apply only for rebuildable cache candidates after deterministic checks pass.",
             ],

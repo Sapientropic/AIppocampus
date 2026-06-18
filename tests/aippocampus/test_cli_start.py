@@ -163,6 +163,19 @@ class AippocampusStartCliTests(unittest.TestCase):
         self.assertEqual(payload["agent_next_action"]["mutation_risk"], "read_only")
         action_ids = [action["id"] for action in payload["safe_next_actions"]]
         self.assertIn("public_safe_demo_search", action_ids)
+        public_demo = next(
+            action for action in payload["safe_next_actions"] if action["id"] == "public_safe_demo_search"
+        )
+        self.assertIn(
+            "--clean-source-dir ./examples/public-memory-bundle/clean-source",
+            public_demo["command_template"],
+        )
+        exact_fallback = next(
+            action for action in payload["safe_next_actions"] if action["id"] == "exact_search_fallback"
+        )
+        self.assertNotIn("--clean-source-dir", exact_fallback["command_template"])
+        self.assertIn("configured local source", exact_fallback["why"])
+        self.assertIn("public_safe_demo_search", exact_fallback["why"])
         self.assertIn("verify_codex_plugin_secondary", action_ids)
         self.assertNotEqual(payload["safe_next_actions"][0]["mutation_risk"], "writes_local_plugin_cache")
 

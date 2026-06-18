@@ -646,7 +646,30 @@ def _hash_json(value: Any, *, length: int = 16) -> str:
     return hashlib.sha1(payload.encode("utf-8")).hexdigest()[:length]
 
 
-def _review_next_actions(source_issue: str) -> list[dict[str, Any]]:
+def _review_next_actions(
+    source_issue: str,
+    *,
+    issue_state: str | None = None,
+    no_open_followup_reason: str | None = None,
+) -> list[dict[str, Any]]:
+    if no_open_followup_reason:
+        return [
+            report_next_action(
+                action_id="longmemeval_rerank_closed_owner_record",
+                label="Treat closed LongMemEval rerank owner as historical",
+                status="closed_historical",
+                reason=(
+                    "This rerank closeout is bounded evidence; open a new scoped issue "
+                    "only for a fresh candidate-builder or reranker adoption slice."
+                ),
+                doc_path="docs/evidence/current-claims.md",
+                owner_path=LONGMEMEVAL_RERANK_ANALYSIS_OWNER_PATH,
+                issue_url=source_issue,
+                issue_state=issue_state or "closed_historical",
+                no_open_followup_reason=no_open_followup_reason,
+                claim_boundary="issue_route_not_longmemeval_quality_claim",
+            )
+        ]
     return [
         report_next_action(
             action_id="review_longmemeval_rerank_owner_issue",
@@ -658,6 +681,7 @@ def _review_next_actions(source_issue: str) -> list[dict[str, Any]]:
             command=f"gh issue view {source_issue.rsplit('/', maxsplit=1)[-1]} --comments",
             owner_path=LONGMEMEVAL_RERANK_ANALYSIS_OWNER_PATH,
             issue_url=source_issue,
+            issue_state=issue_state,
             claim_boundary="issue_route_not_longmemeval_quality_claim",
         ),
         report_next_action(
@@ -675,6 +699,7 @@ def _review_next_actions(source_issue: str) -> list[dict[str, Any]]:
             ),
             owner_path=LONGMEMEVAL_RERANK_ANALYSIS_OWNER_PATH,
             issue_url=source_issue,
+            issue_state=issue_state,
             claim_boundary="diagnostic_rerun_not_longmemeval_quality_claim",
         ),
     ]
@@ -1040,10 +1065,16 @@ def _post_factual_alias_closeout(
         and provider_calls == 0
         and top10_regressions == 0
     )
+    no_open_followup_reason = (
+        "#1437 closed after rejecting a default exact-line reranker change; "
+        "open a new scoped issue only for a fresh candidate-builder or holdout-gated reranker slice."
+    )
     return {
         "kind": "aippocampus_longmemeval_post_factual_alias_closeout",
         "status": "measured_from_same_500q_sanitized_report",
         "issue": "https://github.com/Sapientropic/AIppocampus/issues/1437",
+        "issue_state": "closed_historical",
+        "no_open_followup_reason": no_open_followup_reason,
         "top_k": top_k,
         "same_cohort_evidence": {
             "question_count": _to_int(metrics.get("question_count")),
@@ -1112,6 +1143,8 @@ def _post_factual_alias_closeout(
                 "provider_call_count": provider_calls,
                 "top_10_regression_count": top10_regressions,
                 "closeout_eligible": closeout_eligible,
+                "issue_state": "closed_historical",
+                "no_open_followup_reason": no_open_followup_reason,
             }
         },
         "privacy_boundary": {
@@ -1235,6 +1268,14 @@ def analyze_rerank_report(
     if post_factual_alias_closeout:
         source_issue = "https://github.com/Sapientropic/AIppocampus/issues/1437"
         status = "post_factual_alias_exact_line_rerank_closeout"
+    source_issue_state = (
+        "closed_historical" if post_factual_alias_closeout else "unknown_issue_state"
+    )
+    no_open_followup_reason = (
+        post_factual_alias_closeout.get("no_open_followup_reason")
+        if isinstance(post_factual_alias_closeout, Mapping)
+        else None
+    )
     projection_metrics = (
         (semantic_pilot_report or {}).get("metrics") if semantic_pilot_report else metrics
     ) or {}
@@ -1277,7 +1318,7 @@ def analyze_rerank_report(
         "kind": "aippocampus_longmemeval_rerank_analysis",
         "generated_at": now_utc(),
         "source_issue": source_issue,
-        "current_issue_url": source_issue,
+        "source_issue_state": source_issue_state,
         "owner_path": LONGMEMEVAL_RERANK_ANALYSIS_OWNER_PATH,
         "related_issues": sorted(related_issues),
         "source_report": {
@@ -1426,7 +1467,12 @@ def analyze_rerank_report(
             "output_shape": "sanitized_rerank_aggregate_analysis",
         },
         "claim_boundary": claim_boundary,
-        "review_next_actions": _review_next_actions(source_issue),
+        **({"no_open_followup_reason": no_open_followup_reason} if no_open_followup_reason else {}),
+        "review_next_actions": _review_next_actions(
+            source_issue,
+            issue_state=source_issue_state,
+            no_open_followup_reason=no_open_followup_reason,
+        ),
         "cannot_claim": sorted(
             {
                 *(str(item) for item in report.get("cannot_claim") or []),

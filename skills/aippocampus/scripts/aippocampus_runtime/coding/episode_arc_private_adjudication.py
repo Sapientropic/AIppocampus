@@ -473,7 +473,7 @@ def render_text(report: dict[str, Any]) -> str:
         else "  safe use: none",
         "next: use arcs as sequence-route hints; ask/refresh sources before acting.",
         "machine summary: aippocampus episode-arcs --summary-json",
-        "audit details: aippocampus episode-arcs --json",
+        "audit details: aippocampus episode-arcs --json --detail full",
         "boundary: source text, thread ids, local paths, and source refs stay out of default output",
     ]
     if privacy:
@@ -499,7 +499,7 @@ def summary_projection(report: Mapping[str, Any]) -> dict[str, Any]:
     owner_route = {
         "id": "current_owner_route",
         "kind": "current_owner_route",
-        "command": "aippocampus episode-arcs --json --top 5",
+        "command": "aippocampus episode-arcs --json --detail full --top 5",
         "mutation_risk": "read_only",
         "claim_boundary": "sequence_hint_not_source_truth",
         "why": "Use this owner route when there are actionable arc handles to inspect.",
@@ -507,7 +507,7 @@ def summary_projection(report: Mapping[str, Any]) -> dict[str, Any]:
     route_action = {
         "id": "retrieve_actionable_arc_handles",
         "kind": "retrieve_actionable_arc_handles",
-        "command": "aippocampus episode-arcs --json --top 5",
+        "command": "aippocampus episode-arcs --json --detail full --top 5",
         "mutation_risk": "read_only",
         "claim_boundary": "sequence_hint_not_source_truth",
         "why": "Aggregate counts are only a signal; retrieve a small redacted handle set before acting on an arc.",
@@ -544,12 +544,12 @@ def summary_projection(report: Mapping[str, Any]) -> dict[str, Any]:
         "current_validity_counts": current_validity_counts,
         "safe_use_counts": safe_use_counts,
         "next_action": "Use arcs as navigation-only sequence hints; retrieve handles before source reopen.",
-        "full_audit_flag": "--json",
+        "full_audit_flag": "--json --detail full",
         "privacy_boundary": report.get("privacy_boundary"),
         "claim_boundary": {
             "can_use_for": ["sequence_hint_triage", "source_reopen_target_selection"],
             "must_reopen_for": ["current_validity", "source_backed_claims", "truth_layer_claims"],
-            "detail_available_with": "aippocampus episode-arcs --json",
+            "detail_available_with": "aippocampus episode-arcs --json --detail full",
         },
         "boundary_detail_available": True,
     }
@@ -562,6 +562,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--max-line-gap", type=int, default=DEFAULT_MAX_LINE_GAP)
     parser.add_argument("--json", action="store_true", dest="json_output")
     parser.add_argument("--summary-json", action="store_true")
+    parser.add_argument("--detail", choices=["compact", "full"], default="compact")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--top", type=int, default=DEFAULT_TOP_ARCS)
     parser.add_argument("--arc-handle", help="Filter top_arcs to one public arc handle.")
@@ -583,7 +584,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(output + "\n", encoding="utf-8")
-    if args.summary_json:
+    if args.summary_json or (args.json_output and args.detail != "full"):
         print(json.dumps(summary_projection(report), ensure_ascii=False, indent=2))
     elif args.json_output:
         print(output)

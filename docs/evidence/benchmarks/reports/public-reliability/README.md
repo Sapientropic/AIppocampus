@@ -10,6 +10,9 @@ current_claim_owner: `docs/evidence/current-claims.md#current-claim-snapshot`.
 
 latest_promoted_report: `public-reliability-gauntlet-2026-06-10.json`.
 
+claim_safe_next_action: open Current Claims and this JSON artifact before
+promoting any gauntlet axis into present-tense reliability wording.
+
 safe_next_action: open the JSON artifact, then use
 `python tools\aippocampus\docs\check_docs_health.py --json` before promoting any
 gauntlet axis into a current claim row.

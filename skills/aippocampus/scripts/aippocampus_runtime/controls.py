@@ -15,7 +15,10 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.coding import host_contract
-from aippocampus_runtime.contracts import foreground_shell_action
+from aippocampus_runtime.contracts import (
+    canonical_foreground_action_fields,
+    foreground_shell_action,
+)
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 from aippocampus_runtime.recall.agent_continuity_cli_support import (
     capture_feedback,
@@ -122,8 +125,12 @@ def _with_boundary_detail(
     boundary = projected.pop("boundary", _boundary())
     actions = projected.get("safe_next_actions") or []
     if actions and isinstance(actions[0], Mapping):
-        projected.setdefault("agent_next_action", actions[0])
-        projected.setdefault("foreground_action", actions[0])
+        projected.update(
+            canonical_foreground_action_fields(
+                actions[0],
+                safe_next_actions=[action for action in actions if isinstance(action, Mapping)],
+            )
+        )
     projected["claim_boundary"] = _claim_boundary(command, scoped=scoped)
     projected["boundary_detail"] = {
         "boundary": boundary,
@@ -139,7 +146,7 @@ def _with_boundary_detail(
 def _safe_plan_card(command: str, *, target: str = "") -> dict[str, Any]:
     cached_actions = _last_recall_control_actions(command)
     if command == "pause":
-        actions = cached_actions + [
+        actions = [
             _template_action(
                 action_id="find_pause_target",
                 label="Find pause target",
@@ -155,6 +162,7 @@ def _safe_plan_card(command: str, *, target: str = "") -> dict[str, Any]:
                 mutation_risk="read_only",
                 claim_boundary="operator_diagnostic_not_source_evidence",
             ),
+            *cached_actions,
         ]
         return _with_boundary_detail(
             {
@@ -163,6 +171,7 @@ def _safe_plan_card(command: str, *, target: str = "") -> dict[str, Any]:
                 "mode": "pause",
                 "status": "needs_scope",
                 "ok": True,
+                "control_applied": False,
                 "control": "pause",
                 "target": target,
                 "what_it_can_do_now": [
@@ -178,7 +187,6 @@ def _safe_plan_card(command: str, *, target: str = "") -> dict[str, Any]:
             ],
         )
     actions = [
-        *cached_actions,
         _template_action(
             action_id="find_forget_target",
             label="Find forget target",
@@ -194,6 +202,7 @@ def _safe_plan_card(command: str, *, target: str = "") -> dict[str, Any]:
             mutation_risk="read_only",
             claim_boundary="operator_diagnostic_not_source_evidence",
         ),
+        *cached_actions,
     ]
     return _with_boundary_detail(
         {
@@ -202,6 +211,7 @@ def _safe_plan_card(command: str, *, target: str = "") -> dict[str, Any]:
             "mode": "forget",
             "status": "needs_scope",
             "ok": True,
+            "control_applied": False,
             "control": "forget",
             "target": target,
             "what_it_can_do_now": [
@@ -327,7 +337,7 @@ def do_not_use_here_payload(args: argparse.Namespace) -> tuple[dict[str, Any], i
             )
             | {"surface": "coding-ticket"},
         ]
-        actions = cached_actions or fallback_actions
+        actions = [*fallback_actions, *cached_actions]
         return (
             _public_payload(
                 {
@@ -336,10 +346,9 @@ def do_not_use_here_payload(args: argparse.Namespace) -> tuple[dict[str, Any], i
                     "mode": "do-not-use-here",
                     "status": "needs_target",
                     "ok": False,
+                    "control_applied": False,
                     "last_recall_route_choice_count": len(cached_actions),
-                    "agent_next_action": actions[0],
-                    "foreground_action": actions[0],
-                    "safe_next_actions": actions,
+                    **canonical_foreground_action_fields(actions[0], safe_next_actions=actions),
                     "boundary": _boundary(),
                 }
             ),

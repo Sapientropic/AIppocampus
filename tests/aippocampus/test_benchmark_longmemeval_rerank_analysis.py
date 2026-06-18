@@ -607,7 +607,10 @@ class LongMemEvalRerankAnalysisTests(unittest.TestCase):
 
         closeout = payload["post_factual_alias_closeout"]
         self.assertEqual(payload["source_issue"].split("/")[-1], "1437")
+        self.assertEqual(payload["source_issue_state"], "closed_historical")
+        self.assertIn("#1437 closed", payload["no_open_followup_reason"])
         self.assertEqual(payload["status"], "post_factual_alias_exact_line_rerank_closeout")
+        self.assertNotIn("current_issue_url", payload)
         self.assertEqual(closeout["miss_split"]["fused_miss_count"], 3)
         self.assertEqual(closeout["miss_split"]["candidate_missing_miss_count"], 1)
         self.assertEqual(closeout["miss_split"]["reranker_visible_miss_count"], 2)
@@ -624,6 +627,10 @@ class LongMemEvalRerankAnalysisTests(unittest.TestCase):
             payload["full_500_projection"]["required_before_full_run"],
         )
         self.assertTrue(closeout["issue_readouts"]["github_1437"]["closeout_eligible"])
+        self.assertEqual(closeout["issue_state"], "closed_historical")
+        self.assertIn("#1437 closed", closeout["no_open_followup_reason"])
+        self.assertEqual(payload["review_next_actions"][0]["issue_state"], "closed_historical")
+        self.assertIn("#1437 closed", payload["review_next_actions"][0]["no_open_followup_reason"])
 
 
 if __name__ == "__main__":

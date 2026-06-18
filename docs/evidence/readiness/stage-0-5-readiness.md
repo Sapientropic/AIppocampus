@@ -27,6 +27,10 @@ owner_routes: `docs/evidence/current-claims.md`,
 `docs/evidence/readiness/public-readiness-verification.md`,
 `docs/planning/next-iteration-plan.md`.
 
+stage_safe_next_action: open the relevant stage row and owner route first; use
+docs-health only after deciding whether the stage boundary needs a claim update,
+dated verification, or an explicit no-open-followup note.
+
 next_verification_command: `python tools\aippocampus\docs\check_docs_health.py --json`.
 
 Keep this page focused on claim boundaries and missing proof. Dated command

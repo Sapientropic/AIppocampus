@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from aippocampus_runtime.contracts import foreground_readiness_card
+from aippocampus_runtime.contracts import (
+    canonical_foreground_action_fields,
+    foreground_readiness_card,
+)
 from aippocampus_runtime.core import compact_text
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 from aippocampus_runtime.update import status_actions as update_actions
@@ -33,10 +36,12 @@ def _compact_update_action(
         manual_instruction=manual_instruction,
     )
     result = {
+        "id": f"review_{surface}",
         "surface": surface,
         "reason": compact_text(reason, 220),
         **command_fields,
     }
+    result.setdefault("mutation_risk", "read_only")
     if "manual_instruction" in result:
         result["manual_instruction"] = compact_text(str(result["manual_instruction"]), 220)
     return {key: value for key, value in result.items() if value not in (None, "")}
@@ -233,6 +238,12 @@ def compact_agent_status_report(
             "and partial foreground status is not release-grade readiness"
         ),
     )
+    primary_action = actions[0] if actions else {
+        "id": "continue_after_update_status",
+        "message": "Update status has no foreground setup action; continue normal source-backed work.",
+        "mutation_risk": "read_only",
+        "claim_boundary": "update_status_not_source_evidence",
+    }
     public = {
         "kind": f"aippocampus_update_{report.get('mode') or 'status'}_agent_json",
         "schema_version": schema_version,
@@ -341,6 +352,10 @@ def compact_agent_status_report(
             "next_action": conformance.get("next_action"),
             "claim_boundary": conformance.get("claim_boundary"),
         },
+        **canonical_foreground_action_fields(
+            primary_action,
+            safe_next_actions=actions[:5] or [primary_action],
+        ),
         "next_actions": actions[:5],
     }
     return redact_sensitive_values(redact_private_paths(public))

@@ -10,6 +10,9 @@ current_claim_owner: `docs/evidence/current-claims.md#current-claim-snapshot`.
 
 latest_promoted_report: `rollout-hard-event-cohort-v2-2026-06-12.md`.
 
+claim_safe_next_action: open `../../public-longitudinal-users.md` and Current
+Claims before using a dated React VCS or rollout report as present evidence.
+
 safe_next_action: open `../../public-longitudinal-users.md`, then check Current
 Claims before using a dated React VCS or rollout report as present evidence.
 

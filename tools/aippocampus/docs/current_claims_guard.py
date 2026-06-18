@@ -13,6 +13,7 @@ CURRENT_CLAIMS_FOREGROUND_TERMS = {
     "can_say:": "current claims reviewer card missing can-say line",
     "cannot_say:": "current claims reviewer card missing cannot-say line",
     "owner_routes:": "current claims reviewer card missing owner routes",
+    "claim_safe_next_action:": "current claims reviewer card missing claim safe next action",
     "next_verification_command:": (
         "current claims reviewer card missing next verification command"
     ),

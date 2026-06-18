@@ -25,7 +25,7 @@ import time
 from pathlib import Path
 from typing import Any, Sequence
 
-from aippocampus_runtime.contracts import foreground_shell_action
+from aippocampus_runtime import contracts
 from aippocampus_runtime.navigation.cognitive_map import (
     build_from_files as build_cognitive_map_from_files,
 )
@@ -229,7 +229,7 @@ def public_next_actions(
     dry_run_scope: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     actions = [
-        foreground_shell_action(
+        contracts.foreground_shell_action(
             action_id="try_source_backed_search",
             label="Search registered clean source",
             command='aippocampus search "distinctive old phrase" --json',
@@ -237,7 +237,7 @@ def public_next_actions(
             mutation_risk="read_only",
             claim_boundary="source_reopen_required_before_quoting",
         ),
-        foreground_shell_action(
+        contracts.foreground_shell_action(
             action_id="try_agent_recall",
             label="Recall from a vague cue",
             command='aippocampus agent recall "old decision or handoff cue" --json',
@@ -252,7 +252,7 @@ def public_next_actions(
         if scope_suffix:
             write_command = f"{write_command} {scope_suffix}"
         write_command = f"{write_command} --json"
-        write_action = foreground_shell_action(
+        write_action = contracts.foreground_shell_action(
             action_id="register_after_dry_run_review",
             label="Register after reviewing the dry-run plan",
             command=write_command,
@@ -268,7 +268,7 @@ def public_next_actions(
         )
         actions.insert(
             1,
-            foreground_shell_action(
+            contracts.foreground_shell_action(
                 action_id="review_provider_status",
                 label="Review provider status before writing",
                 command=f"aippocampus onboard --provider {provider} --status --json",
@@ -279,7 +279,7 @@ def public_next_actions(
         )
     if frontier_mode == "off":
         actions.append(
-            foreground_shell_action(
+            contracts.foreground_shell_action(
                 action_id="preview_frontier_smoke",
                 label="Preview frontier smoke mode",
                 command=f"aippocampus onboard --provider {provider} --frontier-mode smoke --dry-run --json",
@@ -690,8 +690,18 @@ def public_onboarding_result(result: dict[str, Any]) -> dict[str, Any]:
         provider=provider,
         dry_run_scope=plan_summary.get("dry_run_scope"),
     )
+    primary_action = next_actions[0] if next_actions else {
+        "id": "continue_after_onboarding_status",
+        "message": "No onboarding action is needed from this compact card.",
+        "mutation_risk": "read_only",
+        "claim_boundary": "host_setup_not_memory_evidence",
+    }
+    action_fields = contracts.canonical_foreground_action_fields(primary_action, safe_next_actions=next_actions or [primary_action])
     return {
+        "kind": "aippocampus_onboard_result",
+        "status": "dry_run_preview" if dry_run else "completed",
         "ok": result.get("ok"),
+        **action_fields,
         "data": {
             "dry_run": dry_run,
             "stats_before": public_stats(data.get("stats_before")),

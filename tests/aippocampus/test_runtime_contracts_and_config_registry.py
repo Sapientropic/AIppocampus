@@ -28,6 +28,7 @@ from aippocampus_runtime.contracts import (  # noqa: E402
     RUNTIME_FAILURE_FAMILIES,
     canonical_foreground_action_fields,
     foreground_action_contract_violations,
+    foreground_chooser_card,
     public_envelope,
 )
 from aippocampus_runtime.registry import store as registry_store  # noqa: E402
@@ -142,6 +143,33 @@ class RuntimeContractsAndConfigRegistryTests(unittest.TestCase):
             violations,
         )
 
+    def test_foreground_chooser_card_exposes_canonical_action_fields(self) -> None:
+        primary = {
+            "id": "check_sync_status",
+            "command": "aippocampus sync status --json",
+            "mutation_risk": "read_only",
+            "claim_boundary": "operator_diagnostic_not_source_evidence",
+        }
+        secondary = {
+            "id": "check_object_sync_status",
+            "command": "aippocampus object-sync status --json",
+            "mutation_risk": "read_only",
+            "claim_boundary": "operator_diagnostic_not_source_evidence",
+        }
+
+        card = foreground_chooser_card(
+            kind="aippocampus_sync_chooser",
+            decision="choose a read-only sync status before push or pull",
+            choices=[primary, secondary],
+        )
+
+        self.assertEqual(card["foreground_action_contract"], "foreground-action-v1")
+        self.assertEqual(card["foreground_action"], primary)
+        self.assertEqual(card["agent_next_action"], primary)
+        self.assertEqual(card["safe_next_actions"][0], primary)
+        self.assertEqual(card["safe_next_actions"], card["choices"])
+        self.assertEqual(foreground_action_contract_violations(card), [])
+
     def test_runtime_aippocampus_env_names_are_registered(self) -> None:
         runtime_names = aippocampus_env_names_from(
             [
@@ -209,8 +237,11 @@ class RuntimeContractsAndConfigRegistryTests(unittest.TestCase):
         self.assertEqual(summary["configured_sensitive_count"], 1)
         self.assertEqual(summary["detail"], "compact")
         self.assertEqual(summary["surface"], "foreground_decision_card")
-        self.assertEqual(summary["foreground_action"]["action_id"], "review_unknown_config_env")
-        self.assertEqual(summary["agent_next_action"]["id"], "review_unknown_aippocampus_env")
+        self.assertEqual(summary["foreground_action_contract"], "foreground-action-v1")
+        self.assertEqual(summary["foreground_action"], summary["agent_next_action"])
+        self.assertEqual(summary["safe_next_actions"][0], summary["foreground_action"])
+        self.assertEqual(summary["foreground_action"]["id"], "review_unknown_config_env")
+        self.assertNotIn("action_id", summary["foreground_action"])
         self.assertEqual(summary["safe_next_actions"][0]["command"], "aippocampus doctor config --detail full --json")
         self.assertEqual(summary["full_audit_command"], "aippocampus doctor config --detail full --json")
         self.assertTrue(summary["audit_json_available"])
@@ -256,12 +287,15 @@ class RuntimeContractsAndConfigRegistryTests(unittest.TestCase):
         self.assertEqual(payload["kind"], "aippocampus_config_doctor_summary")
         self.assertEqual(payload["detail"], "compact")
         self.assertEqual(payload["surface"], "foreground_decision_card")
-        self.assertEqual(payload["foreground_action"]["action_id"], "no_action_needed")
+        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
+        self.assertEqual(payload["foreground_action"], payload["agent_next_action"])
+        self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
+        self.assertEqual(payload["foreground_action"]["id"], "no_action_needed")
+        self.assertNotIn("action_id", payload["foreground_action"])
         self.assertNotIn("command", payload["foreground_action"])
         self.assertEqual(payload["agent_next_action"]["id"], "no_action_needed")
-        self.assertIn("safe_next_actions", payload)
         self.assertEqual(
-            payload["safe_next_actions"][0]["command"],
+            payload["safe_next_actions"][1]["command"],
             "aippocampus doctor config --detail full --json",
         )
         self.assertNotIn("data", payload)
@@ -326,7 +360,7 @@ class RuntimeContractsAndConfigRegistryTests(unittest.TestCase):
                 self.assertEqual(payload["kind"], "aippocampus_config_doctor_summary")
                 self.assertGreater(payload["registered_knob_count"], 0)
                 self.assertEqual(payload["configured_count"], 2)
-                self.assertEqual(payload["foreground_action"]["action_id"], "no_action_needed")
+                self.assertEqual(payload["foreground_action"]["id"], "no_action_needed")
                 self.assertNotIn("command", payload["foreground_action"])
                 self.assertIn("safe_next_actions", payload)
                 self.assertNotIn("knobs", payload)

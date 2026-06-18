@@ -30,6 +30,10 @@ owner_routes:
 - Readiness status and gaps: `docs/evidence/readiness/stage-0-5-readiness.md`.
 - Benchmark report routers: `docs/evidence/benchmarks/reports/README.md`.
 
+claim_safe_next_action: open the relevant claim row and source report first;
+use docs-health only after deciding whether the row needs promotion,
+supersession, or a no-open-followup note.
+
 next_verification_command:
 
 ```powershell

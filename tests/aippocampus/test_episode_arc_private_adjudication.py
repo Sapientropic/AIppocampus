@@ -209,6 +209,19 @@ class EpisodeArcPrivateAdjudicationTests(unittest.TestCase):
                 ["episode-arcs", "--registry", str(registry_path), "--json", "--top", "5"],
                 capture_output=True,
             )
+            detail = facade.run_command(
+                [
+                    "episode-arcs",
+                    "--registry",
+                    str(registry_path),
+                    "--json",
+                    "--detail",
+                    "full",
+                    "--top",
+                    "5",
+                ],
+                capture_output=True,
+            )
             human = facade.run_command(
                 ["episode-arcs", "--registry", str(registry_path)],
                 capture_output=True,
@@ -219,12 +232,17 @@ class EpisodeArcPrivateAdjudicationTests(unittest.TestCase):
             )
 
         self.assertTrue(result.ok, result.stderr)
+        self.assertTrue(detail.ok, detail.stderr)
         self.assertTrue(human.ok, human.stderr)
         self.assertTrue(summary.ok, summary.stderr)
         payload = json.loads(result.stdout)
+        detail_payload = json.loads(detail.stdout)
         summary_payload = json.loads(summary.stdout)
-        self.assertEqual(payload["kind"], private_arcs.REPORT_KIND)
-        self.assertEqual(payload["metrics"]["complete_rejected_route_arc_count"], 1)
+        self.assertEqual(payload["kind"], "aippocampus_episode_arcs_summary")
+        self.assertEqual(payload["foreground_action"], payload["agent_next_action"])
+        self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
+        self.assertEqual(detail_payload["kind"], private_arcs.REPORT_KIND)
+        self.assertEqual(detail_payload["metrics"]["complete_rejected_route_arc_count"], 1)
         self.assertEqual(summary_payload["kind"], "aippocampus_episode_arcs_summary")
         self.assertEqual(summary_payload["foreground_action_contract"], "foreground-action-v1")
         self.assertEqual(summary_payload["foreground_action"], summary_payload["agent_next_action"])
@@ -241,30 +259,31 @@ class EpisodeArcPrivateAdjudicationTests(unittest.TestCase):
         self.assertIn("refresh_sources", summary_payload["safe_use_counts"])
         self.assertEqual(
             summary_payload["safe_next_actions"][0]["command"],
-            "aippocampus episode-arcs --json --top 5",
+            "aippocampus episode-arcs --json --detail full --top 5",
         )
         self.assertEqual(summary_payload["what_to_do"], "retrieve_actionable_arc_handles")
         self.assertFalse(summary_payload["no_op"])
         self.assertEqual(
             summary_payload["owner_route"]["command"],
-            "aippocampus episode-arcs --json --top 5",
+            "aippocampus episode-arcs --json --detail full --top 5",
         )
         self.assertNotIn("cannot_claim", summary_payload)
         self.assertIn("current_validity", summary_payload["claim_boundary"]["must_reopen_for"])
         self.assertEqual(
             summary_payload["claim_boundary"]["detail_available_with"],
-            "aippocampus episode-arcs --json",
+            "aippocampus episode-arcs --json --detail full",
         )
-        self.assertIn("top_arcs", payload)
-        self.assertEqual(payload["top_arcs"][0]["current_validity"], "needs_reopen")
-        self.assertIn("arc_handle", payload["top_arcs"][0])
-        self.assertIn("source_reopen_action", payload["top_arcs"][0])
-        reopen = payload["top_arcs"][0]["source_reopen_action"]
+        self.assertNotIn("top_arcs", payload)
+        self.assertIn("top_arcs", detail_payload)
+        self.assertEqual(detail_payload["top_arcs"][0]["current_validity"], "needs_reopen")
+        self.assertIn("arc_handle", detail_payload["top_arcs"][0])
+        self.assertIn("source_reopen_action", detail_payload["top_arcs"][0])
+        reopen = detail_payload["top_arcs"][0]["source_reopen_action"]
         self.assertEqual(reopen["kind"], "inspect_episode_arc_sources")
         self.assertNotIn("command", reopen)
         self.assertIn("{arc_handle}", reopen["command_template"])
         self.assertEqual(reopen["requires"], ["arc_handle"])
-        self.assertNotIn("source_refs", json.dumps(payload["top_arcs"], ensure_ascii=False))
+        self.assertNotIn("source_refs", json.dumps(detail_payload["top_arcs"], ensure_ascii=False))
         self.assertNotIn("session:cli-private-arc", result.stdout)
         self.assertNotIn("session:cli-private-arc", summary.stdout)
         self.assertIn("AIppocampus episode-arcs", human.stdout)

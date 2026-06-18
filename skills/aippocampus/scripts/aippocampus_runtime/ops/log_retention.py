@@ -13,6 +13,7 @@ import sys
 from pathlib import Path
 from typing import Any, Iterable
 
+from aippocampus_runtime.contracts import canonical_foreground_action_fields
 from aippocampus_runtime.core import aippocampus_registry_dir
 
 DEFAULT_MAX_LOG_BYTES = 8 * 1024 * 1024
@@ -158,6 +159,9 @@ def log_health_report(
     items.sort(key=lambda item: (not item["oversized"], -int(item["size_bytes"]), item["artifact_rel"]))
     oversized_count = sum(1 for item in items if item["oversized"])
     report: dict[str, Any] = {
+        "kind": "aippocampus_logs_status_card",
+        "ok": True,
+        "surface": "foreground_decision_card",
         "available": True,
         "status": "needs_cleanup" if oversized_count else "healthy",
         "max_bytes": resolved_max,
@@ -174,11 +178,21 @@ def log_health_report(
     }
     if oversized_count:
         report["remediation_command"] = "aippocampus logs rotate --dry-run"
-        report["agent_next_action"] = _log_rotation_action(count=oversized_count)
+        primary_action = _log_rotation_action(count=oversized_count)
+        apply_action = _log_apply_action(count=oversized_count)
     else:
-        report["agent_next_action"] = _log_status_action(
+        primary_action = _log_status_action(
             why="Logs are within the retention budget; no cleanup command is needed."
         )
+        apply_action = None
+    report.update(
+        canonical_foreground_action_fields(
+            primary_action,
+            safe_next_actions=[
+                action for action in (primary_action, apply_action) if action is not None
+            ],
+        )
+    )
     return report
 
 

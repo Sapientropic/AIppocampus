@@ -147,8 +147,8 @@ class ProviderKeyBridgeTests(unittest.TestCase):
             payload["recommended_actions"][0]["id"],
             "confirm_visible_env_key",
         )
-        self.assertIn("--source visible-env-key", payload["agent_next_action"])
-        self.assertNotIn("--credential-dotenv <path>", payload["agent_next_action"])
+        self.assertIn("--source visible-env-key", payload["agent_next_action"]["command"])
+        self.assertNotIn("--credential-dotenv <path>", payload["agent_next_action"]["command"])
         self.assertIn("explicit-dotenv", payload["alternate_paths"]["source_options"])
         self.assertFalse(payload["privacy"]["secret_values_printed"])
         self.assertNotIn(fixture_value, encoded)

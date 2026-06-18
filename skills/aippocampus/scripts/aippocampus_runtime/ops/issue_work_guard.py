@@ -16,6 +16,7 @@ import sys
 from typing import Any, Iterable
 
 from aippocampus_runtime.contracts import (
+    canonical_foreground_action_fields,
     foreground_recovery_card,
     foreground_template_action,
 )
@@ -212,6 +213,29 @@ def _owner_ref(owner_id: str, *, reason: str, confidence: str) -> dict[str, str]
     }
 
 
+def _issue_recall_action(title: str) -> dict[str, Any]:
+    cue = title.strip() or "current issue context"
+    return {
+        "id": "agent_recall_issue_context",
+        "tool_name": "agent_recall",
+        "command": f"aippocampus agent recall {json.dumps(cue, ensure_ascii=False)} --json",
+        "arguments": {"cue": cue},
+        "mutation_risk": "read_only",
+        "claim_boundary": "no_claim_before_reopen",
+        "why": "Pull route context before implementing issue work that likely has existing owners.",
+    }
+
+
+def _continue_without_recall_action() -> dict[str, Any]:
+    return {
+        "id": "continue_without_recall",
+        "message": "No existing AIppocampus route owner is required for this local issue shape.",
+        "mutation_risk": "read_only",
+        "claim_boundary": "navigation_only_not_fact",
+        "why": "Continue normal work; run recall later only if old source context becomes relevant.",
+    }
+
+
 def build_issue_active_pull_packet(
     *,
     title: str,
@@ -233,6 +257,7 @@ def build_issue_active_pull_packet(
     should_pull = bool(not trivial_only and (benchmark_like or skill_docs_like or foreground_card_like or architecture_like))
 
     if not should_pull:
+        action = _continue_without_recall_action()
         return {
             "kind": "aippocampus_issue_work_orientation_packet",
             "schema_version": SCHEMA_VERSION,
@@ -241,6 +266,7 @@ def build_issue_active_pull_packet(
             "reason": "no benchmark, architecture, or memory-design trigger detected",
             "suggested_agent_action": "continue_without_recall",
             "fallback_action": "continue normally; run agent recall if old source context becomes relevant",
+            **canonical_foreground_action_fields(action, safe_next_actions=[action]),
             "lead_kinds": [],
             "existing_owner_refs": [],
             "existing_owner_ref_ids": [],
@@ -338,6 +364,7 @@ def build_issue_active_pull_packet(
     if learning_loop_like:
         lead_kinds.append("learning_feedback_owner")
 
+    recall_action = _issue_recall_action(title)
     return {
         "kind": "aippocampus_issue_work_orientation_packet",
         "schema_version": SCHEMA_VERSION,
@@ -346,6 +373,7 @@ def build_issue_active_pull_packet(
         "reason": "issue surface has existing owners that may change the safe implementation route",
         "suggested_agent_action": "agent_recall",
         "fallback_action": "if recall is unavailable, inspect listed owner refs before broad manual scaffolding",
+        **canonical_foreground_action_fields(recall_action, safe_next_actions=[recall_action]),
         "lead_kinds": _unique(lead_kinds),
         "existing_owner_refs": [
             _owner_ref(

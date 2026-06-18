@@ -268,6 +268,30 @@ class AippocampusCliRecoveryCardTests(unittest.TestCase):
                 self.assertIn("requires", choice)
         self.assertEqual(executable_command_violations(payload), [])
 
+    def test_self_note_list_empty_state_uses_structured_actions(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            notes_path = Path(tmp) / "empty-self-notes.jsonl"
+            proc = self.run_cli(
+                "self-note",
+                "list",
+                "--notes-path",
+                str(notes_path),
+                "--json",
+            )
+
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        payload = json.loads(proc.stdout)
+        empty_state = payload["empty_state"]
+        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
+        self.assertIsInstance(empty_state["agent_next_action"], dict)
+        self.assertEqual(empty_state["agent_next_action"], empty_state["safe_next_actions"][0])
+        self.assertEqual(empty_state["agent_next_action"]["id"], "list_notes")
+        self.assertEqual(
+            empty_state["safe_next_actions"][2]["command_template"],
+            'aippocampus agent recall "{cue}" --json',
+        )
+        self.assertNotIn("Append a short direction-only note", json.dumps(empty_state))
+
     def test_self_note_read_missing_id_is_not_not_found(self) -> None:
         proc = self.run_cli("self-note", "read", "--json")
 
@@ -1152,7 +1176,10 @@ class AippocampusCliRecoveryCardTests(unittest.TestCase):
                 payload = json.loads(proc.stdout)
                 self.assertEqual(payload["kind"], kind)
                 self.assertIn("foreground-action-v1", payload["foreground_action_contract"])
-                self.assertIn("safe_next_actions" if "safe_next_actions" in payload else "choices", payload)
+                self.assertIsInstance(payload["foreground_action"], dict)
+                self.assertEqual(payload["agent_next_action"], payload["foreground_action"])
+                self.assertIn("safe_next_actions", payload)
+                self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
                 actions = payload.get("safe_next_actions") or payload.get("choices") or []
                 if args == ("smoke", "--json"):
                     encoded = json.dumps(payload, ensure_ascii=False)

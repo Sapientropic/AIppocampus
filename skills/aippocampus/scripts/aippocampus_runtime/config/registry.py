@@ -9,7 +9,7 @@ import os
 from dataclasses import dataclass
 from typing import Any, Mapping
 
-from aippocampus_runtime.contracts import public_envelope
+from aippocampus_runtime.contracts import canonical_foreground_action_fields, public_envelope
 
 CONFIG_STABILITY_BUCKETS = (
     "stable_public",
@@ -241,7 +241,7 @@ def config_summary_report(report: Mapping[str, object]) -> dict[str, object]:
     ]
     if unknown_count:
         foreground_action = {
-            "action_id": "review_unknown_config_env",
+            "id": "review_unknown_config_env",
             "label": "Review unknown AIPPOCAMPUS_* env names",
             "command": full_audit_command,
             "why": "Unknown AIPPOCAMPUS_* names do not affect runtime unless registered; inspect before treating them as live configuration.",
@@ -249,32 +249,26 @@ def config_summary_report(report: Mapping[str, object]) -> dict[str, object]:
             "mutation_risk": "read_only",
             "claim_boundary": "operator_diagnostic_not_source_evidence",
         }
-        agent_next_action = {
-            "id": "review_unknown_aippocampus_env",
-            "command": full_audit_command,
-            "message": "Review unknown AIPPOCAMPUS_* environment names before assuming they affect runtime behavior.",
-            "mutation_risk": "read_only",
-        }
         recommended_actions = [
             {
-                "id": "review_unknown_aippocampus_env",
+                "id": "review_unknown_config_env",
                 "message": "Review unknown AIPPOCAMPUS_* environment names before assuming they affect runtime behavior.",
             }
         ]
     else:
         foreground_action = {
-            "action_id": "no_action_needed",
+            "id": "no_action_needed",
             "label": "No config action needed",
+            "message": "No foreground config action is needed from this compact doctor card.",
             "why": "All observed AIPPOCAMPUS_* environment names are registered; open the full inventory only for operator audit.",
             "mutation_risk": "read_only",
             "claim_boundary": "operator_diagnostic_not_source_evidence",
         }
-        agent_next_action = {
-            "id": "no_action_needed",
-            "message": "No foreground config action is needed from this compact doctor card.",
-            "mutation_risk": "read_only",
-        }
         recommended_actions = []
+    action_fields = canonical_foreground_action_fields(
+        foreground_action,
+        safe_next_actions=[foreground_action, *safe_next_actions],
+    )
     return {
         "schema_version": 1,
         "kind": "aippocampus_config_doctor_summary",
@@ -288,9 +282,7 @@ def config_summary_report(report: Mapping[str, object]) -> dict[str, object]:
         "configured_sensitive_count": len(configured_sensitive),
         "warning_count": len(warnings),
         "warnings": warnings[:5],
-        "agent_next_action": agent_next_action,
-        "foreground_action": foreground_action,
-        "safe_next_actions": safe_next_actions,
+        **action_fields,
         "recommended_actions": recommended_actions,
         "audit_json_available": True,
         "full_audit_command": full_audit_command,
@@ -340,7 +332,9 @@ def main(argv: list[str] | None = None) -> int:
 
     report = config_report()
     full_detail_json = bool(args.operator_json or args.detail == "full")
-    if args.summary_json or (args.json and not full_detail_json):
+    if args.summary_json:
+        print(json.dumps(config_summary_report(report), ensure_ascii=False))
+    elif args.json and not full_detail_json:
         print(json.dumps(config_summary_report(report), ensure_ascii=False, indent=2))
     elif args.json or args.operator_json:
         print(json.dumps(report, ensure_ascii=False, indent=2))

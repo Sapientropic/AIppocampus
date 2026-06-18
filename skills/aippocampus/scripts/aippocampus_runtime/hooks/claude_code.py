@@ -714,6 +714,7 @@ def dry_run_report(*, settings_path: Path | None = None) -> dict[str, Any]:
         claim_boundary="host_hook_status_not_memory_evidence",
     )
     primary_action = ready_action if command_report["copy_paste_ready"] else blocked_action
+    safe_actions = [primary_action]
     next_step = (
         "run aippocampus hooks claude-code install --json after reviewing this dry-run"
         if command_report["copy_paste_ready"]
@@ -736,7 +737,7 @@ def dry_run_report(*, settings_path: Path | None = None) -> dict[str, Any]:
     payload.update(
         canonical_foreground_action_fields(
             primary_action,
-            safe_next_actions=[primary_action, ready_action, blocked_action],
+            safe_next_actions=safe_actions,
         )
     )
     return payload

@@ -28,6 +28,10 @@ or widening any owner track from this historical table.
 owner_routes: GitHub Issues/Project, `docs/roadmap.md`,
 `docs/evidence/current-claims.md`.
 
+stage_safe_next_action: check the live issue/Project state and the relevant
+canonical owner doc before treating a planning row as executable work; use
+docs-health after routing stale rows to archive, issue, or no-open-followup.
+
 next_verification_command: `python tools\aippocampus\docs\check_docs_health.py --json`.
 
 Keep this file as a task queue and preservation checklist. Detailed Stage 0-5

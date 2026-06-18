@@ -9,6 +9,7 @@ import json
 from pathlib import Path
 from typing import Any, Mapping
 
+from aippocampus_runtime.contracts import canonical_foreground_action_fields
 from aippocampus_runtime.dream.sleep_cycle import public_sleep_cycle_summary
 from aippocampus_runtime.ops import observatory_boundary
 from aippocampus_runtime.ops.activation_authority_audit import (
@@ -868,7 +869,7 @@ def _compact_claim_boundary() -> dict[str, Any]:
     return {
         "can_use_for": ["route_readiness_triage", "observability_review"],
         "must_reopen_for": ["source_backed_claims", "control_state_changes"],
-        "detail_available_with": "aippocampus observatory --json",
+        "detail_available_with": "aippocampus observatory --operator-json",
     }
 
 
@@ -882,6 +883,7 @@ def summary_projection(report: Mapping[str, Any]) -> dict[str, Any]:
     action = _foreground_action(no_rows=no_rows)
     return {
         "kind": "aippocampus_cognitive_observatory_summary",
+        **canonical_foreground_action_fields(action, safe_next_actions=[action]),
         "ok": bool(report.get("ok")),
         "read_only": bool(report.get("no_write")),
         "not_control_plane": bool((report.get("contract") or {}).get("not_control_plane")),
@@ -894,12 +896,12 @@ def summary_projection(report: Mapping[str, Any]) -> dict[str, Any]:
         "needs_ripening_count": metrics.get("campus_needs_ripening_count", 0),
         "panel_previews": _panel_previews(report),
         "surfaces": list(report.get("surfaces") or [])[:12],
-        "full_audit_flag": "--json",
+        "full_audit_flag": "--operator-json",
         "html_flag": "--html",
+        "operator_json_available": True,
+        "operator_json_command": "aippocampus observatory --operator-json",
         "privacy_boundary": report.get("privacy_boundary"),
-        "foreground_action": action,
         "claim_boundary": _compact_claim_boundary(),
-        "agent_next_action": action,
     }
 
 
@@ -907,7 +909,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="aippocampus observatory",
         usage=(
-            "aippocampus observatory [--summary-json|--json|--html] "
+            "aippocampus observatory [--summary-json|--json|--operator-json|--html] "
             "[--fixture] [operator/audit inputs]"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -917,7 +919,7 @@ def main(argv: list[str] | None = None) -> int:
 
 Operator/audit inputs:
   Pass route-readiness, activation, recall, sleep, query-pattern, or cognitive-load JSON
-  only when inspecting the Observatory pipeline. Full audit remains behind --json.""",
+  only when inspecting the Observatory pipeline. Full audit remains behind --operator-json.""",
     )
     parser.add_argument("--fixture", action="store_true", help="Use deterministic fixture rows.")
     parser.add_argument("--route-candidates", help="JSON file/list with route candidates.")
@@ -930,6 +932,7 @@ Operator/audit inputs:
     parser.add_argument("--cognitive-load-calibration", help="JSON cognitive-load calibration report.")
     parser.add_argument("--min-roi-score", type=float, default=1.0)
     parser.add_argument("--json", action="store_true", dest="json_output")
+    parser.add_argument("--operator-json", action="store_true", help="Emit the full sanitized operator observatory report.")
     parser.add_argument(
         "--summary-json",
         action="store_true",
@@ -938,8 +941,8 @@ Operator/audit inputs:
     parser.add_argument("--html", action="store_true", dest="html_output")
     parser.add_argument("--output", type=Path, help="Write the selected output to a file.")
     args = parser.parse_args(argv)
-    if sum(bool(item) for item in (args.json_output, args.summary_json, args.html_output)) > 1:
-        parser.error("--json, --summary-json, and --html are mutually exclusive")
+    if sum(bool(item) for item in (args.json_output, args.summary_json, args.operator_json, args.html_output)) > 1:
+        parser.error("--json, --summary-json, --operator-json, and --html are mutually exclusive")
 
     if args.fixture:
         report = fixture_cognitive_observatory_readout()
@@ -961,9 +964,9 @@ Operator/audit inputs:
             ),
             min_roi_score=args.min_roi_score,
         )
-    if args.summary_json:
+    if args.summary_json or args.json_output:
         output = json.dumps(summary_projection(report), ensure_ascii=False, indent=2) + "\n"
-    elif args.json_output:
+    elif args.operator_json:
         output = json.dumps(report, ensure_ascii=False, indent=2) + "\n"
     elif args.html_output:
         output = render_html(report)

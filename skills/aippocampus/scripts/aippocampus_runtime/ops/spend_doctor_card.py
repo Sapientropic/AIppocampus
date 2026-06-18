@@ -6,6 +6,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from aippocampus_runtime import core as runtime_core
+from aippocampus_runtime.contracts import canonical_foreground_action_fields
 
 SCHEMA_VERSION = 1
 
@@ -28,7 +29,7 @@ def _primary_spend_action(decision: Mapping[str, Any]) -> dict[str, Any]:
     )
     if warm_queue.get("status") == "blocked":
         return {
-            "action_id": "inspect_warm_ambient_queue",
+            "id": "inspect_warm_ambient_queue",
             "label": "Inspect blocked warm ambient queue",
             "command": str(warm_queue.get("status_command") or "aippocampus warm status --json"),
             "route": "warm_ambient",
@@ -48,7 +49,7 @@ def _primary_spend_action(decision: Mapping[str, Any]) -> dict[str, Any]:
         )
         route = routes[0] if routes else str(lowest_yield.get("route") or "unknown")
         return {
-            "action_id": "inspect_spend_route",
+            "id": "inspect_spend_route",
             "label": "Inspect high-spend low-yield route",
             "command": command,
             "route": route,
@@ -61,7 +62,7 @@ def _primary_spend_action(decision: Mapping[str, Any]) -> dict[str, Any]:
         }
     if action == "inspect_usage":
         return {
-            "action_id": "inspect_usage_telemetry",
+            "id": "inspect_usage_telemetry",
             "label": "Inspect missing usage telemetry",
             "command": command,
             "routes": [str(route) for route in decision.get("usage_telemetry_gaps") or []],
@@ -70,7 +71,7 @@ def _primary_spend_action(decision: Mapping[str, Any]) -> dict[str, Any]:
             "claim_boundary": "operator_diagnostic_not_source_evidence",
         }
     return {
-        "action_id": "continue_with_spend_guardrails",
+        "id": "continue_with_spend_guardrails",
         "label": "Continue with current spend guardrails",
         "next_step": "continue_current_task",
         "why": "No local spend/yield warning crossed the configured thresholds.",
@@ -87,6 +88,15 @@ def compact_spend_doctor_card(report: Mapping[str, Any]) -> dict[str, Any]:
     spend = totals.get("spend") if isinstance(totals.get("spend"), Mapping) else {}
     warning_codes = [str(code) for code in report.get("warning_codes") or []]
     routes_to_inspect = [str(route) for route in decision.get("routes_to_pause_or_inspect") or []]
+    primary_action = _primary_spend_action(decision)
+    detail_action = {
+        "id": "open_full_spend_report",
+        "label": "Open full spend report",
+        "command": "aippocampus doctor spend --detail full --json",
+        "mutation_risk": "read_only",
+        "claim_boundary": "operator_diagnostic_not_source_evidence",
+        "why": "Use the operator report only when route-level telemetry or cost basis details are needed.",
+    }
     payload = {
         "schema_version": SCHEMA_VERSION,
         "kind": "aippocampus_spend_doctor_card",
@@ -113,7 +123,10 @@ def compact_spend_doctor_card(report: Mapping[str, Any]) -> dict[str, Any]:
             "cost_basis": decision.get("cost_basis"),
             "cost_explanation": decision.get("cost_explanation"),
         },
-        "foreground_action": _primary_spend_action(decision),
+        **canonical_foreground_action_fields(
+            primary_action,
+            safe_next_actions=[primary_action, detail_action],
+        ),
         "routes_to_pause_or_inspect": routes_to_inspect,
         "warning_codes": warning_codes,
         "privacy_boundary": report.get("privacy_boundary") or {},

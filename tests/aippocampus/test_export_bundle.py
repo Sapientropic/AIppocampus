@@ -70,7 +70,7 @@ class ExportBundleTests(unittest.TestCase):
         ):
             code, stdout, stderr = self._run_export_main([])
 
-        self.assertEqual(code, 2)
+        self.assertEqual(code, 0)
         self.assertEqual(stderr, "")
         payload = json.loads(stdout)
         self.assertFalse(payload["ok"])
@@ -106,7 +106,7 @@ class ExportBundleTests(unittest.TestCase):
                 ):
                     code, stdout, stderr = self._run_export_main(list(argv))
 
-                self.assertEqual(code, 2)
+                self.assertEqual(code, 0)
                 self.assertEqual(stderr, "")
                 payload = json.loads(stdout)
                 self.assertTrue(payload["safety"]["no_write_happened"])

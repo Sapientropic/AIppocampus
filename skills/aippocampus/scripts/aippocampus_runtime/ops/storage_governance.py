@@ -667,7 +667,6 @@ def _error_payload(code: str, message: str, *, error_class: str = "usage_error")
 
 
 def deferred_summary_payload(*, class_filter: str, limit: int) -> dict[str, Any]:
-    bounded_audit = f"aippocampus storage gc --dry-run --json --top {max(1, int(limit))} --cwd ."
     comparable_metrics = (
         f"aippocampus storage gc --dry-run --json --top {max(1, int(limit))} --cwd ."
     )
@@ -707,8 +706,8 @@ def deferred_summary_payload(*, class_filter: str, limit: int) -> dict[str, Any]
         },
         **action_fields,
         "safe_next_action": {
-            "decision": "run bounded audit sample to compute comparable reclaimable metrics",
-            "command": bounded_audit,
+            "decision": "continue without cleanup unless the user explicitly wants storage detail",
+            "command": str(summary_actions[0].get("command") or "continue-without-cleanup"),
         },
         "comparable_metrics_command": comparable_metrics,
         "full_audit_available": True,

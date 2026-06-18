@@ -101,7 +101,12 @@ def compact_agent_explain_payload(
         primary = action or _deepen_action(request_index, last_recall=last_recall)
         next_action = _as_dict(source.get("agent_next_action")) or primary
         safe_actions = _as_list(source.get("safe_next_actions")) or [next_action]
-        error = _as_dict(source.get("error")) or _as_dict(explanation.get("error"))
+        result = _as_dict(source.get("result"))
+        error = (
+            _as_dict(source.get("error"))
+            or _as_dict(result.get("error"))
+            or _as_dict(explanation.get("error"))
+        )
         return _without_empty(
             {
                 "detail": "compact",

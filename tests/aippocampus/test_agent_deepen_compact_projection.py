@@ -233,11 +233,30 @@ class AgentDeepenCompactProjectionTests(unittest.TestCase):
         self.assertEqual(payload["kind"], "aippocampus_route_explain_card")
         self.assertEqual(payload["status"], "cannot_verify")
         self.assertEqual(payload["surface"], "agent_cli_route_explain_compact")
+        self.assertEqual(payload["error"]["code"], "last_recall_unavailable")
         self.assertEqual(payload["foreground_action"]["id"], "recall_with_cue_full_detail")
         self.assertIn("agent recall", payload["foreground_action"]["command_template"])
         self.assertNotIn("macro_navigation_diagnostics", payload)
         self.assertNotIn("cannot_claim", encoded)
         self.assertNotIn(str(self.cwd), encoded)
+
+    def test_cli_agent_explain_last_recall_text_redacts_path_and_shows_recovery(self) -> None:
+        missing_path = self.cwd / "missing-last-recall.json"
+        proc = self._run_agent(
+            "explain",
+            "--request",
+            "1",
+            "--last-recall",
+            "--last-recall-path",
+            str(missing_path),
+        )
+
+        self.assertEqual(proc.returncode, 2, proc.stderr)
+        self.assertIn("last_recall_unavailable", proc.stdout)
+        self.assertIn("Next:", proc.stdout)
+        self.assertIn("aippocampus agent recall", proc.stdout)
+        self.assertNotIn(str(self.cwd), proc.stdout)
+        self.assertNotIn(str(missing_path), proc.stdout)
 
     def test_agent_continuity_module_deepen_handle_json_returns_recovery_card(self) -> None:
         proc = self._run_agent_module("deepen", "--handle", "not-a-real-handle", "--json")
@@ -278,7 +297,7 @@ class AgentDeepenCompactProjectionTests(unittest.TestCase):
         self.assertEqual(route_action["id"], "deepen_this_route")
         self.assertEqual(route_action["tool_name"], "agent_deepen")
         self.assertEqual(route_action["arguments"], {"request_index": 1, "last_recall": True})
-        self.assertIn("--request 1 --last-recall --json", route_action["cli_command"])
+        self.assertIn("--request 1 --last-recall --json", route_action["command"])
         self.assertEqual(route["callable_selector"]["kind"], "last_recall_request_index")
         self.assertEqual(route["callable_selector"]["request_index"], 1)
         self.assertEqual(route["display_id"], route["route_id"])

@@ -96,7 +96,7 @@ class PublicReliabilityGauntletTests(unittest.TestCase):
         self.assertIn("live_hook_write_path_quality", cannot_claim)
         self.assertIn("single_aggregate_reliability_score", cannot_claim)
 
-    def test_default_report_has_current_owner_action_route_and_passes_contract_lint(self) -> None:
+    def test_default_report_has_closed_owner_no_open_followup_and_passes_contract_lint(self) -> None:
         payload = gauntlet.run_public_reliability_gauntlet(
             run_segment_soak=False,
             run_question_tracking=False,
@@ -106,29 +106,27 @@ class PublicReliabilityGauntletTests(unittest.TestCase):
             payload["historical_source_issue"],
             "https://github.com/Sapientropic/AIppocampus/issues/1102",
         )
+        self.assertEqual(payload["owner_issue_state"], "closed_historical")
         self.assertEqual(
-            payload["current_issue_url"],
+            payload["historical_owner_issue_url"],
             "https://github.com/Sapientropic/AIppocampus/issues/2101",
         )
+        self.assertIn("#2101 closed", payload["no_open_followup_reason"])
         self.assertEqual(
             payload["owner_path"],
             "benchmarks/aippocampus/benchmark_public_reliability_gauntlet.py",
         )
         self.assertTrue(payload["review_next_actions"])
         self.assertTrue(payload["issue_actions"])
-        action_issue_urls = {
-            action.get("issue_url")
-            for action in payload["review_next_actions"] + payload["issue_actions"]
-        }
-        self.assertIn(
-            "https://github.com/Sapientropic/AIppocampus/issues/2101",
-            action_issue_urls,
-        )
+        for action in payload["review_next_actions"] + payload["issue_actions"]:
+            self.assertEqual(action["issue_state"], "closed_historical")
+            self.assertIn("#2101 closed", action["no_open_followup_reason"])
 
         lint = benchmark_report_contract_lint(payload)
 
         self.assertTrue(lint["ok"], lint)
-        self.assertGreaterEqual(lint["followup_action_count"], 1)
+        self.assertGreaterEqual(lint["explicit_no_open_followup_route_count"], 1)
+        self.assertGreaterEqual(lint["no_action_reason_count"], 1)
         self.assertGreaterEqual(lint["owner_route_count"], 1)
 
 

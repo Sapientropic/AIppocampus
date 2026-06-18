@@ -71,6 +71,10 @@ class AgentOptInContinuityTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.tmp.cleanup()
 
+    def assertCanonicalForegroundAction(self, payload: dict[str, object]) -> None:
+        self.assertEqual((payload["foreground_action_contract"], payload["agent_next_action"], payload["safe_next_actions"][0]),
+                         ("foreground-action-v1", payload["foreground_action"], payload["foreground_action"]))
+
     def _append_clean_rows(self, rows: list[dict[str, object]]) -> None:
         with (self.clean / "messages.jsonl").open("a", encoding="utf-8", newline="\n") as f:
             for row in rows:
@@ -254,7 +258,7 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertTrue(action["arguments"]["last_recall"])
         self.assertEqual(public["action_boundary"]["primary_action_field"], "foreground_action")
         self.assertNotIn("suggested_next_command", public)
-        self.assertNotIn("agent_next_action", public)
+        self.assertCanonicalForegroundAction(public)
         self.assertNotIn("public_safe_command_preview", public)
         self.assertNotIn("public_safe_recall_command", public)
         self.assertNotIn("foreground_action_card", public)
@@ -353,9 +357,10 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertNotIn("<local-private-handle>", encoded)
         self.assertNotIn("<", encoded)
         self.assertNotIn("agent deepen", encoded)
-        self.assertEqual(public["foreground_action"]["action_id"], "recover_recall_miss")
+        self.assertCanonicalForegroundAction(public)
+        self.assertEqual(public["foreground_action"]["id"], "recover_recall_miss")
         self.assertEqual(public["foreground_action"]["tool_name"], "search_memory")
-        self.assertEqual(public["foreground_action"]["cli_command_template"], 'aippocampus search "{exact_phrase}" --json')
+        self.assertEqual(public["foreground_action"]["command_template"], 'aippocampus search "{exact_phrase}" --json')
         self.assertEqual(public["foreground_action"]["arguments_template"]["query"], "{exact_phrase}")
         self.assertEqual(public["foreground_action"]["requires"], ["exact_phrase"])
         self.assertEqual(public["miss_recovery_card"]["miss_class"], "no_route")
@@ -395,7 +400,8 @@ class AgentOptInContinuityTests(unittest.TestCase):
         )
 
         self.assertEqual(public["route_count"], 1)
-        self.assertEqual(public["foreground_action"]["action_id"], "recover_weak_route")
+        self.assertCanonicalForegroundAction(public)
+        self.assertEqual(public["foreground_action"]["id"], "recover_weak_route")
         self.assertEqual(public["weak_route_recovery_card"]["miss_class"], "weak_route")
         self.assertIn("exact search", " ".join(public["weak_route_recovery_card"]["recovery_actions"]))
 
@@ -852,7 +858,7 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertEqual(recall_proc.returncode, 0, recall_proc.stderr)
         recall_payload = json.loads(recall_proc.stdout)
         self.assertTrue(recall_payload["last_recall_cache_available"])
-        self.assertIn("--last-recall", recall_payload["foreground_action"]["cli_command"])
+        self.assertIn("--last-recall", recall_payload["foreground_action"]["command"])
 
         deepen_proc = subprocess.run(
             [
@@ -1007,7 +1013,8 @@ class AgentOptInContinuityTests(unittest.TestCase):
 
         self.assertFalse(projected["last_recall_cache_available"])
         self.assertNotIn("--last-recall", encoded)
-        self.assertEqual(projected["foreground_action"]["action_id"], "repair_last_recall_cache")
+        self.assertEqual(projected["foreground_action"]["id"], "repair_last_recall_cache")
+        self.assertCanonicalForegroundAction(projected)
         self.assertIn("last_recall_cache_recovery_card", projected)
 
     def test_last_recall_unavailable_recovery_does_not_loop_to_same_command(self) -> None:
@@ -1577,6 +1584,8 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertEqual(payload["mode"], "recall")
         self.assertEqual(payload["surface"], "agent_cli_public_compact")
         self.assertEqual(payload["output_boundary"], "public_compact_no_local_private_handles")
+        self.assertCanonicalForegroundAction(payload)
+        self.assertNotIn("action_id", payload["foreground_action"])
         self.assertEqual(payload["foreground_action"]["tool_name"], "agent_deepen")
         self.assertEqual(payload["foreground_action"]["arguments"]["request_index"], 1)
         self.assertNotIn("cannot_claim", payload)
@@ -1955,9 +1964,13 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertEqual(payload["surface"], "agent_aippo_guidance_card")
         self.assertIn("benchmark_reporting", payload["task_families"])
         self.assertIn("measured results", " ".join(payload["use_guidance"]))
-        self.assertEqual(payload["foreground_action"]["tool_name"], "agent_aippo")
-        self.assertEqual(payload["agent_next_action"], payload["foreground_action"])
-        self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
+        self.assertEqual(payload["foreground_action"]["action_type"], "use_project_working_guidance")
+        self.assertNotIn("tool_name", payload["foreground_action"])
+        self.assertNotIn("arguments", payload["foreground_action"])
+        refresh_action = payload["safe_next_actions"][1]
+        self.assertEqual(refresh_action["tool_name"], "agent_aippo")
+        self.assertEqual(refresh_action["arguments"], {"task": "benchmark reporting issue closeout"})
+        self.assertCanonicalForegroundAction(payload)
         self.assertNotIn("cannot_claim", payload)
         self.assertIn("source_backed_facts", payload["claim_boundary"]["must_reopen_for"])
         self.assertNotIn("operator_json_command_template", payload)
@@ -1996,6 +2009,8 @@ class AgentOptInContinuityTests(unittest.TestCase):
         status = payload["operator_detail"]["contract_status"]
 
         self.assertEqual(payload["foreground_action"]["action_id"], "use_hint")
+        self.assertEqual(payload["foreground_action"]["action_type"], "use_project_working_guidance")
+        self.assertNotIn("arguments", payload["foreground_action"])
         self.assertNotIn("cannot_claim", payload)
         self.assertIn("source_backed_facts", payload["claim_boundary"]["must_reopen_for"])
         self.assertGreaterEqual(status["available_active_clause_count"], 1)
@@ -2063,20 +2078,16 @@ class AgentOptInContinuityTests(unittest.TestCase):
         action = payload["agent_next_action"]
 
         self.assertEqual(payload["status"], "no_active_contract")
-        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
+        self.assertCanonicalForegroundAction(payload)
         self.assertEqual(action["action_id"], "provide_task_cue")
         self.assertEqual(action["tool_name"], "agent_aippo")
         self.assertEqual(action["requires"], ["task_cue"])
         self.assertEqual(action["blocked_by"], ["task_cue_required"])
-        self.assertEqual(
-            payload["operator_detail"]["contract_status"]["availability_basis"],
-            "task_cue_required",
-        )
+        self.assertEqual(payload["operator_detail"]["contract_status"]["availability_basis"], "task_cue_required")
         self.assertEqual(
             payload["operator_detail"]["contract_status"]["blocked_by"],
             ["task_cue_required"],
         )
-        self.assertEqual(payload["safe_next_actions"][0], action)
         self.assertNotIn("operator_json_command", payload)
         self.assertNotIn("operator_json_command_template", payload)
         self.assertIn("operator_json_command_template", payload["operator_detail"])
@@ -2138,9 +2149,7 @@ class AgentOptInContinuityTests(unittest.TestCase):
 
         self.assertEqual(payload["surface"], "project_workflow_ai_ppocampus")
         self.assertIn("activation_packet", payload)
-        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
-        self.assertEqual(payload["agent_next_action"], payload["foreground_action"])
-        self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
+        self.assertCanonicalForegroundAction(payload)
         self.assertIn("product_workflow", payload["activation_packet"]["task_families"])
         self.assertIn("foreground_guidance_card", payload)
         self.assertNotIn("operator_json_command", payload["foreground_guidance_card"])
@@ -2297,7 +2306,7 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertEqual(payload["foreground_action"]["tool_name"], "agent_deepen")
         self.assertEqual(payload["action_boundary"]["primary_action_field"], "foreground_action")
         self.assertNotIn("suggested_next_command", payload)
-        self.assertNotIn("agent_next_action", payload)
+        self.assertCanonicalForegroundAction(payload)
         self.assertLess(len(encoded.encode("utf-8")), 4096)
         self.assertNotIn(str(last_recall_path), encoded)
         self.assertNotIn('"handle"', json.dumps(json.loads(cache_text)["requests"]))

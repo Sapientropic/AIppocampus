@@ -82,8 +82,9 @@ SENSITIVE_ASSIGNMENT_RE = re.compile(
 BEARER_VALUE_RE = re.compile(r"(?i)\bbearer\s+[a-z0-9._~+/=-]{8,}")
 OPENAI_KEY_RE = re.compile(r"\bsk-[A-Za-z0-9][A-Za-z0-9._-]{8,}\b")
 LOCAL_PATH_TEXT_RE = re.compile(
-    r"(?P<path>(?:[A-Za-z]:[\\/]|/(?:Users|home|tmp|var|private|Volumes)/)[^\s,;\"')\]]+)"
+    r"(?P<path>(?:(?<![A-Za-z0-9])[A-Za-z]:[\\/]|/(?:Users|home|tmp|var|private|Volumes)/)[^\s,;\"')\]]+)"
 )
+TEMPLATE_PLACEHOLDER_RE = re.compile(r"^\{[A-Za-z0-9_][A-Za-z0-9_-]*\}$")
 
 
 def redact_private_paths(value):
@@ -132,6 +133,8 @@ def redact_sensitive_values(value):
 
 def _is_private_path_key(key: str, value=None) -> bool:
     normalized = key.casefold()
+    if _is_template_placeholder_value(value):
+        return False
     if normalized in PUBLIC_NON_PATH_KEYS:
         return False
     if normalized == "source":
@@ -172,11 +175,22 @@ def _redact_sensitive_text(value: str) -> str:
 
 
 def _redact_private_path_text(value: str) -> str:
-    return LOCAL_PATH_TEXT_RE.sub(LOCAL_PATH_REDACTION, str(value))
+    text = str(value)
+
+    def replace(match: re.Match[str]) -> str:
+        prefix_parts = text[: match.start()].rsplit(maxsplit=1)
+        token_prefix = prefix_parts[-1] if prefix_parts else ""
+        if "://" in token_prefix:
+            return match.group(0)
+        return LOCAL_PATH_REDACTION
+
+    return LOCAL_PATH_TEXT_RE.sub(replace, text)
 
 
 def _looks_like_path(value: str) -> bool:
     text = str(value)
+    if TEMPLATE_PLACEHOLDER_RE.match(text.strip()):
+        return False
     return (
         "\\" in text
         or "/" in text
@@ -192,4 +206,14 @@ def _value_looks_like_path(value) -> bool:
         return any(_value_looks_like_path(item) for item in value.values())
     if isinstance(value, list | tuple):
         return any(_value_looks_like_path(item) for item in value)
+    return False
+
+
+def _is_template_placeholder_value(value) -> bool:
+    if isinstance(value, str):
+        return bool(TEMPLATE_PLACEHOLDER_RE.match(value.strip()))
+    if isinstance(value, dict):
+        return bool(value) and all(_is_template_placeholder_value(item) for item in value.values())
+    if isinstance(value, list | tuple):
+        return bool(value) and all(_is_template_placeholder_value(item) for item in value)
     return False

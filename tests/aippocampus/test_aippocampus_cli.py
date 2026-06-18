@@ -528,7 +528,7 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertNotIn("<ticket_id>", encoded)
         self.assertNotIn("route to quiet", encoded)
 
-    def test_personal_controls_prefer_last_recall_route_choices(self) -> None:
+    def test_personal_controls_keep_last_recall_route_choices_secondary(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             registry = Path(tmp) / "registry"
             self.write_last_recall_cache(registry, "route_cached_one", "route_cached_two")
@@ -540,9 +540,17 @@ class AippocampusCliTests(unittest.TestCase):
         for proc in (pause, forget, quiet):
             self.assertIn(proc.returncode, {0, 2}, proc.stderr)
             payload = json.loads(proc.stdout)
-            self.assertEqual(payload["agent_next_action"]["source"], "last_recall_cache")
-            self.assertEqual(payload["agent_next_action"]["request_index"], 1)
-            self.assertIn("route_cached_one", payload["agent_next_action"]["command"])
+            self.assertEqual(payload["agent_next_action"]["mutation_risk"], "read_only")
+            self.assertIn("command_template", payload["agent_next_action"])
+            cached_actions = [
+                action
+                for action in payload["safe_next_actions"]
+                if action.get("source") == "last_recall_cache"
+            ]
+            self.assertTrue(cached_actions)
+            self.assertEqual(cached_actions[0]["request_index"], 1)
+            self.assertIn("route_cached_one", cached_actions[0]["command"])
+            self.assertNotEqual(payload["agent_next_action"], cached_actions[0])
             self.assertNotIn("route to quiet", json.dumps(payload, ensure_ascii=False))
 
     def test_repro_package_template_has_structured_copyable_payload(self) -> None:
@@ -1591,7 +1599,9 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertEqual(payload["kind"], "aippocampus_agent_self_note_read")
         self.assertEqual(payload["note"]["note_id"], note_id)
         self.assertEqual(payload["note"]["action_grammar"], "direction_only")
-        self.assertIn("source-backed facts", payload["agent_next_action"])
+        self.assertEqual(payload["foreground_action"], payload["agent_next_action"])
+        self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
+        self.assertIn("source-backed facts", payload["agent_next_action"]["message"])
         self.assertNotEqual(missing.returncode, 0)
         missing_payload = json.loads(missing.stdout)
         self.assertEqual(missing_payload["error"]["code"], "agent_self_note_not_found")
