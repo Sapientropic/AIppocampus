@@ -1,0 +1,13 @@
+name: AIppocampus CodeQL
+
+paths:
+  - skills/aippocampus/scripts
+  - tools/aippocampus
+  - plugins/aippocampus
+
+paths-ignore:
+  - tests
+  - benchmarks
+  - benchmark_corpus
+  - docs
+  - "**/*.md"

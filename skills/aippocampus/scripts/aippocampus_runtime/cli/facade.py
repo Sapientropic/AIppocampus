@@ -15,6 +15,7 @@ from io import StringIO
 from pathlib import Path
 from typing import Any, Callable, TextIO
 
+from aippocampus_runtime.cli.recovery import handle_module_exception
 from aippocampus_runtime.cli.recovery_cards import (
     import_recovery_payload,
     object_sync_chooser_payload,
@@ -950,6 +951,8 @@ def run_module_main(module_name: str, script_name: str, args: list[str]) -> int:
             return _coerce_exit_code(main_func(list(args)))
         except SystemExit as exc:
             return _system_exit_code(exc)
+        except Exception as exc:
+            return handle_module_exception(script_name, args, exc)
 
     old_argv = sys.argv[:]
     sys.argv = [str(SCRIPT_DIR / script_name), *args]
@@ -957,6 +960,8 @@ def run_module_main(module_name: str, script_name: str, args: list[str]) -> int:
         return _coerce_exit_code(main_func())
     except SystemExit as exc:
         return _system_exit_code(exc)
+    except Exception as exc:
+        return handle_module_exception(script_name, args, exc)
     finally:
         sys.argv = old_argv
 

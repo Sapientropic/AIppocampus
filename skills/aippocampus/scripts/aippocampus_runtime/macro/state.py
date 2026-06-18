@@ -325,13 +325,46 @@ def append_macro_orientation_state(path: Path, entry: Mapping[str, object]) -> N
         handle.write(json.dumps(dict(entry), ensure_ascii=False, sort_keys=True) + "\n")
 
 
-def load_macro_orientation_states(path: Path) -> list[dict[str, object]]:
+def load_macro_orientation_states(
+    path: Path, *, warnings: list[dict[str, object]] | None = None
+) -> list[dict[str, object]]:
     if not path.exists():
         return []
     rows: list[dict[str, object]] = []
-    for line in path.read_text(encoding="utf-8").splitlines():
-        if line.strip():
-            rows.append(json.loads(line))
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError as exc:
+        if warnings is not None:
+            warnings.append(
+                {
+                    "code": "macro_state_unreadable",
+                    "message": type(exc).__name__,
+                }
+            )
+        return []
+    for line_number, line in enumerate(lines, start=1):
+        if not line.strip():
+            continue
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            if warnings is not None:
+                warnings.append(
+                    {
+                        "code": "invalid_jsonl_row_skipped",
+                        "line": line_number,
+                    }
+                )
+            continue
+        if isinstance(row, dict):
+            rows.append(row)
+        elif warnings is not None:
+            warnings.append(
+                {
+                    "code": "non_object_jsonl_row_skipped",
+                    "line": line_number,
+                }
+            )
     return rows
 
 

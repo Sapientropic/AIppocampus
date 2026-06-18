@@ -9,12 +9,14 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime import core
 from aippocampus_runtime.aippo import working_contract as aippo
+from aippocampus_runtime.cli.recovery import action_command_text
 from aippocampus_runtime.contracts import (
     FOREGROUND_ACTION_CONTRACT_VERSION,
     foreground_recovery_card,
@@ -32,6 +34,7 @@ from aippocampus_runtime.mcp.recall_navigation import (
 )
 from aippocampus_runtime.navigation import attention_route_projection
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
+from aippocampus_runtime.public_output import emit_public_text
 from aippocampus_runtime.recall import (
     agent_deepen_requests,
     agent_packet_compaction,
@@ -500,8 +503,12 @@ def _load_macro_projection(
             "authority_level": macro_state.AUTHORITY_LEVEL,
             "claim_permission": macro_state.CLAIM_PERMISSION,
         }
-    entries = macro_state.load_macro_orientation_states(state_path)
-    return macro_state.latest_project_macro_orientation(entries, project=project)
+    warnings: list[dict[str, Any]] = []
+    entries = macro_state.load_macro_orientation_states(state_path, warnings=warnings)
+    projection = macro_state.latest_project_macro_orientation(entries, project=project)
+    if warnings:
+        projection = {**projection, "warnings": warnings}
+    return projection
 
 
 def _resolve_macro_state_path(
@@ -703,6 +710,7 @@ def macro_orientation(
         "foreground_action": foreground_action,
         "agent_next_action": foreground_action,
         "safe_next_actions": safe_next_actions,
+        "warnings": projection.get("warnings", []),
         "diagnostics": diagnostics,
         "metrics": {
             "macro_packet_shown_count": len(memory_packets),
@@ -1627,10 +1635,18 @@ def main(argv: list[str] | None = None) -> int:
             if args.json:
                 _json_out(payload)
             else:
-                print("AIppocampus agent recall: cue required")
-                print("Next: " + str(payload["agent_next_action"]["command"]))
-                print("Then: " + str(payload["safe_next_actions"][1]["command"]))
-                print("Boundary: recovery guidance is not source evidence.")
+                actions = [
+                    action
+                    for action in payload.get("safe_next_actions") or []
+                    if isinstance(action, Mapping)
+                ]
+                lines = ["AIppocampus agent recall: cue required"]
+                if actions:
+                    lines.append(f"Try: {action_command_text(actions[0])}")
+                if len(actions) > 1:
+                    lines.append(f"Then: {action_command_text(actions[1])}")
+                lines.append("Boundary: recovery guidance is not source evidence.")
+                emit_public_text("\n".join(lines), stream=sys.stderr)
             return 2
         payload = recall(
             query,

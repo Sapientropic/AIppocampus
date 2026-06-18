@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import sys
 from argparse import Namespace
 from typing import Any
+
+from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 
 SYNC_COMMANDS = {"status", "push", "pull", "repair"}
 
@@ -132,6 +135,10 @@ def sync_help_card(command: str | None = None) -> str:
 HUGE_PLAN_FILE_COUNT = 1000
 
 
+def _public_text(value: Any) -> str:
+    return str(redact_sensitive_values(redact_private_paths(str(value))))
+
+
 def _included_count(file_count_breakdown: list[dict[str, Any]]) -> int:
     return sum(int(item.get("count") or 0) for item in file_count_breakdown if item.get("included"))
 
@@ -204,27 +211,39 @@ def sync_direction_plan(
 
 
 def print_sync_human_result(command: str, result: dict[str, Any]) -> None:
+    target = sys.stderr if result.get("ok") is False else sys.stdout
+
+    def write(line: str) -> None:
+        print(line, file=target)
+
     if result.get("kind") == "aippocampus_sync_direction_plan":
-        print(f"sync {command}: plan only")
-        print(f"read: {result.get('source_side')}")
-        print(f"write: {', '.join(result.get('mutates') or []) or 'none'}")
-        print(f"estimated files: {result.get('estimated_file_count')}")
+        write(f"sync {command}: plan only")
+        write(f"read: {result.get('source_side')}")
+        write(f"write: {', '.join(result.get('mutates') or []) or 'none'}")
+        write(f"estimated files: {result.get('estimated_file_count')}")
         for item in result.get("estimated_file_breakdown") or []:
             included = "included" if item.get("included") else "excluded"
-            print(f"- {item.get('category')}: {item.get('count')} ({included})")
-        print(f"raw rollout: {result.get('raw_rollout_boundary')}")
-        print(f"boundary: {result.get('conflict_boundary')}")
+            write(f"- {item.get('category')}: {item.get('count')} ({included})")
+        write(f"raw rollout: {result.get('raw_rollout_boundary')}")
+        write(f"boundary: {result.get('conflict_boundary')}")
         if result.get("next_safe_action") != result.get("next_command_template"):
-            print(f"next safe action: {result.get('next_safe_action')}")
-        print(f"template: {result.get('next_command_template')}")
+            write(f"next safe action: {result.get('next_safe_action')}")
+        write(f"template: {result.get('next_command_template')}")
     elif result.get("status") == "available_requires_sync_dir":
-        print("sync status: capability available; no sync folder selected")
-        print(f"template: {result.get('next_command_template')}")
-        print(f"boundary: {result.get('claim_boundary')}")
+        write("sync status: capability available; no sync folder selected")
+        write(f"template: {result.get('next_command_template')}")
+        write(f"boundary: {result.get('claim_boundary')}")
     else:
-        print(f"sync {command}: {'ok' if result.get('ok') else 'needs attention'}")
+        write(f"sync {command}: {'ok' if result.get('ok') else 'needs attention'}")
     if result.get("manifest"):
-        print(f"manifest: {result['manifest']}")
+        write(f"manifest: {_public_text(result['manifest'])}")
     if result.get("issues"):
         for issue in result["issues"]:
-            print(f"- {issue.get('code')}: {issue.get('path')}")
+            path = issue.get("path")
+            suffix = f": {_public_text(path)}" if path else ""
+            write(f"- {issue.get('code')}{suffix}")
+    if result.get("ok") is False:
+        if command == "status":
+            write("Try: aippocampus sync repair --plan --sync-dir {sync_dir} --json")
+        else:
+            write(f"Try: aippocampus sync {command} --plan --sync-dir {{sync_dir}} --json")
