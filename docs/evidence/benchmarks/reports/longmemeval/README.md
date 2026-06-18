@@ -10,6 +10,9 @@ current_claim_owner: `docs/evidence/current-claims.md#current-claim-snapshot`.
 
 latest_promoted_report: `factual-alias/longmemeval-post-factual-alias-rerank-closeout-500-2026-06-14.md`.
 
+claim_safe_next_action: open `../../longmemeval.md` and
+`docs/evidence/current-claims.md` before citing a dated LongMemEval number.
+
 safe_next_action: open `../../longmemeval.md`, then compare this family report
 against `docs/evidence/current-claims.md` before citing any LongMemEval number.
 

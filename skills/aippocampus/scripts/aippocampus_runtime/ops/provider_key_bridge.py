@@ -18,6 +18,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.contracts import canonical_foreground_action_fields
 from aippocampus_runtime.core import codex_home, now_utc
 from aippocampus_runtime.hooks import install_lifecycle, install_prompt
 from aippocampus_runtime.io_integrity import atomic_write_json
@@ -123,8 +124,10 @@ def _privacy(
 def _primary_agent_next_action(recommended_actions: list[dict[str, Any]]) -> Any:
     if not recommended_actions:
         return None
-    primary = recommended_actions[0]
-    return primary.get("command") or primary
+    primary = dict(recommended_actions[0])
+    primary.setdefault("mutation_risk", "read_only")
+    primary.setdefault("claim_boundary", "provider_key_bridge_optional_setup")
+    return primary
 
 
 def _env_var_is_visible(env_var: str) -> bool:
@@ -505,7 +508,15 @@ def build_provider_key_bridge_plan(
             "no_key_source_backed_recall_still_works": True,
         },
         "recommended_actions": recommended_actions,
-        "agent_next_action": _primary_agent_next_action(recommended_actions),
+        **canonical_foreground_action_fields(
+            _primary_agent_next_action(recommended_actions) or {
+                "id": "continue_without_provider_key",
+                "message": "Provider-key bridge is optional; continue without LLM-backed setup.",
+                "mutation_risk": "read_only",
+                "claim_boundary": "provider_key_bridge_optional",
+            },
+            safe_next_actions=recommended_actions or [],
+        ),
         "claim_boundary": (
             "Current process provider-key readiness is based on env-var presence only; future hook "
             "processes are ready only when launched from an environment with the same variable; this "
@@ -527,6 +538,8 @@ def _blocked_plan_recommended_actions() -> list[dict[str, Any]]:
                 "--credential-dotenv {credential_dotenv_path} --json"
             ),
             "requires": ["credential_dotenv_path"],
+            "mutation_risk": "read_only_preview",
+            "claim_boundary": "provider_key_bridge_optional_setup",
         },
         {
             "id": "continue_without_provider_key",
@@ -535,6 +548,8 @@ def _blocked_plan_recommended_actions() -> list[dict[str, Any]]:
                 "still works without a provider key."
             ),
             "command": 'aippocampus search "a distinctive old phrase"',
+            "mutation_risk": "read_only",
+            "claim_boundary": "no_claim_before_reopen",
         },
     ]
 
@@ -588,7 +603,15 @@ def build_provider_key_bridge_chooser(
         "issues": [],
         "privacy": _privacy(include_local_paths),
         "recommended_actions": recommended_actions,
-        "agent_next_action": _primary_agent_next_action(recommended_actions),
+        **canonical_foreground_action_fields(
+            _primary_agent_next_action(recommended_actions) or {
+                "id": "continue_without_provider_key",
+                "message": "Provider-key bridge is optional; continue without LLM-backed setup.",
+                "mutation_risk": "read_only",
+                "claim_boundary": "provider_key_bridge_optional",
+            },
+            safe_next_actions=recommended_actions or [],
+        ),
         "claim_boundary": (
             "A provider-key bridge is optional. It can help future/restarted hooks use LLM-backed "
             "semantic routes, but source-backed recall/search remains usable without it."

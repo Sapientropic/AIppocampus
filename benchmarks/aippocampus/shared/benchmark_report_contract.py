@@ -66,6 +66,19 @@ OWNER_STATUS_FIELDS = (
     "requires_human_review_before_closeout",
     "successor_required",
 )
+OWNER_ROUTE_STATE_FIELDS = (
+    "successor_issue_state",
+    "current_issue_state",
+    "owner_issue_state",
+    "issue_state",
+    "source_issue_state",
+)
+OWNER_ROUTE_CLASSES = (
+    "open_owner",
+    "closed_historical_owner",
+    "explicit_no_open_followup",
+    "unknown_issue_state",
+)
 HIGH_SIGNAL_CANNOT_CLAIM_THRESHOLD = 4
 HIGH_SIGNAL_METRICS_THRESHOLD = 5
 
@@ -164,6 +177,7 @@ def benchmark_report_followup_counts(report: Mapping[str, Any]) -> dict[str, int
     unqualified_followup_action_count = 0
     owner_route_count = 0
     no_action_reason_count = 0
+    route_class_counts = {route_class: 0 for route_class in OWNER_ROUTE_CLASSES}
     for mapping in _walk_mappings(report):
         for field in FOLLOWUP_ACTION_FIELDS:
             actions = mapping.get(field)
@@ -182,12 +196,19 @@ def benchmark_report_followup_counts(report: Mapping[str, Any]) -> dict[str, int
             no_action_reason_count += _count_nonempty_items(mapping.get(field))
         if _mapping_has_owner_route(mapping):
             owner_route_count += 1
+            route_class = _owner_route_class(mapping)
+            if route_class:
+                route_class_counts[route_class] += 1
 
     return {
         "followup_action_count": followup_action_count,
         "unqualified_followup_action_count": unqualified_followup_action_count,
         "owner_route_count": owner_route_count,
         "no_action_reason_count": no_action_reason_count,
+        "open_owner_route_count": route_class_counts["open_owner"],
+        "closed_historical_owner_route_count": route_class_counts["closed_historical_owner"],
+        "explicit_no_open_followup_route_count": route_class_counts["explicit_no_open_followup"],
+        "unknown_issue_state_owner_route_count": route_class_counts["unknown_issue_state"],
         "followup_surface_count": (
             followup_action_count + no_action_reason_count
         ),
@@ -198,6 +219,31 @@ def _mapping_has_owner_route(mapping: Mapping[str, Any]) -> bool:
     return _is_nonempty(mapping.get("owner_path")) and any(
         _is_nonempty(mapping.get(field)) for field in OWNER_ROUTE_ISSUE_FIELDS
     )
+
+
+def _issue_state_values(mapping: Mapping[str, Any]) -> list[str]:
+    return [
+        str(mapping.get(field) or "").strip().casefold()
+        for field in OWNER_ROUTE_STATE_FIELDS
+        if _is_nonempty(mapping.get(field))
+    ]
+
+
+def _has_no_open_followup_reason(mapping: Mapping[str, Any]) -> bool:
+    return any(_is_nonempty(mapping.get(field)) for field in NO_ACTION_REASON_FIELDS)
+
+
+def _owner_route_class(mapping: Mapping[str, Any]) -> str | None:
+    if not _mapping_has_owner_route(mapping):
+        return None
+    states = _issue_state_values(mapping)
+    if any(state == "open" or state.startswith("open_") for state in states):
+        return "open_owner"
+    if _has_no_open_followup_reason(mapping):
+        return "explicit_no_open_followup"
+    if any("closed" in state or "historical" in state for state in states):
+        return "closed_historical_owner"
+    return "unknown_issue_state"
 
 
 def _action_has_foreground_route(action: Any) -> bool:
@@ -213,15 +259,15 @@ def _action_has_foreground_route(action: Any) -> bool:
         return False
     if not _mapping_has_owner_route(action):
         return False
+    if _owner_route_class(action) == "closed_historical_owner":
+        return False
     return any(_is_nonempty(action.get(field)) for field in FOLLOWUP_EXECUTION_FIELDS)
 
 
 def _closed_or_historical_issue_signal(report: Mapping[str, Any]) -> bool:
     for mapping in _walk_mappings(report):
-        for field in ("issue_state", "source_issue_state", "owner_issue_state"):
-            value = str(mapping.get(field) or "").lower()
-            if "closed" in value or "historical" in value:
-                return True
+        if _owner_route_class(mapping) == "closed_historical_owner":
+            return True
     return False
 
 

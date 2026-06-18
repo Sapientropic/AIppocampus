@@ -122,9 +122,15 @@ def _start_actions(cwd: Path, state: dict[str, Any]) -> tuple[str, list[dict[str
             _template_action(
                 action_id="public_safe_demo_search",
                 label="Try public-safe exact search",
-                command_template='aippocampus search "{exact_phrase}" --json',
+                command_template=(
+                    'aippocampus search "{exact_phrase}" --json '
+                    "--clean-source-dir ./examples/public-memory-bundle/clean-source"
+                ),
                 requires=["exact_phrase"],
-                why="Use when there is no private source yet but a public fixture or exact phrase is available.",
+                why=(
+                    "Use when there is no private source yet and the foreground needs a public "
+                    "demo; this stays inside the packaged public fixture."
+                ),
                 claim_boundary="exact_search_result_requires_source_scope",
             ),
             foreground_shell_action(
@@ -160,7 +166,10 @@ def build_start_card(cwd: Path, *, clean_source_dir: str | None = None, detail: 
             label="Exact phrase fallback",
             command_template='aippocampus search "{exact_phrase}" --json',
             requires=["exact_phrase"],
-            why="Use only for exact known wording or public/no-clone demos, not as the default continuity promise.",
+            why=(
+                "Use only for exact known wording against the configured local source; "
+                "use public_safe_demo_search for the packaged public demo fixture."
+            ),
             claim_boundary="exact_search_result_requires_source_scope",
         )
     )

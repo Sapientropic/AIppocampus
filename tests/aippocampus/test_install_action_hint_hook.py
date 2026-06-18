@@ -165,7 +165,7 @@ class InstallActionHintHookTests(unittest.TestCase):
         card_steps = result["frontstage_card"]["next_steps"]
         action_ids = [action["id"] for action in result["safe_next_actions"]]
 
-        self.assertEqual(result["foreground_action"]["status"], "with_missing_cache_file")
+        self.assertEqual(result["frontstage_card"]["status"], "with_missing_cache_file")
         self.assertEqual(result["agent_next_action"]["id"], "check_action_hint_status")
         self.assertEqual(result["agent_next_action"]["mutation_risk"], "read_only")
         self.assertIn("refresh_action_hint_cache", action_ids)
@@ -284,7 +284,7 @@ class InstallActionHintHookTests(unittest.TestCase):
         self.assertFalse(payload["privacy_boundary"]["local_path_serialized"])
         self.assertFalse(payload["privacy_boundary"]["hook_command_serialized"])
         self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
-        self.assertEqual(payload["foreground_action"]["status"], "installed_but_not_ready")
+        self.assertEqual(payload["status"], "installed_but_not_ready")
         self.assertEqual(payload["agent_next_action"]["id"], "refresh_action_hint_cache")
         action_ids = [action["id"] for action in payload["safe_next_actions"]]
         self.assertIn("status", action_ids)
@@ -317,7 +317,7 @@ class InstallActionHintHookTests(unittest.TestCase):
         self.assertEqual(code, 0, payload)
         self.assertTrue(payload["installed"])
         self.assertEqual(payload["cache_status"], "with_empty_cache")
-        self.assertEqual(payload["foreground_action"]["status"], "installed_but_not_ready")
+        self.assertEqual(payload["status"], "installed_but_not_ready")
         self.assertEqual(payload["agent_next_action"]["id"], "refresh_action_hint_cache")
         self.assertIn("aippocampus hooks action refresh-cache --write --json", encoded)
         self.assertIn("aippocampus hooks action status --json", encoded)

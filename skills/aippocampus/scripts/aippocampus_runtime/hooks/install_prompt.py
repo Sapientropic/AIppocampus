@@ -356,6 +356,7 @@ def status(
     status_path: Path | None = None,
     telemetry_path: Path | None = None,
     include_private_paths: bool = False,
+    include_operator_detail: bool = False,
 ) -> dict[str, Any]:
     data = load_hooks(path)
     groups = (data.get("hooks") or {}).get("UserPromptSubmit") or []
@@ -429,6 +430,24 @@ def status(
             else None,
         )
     )
+    if include_last:
+        result["operator_json_available"] = True
+        result["operator_json_command"] = (
+            "aippocampus hooks prompt status --last --operator-json"
+        )
+        result["operator_detail_fields"] = [
+            "last_prompt_hook",
+            "prompt_hook_latency_risk",
+            "raw_hook_path",
+            "raw_hook_commands",
+        ]
+        if not include_operator_detail:
+            # Keep the default `--last --json` path action-first. The raw
+            # status/latency reports are sanitized, but still long operator
+            # ledgers that make foreground agents read audit detail before the
+            # next useful step.
+            result.pop("last_prompt_hook", None)
+            result.pop("prompt_hook_latency_risk", None)
     return result
 
 
@@ -509,6 +528,12 @@ def main(argv: list[str] | None = None) -> int:
         dest="operator_json",
         help="Emit raw local hooks.json path and hook command for local diagnostics.",
     )
+    parser.add_argument(
+        "--detail",
+        choices=["compact", "full"],
+        default="compact",
+        help="Use --detail full with --json to include sanitized operator audit detail.",
+    )
     parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args(argv)
 
@@ -539,9 +564,10 @@ def main(argv: list[str] | None = None) -> int:
             if args.skip_telemetry_path
             else None,
             include_private_paths=args.include_private_paths or args.operator_json,
+            include_operator_detail=args.operator_json or args.detail == "full",
         )
 
-    if args.json_output:
+    if args.json_output or args.operator_json:
         output = result if args.operator_json or args.action != "install" else public_install_result(result)
         print(json.dumps(output, ensure_ascii=False, indent=2))
     else:

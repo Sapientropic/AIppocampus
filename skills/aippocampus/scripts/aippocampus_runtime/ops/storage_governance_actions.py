@@ -72,30 +72,31 @@ def storage_gc_foreground_actions(
 def storage_gc_summary_actions(*, limit: int, include_apply: bool) -> list[dict[str, Any]]:
     """Return compact summary choices without making cleanup feel inevitable.
 
-    Summary JSON is a foreground chooser, not an audit report. Keep bounded
-    audit first so agents can get deterministic candidate detail before any
-    mutation. Keep stop/no-cleanup second because "do nothing" is a valid safe
-    outcome when the user did not ask for cleanup. Only expose apply when the
-    summary was built from existing evidence that can be audited and rebuilt.
+    Summary JSON is a foreground chooser, not an audit report. Keep
+    stop/no-cleanup first because "do nothing" is the safest useful default
+    when the user did not ask for storage work. Bounded audit remains one hop
+    away for operator detail, and apply appears only when existing evidence can
+    be audited and rebuilt.
     """
 
     top = max(1, int(limit))
     actions: list[dict[str, Any]] = [
+        {
+            "id": "stop_without_cleanup",
+            "label": "Stop without cleanup",
+            "command": "continue-without-cleanup",
+            "message": "No cleanup is required from this summary; continue without mutating storage.",
+            "mutation_risk": "read_only",
+            "claim_boundary": "storage_pressure_summary_not_memory_quality_evidence",
+            "why": "Storage GC is optional operator work unless the user explicitly chooses audit/apply.",
+        },
         {
             "id": "bounded_storage_audit",
             "label": "Run bounded storage audit",
             "command": f"aippocampus storage gc --dry-run --json --top {top} --cwd .",
             "mutation_risk": "read_only",
             "claim_boundary": "operator_diagnostic_not_source_evidence",
-            "why": "Open a small no-write candidate sample before deciding whether cleanup is worthwhile.",
-        },
-        {
-            "id": "stop_without_cleanup",
-            "label": "Stop without cleanup",
-            "message": "No cleanup is required from this summary; continue without mutating storage.",
-            "mutation_risk": "read_only",
-            "claim_boundary": "storage_pressure_summary_not_memory_quality_evidence",
-            "why": "Storage GC is optional operator work unless the user explicitly chooses audit/apply.",
+            "why": "Open a small no-write candidate sample only when cleanup detail is worth inspecting.",
         },
     ]
     if include_apply:

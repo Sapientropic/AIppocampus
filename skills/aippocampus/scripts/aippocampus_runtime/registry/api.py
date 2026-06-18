@@ -9,8 +9,10 @@ import json
 import os
 import sys
 from pathlib import Path
+from typing import Any
 
 from aippocampus_runtime.artifacts.publish import resolve_sqlite_index_path
+from aippocampus_runtime.contracts import canonical_foreground_action_fields
 from aippocampus_runtime.core import (
     cli_exit_code_for_error_code,
     codex_home,
@@ -144,6 +146,28 @@ def import_conversation_usage_payload(missing: list[str]) -> dict:
         "input_path" if item == "--input/--source" else "format_or_provider"
         for item in missing
     ]
+    actions: list[dict[str, Any]] = [
+        {
+            "id": "show_import_chooser",
+            "kind": "shell_command",
+            "command": "aippocampus import --json",
+            "mutation_risk": "read_only",
+            "claim_boundary": "import_recovery_no_write",
+            "reason": "show machine-readable import choices without writing registry data",
+        },
+        {
+            "id": "preview_generic_jsonl",
+            "kind": "shell_command_template",
+            "command_template": (
+                "aippocampus import conversation --format generic-jsonl "
+                "--input {input_path} --dry-run --json"
+            ),
+            "requires": ["input_path"],
+            "mutation_risk": "read_only_preview",
+            "claim_boundary": "import_preview_before_write",
+            "reason": "validate the transcript before any registry write",
+        },
+    ]
     return {
         "kind": "aippocampus_import_conversation_recovery",
         "ok": False,
@@ -160,6 +184,7 @@ def import_conversation_usage_payload(missing: list[str]) -> dict:
         },
         "input_schema": {
             "required": normalized_missing,
+            "supported_providers": list(PROVIDER_CHOICES),
             "supported_formats": ["generic-jsonl"],
             "preview_first": True,
         },
@@ -168,26 +193,7 @@ def import_conversation_usage_payload(missing: list[str]) -> dict:
             "preview_before_write": True,
             "local_paths_redacted_by_default": True,
         },
-        "safe_next_actions": [
-            {
-                "id": "show_import_chooser",
-                "kind": "shell_command",
-                "command": "aippocampus import --json",
-                "mutation_risk": "read_only",
-                "reason": "show machine-readable import choices without writing registry data",
-            },
-            {
-                "id": "preview_generic_jsonl",
-                "kind": "shell_command_template",
-                "command_template": (
-                    "aippocampus import conversation --format generic-jsonl "
-                    "--input {input_path} --dry-run --json"
-                ),
-                "requires": ["input_path"],
-                "mutation_risk": "read_only_preview",
-                "reason": "validate the transcript before any registry write",
-            },
-        ],
+        **canonical_foreground_action_fields(actions[0], safe_next_actions=actions),
         "data": None,
     }
 

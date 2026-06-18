@@ -513,8 +513,8 @@ class RouteReadinessObservatoryTests(unittest.TestCase):
         encoded = json.dumps(report, ensure_ascii=False, sort_keys=True)
         self.assertNotIn("PRIVATE_OBSERVATORY_CONTROL_SENTINEL", encoded)
 
-    def test_cli_facade_exposes_observatory_fixture_json(self) -> None:
-        result = facade.run_command(["observatory", "--fixture", "--json"], capture_output=True)
+    def test_cli_facade_exposes_observatory_fixture_operator_json(self) -> None:
+        result = facade.run_command(["observatory", "--fixture", "--operator-json"], capture_output=True)
 
         self.assertTrue(result.ok, result.stderr)
         payload = json.loads(result.stdout)
@@ -539,29 +539,24 @@ class RouteReadinessObservatoryTests(unittest.TestCase):
 
         self.assertTrue(result.ok, result.stderr)
         payload = json.loads(result.stdout)
-        self.assertEqual(payload["readout_state"]["status"], "no_rows")
-        self.assertEqual(payload["route_readiness"]["rows"], [])
-        self.assertEqual(payload["metrics"]["activation_surface_count"], 0)
-        self.assertEqual(payload["metrics"]["campus_useful_now_count"], 0)
+        self.assertEqual(payload["kind"], "aippocampus_cognitive_observatory_summary")
+        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
         self.assertEqual(payload["agent_next_action"], payload["foreground_action"])
         self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
         self.assertEqual(payload["foreground_action"]["kind"], "no_op")
         self.assertEqual(payload["foreground_action"]["id"], "no_observatory_rows_to_route")
+        self.assertEqual(payload["useful_now_count"], 0)
+        self.assertEqual(payload["activation_surface_count"], 0)
+        self.assertEqual(
+            payload["operator_json_command"],
+            "aippocampus observatory --operator-json",
+        )
+        self.assertTrue(payload["operator_json_available"])
+        self.assertNotIn("route_readiness", payload)
+        self.assertNotIn("activation_authority", payload)
+        self.assertNotIn("control_authority_audit", payload)
+        self.assertNotIn("boundary_detail", payload)
         self.assertNotIn("cannot_claim", payload)
-        self.assertNotIn("cannot_claim", payload["route_readiness"])
-        self.assertNotIn("cannot_claim", payload["control_authority_audit"])
-        self.assertIn(
-            "prewarm_route_is_source_backed_evidence",
-            payload["route_readiness"]["boundary_detail"]["cannot_claim"],
-        )
-        self.assertIn(
-            "observatory_control_plane",
-            payload["control_authority_audit"]["boundary_detail"]["cannot_claim"],
-        )
-        self.assertIn(
-            "complete_cognitive_observatory_ui_exists",
-            payload["boundary_detail"]["cannot_claim"],
-        )
 
     def test_default_text_explains_no_input_and_fixture_panels(self) -> None:
         empty = facade.run_command(["observatory"], capture_output=True)
@@ -594,12 +589,14 @@ class RouteReadinessObservatoryTests(unittest.TestCase):
         self.assertIn("panel_previews", payload)
         self.assertTrue(payload["panel_previews"]["useful_now"])
         self.assertLessEqual(len(payload["panel_previews"]["useful_now"]), 3)
-        self.assertEqual(payload["full_audit_flag"], "--json")
+        self.assertEqual(payload["full_audit_flag"], "--operator-json")
         self.assertEqual(
             payload["foreground_action"]["command"],
             "aippocampus observatory --summary-json",
         )
         self.assertEqual(payload["agent_next_action"], payload["foreground_action"])
+        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
+        self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
         self.assertIn("control_state_changes", payload["claim_boundary"]["must_reopen_for"])
         self.assertNotIn("route_readiness", payload)
         self.assertNotIn("activation_authority", payload)
@@ -651,7 +648,7 @@ class RouteReadinessObservatoryTests(unittest.TestCase):
             )
 
             result = facade.run_command(
-                ["observatory", "--query-pattern-routes", str(routes_path), "--json"],
+                ["observatory", "--query-pattern-routes", str(routes_path), "--operator-json"],
                 capture_output=True,
             )
         finally:
@@ -694,7 +691,7 @@ class RouteReadinessObservatoryTests(unittest.TestCase):
                     "observatory",
                     "--cognitive-load-calibration",
                     str(report_path),
-                    "--json",
+                    "--operator-json",
                 ],
                 capture_output=True,
             )

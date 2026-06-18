@@ -62,6 +62,10 @@ class ClaudeCodeHooksTests(unittest.TestCase):
         self.assertEqual(dry_run["install_command"], "aippocampus hooks claude-code install --json")
         self.assertEqual(dry_run["foreground_action_contract"], "foreground-action-v1")
         self.assertEqual(dry_run["agent_next_action"], dry_run["foreground_action"])
+        action_ids = [action["id"] for action in dry_run["safe_next_actions"]]
+        self.assertEqual(action_ids, list(dict.fromkeys(action_ids)))
+        self.assertEqual(action_ids[0], "install_claude_code_hooks_after_review")
+        self.assertNotIn("inspect_claude_code_hook_status", action_ids)
         self.assertNotIn("copy the dry-run handlers", dry_run["next_operator_step"])
         self.assertNotIn(str(settings), encoded)
 
@@ -233,6 +237,10 @@ class ClaudeCodeHooksTests(unittest.TestCase):
         self.assertFalse(dry_run["handler_command"]["copy_paste_ready"])
         self.assertIn("resolvable", dry_run["next_operator_step"])
         self.assertEqual(dry_run["agent_next_action"]["id"], "inspect_claude_code_hook_status")
+        action_ids = [action["id"] for action in dry_run["safe_next_actions"]]
+        self.assertEqual(action_ids, list(dict.fromkeys(action_ids)))
+        self.assertEqual(action_ids[0], "inspect_claude_code_hook_status")
+        self.assertNotIn("install_claude_code_hooks_after_review", action_ids)
 
     def test_synthetic_smoke_handles_claude_events_without_payload_leakage(self) -> None:
         from aippocampus_runtime.hooks import claude_code

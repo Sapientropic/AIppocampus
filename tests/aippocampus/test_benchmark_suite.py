@@ -630,11 +630,38 @@ class BenchmarkSuiteTests(unittest.TestCase):
                 "docs/evidence/current-claims.md owns current claim posture."
             ),
         }
+        high_signal_closed_issue_action = {
+            **high_signal_without_followup,
+            "review_next_actions": [
+                {
+                    "id": "closed_owner_review",
+                    "label": "Closed owner review",
+                    "owner_path": "benchmarks/aippocampus/example.py",
+                    "issue_url": "https://github.com/Sapientropic/AIppocampus/issues/2100",
+                    "issue_state": "closed_historical",
+                    "command": "gh issue view 2100 --comments",
+                }
+            ],
+        }
+        high_signal_closed_issue_no_open = {
+            **high_signal_closed_issue_action,
+            "review_next_actions": [
+                {
+                    **high_signal_closed_issue_action["review_next_actions"][0],
+                    "command": "",
+                    "no_open_followup_reason": (
+                        "Closed historical owner; current claims own the boundary until a new scoped issue opens."
+                    ),
+                }
+            ],
+        }
 
         rejected = benchmark_report_contract_lint(high_signal_without_followup)
         owner_only = benchmark_report_contract_lint(high_signal_with_owner_but_no_command)
         accepted = benchmark_report_contract_lint(high_signal_with_followup)
         historical = benchmark_report_contract_lint(high_signal_historical_no_action)
+        closed_action = benchmark_report_contract_lint(high_signal_closed_issue_action)
+        closed_no_open = benchmark_report_contract_lint(high_signal_closed_issue_no_open)
 
         self.assertFalse(rejected["ok"])
         self.assertIn("cannot_claim_without_followup", rejected["findings"])
@@ -650,6 +677,13 @@ class BenchmarkSuiteTests(unittest.TestCase):
         self.assertEqual(accepted["owner_route_count"], 1)
         self.assertTrue(historical["ok"], historical)
         self.assertEqual(historical["no_action_reason_count"], 1)
+        self.assertFalse(closed_action["ok"])
+        self.assertIn("closed_issue_without_open_followup", closed_action["findings"])
+        self.assertEqual(closed_action["followup_action_count"], 0)
+        self.assertEqual(closed_action["closed_historical_owner_route_count"], 1)
+        self.assertTrue(closed_no_open["ok"], closed_no_open)
+        self.assertEqual(closed_no_open["explicit_no_open_followup_route_count"], 1)
+        self.assertEqual(closed_no_open["no_action_reason_count"], 1)
 
     def test_linter_accepts_bounded_support_fields_without_public_quality_claim(self) -> None:
         bounded = {

@@ -725,7 +725,12 @@ class OnboardCodexTests(unittest.TestCase):
 
         public = onboard.public_onboarding_result(result)
         commands = [item["command"] for item in public["next_actions"]]
+        keys = list(public)
 
+        self.assertLess(keys.index("foreground_action_contract"), keys.index("data"))
+        self.assertLess(keys.index("foreground_action"), keys.index("data"))
+        self.assertLess(keys.index("agent_next_action"), keys.index("data"))
+        self.assertLess(keys.index("safe_next_actions"), keys.index("data"))
         self.assertEqual(public["next_count"], len(public["next_actions"]))
         self.assertIn("aippocampus onboard --provider codex --cwd . --json", commands)
         self.assertNotIn("aippocampus onboard --provider codex --all --json", commands)

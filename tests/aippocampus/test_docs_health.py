@@ -203,6 +203,7 @@ class DocsHealthTests(unittest.TestCase):
         warnings, metrics = docs_health.benchmark_report_followup_warnings(REPO_ROOT)
 
         self.assertGreaterEqual(metrics["json_reports_checked"], 2)
+        self.assertGreaterEqual(metrics["explicit_no_open_followup_reports"], 1)
         warning_text = "\n".join(warnings)
         self.assertNotIn("public-reliability-gauntlet-2026-06-10.json", warning_text)
         self.assertNotIn(
@@ -224,6 +225,8 @@ class DocsHealthTests(unittest.TestCase):
         self.assertIn("review_next_actions", public_reliability)
         self.assertTrue(public_reliability["review_next_actions"][0]["owner_path"])
         self.assertTrue(public_reliability["review_next_actions"][0]["issue_url"])
+        self.assertEqual(public_reliability["review_next_actions"][0]["issue_state"], "closed_historical")
+        self.assertIn("#2101 closed", public_reliability["no_open_followup_reason"])
 
     def test_provider_key_docs_prefer_visible_env_before_dotenv_fallbacks(self) -> None:
         safe_env = (

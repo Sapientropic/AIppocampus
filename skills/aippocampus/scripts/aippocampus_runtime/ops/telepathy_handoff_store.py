@@ -14,6 +14,7 @@ from typing import Any
 
 from aippocampus_runtime import core
 from aippocampus_runtime.contracts import (
+    canonical_foreground_action_fields,
     foreground_recovery_card,
     foreground_shell_action,
     foreground_template_action,
@@ -506,7 +507,11 @@ def list_handoffs_payload(
                 why="No active handoff is waiting; continue source-backed recall/search unless coordination was explicitly requested.",
                 mutation_risk="read_only",
                 claim_boundary="no_claim_before_reopen",
-            ),
+            )
+            | {
+                "tool_name": "agent_recall",
+                "arguments_template": {"query": "{cue}"},
+            },
             foreground_template_action(
                 action_id="create_explicit_handoff",
                 label="Create explicit handoff",
@@ -545,6 +550,14 @@ def list_handoffs_payload(
         "count": len(limited),
         "total_matching_count": len(cards),
         "empty_state": empty_state,
+        **(
+            canonical_foreground_action_fields(
+                empty_state["agent_next_action"],
+                safe_next_actions=empty_state["safe_next_actions"],
+            )
+            if empty_state
+            else {}
+        ),
     }
 
 

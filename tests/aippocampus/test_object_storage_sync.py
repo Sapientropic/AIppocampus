@@ -321,7 +321,7 @@ output.write_bytes(b"FAKEAGE\\n" + base64.b64encode(data))
         missing_payload = json.loads(stdout.getvalue())
         missing_encoded = json.dumps(missing_payload, ensure_ascii=False)
 
-        self.assertEqual(missing_code, 1)
+        self.assertEqual(missing_code, 0)
         self.assertEqual(missing_payload["issues"][0]["code"], "missing_manifest")
         self.assertEqual(
             missing_payload["issues"][0]["path"], "<object-path-redacted>"

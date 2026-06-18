@@ -274,9 +274,14 @@ class AippocampusHealthTests(unittest.TestCase):
 
         self.assertEqual(code, 0)
         self.assertEqual(payload["agent_next_action"]["id"], "continue_with_nonblocking_maintenance")
+        self.assertEqual(payload["agent_next_action"]["when_idle"]["id"], "review_storage_gc_summary")
         self.assertEqual(
             payload["agent_next_action"]["when_idle"]["command"],
-            "aippocampus storage gc --dry-run --json --top 1 --cwd .",
+            "aippocampus storage gc --dry-run --summary-json --cwd .",
+        )
+        self.assertEqual(
+            payload["maintenance_summary"]["storage"]["bounded_audit_available"],
+            True,
         )
         self.assertEqual(
             payload["maintenance_summary"]["recommended_action_ids"][0],
@@ -406,7 +411,11 @@ class AippocampusHealthTests(unittest.TestCase):
         )
         self.assertEqual(
             payload["foreground_action"]["when_idle"]["command"],
-            "aippocampus storage gc --dry-run --json --top 1 --cwd .",
+            "aippocampus storage gc --dry-run --summary-json --cwd .",
+        )
+        self.assertEqual(
+            payload["maintenance_summary"]["storage"]["bounded_audit_available"],
+            True,
         )
         for operator_key in (
             "freshness",

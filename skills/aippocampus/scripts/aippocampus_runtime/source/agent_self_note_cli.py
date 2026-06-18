@@ -12,6 +12,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.contracts import canonical_foreground_action_fields
 from aippocampus_runtime.registry.api import registry_paths
 from aippocampus_runtime.source.agent_self_note_actions import (
     append_error_payload as build_append_error_payload,
@@ -212,7 +213,7 @@ def _write_boundary() -> dict[str, Any]:
 
 
 def _self_note_recovery_payload() -> dict[str, Any]:
-    choices = [
+    choices: list[dict[str, Any]] = [
         {
             "id": "list_direction_only_notes",
             "label": "list",
@@ -261,9 +262,7 @@ def _self_note_recovery_payload() -> dict[str, Any]:
             "message": "self-note defaults to read-only list/search; append only after an explicit write request.",
         },
         "choices": choices,
-        "foreground_action": primary,
-        "agent_next_action": primary,
-        "safe_next_actions": choices,
+        **canonical_foreground_action_fields(primary, safe_next_actions=choices),
         "source_boundary": {
             "authority": "direction_only",
             "direction_only_is_not_source_truth": True,
@@ -419,9 +418,7 @@ def _read_not_found_payload(note_id: str) -> dict[str, Any]:
             "message": "No scoped agent self-note matched that note_id.",
             "note_id": note_id,
         },
-        "agent_next_action": actions[0],
-        "foreground_action": actions[0],
-        "safe_next_actions": actions,
+        **canonical_foreground_action_fields(actions[0], safe_next_actions=actions),
         "privacy_boundary": _privacy_boundary(),
     }
 
@@ -435,22 +432,29 @@ def _read_missing_id_payload() -> dict[str, Any]:
             "code": "needs_note_id",
             "message": "self-note read needs a note_id.",
         },
-        "agent_next_action": actions[0],
-        "foreground_action": actions[0],
-        "safe_next_actions": actions,
+        **canonical_foreground_action_fields(actions[0], safe_next_actions=actions),
         "write_boundary": _write_boundary(),
         "privacy_boundary": _privacy_boundary(),
     }
 
 
 def _read_success_payload(row: Mapping[str, Any]) -> dict[str, Any]:
+    action = {
+        "id": "use_direction_only_note",
+        "message": (
+            "Use this self-note only as direction-only atmosphere; reopen clean "
+            "source before source-backed facts, user-profile claims, or public wording."
+        ),
+        "mutation_risk": "read_only",
+        "claim_boundary": "direction_only_not_source_truth",
+    }
     return {
         "kind": "aippocampus_agent_self_note_read",
         "ok": True,
         "note": public_agent_self_note_surface(row),
-        "agent_next_action": (
-            "Use this only as direction-only atmosphere; reopen clean source before "
-            "source-backed facts, user-profile claims, or public wording."
+        **canonical_foreground_action_fields(
+            action,
+            safe_next_actions=[action, *_self_note_lookup_actions()],
         ),
         "source_boundary": {
             "self_note_is_not_source_fact": True,
@@ -461,8 +465,8 @@ def _read_success_payload(row: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def _empty_notes_state(command: str, query: str = "") -> dict[str, Any]:
+    actions = _self_note_lookup_actions()
     if command == "search":
-        actions = _self_note_lookup_actions()
         return {
             "decision": "empty",
             "message": "No agent self-note matched this cue.",
@@ -474,10 +478,8 @@ def _empty_notes_state(command: str, query: str = "") -> dict[str, Any]:
     return {
         "decision": "empty",
         "message": "No agent self-notes have been recorded yet.",
-        "agent_next_action": (
-            "Append a short direction-only note after a decision, or skip self-notes and use "
-            "`aippocampus agent recall` when you need source-backed continuity."
-        ),
+        "agent_next_action": actions[0],
+        "safe_next_actions": actions,
         "authority": "direction_only_empty_state",
     }
 
@@ -511,6 +513,12 @@ def _self_note_lookup_actions() -> list[dict[str, Any]]:
             "why": "Use for facts, continuity claims, or exact source-backed context.",
         },
     ]
+
+
+def _self_note_lookup_action_fields(*, command: str) -> dict[str, Any]:
+    actions = _self_note_lookup_actions()
+    primary_index = 1 if command == "search" else 0
+    return canonical_foreground_action_fields(actions[primary_index], safe_next_actions=actions)
 
 
 def _append_success_payload(
@@ -725,9 +733,7 @@ before quoting or deciding from memory.""",
                     "code": "needs_cue",
                     "message": "self-note search needs a cue.",
                 },
-                "agent_next_action": actions[1],
-                "foreground_action": actions[1],
-                "safe_next_actions": actions,
+                **canonical_foreground_action_fields(actions[1], safe_next_actions=actions),
                 "write_boundary": _write_boundary(),
                 "privacy_boundary": _privacy_boundary(),
             }
@@ -738,22 +744,26 @@ before quoting or deciding from memory.""",
                 print("Next: " + str(actions[1]["command_template"]), file=sys.stderr)
             return 2
         rows = search_agent_self_notes(text, scoped_rows, limit=args.max)
+        actions = _self_note_lookup_actions()
         payload = {
             "kind": "aippocampus_agent_self_note_search",
             "query": text,
             "count": len(rows),
             "scope": scope,
             "rows": [public_agent_self_note_surface(row) for row in rows],
+            **canonical_foreground_action_fields(actions[1], safe_next_actions=actions),
         }
         if not rows:
             payload["empty_state"] = _empty_notes_state("search", text)
     else:
         rows = scoped_rows[: max(0, int(args.max or 0))]
+        actions = _self_note_lookup_actions()
         payload = {
             "kind": "aippocampus_agent_self_notes",
             "scope": scope,
             "count": len(rows),
             "rows": [public_agent_self_note_surface(row) for row in rows],
+            **canonical_foreground_action_fields(actions[0], safe_next_actions=actions),
         }
         if not rows:
             payload["empty_state"] = _empty_notes_state("list")
@@ -780,7 +790,8 @@ before quoting or deciding from memory.""",
         empty_state = payload.get("empty_state")
         if not payload_rows and isinstance(empty_state, dict):
             print(str(empty_state.get("message") or ""))
-            print("Next: " + str(empty_state.get("agent_next_action") or ""))
+            formatted = format_action_for_human(empty_state.get("agent_next_action"))
+            print("Next: " + (formatted[0] if formatted else ""))
     return 0
 
 

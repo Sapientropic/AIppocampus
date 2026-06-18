@@ -13,6 +13,7 @@ from typing import Any
 
 from aippocampus_runtime import core
 from aippocampus_runtime import health as aippocampus_health
+from aippocampus_runtime.contracts import canonical_foreground_action_fields
 from aippocampus_runtime.mcp import memory_health_recovery
 from aippocampus_runtime.mcp.agent_deepen_projection import compact_agent_deepen_payload
 from aippocampus_runtime.mcp.agent_explain_projection import compact_agent_explain_payload
@@ -185,6 +186,74 @@ def clean_source_unavailable(
         missing_files=missing_files(source_dir, required),
         required_files=required,
     )
+
+
+def _mcp_template_action(
+    *,
+    action_id: str,
+    tool_name: str,
+    arguments_template: dict[str, Any],
+    requires: list[str],
+    label: str,
+    why: str,
+    mutation_risk: str = "read_only",
+    claim_boundary: str = "no_claim_before_reopen",
+) -> dict[str, Any]:
+    return {
+        "id": action_id,
+        "tool_name": tool_name,
+        "arguments_template": arguments_template,
+        "requires": list(requires),
+        "template_only": True,
+        "label": label,
+        "why": why,
+        "mutation_risk": mutation_risk,
+        "claim_boundary": claim_boundary,
+    }
+
+
+def _list_threads_missing_registry_actions() -> list[dict[str, Any]]:
+    register = _mcp_template_action(
+        action_id="register_thread_before_listing",
+        tool_name="register_thread",
+        arguments_template={"cwd": "{project_cwd}", "provider": "{provider}", "confirm_write": True},
+        requires=["cwd", "provider", "confirm_write"],
+        label="Register a thread before listing routes",
+        why="The registry does not exist yet; choose an explicit provider and confirm the local write before listing.",
+        mutation_risk="explicit_local_registry_write",
+        claim_boundary="registry_write_not_source_claim",
+    )
+    status = _mcp_template_action(
+        action_id="inspect_thread_registration_status",
+        tool_name="memory_health",
+        arguments_template={"cwd": "{project_cwd}", "detail": "compact"},
+        requires=["cwd"],
+        label="Inspect thread registration health",
+        why="Use a read-only health check if registration status is unclear.",
+        claim_boundary="health_status_not_source_evidence",
+    )
+    return [register, status]
+
+
+def _list_threads_ok_actions() -> list[dict[str, Any]]:
+    recall_context = _mcp_template_action(
+        action_id="recall_context_from_thread_list",
+        tool_name="recall_context",
+        arguments_template={"intent": "{task_or_memory_cue}"},
+        requires=["intent"],
+        label="Use recall_context for a task-specific route",
+        why="Thread lists orient the registry; use recall_context with a concrete cue before relying on source.",
+    )
+    full_detail = _mcp_template_action(
+        action_id="inspect_list_threads_full_detail",
+        tool_name="list_threads",
+        arguments_template={"detail": "full"},
+        requires=["operator_diagnostic_need"],
+        label="Inspect full registry detail only for diagnostics",
+        why="Full detail may expose private identifiers; keep it behind an explicit diagnostic need.",
+        claim_boundary="operator_detail_not_source_evidence",
+    )
+    return [recall_context, full_detail]
 
 
 def clean_source_message_sort_key(item: dict[str, Any]) -> int:
@@ -752,7 +821,6 @@ def call_get_turn_context(arguments: dict[str, Any]) -> dict[str, Any]:
         )
     )
 
-
 def call_list_threads(arguments: dict[str, Any]) -> dict[str, Any]:
     registry_dir = (
         Path(str(arguments["registry_dir"])).resolve() if arguments.get("registry_dir") else None
@@ -760,6 +828,7 @@ def call_list_threads(arguments: dict[str, Any]) -> dict[str, Any]:
     json_path, _ = registry.registry_paths(registry_dir)
     detail = detail_arg(arguments)
     if not json_path.exists():
+        actions = _list_threads_missing_registry_actions()
         return text_result(
             {
                 "status": "registry_missing",
@@ -769,7 +838,7 @@ def call_list_threads(arguments: dict[str, Any]) -> dict[str, Any]:
                 else LOCAL_PATH_REDACTION,
                 "threads": [],
                 "count": 0,
-                "agent_next_action": "Register or sync a thread before listing memory routes.",
+                **canonical_foreground_action_fields(actions[0], safe_next_actions=actions),
             }
         )
     payload = registry.load_registry(json_path)
@@ -790,6 +859,7 @@ def call_list_threads(arguments: dict[str, Any]) -> dict[str, Any]:
         if detail == "compact"
         else raw_threads
     )
+    actions = _list_threads_ok_actions()
     return text_result(
         public_payload(
             arguments,
@@ -805,9 +875,7 @@ def call_list_threads(arguments: dict[str, Any]) -> dict[str, Any]:
                     if include_private_identifiers
                     else "compact_thread_handles_are_stable_local_fingerprints"
                 ),
-                "agent_next_action": (
-                    "Use recall_context for task-specific routes; request detail=full only for diagnostics."
-                ),
+                **canonical_foreground_action_fields(actions[0], safe_next_actions=actions),
             },
         )
     )

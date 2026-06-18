@@ -22,6 +22,10 @@ claim expansion.
 owner_routes: `docs/evidence/readiness/stage-0-5-readiness.md`,
 `docs/evidence/current-claims.md`, `docs/evidence/benchmark-evidence-map.md`.
 
+stage_safe_next_action: open `stage-0-5-readiness.md` and the dated command row
+before changing readiness wording; use docs-health after choosing whether the
+row needs promotion, supersession, or a no-open-followup note.
+
 next_verification_command: `python tools\aippocampus\docs\check_docs_health.py --json`.
 
 This file is a dated verification ledger. It preserves summarized command

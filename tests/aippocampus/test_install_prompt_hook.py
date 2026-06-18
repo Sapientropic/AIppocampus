@@ -111,7 +111,9 @@ class InstallAmbientRecallHookTests(unittest.TestCase):
         self.assertFalse(payload["privacy_boundary"]["local_path_serialized"])
         self.assertFalse(payload["privacy_boundary"]["hook_command_serialized"])
         self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
-        self.assertEqual(payload["foreground_action"]["status"], "installed_ready")
+        self.assertEqual(payload["status"], "installed_ready")
+        self.assertEqual(payload["foreground_action"], payload["agent_next_action"])
+        self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
         self.assertEqual(payload["agent_next_action"]["id"], "no_action_needed")
         action_ids = [action["id"] for action in payload["safe_next_actions"]]
         self.assertIn("status", action_ids)
@@ -134,7 +136,8 @@ class InstallAmbientRecallHookTests(unittest.TestCase):
         self.assertEqual(code, 0, payload)
         self.assertTrue(payload["installed"])
         self.assertFalse(payload["changed"])
-        self.assertEqual(payload["foreground_action"]["status"], "installed_ready")
+        self.assertEqual(payload["status"], "installed_ready")
+        self.assertEqual(payload["foreground_action"], payload["agent_next_action"])
         self.assertEqual(payload["agent_next_action"]["id"], "no_action_needed")
         self.assertNotIn("path", payload)
         self.assertNotIn("command", payload)
@@ -223,7 +226,9 @@ class InstallAmbientRecallHookTests(unittest.TestCase):
 
     def test_status_has_foreground_action_card_for_installed_missing_and_stale(self) -> None:
         missing = installer.status(self.hooks_json)
-        self.assertEqual(missing["foreground_action"]["status"], "missing")
+        self.assertEqual(missing["status"], "missing")
+        self.assertEqual(missing["foreground_action"], missing["agent_next_action"])
+        self.assertEqual(missing["safe_next_actions"][0], missing["foreground_action"])
         self.assertEqual(missing["agent_next_action"]["id"], "install_prompt_hook")
         self.assertTrue(
             any(action["id"] == "install_prompt_hook" for action in missing["safe_next_actions"])
@@ -232,7 +237,9 @@ class InstallAmbientRecallHookTests(unittest.TestCase):
 
         installer.install(self.hooks_json, timeout=5)
         installed = installer.status(self.hooks_json)
-        self.assertEqual(installed["foreground_action"]["status"], "installed")
+        self.assertEqual(installed["status"], "installed")
+        self.assertEqual(installed["foreground_action"], installed["agent_next_action"])
+        self.assertEqual(installed["safe_next_actions"][0], installed["foreground_action"])
         self.assertEqual(installed["agent_next_action"]["id"], "inspect_prompt_hook_output")
         self.assertEqual(installed["agent_next_action"]["mutation_risk"], "read_only")
         installed_action_ids = [action["id"] for action in installed["safe_next_actions"]]
@@ -261,7 +268,8 @@ class InstallAmbientRecallHookTests(unittest.TestCase):
         )
         stale = installer.status(self.hooks_json)
         encoded = json.dumps(stale, ensure_ascii=False)
-        self.assertEqual(stale["foreground_action"]["status"], "stale")
+        self.assertEqual(stale["status"], "stale")
+        self.assertEqual(stale["foreground_action"], stale["agent_next_action"])
         self.assertEqual(stale["agent_next_action"]["id"], "refresh_prompt_hook")
         self.assertIn("refresh_prompt_hook", [action["id"] for action in stale["safe_next_actions"]])
         self.assertNotIn("ambient_recall_hook.py", encoded)
@@ -330,26 +338,47 @@ class InstallAmbientRecallHookTests(unittest.TestCase):
                 telemetry_path=self.codex_home / "no-skip-telemetry.json",
             )
 
-        self.assertEqual(result["last_prompt_hook"]["status"], "found")
-        self.assertEqual(result["last_prompt_hook"]["source"], "last_status")
+        self.assertEqual(result["last_prompt_hook_status"], "found")
         self.assertEqual(
-            result["last_prompt_hook"]["last_prompt_hook"]["memory_surface"],
+            result["last_prompt_hook_memory_surface"],
             "candidate",
         )
         self.assertEqual(result["agent_next_action"]["id"], "review_last_prompt_hook_recall")
-        self.assertEqual(result["foreground_action"]["last_prompt_hook_memory_surface"], "candidate")
-        self.assertGreater(result["foreground_action"]["last_prompt_hook_useful_signal_count"], 0)
-        encoded = json.dumps(result["last_prompt_hook"], ensure_ascii=False)
-        self.assertNotIn("private cached theme", encoded)
-        self.assertNotIn("private candidate", encoded)
-        self.assertNotIn("private-session", encoded)
+        self.assertEqual(result["foreground_action"], result["agent_next_action"])
+        self.assertGreater(result["last_prompt_hook_useful_signal_count"], 0)
         public_status = json.dumps(result, ensure_ascii=False)
+        self.assertNotIn("last_prompt_hook", result)
+        self.assertNotIn("prompt_hook_latency_risk", result)
+        self.assertTrue(result["operator_json_available"])
+        self.assertEqual(
+            result["operator_json_command"],
+            "aippocampus hooks prompt status --last --operator-json",
+        )
         self.assertEqual(result["path"], "hooks.json")
         self.assertTrue(result["path_redacted"])
         self.assertEqual(result["commands"], ["<redacted:hook-command>"])
         self.assertTrue(result["commands_redacted"])
+        self.assertNotIn("private cached theme", public_status)
+        self.assertNotIn("private candidate", public_status)
+        self.assertNotIn("private-session", public_status)
         self.assertNotIn(str(self.codex_home), public_status)
         self.assertNotIn(str(SCRIPTS.resolve()), public_status)
+
+        with patch(
+            "aippocampus_runtime.hooks.debug_log.default_prompt_hook_status_path",
+            return_value=status_path,
+        ):
+            operator = installer.status(
+                self.hooks_json,
+                include_last=True,
+                telemetry_path=self.codex_home / "no-skip-telemetry.json",
+                include_operator_detail=True,
+            )
+        self.assertEqual(operator["last_prompt_hook"]["status"], "found")
+        self.assertEqual(
+            operator["last_prompt_hook"]["last_prompt_hook"]["memory_surface"],
+            "candidate",
+        )
 
     def test_status_last_surfaces_aggregate_latency_risk_action(self) -> None:
         telemetry_path = self.codex_home / "prompt_hook_skip_telemetry.json"
@@ -381,16 +410,26 @@ class InstallAmbientRecallHookTests(unittest.TestCase):
         )
         encoded = json.dumps(result, ensure_ascii=False)
 
-        risk = result["prompt_hook_latency_risk"]
+        self.assertNotIn("prompt_hook_latency_risk", result)
+        self.assertEqual(result["agent_next_action"]["id"], "inspect_prompt_hook_output")
+        self.assertEqual(result["agent_next_action"]["mutation_risk"], "read_only")
+        self.assertEqual(result["foreground_action"], result["agent_next_action"])
+        self.assertEqual(result["prompt_hook_latency_risk_status"], "near_host_timeout_risk")
+        action_ids = [action["id"] for action in result["safe_next_actions"]]
+        self.assertIn("refresh_prompt_hook_safe_budget", action_ids)
+        repair_action = next(action for action in result["safe_next_actions"] if action["id"] == "refresh_prompt_hook_safe_budget")
+        self.assertIn("aippocampus hooks prompt install --json", repair_action["command"])
+        self.assertNotIn(str(self.codex_home), encoded)
+
+        operator = installer.status(
+            self.hooks_json,
+            include_last=True,
+            telemetry_path=telemetry_path,
+            include_operator_detail=True,
+        )
+        risk = operator["prompt_hook_latency_risk"]
         self.assertEqual(risk["status"], "near_host_timeout_risk")
         self.assertGreaterEqual(risk["near_timeout_event_count"], 1)
-        self.assertEqual(result["agent_next_action"]["id"], "refresh_prompt_hook_safe_budget")
-        self.assertEqual(
-            result["foreground_action"]["prompt_hook_latency_risk_status"],
-            "near_host_timeout_risk",
-        )
-        self.assertIn("aippocampus hooks prompt install --json", result["agent_next_action"]["command"])
-        self.assertNotIn(str(self.codex_home), encoded)
 
     def test_status_last_includes_sanitized_prompt_hook_audit_summary(self) -> None:
         log_path = self.codex_home / "prompt_hook_debug.jsonl"
@@ -431,6 +470,7 @@ class InstallAmbientRecallHookTests(unittest.TestCase):
             include_last=True,
             log_path=log_path,
             telemetry_path=self.codex_home / "no-skip-telemetry.json",
+            include_operator_detail=True,
         )
 
         self.assertEqual(result["last_prompt_hook"]["status"], "found")
@@ -495,19 +535,41 @@ class InstallAmbientRecallHookTests(unittest.TestCase):
 
         self.assertEqual(code, 0)
         payload = json.loads(stdout.getvalue())
-        self.assertEqual(payload["last_prompt_hook"]["status"], "found")
-        self.assertEqual(
-            payload["last_prompt_hook"]["last_prompt_hook"]["memory_surface"],
-            "candidate",
-        )
+        self.assertNotIn("last_prompt_hook", payload)
+        self.assertNotIn("prompt_hook_latency_risk", payload)
         self.assertEqual(payload["agent_next_action"]["id"], "review_last_prompt_hook_recall")
-        self.assertEqual(payload["foreground_action"]["last_prompt_hook_memory_surface"], "candidate")
-        self.assertGreater(payload["foreground_action"]["last_prompt_hook_useful_signal_count"], 0)
+        self.assertEqual(payload["foreground_action"], payload["agent_next_action"])
+        self.assertEqual(payload["last_prompt_hook_memory_surface"], "candidate")
+        self.assertGreater(payload["last_prompt_hook_useful_signal_count"], 0)
         encoded = json.dumps(payload, ensure_ascii=False)
         self.assertEqual(payload["path"], "hooks.json")
         self.assertTrue(payload["path_redacted"])
         self.assertNotIn("private cached theme", encoded)
         self.assertNotIn(str(self.codex_home), encoded)
+
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            code = installer.main(
+                [
+                    "status",
+                    "--hooks-json",
+                    str(self.hooks_json),
+                    "--last",
+                    "--log-path",
+                    str(log_path),
+                    "--skip-telemetry-path",
+                    str(self.codex_home / "no-skip-telemetry.json"),
+                    "--operator-json",
+                ]
+            )
+
+        self.assertEqual(code, 0)
+        operator_payload = json.loads(stdout.getvalue())
+        self.assertEqual(operator_payload["last_prompt_hook"]["status"], "found")
+        self.assertEqual(
+            operator_payload["last_prompt_hook"]["last_prompt_hook"]["memory_surface"],
+            "candidate",
+        )
 
     def test_text_cli_labels_prompt_installer_as_codex_only(self) -> None:
         stdout = io.StringIO()

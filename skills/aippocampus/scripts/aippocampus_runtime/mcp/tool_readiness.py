@@ -35,13 +35,16 @@ def _tool_use_guide() -> dict[str, Any]:
         "when_to_use": {
             "agent_recall": "Use first when the agent has a task cue, old correction, issue title, or handoff phrase.",
             "agent_deepen": "Use after recall surfaces a numbered route that may support a claim or decision.",
-            "agent_feedback": "Use after judging a route as helpful, wrong, stale, noisy, or quiet-worthy.",
+            "route_feedback": "Use the CLI feedback fallback only after judging a route as helpful, wrong, stale, noisy, or quiet-worthy.",
         },
         "fallbacks": {
             "current_thread_visibility_missing": (
                 "Run recall with a concrete cue or exact search; tool discovery is routing metadata, not source evidence."
             ),
             "route_selector_missing": "Run agent_recall again or request detail=full only for local diagnostics.",
+            "route_feedback_cli": (
+                "MCP does not expose an agent_feedback tool; use `aippocampus agent feedback ... --json` only when explicitly recording local route feedback."
+            ),
         },
         "boundary": "tool_discovery_routes_attention_source_claims_require_recall_or_deepen",
     }
@@ -110,7 +113,7 @@ def tool_readiness_summary() -> dict[str, Any]:
             claim_boundary="no_claim_before_reopen",
         )
         feedback = foreground_template_action(
-            action_id="record_route_feedback",
+            action_id="record_route_feedback_cli_fallback",
             command_template=(
                 "aippocampus agent feedback {route_id} --outcome {feedback_outcome} --json"
             ),
@@ -124,7 +127,8 @@ def tool_readiness_summary() -> dict[str, Any]:
         payload.update(
             canonical_foreground_action_fields(
                 primary,
-                safe_next_actions=[primary, recall, deepen, feedback],
+                safe_next_actions=[primary, recall, deepen],
             )
         )
+        payload["cli_fallback_actions"] = [feedback]
     return payload

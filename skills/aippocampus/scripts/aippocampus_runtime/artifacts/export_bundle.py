@@ -636,7 +636,7 @@ def main(argv: list[str] | None = None) -> int:
     if public_hint or not args.output:
         reason = "public_metadata_hint" if public_hint else "missing_output"
         print(json.dumps(_chooser_payload(reason=reason, public_hint=public_hint), ensure_ascii=False, indent=2))
-        return 2
+        return 0
     try:
         payload = export_bundle(args)
     except ValueError as exc:

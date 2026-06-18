@@ -68,22 +68,30 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
         )
 
         self.assertEqual(public["route_count"], 3)
+        self.assertEqual(public["foreground_action_contract"], "foreground-action-v1")
+        self.assertEqual(public["foreground_action"], public["agent_next_action"])
+        self.assertEqual(public["safe_next_actions"][0], public["foreground_action"])
         action = public["foreground_action"]
-        self.assertEqual(action["action_id"], "refine_low_specificity_recall_cue")
+        self.assertEqual(action["id"], "refine_low_specificity_recall_cue")
+        self.assertNotIn("action_id", action)
         self.assertEqual(action["tool_name"], "agent_recall")
         self.assertEqual(action["arguments"]["query"], "dashboard mobile continuity state")
         self.assertEqual(
-            action["cli_command"],
+            action["command"],
             'aippocampus agent recall "dashboard mobile continuity state" --json',
         )
         self.assertNotIn("requires", action)
-        self.assertNotIn("cli_command_template", action)
+        self.assertNotIn("command_template", action)
         self.assertEqual(action["tighter_cue_template"]["requires"], ["tighter_cue"])
+        self.assertEqual(
+            action["tighter_cue_template"]["command_template"],
+            'aippocampus agent recall "{tighter_cue}" --json',
+        )
         self.assertEqual(action["route_label_specificity_floor"], 0.0)
         self.assertEqual(action["topic_label_present_count"], 0)
         self.assertIn("tighter cue", action["why"])
-        self.assertEqual(action["secondary_action"]["original_action_id"], "agent_deepen_selected_route")
-        self.assertEqual(action["secondary_action"]["action_id"], "deepen_top_route_low_confidence")
+        self.assertEqual(action["secondary_action"]["original_id"], "agent_deepen_selected_route")
+        self.assertEqual(action["secondary_action"]["id"], "deepen_top_route_low_confidence")
         self.assertEqual(action["secondary_action"]["tool_name"], "agent_deepen")
         for route in public["routes"]:
             self.assertIn("choice_reason", route)
@@ -98,7 +106,7 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
             self.assertTrue(action["arguments"]["last_recall"])
             self.assertIn(
                 f"--request {route['route_index']} --last-recall --json",
-                action["cli_command"],
+                action["command"],
             )
             self.assertEqual(action["claim_boundary"], "no_claim_before_reopen")
         encoded = json.dumps(public, ensure_ascii=False, sort_keys=True)
@@ -154,7 +162,11 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
 
         action = public["foreground_action"]
         self.assertEqual(action["tool_name"], "agent_deepen")
-        self.assertNotEqual(action["action_id"], "refine_low_specificity_recall_cue")
+        self.assertEqual(public["foreground_action_contract"], "foreground-action-v1")
+        self.assertEqual(public["agent_next_action"], public["foreground_action"])
+        self.assertEqual(public["safe_next_actions"][0], public["foreground_action"])
+        self.assertNotEqual(action["id"], "refine_low_specificity_recall_cue")
+        self.assertNotIn("action_id", action)
         self.assertNotIn("secondary_action", action)
         self.assertIn("topic_roadmap_closeout", public["routes"][0]["choice_reason"])
 
@@ -184,8 +196,17 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
             },
             query="broad direction route",
         )
-        self.assertEqual(no_route["foreground_action"]["cli_command"], 'aippocampus search "unlikely-no-match-token-xyz-12345" --json')
-        self.assertEqual(weak_route["foreground_action"]["cli_command"], 'aippocampus search "broad direction route" --json')
+        self.assertEqual(no_route["foreground_action_contract"], "foreground-action-v1")
+        self.assertEqual(no_route["foreground_action"], no_route["agent_next_action"])
+        self.assertEqual(no_route["safe_next_actions"][0], no_route["foreground_action"])
+        self.assertEqual(no_route["foreground_action"]["id"], "recover_recall_miss")
+        self.assertNotIn("action_id", no_route["foreground_action"])
+        self.assertEqual(no_route["foreground_action"]["command"], 'aippocampus search "unlikely-no-match-token-xyz-12345" --json')
+        self.assertEqual(weak_route["foreground_action_contract"], "foreground-action-v1")
+        self.assertEqual(weak_route["foreground_action"], weak_route["agent_next_action"])
+        self.assertEqual(weak_route["safe_next_actions"][0], weak_route["foreground_action"])
+        self.assertEqual(weak_route["foreground_action"]["id"], "recover_weak_route")
+        self.assertEqual(weak_route["foreground_action"]["command"], 'aippocampus search "broad direction route" --json')
         self.assertEqual(executable_command_violations(no_route), [])
         self.assertEqual(executable_command_violations(weak_route), [])
 
@@ -229,7 +250,7 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
         encoded = json.dumps(projected, ensure_ascii=False)
         self.assertNotIn("<same cue>", encoded)
         self.assertEqual(
-            projected["foreground_action"]["cli_command"],
+            projected["foreground_action"]["command"],
             'aippocampus agent recall "missing cache source cue" --json --detail full',
         )
         self.assertEqual(executable_command_violations(projected), [])

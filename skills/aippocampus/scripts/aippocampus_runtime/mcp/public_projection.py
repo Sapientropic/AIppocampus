@@ -178,6 +178,42 @@ def _action_command_projection(action: dict[str, Any]) -> dict[str, Any]:
     return {"kind": "manual_action"}
 
 
+def _storage_summary_projection(
+    storage_cleanup_action: dict[str, Any] | None,
+    storage_pressure: dict[str, Any],
+) -> dict[str, Any]:
+    summary_command = str(storage_pressure.get("summary_command") or "").strip()
+    if summary_command:
+        return {"kind": "shell_command", "command": summary_command}
+    raw_command = ""
+    command_field = "command"
+    if storage_cleanup_action:
+        raw_command = str(
+            storage_cleanup_action.get("command")
+            or storage_cleanup_action.get("command_template")
+            or ""
+        ).strip()
+        command_field = (
+            "command_template"
+            if storage_cleanup_action.get("command_template")
+            else "command"
+        )
+    summary = re.sub(r"\s+--json\s+--top\s+\d+\b", " --summary-json", raw_command, count=1)
+    if not summary or summary == raw_command:
+        summary = "aippocampus storage gc --dry-run --summary-json --cwd ."
+        command_field = "command"
+    if command_field == "command_template":
+        result: dict[str, Any] = {
+            "kind": "shell_command_template",
+            "command_template": summary,
+            "template_only": True,
+        }
+        if storage_cleanup_action and storage_cleanup_action.get("requires"):
+            result["requires"] = storage_cleanup_action["requires"]
+        return result
+    return {"kind": "shell_command", "command": summary}
+
+
 def compact_health_payload(payload: dict[str, Any]) -> dict[str, Any]:
     readiness = payload.get("product_readiness") or {}
     all_recommended = [
@@ -270,11 +306,7 @@ def compact_health_payload(payload: dict[str, Any]) -> dict[str, Any]:
         {
             "cleanup_recommended": True if storage_cleanup_recommended else None,
             "pressure": storage_pressure.get("pressure") if storage_pressure.get("pressure") else None,
-            "dry_run_command": storage_cleanup_action.get("command")
-            if storage_cleanup_action
-            else storage_pressure.get("dry_run_command")
-            if storage_cleanup_recommended
-            else None,
+            "bounded_audit_available": True if storage_cleanup_recommended else None,
         }
     )
     host_state_summary = _without_empty(
@@ -298,7 +330,7 @@ def compact_health_payload(payload: dict[str, Any]) -> dict[str, Any]:
             ),
             "recommended_action_ids": recommended_action_ids,
             "freshness_degraded": True if freshness_summary else None,
-            "storage": {"pressure": True} if storage_pressure.get("pressure") else None,
+            "storage": storage_summary or None,
             "storage_cleanup_recommended": True if storage_summary else None,
             "host_state_confounds_detected": True if host_state_summary else None,
         }
@@ -311,23 +343,20 @@ def compact_health_payload(payload: dict[str, Any]) -> dict[str, Any]:
                 "ordinary_first_recall_usable": True,
                 "message": "ordinary source-backed recall/search can continue",
             },
-            "recommended_action_ids": [
-                str(item.get("id") or "")
-                for item in all_recommended
-                if str(item.get("id") or "")
-            ][:5],
         }
         if (
             freshness_degraded and exact_latest_action
         ):
             agent_next_action["before_exact_latest_claims"] = _action_command_projection(
                 exact_latest_action
-            ) | {
-                "reason": "refresh before exact latest claims",
-            }
+            )
         if storage_cleanup_action:
-            agent_next_action["when_idle"] = _action_command_projection(storage_cleanup_action) | {
-                "reason": "optional storage cleanup audit",
+            agent_next_action["when_idle"] = _storage_summary_projection(
+                storage_cleanup_action,
+                storage_pressure,
+            ) | {
+                "id": "review_storage_gc_summary",
+                "mutation_risk": "read_only",
             }
     else:
         agent_next_action = (
@@ -367,13 +396,6 @@ def compact_health_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "output_boundary": "compact_foreground_no_operator_diagnostic_objects",
     }
     foreground_fields = canonical_foreground_action_fields(foreground_action)
-    # Health compact JSON is often read inline by the foreground agent. When
-    # there is only one action, `safe_next_actions` repeats the same command
-    # already present in `foreground_action` and the legacy `agent_next_action`
-    # alias; omit that duplicate so the card stays card-sized.
-    safe_actions = foreground_fields.get("safe_next_actions")
-    if isinstance(safe_actions, list) and safe_actions == [foreground_action]:
-        foreground_fields.pop("safe_next_actions", None)
     card.update(foreground_fields)
     return _without_empty(card)
 
@@ -524,7 +546,7 @@ def route_deepen_action(request_index: int, *, low_confidence: bool = False) -> 
         "id": "deepen_this_route",
         "tool_name": "agent_deepen",
         "arguments": {"request_index": request_index, "last_recall": True},
-        "cli_command": (
+        "command": (
             f"aippocampus agent deepen --request {request_index} --last-recall --json"
         ),
         "mutation_risk": "read_only",
@@ -699,6 +721,7 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
             "source_reopen_required_for_claims": True,
         },
     }
+    result.update(canonical_foreground_action_fields(foreground_action))
     return _without_empty(result)
 
 

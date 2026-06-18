@@ -34,7 +34,11 @@ from shared.report_actions import report_next_action
 SCHEMA_VERSION = 1
 OWNER_PATH = "benchmarks/aippocampus/benchmark_public_reliability_gauntlet.py"
 HISTORICAL_SOURCE_ISSUE = "https://github.com/Sapientropic/AIppocampus/issues/1102"
-CURRENT_ISSUE_URL = "https://github.com/Sapientropic/AIppocampus/issues/2101"
+HISTORICAL_OWNER_ISSUE_URL = "https://github.com/Sapientropic/AIppocampus/issues/2101"
+NO_OPEN_FOLLOWUP_REASON = (
+    "#2101 closed after adding owner/action routing; current claim posture is "
+    "owned by docs/evidence/current-claims.md until a new scoped issue is opened."
+)
 LONGMEMEVAL_500_SOURCE_REPORT = "docs/evidence/benchmarks/longmemeval.md#current-published-result"
 LONGMEMEVAL_500_COMMAND_REPORT = "docs/evidence/benchmarks/longmemeval.md#commands"
 
@@ -562,16 +566,18 @@ def _privacy_boundary() -> dict[str, Any]:
 def _review_next_actions() -> list[dict[str, Any]]:
     return [
         report_next_action(
-            action_id="review_public_reliability_gauntlet_successor",
-            label="Review public reliability gauntlet successor",
-            status="open_successor",
+            action_id="public_reliability_gauntlet_closed_owner_record",
+            label="Treat closed gauntlet owner as historical",
+            status="closed_historical",
             reason=(
-                "#1102 is closed/historical; #2101 is the current owner route for "
-                "gauntlet action follow-up without broadening the reliability claim."
+                "#1102 and #2101 are closed/historical; this report is bounded "
+                "evidence, not an active reliability-work queue."
             ),
-            command="gh issue view 2101 --comments",
+            doc_path="docs/evidence/current-claims.md",
             owner_path=OWNER_PATH,
-            issue_url=CURRENT_ISSUE_URL,
+            issue_url=HISTORICAL_OWNER_ISSUE_URL,
+            issue_state="closed_historical",
+            no_open_followup_reason=NO_OPEN_FOLLOWUP_REASON,
             claim_boundary="owner_route_not_public_reliability_claim",
         ),
         report_next_action(
@@ -585,7 +591,9 @@ def _review_next_actions() -> list[dict[str, Any]]:
                 "python benchmarks/aippocampus/benchmark_public_reliability_gauntlet.py --json"
             ),
             owner_path=OWNER_PATH,
-            issue_url=CURRENT_ISSUE_URL,
+            issue_url=HISTORICAL_OWNER_ISSUE_URL,
+            issue_state="closed_historical",
+            no_open_followup_reason=NO_OPEN_FOLLOWUP_REASON,
             claim_boundary="diagnostic_rerun_not_public_reliability_claim",
         ),
     ]
@@ -594,16 +602,18 @@ def _review_next_actions() -> list[dict[str, Any]]:
 def _issue_actions() -> list[dict[str, Any]]:
     return [
         report_next_action(
-            action_id="map_cannot_claim_families_to_current_owner",
-            label="Map cannot-claim families to current owner",
-            status="actionable",
+            action_id="public_reliability_no_open_followup",
+            label="No open public reliability follow-up",
+            status="closed_historical",
             reason=(
-                "The gauntlet has useful boundaries; #2101 owns converting those "
-                "boundaries into review routes or explicit no-action reasons."
+                "The gauntlet boundaries are already routed into Current Claims; "
+                "open a new scoped issue only when a concrete claim expansion is needed."
             ),
-            command="gh issue view 2101 --comments",
+            doc_path="docs/evidence/current-claims.md",
             owner_path=OWNER_PATH,
-            issue_url=CURRENT_ISSUE_URL,
+            issue_url=HISTORICAL_OWNER_ISSUE_URL,
+            issue_state="closed_historical",
+            no_open_followup_reason=NO_OPEN_FOLLOWUP_REASON,
             claim_boundary="issue_triage_action_not_quality_evidence",
         )
     ]
@@ -664,7 +674,9 @@ def run_public_reliability_gauntlet(
         "case_count": int(longmemeval_ref["metrics"]["question_count"]),
         "source_issue": HISTORICAL_SOURCE_ISSUE,
         "historical_source_issue": HISTORICAL_SOURCE_ISSUE,
-        "current_issue_url": CURRENT_ISSUE_URL,
+        "historical_owner_issue_url": HISTORICAL_OWNER_ISSUE_URL,
+        "owner_issue_state": "closed_historical",
+        "no_open_followup_reason": NO_OPEN_FOLLOWUP_REASON,
         "owner_path": OWNER_PATH,
         "issue_refs": [
             {
@@ -673,9 +685,9 @@ def run_public_reliability_gauntlet(
                 "role": "historical_source",
             },
             {
-                "issue_url": CURRENT_ISSUE_URL,
-                "issue_state": "open_current",
-                "role": "current_owner_action_route",
+                "issue_url": HISTORICAL_OWNER_ISSUE_URL,
+                "issue_state": "closed_historical",
+                "role": "historical_owner_action_route",
             },
         ],
         "status": "public_safe_gauntlet_passed_with_boundaries" if ok else "axis_failed",
@@ -701,13 +713,13 @@ def run_public_reliability_gauntlet(
         ),
         "supports": [
             "public-safe runtime, mis-recall, and pollution axes are reported separately",
-            "closed historical source issue is paired with a current owner/action route",
+            "closed historical source and owner issues are paired with an explicit no-open-followup reason",
         ],
         "useful_now": [
-            "use as a bounded review packet for #2101",
+            "use as bounded evidence for Current Claims review",
             "keep aggregate reliability and private-history quality unclaimed",
         ],
-        "agent_action": "open_current_issue_route_before_using_gauntlet_for_review",
+        "agent_action": "open_current_claims_before_using_gauntlet_for_review",
         "can_claim": [
             "public_safe_gauntlet_axes_are_available",
             "axis_report_keeps_runtime_mis_recall_and_pollution_boundaries_separate",

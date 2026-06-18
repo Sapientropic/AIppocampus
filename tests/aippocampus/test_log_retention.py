@@ -50,8 +50,13 @@ class LogRetentionTests(unittest.TestCase):
             rendered = str(report)
 
             self.assertTrue(report["oversized"])
+            self.assertEqual(report["kind"], "aippocampus_logs_status_card")
+            self.assertEqual(report["surface"], "foreground_decision_card")
             self.assertEqual(report["items"][0]["artifact_name"], log.name)
             self.assertEqual(report["remediation_command"], "aippocampus logs rotate --dry-run")
+            self.assertEqual(report["foreground_action_contract"], "foreground-action-v1")
+            self.assertEqual(report["foreground_action"], report["agent_next_action"])
+            self.assertEqual(report["safe_next_actions"][0], report["foreground_action"])
             self.assertEqual(report["agent_next_action"]["id"], "plan_log_rotation")
             self.assertEqual(
                 report["agent_next_action"]["command"],
@@ -104,9 +109,14 @@ class LogRetentionTests(unittest.TestCase):
             plan = log_retention.rotation_plan(root, max_bytes=20)
 
             self.assertFalse(status["oversized"])
+            self.assertEqual(status["kind"], "aippocampus_logs_status_card")
+            self.assertEqual(status["surface"], "foreground_decision_card")
             self.assertEqual(status["oversized_count"], 0)
             self.assertEqual(status["status"], "healthy")
             self.assertNotIn("remediation_command", status)
+            self.assertEqual(status["foreground_action_contract"], "foreground-action-v1")
+            self.assertEqual(status["foreground_action"], status["agent_next_action"])
+            self.assertEqual(status["safe_next_actions"][0], status["foreground_action"])
             self.assertEqual(status["agent_next_action"]["id"], "no_cleanup_needed")
             self.assertEqual(status["agent_next_action"]["mutation_risk"], "read_only")
             self.assertEqual(

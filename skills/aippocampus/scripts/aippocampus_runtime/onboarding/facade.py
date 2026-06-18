@@ -9,6 +9,7 @@ import sys
 import time
 from typing import Sequence
 
+from aippocampus_runtime.contracts import canonical_foreground_action_fields
 from aippocampus_runtime.core import aippocampus_registry_resolution, codex_home
 from aippocampus_runtime.legacy_aliases import legacy_alias_diagnostics
 from aippocampus_runtime.onboarding import codex as onboard_codex
@@ -428,7 +429,7 @@ def compact_provider_status_card(report: dict) -> dict:
         "provider_scope": provider_scope,
         "decision": primary.get("decision"),
         "primary_next_action": primary_action,
-        "agent_next_action": primary_action,
+        **canonical_foreground_action_fields(primary_action, safe_next_actions=[primary_action]),
         "provider_summary": provider_summary,
         "operator_detail_command": (
             f"aippocampus onboard --provider {provider_scope} --status --operator-json"

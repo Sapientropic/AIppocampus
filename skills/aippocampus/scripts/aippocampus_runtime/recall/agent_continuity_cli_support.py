@@ -14,6 +14,7 @@ from aippocampus_runtime import core
 from aippocampus_runtime.aippo import working_contract as aippo_working_contract
 from aippocampus_runtime.contracts import (
     FOREGROUND_ACTION_CONTRACT_VERSION,
+    canonical_foreground_action_fields,
     command_value_needs_input,
     foreground_recovery_card,
     foreground_shell_action,
@@ -170,6 +171,7 @@ def _foreground_template_action(
         "label": label,
         "command_template": command_template,
         "requires": list(requires),
+        "template_only": True,
         "mutation_risk": "read_only",
         "claim_boundary": "no_claim_before_reopen",
         "why": why,
@@ -177,19 +179,36 @@ def _foreground_template_action(
 
 
 def _recall_with_cue_action(*, label: str, why: str, action_id: str = "recall_with_cue") -> dict[str, Any]:
-    return _foreground_template_action(
+    action = _foreground_template_action(
         action_id, 'aippocampus agent recall "{cue}" --json', ["cue"], label, why
     )
+    action.update(
+        {
+            "tool_name": "agent_recall",
+            "arguments_template": {"query": "{cue}"},
+        }
+    )
+    return action
 
 
 def _request_index_followup_action(mode: str) -> dict[str, Any]:
-    return _foreground_template_action(
+    action = _foreground_template_action(
         f"{mode}_last_recall_request",
         f"aippocampus agent {mode} --request {{request_index}} --last-recall --json",
         ["last_recall_cache", "request_index"],
         f"Run agent {mode} against a numbered route from the last recall",
         "Requires a fresh recall cache and selected request index.",
     )
+    action.update(
+        {
+            "tool_name": f"agent_{mode}",
+            "arguments_template": {
+                "request_index": "{request_index}",
+                "last_recall": True,
+            },
+        }
+    )
+    return action
 
 
 def handle_recovery_fields(mode: str) -> dict[str, Any]:
@@ -575,7 +594,7 @@ def public_recall_projection(payload: Mapping[str, Any], *, query: str | None = 
     raw_action_args = action_map.get("arguments")
     action_args = raw_action_args if isinstance(raw_action_args, Mapping) else {}
     advertises_last_recall = bool(action_args.get("last_recall")) or "--last-recall" in str(
-        action_map.get("cli_command") or ""
+        action_map.get("command") or action_map.get("cli_command") or ""
     )
     if not cache_available and advertises_last_recall:
         recovery_cue = str(
@@ -585,7 +604,7 @@ def public_recall_projection(payload: Mapping[str, Any], *, query: str | None = 
         if command_value_needs_input(recovery_cue):
             recovery_cue = ""
         repair_action: dict[str, Any] = {
-            "action_id": "repair_last_recall_cache",
+            "id": "repair_last_recall_cache",
             "tool_name": "agent_recall",
             "why": (
                 "Recall found route-shaped context, but the same-machine request cache was "
@@ -597,7 +616,7 @@ def public_recall_projection(payload: Mapping[str, Any], *, query: str | None = 
             repair_action.update(
                 {
                     "arguments": {"query": recovery_cue, "detail": "full"},
-                    "cli_command": f"aippocampus agent recall {json.dumps(recovery_cue, ensure_ascii=False)} --json --detail full",
+                    "command": f"aippocampus agent recall {json.dumps(recovery_cue, ensure_ascii=False)} --json --detail full",
                 }
             )
         else:
@@ -606,10 +625,11 @@ def public_recall_projection(payload: Mapping[str, Any], *, query: str | None = 
                     "arguments_template": {"query": "{cue}", "detail": "full"},
                     "requires": ["cue"],
                     "template_only": True,
-                    "cli_command_template": 'aippocampus agent recall "{cue}" --json --detail full',
+                    "command_template": 'aippocampus agent recall "{cue}" --json --detail full',
                 }
             )
         projected["foreground_action"] = repair_action
+        projected.update(canonical_foreground_action_fields(repair_action))
         projected["last_recall_cache_recovery_card"] = {
             "status": "cache_unavailable",
             "primary_action": "rerun_recall_or_use_full_local_diagnostics",
@@ -669,11 +689,10 @@ def compact_aippo_guidance_card(payload: Mapping[str, Any], *, task: str = "") -
         foreground_action = {
             "id": next_action or "use_aippo_working_contract_guidance",
             "action_id": next_action or "use_aippo_working_contract_guidance",
-            "tool_name": "agent_aippo",
-            "arguments": {
-                "task_families": families[:3],
-                "guidance": guidance[:2],
-            },
+            "action_type": "use_project_working_guidance",
+            "selected_task_families": families[:3],
+            "guidance_preview": guidance[:2],
+            "mutation_risk": "read_only",
             "claim_boundary": "working_guidance_not_source_truth",
             "why": "AIppo found low-risk project workflow guidance for this task.",
         }
@@ -702,6 +721,18 @@ def compact_aippo_guidance_card(payload: Mapping[str, Any], *, task: str = "") -
                 "why": "AIppo needs a concrete task description before it can choose a working contract.",
             }
     safe_next_actions: list[dict[str, Any]] = [dict(foreground_action)]
+    if task_text and (use_hint_available or (status == "ok" and direct_guidance_available)):
+        safe_next_actions.append(
+            {
+                "id": "refresh_aippo_guidance_for_task",
+                "action_id": "refresh_aippo_guidance_for_task",
+                "tool_name": "agent_aippo",
+                "arguments": {"task": task_text},
+                "mutation_risk": "read_only",
+                "claim_boundary": "working_guidance_not_source_truth",
+                "why": "Re-run AIppo only if the task wording has changed or the card needs refreshing.",
+            }
+        )
     if not task_text:
         safe_next_actions.append(
             {
@@ -912,7 +943,7 @@ def _public_compact_route_receipts(routes: Any) -> list[dict[str, Any]]:
             "id": action_map.get("id"),
             "tool_name": action_map.get("tool_name"),
             "arguments": action_map.get("arguments"),
-            "cli_command": action_map.get("cli_command"),
+            "command": action_map.get("command") or action_map.get("cli_command"),
             "route_choice_posture": action_map.get("route_choice_posture"),
             "confidence": action_map.get("confidence"),
             "claim_boundary": action_map.get("claim_boundary"),

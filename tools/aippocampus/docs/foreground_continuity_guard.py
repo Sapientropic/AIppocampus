@@ -24,6 +24,7 @@ REPORT_ROUTER_TASK_CARD_TERMS = (
     "## Report Router Task Card",
     "current_claim_owner:",
     "latest_promoted_report:",
+    "claim_safe_next_action:",
     "safe_next_action:",
     "historical_boundary:",
 )
@@ -40,8 +41,25 @@ CURRENTNESS_CARD_TERMS = (
     "current_status:",
     "remaining_gaps:",
     "owner_routes:",
+    "stage_safe_next_action:",
     "next_verification_command:",
 )
+OWNER_ROUTE_ISSUE_FIELDS = (
+    "issue_url",
+    "issue_refs",
+    "current_issue_url",
+    "current_issue",
+    "successor_issue_url",
+    "successor_issue",
+)
+OWNER_ROUTE_STATE_FIELDS = (
+    "successor_issue_state",
+    "current_issue_state",
+    "owner_issue_state",
+    "issue_state",
+    "source_issue_state",
+)
+NO_ACTION_REASON_FIELDS = ("no_action_reason", "no_open_followup_reason")
 
 
 def foreground_continuity_doc_issues(repo_root: Path) -> list[str]:
@@ -124,28 +142,37 @@ def _top_level_cannot_claim_count(report: Any) -> int:
 def _action_has_owner(action: Any) -> bool:
     if not isinstance(action, dict):
         return False
-    has_owner = bool(action.get("owner_path")) or any(
-        action.get(field)
-        for field in (
-            "issue_url",
-            "issue_refs",
-            "current_issue_url",
-            "current_issue",
-            "successor_issue_url",
-            "successor_issue",
-        )
-    )
+    has_owner = bool(action.get("owner_path")) or any(action.get(field) for field in OWNER_ROUTE_ISSUE_FIELDS)
     has_next_surface = any(
         action.get(field)
-        for field in (
-            "command",
-            "doc_path",
-            "required_artifact",
-            "no_action_reason",
-            "no_open_followup_reason",
-        )
+        for field in ("command", "doc_path", "required_artifact", *NO_ACTION_REASON_FIELDS)
     )
-    return bool(has_owner and has_next_surface)
+    return bool(has_owner and has_next_surface and _owner_route_class(action) != "closed_historical_owner")
+
+
+def _issue_state_values(mapping: dict[str, Any]) -> list[str]:
+    return [
+        str(mapping.get(field) or "").strip().casefold()
+        for field in OWNER_ROUTE_STATE_FIELDS
+        if mapping.get(field) not in (None, "", [], {})
+    ]
+
+
+def _has_no_action_reason(mapping: dict[str, Any]) -> bool:
+    return any(mapping.get(field) not in (None, "", [], {}) for field in NO_ACTION_REASON_FIELDS)
+
+
+def _owner_route_class(mapping: dict[str, Any]) -> str:
+    if not (mapping.get("owner_path") or any(mapping.get(field) for field in OWNER_ROUTE_ISSUE_FIELDS)):
+        return "none"
+    states = _issue_state_values(mapping)
+    if any(state == "open" or state.startswith("open_") for state in states):
+        return "open_owner"
+    if _has_no_action_reason(mapping):
+        return "explicit_no_open_followup"
+    if any("closed" in state or "historical" in state for state in states):
+        return "closed_historical_owner"
+    return "unknown_issue_state"
 
 
 def _report_has_actionable_followup(report: dict[str, Any]) -> bool:
@@ -173,6 +200,9 @@ def benchmark_report_followup_warnings(repo_root: Path) -> tuple[list[str], dict
         "json_reports_checked": 0,
         "high_cannot_claim_reports": 0,
         "high_cannot_claim_reports_missing_followup": 0,
+        "closed_historical_owner_route_reports": 0,
+        "explicit_no_open_followup_reports": 0,
+        "unknown_owner_route_reports": 0,
         "missing_followup_reports": missing_followup_reports,
     }
     if not reports_dir.exists():
@@ -192,6 +222,17 @@ def benchmark_report_followup_warnings(repo_root: Path) -> tuple[list[str], dict
         if cannot_claim_count < 4:
             continue
         metrics["high_cannot_claim_reports"] += 1
+        route_classes = {
+            _owner_route_class(item)
+            for item in _walk_dicts(report)
+            if _owner_route_class(item) != "none"
+        }
+        if "closed_historical_owner" in route_classes:
+            metrics["closed_historical_owner_route_reports"] += 1
+        if "explicit_no_open_followup" in route_classes or report.get("no_open_followup_reason"):
+            metrics["explicit_no_open_followup_reports"] += 1
+        if "unknown_issue_state" in route_classes:
+            metrics["unknown_owner_route_reports"] += 1
         if not isinstance(report, dict) or not _report_has_actionable_followup(report):
             metrics["high_cannot_claim_reports_missing_followup"] += 1
             missing_followup_reports.append(rel_path)
@@ -205,3 +246,15 @@ def benchmark_report_followup_warnings(repo_root: Path) -> tuple[list[str], dict
             f"those artifacts are cleaned. examples: {examples}{suffix}"
         )
     return warnings, metrics
+
+
+def _walk_dicts(value: Any) -> list[dict[str, Any]]:
+    dicts: list[dict[str, Any]] = []
+    if isinstance(value, dict):
+        dicts.append(value)
+        for child in value.values():
+            dicts.extend(_walk_dicts(child))
+    elif isinstance(value, list):
+        for child in value:
+            dicts.extend(_walk_dicts(child))
+    return dicts

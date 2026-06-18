@@ -12,6 +12,7 @@ from typing import Any
 
 from aippocampus_runtime.contracts import (
     FOREGROUND_ACTION_CONTRACT_VERSION,
+    canonical_foreground_action_fields,
     foreground_shell_action,
     foreground_template_action,
 )
@@ -116,11 +117,22 @@ def _hook_card(
 def contract_fields(card: Mapping[str, Any]) -> dict[str, Any]:
     primary = dict(card.get("primary") or {})
     safe_actions = [dict(action) for action in card.get("safe_next_actions") or []]
+    action_fields = canonical_foreground_action_fields(primary, safe_next_actions=safe_actions)
+    card_fields = {
+        key: value
+        for key, value in dict(card).items()
+        if key
+        not in {
+            "foreground_action_contract",
+            "foreground_action",
+            "agent_next_action",
+            "safe_next_actions",
+            "primary",
+        }
+    }
     return {
-        "foreground_action_contract": FOREGROUND_ACTION_CONTRACT_VERSION,
-        "foreground_action": dict(card),
-        "agent_next_action": primary,
-        "safe_next_actions": safe_actions,
+        **card_fields,
+        **action_fields,
         "claim_boundary": str(card.get("claim_boundary") or CLAIM_BOUNDARY),
     }
 
@@ -215,15 +227,24 @@ def prompt_status_contract(
     last_repair = str((last_summary or {}).get("next_repair") or "")
     latency_status = str((latency_risk or {}).get("status") or "")
     latency_repair = str((latency_risk or {}).get("repair_action") or "")
+    latency_repair_action = None
     if status == "installed" and latency_status == "near_host_timeout_risk":
-        primary = _write_action(
+        primary = _status_action(
+            action_id="inspect_prompt_hook_output",
+            label="Inspect prompt hook output",
+            command="aippocampus hooks prompt status --last --json",
+        )
+        primary["why"] = (
+            "Recent prompt-hook runs are near the host timeout; keep the foreground "
+            "step read-only and refresh only if the user chooses repair."
+        )
+        latency_repair_action = _write_action(
             action_id="refresh_prompt_hook_safe_budget",
             label="Refresh prompt hook safe budget",
             command=latency_repair or "aippocampus hooks prompt install --json",
             why=(
                 "Aggregate prompt-hook telemetry shows near-host-timeout runs; "
-                "reinstall with the safer foreground budget before treating the "
-                "hook as ready."
+                "reinstall with the safer foreground budget only as an explicit repair."
             ),
         )
     elif status == "installed" and useful_last_count:
@@ -233,7 +254,7 @@ def prompt_status_contract(
             "label": "Review last prompt-hook recall",
             "message": (
                 f"Last prompt hook surfaced {useful_last_count} {surface} signal(s); "
-                "use the included last_prompt_hook summary as navigation and reopen/deepen source before claims."
+                "use the compact counters as navigation and reopen/deepen source before claims."
             ),
             "mutation_risk": "read_only",
             "claim_boundary": "last_prompt_hook_summary_not_source_text",
@@ -287,6 +308,7 @@ def prompt_status_contract(
                 label="Check prompt hook status",
                 command="aippocampus hooks prompt status --last --json",
             ),
+            *([latency_repair_action] if latency_repair_action else []),
             _write_action(
                 action_id="rollback_prompt_hook",
                 label="Rollback prompt hook",

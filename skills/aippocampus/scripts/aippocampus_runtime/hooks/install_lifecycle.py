@@ -358,10 +358,17 @@ def status(
     windows_relevant = os.name == "nt"
     for event, commands in installed_events.items():
         command_list = commands if isinstance(commands, list) else []
+        event_bridge_commands = set(bridge_events.get(event) or [])
+        bridge_managed_event = bool(event_bridge_commands) and set(command_list).issubset(
+            event_bridge_commands
+        )
+        # Bridge wrappers are the lifecycle wiring for provider-key installs.
+        # Their runtime env still needs provider-doctor verification, but they
+        # should not be downgraded to stale direct lifecycle launchers here.
         event_hidden = bool(command_list) and all(
             command_uses_hidden_windows_lifecycle_launcher(command)
             for command in command_list
-        )
+        ) or bridge_managed_event
         event_visible = any(
             command_uses_visible_windows_lifecycle_launcher(command)
             for command in command_list

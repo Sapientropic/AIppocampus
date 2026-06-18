@@ -1876,9 +1876,27 @@ def main(argv: list[str] | None = None) -> int:
                 if args.json:
                     _json_out(project_agent_explain_cli_payload(payload, args, surface="agent_cli_route_explain_compact"))
                 else:
+                    projected = project_agent_explain_cli_payload(
+                        payload,
+                        args,
+                        surface="agent_cli_route_explain_compact",
+                    )
+                    raw_error = projected.get("error")
+                    error_map: Mapping[str, Any] = raw_error if isinstance(raw_error, Mapping) else {}
+                    raw_action = projected.get("foreground_action")
+                    foreground_action: Mapping[str, Any] = (
+                        raw_action if isinstance(raw_action, Mapping) else {}
+                    )
                     print("AIppocampus agent explain: cannot verify last recall cache")
-                    print("Reason: " + str(exc))
-                    print("Use: rerun `aippocampus agent recall \"<cue>\" --json`, then explain a request number.")
+                    print("Reason: " + str(error_map.get("code") or "last_recall_unavailable"))
+                    next_template = foreground_action.get("command_template") or foreground_action.get("cli_command_template")
+                    next_command = foreground_action.get("command") or foreground_action.get("cli_command")
+                    if next_template:
+                        print("Next: " + str(next_template))
+                    elif next_command:
+                        print("Next: " + str(next_command))
+                    else:
+                        print('Next: rerun `aippocampus agent recall "<cue>" --json`, then explain a request number.')
                 return 2
         payload = explain(
             handle,

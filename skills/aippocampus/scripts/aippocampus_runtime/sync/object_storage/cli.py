@@ -753,6 +753,8 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(output, ensure_ascii=False, indent=2))
     else:
         print_object_sync_human_result(str(args.command), result)
+    if args.command == "status" and args.json_output and not args.operator_json and not result.get("error"):
+        return 0
     return 0 if result.get("ok") else 1
 
 

@@ -25,6 +25,10 @@ them, and avoid mirroring evidence tables here.
 owner_routes: `../roadmap.md`, GitHub Issues/Project,
 `../evidence/current-claims.md`.
 
+stage_safe_next_action: open the canonical owner or live issue before acting on
+a planning note; use docs-health after deciding whether the note stays active,
+moves to archive, or needs an explicit no-open-followup pointer.
+
 next_verification_command: `python tools\aippocampus\docs\check_docs_health.py --json`.
 
 ## Current Planning Lanes

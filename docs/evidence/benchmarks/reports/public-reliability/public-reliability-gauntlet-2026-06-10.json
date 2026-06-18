@@ -3,7 +3,9 @@
   "kind": "aippocampus_public_reliability_gauntlet",
   "generated_at": "2026-06-10T09:37:26Z",
   "source_issue": "https://github.com/Sapientropic/AIppocampus/issues/1102",
-  "current_issue_url": "https://github.com/Sapientropic/AIppocampus/issues/2101",
+  "historical_owner_issue_url": "https://github.com/Sapientropic/AIppocampus/issues/2101",
+  "owner_issue_state": "closed_historical",
+  "no_open_followup_reason": "#2101 closed after adding owner/action routing; current claim posture is owned by docs/evidence/current-claims.md until a new scoped issue is opened.",
   "owner_path": "benchmarks/aippocampus/benchmark_public_reliability_gauntlet.py",
   "status": "public_safe_gauntlet_passed_with_boundaries",
   "ok": true,
@@ -580,15 +582,17 @@
   "claim_boundary": "A public-safe reliability gate exists for runtime pressure, mis-recall diagnostics, and pollution hygiene. The axes are intentionally not collapsed into a single score.",
   "review_next_actions": [
     {
-      "id": "review_public_reliability_gauntlet_successor",
-      "label": "Review public reliability gauntlet successor",
-      "status": "open_successor",
-      "reason": "#1102 is closed/historical; #2101 is the current owner route for gauntlet action follow-up without broadening the reliability claim.",
+      "id": "public_reliability_gauntlet_closed_owner_record",
+      "label": "Treat closed gauntlet owner as historical",
+      "status": "closed_historical",
+      "reason": "#1102 and #2101 are closed/historical; this report is bounded evidence, not an active reliability-work queue.",
       "mutation_risk": "read_only_or_review_only",
       "claim_boundary": "owner_route_not_public_reliability_claim",
-      "command": "gh issue view 2101 --comments",
+      "doc_path": "docs/evidence/current-claims.md",
       "owner_path": "benchmarks/aippocampus/benchmark_public_reliability_gauntlet.py",
-      "issue_url": "https://github.com/Sapientropic/AIppocampus/issues/2101"
+      "issue_url": "https://github.com/Sapientropic/AIppocampus/issues/2101",
+      "issue_state": "closed_historical",
+      "no_open_followup_reason": "#2101 closed after adding owner/action routing; current claim posture is owned by docs/evidence/current-claims.md until a new scoped issue is opened."
     },
     {
       "id": "rerun_public_reliability_gauntlet_json",
@@ -599,20 +603,24 @@
       "claim_boundary": "diagnostic_rerun_not_public_reliability_claim",
       "command": "python benchmarks/aippocampus/benchmark_public_reliability_gauntlet.py --json",
       "owner_path": "benchmarks/aippocampus/benchmark_public_reliability_gauntlet.py",
-      "issue_url": "https://github.com/Sapientropic/AIppocampus/issues/2101"
+      "issue_url": "https://github.com/Sapientropic/AIppocampus/issues/2101",
+      "issue_state": "closed_historical",
+      "no_open_followup_reason": "#2101 closed after adding owner/action routing; current claim posture is owned by docs/evidence/current-claims.md until a new scoped issue is opened."
     }
   ],
   "issue_actions": [
     {
-      "id": "map_cannot_claim_families_to_current_owner",
-      "label": "Map cannot-claim families to current owner",
-      "status": "actionable",
-      "reason": "The gauntlet has useful boundaries; #2101 owns converting those boundaries into review routes or explicit no-action reasons.",
+      "id": "public_reliability_no_open_followup",
+      "label": "No open public reliability follow-up",
+      "status": "closed_historical",
+      "reason": "The gauntlet boundaries are already routed into Current Claims; open a new scoped issue only when a concrete claim expansion is needed.",
       "mutation_risk": "read_only_or_review_only",
       "claim_boundary": "issue_triage_action_not_quality_evidence",
-      "command": "gh issue view 2101 --comments",
+      "doc_path": "docs/evidence/current-claims.md",
       "owner_path": "benchmarks/aippocampus/benchmark_public_reliability_gauntlet.py",
-      "issue_url": "https://github.com/Sapientropic/AIppocampus/issues/2101"
+      "issue_url": "https://github.com/Sapientropic/AIppocampus/issues/2101",
+      "issue_state": "closed_historical",
+      "no_open_followup_reason": "#2101 closed after adding owner/action routing; current claim posture is owned by docs/evidence/current-claims.md until a new scoped issue is opened."
     }
   ],
   "cannot_claim": [
