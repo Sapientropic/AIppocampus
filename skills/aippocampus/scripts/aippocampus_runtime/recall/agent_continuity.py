@@ -1164,6 +1164,7 @@ def deepen(
             max_matches=match_limit,
         )
     except RecallNavigationError as exc:
+        error_payload = navigation_error_payload(exc)
         macro_projection = _load_macro_projection(
             project=project,
             macro_state_path=macro_state_path,
@@ -1179,7 +1180,8 @@ def deepen(
                 "status": "cannot_verify",
                 "ok": False,
                 "cli_exit_recommended": "nonzero",
-                "result": navigation_error_payload(exc),
+                "error": error_payload.get("error"),
+                "result": error_payload,
                 **handle_recovery_fields("deepen"),
                 "macro_navigation_diagnostics": macro_live_recall.navigation_diagnostics(
                     projection=macro_projection,
@@ -1574,6 +1576,7 @@ def _parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     deepen_parser.add_argument("handle", nargs="?")
+    deepen_parser.add_argument("--handle", dest="handle_option")
     deepen_parser.add_argument("--request", type=int)
     deepen_parser.add_argument("--last-recall", action="store_true")
     deepen_parser.add_argument("--last-recall-path")
@@ -1602,6 +1605,7 @@ def _parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     explain_parser.add_argument("handle", nargs="?")
+    explain_parser.add_argument("--handle", dest="handle_option")
     explain_parser.add_argument("--request", type=int)
     explain_parser.add_argument("--last-recall", action="store_true")
     explain_parser.add_argument("--last-recall-path")
@@ -1807,7 +1811,7 @@ def main(argv: list[str] | None = None) -> int:
             print(render_macro_human(payload))
         return 0
     if args.command == "deepen":
-        handle = args.handle
+        handle = args.handle_option or args.handle
         cached_context: dict[str, Any] = {}
         if args.last_recall or args.request is not None:
             try:
@@ -1853,7 +1857,7 @@ def main(argv: list[str] | None = None) -> int:
             print(render_deepen_human(payload))
         return 2 if payload.get("status") == "cannot_verify" or payload.get("ok") is False else 0
     if args.command == "explain":
-        handle = args.handle
+        handle = args.handle_option or args.handle
         explain_cached_context: dict[str, Any] = {}
         if args.last_recall or args.request is not None:
             try:

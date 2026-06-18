@@ -390,6 +390,29 @@ output.write_bytes(b"FAKEAGE\\n" + base64.b64encode(data))
             all(action["mutation_risk"] == "read_only" for action in payload["safe_next_actions"])
         )
 
+    def test_object_sync_partial_backend_plan_keeps_next_template_read_only(self) -> None:
+        partial_backend_env = {
+            "AIPPOCAMPUS_OBJECT_STORE_URL": "",
+            "AIPPOCAMPUS_OBJECT_PROVIDER": "r2",
+            "AIPPOCAMPUS_OBJECT_BUCKET": "memory-bucket",
+            "AIPPOCAMPUS_OBJECT_ACCOUNT_ID": "test-account",
+        }
+        with (
+            patch.dict(os.environ, partial_backend_env, clear=False),
+            patch("sys.stdout", new_callable=StringIO) as stdout,
+        ):
+            code = sync_object_storage.main(["push", "--plan", "--json"])
+
+        payload = json.loads(stdout.getvalue())
+        encoded = json.dumps(payload, ensure_ascii=False)
+
+        self.assertEqual(code, 0)
+        self.assertEqual(payload["kind"], "aippocampus_object_sync_direction_plan")
+        self.assertEqual(payload["requires"], ["object_store_url"])
+        self.assertIn("--plan", payload["next_command_template"])
+        self.assertNotIn("object-sync push --object-store-url {object_store_url} --json", encoded)
+        self.assertFalse(payload["privacy_boundary"]["writes_performed"])
+
     def test_object_store_token_requires_https_unless_endpoint_is_loopback(self) -> None:
         with self.assertRaisesRegex(ValueError, "requires HTTPS"):
             sync_object_storage.client_for(
