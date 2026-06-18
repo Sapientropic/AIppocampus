@@ -28,8 +28,8 @@ def public_safe_payload(value: Any, *, project_root: str | Path | None = None) -
     return sanitize_external_model_payload(value, project_root=project_root)
 
 
-def atomic_write_text(path: Path, text: str) -> None:
-    """Write text by same-directory tmp+replace.
+def _atomic_replace_bytes(path: Path, payload_bytes: bytes) -> None:
+    """Write bytes by same-directory tmp+replace.
 
     Same-directory replacement keeps the operation atomic on normal local
     filesystems and avoids cross-device rename surprises. The tmp name is
@@ -40,7 +40,8 @@ def atomic_write_text(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(f".{path.name}.aippocampus-{os.getpid()}-{time.time_ns()}{TMP_SUFFIX}")
     try:
-        tmp.write_text(text, encoding="utf-8", newline="\n")
+        with tmp.open("xb") as handle:
+            handle.write(payload_bytes)
         tmp.replace(path)
     except BaseException:
         try:
@@ -59,7 +60,8 @@ def atomic_write_json(
     indent: int | None = 2,
 ) -> None:
     data: Any = public_safe_payload(dict(payload), project_root=project_root) if sanitize else dict(payload)
-    atomic_write_text(path, json.dumps(data, ensure_ascii=False, indent=indent))
+    body = json.dumps(data, ensure_ascii=False, indent=indent)
+    _atomic_replace_bytes(path, body.encode("utf-8"))
 
 
 def atomic_write_jsonl(
@@ -79,7 +81,7 @@ def atomic_write_jsonl(
         json.dumps(row, ensure_ascii=False, sort_keys=sort_keys) + "\n"
         for row in materialized
     )
-    atomic_write_text(path, body)
+    _atomic_replace_bytes(path, body.encode("utf-8"))
 
 
 def stale_tmp_recovery_card(root: Path, *, max_age_seconds: float = 300.0) -> dict[str, Any]:

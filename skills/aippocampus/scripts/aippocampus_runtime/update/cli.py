@@ -93,8 +93,8 @@ RESOLVED_INSTALLED_CACHE_AUTO_STATUSES = {"unique", "unique_version_match"}
 
 def _json_default(value: Any) -> str:
     if isinstance(value, Path):
-        return str(value)
-    return str(value)
+        return "<redacted:local-path>"
+    return f"<non_json:{type(value).__name__}>"
 
 
 def _emit_json(payload: Any) -> None:
