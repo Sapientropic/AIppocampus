@@ -346,7 +346,7 @@ def foreground_status_cards(report: dict[str, Any]) -> list[dict[str, Any]]:
                 or (summary.get("plugin_cache_recommended_actions") or [None])[0]
                 or PLUGIN_CACHE_DEFAULT_REPAIR_COMMAND
             )
-            command_fields = executable_update_action_fields(
+            plugin_command_fields = executable_update_action_fields(
                 command,
                 fallback_command=PLUGIN_CACHE_DEFAULT_REPAIR_COMMAND,
                 manual_instruction=(
