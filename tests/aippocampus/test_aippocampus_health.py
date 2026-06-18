@@ -1512,6 +1512,27 @@ class AippocampusHealthTests(unittest.TestCase):
         self.assertNotIn(str(workspace), encoded)
         self.assertNotIn("private-project-label", encoded)
 
+    def test_background_cognition_subconscious_defaults_disabled_without_explicit_hook(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workspace = root / "workspace"
+            workspace.mkdir()
+            now = health.datetime(2026, 6, 6, 12, 0, 0, tzinfo=health.timezone.utc)
+
+            with mock.patch.dict(health.os.environ, {}, clear=True):
+                payload = health.background_cognition_health(
+                    root=root,
+                    registry_path=root / "threads.json",
+                    jobs_path=root / "subconscious_jobs.jsonl",
+                    cwd=workspace,
+                    now=now,
+                )
+
+        subconscious = payload["lanes"]["subconscious"]
+        self.assertFalse(subconscious["enabled"])
+        self.assertEqual(subconscious["due_state"], "disabled")
+        self.assertEqual(subconscious["skip_reason"], "disabled_by_env")
+
     def test_warm_ambient_pending_job_is_not_reported_as_running(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

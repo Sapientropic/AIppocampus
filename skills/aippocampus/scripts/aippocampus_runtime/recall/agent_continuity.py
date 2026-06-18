@@ -556,16 +556,16 @@ def _macro_momentum_foreground_text(entry: Mapping[str, Any]) -> str:
     if not direction:
         return ""
     if route_policy == "closeout_with_overconfidence_watch":
-        return "momentum peaking; close out only with overconfidence watch"
+        return "derived momentum peak; recheck currentness and overconfidence before closeout"
     if direction == "rising":
-        return "momentum rising"
+        return "derived momentum rising"
     if direction == "turning":
-        return "momentum turning; recheck currentness before pushing"
+        return "derived momentum turning; recheck currentness before pushing"
     if direction == "declining":
-        return "momentum declining; reduce push and reopen currentness"
+        return "derived momentum declining; reduce push and reopen currentness"
     if direction == "hibernating":
-        return "momentum hibernating; stay quiet until new source changes"
-    return f"momentum {direction}"
+        return "derived momentum hibernating; stay quiet until new source changes"
+    return f"derived momentum {direction}"
 
 
 def _macro_foreground_text(entry: Mapping[str, Any]) -> str:
@@ -582,8 +582,9 @@ def _macro_foreground_text(entry: Mapping[str, Any]) -> str:
     momentum_text = _macro_momentum_foreground_text(entry)
     momentum_clause = f"; {momentum_text}" if momentum_text else ""
     return (
-        f"Macro orientation: {current} -> {toward}; active layer {layer}{momentum_clause}; "
-        f"agent as {role}. Reopen before exact/public/disputed claims."
+        f"Macro orientation heuristic (initial calibration): {current} -> {toward}; "
+        f"human-action layer ({layer}){momentum_clause}; agent posture {role}. "
+        f"Use as navigation only; reopen before exact/public/disputed claims."
     )
 
 
@@ -614,6 +615,12 @@ def _macro_memory_packet(
         "claim_permission": macro_state.CLAIM_PERMISSION,
         "foreground_budget_bytes": 360,
         "foreground_text": foreground_text,
+        "calibration": {
+            "status": "initial_calibration",
+            "confidence": "heuristic_low_to_medium",
+            "provenance_gloss": "derived from project-local macro state; deepen opens derivation/source trail",
+            "source_truth": False,
+        },
         "macro_orientation": {
             "movement": perturbation.get("movement"),
             "perturbation": perturbation.get("perturbation"),

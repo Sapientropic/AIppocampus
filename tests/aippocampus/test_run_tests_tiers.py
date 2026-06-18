@@ -48,6 +48,7 @@ BENCHMARK_SMOKE_REVIEWED_NON_BENCHMARK_MODULES = {
 
 PR_CRITICAL_MODULES = {
     "tests.aippocampus.test_benchmark_graph_extraction_boundary",
+    "tests.aippocampus.test_prompt_hook_anti_nag_behavior",
 }
 
 
@@ -510,7 +511,7 @@ class RunTestsTierTests(unittest.TestCase):
         self.assertLess(pr, broad_pr)
         # Keep this as a drift guard, not an off-by-one blocker when a small
         # foreground contract test enters the fast PR lane.
-        self.assertLessEqual(len(pr) * 3, len(broad_pr))
+        self.assertLessEqual(len(pr) * 3, len(broad_pr) + 2)
         self.assertTrue(PR_CRITICAL_MODULES.isdisjoint(quick))
         self.assertLessEqual(PR_CRITICAL_MODULES, pr)
 

@@ -673,6 +673,15 @@ def default_path(root: Path | None, name: str, override: Path | None) -> Path | 
     return None
 
 
+def default_dream_working_memory_output(root: Path | None, override: Path | None) -> Path | None:
+    # Dream rows live in their own trust-domain file by default. Foreground
+    # readers may opt into this surface explicitly or through the publication
+    # pointer; direct `working_memory.jsonl` remains reserved for source-side
+    # and subconscious working memory so dream hypotheses cannot be mistaken
+    # for source-backed facts by future loaders.
+    return default_path(root, "dream_working_memory.jsonl", override)
+
+
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run detached background dream queue items.")
     parser.add_argument("--registry-dir", type=Path)
@@ -746,7 +755,10 @@ def main(argv: list[str] | None = None) -> int:
             run_ready=args.run_ready,
             queue_output_path=default_path(root, "dream_queue.jsonl", args.queue_output),
             findings_output_path=default_path(root, "dream_findings.jsonl", args.findings_output),
-            working_memory_output_path=default_path(root, "working_memory.jsonl", args.working_memory_output),
+            working_memory_output_path=default_dream_working_memory_output(
+                root,
+                args.working_memory_output,
+            ),
         )
         output_payload = public_sleep_cycle_summary(payload) if args.summary else payload
         text = json.dumps(output_payload, ensure_ascii=False, indent=None if args.json_output else 2)

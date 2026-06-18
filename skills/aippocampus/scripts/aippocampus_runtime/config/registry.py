@@ -123,14 +123,14 @@ CONFIG_KNOBS = (
     _knob("AIPPOCAMPUS_SEMANTIC_TRIGGER_LIMIT", "recall", "experimental", "semantic recall", "route default"),
     _knob("AIPPOCAMPUS_SEMANTIC_TEMPERATURE", "recall", "experimental", "semantic recall", "route default"),
     _knob("AIPPOCAMPUS_SEMANTIC_CACHE_TTL", "recall", "experimental", "semantic recall", "built-in TTL"),
-    _knob("AIPPOCAMPUS_PROMPT_HOOK_BUDGET_MS", "hooks", "stable_public", "prompt hook", "host-safe default"),
+    _knob("AIPPOCAMPUS_PROMPT_HOOK_BUDGET_MS", "hooks", "stable_public", "prompt hook", "3500"),
     _knob("AIPPOCAMPUS_PROMPT_SEMANTIC_TIMEOUT", "hooks", "experimental", "prompt hook", "host-safe default"),
     _knob("AIPPOCAMPUS_PROMPT_PROBE_LIMIT", "recall", "experimental", "prompt recall", "built-in default"),
     _knob("AIPPOCAMPUS_PROMPT_SKIP_TELEMETRY", "hooks", "stable_public", "prompt hook telemetry", "enabled"),
     _knob("AIPPOCAMPUS_CURRENT_THREAD_KEY", "source/agent_self_note_cli", "experimental", "current-thread self-note", "unset"),
     _knob("AIPPOCAMPUS_AGENT_LAST_RECALL_PATH", "recall/agent_continuity", "experimental", "agent recall", "registry cache"),
     _knob("AIPPOCAMPUS_FEEDBACK_JSONL", "controls", "experimental", "durable feedback rows", "unset"),
-    _knob("AIPPOCAMPUS_LIFECYCLE_HOOK_BUDGET_MS", "hooks", "stable_public", "lifecycle hook", "host-safe default"),
+    _knob("AIPPOCAMPUS_LIFECYCLE_HOOK_BUDGET_MS", "hooks", "stable_public", "lifecycle hook", "15000"),
     _knob("AIPPOCAMPUS_WARM_RECALL_BACKGROUND", "warm_ambient", "experimental", "warm recall", "auto"),
     _knob("AIPPOCAMPUS_WARM_RECALL_TIMEOUT", "warm_ambient", "experimental", "warm recall", "route default"),
     _knob("AIPPOCAMPUS_WARM_RECALL_MAX_WORKERS", "warm_ambient", "experimental", "warm recall", "route default"),
@@ -148,7 +148,15 @@ CONFIG_KNOBS = (
     _knob("AIPPOCAMPUS_DREAM_ROLLOUT_RATE", "dream", "experimental", "dream delivery", "1.0"),
     _knob("AIPPOCAMPUS_DREAM_SHADOW_AB", "dream", "experimental", "dream delivery", "disabled"),
     _knob("AIPPOCAMPUS_DREAM_SHADOW_AB_SALT", "dream", "experimental", "dream delivery", "unset", sensitive=True),
-    _knob("AIPPOCAMPUS_SUBCONSCIOUS_HOOK", "subconscious", "experimental", "background scheduling", "enabled"),
+    _knob(
+        "AIPPOCAMPUS_BACKGROUND_MODEL_CONSENT",
+        "subconscious/dream",
+        "experimental",
+        "background model consent",
+        "disabled",
+        notes="Separate opt-in for sending background subconscious/Dream seeds to an external model; provider key visibility alone is not consent.",
+    ),
+    _knob("AIPPOCAMPUS_SUBCONSCIOUS_HOOK", "subconscious", "experimental", "background scheduling", "disabled"),
     _knob("AIPPOCAMPUS_SUBCONSCIOUS_JOB_CONCURRENCY", "subconscious", "experimental", "background scheduling", "4"),
     _knob("AIPPOCAMPUS_SUBCONSCIOUS_CONCURRENCY", "subconscious", "experimental", "background jobs", "4"),
     _knob("AIPPOCAMPUS_SUBCONSCIOUS_SAMPLES_PER_JOB", "subconscious", "experimental", "background jobs", "2"),
@@ -165,31 +173,122 @@ CONFIG_KNOBS = (
 )
 
 CONFIG_BY_NAME = {knob.name: knob for knob in CONFIG_KNOBS}
+LOCAL_PATH_REDACTION = "<local-path-redacted>"
 
 
 def config_registry_names() -> set[str]:
     return set(CONFIG_BY_NAME)
 
 
-def _public_config_entry(knob: ConfigKnob, env: Mapping[str, str]) -> dict[str, object]:
+def _value_kind_for_knob(name: str) -> str:
+    if name.endswith("_MS") or any(
+        token in name
+        for token in (
+            "_LIMIT",
+            "_CONCURRENCY",
+            "_MAX_WORKERS",
+            "_SAMPLES_PER_JOB",
+            "_SCOUTS",
+            "_BACKUPS",
+            "_BYTES",
+            "_TOKENS",
+            "_WARN_ROWS",
+        )
+    ):
+        return "positive_integer"
+    if name.endswith("_TIMEOUT") or name.endswith("_RATE") or name.endswith("_TEMPERATURE"):
+        return "positive_float"
+    if name.endswith("_HOME") or name.endswith("_PATH") or name.endswith("_JSONL"):
+        return "local_path_or_locator"
+    if any(token in name for token in ("_DIR", "_BIN", "_SOURCE", "_VAULT")):
+        return "local_path_or_locator"
+    return "string"
+
+
+def _validation_warning(name: str, value: str, value_kind: str) -> dict[str, object] | None:
+    if not value.strip():
+        return None
+    if value_kind == "positive_integer":
+        try:
+            if int(value) <= 0:
+                raise ValueError
+        except ValueError:
+            return {
+                "code": "malformed_numeric_env",
+                "name": name,
+                "value_kind": value_kind,
+            }
+    if value_kind == "positive_float":
+        try:
+            if float(value) <= 0:
+                raise ValueError
+        except ValueError:
+            return {
+                "code": "malformed_numeric_env",
+                "name": name,
+                "value_kind": value_kind,
+            }
+    return None
+
+
+def _resolved_value(
+    knob: ConfigKnob,
+    env: Mapping[str, str],
+    *,
+    include_resolved: bool,
+) -> str | None:
+    if not include_resolved:
+        return None
     configured = bool(str(env.get(knob.name, "")).strip())
-    return {
+    value_kind = _value_kind_for_knob(knob.name)
+    if knob.sensitive:
+        return "<redacted>" if configured else ""
+    if value_kind == "local_path_or_locator" and configured:
+        return LOCAL_PATH_REDACTION
+    if configured:
+        return str(env.get(knob.name) or "")
+    return "" if knob.default == "unset" else knob.default
+
+
+def _public_config_entry(
+    knob: ConfigKnob,
+    env: Mapping[str, str],
+    *,
+    include_resolved: bool = False,
+) -> dict[str, object]:
+    configured = bool(str(env.get(knob.name, "")).strip())
+    value_kind = _value_kind_for_knob(knob.name)
+    entry: dict[str, object] = {
         "name": knob.name,
         "owner": knob.owner,
         "stability": knob.stability,
         "surface": knob.surface,
         "default": knob.default,
         "sensitive": knob.sensitive,
+        "value_kind": value_kind,
         "configured": configured,
         "source": "env" if configured else ("default" if knob.default != "unset" else "unset"),
-        "value_redacted": configured,
+        "value_redacted": configured
+        and (not include_resolved or knob.sensitive or value_kind == "local_path_or_locator"),
         "notes": knob.notes,
     }
+    resolved = _resolved_value(knob, env, include_resolved=include_resolved)
+    if resolved is not None:
+        entry["resolved_value"] = resolved
+    return entry
 
 
-def config_report(env: Mapping[str, str] | None = None) -> dict[str, object]:
+def config_report(
+    env: Mapping[str, str] | None = None,
+    *,
+    include_resolved: bool = False,
+) -> dict[str, object]:
     current_env = env if env is not None else os.environ
-    registered = [_public_config_entry(knob, current_env) for knob in sorted(CONFIG_KNOBS, key=lambda item: item.name)]
+    sorted_knobs = sorted(CONFIG_KNOBS, key=lambda item: item.name)
+    registered = [
+        _public_config_entry(knob, current_env, include_resolved=include_resolved)
+        for knob in sorted_knobs
+    ]
     unknown_names = sorted(
         name for name in current_env if name.startswith("AIPPOCAMPUS_") and name not in CONFIG_BY_NAME
     )
@@ -197,6 +296,14 @@ def config_report(env: Mapping[str, str] | None = None) -> dict[str, object]:
         {"code": "unregistered_aippocampus_env", "name": name}
         for name in unknown_names
     ]
+    for knob in sorted_knobs:
+        warning = _validation_warning(
+            knob.name,
+            str(current_env.get(knob.name, "")),
+            _value_kind_for_knob(knob.name),
+        )
+        if warning is not None:
+            warnings.append(warning)
     status = "partial" if warnings else "ok"
     return public_envelope(
         ok=True,
@@ -204,10 +311,15 @@ def config_report(env: Mapping[str, str] | None = None) -> dict[str, object]:
         data={
             "kind": "aippocampus_config_registry_report",
             "no_write": True,
-            "value_policy": "values are never printed; configured values are presence-only",
+            "value_policy": (
+                "safe non-sensitive resolved values included; secrets and local paths redacted"
+                if include_resolved
+                else "values are never printed; configured values are presence-only"
+            ),
             "knobs": registered,
             "stability_buckets": list(CONFIG_STABILITY_BUCKETS),
             "unknown_count": len(unknown_names),
+            "resolved_values_included": include_resolved,
         },
         warnings=warnings,
         cannot_claim=[
@@ -215,6 +327,48 @@ def config_report(env: Mapping[str, str] | None = None) -> dict[str, object]:
             "config_report_does_not_probe_provider_connectivity",
         ],
     )
+
+
+def config_knob_detail_report(
+    name: str,
+    env: Mapping[str, str] | None = None,
+    *,
+    include_resolved: bool = False,
+) -> dict[str, object]:
+    normalized = str(name or "").strip().upper()
+    knob = CONFIG_BY_NAME.get(normalized)
+    if knob is None:
+        return {
+            "schema_version": 1,
+            "kind": "aippocampus_config_knob_detail",
+            "ok": False,
+            "status": "unknown_config_knob",
+            "name": normalized,
+            "known_count": len(CONFIG_BY_NAME),
+            "privacy": {"values_printed": False},
+        }
+    current_env = env if env is not None else os.environ
+    entry = _public_config_entry(knob, current_env, include_resolved=include_resolved)
+    value_kind = _value_kind_for_knob(knob.name)
+    warning = _validation_warning(
+        knob.name,
+        str(current_env.get(knob.name, "")),
+        value_kind,
+    )
+    return {
+        "schema_version": 1,
+        "kind": "aippocampus_config_knob_detail",
+        "ok": True,
+        "status": "ok" if warning is None else "partial",
+        "knob": entry,
+        "warnings": [warning] if warning else [],
+        "privacy": {
+            "values_printed": include_resolved and not knob.sensitive and value_kind != "local_path_or_locator",
+            "secret_values_printed": False,
+            "local_paths_printed": False,
+        },
+        "claim_boundary": "config diagnostics are local setup state, not source evidence",
+    }
 
 
 def config_summary_report(report: Mapping[str, object]) -> dict[str, object]:
@@ -308,7 +462,9 @@ def config_summary_report(report: Mapping[str, object]) -> dict[str, object]:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Report registered AIppocampus configuration knobs.")
-    parser.add_argument("command", nargs="?", default="report", choices=("report",))
+    parser.add_argument("command", nargs="?", default="report", choices=("report", "describe"))
+    parser.add_argument("knob", nargs="?")
+    parser.add_argument("--resolved", action="store_true", help="Include non-sensitive resolved values.")
     parser.add_argument("--json", action="store_true", help="Emit JSON.")
     parser.add_argument(
         "--detail",
@@ -330,7 +486,29 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    report = config_report()
+    if args.command == "describe":
+        if not args.knob:
+            parser.error("config describe requires a knob name")
+        detail = config_knob_detail_report(args.knob, include_resolved=args.resolved)
+        if args.json:
+            print(json.dumps(detail, ensure_ascii=False, indent=2))
+        else:
+            raw_knob = detail.get("knob")
+            knob: dict[str, Any] = raw_knob if isinstance(raw_knob, dict) else {}
+            if not detail.get("ok"):
+                print(f"config knob: {detail.get('name')} not registered")
+            else:
+                print(f"config knob: {knob.get('name')}")
+                print(f"- surface: {knob.get('surface')}")
+                print(f"- default: {knob.get('default')}")
+                print(f"- source: {knob.get('source')}")
+                if args.resolved:
+                    print(f"- resolved: {knob.get('resolved_value', '')}")
+                if knob.get("notes"):
+                    print(f"- notes: {knob.get('notes')}")
+        return 0 if detail.get("ok") else 2
+
+    report = config_report(include_resolved=args.resolved)
     full_detail_json = bool(args.operator_json or args.detail == "full")
     if args.summary_json:
         print(json.dumps(config_summary_report(report), ensure_ascii=False))

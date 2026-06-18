@@ -1248,6 +1248,7 @@ def render_macro_human(payload: Mapping[str, Any]) -> str:
         deepen_route = str(packet.get("deepen_route_id") or "").strip()
         if deepen_route:
             lines.append(f"Next: aippocampus agent deepen {shell_quote(deepen_route)}")
+            lines.append("Boundary: heuristic navigation only; deepen opens derivation/source trail.")
     else:
         diagnostics = [str(item) for item in payload.get("diagnostics") or [] if str(item)]
         if diagnostics:

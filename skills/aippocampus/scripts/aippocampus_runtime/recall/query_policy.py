@@ -12,6 +12,7 @@ import re
 from pathlib import Path
 
 from aippocampus_runtime.core import parse_anchor_file
+from aippocampus_runtime.text import cjk_ngrams, iter_cjk_sequences
 
 RECALL_TRIGGERS = [
     "还记得",
@@ -123,6 +124,11 @@ CJK_QUERY_SIDE_CAR_STOP = {
     "不要",
 }
 
+CJK_QUERY_SIDE_CAR_SHORT_SIGNALS = {
+    "锚点",
+    "证据",
+}
+
 
 def unique_preserve(items: list[str], limit: int | None = None) -> list[str]:
     seen: set[str] = set()
@@ -192,7 +198,7 @@ def cjk_query_sidecar_terms(query: str, limit: int = 24) -> list[str]:
     """
 
     terms: list[str] = []
-    for chunk in re.findall(r"[\u3400-\u9fff]{2,}", query):
+    for chunk in iter_cjk_sequences(query, min_len=2, max_len=32):
         normalized = chunk
         for stop in CJK_QUERY_SIDE_CAR_STOP:
             normalized = normalized.replace(stop, " ")
@@ -201,10 +207,11 @@ def cjk_query_sidecar_terms(query: str, limit: int = 24) -> list[str]:
             if len(part) < 2:
                 continue
             terms.append(part)
-            for n in (2, 3, 4):
-                if len(part) < n:
-                    continue
-                terms.extend(part[i : i + n] for i in range(0, len(part) - n + 1))
+            if len(part) <= 4:
+                terms.extend(cjk_ngrams(part, sizes=(2, 3, 4)))
+                continue
+            terms.extend(cjk_ngrams(part, sizes=(4,)))
+            terms.extend(signal for signal in CJK_QUERY_SIDE_CAR_SHORT_SIGNALS if signal in part)
     return unique_preserve(terms, limit=limit)
 
 

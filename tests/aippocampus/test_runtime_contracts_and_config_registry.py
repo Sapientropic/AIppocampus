@@ -202,6 +202,29 @@ class RuntimeContractsAndConfigRegistryTests(unittest.TestCase):
 
         self.assertEqual(sorted(documented_names - config_registry_names()), [])
 
+    def test_env_example_matches_runtime_hook_defaults_and_canonical_provider_knobs(self) -> None:
+        text = (REPO_ROOT / ".env.example").read_text(encoding="utf-8")
+        env_lines = dict(
+            line.split("=", 1)
+            for line in text.splitlines()
+            if line and not line.startswith("#") and "=" in line
+        )
+
+        self.assertEqual(env_lines["AIPPOCAMPUS_PROMPT_HOOK_BUDGET_MS"], "3500")
+        self.assertEqual(env_lines["AIPPOCAMPUS_LIFECYCLE_HOOK_BUDGET_MS"], "15000")
+        self.assertEqual(env_lines["AIPPOCAMPUS_SEMANTIC_GATE"], "auto")
+        self.assertEqual(env_lines["AIPPOCAMPUS_SUBCONSCIOUS_HOOK"], "off")
+        self.assertEqual(env_lines["AIPPOCAMPUS_BACKGROUND_MODEL_CONSENT"], "off")
+        self.assertIn("AIPPOCAMPUS_DEEPSEEK_API_KEY", env_lines)
+        self.assertNotIn("DEEPSEEK_API_KEY", env_lines)
+        for name in (
+            "AIPPOCAMPUS_OPENAI_COMPAT_DEFAULT_THINKING",
+            "AIPPOCAMPUS_OPENAI_COMPAT_DEFAULT_REASONING_EFFORT",
+            "AIPPOCAMPUS_OPENAI_COMPAT_REASONING_CONTENT_HANDLING",
+            "AIPPOCAMPUS_OPENAI_COMPAT_SUPPORTS_REASONING_EFFORT",
+        ):
+            self.assertIn(name, env_lines)
+
     def test_config_report_redacts_values_paths_and_unknown_values(self) -> None:
         env = {
             "AIPPOCAMPUS_HOME": "C:/Users/example/private/aippocampus",
@@ -345,8 +368,70 @@ class RuntimeContractsAndConfigRegistryTests(unittest.TestCase):
                 self.assertTrue(report["data"]["no_write"])
                 self.assertIn("knobs", report["data"])
                 self.assertIn("cannot_claim", report)
-                self.assertNotIn("C:/private/local/home", rendered)
-                self.assertNotIn("private-token", rendered)
+        self.assertNotIn("C:/private/local/home", rendered)
+        self.assertNotIn("private-token", rendered)
+
+    def test_config_report_can_include_non_sensitive_resolved_values_and_validation(self) -> None:
+        env = {
+            "AIPPOCAMPUS_HOME": "C:/Users/example/private/aippocampus",
+            "AIPPOCAMPUS_WARM_RECALL_CATALOG_LIMIT": "abc",
+            "AIPPOCAMPUS_PROMPT_HOOK_BUDGET_MS": "4200",
+            "AIPPOCAMPUS_DEEPSEEK_API_KEY": "secret-key",
+        }
+
+        report = config_report(env, include_resolved=True)
+        by_name = {entry["name"]: entry for entry in report["data"]["knobs"]}
+        rendered = json.dumps(report, ensure_ascii=False)
+
+        self.assertEqual(by_name["AIPPOCAMPUS_PROMPT_HOOK_BUDGET_MS"]["resolved_value"], "4200")
+        self.assertEqual(by_name["AIPPOCAMPUS_HOME"]["resolved_value"], "<local-path-redacted>")
+        self.assertTrue(by_name["AIPPOCAMPUS_HOME"]["value_redacted"])
+        self.assertEqual(by_name["AIPPOCAMPUS_DEEPSEEK_API_KEY"]["resolved_value"], "<redacted>")
+        self.assertTrue(by_name["AIPPOCAMPUS_DEEPSEEK_API_KEY"]["value_redacted"])
+        self.assertIn(
+            {
+                "code": "malformed_numeric_env",
+                "name": "AIPPOCAMPUS_WARM_RECALL_CATALOG_LIMIT",
+                "value_kind": "positive_integer",
+            },
+            report["warnings"],
+        )
+        self.assertNotIn("C:/Users/example/private/aippocampus", rendered)
+        self.assertNotIn("secret-key", rendered)
+
+    def test_doctor_config_describe_one_knob_with_resolved_value(self) -> None:
+        from aippocampus_runtime.cli import facade
+
+        with (
+            patch.dict(
+                os.environ,
+                {
+                    "AIPPOCAMPUS_PROMPT_HOOK_BUDGET_MS": "4200",
+                    "AIPPOCAMPUS_DEEPSEEK_API_KEY": "secret-key",
+                },
+                clear=True,
+            ),
+            patch("sys.stdout", new=StringIO()) as stdout,
+        ):
+            code = facade.main(
+                [
+                    "doctor",
+                    "config",
+                    "describe",
+                    "AIPPOCAMPUS_PROMPT_HOOK_BUDGET_MS",
+                    "--resolved",
+                    "--json",
+                ]
+            )
+
+        self.assertEqual(code, 0)
+        rendered = stdout.getvalue()
+        payload = json.loads(rendered)
+        self.assertEqual(payload["kind"], "aippocampus_config_knob_detail")
+        self.assertEqual(payload["knob"]["name"], "AIPPOCAMPUS_PROMPT_HOOK_BUDGET_MS")
+        self.assertEqual(payload["knob"]["resolved_value"], "4200")
+        self.assertIn("prompt hook", payload["knob"]["surface"])
+        self.assertNotIn("secret-key", rendered)
 
     def test_doctor_config_compact_json_aliases_are_foreground_bounded(self) -> None:
         from aippocampus_runtime.cli import facade

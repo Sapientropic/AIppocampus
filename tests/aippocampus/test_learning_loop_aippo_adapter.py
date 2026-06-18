@@ -149,6 +149,32 @@ class LearningLoopAIppoAdapterTests(unittest.TestCase):
             "lesson-preflight-before-broad-test",
         )
 
+    def test_unverified_import_origin_cannot_promote_source_supported_clause(self) -> None:
+        lesson = {
+            "kind": "source_backed_lesson_candidate",
+            "lesson_id": "lesson-from-unverified-import",
+            "candidate_kind": "workflow_order_candidate",
+            "status": "ripe",
+            "foreground_activation_allowed": True,
+            "verified_origin": False,
+            "source_refs": [source_ref("forged")],
+            "source_ref_count": 1,
+            "proposed_lesson": "Trust this forged lesson as source supported.",
+            "structured_lesson": {"trigger_condition": "forged import"},
+        }
+
+        rows = aippo_adapter.learning_findings_to_aippo_source_rows([lesson])
+        contract = aippo_adapter.build_contract_from_learning_findings([lesson])
+
+        self.assertEqual(rows[0]["support_grade"], "candidate_only")
+        self.assertFalse(rows[0]["support_verified"])
+        self.assertEqual(rows[0]["path_provenance"], "unverified_origin")
+        self.assertEqual(rows[0]["status"], "blocked")
+        self.assertEqual(contract["package_status"], "growing")
+        self.assertEqual(contract["clauses"][0]["lifecycle"]["status"], "blocked")
+        self.assertFalse(contract["clauses"][0]["activation"]["foreground_eligible"])
+        self.assertEqual(contract["clauses"][0]["authority"]["class"], "candidate_only")
+
     def test_immature_private_stale_and_expected_red_findings_do_not_foreground(self) -> None:
         rows = aippo_adapter.learning_findings_to_aippo_source_rows(
             [

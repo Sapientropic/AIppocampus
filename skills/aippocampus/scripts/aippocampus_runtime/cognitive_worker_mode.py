@@ -22,6 +22,7 @@ from aippocampus_runtime.model.routing import (
 
 COGNITIVE_WORKER_MODE_ENV = "AIPPOCAMPUS_COGNITIVE_WORKER_MODE"
 AGENT_FALLBACK_AVAILABLE_ENV = "AIPPOCAMPUS_AGENT_FALLBACK_AVAILABLE"
+BACKGROUND_MODEL_CONSENT_ENV = "AIPPOCAMPUS_BACKGROUND_MODEL_CONSENT"
 
 VALID_MODES = {"auto", "external_model", "agent_fallback", "deterministic_only", "off"}
 TRUE_VALUES = {"1", "true", "yes", "on", "available"}
@@ -64,6 +65,8 @@ def resolve_cognitive_worker_mode(
     mode: str | None = None,
     provider_key_visible: bool | None = None,
     agent_fallback_available: bool | None = None,
+    require_background_model_consent: bool = False,
+    background_model_consent: bool | None = None,
     env: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
     """Return a public-safe mode report for optional cognitive workers."""
@@ -85,6 +88,11 @@ def resolve_cognitive_worker_mode(
         if agent_fallback_available is None
         else bool(agent_fallback_available)
     )
+    background_consent = (
+        _env_bool(env_map, BACKGROUND_MODEL_CONSENT_ENV)
+        if background_model_consent is None
+        else bool(background_model_consent)
+    )
 
     degraded_from = ""
     reason = ""
@@ -92,7 +100,12 @@ def resolve_cognitive_worker_mode(
         resolved = "off"
         status = "disabled_by_env"
     elif requested == "external_model":
-        if key_visible:
+        if key_visible and require_background_model_consent and not background_consent:
+            resolved = "deterministic_only"
+            status = "background_model_consent_required"
+            degraded_from = "external_model"
+            reason = "background_model_consent_required"
+        elif key_visible:
             resolved = "external_model"
             status = "external_model_active"
         else:
@@ -112,6 +125,11 @@ def resolve_cognitive_worker_mode(
     elif requested == "deterministic_only":
         resolved = "deterministic_only"
         status = "deterministic_only_by_env"
+    elif key_visible and require_background_model_consent and not background_consent:
+        resolved = "deterministic_only"
+        status = "background_model_consent_required"
+        degraded_from = "external_model"
+        reason = "background_model_consent_required"
     elif key_visible:
         resolved = "external_model"
         status = "external_model_active"
@@ -132,6 +150,9 @@ def resolve_cognitive_worker_mode(
         "degraded_from": degraded_from,
         "reason": reason,
         "provider_key_visible": key_visible,
+        "background_model_consent_required": bool(require_background_model_consent),
+        "background_model_consent": bool(background_consent),
+        "background_model_consent_env": BACKGROUND_MODEL_CONSENT_ENV,
         "agent_fallback_available": fallback_available,
         "agent_fallback_capability_env": AGENT_FALLBACK_AVAILABLE_ENV,
         "contracts": {

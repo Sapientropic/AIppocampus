@@ -224,18 +224,20 @@ class Fts5RecallBenchmarkTests(unittest.TestCase):
                 "mild_paraphrase",
                 "compact_cjk_without_spaces",
                 "mixed_english_project_symbol",
+                "plain_cjk_project_terms",
+                "cjk_extension_ideographs",
                 "negative_generic_cue",
                 "negative_project_symbol_neighbor",
                 "negative_semantic_alias_gap",
             },
         )
-        self.assertGreaterEqual(payload["metrics"]["case_count"], 10)
-        self.assertEqual(payload["metrics"]["positive_case_count"], 7)
+        self.assertGreaterEqual(payload["metrics"]["case_count"], 12)
+        self.assertEqual(payload["metrics"]["positive_case_count"], 9)
         self.assertEqual(payload["metrics"]["negative_case_count"], 3)
         self.assertEqual(payload["status"], "fixture_passed")
-        self.assertEqual(payload["metrics"]["production_hybrid"]["positive_hit_top5"], 7)
+        self.assertEqual(payload["metrics"]["production_hybrid"]["positive_hit_top5"], 9)
         self.assertEqual(payload["metrics"]["production_hybrid"]["negative_false_positive_count"], 0)
-        self.assertEqual(payload["metrics"]["cjk_aware_sidecar"]["positive_hit_top5"], 7)
+        self.assertEqual(payload["metrics"]["cjk_aware_sidecar"]["positive_hit_top5"], 9)
         self.assertEqual(payload["metrics"]["cjk_aware_sidecar"]["negative_false_positive_count"], 0)
         self.assertEqual(payload["default_gap"]["production_positive_miss_count"], 0)
         self.assertEqual(payload["default_gap"]["status"], "none")
@@ -247,6 +249,18 @@ class Fts5RecallBenchmarkTests(unittest.TestCase):
         )
         self.assertEqual(
             payload["metrics"]["by_case_type"]["mixed_english_project_symbol"][
+                "production_hybrid_hit_top5"
+            ],
+            1,
+        )
+        self.assertEqual(
+            payload["metrics"]["by_case_type"]["plain_cjk_project_terms"][
+                "production_hybrid_hit_top5"
+            ],
+            1,
+        )
+        self.assertEqual(
+            payload["metrics"]["by_case_type"]["cjk_extension_ideographs"][
                 "production_hybrid_hit_top5"
             ],
             1,

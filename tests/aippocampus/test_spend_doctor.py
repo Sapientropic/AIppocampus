@@ -7,6 +7,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
@@ -28,6 +29,22 @@ def write_jsonl(path: Path, rows: list[dict[str, object]]) -> None:
 
 
 class SpendDoctorTests(unittest.TestCase):
+    def test_subconscious_operator_switch_defaults_disabled_without_explicit_hook(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(
+            spend_doctor.os.environ,
+            {},
+            clear=True,
+        ):
+            report = spend_doctor.build_spend_doctor_report(
+                registry_dir=Path(tmp),
+                days=7,
+                now="2026-06-06T12:00:00Z",
+            )
+
+        switch = report["budget_guardrails"]["operator_switches"]["subconscious"]
+        self.assertEqual(switch["env"], "AIPPOCAMPUS_SUBCONSCIOUS_HOOK")
+        self.assertFalse(switch["enabled"])
+
     def test_spend_report_aggregates_cost_and_yield_without_private_payloads(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

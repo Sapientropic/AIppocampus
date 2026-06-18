@@ -78,6 +78,13 @@ class SubconsciousSchedulerTests(unittest.TestCase):
         defaults.update(overrides)
         return type("Args", (), defaults)()
 
+    def external_worker_env(self) -> dict[str, str]:
+        return {
+            "AIPPOCAMPUS_SUBCONSCIOUS_HOOK": "1",
+            "AIPPOCAMPUS_BACKGROUND_MODEL_CONSENT": "1",
+            "DEEPSEEK_API_KEY": "x",
+        }
+
     def test_project_for_cwd_uses_registered_workspace(self) -> None:
         label = scheduler.project_for_cwd(self.registry, self.cwd)
 
@@ -109,8 +116,15 @@ class SubconsciousSchedulerTests(unittest.TestCase):
 
         self.assertIsNone(reason)
 
-    def test_maybe_start_skips_without_api_key(self) -> None:
+    def test_maybe_start_defaults_to_disabled_without_explicit_hook_opt_in(self) -> None:
         with patch.dict(os.environ, {}, clear=True):
+            result = scheduler.maybe_start(self.args())
+
+        self.assertEqual(result["skipped"], "subconscious_hook_consent_required")
+        self.assertEqual(result["projects"], [])
+
+    def test_maybe_start_skips_without_api_key_after_hook_opt_in(self) -> None:
+        with patch.dict(os.environ, {"AIPPOCAMPUS_SUBCONSCIOUS_HOOK": "1"}, clear=True):
             result = scheduler.maybe_start(self.args())
 
         self.assertEqual(result["skipped"], "missing_api_key")
@@ -128,7 +142,14 @@ class SubconsciousSchedulerTests(unittest.TestCase):
             return 4321
 
         with (
-            patch.dict(os.environ, {"AIPPOCAMPUS_AGENT_FALLBACK_AVAILABLE": "1"}, clear=True),
+            patch.dict(
+                os.environ,
+                {
+                    "AIPPOCAMPUS_SUBCONSCIOUS_HOOK": "1",
+                    "AIPPOCAMPUS_AGENT_FALLBACK_AVAILABLE": "1",
+                },
+                clear=True,
+            ),
             patch.object(
                 scheduler,
                 "start_detached",
@@ -164,8 +185,28 @@ class SubconsciousSchedulerTests(unittest.TestCase):
         self.assertEqual(result["skipped"], "disabled_by_env")
         self.assertEqual(result["projects"], [])
 
+    def test_maybe_start_requires_background_model_consent_even_when_key_is_visible(self) -> None:
+        with patch.dict(
+            os.environ,
+            {"AIPPOCAMPUS_SUBCONSCIOUS_HOOK": "1", "DEEPSEEK_API_KEY": "x"},
+            clear=True,
+        ):
+            result = scheduler.maybe_start(self.args(dry_run=True))
+
+        self.assertEqual(result["skipped"], "background_model_consent_required")
+        self.assertEqual(result["projects"], [])
+        self.assertEqual(result["cognitive_worker"]["status"], "background_model_consent_required")
+
     def test_maybe_start_dry_run_reports_due_project(self) -> None:
-        with patch.dict(os.environ, {"DEEPSEEK_API_KEY": "x"}, clear=True):
+        with patch.dict(
+            os.environ,
+            {
+                "AIPPOCAMPUS_SUBCONSCIOUS_HOOK": "1",
+                "AIPPOCAMPUS_BACKGROUND_MODEL_CONSENT": "1",
+                "DEEPSEEK_API_KEY": "x",
+            },
+            clear=True,
+        ):
             result = scheduler.maybe_start(self.args(dry_run=True))
 
         self.assertFalse(result["started"])
@@ -190,7 +231,7 @@ class SubconsciousSchedulerTests(unittest.TestCase):
             },
         )
 
-        with patch.dict(os.environ, {"DEEPSEEK_API_KEY": "x"}, clear=True):
+        with patch.dict(os.environ, self.external_worker_env(), clear=True):
             result = scheduler.maybe_start(
                 self.args(dry_run=True, state_file=str(state_file))
             )
@@ -223,7 +264,7 @@ class SubconsciousSchedulerTests(unittest.TestCase):
             },
         )
 
-        with patch.dict(os.environ, {"DEEPSEEK_API_KEY": "x"}, clear=True):
+        with patch.dict(os.environ, self.external_worker_env(), clear=True):
             result = scheduler.maybe_start(
                 self.args(dry_run=True, state_file=str(state_file))
             )
@@ -245,7 +286,7 @@ class SubconsciousSchedulerTests(unittest.TestCase):
         self.assertNotIn(str(self.cwd), encoded)
 
     def test_old_project_name_reports_name_resolution_skip_reason(self) -> None:
-        with patch.dict(os.environ, {"DEEPSEEK_API_KEY": "x"}, clear=True):
+        with patch.dict(os.environ, self.external_worker_env(), clear=True):
             result = scheduler.maybe_start(
                 self.args(dry_run=True, project="Old Project Name")
             )
@@ -291,7 +332,7 @@ class SubconsciousSchedulerTests(unittest.TestCase):
             },
         )
 
-        with patch.dict(os.environ, {"DEEPSEEK_API_KEY": "x"}, clear=True):
+        with patch.dict(os.environ, self.external_worker_env(), clear=True):
             result = scheduler.maybe_start(
                 self.args(dry_run=True, state_file=str(state_file))
             )
@@ -381,7 +422,7 @@ class SubconsciousSchedulerTests(unittest.TestCase):
         self.assertIn("subconscious_worker.py", " ".join(report["manual_override_surface"]))
 
     def test_maybe_start_dry_run_includes_shell_selection_report(self) -> None:
-        with patch.dict(os.environ, {"DEEPSEEK_API_KEY": "x"}, clear=True):
+        with patch.dict(os.environ, self.external_worker_env(), clear=True):
             result = scheduler.maybe_start(self.args(dry_run=True, shell_selection="worker"))
 
         project = result["projects"][0]
@@ -399,7 +440,7 @@ class SubconsciousSchedulerTests(unittest.TestCase):
             return 4321
 
         with (
-            patch.dict(os.environ, {"DEEPSEEK_API_KEY": "x"}, clear=True),
+            patch.dict(os.environ, self.external_worker_env(), clear=True),
             patch.object(
                 scheduler,
                 "start_detached",
@@ -429,7 +470,7 @@ class SubconsciousSchedulerTests(unittest.TestCase):
             },
         )
         with (
-            patch.dict(os.environ, {"DEEPSEEK_API_KEY": "x"}, clear=True),
+            patch.dict(os.environ, self.external_worker_env(), clear=True),
             patch.object(
                 scheduler,
                 "start_detached",
@@ -492,7 +533,7 @@ class SubconsciousSchedulerTests(unittest.TestCase):
             results.append(scheduler.maybe_start(self.args(state_file=str(state_file))))
 
         with (
-            patch.dict(os.environ, {"DEEPSEEK_API_KEY": "x"}, clear=True),
+            patch.dict(os.environ, self.external_worker_env(), clear=True),
             patch.object(
                 scheduler,
                 "start_detached",

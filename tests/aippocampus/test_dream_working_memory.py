@@ -55,6 +55,7 @@ class DreamWorkingMemoryTests(unittest.TestCase):
         self.assertEqual(len(rows), 1)
         row = rows[0]
         self.assertEqual(row["candidate_type"], "dream_hypothesis")
+        self.assertEqual(row["trust_domain"], "dream_working_memory")
         self.assertEqual(row["truth_boundary"], "adjudicated_dream_hypothesis_not_fact")
         self.assertEqual(row["foreground_use"]["default_action"], "quiet_substrate")
         self.assertTrue(row["foreground_use"]["strong_claim_requires_source_reopen"])

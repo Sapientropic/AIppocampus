@@ -100,6 +100,25 @@ def _source_refs(value: Any, *, limit: int = 6) -> list[dict[str, Any]]:
     return refs
 
 
+def _verified_origin(row: Mapping[str, Any]) -> bool:
+    """Return whether imported learning material has a verified origin.
+
+    Older in-process learning findings did not carry an origin field, so absence
+    stays compatible. Explicit import/integrity metadata is fail-closed: once a
+    row says it came from an unverified bundle or JSONL, source refs may orient
+    navigation but cannot promote the lesson to source-supported authority.
+    """
+
+    for key in ("verified_origin", "origin_verified", "support_verified"):
+        if key in row:
+            return bool(row.get(key))
+    for key in ("import_origin", "integrity", "origin"):
+        value = row.get(key)
+        if isinstance(value, Mapping) and "verified_origin" in value:
+            return bool(value.get("verified_origin"))
+    return True
+
+
 def _first_string(value: Any, *, limit: int = 160) -> str:
     if isinstance(value, str):
         return _text(value, limit)
@@ -125,11 +144,13 @@ def _source_backed_lesson_to_aippo_row(
     refs = _source_refs(lesson.get("source_refs"))
     if not refs:
         return None
+    verified_origin = _verified_origin(lesson)
     raw_structured = lesson.get("structured_lesson")
     structured: Mapping[str, Any] = raw_structured if isinstance(raw_structured, Mapping) else {}
     scope_values = lesson.get("scope")
     scope_terms = _strings(scope_values, limit=6)
     source_count = int(lesson.get("source_ref_count") or len(refs))
+    source_supported = verified_origin and source_count >= 1
     lesson_id = (
         _text(lesson.get("lesson_id") or lesson.get("candidate_id") or lesson.get("clause_id"), 120)
         or _stable_id("source_lesson_clause", lesson.get("failed_route"), lesson.get("proposed_lesson"))
@@ -167,14 +188,15 @@ def _source_backed_lesson_to_aippo_row(
             limit=8,
         ),
         "allowed_without_reopen_for": ["planning", "patch_shape", "task_ordering"],
-        "support_grade": "source_supported" if source_count >= 1 else "candidate_only",
+        "support_grade": "source_supported" if source_supported else "candidate_only",
+        "support_verified": bool(source_supported),
         "source_refs": refs,
         "source_ref_count": source_count,
         "independent_trail_count": int(lesson.get("independent_trail_count") or min(2, source_count)),
         "support_types": ["source_backed_lesson", "reopen_first"],
         "counter_evidence_ref_count": int(lesson.get("counter_evidence_ref_count") or 0),
-        "path_provenance": "complete" if refs else "gappy",
-        "status": "ripe",
+        "path_provenance": "complete" if source_supported else "unverified_origin",
+        "status": "ripe" if source_supported else "blocked",
         "freshness": str(structured.get("freshness") or lesson.get("freshness") or "current"),
         "review_state": "reviewed",
         "built_at": built_at,
@@ -190,6 +212,8 @@ def _source_backed_lesson_to_aippo_row(
             "navigation_only": True,
             "source_reopen_required_before_claim": True,
             "raw_tool_payload_serialized": False,
+            "origin_verified": verified_origin,
+            "unverified_origin_blocks_source_supported": not verified_origin,
         },
     }
 
@@ -291,6 +315,8 @@ def learning_findings_to_aippo_source_rows(
         status = "stale" if suppression.endswith("_finding_degraded") else "ripe"
         kind = _finding_kind(finding)
         source_count = int(finding.get("source_ref_count") or len(refs))
+        verified_origin = _verified_origin(finding)
+        source_supported = verified_origin and source_count >= 2
         row = {
             "clause_id": _text(finding.get("clause_id"), 120)
             or _stable_id("learned_clause", finding.get("finding_id"), kind),
@@ -322,7 +348,8 @@ def learning_findings_to_aippo_source_rows(
             ),
             "does_not_apply_when": ["unrelated_task", "source_already_visible"],
             "allowed_without_reopen_for": ["low_risk_orientation", "patch_planning"],
-            "support_grade": "source_supported" if source_count >= 2 else "candidate_only",
+            "support_grade": "source_supported" if source_supported else "candidate_only",
+            "support_verified": bool(source_supported),
             "source_refs": refs,
             "source_ref_count": source_count,
             "independent_trail_count": int(
@@ -334,9 +361,9 @@ def learning_findings_to_aippo_source_rows(
                 *(["reopen_first"] if kind in REOPEN_FIRST_FINDINGS else []),
             ],
             "counter_evidence_ref_count": int(finding.get("counter_evidence_ref_count") or 0),
-            "path_provenance": "complete" if source_count >= 2 else "gappy",
-            "status": status,
-            "freshness": "current" if status == "ripe" else "stale",
+            "path_provenance": "complete" if source_supported else "unverified_origin" if not verified_origin else "gappy",
+            "status": status if verified_origin else "blocked",
+            "freshness": "current" if status == "ripe" and verified_origin else "stale",
             "built_at": built_at,
             "last_source_seen_at": _text(finding.get("last_source_seen_at"), 40) or built_at,
             "invalidators": _strings(
@@ -350,6 +377,8 @@ def learning_findings_to_aippo_source_rows(
                 "navigation_only": True,
                 "source_reopen_required_before_claim": True,
                 "raw_tool_payload_serialized": False,
+                "origin_verified": verified_origin,
+                "unverified_origin_blocks_source_supported": not verified_origin,
             },
         }
         rows.append(row)

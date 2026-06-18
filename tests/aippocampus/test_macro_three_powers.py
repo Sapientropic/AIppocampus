@@ -129,7 +129,13 @@ class MacroThreePowersTests(unittest.TestCase):
         )
 
         self.assertTrue(packet["keyword_fallback_used"])
-        self.assertEqual(packet["layer_match_bonus"], 2)
+        self.assertEqual(packet["layer_match_bonus"], 0)
+        self.assertFalse(packet["layer_bias_applied"])
+        self.assertEqual(
+            packet["layer_bias_suppressed_reason"],
+            "keyword_fallback_below_ranking_confidence",
+        )
+        self.assertIn("keyword_fallback_below_ranking_confidence", packet["diagnostics"])
         self.assertEqual(packet["ranked_candidates"][0]["route_id"], "source_backed_tests")
         self.assertIn("keyword_fallback_used", packet["diagnostics"])
 
@@ -143,6 +149,7 @@ class MacroThreePowersTests(unittest.TestCase):
         self.assertEqual(packet["active_layer"], "heaven")
         self.assertFalse(packet["keyword_fallback_used"])
         self.assertEqual(packet["three_powers_layer_profile_source"], "semantic_profile")
+        self.assertTrue(packet["layer_bias_applied"])
         self.assertEqual(packet["ranked_candidates"][0]["route_id"], "route_roadmap")
 
     def test_perturbation_amplitude_controls_layer_aware_fanout(self) -> None:

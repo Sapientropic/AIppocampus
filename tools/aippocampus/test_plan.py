@@ -10,6 +10,8 @@ from typing import Iterable
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
+from test_tier_manifest import TEST_MODULE_CLASSIFICATIONS
+
 
 @dataclass(frozen=True)
 class PlannedCommand:
@@ -46,6 +48,14 @@ def py_command(args: str) -> str:
 def py_script(script: str, args: str = "") -> str:
     suffix = f" {args}" if args else ""
     return f"{python_command()} {script}{suffix}"
+
+
+def modules_with_tag(tag: str) -> list[str]:
+    return sorted(
+        module
+        for module, classification in TEST_MODULE_CLASSIFICATIONS.items()
+        if tag in classification.tags
+    )
 
 
 def _run_git_name_only(args: list[str]) -> list[str]:
@@ -223,16 +233,12 @@ def build_test_plan(changed_files: list[str]) -> dict[str, object]:
         )
 
     if "hooks" in categories:
+        hook_behavior_modules = " ".join(modules_with_tag("hook_behavior"))
         _add_command(
             commands,
             PlannedCommand(
-                command=py_command(
-                    "-m unittest "
-                    "tests.aippocampus.test_prompt_hook_hot_path "
-                    "tests.aippocampus.test_install_prompt_hook "
-                    "tests.aippocampus.test_aippocampus_lifecycle_hook -v"
-                ),
-                reason="Hook edits can affect foreground latency and install behavior.",
+                command=py_command(f"-m unittest {hook_behavior_modules} -v"),
+                reason="Hook edits can affect foreground behavior, anti-nag quietness, and latency.",
                 scope="focused",
             ),
         )

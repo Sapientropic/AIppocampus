@@ -120,14 +120,16 @@ def print_version_help(*, file: TextIO | None = None) -> None:
 
 def print_config_help(*, file: TextIO | None = None) -> None:
     target = sys.stdout if file is None else file
-    print("usage: aippocampus config [--json|--compact-json]", file=target)
+    print("usage: aippocampus config [describe KNOB] [--resolved] [--json|--compact-json]", file=target)
     print("", file=target)
     print("Config recovery card:", file=target)
-    print("  Values are never printed; configured values are reported as presence only.", file=target)
+    print("  Default output lists the readable knob catalog without printing configured values.", file=target)
+    print("  --resolved may print safe non-sensitive values; secrets and local paths stay redacted.", file=target)
     print("  This is the natural shortcut to the safe config doctor, not a second config source.", file=target)
     print("", file=target)
     print("Try:", file=target)
     print("  aippocampus config", file=target)
+    print("  aippocampus config describe AIPPOCAMPUS_PROMPT_HOOK_BUDGET_MS --resolved", file=target)
     print("  aippocampus config --compact-json", file=target)
     print("  aippocampus doctor config --json", file=target)
 

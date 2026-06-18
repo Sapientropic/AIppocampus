@@ -20,7 +20,10 @@ for _path in (
 from aippocampus_runtime.recall import index_builder  # noqa: E402
 from aippocampus_runtime.recall import query_policy as policy  # noqa: E402
 from aippocampus_runtime.recall.query_expansion import plan_query_expansion  # noqa: E402
-from aippocampus_runtime.recall.retrieval import search_hybrid_index  # noqa: E402
+from aippocampus_runtime.recall.retrieval import (  # noqa: E402
+    extract_rag_terms,
+    search_hybrid_index,
+)
 
 
 def _message(*, line: int, text: str) -> dict:
@@ -92,6 +95,21 @@ class RetrievalQueryPolicyTests(unittest.TestCase):
         self.assertNotIn("上次", terms)
         self.assertNotIn("那个", terms)
         self.assertEqual(policy.cjk_query_sidecar_terms("之前 那个 记忆"), [])
+
+    def test_cjk_retrieval_and_query_terms_share_extension_ranges(self) -> None:
+        samples = [
+            "项目㐀名支付接口",
+            "项目𠀀名数据库迁移",
+        ]
+
+        for sample in samples:
+            with self.subTest(sample=sample):
+                rag_terms = extract_rag_terms(sample)
+                query_terms = policy.cjk_query_sidecar_terms(sample)
+
+                self.assertIn(sample, rag_terms)
+                self.assertIn(sample, query_terms)
+                self.assertTrue(any("支付接口" in term or "数据库迁移" in term for term in query_terms))
 
     def test_source_backed_alias_expansion_reaches_candidate_before_topk_truncation(self) -> None:
         alias_rows = [

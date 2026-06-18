@@ -515,6 +515,7 @@ def adjudicated_dream_findings_to_working_memory(
                 "kind": WORKING_MEMORY_KIND,
                 "created_at": now_utc(),
                 "status": "active",
+                "trust_domain": "dream_working_memory",
                 "route": USE_WITH_SOURCE,
                 "ask_policy": ask_policy_for(USE_WITH_SOURCE),
                 "risk": "medium",

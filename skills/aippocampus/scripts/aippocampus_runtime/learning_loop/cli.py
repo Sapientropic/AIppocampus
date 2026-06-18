@@ -16,6 +16,15 @@ from aippocampus_runtime.contracts import (
     foreground_shell_action,
 )
 from aippocampus_runtime.hooks.action_hint_cache import refresh_action_hint_cache
+from aippocampus_runtime.learning_loop.behavioral_records import (
+    behavioral_records,
+)
+from aippocampus_runtime.learning_loop.behavioral_records import (
+    inventory_payload as behavioral_records_inventory_payload,
+)
+from aippocampus_runtime.learning_loop.behavioral_records import (
+    purge_payload as purge_behavioral_records_payload,
+)
 from aippocampus_runtime.learning_loop.dogfood_cases import build_sanitized_repro_package
 from aippocampus_runtime.learning_loop.foreground_lifecycle import (
     preview_cache_bridge_action,
@@ -247,6 +256,23 @@ def discover_history_payload(*, cwd: Path) -> dict[str, Any]:
                 if "learning-loop" in path.parts
                 else "workspace/.aippocampus/clean-source/behavior-events.jsonl",
                 "raw_private_text_loaded": False,
+            }
+        )
+    for row in behavioral_records(root):
+        candidates.append(
+            {
+                "id": row["id"],
+                "label": row["label"],
+                "status": row["status"],
+                "path_label": row["path_label"],
+                "row_count": row["row_count"],
+                "authority": row["authority"],
+                "source_truth": False,
+                "raw_private_text_loaded": False,
+                "purge_command": (
+                    "aippocampus learning purge-behavioral-records "
+                    f"--target {row['id']} --dry-run --json"
+                ),
             }
         )
     setup_actions = _learning_setup_actions()
@@ -922,6 +948,30 @@ def build_parser() -> argparse.ArgumentParser:
     discover.add_argument("--cwd")
     discover.add_argument("--json", action="store_true")
 
+    behavior = sub.add_parser("behavioral-records")
+    behavior.add_argument("--cwd")
+    behavior.add_argument("--json", action="store_true")
+
+    purge_behavior = sub.add_parser("purge-behavioral-records")
+    purge_behavior.add_argument("--cwd")
+    purge_behavior.add_argument(
+        "--target",
+        default="all",
+        choices=[
+            "all",
+            "effectiveness-ledger",
+            "effectiveness_ledger",
+            "recall-outcome-feedback",
+            "recall_outcome_feedback",
+            "route-feedback",
+            "agent-route-feedback",
+            "agent_route_feedback",
+        ],
+    )
+    purge_behavior.add_argument("--dry-run", action="store_true")
+    purge_behavior.add_argument("--confirm", action="store_true")
+    purge_behavior.add_argument("--json", action="store_true")
+
     repro = sub.add_parser(
         "repro-package",
         help="Create a public-safe dogfood repro package from a saved command/output JSON object.",
@@ -951,6 +1001,15 @@ def main(argv: list[str] | None = None) -> int:
             parser.error(str(exc))
     elif args.command == "discover-history":
         payload = discover_history_payload(cwd=_cwd(args.cwd))
+    elif args.command == "behavioral-records":
+        payload = behavioral_records_inventory_payload(cwd=_cwd(args.cwd))
+    elif args.command == "purge-behavioral-records":
+        payload = purge_behavioral_records_payload(
+            cwd=_cwd(args.cwd),
+            target=args.target,
+            dry_run=bool(args.dry_run),
+            confirm=bool(args.confirm),
+        )
     elif args.command == "repro-package":
         if args.template:
             payload = repro_package_template_payload()
