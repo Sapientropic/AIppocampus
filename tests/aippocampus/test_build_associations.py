@@ -157,6 +157,43 @@ class BuildAssociationsTests(unittest.TestCase):
         self.assertTrue(assoc.term_is_noise("阶段的"))
         self.assertTrue(assoc.term_is_noise("体验更像工具"))
 
+    def test_builder_extracts_plain_cjk_project_terms_without_hint_allowlist(self) -> None:
+        con = sqlite3.connect(self.sqlite)
+        try:
+            con.execute(
+                """
+                INSERT INTO messages
+                (id, line, timestamp, role, kind, phase, turn_index, is_final, text)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    5,
+                    14,
+                    "2026-05-25T01:04:00Z",
+                    "assistant",
+                    "message",
+                    "final_answer",
+                    6,
+                    1,
+                    "数据库迁移、支付接口、账单导出都要进入同一条可复开的工程线索。",
+                ),
+            )
+            con.commit()
+        finally:
+            con.close()
+
+        result = assoc.build_associations(self.registry, max_messages_per_thread=50)
+        terms = result["terms"]
+
+        self.assertIn("数据库迁移", terms)
+        self.assertIn("支付接口", terms)
+        self.assertNotIn("阶段的", "\n".join(terms))
+
+        matches = assoc.match_associations("继续检查支付接口和数据库迁移的回归风险", result)
+        matched_terms = {item["term"] for item in matches}
+        self.assertIn("数据库迁移", matched_terms)
+        self.assertIn("支付接口", matched_terms)
+
     def test_ascii_domain_and_repo_terms_emit_component_aliases(self) -> None:
         text = " ".join(
             [

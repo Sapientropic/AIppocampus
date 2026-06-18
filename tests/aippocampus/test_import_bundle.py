@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import subprocess
@@ -85,6 +86,118 @@ class ImportBundleTests(unittest.TestCase):
                 (dest / "imported" / "index" / "versions" / "source_index-current.sqlite").resolve(),
             )
             self.assertTrue(result["privacy_boundary"]["local_paths_included"])
+
+    def test_import_rejects_bundle_with_integrity_hash_mismatch(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            bundle = root / "tampered.zip"
+            dest = root / "workspace"
+            dest.mkdir()
+            expected = hashlib.sha256(b"original").hexdigest()
+            with zipfile.ZipFile(bundle, "w") as zf:
+                zf.writestr(
+                    "bundle_manifest.json",
+                    json.dumps({"message_count": 1}, ensure_ascii=False),
+                )
+                zf.writestr("index/messages.jsonl", b"tampered")
+                zf.writestr(
+                    "bundle_integrity.json",
+                    json.dumps(
+                        {
+                            "schema_version": 1,
+                            "kind": "aippocampus_bundle_integrity",
+                            "files": [
+                                {
+                                    "path": "index/messages.jsonl",
+                                    "size": len(b"tampered"),
+                                    "sha256": expected,
+                                }
+                            ],
+                            "origin": {"verified_origin": False, "checksum_only": True},
+                        },
+                        ensure_ascii=False,
+                    ),
+                )
+
+            proc = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    IMPORT_BUNDLE_MODULE,
+                    str(bundle),
+                    "--dest",
+                    str(dest),
+                    "--name",
+                    "imported",
+                    "--no-anchor",
+                    "--json",
+                ],
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                capture_output=True,
+                check=False,
+                env={
+                    **os.environ,
+                    "PYTHONPATH": str(SCRIPTS)
+                    if not os.environ.get("PYTHONPATH")
+                    else str(SCRIPTS) + os.pathsep + os.environ["PYTHONPATH"],
+                },
+            )
+
+        self.assertEqual(proc.returncode, 2, proc.stdout + proc.stderr)
+        payload = json.loads(proc.stdout)
+        self.assertEqual(payload["error"]["code"], "bundle_integrity_failed")
+        self.assertEqual(payload["integrity"]["verified_origin"], False)
+        self.assertFalse(payload["integrity"]["checksum_verified"])
+
+    def test_import_rejects_integrity_manifest_unlisted_files(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            bundle = root / "extra.zip"
+            dest = root / "workspace"
+            dest.mkdir()
+            manifest_bytes = json.dumps({"message_count": 1}, ensure_ascii=False).encode()
+            messages_bytes = b"{}\n"
+            with zipfile.ZipFile(bundle, "w") as zf:
+                zf.writestr("bundle_manifest.json", manifest_bytes)
+                zf.writestr("index/messages.jsonl", messages_bytes)
+                zf.writestr("extra/unlisted.txt", "not in manifest")
+                zf.writestr(
+                    "bundle_integrity.json",
+                    json.dumps(
+                        {
+                            "schema_version": 1,
+                            "kind": "aippocampus_bundle_integrity",
+                            "file_count": 2,
+                            "files": [
+                                {
+                                    "path": "bundle_manifest.json",
+                                    "size": len(manifest_bytes),
+                                    "sha256": hashlib.sha256(manifest_bytes).hexdigest(),
+                                },
+                                {
+                                    "path": "index/messages.jsonl",
+                                    "size": len(messages_bytes),
+                                    "sha256": hashlib.sha256(messages_bytes).hexdigest(),
+                                },
+                            ],
+                            "origin": {"verified_origin": False, "checksum_only": True},
+                        },
+                        ensure_ascii=False,
+                    ),
+                )
+
+            with patch("sys.stdout", new=StringIO()) as stdout:
+                code = packaged_import_bundle.main(
+                    [str(bundle), "--dest", str(dest), "--name", "imported", "--json"]
+                )
+
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(code, 2)
+        self.assertEqual(payload["error"]["code"], "bundle_integrity_failed")
+        self.assertIn("bundle_integrity_unlisted_file", payload["error"]["message"])
+        self.assertFalse(payload["integrity"]["checksum_verified"])
 
     def test_import_reports_generation_pointer_resolved_current_sqlite(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

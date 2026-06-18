@@ -20,6 +20,7 @@ from typing import Any
 from aippocampus_runtime.core import now_utc
 from aippocampus_runtime.io_mtime_cache import load_json_object
 from aippocampus_runtime.registry.api import load_registry, registry_paths, unique_preserve
+from aippocampus_runtime.text import has_cjk_ideograph, iter_cjk_sequences
 
 ASSOCIATION_SCHEMA_VERSION = 1
 DEFAULT_MAX_MESSAGES_PER_THREAD = 120
@@ -106,6 +107,8 @@ CJK_BOUNDARY_WORDS = [
     "读取",
     "做成",
     "变成",
+    "都要",
+    "同一条",
     "需要",
     "可以",
     "已经",
@@ -240,11 +243,16 @@ def term_is_noise(term: str) -> bool:
         return True
     if low in {"goals", "budget", "remaining", "active", "paused", "complete"}:
         return True
-    if any("\u4e00" <= ch <= "\u9fff" for ch in term) and any(
-        marker in term for marker in CJK_GLUE_NOISE
-    ):
-        return True
-    if len(term) < 3 and not any("\u4e00" <= ch <= "\u9fff" for ch in term):
+    if has_cjk_ideograph(term):
+        if squashed in CJK_GLUE_NOISE:
+            return True
+        if any(squashed.startswith(marker) for marker in ("我们", "你们", "他们", "这个", "那个")):
+            return True
+        if len(squashed) <= 4 and any(squashed.endswith(marker) for marker in ("的", "了")):
+            return True
+        if any(marker in squashed for marker in ("更像", "读取", "做成", "通过")):
+            return True
+    if len(term) < 3 and not has_cjk_ideograph(term):
         return True
     if term.isdigit():
         return True
@@ -284,7 +292,7 @@ def component_aliases(term: str) -> list[str]:
 
 def extract_cjk_terms(text: str) -> list[str]:
     terms: list[str] = []
-    sequences = re.findall(r"[\u4e00-\u9fff]{3,32}", text)
+    sequences = iter_cjk_sequences(text, min_len=3, max_len=48)
     boundary_pattern = "|".join(
         re.escape(word) for word in sorted(CJK_BOUNDARY_WORDS, key=len, reverse=True)
     )
@@ -293,21 +301,29 @@ def extract_cjk_terms(text: str) -> list[str]:
             continue
         for phrase in re.split(boundary_pattern, seq):
             phrase = normalize_term(phrase)
-            if 3 <= len(phrase) <= 12 and any(hint in phrase for hint in DURABLE_CJK_HINTS):
+            if 3 <= len(phrase) <= 12:
                 if not term_is_noise(phrase):
                     terms.append(phrase)
-        for size in range(3, min(8, len(seq)) + 1):
-            for idx in range(0, len(seq) - size + 1):
-                term = seq[idx : idx + size]
-                if not any(hint in term for hint in DURABLE_CJK_HINTS):
-                    continue
-                if not term_is_noise(term):
-                    terms.append(term)
+            if len(phrase) > 12:
+                # Long Chinese clauses need one useful handle, not every
+                # possible n-gram. Keep durable hints as a ranking/selection
+                # aid by opening a small local window around them, so the
+                # association map stays sparse while still preserving phrases
+                # like "进入被动联想范围" from clean-source fallback rows.
+                for hint in DURABLE_CJK_HINTS:
+                    index = phrase.find(hint)
+                    if index < 0:
+                        continue
+                    start = max(0, index - 4)
+                    end = min(len(phrase), index + len(hint) + 2)
+                    term = normalize_term(phrase[start:end])
+                    if 3 <= len(term) <= 12 and not term_is_noise(term):
+                        terms.append(term)
     return terms
 
 
 def term_rank(term: str) -> tuple[int, int, str]:
-    cjk_bonus = 3 if any("\u4e00" <= ch <= "\u9fff" for ch in term) else 0
+    cjk_bonus = 3 if has_cjk_ideograph(term) else 0
     durable_bonus = 4 if any(hint in term for hint in DURABLE_CJK_HINTS) else 0
     tech_bonus = 2 if re.search(r"[A-Z][A-Za-z]+|[._-]", term) else 0
     return (durable_bonus + tech_bonus + cjk_bonus, min(len(term), 24), term.casefold())
@@ -586,7 +602,7 @@ def term_in_text(
     term = normalize_term(term)
     if not term:
         return False
-    if any("\u4e00" <= ch <= "\u9fff" for ch in term):
+    if has_cjk_ideograph(term):
         return term in text
     if ascii_term_is_simple(term):
         tokens = ascii_tokens if ascii_tokens is not None else ascii_tokens_for_match(text)

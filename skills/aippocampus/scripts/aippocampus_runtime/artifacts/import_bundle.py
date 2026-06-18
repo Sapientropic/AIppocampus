@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime import core
 from aippocampus_runtime.artifacts.publish import (
     index_pointer_path,
     resolve_sqlite_index_path,
@@ -20,6 +21,8 @@ from aippocampus_runtime.privacy import (
     redact_private_paths,
     redact_sensitive_values,
 )
+
+BUNDLE_INTEGRITY_NAME = "bundle_integrity.json"
 
 
 def timestamp_slug() -> str:
@@ -71,6 +74,66 @@ def safe_extract(zip_file: zipfile.ZipFile, extract_dir: Path) -> None:
     zip_file.extractall(root)
 
 
+def verify_bundle_integrity(extract_dir: Path) -> dict[str, Any]:
+    integrity_path = extract_dir / BUNDLE_INTEGRITY_NAME
+    if not integrity_path.exists():
+        return {
+            "status": "missing_integrity_manifest",
+            "checksum_verified": False,
+            "verified_origin": False,
+            "boundary": "legacy or unsigned bundle; imported bytes are not promoted to source authority",
+        }
+    try:
+        manifest = json.loads(integrity_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError("bundle_integrity_invalid_json") from exc
+    files = manifest.get("files")
+    if not isinstance(files, list):
+        raise ValueError("bundle_integrity_missing_files")
+    root = extract_dir.resolve()
+    checked = 0
+    expected_paths: set[str] = set()
+    for entry in files:
+        if not isinstance(entry, dict):
+            raise ValueError("bundle_integrity_invalid_file_entry")
+        rel = str(entry.get("path") or "").replace("\\", "/")
+        member = Path(rel)
+        if not rel or member.is_absolute() or ".." in member.parts:
+            raise ValueError("bundle_integrity_unsafe_path")
+        target = (root / member).resolve()
+        if target != root and root not in target.parents:
+            raise ValueError("bundle_integrity_unsafe_path")
+        if not target.is_file():
+            raise ValueError(f"bundle_integrity_missing_file:{rel}")
+        expected_size = entry.get("size")
+        if isinstance(expected_size, int) and target.stat().st_size != expected_size:
+            raise ValueError(f"bundle_integrity_size_mismatch:{rel}")
+        expected_sha = str(entry.get("sha256") or "")
+        if expected_sha and core.file_sha256(target) != expected_sha:
+            raise ValueError(f"bundle_integrity_hash_mismatch:{rel}")
+        expected_paths.add(rel)
+        checked += 1
+    actual_paths = {
+        path.resolve().relative_to(root).as_posix()
+        for path in root.rglob("*")
+        if path.is_file() and path.name != BUNDLE_INTEGRITY_NAME
+    }
+    unlisted = sorted(actual_paths - expected_paths)
+    if unlisted:
+        raise ValueError(f"bundle_integrity_unlisted_file:{unlisted[0]}")
+    if manifest.get("file_count") not in {None, checked}:
+        raise ValueError("bundle_integrity_file_count_mismatch")
+    origin = manifest.get("origin") if isinstance(manifest.get("origin"), dict) else {}
+    return {
+        "status": "checksum_verified",
+        "checksum_verified": True,
+        "verified_origin": bool(origin.get("verified_origin")),
+        "signature_verified": bool(origin.get("signature_verified")),
+        "file_count": checked,
+        "boundary": "checksum verifies bundle bytes only; unsigned imports do not become source authority",
+    }
+
+
 def import_bundle(args: argparse.Namespace) -> dict[str, Any]:
     bundle = Path(args.bundle).resolve()
     if not bundle.is_file():
@@ -82,6 +145,7 @@ def import_bundle(args: argparse.Namespace) -> dict[str, Any]:
 
     with zipfile.ZipFile(bundle, "r") as zf:
         safe_extract(zf, extract_dir)
+    integrity = verify_bundle_integrity(extract_dir)
 
     manifest_path = extract_dir / "bundle_manifest.json"
     manifest: dict[str, Any] = {}
@@ -110,6 +174,7 @@ def import_bundle(args: argparse.Namespace) -> dict[str, Any]:
         "message_count": manifest.get("message_count"),
         "raw_rollout_included": manifest.get("raw_rollout_included"),
         "redaction_profile": manifest.get("redaction_profile"),
+        "integrity": integrity,
     }
 
 
@@ -136,6 +201,7 @@ def _public_import_projection(payload: dict[str, Any], *, include_private_paths:
                 "anchor_written": anchor_written,
                 "redaction_profile": payload.get("redaction_profile"),
                 "raw_rollout_included": bool(payload.get("raw_rollout_included")),
+                "integrity": payload.get("integrity"),
                 "next_command": 'aippocampus search "keyword" --clean-source-dir <imported-index-folder> --json',
                 "no_anchor_command": "aippocampus import <bundle.zip> --dest <folder> --no-anchor",
             },
@@ -305,6 +371,27 @@ def main(argv: list[str] | None = None) -> int:
                 "message": message,
                 "bundle_label": Path(str(args.bundle)).name,
                 "next_command": "aippocampus import <existing-bundle.zip> --dest <folder>",
+            },
+            "privacy_boundary": {
+                "local_paths_included": False,
+                "path_redaction": LOCAL_PATH_REDACTION,
+            },
+        }
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        return 2
+    except ValueError as exc:
+        payload = {
+            "ok": False,
+            "kind": "aippocampus_bundle_import_summary",
+            "error": {
+                "code": "bundle_integrity_failed",
+                "message": str(redact_private_paths(str(exc))),
+                "bundle_label": Path(str(args.bundle)).name,
+            },
+            "integrity": {
+                "status": "failed",
+                "verified_origin": False,
+                "checksum_verified": False,
             },
             "privacy_boundary": {
                 "local_paths_included": False,

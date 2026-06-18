@@ -21,6 +21,7 @@ from aippocampus_runtime.recall import index_builder
 PUBLIC_NO_RAW_PROFILES = {"public-export", "public-metadata"}
 PUBLIC_METADATA_PROFILES = {"public-export", "public-metadata"}
 ALLOWED_REDACTION_PROFILES = ["raw-private", "redacted-local", "public-export", "public-metadata"]
+BUNDLE_INTEGRITY_NAME = "bundle_integrity.json"
 PRIVATE_EXPORT_COMMAND = (
     "aippocampus export --redaction-profile raw-private --output {output_path} --json"
 )
@@ -313,6 +314,37 @@ def _strip_public_metadata_index(
     )
 
 
+def _relative_bundle_path(path: Path, bundle_root: Path) -> str:
+    return path.resolve().relative_to(bundle_root.resolve()).as_posix()
+
+
+def build_bundle_integrity_manifest(bundle_root: Path) -> dict[str, Any]:
+    files: list[dict[str, Any]] = []
+    for file in sorted(bundle_root.rglob("*")):
+        if not file.is_file() or file.name == BUNDLE_INTEGRITY_NAME:
+            continue
+        files.append(
+            {
+                "path": _relative_bundle_path(file, bundle_root),
+                "size": file.stat().st_size,
+                "sha256": core.file_sha256(file),
+            }
+        )
+    return {
+        "schema_version": 1,
+        "kind": "aippocampus_bundle_integrity",
+        "algorithm": "sha256",
+        "file_count": len(files),
+        "files": files,
+        "origin": {
+            "verified_origin": False,
+            "signature": None,
+            "checksum_only": True,
+            "boundary": "checksum verifies bundle bytes only; it does not make imported rows source truth",
+        },
+    }
+
+
 def export_bundle(args: argparse.Namespace) -> dict[str, Any]:
     cwd = Path(args.cwd).resolve()
     redaction_profile = str(getattr(args, "redaction_profile", "raw-private") or "raw-private")
@@ -400,8 +432,18 @@ def export_bundle(args: argparse.Namespace) -> dict[str, Any]:
         if redaction_profile in PUBLIC_METADATA_PROFILES
         else "index/source_index.sqlite",
     }
+    bundle_manifest["behavioral_records"] = {
+        "effectiveness_ledger_included": False,
+        "recall_outcome_feedback_included": False,
+        "agent_route_feedback_included": False,
+        "default_export_policy": "local_behavioral_records_not_exported_by_default",
+    }
     (bundle_root / "bundle_manifest.json").write_text(
         json.dumps(bundle_manifest, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    (bundle_root / BUNDLE_INTEGRITY_NAME).write_text(
+        json.dumps(build_bundle_integrity_manifest(bundle_root), ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
 

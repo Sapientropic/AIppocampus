@@ -312,6 +312,18 @@ class ExportBundleTests(unittest.TestCase):
             self.assertNotIn("index/source_index.sqlite", names)
             self.assertNotIn("index/source_index.pointer.json", names)
             self.assertIn("index/search_index_omitted.json", names)
+            self.assertIn("bundle_integrity.json", names)
+            integrity = json.loads((bundle_root / "bundle_integrity.json").read_text(encoding="utf-8"))
+            integrity_paths = {entry["path"] for entry in integrity["files"]}
+            self.assertEqual(integrity["kind"], "aippocampus_bundle_integrity")
+            self.assertIn("bundle_manifest.json", integrity_paths)
+            self.assertFalse(integrity["origin"]["verified_origin"])
+            self.assertTrue(integrity["origin"]["checksum_only"])
+            manifest = json.loads(bundle_manifest)
+            self.assertEqual(
+                manifest["behavioral_records"]["default_export_policy"],
+                "local_behavioral_records_not_exported_by_default",
+            )
             self.assertTrue(
                 all(
                     str(row["source_ref"]).startswith("source_hash:")

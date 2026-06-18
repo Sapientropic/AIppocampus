@@ -580,11 +580,26 @@ def maybe_start(args: argparse.Namespace) -> dict[str, Any]:
     if hook_env is None:
         # Keep the old misspelled knob as a compatibility fallback only; the
         # public prefix is AIPPOCAMPUS_* and should be the one documented/used.
-        hook_env = os.environ.get("AIIPPOCAMPUS_SUBCONSCIOUS_HOOK", "1")
-    if hook_env.lower() in {"0", "false", "off", "no"}:
+        hook_env = os.environ.get("AIIPPOCAMPUS_SUBCONSCIOUS_HOOK")
+    hook_token = str(hook_env or "").strip().lower()
+    if hook_token in {"0", "false", "off", "no", "disabled"}:
         return {"started": False, "skipped": "disabled_by_env", "projects": []}
+    if hook_token not in {"1", "true", "on", "yes", "enabled"}:
+        return {
+            "started": False,
+            "skipped": "subconscious_hook_consent_required",
+            "projects": [],
+            "consent": {
+                "required_env": "AIPPOCAMPUS_SUBCONSCIOUS_HOOK",
+                "legacy_env": "AIIPPOCAMPUS_SUBCONSCIOUS_HOOK",
+                "accepted_values": ["1", "true", "on", "yes", "enabled"],
+            },
+        }
     resolved_api_key_env = resolved_scheduler_api_key_env(args.api_key_env)
-    worker_mode = resolve_cognitive_worker_mode(api_key_env=resolved_api_key_env)
+    worker_mode = resolve_cognitive_worker_mode(
+        api_key_env=resolved_api_key_env,
+        require_background_model_consent=True,
+    )
     resolved_worker_mode = str(worker_mode.get("resolved_mode") or "")
     if resolved_worker_mode == "off":
         return {
@@ -594,6 +609,13 @@ def maybe_start(args: argparse.Namespace) -> dict[str, Any]:
             "cognitive_worker": worker_mode,
         }
     if resolved_worker_mode == "deterministic_only":
+        if worker_mode.get("status") == "background_model_consent_required":
+            return {
+                "started": False,
+                "skipped": "background_model_consent_required",
+                "projects": [],
+                "cognitive_worker": worker_mode,
+            }
         skipped = (
             "deterministic_only_by_env"
             if worker_mode.get("status") == "deterministic_only_by_env"

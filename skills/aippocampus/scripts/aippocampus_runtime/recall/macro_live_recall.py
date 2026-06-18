@@ -401,5 +401,9 @@ def apply_recall_bias(
         "macro_wrong_layer_route_count": wrong_layer_count,
         "macro_recheck_trigger_count": len(recheck_triggers(context)),
         "macro_reason_code_count": len(diagnostics["reason_codes"]),
+        "macro_layer_bias_applied": bool(fanout_result.get("layer_bias_applied")),
+        "macro_layer_bias_suppressed_reason": str(
+            fanout_result.get("layer_bias_suppressed_reason") or ""
+        ),
     }
     return enriched, diagnostics, metrics

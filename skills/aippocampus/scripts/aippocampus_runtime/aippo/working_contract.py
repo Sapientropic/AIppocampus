@@ -132,10 +132,16 @@ def _source_refs(value: Any) -> list[dict[str, Any]]:
 
 def _support(row: Mapping[str, Any], refs: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     support_grade = _text(row.get("support_grade"), 80) or "candidate_only"
-    counter = int(row.get("counter_evidence_ref_count") or 0)
     path_provenance = _text(row.get("path_provenance"), 80) or "none"
+    support_verified = (
+        bool(row.get("support_verified"))
+        if "support_verified" in row
+        else path_provenance != "unverified_origin"
+    )
+    counter = int(row.get("counter_evidence_ref_count") or 0)
     return {
         "support_grade": support_grade,
+        "support_verified": support_verified,
         "source_ref_count": len(refs),
         "independent_trail_count": int(row.get("independent_trail_count") or 0),
         "support_types": _strings(row.get("support_types"), limit=8),
@@ -150,6 +156,7 @@ def _lifecycle_status(row: Mapping[str, Any], support: Mapping[str, Any]) -> str
         return requested
     if (
         support.get("support_grade") == "source_supported"
+        and bool(support.get("support_verified"))
         and int(support.get("source_ref_count") or 0) > 0
         and int(support.get("counter_evidence_ref_count") or 0) == 0
         and support.get("path_provenance") != "gappy"
@@ -176,6 +183,10 @@ def _clause_from_row(row: Mapping[str, Any]) -> dict[str, Any]:
     support = _support(row, refs)
     status = _lifecycle_status(row, support)
     review_state = _review_state(status, row, support)
+    source_authority = (
+        support.get("support_grade") == "source_supported"
+        and bool(support.get("support_verified"))
+    )
     authority_surface = authority.with_trust_fields(
         {
             "support_level": "source_required" if refs else "candidate",
@@ -227,7 +238,7 @@ def _clause_from_row(row: Mapping[str, Any]) -> dict[str, Any]:
         ),
         "source_refs": refs,
         "authority": {
-            "class": "truth_source" if support.get("support_grade") == "source_supported" else "candidate_only",
+            "class": "truth_source" if source_authority else "candidate_only",
             "candidate_inputs_are_truth": False,
             "trust_level": authority_surface.get("trust_level"),
             "action_grammar": authority_surface.get("action_grammar"),

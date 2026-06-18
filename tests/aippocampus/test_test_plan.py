@@ -56,6 +56,7 @@ class ChangedSurfaceTestPlanTests(unittest.TestCase):
         )
 
         self.assertTrue(any("test_prompt_hook_hot_path" in command for command in commands))
+        self.assertTrue(any("test_prompt_hook_anti_nag_behavior" in command for command in commands))
         self.assertIn(py_script("tools/aippocampus/run_tests.py", "--tier pr"), commands)
 
     def test_mcp_change_recommends_mcp_contract_and_pr_gate(self) -> None:

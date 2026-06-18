@@ -46,6 +46,7 @@ from aippocampus_runtime.recall.retrieval import (
 from aippocampus_runtime.registry.api import load_registry as load_thread_registry
 from aippocampus_runtime.registry.api import registry_paths
 from aippocampus_runtime.source.search import iter_clean_messages
+from aippocampus_runtime.text import cjk_ideograph_count
 from benchmarks.aippocampus.shared.benchmark_entrypoints import (  # noqa: E402
     json_report_exit_code,
 )
@@ -197,7 +198,7 @@ def cjk_chunks(text: str) -> list[str]:
         segment = re.sub(r"\s+", " ", segment).strip()
         if len(segment) < MIN_QUERY_CHARS:
             continue
-        cjk_count = len(re.findall(r"[\u3400-\u9fff]", segment))
+        cjk_count = cjk_ideograph_count(segment)
         if cjk_count < 4:
             continue
         if looks_sensitive(segment):
@@ -230,7 +231,7 @@ def query_from_text(text: str) -> str | None:
 
 
 def normalized_recall_query(query: str) -> str | None:
-    cjk_count = len(re.findall(r"[\u3400-\u9fff]", query))
+    cjk_count = cjk_ideograph_count(query)
     if cjk_count < 4:
         return None
     normalized = re.sub(r"\s+", "", query)
@@ -387,6 +388,20 @@ def public_cjk_fixture_messages() -> list[dict[str, Any]]:
             "final_answer",
             "Graphify 中文路线要走 source reopen，不把图节点当事实。",
         ),
+        (
+            "cjk-plain-project-terms",
+            80,
+            "assistant",
+            "final_answer",
+            "数据库迁移和支付接口要作为普通中文工程线索被召回。",
+        ),
+        (
+            "cjk-extension-ideographs",
+            90,
+            "assistant",
+            "final_answer",
+            "项目㐀名支付接口和项目𠀀名数据库迁移都应该保持同一套中文片段处理。",
+        ),
     ]
     return [
         {
@@ -463,6 +478,22 @@ def public_cjk_fixture_cases() -> list[PublicCjkFixtureCase]:
             expected_message_id="cjk-mixed-project-symbol",
             expected_line_start=70,
             expected_line_end=70,
+        ),
+        PublicCjkFixtureCase(
+            case_id="plain-cjk-project-terms",
+            case_type="plain_cjk_project_terms",
+            query="支付接口 数据库迁移",
+            expected_message_id="cjk-plain-project-terms",
+            expected_line_start=80,
+            expected_line_end=80,
+        ),
+        PublicCjkFixtureCase(
+            case_id="cjk-extension-ideograph-cues",
+            case_type="cjk_extension_ideographs",
+            query="项目㐀名支付接口 项目𠀀名数据库迁移",
+            expected_message_id="cjk-extension-ideographs",
+            expected_line_start=90,
+            expected_line_end=90,
         ),
         PublicCjkFixtureCase(
             case_id="generic-deictic-negative",

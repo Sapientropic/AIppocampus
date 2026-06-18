@@ -35,6 +35,7 @@ PROVIDER_ENV_NAMES = [
     "AIPPOCAMPUS_OPENAI_COMPAT_BASE_URL",
     "AIPPOCAMPUS_OPENAI_COMPAT_API_KEY_ENV",
     "AIPPOCAMPUS_COGNITIVE_WORKER_MODE",
+    "AIPPOCAMPUS_BACKGROUND_MODEL_CONSENT",
     "AIPPOCAMPUS_AGENT_FALLBACK_AVAILABLE",
 ]
 DOTENV_PROVIDER_ENV_VAR = "PROVIDER_DOCTOR_TEST_VALUE"
@@ -159,6 +160,15 @@ class ProviderDoctorTests(unittest.TestCase):
         self.assertTrue(report["provider_env"]["visible_in_child_process"])
         self.assertTrue(report["hook_relevance"]["semantic_gate_enabled_for_route"])
         self.assertEqual(report["cognitive_worker"]["status"], "external_model_active")
+        self.assertEqual(
+            report["background_model_consent"]["status"],
+            "background_model_consent_required",
+        )
+        self.assertTrue(report["background_model_consent"]["provider_key_is_not_consent"])
+        self.assertEqual(
+            report["background_model_consent"]["required_env"],
+            "AIPPOCAMPUS_BACKGROUND_MODEL_CONSENT",
+        )
         self.assertFalse(report["hook_relevance"]["actual_installed_hook_process_checked"])
         self.assertEqual(
             report["recommended_actions"][0]["id"],

@@ -56,6 +56,7 @@ from aippocampus_runtime.recall.structure_time import (
 from aippocampus_runtime.recall.structure_time import (
     parse_temporal_cue as parse_temporal_cue,
 )
+from aippocampus_runtime.text import cjk_ngrams, iter_cjk_sequences
 
 
 def sqlite_has_table(con: sqlite3.Connection, name: str) -> bool:
@@ -209,13 +210,10 @@ def extract_rag_terms(text: str, limit: int = 80) -> dict[str, int]:
         if token not in STOP_TERMS and len(token) >= 2:
             terms.append(token)
 
-    for chunk in re.findall(r"[\u4e00-\u9fff]{2,}", text):
+    for chunk in iter_cjk_sequences(text, min_len=2, max_len=32):
         if len(chunk) <= 12:
             terms.append(chunk)
-        for n in (2, 3, 4):
-            if len(chunk) < n:
-                continue
-            terms.extend(chunk[i : i + n] for i in range(0, len(chunk) - n + 1))
+        terms.extend(cjk_ngrams(chunk, sizes=(2, 3, 4)))
 
     counts = Counter(term for term in terms if normalize_term(term))
     ranked = sorted(

@@ -23,7 +23,10 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from aippocampus_runtime.cognitive_worker_mode import resolve_cognitive_worker_mode
+from aippocampus_runtime.cognitive_worker_mode import (
+    BACKGROUND_MODEL_CONSENT_ENV,
+    resolve_cognitive_worker_mode,
+)
 from aippocampus_runtime.contracts import (
     canonical_foreground_action_fields,
     foreground_shell_action,
@@ -334,6 +337,11 @@ def build_provider_doctor_report(
         api_key_env=resolved_provider_env_var,
         provider_key_visible=current_visible,
     )
+    background_worker = resolve_cognitive_worker_mode(
+        api_key_env=resolved_provider_env_var,
+        provider_key_visible=current_visible,
+        require_background_model_consent=True,
+    )
     child_visibility = (
         _child_process_env_visibility(resolved_provider_env_var)
         if check_child_process and resolved_provider_env_var
@@ -367,6 +375,14 @@ def build_provider_doctor_report(
         },
         "legacy_aliases": legacy_aliases,
         "cognitive_worker": cognitive_worker,
+        "background_model_consent": {
+            "required_env": BACKGROUND_MODEL_CONSENT_ENV,
+            "consent": bool(background_worker.get("background_model_consent")),
+            "provider_key_is_not_consent": True,
+            "resolved_background_mode": background_worker.get("resolved_mode"),
+            "status": background_worker.get("status"),
+            "reason": background_worker.get("reason"),
+        },
         "hook_relevance": {
             "prompt_hook_reads_process_env": True,
             "does_not_read_dotenv_or_credential_store": True,
@@ -447,6 +463,13 @@ def render_text(report: dict[str, Any]) -> str:
     cognitive_worker = _as_dict(report.get("cognitive_worker"))
     if cognitive_worker:
         lines.append(f"- Cognitive worker mode: {cognitive_worker.get('status', 'unknown')}")
+    background_consent = _as_dict(report.get("background_model_consent"))
+    if background_consent:
+        lines.append(
+            "- Background model consent: "
+            f"{background_consent.get('status', 'unknown')} "
+            f"(env {background_consent.get('required_env', BACKGROUND_MODEL_CONSENT_ENV)})"
+        )
     hook_relevance = _as_dict(report.get("hook_relevance"))
     if hook_relevance and not hook_relevance.get("actual_installed_hook_process_checked"):
         lines.extend(
@@ -481,9 +504,23 @@ def render_config_text(report: dict[str, Any]) -> str:
         f"- Warnings: {len(report.get('warnings') or [])}",
         "- Cannot claim: config presence does not validate secret values or provider connectivity",
         "- Privacy: values are not printed; configured values are presence-only",
+        "- Knob catalog:",
+    ]
+    for item in knobs:
+        if not isinstance(item, dict):
+            continue
+        note = str(item.get("notes") or "")
+        note_part = f" note={note}" if note else ""
+        lines.append(
+            f"  - {item.get('name')} surface={item.get('surface')} "
+            f"default={item.get('default')} source={item.get('source')}{note_part}"
+        )
+    lines.extend(
+        [
         "- Next: use `aippocampus doctor provider` when you need provider/key connectivity readiness.",
         "",
-    ]
+        ]
+    )
     if cannot_claim:
         lines.append("- Detail: " + ", ".join(str(item) for item in cannot_claim[:3]))
         lines.append("")
@@ -611,12 +648,14 @@ def main(argv: list[str] | None = None) -> int:
     )
     config_parser = subparsers.add_parser(
         "config",
-        usage="aippocampus doctor config [--json] [--detail compact|full] [--operator-json]",
+        usage="aippocampus doctor config [describe KNOB] [--resolved] [--json] [--detail compact|full] [--operator-json]",
         help="Report registered AIPPOCAMPUS_* configuration without printing values.",
         description=(
             "Config doctor answers: which AIppocampus configuration knobs are "
             "known/configured without revealing their values?\n\n"
             "Normal examples:\n"
+            "  aippocampus doctor config\n"
+            "  aippocampus doctor config describe AIPPOCAMPUS_PROMPT_HOOK_BUDGET_MS --resolved\n"
             "  aippocampus doctor config --json\n"
             "  aippocampus doctor config --detail full --json\n"
             "  aippocampus doctor config --operator-json"
@@ -628,6 +667,9 @@ def main(argv: list[str] | None = None) -> int:
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
+    config_parser.add_argument("config_command", nargs="?", default="report", choices=("report", "describe"))
+    config_parser.add_argument("knob", nargs="?")
+    config_parser.add_argument("--resolved", action="store_true", help="Include non-sensitive resolved values.")
     config_parser.add_argument("--json", action="store_true", dest="json_output")
     config_parser.add_argument(
         "--detail",
@@ -697,7 +739,33 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "config":
         from aippocampus_runtime.config import registry as config_registry  # noqa: PLC0415
 
-        report = config_registry.config_report()
+        if args.config_command == "describe":
+            if not args.knob:
+                config_parser.error("config describe requires a knob name")
+            detail = config_registry.config_knob_detail_report(
+                args.knob,
+                include_resolved=args.resolved,
+            )
+            if args.json_output or args.operator_json:
+                print(json.dumps(detail, ensure_ascii=False, indent=2))
+            else:
+                knob = _as_dict(detail.get("knob"))
+                if not detail.get("ok"):
+                    print("AIppocampus config doctor")
+                    print(f"- Unknown knob: {detail.get('name')}")
+                else:
+                    print("AIppocampus config doctor")
+                    print(f"- Knob: {knob.get('name')}")
+                    print(f"- Surface: {knob.get('surface')}")
+                    print(f"- Default: {knob.get('default')}")
+                    print(f"- Source: {knob.get('source')}")
+                    if args.resolved:
+                        print(f"- Resolved: {knob.get('resolved_value', '')}")
+                    if knob.get("notes"):
+                        print(f"- Notes: {knob.get('notes')}")
+            return 0 if detail.get("ok") else 2
+
+        report = config_registry.config_report(include_resolved=args.resolved)
         full_detail_json = bool(args.operator_json or args.detail == "full")
         if args.summary_json:
             print(json.dumps(config_registry.config_summary_report(report), ensure_ascii=False))

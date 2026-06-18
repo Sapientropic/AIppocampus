@@ -299,6 +299,15 @@ class DreamSleepCycleTests(unittest.TestCase):
         self.assertEqual(len(finding_rows), 1)
         self.assertFalse(working_memory_path.exists())
 
+    def test_default_write_output_uses_dream_working_memory_trust_domain_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+
+            self.assertEqual(
+                dream_sleep_cycle.default_dream_working_memory_output(root, None),
+                root / "dream_working_memory.jsonl",
+            )
+
     def test_sleep_cycle_can_publish_reader_safe_working_memory_snapshot(self) -> None:
         def fake_model_call(messages: list[dict[str, str]], call_config: ChatClientConfig) -> dict[str, object]:
             del call_config

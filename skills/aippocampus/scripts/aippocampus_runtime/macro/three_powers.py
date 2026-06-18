@@ -16,6 +16,7 @@ LayerOrUnknown: TypeAlias = Literal["earth", "human", "heaven", "unknown"]
 AUTHORITY_LEVEL = "navigation_only"
 CLAIM_PERMISSION = "no_claim_before_reopen"
 SCHEMA_VERSION = 1
+MIN_RANKING_CONFIDENCE = 0.5
 
 _LAYERS: tuple[Layer, ...] = ("earth", "human", "heaven")
 _LAYER_LABELS: dict[LayerOrUnknown, str] = {
@@ -430,9 +431,19 @@ def apply_three_powers_fanout(
     else:
         normalized_layer = normalize_layer(layer_value)
     profile_source = str(layer_profile.get("source") or "")
+    raw_confidence = layer_profile.get("confidence")
+    if isinstance(raw_confidence, int | float | str):
+        profile_confidence = float(raw_confidence or 0.0)
+    else:
+        profile_confidence = 0.0
+    bias_suppressed_reason = ""
     layer_match_bonus = 100 if profile_source == "explicit" else 40
     if profile_source == "keyword_fallback":
-        layer_match_bonus = 2
+        if profile_confidence < MIN_RANKING_CONFIDENCE:
+            layer_match_bonus = 0
+            bias_suppressed_reason = "keyword_fallback_below_ranking_confidence"
+        else:
+            layer_match_bonus = 2
     if normalized_layer == "unknown":
         layer_match_bonus = 0
     projected = [
@@ -494,6 +505,8 @@ def apply_three_powers_fanout(
             f"parallel_derivation_{code}"
             for code in preflattening_gate.get("reason_codes") or []
         )
+    if bias_suppressed_reason:
+        diagnostics.append(bias_suppressed_reason)
     return {
         "kind": "macro_three_powers_route_fanout",
         "schema_version": SCHEMA_VERSION,
@@ -503,6 +516,9 @@ def apply_three_powers_fanout(
         "keyword_fallback_used": bool(layer_profile.get("keyword_fallback_used")),
         "semantic_profile_absent": bool(layer_profile.get("semantic_profile_absent")),
         "layer_match_bonus": layer_match_bonus,
+        "layer_bias_applied": layer_match_bonus > 0,
+        "layer_bias_suppressed_reason": bias_suppressed_reason,
+        "minimum_ranking_confidence": MIN_RANKING_CONFIDENCE,
         "layer_profile": layer_profile,
         "ranked_candidates": ranked,
         "selected_route_ids": [str(candidate["route_id"]) for candidate in selected],
