@@ -98,6 +98,7 @@ def _json_default(value: Any) -> str:
 
 
 def _emit_json(payload: Any) -> None:
+    # codeql[py/clear-text-logging-sensitive-data] update JSON is a local operator channel and must preserve rollback paths; payload builders own redaction for public fields.
     print(json.dumps(payload, ensure_ascii=False, indent=2, default=_json_default))
 
 
