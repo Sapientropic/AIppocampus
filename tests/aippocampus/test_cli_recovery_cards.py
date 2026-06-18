@@ -5,8 +5,11 @@ import os
 import subprocess
 import sys
 import tempfile
+import types
 import unittest
+from contextlib import redirect_stderr, redirect_stdout
 from datetime import datetime, timezone
+from io import StringIO
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -15,6 +18,9 @@ sys.path.insert(0, str(SCRIPTS))
 
 from aippocampus_runtime.cli import facade  # noqa: E402
 from aippocampus_runtime.contracts import executable_command_violations  # noqa: E402
+from aippocampus_runtime.recall.agent_continuity_cli_support import (
+    render_recall_human,  # noqa: E402
+)
 
 
 class AippocampusCliRecoveryCardTests(unittest.TestCase):
@@ -739,9 +745,162 @@ class AippocampusCliRecoveryCardTests(unittest.TestCase):
 
                 self.assertEqual(proc.returncode, 2)
                 self.assertNotIn("Traceback", proc.stdout + proc.stderr)
-                self.assertIn("no write happened", proc.stdout.casefold())
-                self.assertIn(code, proc.stdout)
-                self.assertIn(command, proc.stdout)
+                self.assertEqual(proc.stdout, "")
+                self.assertIn("no write happened", proc.stderr.casefold())
+                self.assertIn(code, proc.stderr)
+                self.assertIn(command, proc.stderr)
+
+    def test_update_missing_subcommand_recovery_is_stderr_diagnostic(self) -> None:
+        proc = self.run_cli("update")
+
+        self.assertEqual(proc.returncode, 2)
+        self.assertEqual(proc.stdout, "")
+        self.assertIn("AIppocampus update recovery card", proc.stderr)
+        self.assertIn("Try: aippocampus update status --json", proc.stderr)
+        self.assertNotIn("Traceback", proc.stderr)
+
+    def test_agent_recall_plain_missing_cue_is_stderr_without_traceback(self) -> None:
+        proc = self.run_cli("agent", "recall")
+
+        self.assertEqual(proc.returncode, 2)
+        self.assertEqual(proc.stdout, "")
+        self.assertIn("AIppocampus agent recall: cue required", proc.stderr)
+        self.assertIn("Try:", proc.stderr)
+        self.assertNotIn("Traceback", proc.stderr)
+
+    def test_agent_recall_bad_registry_returns_error_card_not_traceback(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            registry = Path(tmp) / "registry"
+            registry.mkdir()
+            (registry / "threads.json").write_text("{bad json", encoding="utf-8")
+            proc = self.run_cli(
+                "agent",
+                "recall",
+                "old cue",
+                "--registry-dir",
+                str(registry),
+                "--json",
+            )
+
+        raw = proc.stdout + proc.stderr
+        self.assertEqual(proc.returncode, 2)
+        self.assertNotIn("Traceback", raw)
+        self.assertNotIn(str(registry), raw)
+        payload = json.loads(proc.stdout)
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["error"]["code"], "invalid_json")
+        self.assertEqual(payload["error"]["class"], "validation_error")
+        self.assertIn("safe_next_actions", payload)
+
+    def test_facade_unhandled_json_exception_returns_recovery_card(self) -> None:
+        module_name = "aippocampus_runtime._test_unhandled_cli_error"
+        fake_module = types.ModuleType(module_name)
+
+        def main(argv: list[str]) -> int:
+            self.assertIn("--json", argv)
+            raise OSError(r"cannot open C:\private\registry\threads.json")
+
+        fake_module.main = main
+        sys.modules[module_name] = fake_module
+        stdout = StringIO()
+        stderr = StringIO()
+        try:
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                code = facade.run_module_main(
+                    module_name,
+                    "agent_continuity.py",
+                    ["recall", "old cue", "--json"],
+                )
+        finally:
+            sys.modules.pop(module_name, None)
+
+        raw = stdout.getvalue() + stderr.getvalue()
+        self.assertEqual(code, 1)
+        self.assertEqual(stderr.getvalue(), "")
+        self.assertNotIn("Traceback", raw)
+        self.assertNotIn(r"C:\private\registry", raw)
+        payload = json.loads(stdout.getvalue())
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["kind"], "aippocampus_cli_recovery_error")
+        self.assertIn("safe_next_actions", payload)
+        self.assertEqual(payload["agent_next_action"]["command_template"], 'aippocampus agent recall "{cue}" --json')
+
+    def test_facade_unhandled_plain_exception_is_stderr_try_hint(self) -> None:
+        module_name = "aippocampus_runtime._test_unhandled_storage_error"
+        fake_module = types.ModuleType(module_name)
+
+        def main(argv: list[str]) -> int:
+            self.assertIn("--dry-run", argv)
+            raise PermissionError(r"denied C:\private\aippocampus\capacity.json")
+
+        fake_module.main = main
+        sys.modules[module_name] = fake_module
+        stdout = StringIO()
+        stderr = StringIO()
+        try:
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                code = facade.run_module_main(
+                    module_name,
+                    "storage_governance.py",
+                    ["gc", "--dry-run"],
+                )
+        finally:
+            sys.modules.pop(module_name, None)
+
+        raw = stdout.getvalue() + stderr.getvalue()
+        self.assertEqual(code, 1)
+        self.assertEqual(stdout.getvalue(), "")
+        self.assertIn("Try: aippocampus storage gc --dry-run --summary-json --cwd .", stderr.getvalue())
+        self.assertNotIn("Traceback", raw)
+        self.assertNotIn(r"C:\private\aippocampus", raw)
+
+    def test_agent_macro_bad_jsonl_skips_bad_row_without_traceback(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            macro_state = Path(tmp) / "macro_state.jsonl"
+            macro_state.write_text("{bad json\n", encoding="utf-8")
+            proc = self.run_cli(
+                "agent",
+                "macro",
+                "--macro-state-jsonl",
+                str(macro_state),
+                "--json",
+            )
+
+        raw = proc.stdout + proc.stderr
+        self.assertEqual(proc.returncode, 0)
+        self.assertNotIn("Traceback", raw)
+        self.assertNotIn(str(macro_state), raw)
+        payload = json.loads(proc.stdout)
+        self.assertIn(payload["status"], {"missing", "missing_macro_state", "no_macro_projection"})
+        self.assertIn("warnings", payload)
+        self.assertEqual(payload["warnings"][0]["code"], "invalid_jsonl_row_skipped")
+
+    def test_agent_recall_human_fallback_uses_real_command_not_continue_normally(self) -> None:
+        text = render_recall_human(
+            {
+                "status": "ok",
+                "memory_packets": [],
+                "deepen_requests": [],
+                "suggested_next": "continue_normally",
+            }
+        )
+
+        self.assertIn('Next: aippocampus agent recall "old decision or handoff cue" --json', text)
+        self.assertNotIn("continue_normally", text)
+
+    def test_sync_plain_issues_redact_local_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            sync_dir = Path(tmp) / "sync"
+            sync_dir.mkdir()
+            (sync_dir / "aippocampus-sync-manifest.json").write_text("{bad json", encoding="utf-8")
+            proc = self.run_cli("sync", "status", "--sync-dir", str(sync_dir))
+
+        raw = proc.stdout + proc.stderr
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertEqual(proc.stdout, "")
+        self.assertNotIn(str(sync_dir), raw)
+        self.assertIn("<local-path-redacted>", raw)
+        self.assertIn("Try: aippocampus sync repair --plan --sync-dir {sync_dir} --json", proc.stderr)
 
     def test_update_apply_without_surface_returns_no_write_recovery_json(self) -> None:
         human = self.run_cli("update", "apply")

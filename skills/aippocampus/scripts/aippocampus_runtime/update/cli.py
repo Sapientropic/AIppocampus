@@ -132,7 +132,7 @@ def _render_update_recovery(payload: dict[str, Any]) -> str:
         "AIppocampus update recovery card",
         f"reason: {error.get('code')}",
         "No write happened.",
-        f"next: {error.get('next_command')}",
+        f"Try: {error.get('next_command')}",
         "choose a surface before apply; --all-local is a broad repair/bootstrap shortcut",
     ]
     return "\n".join(lines) + "\n"
@@ -142,7 +142,7 @@ def _emit_update_recovery(payload: dict[str, Any], *, json_output: bool) -> int:
     if json_output:
         emit_public_text(json.dumps(payload, ensure_ascii=False, indent=2, default=_json_default))
     else:
-        emit_public_text(_render_update_recovery(payload), end="")
+        emit_public_text(_render_update_recovery(payload), end="", stream=sys.stderr)
     return 2
 
 

@@ -22,6 +22,7 @@ from aippocampus_runtime.macro import state as macro_state
 from aippocampus_runtime.mcp.public_projection import compact_agent_recall_payload
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 from aippocampus_runtime.recall import feedback_events
+from aippocampus_runtime.recall.human_actions import recall_human_next_hint
 
 LAST_RECALL_CACHE_ENV = "AIPPOCAMPUS_AGENT_LAST_RECALL_PATH"
 DEFAULT_FEEDBACK_ENV = "AIPPOCAMPUS_FEEDBACK_JSONL"
@@ -1173,7 +1174,6 @@ def render_recall_human(payload: Mapping[str, Any]) -> str:
         if signals:
             action = str(navigation.get("next_safe_action") or "deepen_before_claim")
             lines.append(f"Navigation: {', '.join(signals[:3])} -> {action}")
-    suggested_command = str(payload.get("suggested_next_command") or "").strip()
     if deepen_requests:
         first = deepen_requests[0]
         next_action = str(first.get("human_next_action") or "").strip()
@@ -1190,9 +1190,7 @@ def render_recall_human(payload: Mapping[str, Any]) -> str:
                 "for local-private handle"
             )
         lines.append(f"Next: {next_action}.")
-    elif suggested_command and "aippo-nav:" not in suggested_command and len(suggested_command) <= 160:
-        lines.append(f"Next: {suggested_command}")
     else:
-        lines.append(f"Next: {payload.get('suggested_next') or 'continue_normally'}")
+        lines.append(f"Next: {recall_human_next_hint(payload)}")
     lines.append("Boundary: route only; reopen source before quoting or making strong claims.")
     return "\n".join(lines)

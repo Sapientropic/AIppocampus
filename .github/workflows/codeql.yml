@@ -12,9 +12,52 @@ on:
 permissions:
   actions: read
   contents: read
+  pull-requests: read
   security-events: write
 
 jobs:
+  python-codeql-filter:
+    name: Python CodeQL filter
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      should-run: ${{ steps.filter.outputs.should-run }}
+      reason: ${{ steps.filter.outputs.reason }}
+
+    steps:
+      - name: Decide whether Python CodeQL should run
+        id: filter
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "$EVENT_NAME" != "pull_request" ]]; then
+            echo "should-run=true" >> "$GITHUB_OUTPUT"
+            echo "reason=deep-scan-event" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          changed_files="$(
+            gh api --paginate \
+              "repos/${REPOSITORY}/pulls/${PR_NUMBER}/files" \
+              --jq '.[].filename'
+          )"
+
+          if printf '%s\n' "$changed_files" | grep -Eq '^((skills/aippocampus/scripts|tools/aippocampus|plugins/aippocampus)/|\.github/workflows/codeql\.yml$|\.github/codeql/|pyproject\.toml$)'; then
+            echo "should-run=true" >> "$GITHUB_OUTPUT"
+            echo "reason=python-relevant-pr-change" >> "$GITHUB_OUTPUT"
+          else
+            echo "should-run=false" >> "$GITHUB_OUTPUT"
+            echo "reason=no-python-relevant-pr-change" >> "$GITHUB_OUTPUT"
+          fi
+
   analyze-standard:
     name: Analyze (${{ matrix.language }})
     runs-on: ubuntu-latest
@@ -45,6 +88,8 @@ jobs:
 
   analyze-python:
     name: Analyze (python)
+    needs: python-codeql-filter
+    if: ${{ needs.python-codeql-filter.outputs.should-run == 'true' }}
     runs-on: ubuntu-latest
     permissions:
       actions: read
@@ -55,11 +100,21 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v6
 
-      - name: Initialize CodeQL
+      - name: Initialize CodeQL for pull request
+        if: ${{ github.event_name == 'pull_request' }}
         uses: github/codeql-action/init@v4
         with:
           languages: python
           build-mode: none
+          config-file: ./.github/codeql/codeql-config.yml
+
+      - name: Initialize CodeQL for deep scan
+        if: ${{ github.event_name != 'pull_request' }}
+        uses: github/codeql-action/init@v4
+        with:
+          languages: python
+          build-mode: none
+          config-file: ./.github/codeql/codeql-config.yml
           queries: +security-extended
           packs: codeql/python-queries:AlertSuppression.ql
 

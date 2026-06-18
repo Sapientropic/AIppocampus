@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
+from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 from aippocampus_runtime.text import compact_text
 
 STABLE_CLI_ERROR_CODE_CLASSES = {
@@ -91,7 +92,10 @@ def cli_public_error_object(error: Mapping[str, Any] | None) -> dict[str, str] |
 
 
 def cli_error_payload(exc: BaseException) -> dict[str, Any]:
-    message = compact_text(f"{type(exc).__name__}: {exc}", 800)
+    message = compact_text(
+        str(redact_sensitive_values(redact_private_paths(f"{type(exc).__name__}: {exc}"))),
+        800,
+    )
     code = cli_error_code_from_message(message)
     return {
         "ok": False,
@@ -101,7 +105,10 @@ def cli_error_payload(exc: BaseException) -> dict[str, Any]:
 
 
 def cli_error_payload_from_message(message: str) -> dict[str, Any]:
-    clean_message = compact_text(str(message or ""), 800)
+    clean_message = compact_text(
+        str(redact_sensitive_values(redact_private_paths(str(message or "")))),
+        800,
+    )
     return {
         "ok": False,
         "error": cli_error_object(cli_error_code_from_message(clean_message), clean_message),
