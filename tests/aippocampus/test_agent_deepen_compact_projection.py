@@ -79,6 +79,17 @@ class AgentDeepenCompactProjectionTests(unittest.TestCase):
             env=env,
         )
 
+    def _run_agent_module(self, *args: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [sys.executable, "-m", "aippocampus_runtime.recall.agent_continuity", *args],
+            cwd=SCRIPTS,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            check=False,
+        )
+
     def _tool_payload(self, response: dict) -> dict:
         return json.loads(response["result"]["content"][0]["text"])
 
@@ -227,6 +238,22 @@ class AgentDeepenCompactProjectionTests(unittest.TestCase):
         self.assertNotIn("macro_navigation_diagnostics", payload)
         self.assertNotIn("cannot_claim", encoded)
         self.assertNotIn(str(self.cwd), encoded)
+
+    def test_agent_continuity_module_deepen_handle_json_returns_recovery_card(self) -> None:
+        proc = self._run_agent_module("deepen", "--handle", "not-a-real-handle", "--json")
+
+        payload = json.loads(proc.stdout)
+        encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertEqual(proc.returncode, 2, proc.stderr)
+        self.assertEqual(proc.stderr.strip(), "")
+        self.assertEqual(payload["detail"], "compact")
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["status"], "cannot_verify")
+        self.assertEqual(payload["error"]["code"], "malformed_recall_handle")
+        self.assertIn("safe_next_actions", payload)
+        self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
+        self.assertNotIn("macro_navigation_diagnostics", payload)
+        self.assertNotIn("cannot_claim", encoded)
 
     def test_mcp_recall_routes_expose_actions_and_deepen_detail_modes(self) -> None:
         old_last_recall = os.environ.get(agent_continuity.LAST_RECALL_CACHE_ENV)

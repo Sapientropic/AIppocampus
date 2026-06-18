@@ -92,6 +92,42 @@ def compact_agent_deepen_payload(
     """
 
     source = dict(payload)
+    if source.get("surface") == "recall" and source.get("status") != "ok":
+        # Recovery cards must be parseable foreground JSON even for module
+        # entrypoints. Keep the actionable error and compatibility aliases up
+        # front, while any heavier local diagnostics stay behind detail fields.
+        result = _as_dict(source.get("result"))
+        primary_action = _as_dict(source.get("foreground_action") or source.get("agent_next_action"))
+        follow_up_action = _as_dict(source.get("follow_up_action"))
+        safe_next_actions = [primary_action] if primary_action else []
+        if follow_up_action and follow_up_action != primary_action:
+            safe_next_actions.append(follow_up_action)
+        foreground_fields = (
+            canonical_foreground_action_fields(
+                primary_action,
+                safe_next_actions=safe_next_actions,
+            )
+            if primary_action
+            else {}
+        )
+        return _without_empty(
+            {
+                "detail": "compact",
+                "kind": source.get("kind"),
+                "schema_version": source.get("schema_version"),
+                "mode": source.get("mode"),
+                "surface": surface,
+                "status": source.get("status"),
+                "ok": False,
+                "error": result.get("error") or source.get("error"),
+                **foreground_fields,
+                "next_safe_action": primary_action,
+                "next_safe_action_id": source.get("next_safe_action_id") or primary_action.get("id"),
+                "boundary_detail": source.get("boundary_detail"),
+                "operator_detail": source.get("operator_detail"),
+                "output_boundary": "compact_recovery_operator_detail_gated",
+            }
+        )
     if source.get("status") != "ok" or source.get("surface") != "recall":
         return source
     result = _as_dict(source.get("result"))

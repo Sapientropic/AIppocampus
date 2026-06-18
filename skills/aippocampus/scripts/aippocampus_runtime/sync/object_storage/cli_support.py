@@ -109,7 +109,10 @@ def object_sync_help_card(command: str | None = None) -> str:
 
 def object_sync_direction_plan(args: Namespace) -> dict[str, Any]:
     command = str(args.command)
-    command_preview = f"aippocampus object-sync {command} --object-store-url {{object_store_url}} --json"
+    command_preview = (
+        f"aippocampus object-sync {command} --plan "
+        "--object-store-url {object_store_url} --json"
+    )
     if command == "status":
         command_preview = "aippocampus object-sync status --object-store-url {object_store_url} --json"
     safe_store = (
