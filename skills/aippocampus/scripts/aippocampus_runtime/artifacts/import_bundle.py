@@ -6,6 +6,7 @@ import argparse
 import json
 import os
 import zipfile
+from collections.abc import Mapping
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -23,6 +24,11 @@ from aippocampus_runtime.privacy import (
 )
 
 BUNDLE_INTEGRITY_NAME = "bundle_integrity.json"
+IMPORT_ORIGIN_BOUNDARY = (
+    "Checksum verification only proves the imported bundle bytes match its "
+    "manifest. Without a verified signature or local source reopen, imported "
+    "rows must stay below source-supported authority."
+)
 
 
 def timestamp_slug() -> str:
@@ -124,13 +130,110 @@ def verify_bundle_integrity(extract_dir: Path) -> dict[str, Any]:
     if manifest.get("file_count") not in {None, checked}:
         raise ValueError("bundle_integrity_file_count_mismatch")
     origin = manifest.get("origin") if isinstance(manifest.get("origin"), dict) else {}
+    signature_verified = bool(origin.get("signature_verified"))
+    manifest_claimed_verified_origin = bool(origin.get("verified_origin"))
     return {
         "status": "checksum_verified",
         "checksum_verified": True,
-        "verified_origin": bool(origin.get("verified_origin")),
-        "signature_verified": bool(origin.get("signature_verified")),
+        "verified_origin": bool(manifest_claimed_verified_origin and signature_verified),
+        "manifest_claimed_verified_origin": manifest_claimed_verified_origin,
+        "signature_verified": signature_verified,
         "file_count": checked,
-        "boundary": "checksum verifies bundle bytes only; unsigned imports do not become source authority",
+        "boundary": IMPORT_ORIGIN_BOUNDARY,
+    }
+
+
+def _import_origin_for_rows(integrity: Mapping[str, Any]) -> dict[str, Any]:
+    verified_origin = bool(integrity.get("verified_origin") and integrity.get("signature_verified"))
+    return {
+        "verified_origin": verified_origin,
+        "origin_verified": verified_origin,
+        "user_authorized_import": True,
+        "checksum_verified": bool(integrity.get("checksum_verified")),
+        "signature_verified": bool(integrity.get("signature_verified")),
+        "origin_kind": "portable_bundle_import",
+        "usable_for": ["search", "recall_route", "source_reopen"],
+        "source_authority": "requires_source_reopen_or_verified_signature",
+        "boundary": IMPORT_ORIGIN_BOUNDARY,
+    }
+
+
+CLAIM_PROMOTING_ROW_KINDS = {
+    "aippocampus_learning_finding",
+    "source_backed_lesson_candidate",
+    "aippocampus_learning_action_guidance",
+    "aippocampus_workflow_candidate",
+    "aippocampus_learning_guidance_outcome",
+    "aippocampus_learning_effectiveness_ledger_row",
+}
+CLAIM_PROMOTING_FILENAMES = {
+    "findings.jsonl",
+    "effectiveness-ledger.jsonl",
+}
+
+
+def _claim_promoting_import_row(path: Path, row: Mapping[str, Any]) -> bool:
+    kind = str(row.get("kind") or "")
+    if kind in CLAIM_PROMOTING_ROW_KINDS:
+        return True
+    if path.name in CLAIM_PROMOTING_FILENAMES and {"learning-loop", "learning"} & set(path.parts):
+        return True
+    return False
+
+
+def _stamp_imported_claim_rows(extract_dir: Path, integrity: Mapping[str, Any]) -> dict[str, Any]:
+    origin = _import_origin_for_rows(integrity)
+    touched_files = 0
+    stamped_rows = 0
+    skipped_source_rows = 0
+    malformed_rows = 0
+    for path in sorted(extract_dir.rglob("*.jsonl")):
+        try:
+            original_text = path.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        output_lines: list[str] = []
+        changed = False
+        for line in original_text.splitlines():
+            if not line.strip():
+                output_lines.append(line)
+                continue
+            try:
+                payload = json.loads(line)
+            except json.JSONDecodeError:
+                malformed_rows += 1
+                output_lines.append(line)
+                continue
+            if not isinstance(payload, dict):
+                output_lines.append(line)
+                continue
+            if not _claim_promoting_import_row(path, payload):
+                skipped_source_rows += 1
+                output_lines.append(line)
+                continue
+            row = dict(payload)
+            # Do not preserve a row-level "verified" claim from an unsigned
+            # imported claim-promoting artifact. User-authorized import makes
+            # the bundle usable for recall/search, but source-supported AIppo
+            # promotion still needs a verified origin or a reopened source.
+            row["verified_origin"] = bool(origin["verified_origin"])
+            row["origin_verified"] = bool(origin["origin_verified"])
+            row["import_origin"] = dict(origin)
+            output_lines.append(json.dumps(row, ensure_ascii=False, sort_keys=True))
+            changed = True
+            stamped_rows += 1
+        if changed:
+            path.write_text("\n".join(output_lines) + ("\n" if original_text.endswith("\n") else ""), encoding="utf-8")
+            touched_files += 1
+    return {
+        "jsonl_files_stamped": touched_files,
+        "jsonl_rows_stamped": stamped_rows,
+        "jsonl_source_rows_left_reopenable": skipped_source_rows,
+        "malformed_jsonl_rows_preserved": malformed_rows,
+        "verified_origin": bool(origin["verified_origin"]),
+        "user_authorized_import": True,
+        "checksum_verified_before_local_stamp": bool(integrity.get("checksum_verified")),
+        "boundary": IMPORT_ORIGIN_BOUNDARY,
     }
 
 
@@ -146,6 +249,8 @@ def import_bundle(args: argparse.Namespace) -> dict[str, Any]:
     with zipfile.ZipFile(bundle, "r") as zf:
         safe_extract(zf, extract_dir)
     integrity = verify_bundle_integrity(extract_dir)
+    row_provenance = _stamp_imported_claim_rows(extract_dir, integrity)
+    integrity["import_row_provenance"] = row_provenance
 
     manifest_path = extract_dir / "bundle_manifest.json"
     manifest: dict[str, Any] = {}

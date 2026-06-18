@@ -27,6 +27,7 @@ class LearningLoopAIppoAdapterTests(unittest.TestCase):
                 "status": "open",
                 "confidence": "high",
                 "occurrence_count": 3,
+                "verified_origin": True,
                 "source_ref_count": 3,
                 "source_refs": [source_ref("fail"), source_ref("ruff"), source_ref("pass")],
                 "scope": "project:OtherRepo",
@@ -108,6 +109,7 @@ class LearningLoopAIppoAdapterTests(unittest.TestCase):
             "candidate_kind": "workflow_order_candidate",
             "status": "ripe",
             "foreground_activation_allowed": True,
+            "verified_origin": True,
             "scope": ["coding", "benchmark_reporting", "project:AIppocampus"],
             "failed_route": "broad_pytest_without_preflight",
             "source_refs": [source_ref("lesson-a"), source_ref("lesson-b")],
@@ -175,6 +177,26 @@ class LearningLoopAIppoAdapterTests(unittest.TestCase):
         self.assertFalse(contract["clauses"][0]["activation"]["foreground_eligible"])
         self.assertEqual(contract["clauses"][0]["authority"]["class"], "candidate_only")
 
+    def test_missing_origin_cannot_promote_source_supported_clause(self) -> None:
+        lesson = {
+            "kind": "source_backed_lesson_candidate",
+            "lesson_id": "lesson-without-origin",
+            "candidate_kind": "workflow_order_candidate",
+            "status": "ripe",
+            "foreground_activation_allowed": True,
+            "source_refs": [source_ref("implicit")],
+            "source_ref_count": 1,
+            "proposed_lesson": "Missing provenance cannot become source supported.",
+            "structured_lesson": {"trigger_condition": "implicit origin"},
+        }
+
+        rows = aippo_adapter.learning_findings_to_aippo_source_rows([lesson])
+
+        self.assertEqual(rows[0]["support_grade"], "candidate_only")
+        self.assertFalse(rows[0]["support_verified"])
+        self.assertEqual(rows[0]["path_provenance"], "unverified_origin")
+        self.assertTrue(rows[0]["learning_loop"]["unverified_origin_blocks_source_supported"])
+
     def test_immature_private_stale_and_expected_red_findings_do_not_foreground(self) -> None:
         rows = aippo_adapter.learning_findings_to_aippo_source_rows(
             [
@@ -201,6 +223,7 @@ class LearningLoopAIppoAdapterTests(unittest.TestCase):
                     "finding_id": "stale",
                     "finding_kind": "workflow_order_finding",
                     "status": "stale",
+                    "verified_origin": True,
                     "source_ref_count": 2,
                     "source_refs": [source_ref("old"), source_ref("old2")],
                 },

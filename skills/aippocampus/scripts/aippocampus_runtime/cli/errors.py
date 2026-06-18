@@ -21,9 +21,23 @@ STABLE_CLI_ERROR_CODE_CLASSES = {
     "source_not_file": "validation_error",
     "missing_api_key": "missing_prerequisite",
     "missing_file": "missing_prerequisite",
+    "missing_manifest": "missing_prerequisite",
+    "missing_sync_dir": "missing_prerequisite",
+    "missing_registry_dir": "missing_prerequisite",
+    "missing_rollback_id": "missing_prerequisite",
     "missing_prerequisite": "missing_prerequisite",
+    "no_routes": "missing_prerequisite",
     "privacy_blocked": "privacy_block",
+    "provider_not_available": "missing_prerequisite",
     "runtime_error": "runtime_error",
+    "storage_gc_invalid_report": "validation_error",
+    "unsupported_sync_manifest_schema": "validation_error",
+    "update_apply_surface_required": "usage_error",
+    "blocked_dirty_worktree": "validation_error",
+    "update_command_required": "usage_error",
+    "update_failed": "runtime_error",
+    "update_plan_alias": "usage_error",
+    "update_status_alias": "usage_error",
 }
 
 CALLER_ACTIONABLE_ERROR_CLASSES = {

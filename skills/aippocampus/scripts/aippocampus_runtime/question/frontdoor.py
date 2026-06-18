@@ -8,7 +8,7 @@ import json
 from pathlib import Path
 from typing import Any, Mapping
 
-from aippocampus_runtime.contracts import canonical_foreground_action_fields
+from aippocampus_runtime.contracts import canonical_foreground_action_fields, shell_quote
 from aippocampus_runtime.question.constants import DEFAULT_DORMANT_AFTER_DAYS
 from aippocampus_runtime.question.health import (
     aggregate_question_health_stats,
@@ -106,8 +106,7 @@ def _safe_int(value: Any) -> int:
 
 def _search_command(title: Any) -> str:
     query = str(title or "question route").strip() or "question route"
-    query = query.replace("\\", "\\\\").replace('"', '\\"')
-    return f'aippocampus search "{query}" --json'
+    return f"aippocampus search {shell_quote(query)} --json"
 
 
 def _row_action(

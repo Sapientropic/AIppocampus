@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from aippocampus_runtime.artifacts.publish import resolve_sqlite_index_path
+from aippocampus_runtime.cli.human_io import exit_code_for_payload
 from aippocampus_runtime.contracts import write_boundary
 from aippocampus_runtime.core import aippocampus_registry_dir, file_sha256, now_utc, safe_path_name
 from aippocampus_runtime.io_integrity import stale_tmp_recovery_card
@@ -1391,7 +1392,7 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(result, ensure_ascii=False, indent=2))
     else:
         print_sync_human_result(str(args.command), result)
-    return 0 if result.get("ok") else 1
+    return exit_code_for_payload(result)
 
 
 if __name__ == "__main__":

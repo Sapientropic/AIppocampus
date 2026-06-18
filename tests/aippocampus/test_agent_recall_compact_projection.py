@@ -242,6 +242,29 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
         self.assertEqual(card["safe_next_actions"][0], card["canonical_action"])
         self.assertEqual(executable_command_violations(card), [])
 
+    def test_full_recall_action_card_no_source_redirects_to_registration(self) -> None:
+        card = foreground_action_card.build_recall_foreground_action_card(
+            status="no_routes",
+            memory_packets=[],
+            deepen_requests=[],
+            query="unlikely-no-match-token-xyz-12345",
+            source_registered=False,
+        )
+
+        self.assertEqual(card["decision"], "recover_no_route")
+        self.assertEqual(card["canonical_action"]["action_id"], "register_source_before_recall")
+        self.assertEqual(card["canonical_action"]["tool_name"], "shell")
+        assert_command_args(
+            self,
+            card["canonical_action"]["cli_command"],
+            ["aippocampus", "onboard", "--provider", "codex", "--cwd", ".", "--json"],
+        )
+        action_ids = [action["action_id"] for action in card["safe_next_actions"]]
+        self.assertEqual(action_ids[0], "register_source_before_recall")
+        self.assertIn("check_onboarding_status", action_ids)
+        self.assertIn("recover_recall_miss", action_ids)
+        self.assertEqual(executable_command_violations(card), [])
+
     def test_missing_cache_recovery_uses_known_query_not_same_cue_placeholder(self) -> None:
         projected = agent_continuity.public_recall_projection(
             {

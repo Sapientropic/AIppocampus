@@ -91,6 +91,31 @@ class SearchCleanSourceTests(unittest.TestCase):
         self.assertEqual(result["matches"][0]["scope_labels"], ["technical_work"])
         self.assertIn("AIppocampus 是清洗后的原文记忆库", result["matches"][0]["snippet"])
 
+    def test_search_uses_cjk_sidecar_terms_for_near_exact_phrase(self) -> None:
+        with (self.source / "messages.jsonl").open("a", encoding="utf-8", newline="\n") as f:
+            f.write(
+                json.dumps(
+                    {
+                        "id": "msg_cjk_route",
+                        "source_line": 50,
+                        "role": "assistant",
+                        "phase": "final_answer",
+                        "turn_index": 5,
+                        "is_final": True,
+                        "scope_labels": ["technical_work"],
+                        "text": "复开源头路线有界证据需要先看 source。",
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n"
+            )
+
+        result = search.search_clean_source(self.cwd, ["复开源头路线有界材料"], limit=5)
+
+        self.assertEqual(result["matches"][0]["id"], "msg_cjk_route")
+        self.assertIn("源头路线", result["query_terms"])
+        self.assertIn("复开源头路线有界证据", result["matches"][0]["snippet"])
+
     def test_search_does_not_search_source_texture_by_default(self) -> None:
         (self.source / "source-texture.jsonl").write_text(
             json.dumps(
@@ -161,7 +186,7 @@ class SearchCleanSourceTests(unittest.TestCase):
         self.assertNotIn("phase=", output)
         self.assertNotIn("score=", output)
 
-    def test_public_metadata_only_human_search_renders_receipt_not_none_snippet(self) -> None:
+    def test_public_human_search_renders_capped_snippet_receipt(self) -> None:
         stdout = io.StringIO()
         with contextlib.redirect_stdout(stdout):
             code = search.main(
@@ -177,7 +202,8 @@ class SearchCleanSourceTests(unittest.TestCase):
 
         output = stdout.getvalue()
         self.assertEqual(code, 0)
-        self.assertIn("snippet omitted in public mode", output)
+        self.assertIn("AIppocampus 是清洗后的原文记忆库", output)
+        self.assertNotIn("snippet omitted in public mode", output)
         self.assertNotIn('"None"', output)
 
     def test_search_marks_process_noise_and_demotes_it_behind_source_receipts(self) -> None:

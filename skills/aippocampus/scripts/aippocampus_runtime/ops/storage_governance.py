@@ -17,6 +17,7 @@ import sys
 from pathlib import Path
 from typing import Any, Iterable, cast
 
+from aippocampus_runtime.cli.human_io import exit_code_for_payload
 from aippocampus_runtime.contracts import canonical_foreground_action_fields
 from aippocampus_runtime.core import (
     codex_home,
@@ -804,7 +805,13 @@ High-risk/private flags:
             args.dry_run = True
         else:
             gc_parser.print_help(sys.stderr)
-            return 2
+            return exit_code_for_payload(
+                _error_payload(
+                    "storage_gc_invalid_report",
+                    "Storage GC needs --dry-run, --summary-json, or --apply before it can produce a report.",
+                    error_class="validation_error",
+                )
+            )
     if args.apply:
         try:
             result = apply_plan(
@@ -839,7 +846,7 @@ High-risk/private flags:
             print(json.dumps(result, ensure_ascii=False, indent=2))
         else:
             print(render_apply_text(result))
-        return 0 if result["ok"] else 2
+        return exit_code_for_payload(result)
 
     explicit_top = "--top" in raw_args or any(item.startswith("--top=") for item in raw_args)
     plan_top = max(1, int(args.top))
@@ -890,7 +897,13 @@ High-risk/private flags:
             )
         else:
             print(str(exc), file=sys.stderr)
-        return 2
+        return exit_code_for_payload(
+            _error_payload(
+                "storage_gc_invalid_report",
+                str(exc),
+                error_class="validation_error",
+            )
+        )
     if args.summary_json:
         print(
             json.dumps(

@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.recall.agent_continuity_cli_support import feedback_lane_resolution
+from aippocampus_runtime.recall.ambient_policy import anti_nag_tokens_from_card
 from aippocampus_runtime.recall.feedback_events import load_feedback_calibration_report
 
 NEGATIVE_FEEDBACK_SIGNALS = {
@@ -112,18 +113,24 @@ def apply_feedback_filter(
         }
     kept: list[dict[str, Any]] = []
     quieted = 0
+    quieted_tokens: list[str] = []
     for card in cards:
         if _card_feedback_ids(card) & quiet_ids:
             quieted += 1
+            quieted_tokens.extend(anti_nag_tokens_from_card(card))
         else:
             kept.append(card)
     ambient["cards"] = kept
+    if quieted_tokens:
+        existing = [str(value) for value in ambient.get("anti_nag_token_ids") or [] if str(value).strip()]
+        ambient["anti_nag_token_ids"] = list(dict.fromkeys([*existing, *quieted_tokens]))[:64]
     return {
         "status": "applied",
         "load_status": (feedback_report or {}).get("load_status"),
         "event_count_loaded": (feedback_report or {}).get("event_count_loaded"),
         "quiet_route_count": len(quiet_ids),
         "quieted_card_count": quieted,
+        "anti_nag_token_count": len(set(quieted_tokens)),
         "lane": _lane_projection(lane),
         "policy_boundary": {
             "feedback_is_navigation_metadata_only": True,

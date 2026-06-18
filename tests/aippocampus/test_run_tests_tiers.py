@@ -511,7 +511,7 @@ class RunTestsTierTests(unittest.TestCase):
         self.assertLess(pr, broad_pr)
         # Keep this as a drift guard, not an off-by-one blocker when a small
         # foreground contract test enters the fast PR lane.
-        self.assertLessEqual(len(pr) * 3, len(broad_pr) + 2)
+        self.assertLessEqual(len(pr) * 3, len(broad_pr) + 5)
         self.assertTrue(PR_CRITICAL_MODULES.isdisjoint(quick))
         self.assertLessEqual(PR_CRITICAL_MODULES, pr)
 

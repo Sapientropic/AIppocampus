@@ -66,6 +66,11 @@ def behavior_event(
         "scope": "project:AIppocampus",
         "freshness_window": "recent",
         "source_refs": [source_ref(source or event_id)],
+        "verified_origin": True,
+        "origin": {
+            "verified_origin": True,
+            "origin_kind": "local_clean_source_fixture",
+        },
         "sequence_index": sequence_index,
         "expected_local_red": expected_local_red,
         "path_fingerprints": [path_category_fingerprint],

@@ -15,16 +15,37 @@ operator catalog. The point is not that AIppocampus has innate memory; the point
 is that a later agent can find a source route, reopen the source, and carry the
 bounded context forward.
 
-1. Ask for a vague continuity route:
+0. Start from a fresh clone:
 
    ```sh
-   aippocampus agent recall "AIppocampus continuity without innate memory" --cwd . --clean-source-dir ./examples/public-memory-bundle/clean-source --json
+   git clone https://github.com/Sapientropic/AIppocampus.git
+   cd AIppocampus
+   python -m pip install -e ".[dev]"
+   ```
+
+   Expected result: the `aippocampus` command is available from the same shell.
+
+1. Check the local first-run card:
+
+   ```sh
+   aippocampus start --json
+   ```
+
+   Expected result: JSON names the first useful recall path before deeper
+   operator diagnostics.
+
+2. Ask for the public bundle's source-backed continuity route:
+
+   ```sh
+   aippocampus agent recall "can an agent catch up without pretending it has innate memory?" --cwd . --clean-source-dir ./examples/public-memory-bundle/clean-source --json
    ```
 
    Expected result: compact JSON returns route rows plus a foreground action to
-   deepen a selected route. Route rows are navigation, not source evidence yet.
+   deepen a selected route. This cue intentionally matches the public bundle so
+   the first useful aha happens here, not only in exact search. Route rows are
+   navigation, not source evidence yet.
 
-2. Reopen the selected source:
+3. Reopen the selected source:
 
    ```sh
    aippocampus agent deepen --request 1 --last-recall --json
@@ -33,7 +54,7 @@ bounded context forward.
    Expected result: the response reports source-backed evidence for the selected
    route and keeps claim boundaries tied to the opened source window.
 
-3. Use exact search only as the fallback/proof lane:
+4. Use exact search only as the fallback/proof lane:
 
    ```sh
    aippocampus search "without pretending it has innate memory" --clean-source-dir ./examples/public-memory-bundle/clean-source --json
@@ -44,6 +65,22 @@ bounded context forward.
 
 Use exact search when proving a known phrase exists. Use recall/deepen when the
 user gives a vague cue and needs source-backed continuity.
+
+### First Useful Recall (Agent)
+
+When another agent is driving the workflow, the same loop is:
+
+```text
+recall_context:
+  query: can an agent catch up without pretending it has innate memory?
+  clean_source_dir: ./examples/public-memory-bundle/clean-source
+recall_deepen:
+  request_index: 1
+  last_recall: true
+```
+
+The agent should treat `recall_context` output as route context only, then call
+`recall_deepen` before making exact or source-sensitive claims.
 
 ## Maintainer And Operator Scenario Catalog
 

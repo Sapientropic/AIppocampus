@@ -2286,7 +2286,7 @@ class AippocampusCliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             proc = self.run_cli("sync", "status", "--sync-dir", tmp, "--json")
 
-        self.assertEqual(proc.returncode, 1)
+        self.assertEqual(proc.returncode, 2)
         data = json.loads(proc.stdout)
         self.assertFalse(data["ok"])
         self.assertFalse(data["manifest_exists"])
@@ -2398,10 +2398,13 @@ class AippocampusCliTests(unittest.TestCase):
         encoded_public = json.dumps(public_payload, ensure_ascii=False)
         self.assertEqual(
             public_payload["output_boundary"],
-            "public_metadata_only_no_source_snippets_or_reopen_refs",
+            "public_metadata_with_capped_source_snippets_no_reopen_refs",
         )
         self.assertTrue(public_payload["privacy"]["metadata_only"])
-        self.assertNotIn("snippet", public_payload["matches"][0])
+        self.assertTrue(public_payload["matches"][0]["snippet"])
+        self.assertLessEqual(len(public_payload["matches"][0]["snippet"]), 24)
+        self.assertFalse(public_payload["matches"][0]["snippet_omitted"])
+        self.assertTrue(public_payload["matches"][0]["source_refs_omitted"])
         self.assertNotIn("message_id", encoded_public)
         self.assertNotIn("turn_private", encoded_public)
         self.assertNotIn("session:private", encoded_public)

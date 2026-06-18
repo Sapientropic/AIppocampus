@@ -327,6 +327,7 @@ class ActionHintCacheTests(unittest.TestCase):
                 "scope": "project:AIppocampus",
                 "confidence": "high",
                 "occurrence_count": 2,
+                "verified_origin": True,
                 "source_ref_count": 2,
                 "source_refs": [source_ref("learn-a"), source_ref("learn-b")],
             }

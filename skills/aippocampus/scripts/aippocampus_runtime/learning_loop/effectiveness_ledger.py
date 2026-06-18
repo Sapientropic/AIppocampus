@@ -31,6 +31,12 @@ OUTCOMES = {
 USEFUL_OUTCOMES = {"prevented_repeat"}
 INEFFECTIVE_OUTCOMES = {"ignored", "repeated_failure_after_surface", "dismissed_noisy"}
 ARCHIVE_OUTCOMES = {"stale_superseded"}
+LOADED_LEDGER_ORIGIN = {
+    "verified_origin": False,
+    "origin_verified": False,
+    "origin_kind": "operator_selected_effectiveness_ledger_without_integrity_manifest",
+    "boundary": "ledger files adjust navigation priority only; parsed JSONL is not a source-trust anchor",
+}
 
 
 def _stable_id(prefix: str, *parts: Any) -> str:
@@ -222,7 +228,17 @@ def append_ledger_rows(path: Path, rows: Iterable[Mapping[str, Any]]) -> int:
         for row in rows:
             if row.get("kind") != LEDGER_ROW_KIND:
                 raise ValueError(f"unsupported learning effectiveness row kind: {row.get('kind')}")
-            fh.write(json.dumps(dict(row), ensure_ascii=False, sort_keys=True) + "\n")
+            payload = dict(row)
+            payload.setdefault("verified_origin", True)
+            payload.setdefault(
+                "origin",
+                {
+                    "verified_origin": True,
+                    "origin_kind": "local_effectiveness_ledger_append",
+                    "boundary": "local append is authorized for navigation priority, not source truth",
+                },
+            )
+            fh.write(json.dumps(payload, ensure_ascii=False, sort_keys=True) + "\n")
             count += 1
     return count
 
@@ -236,7 +252,11 @@ def load_ledger_rows(path: Path) -> list[dict[str, Any]]:
             continue
         payload = json.loads(line)
         if isinstance(payload, Mapping) and payload.get("kind") == LEDGER_ROW_KIND:
-            rows.append(dict(payload))
+            row = dict(payload)
+            row["verified_origin"] = False
+            row["origin_verified"] = False
+            row["origin"] = dict(LOADED_LEDGER_ORIGIN)
+            rows.append(row)
     return rows
 
 

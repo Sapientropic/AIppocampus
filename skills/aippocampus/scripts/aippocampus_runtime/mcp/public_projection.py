@@ -595,7 +595,12 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
     route_receipts: list[dict[str, Any]] = []
     for index, packet in enumerate(memory_packets[:3], start=1):
         route_id = str(packet.get("route_id") or f"route:{index}").strip()
-        route_is_callable = cache_available and str(packet.get("output_mode") or "") == "reopenable_route"
+        already_opened = bool(packet.get("already_opened"))
+        route_is_callable = (
+            cache_available
+            and not already_opened
+            and str(packet.get("output_mode") or "") == "reopenable_route"
+        )
         callable_selector = (
             {
                 "kind": "last_recall_request_index",
@@ -605,7 +610,11 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
             if route_is_callable
             else {
                 "kind": "not_callable_from_compact_card",
-                "reason": "route_not_reopenable_or_last_recall_cache_missing",
+                "reason": (
+                    "route_already_opened_in_this_session"
+                    if already_opened
+                    else "route_not_reopenable_or_last_recall_cache_missing"
+                ),
             }
         )
         route_receipts.append(
@@ -629,6 +638,7 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
                         120,
                     ),
                     "route_family": packet.get("route_kind") or packet.get("output_mode"),
+                    "already_opened": already_opened or None,
                     "choice_reason": recall_choices.route_choice_reason(
                         packet,
                         index=index,

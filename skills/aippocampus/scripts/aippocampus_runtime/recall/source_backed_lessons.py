@@ -64,6 +64,29 @@ def _safe_refs(value: Any) -> list[dict[str, Any]]:
     return refs[:6]
 
 
+def _verified_origin(row: Mapping[str, Any]) -> bool:
+    for key in ("verified_origin", "origin_verified", "support_verified"):
+        if key in row:
+            return bool(row.get(key))
+    for key in ("import_origin", "integrity", "origin"):
+        value = row.get(key)
+        if isinstance(value, Mapping) and "verified_origin" in value:
+            return bool(value.get("verified_origin"))
+    return False
+
+
+def _derived_origin(rows: Iterable[Mapping[str, Any]], *, origin_kind: str) -> dict[str, Any]:
+    materialized = [row for row in rows if isinstance(row, Mapping)]
+    verified = bool(materialized) and all(_verified_origin(row) for row in materialized)
+    return {
+        "verified_origin": verified,
+        "origin_verified": verified,
+        "origin_kind": origin_kind,
+        "source_row_count": len(materialized),
+        "boundary": "lesson candidates inherit explicit source verification; absence fails closed",
+    }
+
+
 def _candidate_kind_for_finding(row: Mapping[str, Any]) -> str:
     explicit = str(row.get("candidate_family") or "")
     if explicit:
@@ -123,6 +146,7 @@ def _candidate_from_learning_finding(row: Mapping[str, Any]) -> dict[str, Any] |
     thin = int(row.get("occurrence_count") or 0) < 2 or not refs
     backstage = stale or freshness in {"stale", "superseded"} or local_only or thin
     structured = _structured_lesson_for_finding(row, candidate_kind)
+    origin = _derived_origin([row], origin_kind="source_backed_lesson_from_learning_finding")
     return {
         "kind": "source_backed_lesson_candidate",
         "schema_version": SCHEMA_VERSION,
@@ -132,6 +156,9 @@ def _candidate_from_learning_finding(row: Mapping[str, Any]) -> dict[str, Any] |
         "failed_route": str(row.get("failed_route") or row.get("workflow_family") or row.get("finding_kind") or ""),
         "source_refs": refs,
         "source_ref_count": len(refs),
+        "verified_origin": origin["verified_origin"],
+        "origin_verified": origin["origin_verified"],
+        "origin": origin,
         "independent_trail_count": int(row.get("independent_trail_count") or 1),
         "explicit_confirmation_seen": bool(row.get("explicit_confirmation_seen")),
         "structured_lesson": structured,
@@ -175,6 +202,7 @@ def extract_source_backed_lesson_candidates(
         str(row.get("event_type") or "") == "user_confirmation" for row in rows
     )
     source_refs = _event_refs(rows)
+    origin = _derived_origin(rows, origin_kind="source_backed_lesson_from_events")
     return [
         {
             "kind": "source_backed_lesson_candidate",
@@ -190,6 +218,9 @@ def extract_source_backed_lesson_candidates(
             ],
             "source_refs": source_refs,
             "source_ref_count": len(source_refs),
+            "verified_origin": origin["verified_origin"],
+            "origin_verified": origin["origin_verified"],
+            "origin": origin,
             "independent_trail_count": 1,
             "explicit_confirmation_seen": has_confirmation,
             "proposed_lesson": (

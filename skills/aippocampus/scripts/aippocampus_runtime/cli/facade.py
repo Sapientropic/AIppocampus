@@ -1344,12 +1344,13 @@ def dispatch(argv: list[str]) -> tuple[CommandInvocation | None, int]:
         print_repro_package_help()
         return None, 0
     if args[0] == "doctor" and set(args[1:]) <= {"--json"}:
-        payload = doctor_chooser_payload()
-        if "--json" in args[1:]:
-            print(json.dumps(payload, ensure_ascii=False, indent=2))
-        else:
-            print_doctor_recovery_card()
-        return None, 0
+        invocation = CommandInvocation(
+            "doctor",
+            "provider_doctor.py",
+            module_name_for_script("provider_doctor.py"),
+            ["preflight", *(["--json"] if "--json" in args[1:] else [])],
+        )
+        return invocation, run_invocation(invocation)
     if args[0] == "smoke" and set(args[1:]) <= {"--json"}:
         payload = smoke_chooser_payload()
         if "--json" in args[1:]:

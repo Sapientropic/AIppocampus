@@ -242,6 +242,40 @@ class AmbientRecallPolicyTests(unittest.TestCase):
             1,
         )
 
+    def test_source_backed_evidence_card_uses_anti_nag_surface_cap(self) -> None:
+        card = {
+            "card_id": "evidence-card",
+            "route_id": "route-source-1",
+            "theme": "Opened source-backed route",
+            "support_level": "evidence",
+            "action_grammar": "bounded_evidence",
+            "key_line": "This route was just shown from clean source.",
+            "source_refs": [
+                {
+                    "thread_key": "session:old-private",
+                    "message_id": "msg-source-1",
+                    "line": 77,
+                }
+            ],
+            "ambient_policy": {
+                "target_keys": ["source-route-1"],
+                "target_kind": "source_backed_reopen",
+            },
+        }
+
+        events = policy.surface_events_for_cards(
+            [card],
+            thread_id="thread-a",
+            workspace="E:/private/workspace",
+        )
+        result = policy.filter_evidence_cards([card], events, prompt="ordinary follow up")
+
+        self.assertEqual(events[0]["target_kind"], "source_backed_reopen")
+        self.assertEqual(result["cards"], [])
+        self.assertEqual(result["diagnostics"]["frequency_capped"], 1)
+        self.assertIn("route-source-1", result["anti_nag_token_ids"])
+        self.assertNotIn("session:old-private", json.dumps(events, ensure_ascii=False))
+
     def test_stop_tracking_this_writes_hash_only_dismissal_for_cached_card(self) -> None:
         path = self.root / "ambient_policy.jsonl"
         update = policy.policy_update_for_prompt(

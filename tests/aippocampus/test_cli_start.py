@@ -51,6 +51,9 @@ class AippocampusStartCliTests(unittest.TestCase):
         self.assertEqual(payload["agent_next_action"]["id"], "recall_continuity_cue")
         self.assertIn("command_template", payload["agent_next_action"])
         self.assertFalse(payload["state_summary"]["clean_source"]["path_serialized"])
+        action_ids = [action["id"] for action in payload["safe_next_actions"]]
+        self.assertIn("choose_export_for_next_thread", action_ids)
+        self.assertIn("choose_sync_for_next_device", action_ids)
 
     def test_start_json_redacts_operator_sensitive_fields(self) -> None:
         from aippocampus_runtime.cli import start as start_cli
@@ -119,7 +122,58 @@ class AippocampusStartCliTests(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stderr)
         payload = json.loads(proc.stdout)
         self.assertEqual(payload["decision"], "register_source_before_continuity")
-        self.assertEqual(payload["agent_next_action"]["command"], "aippocampus onboard --provider auto --status --json")
+        self.assertEqual(payload["agent_next_action"]["id"], "register_codex_source")
+        self.assertEqual(
+            payload["agent_next_action"]["command"],
+            "aippocampus onboard --provider codex --cwd . --json",
+        )
+        self.assertEqual(payload["agent_next_action"]["mutation_risk"], "writes_local_clean_source")
+        action_ids = [action["id"] for action in payload["safe_next_actions"]]
+        self.assertEqual(action_ids[0], "register_codex_source")
+        self.assertIn("register_claude_code_source", action_ids)
+        self.assertIn("import_generic_jsonl_source", action_ids)
+        self.assertIn("inspect_onboarding_status", action_ids)
+        self.assertIn("review_claude_code_hooks", action_ids)
+
+    def test_start_json_prefers_detected_non_codex_source_registration(self) -> None:
+        from aippocampus_runtime.cli import start as start_cli
+
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.object(
+                start_cli,
+                "provider_status_report",
+                return_value={
+                    "data": {
+                        "providers": [
+                            {
+                                "provider": "codex",
+                                "detected": False,
+                                "write_registration_available": True,
+                            },
+                            {
+                                "provider": "claude-code",
+                                "detected": True,
+                                "write_registration_available": True,
+                            },
+                            {
+                                "provider": "generic-jsonl",
+                                "detected": False,
+                                "write_registration_available": False,
+                            },
+                        ]
+                    }
+                },
+            ):
+                payload = start_cli.build_start_card(Path(tmp))
+
+        self.assertEqual(payload["decision"], "register_source_before_continuity")
+        self.assertEqual(payload["agent_next_action"]["id"], "register_claude_code_source")
+        self.assertEqual(
+            payload["agent_next_action"]["command"],
+            "aippocampus onboard --provider claude-code --cwd . --json",
+        )
+        action_ids = [action["id"] for action in payload["safe_next_actions"]]
+        self.assertLess(action_ids.index("register_claude_code_source"), action_ids.index("register_codex_source"))
 
     def test_bare_aippocampus_in_new_workspace_shows_start_card_not_help_wall(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -143,7 +197,7 @@ class AippocampusStartCliTests(unittest.TestCase):
 
         self.assertEqual(proc.returncode, 0, proc.stderr)
         self.assertIn("AIppocampus start", proc.stdout)
-        self.assertIn("next: aippocampus onboard --provider auto --status --json", proc.stdout)
+        self.assertIn("next: aippocampus onboard --provider codex --cwd . --json", proc.stdout)
         self.assertNotIn("Commands:", proc.stdout)
 
     def test_start_json_routes_trusted_codex_workspace_to_read_only_first_recall(self) -> None:

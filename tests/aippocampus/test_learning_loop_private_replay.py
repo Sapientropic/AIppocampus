@@ -16,7 +16,12 @@ from aippocampus_runtime.learning_loop import (  # noqa: E402
     detect_workflow_order_findings,
     project_action_time_guidance,
 )
+from aippocampus_runtime.learning_loop.effectiveness_ledger import (  # noqa: E402
+    LEDGER_ROW_KIND,
+    load_ledger_rows,
+)
 from aippocampus_runtime.learning_loop.private_export import (
+    load_behavior_event_rows,
     sanitize_events_for_private_replay,  # noqa: E402
 )
 from aippocampus_runtime.learning_loop.private_replay import (  # noqa: E402
@@ -153,10 +158,53 @@ class LearningLoopPrivateReplayTests(unittest.TestCase):
 
         self.assertEqual(rows[0]["event_id"], "raw-row")
         self.assertIn("source_refs", rows[0])
+        self.assertTrue(rows[0]["verified_origin"])
         self.assertNotIn("command", rows[0])
         self.assertNotIn("stdout", rows[0])
         self.assertNotIn("PRIVATE_HISTORY_PAYLOAD", encoded)
         self.assertNotIn("E:/private", encoded)
+
+    def test_jsonl_loaders_fail_closed_on_spoofed_origin_without_integrity_manifest(self) -> None:
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            events = root / "events.jsonl"
+            events.write_text(
+                json.dumps(
+                    {
+                        "kind": "behavior_event",
+                        "status": "failed",
+                        "command_family": "python_pytest",
+                        "verified_origin": True,
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            ledger = root / "effectiveness-ledger.jsonl"
+            ledger.write_text(
+                json.dumps(
+                    {
+                        "kind": LEDGER_ROW_KIND,
+                        "lesson_id": "spoofed",
+                        "outcome": "prevented_repeat",
+                        "verified_origin": True,
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            event_rows = load_behavior_event_rows(events)
+            ledger_rows = load_ledger_rows(ledger)
+
+        self.assertFalse(event_rows[0]["verified_origin"])
+        self.assertFalse(event_rows[0]["origin"]["verified_origin"])
+        self.assertFalse(ledger_rows[0]["verified_origin"])
+        self.assertFalse(ledger_rows[0]["origin"]["verified_origin"])
 
 
 if __name__ == "__main__":

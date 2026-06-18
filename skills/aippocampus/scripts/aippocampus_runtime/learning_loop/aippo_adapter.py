@@ -103,10 +103,11 @@ def _source_refs(value: Any, *, limit: int = 6) -> list[dict[str, Any]]:
 def _verified_origin(row: Mapping[str, Any]) -> bool:
     """Return whether imported learning material has a verified origin.
 
-    Older in-process learning findings did not carry an origin field, so absence
-    stays compatible. Explicit import/integrity metadata is fail-closed: once a
-    row says it came from an unverified bundle or JSONL, source refs may orient
-    navigation but cannot promote the lesson to source-supported authority.
+    Absence is deliberately fail-closed. Import bundles, loose JSONL loaders,
+    and hand-authored fixtures can all contain plausible source refs; only an
+    explicit verified-origin stamp may promote those refs to source-supported
+    authority. Local generators that really own their source trail must stamp
+    this field before handing rows to the adapter.
     """
 
     for key in ("verified_origin", "origin_verified", "support_verified"):
@@ -116,7 +117,7 @@ def _verified_origin(row: Mapping[str, Any]) -> bool:
         value = row.get(key)
         if isinstance(value, Mapping) and "verified_origin" in value:
             return bool(value.get("verified_origin"))
-    return True
+    return False
 
 
 def _first_string(value: Any, *, limit: int = 160) -> str:

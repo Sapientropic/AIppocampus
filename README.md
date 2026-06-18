@@ -56,16 +56,25 @@ maze. Use the canonical
 human or agent needs the shortest safe path.
 
 If the `aippocampus` command already exists from a source checkout or editable
-install, start with the foreground chooser, verify the Codex plugin when this
-is a trusted Codex setup, then pull and deepen one route. Status and repair
-cards come after the route is blocked or the host does not expose the tools.
+install, start with the foreground chooser. When no clean source is registered,
+run one explicit source-registration command before recall; status cards are
+read-only checks, not registration.
 
 ```sh
 aippocampus start --json
-aippocampus plugin install --codex --verify
+aippocampus onboard --provider codex --cwd . --json
 aippocampus agent recall "old decision or handoff cue" --json
 aippocampus agent deepen --request 1 --last-recall --json
+aippocampus export --json
+aippocampus sync --json
 ```
+
+Use `aippocampus onboard --provider claude-code --cwd . --json` instead when
+Claude Code transcripts are the intended source. Use
+`aippocampus import conversation --format generic-jsonl --input ./conversation.jsonl --json`
+only with a user-selected visible-message export file. After a successful
+deepen, `export` and `sync` are the carry-forward choices for the next thread,
+device, or project.
 
 If the command does not exist yet, use the no-clone probe first:
 
@@ -75,7 +84,8 @@ uvx aippocampus onboard --provider auto --status
 ```
 
 The Codex plugin command is a source checkout / editable local package path; the
-`uvx` path is the public package probe. For a user-facing install closeout,
+`uvx` path is the public package probe. It is Codex-only host integration, not
+source registration. For a user-facing install closeout,
 agents can ask for JSON directly; successful installs return a concise
 public-safe summary:
 
@@ -153,19 +163,21 @@ provider path and then ask for one old source-backed continuity route:
 
 ```sh
 # Codex: local history plus the most complete hook-capable host path.
-uvx aippocampus onboard --provider codex --status --json
-# Then follow the explicit write recommendation after consent.
+uvx aippocampus onboard --provider codex --dry-run --json
+uvx aippocampus onboard --provider codex --cwd . --json
 
 # Claude Code: local transcript onboarding plus scoped explicit hooks.
-uvx aippocampus onboard --provider claude-code --dry-run
-uvx aippocampus onboard --provider claude-code
+uvx aippocampus onboard --provider claude-code --dry-run --json
+uvx aippocampus onboard --provider claude-code --cwd . --json
 
 # Generic visible-message export from a user-selected local JSONL file.
 uvx aippocampus import conversation --format generic-jsonl --input ./conversation.jsonl --dry-run --json
-uvx aippocampus import conversation --format generic-jsonl --input ./conversation.jsonl
+uvx aippocampus import conversation --format generic-jsonl --input ./conversation.jsonl --json
 
 uvx aippocampus agent recall "old decision or handoff cue" --json
 uvx aippocampus agent deepen --request 1 --last-recall --json
+uvx aippocampus export --json
+uvx aippocampus sync --json
 ```
 
 Manual search demonstrates the source substrate; agent recall/deepen is the
@@ -181,11 +193,17 @@ real-host firing, `PostToolUse` / `PostToolBatch` capture, compaction hook
 utility, all Claude Code versions, or broad native ambient quality without
 source/event evidence. Hooks are never installed silently; review status first,
 then install them only when this machine is allowed to let AIppocampus touch the
-relevant host settings:
+relevant host settings. Codex and Claude Code use different hook surfaces:
 
 ```sh
+# Codex prompt/lifecycle hooks.
 aippocampus update status
 aippocampus update apply --surface hooks
+
+# Claude Code scoped UserPromptSubmit/Stop hooks.
+aippocampus hooks claude-code status --json
+aippocampus hooks claude-code dry-run --json
+aippocampus hooks claude-code install --json
 ```
 
 Rollback stays visible:
@@ -267,12 +285,12 @@ provider. Only after the user explicitly agrees to register local history, pick
 one provider-specific write path:
 
 ```sh
-uvx aippocampus onboard --provider codex --status --json
-# Then follow the explicit write recommendation after consent.
+uvx aippocampus onboard --provider codex --dry-run --json
+uvx aippocampus onboard --provider codex --cwd . --json
 uvx aippocampus onboard --provider claude-code --dry-run --json
-uvx aippocampus onboard --provider claude-code --json
+uvx aippocampus onboard --provider claude-code --cwd . --json
 uvx aippocampus import conversation --format generic-jsonl --input ./conversation.jsonl --dry-run --json
-uvx aippocampus import conversation --format generic-jsonl --input ./conversation.jsonl
+uvx aippocampus import conversation --format generic-jsonl --input ./conversation.jsonl --json
 ```
 
 For human-facing demos, omit `--format json` so onboarding and search show the

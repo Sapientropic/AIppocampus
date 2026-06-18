@@ -905,6 +905,121 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertTrue(wrote)
         self.assertEqual(json.loads(handle), handle_dict)
 
+    def test_last_recall_cache_marks_opened_routes_without_plaintext_handles(self) -> None:
+        cache_path = self.cwd / "last-recall-opened.json"
+        wrote = agent_continuity_cli_support.write_last_recall_cache(
+            [
+                {
+                    "request_index": 1,
+                    "route_id": "route_opened",
+                    "handle": {
+                        "route_id": "route_opened",
+                        "message_id": "msg_private_handle",
+                    },
+                    "handle_sha256_12": "abc123abc123",
+                }
+            ],
+            query="opened route cue",
+            cwd=self.cwd,
+            clean_source_dir=self.clean,
+            registry_dir=self.cwd / "registry",
+            macro_state_path=None,
+            project="AIppocampus",
+            max_matches=5,
+            schema_version=agent_continuity.SCHEMA_VERSION,
+            path=cache_path,
+        )
+
+        marked = agent_continuity_cli_support.mark_last_recall_request_opened(
+            1,
+            path=cache_path,
+        )
+        cache = agent_continuity_cli_support.read_last_recall_cache(cache_path)
+        encoded = cache_path.read_text(encoding="utf-8")
+
+        self.assertTrue(wrote)
+        self.assertTrue(marked)
+        self.assertTrue(cache["requests"][0]["opened"])
+        self.assertEqual(cache["opened_routes"][0]["route_id"], "route_opened")
+        self.assertEqual(cache["opened_routes"][0]["handle_sha256_12"], "abc123abc123")
+        self.assertIn(
+            "route_opened|abc123abc123",
+            agent_continuity_cli_support.opened_route_keys_from_last_recall_cache(cache_path),
+        )
+        self.assertIn(
+            "route_opened|*",
+            agent_continuity_cli_support.opened_route_keys_from_last_recall_cache(cache_path),
+        )
+        self.assertNotIn("msg_private_handle", encoded)
+        self.assertNotIn(str(self.cwd), encoded)
+
+    def test_recall_does_not_resuggest_deepen_for_already_opened_route(self) -> None:
+        cache_path = self.cwd / "last-recall-repeat.json"
+        first = agent_continuity.recall(
+            "opt-in continuity source before claims",
+            cwd=self.cwd,
+            clean_source_dir=self.clean,
+            registry_dir=self.cwd / "registry",
+            max_routes=1,
+        )
+        self.assertEqual(first["status"], "ok")
+        self.assertEqual(
+            first["foreground_action_card"]["canonical_action"]["action_id"],
+            "agent_deepen_selected_route",
+        )
+        agent_continuity_cli_support.write_last_recall_cache(
+            first["deepen_requests"],
+            query="opt-in continuity source before claims",
+            cwd=self.cwd,
+            clean_source_dir=self.clean,
+            registry_dir=self.cwd / "registry",
+            macro_state_path=None,
+            project="AIppocampus",
+            max_matches=5,
+            schema_version=agent_continuity.SCHEMA_VERSION,
+            path=cache_path,
+        )
+        self.assertTrue(
+            agent_continuity_cli_support.mark_last_recall_request_opened(
+                1,
+                path=cache_path,
+            )
+        )
+        expected_opened_key = agent_continuity_cli_support.last_recall_route_key(
+            first["deepen_requests"][0]["route_id"],
+            first["deepen_requests"][0]["handle_sha256_12"],
+        )
+        opened_keys = agent_continuity_cli_support.opened_route_keys_from_last_recall_cache(cache_path)
+        self.assertIn(
+            expected_opened_key,
+            opened_keys,
+        )
+
+        second = agent_continuity.recall(
+            "opt-in continuity source before claims",
+            cwd=self.cwd,
+            clean_source_dir=self.clean,
+            registry_dir=self.cwd / "registry",
+            max_routes=1,
+            opened_route_keys=opened_keys,
+        )
+        packet = next(
+            item
+            for item in second["memory_packets"]
+            if item["route_id"] == first["memory_packets"][0]["route_id"]
+        )
+
+        self.assertTrue(packet["already_opened"])
+        self.assertEqual(
+            packet["recommended_next"],
+            "use_opened_route_context_or_deepen_if_scope_changed",
+        )
+        self.assertEqual(second["metrics"]["already_opened_route_count"], 1)
+        self.assertEqual(
+            second["foreground_action_card"]["canonical_action"]["action_id"],
+            "use_opened_route_context",
+        )
+
     def test_last_recall_cache_keeps_public_safe_query_for_recovery(self) -> None:
         cache_path = self.cwd / "last-recall-query.json"
         wrote = agent_continuity_cli_support.write_last_recall_cache(
@@ -1819,8 +1934,13 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertEqual(deepen_proc.returncode, 0, deepen_proc.stderr)
         self.assertIn("AIppocampus agent deepen: ok", deepen_proc.stdout)
         self.assertIn("source windows opened:", deepen_proc.stdout)
-        self.assertIn("rerun with --json", deepen_proc.stdout)
+        self.assertIn("Source:", deepen_proc.stdout)
+        self.assertIn("agent-native recall opt-in path", deepen_proc.stdout)
+        self.assertIn("whole opened window", deepen_proc.stdout)
         self.assertNotIn('"source_window"', deepen_proc.stdout)
+        self.assertIn("<sensitive-value-redacted>", deepen_proc.stdout)
+        self.assertNotIn("SECRET_TOKEN=abc123", deepen_proc.stdout)
+        self.assertNotIn("SECRET_TOKEN", deepen_proc.stdout)
         self.assertNotIn("Opt-in continuity should return", deepen_proc.stdout)
 
     def test_agent_recall_accepts_semantic_controls_as_diagnostic_sidecar(self) -> None:

@@ -160,6 +160,23 @@ class PromptForegroundBudgetTests(unittest.TestCase):
             self.assertNotIn(raw_marker, context)
         self.assertEqual(public["foreground_context"]["debug_only_field_leak_count"], 0)
 
+    def test_weak_scent_with_only_quieted_reasons_stays_suppressed(self) -> None:
+        result = {
+            "decision": "scent",
+            "score": 0.64,
+            "confidence": "medium",
+            "query_terms": ["quieted"],
+            "concept_expansions": [],
+            "candidates": [],
+            "evidence": [],
+            "working_memory": [],
+            "cognitive_map": [],
+            "ambient_recall": {"cards": [], "anti_nag_token_ids": ["quieted-card"]},
+            "reasons": ["raw reason should not resurrect a quieted weak scent"],
+        }
+
+        self.assertIsNone(hook.context_for_hook(result))
+
     def test_cognitive_map_direction_only_scent_uses_compact_foreground(self) -> None:
         result = {
             "decision": "scent",

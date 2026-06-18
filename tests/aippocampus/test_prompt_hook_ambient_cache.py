@@ -339,6 +339,8 @@ class PromptHookAmbientCacheTests(AmbientRecallHookCase):
         )
         self.assertEqual(ambient["feedback_filter"]["load_status"], "loaded")
         self.assertEqual(ambient["feedback_filter"]["quieted_card_count"], 1)
+        self.assertIn("cached-card-to-quiet", ambient["anti_nag_token_ids"])
+        self.assertIsNone(hook.context_for_hook(result))
 
     def test_prompt_hook_debug_log_summarizes_ambient_cache_without_raw_prompt(self) -> None:
         result = {

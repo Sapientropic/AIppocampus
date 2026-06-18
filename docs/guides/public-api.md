@@ -178,10 +178,11 @@ The CLI contract applies to documented operator commands, especially:
 - `aippocampus storage gc --dry-run` as the no-mutation storage governance plan
   over capacity data and existing retention JSON
 - `aippocampus search "<cue>" --public` / `--metadata-only` as the
-  public-safe metadata projection for issue attachments, support reports, or
-  other surfaces that should not emit snippets, source refs, handles, or local
-  identifiers. `--snippet-chars 0` is supported when automation wants normal
-  match rows but no snippet text.
+  public-safe compact search receipt for issue attachments, support reports, or
+  other surfaces that need matched wording without local reopen details. It may
+  emit capped matched snippets by design, but it must omit source refs, handles,
+  message ids, and local identifiers. `--snippet-chars 0` is supported when
+  automation wants normal match rows but no snippet text.
 - `aippocampus export --redaction-profile public-export --no-raw` as the
   metadata-only public bundle path. It omits clean-source text, session refs,
   host session metadata, anchors, graph labels, raw rollouts, and searchable
