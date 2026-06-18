@@ -44,7 +44,12 @@ def _atomic_replace_bytes(path: Path, payload_bytes: bytes) -> None:
     tmp = path.with_name(f".{path.name}.aippocampus-{os.getpid()}-{time.time_ns()}{TMP_SUFFIX}")
     try:
         with tmp.open("xb") as handle:
-            handle.write(payload_bytes)  # lgtm[py/clear-text-storage-sensitive-data] Local AIppocampus control/generated-state files intentionally use plaintext; callers own public/private redaction boundaries.
+            # This low-level writer serves both public-safe generated state and
+            # private local control manifests. Callers own that boundary through
+            # `sanitize=True`; provider bridge locators must remain executable
+            # on the local machine and are not public artifacts.
+            # codeql[py/clear-text-storage-sensitive-data]
+            handle.write(payload_bytes)
         tmp.replace(path)
     except BaseException:
         try:

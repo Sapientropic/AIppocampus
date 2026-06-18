@@ -98,7 +98,11 @@ def _json_default(value: Any) -> str:
 
 
 def _emit_json(payload: Any) -> None:
-    print(json.dumps(payload, ensure_ascii=False, indent=2, default=_json_default))  # lgtm[py/clear-text-logging-sensitive-data] Local update JSON must preserve executable rollback paths; public fields are redacted by payload builders.
+    # Update JSON is a local/operator control surface. Payload builders decide
+    # which fields are public-safe; sanitizing here breaks executable rollback
+    # paths and private provider bridge locators that users need for recovery.
+    # codeql[py/clear-text-logging-sensitive-data]
+    print(json.dumps(payload, ensure_ascii=False, indent=2, default=_json_default))
 
 
 def _update_recovery_payload(*, code: str, message: str, next_command: str) -> dict[str, Any]:
