@@ -74,12 +74,26 @@ aippocampus agent deepen --request 1 --last-recall --json
 4. If no local source is registered yet, preview before writing:
 
    ```sh
+   aippocampus onboard --provider codex --dry-run --json
+   aippocampus onboard --provider codex --cwd . --json
    aippocampus onboard --provider claude-code --dry-run --json
+   aippocampus onboard --provider claude-code --cwd . --json
    aippocampus import conversation --format generic-jsonl --input ./conversation.jsonl --dry-run --json
+   aippocampus import conversation --format generic-jsonl --input ./conversation.jsonl --json
    ```
 
    Replace `./conversation.jsonl` with the user-selected export. Register
-   selected local history only after explicit consent.
+   selected local history only after explicit consent. Status cards are
+   read-only; the `--cwd .` provider commands and explicit import are the
+   source-registration writes.
+
+5. After a successful deepen, carry the reopened context only when the user is
+   moving to another thread, device, or project:
+
+   ```sh
+   aippocampus export --json
+   aippocampus sync --json
+   ```
 
 ## What Counts As Success
 

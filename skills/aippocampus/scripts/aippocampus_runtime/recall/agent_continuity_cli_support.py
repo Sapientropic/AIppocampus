@@ -50,6 +50,7 @@ SENSITIVE_ASSIGNMENT_RE = re.compile(
     r"\b[A-Za-z0-9_]*(?:TOKEN|SECRET|PASSWORD|API_KEY|ACCESS_KEY)[A-Za-z0-9_]*=\S+",
     re.I,
 )
+SOURCE_SNIPPET_CHAR_LIMIT = 420
 
 
 class RouteLimitError(ValueError):
@@ -988,6 +989,53 @@ def _public_projection_route_ids(data: Mapping[str, Any]) -> dict[int, str]:
     return route_ids
 
 
+def _handle_sha256_12(handle: Any) -> str:
+    if handle is None:
+        return ""
+    handle_arg = (
+        json.dumps(handle, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+        if isinstance(handle, Mapping)
+        else str(handle)
+    )
+    return hashlib.sha256(handle_arg.encode("utf-8")).hexdigest()[:12] if handle_arg else ""
+
+
+def last_recall_route_key(route_id: Any, handle_sha256_12: Any) -> str:
+    route = str(route_id or "").strip()
+    digest = str(handle_sha256_12 or "").strip()
+    return f"{route}|{digest}" if route and digest else ""
+
+
+def last_recall_route_wildcard_key(route_id: Any) -> str:
+    route = str(route_id or "").strip()
+    return f"{route}|*" if route else ""
+
+
+def _opened_routes_by_key(cache: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
+    opened: dict[str, dict[str, Any]] = {}
+    for item in cache.get("opened_routes") or []:
+        if not isinstance(item, Mapping):
+            continue
+        key = last_recall_route_key(item.get("route_id"), item.get("handle_sha256_12"))
+        if key:
+            opened[key] = dict(item)
+    return opened
+
+
+def opened_route_keys_from_last_recall_cache(path: str | Path | None = None) -> set[str]:
+    try:
+        cache = read_last_recall_cache(path)
+    except Exception:
+        return set()
+    keys = set(_opened_routes_by_key(cache))
+    for item in cache.get("opened_routes") or []:
+        if isinstance(item, Mapping):
+            wildcard = last_recall_route_wildcard_key(item.get("route_id"))
+            if wildcard:
+                keys.add(wildcard)
+    return keys
+
+
 def write_last_recall_cache(
     deepen_requests: Iterable[Any],
     *,
@@ -1002,19 +1050,33 @@ def write_last_recall_cache(
     path: str | Path | None = None,
 ) -> bool:
     requests: list[dict[str, Any]] = []
+    target = last_recall_cache_path(path)
+    try:
+        previous_cache = read_last_recall_cache(path) if target.exists() else {}
+    except Exception:
+        previous_cache = {}
+    previous_opened = _opened_routes_by_key(previous_cache)
     for request in deepen_requests:
         if not isinstance(request, Mapping) or not request.get("handle"):
             continue
+        handle_digest = str(request.get("handle_sha256_12") or "").strip() or _handle_sha256_12(
+            request.get("handle")
+        )
+        opened_key = last_recall_route_key(request.get("route_id"), handle_digest)
+        opened_entry = previous_opened.get(opened_key) if opened_key else None
         requests.append(
             {
                 "request_index": request.get("request_index"),
                 "route_id": request.get("route_id"),
+                "handle_sha256_12": handle_digest,
                 "local_reopen_token": _encode_local_reopen_token(request.get("handle")),
+                "opened": bool(opened_entry),
+                "opened_at": opened_entry.get("opened_at") if opened_entry else None,
+                "opened_count": opened_entry.get("opened_count") if opened_entry else 0,
             }
         )
     if not requests:
         return False
-    target = last_recall_cache_path(path)
     context_token = _local_reopen_context_token(
         cwd=cwd,
         clean_source_dir=clean_source_dir,
@@ -1026,6 +1088,11 @@ def write_last_recall_cache(
         "schema_version": schema_version,
         "written_at": core.now_utc(),
         "requests": requests[:25],
+        # This is session-local route-opened state, not a new memory layer. It
+        # stores only route id plus opaque handle digest so the next foreground
+        # recall does not nag the agent to reopen exactly the same source window
+        # it already opened. If the handle changes, the route is eligible again.
+        "opened_routes": list(previous_opened.values())[:100],
         "context": {
             "project": project,
             "max": max_matches,
@@ -1053,6 +1120,50 @@ def write_last_recall_cache(
         atomic_write_json(target, cache)
     except OSError:
         return False
+    return True
+
+
+def mark_last_recall_request_opened(
+    request_index: int,
+    *,
+    path: str | Path | None = None,
+    outcome: str = "source_open",
+) -> bool:
+    cache = read_last_recall_cache(path)
+    requests = [dict(request) for request in cache.get("requests") or [] if isinstance(request, Mapping)]
+    opened_routes = _opened_routes_by_key(cache)
+    changed = False
+    opened_at = core.now_utc()
+    for request in requests:
+        try:
+            index = int(request.get("request_index") or 0)
+        except (TypeError, ValueError):
+            index = 0
+        if index != int(request_index):
+            continue
+        route_id = str(request.get("route_id") or "").strip()
+        digest = str(request.get("handle_sha256_12") or "").strip()
+        key = last_recall_route_key(route_id, digest)
+        if not key:
+            continue
+        opened_count = int(request.get("opened_count") or 0) + 1
+        request["opened"] = True
+        request["opened_at"] = opened_at
+        request["opened_count"] = opened_count
+        opened_routes[key] = {
+            "route_id": route_id,
+            "handle_sha256_12": digest,
+            "opened_at": opened_at,
+            "opened_count": opened_count,
+            "outcome": str(outcome or "source_open"),
+        }
+        changed = True
+        break
+    if not changed:
+        return False
+    cache["requests"] = requests
+    cache["opened_routes"] = list(opened_routes.values())[:100]
+    atomic_write_json(last_recall_cache_path(path), cache)
     return True
 
 
@@ -1276,6 +1387,38 @@ def render_macro_human(payload: Mapping[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def _source_message_rank(message: Mapping[str, Any]) -> int:
+    source_class = str(message.get("source_use_class") or "").strip()
+    phase = str(message.get("phase") or "").strip().casefold()
+    role = str(message.get("role") or "").strip().casefold()
+    if source_class == "foreground_continuity_source":
+        return 0
+    if role in {"user", "assistant"} and phase not in {"audit", "debug", "tool"}:
+        return 1
+    if phase in {"commentary", "final_answer"}:
+        return 2
+    return 3
+
+
+def _primary_source_snippet_text(messages: Any) -> str:
+    if not isinstance(messages, list | tuple):
+        return ""
+    ranked = sorted(
+        ((index, item) for index, item in enumerate(messages, start=1) if isinstance(item, Mapping)),
+        key=lambda item: (_source_message_rank(item[1]), item[0]),
+    )
+    for _, message in ranked:
+        text = str(message.get("text") or "").strip()
+        if not text:
+            continue
+        compact = core.compact_text(text, SOURCE_SNIPPET_CHAR_LIMIT)
+        compact = SENSITIVE_ASSIGNMENT_RE.sub("<sensitive-value-redacted>", compact)
+        redacted = str(redact_sensitive_values(redact_private_paths(compact)) or "").strip()
+        if redacted:
+            return redacted
+    return ""
+
+
 def render_deepen_human(payload: Mapping[str, Any]) -> str:
     status = str(payload.get("status") or "unknown")
     surface = str(payload.get("surface") or "unknown")
@@ -1300,10 +1443,13 @@ def render_deepen_human(payload: Mapping[str, Any]) -> str:
         message_count = int(window.get("message_count") or len(window.get("messages") or []))
         evidence = data.get("evidence_level") or data.get("support_level") or "source_open"
         lines.append(f"Evidence: {evidence}; source windows opened: {message_count}")
+        snippet = _primary_source_snippet_text(window.get("messages"))
+        if snippet:
+            lines.append("Source: " + snippet)
         why = str(data.get("why_this_may_matter") or "").strip()
         if why:
             lines.append("Why: " + core.compact_text(why, 160))
-        lines.append("Next: rerun with --json to inspect the source window for exact wording.")
+        lines.append("Next: use --json --detail full only when you need the whole opened window.")
     lines.append("Boundary: use opened source only within scope; no broad claims from the handle.")
     return "\n".join(lines)
 

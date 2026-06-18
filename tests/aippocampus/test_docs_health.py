@@ -171,9 +171,18 @@ class DocsHealthTests(unittest.TestCase):
         readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
 
         recall_command = 'aippocampus agent recall "old decision or handoff cue" --json'
+        codex_write = "aippocampus onboard --provider codex --cwd . --json"
+        claude_write = "aippocampus onboard --provider claude-code --cwd . --json"
         self.assertLess(readme.index(recall_command), readme.index("## Quick Start"))
         self.assertLess(start_here.index("## First Recall"), start_here.index("## See And Add To Memory"))
         self.assertLess(start_here.index(recall_command), start_here.index("aippocampus vault sync --json"))
+        self.assertIn(codex_write, readme)
+        self.assertIn(claude_write, readme)
+        self.assertIn(codex_write, start_here)
+        self.assertIn(claude_write, start_here)
+        self.assertIn("aippocampus export --json", readme)
+        self.assertIn("aippocampus sync --json", start_here)
+        self.assertLess(start_here.index(codex_write), start_here.index(recall_command))
 
         repo_issues = docs_health.foreground_continuity_doc_issues(REPO_ROOT)
         self.assertEqual([], repo_issues)
@@ -281,6 +290,68 @@ class DocsHealthTests(unittest.TestCase):
             "no live host behavior",
         ):
             self.assertNotIn(repeated_caveat, demo_text)
+
+    def test_first_useful_recall_demo_is_copy_pasteable_and_agent_native(self) -> None:
+        demo_text = (REPO_ROOT / "docs" / "guides" / "demo-scenarios.md").read_text(
+            encoding="utf-8"
+        )
+        first_demo = demo_text.split("## Maintainer And Operator Scenario Catalog", 1)[0]
+
+        self.assertIn("git clone https://github.com/Sapientropic/AIppocampus.git", first_demo)
+        self.assertIn('python -m pip install -e ".[dev]"', first_demo)
+        self.assertIn("aippocampus start --json", first_demo)
+        self.assertIn(
+            'aippocampus agent recall "can an agent catch up without pretending it has innate memory?"',
+            first_demo,
+        )
+        self.assertLess(first_demo.index("aippocampus start --json"), first_demo.index("agent recall"))
+        self.assertLess(first_demo.index("agent recall"), first_demo.index("agent deepen"))
+        self.assertIn("First Useful Recall (Agent)", first_demo)
+        self.assertIn("recall_context", first_demo)
+        self.assertIn("recall_deepen", first_demo)
+
+    def test_bilingual_docs_have_operational_bridge_and_glossary(self) -> None:
+        glossary = REPO_ROOT / "docs" / "guides" / "glossary-bilingual.md"
+        zh_first = REPO_ROOT / "docs" / "guides" / "zh" / "first-useful-recall.md"
+        llms_text = (REPO_ROOT / "llms.txt").read_text(encoding="utf-8")
+        origin_zh = (REPO_ROOT / "docs" / "未干的地图.md").read_text(encoding="utf-8")
+        yi_contract = (
+            REPO_ROOT / "docs" / "architecture" / "coordination" / "yi-macro-runtime-interfaces.md"
+        ).read_text(encoding="utf-8")
+
+        self.assertTrue(glossary.exists())
+        self.assertTrue(zh_first.exists())
+        glossary_text = glossary.read_text(encoding="utf-8")
+        zh_text = zh_first.read_text(encoding="utf-8")
+        for term in (
+            "hippocampus",
+            "continuity",
+            "clean source",
+            "recall",
+            "deepen",
+            "route",
+            "layer",
+            "scaffold",
+            "foundation",
+        ):
+            self.assertIn(term, glossary_text)
+        self.assertIn("Chinese origin essay is canonical", llms_text)
+        self.assertIn("English transcreation", llms_text)
+        self.assertIn("canonical Chinese origin essay", origin_zh[:500])
+        self.assertIn("the-unfinished-map.md", origin_zh[:500])
+        self.assertIn("aippocampus start --json", zh_text)
+        self.assertIn("aippocampus agent recall", zh_text)
+        for gloss in (
+            "世 / 应 (Shi/Ying; host/response role positioning)",
+            "消息卦 momentum (growth/decline phase)",
+            "纳甲-like active-axis timing (Najia-style timing)",
+            "卦气-like source-epoch cadence (hexagram-qi style cadence)",
+            "乘 / 承 / 比 / 应 internal line topology",
+            "当位 / 不当位 (proper/improper line position)",
+            "本卦 -> changing lines -> 之卦 (original hexagram -> changed hexagram)",
+            "Nuclear/互卦 basins (nuclear hexagram basins)",
+        ):
+            self.assertIn(gloss, yi_contract)
 
     def test_evidence_ledgers_stay_line_addressable(self) -> None:
         issues, metrics = docs_health.evidence_ledger_line_length_payload(REPO_ROOT)

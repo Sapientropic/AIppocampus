@@ -68,6 +68,18 @@ RAW_BLOCKED_KEYS = {
 }
 LOCAL_PATH_SENTINELS = ("E:/", "C:/", "\\Users\\", "/Users/", "/home/", "/tmp/")
 BEHAVIOR_EVENT_REQUIRED_ANY = ("status", "hard_event_kind", "event_kind", "command_family")
+LOCAL_SANITIZED_ORIGIN = {
+    "verified_origin": True,
+    "origin_verified": True,
+    "origin_kind": "local_private_replay_sanitized_export",
+    "boundary": "local sanitizer owns the clean-source trail; exported rows still need source reopen before claims",
+}
+LOADED_JSONL_ORIGIN = {
+    "verified_origin": False,
+    "origin_verified": False,
+    "origin_kind": "operator_selected_json_file_without_integrity_manifest",
+    "boundary": "parsed JSON is not a source-trust anchor; absence of integrity verification fails closed",
+}
 
 
 class LearningReplayInputError(ValueError):
@@ -145,6 +157,9 @@ def sanitize_events_for_private_replay(
         row.setdefault("scope", "project_or_task_family")
         row.setdefault("workspace_or_environment_profile", "private_sanitized_history")
         row.setdefault("freshness_window", "recent")
+        row["verified_origin"] = True
+        row["origin_verified"] = True
+        row["origin"] = dict(LOCAL_SANITIZED_ORIGIN)
         rows.append(row)
     return rows
 
@@ -197,6 +212,20 @@ def _validate_behavior_event_rows(rows: list[dict[str, Any]]) -> list[dict[str, 
     return rows
 
 
+def _stamp_loaded_behavior_rows(rows: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    stamped: list[dict[str, Any]] = []
+    for row in rows:
+        item = dict(row)
+        # A loader only proves the file parsed. Without a checked sidecar or
+        # signature, file input must not inherit any row-level trust claim that
+        # could be hand-authored into the JSONL.
+        item["verified_origin"] = False
+        item["origin_verified"] = False
+        item["origin"] = dict(LOADED_JSONL_ORIGIN)
+        stamped.append(item)
+    return stamped
+
+
 def load_behavior_event_rows(path: Path) -> list[dict[str, Any]]:
     text = _read_text_for_replay(path)
     if path.suffix.lower() == ".jsonl":
@@ -217,7 +246,7 @@ def load_behavior_event_rows(path: Path) -> list[dict[str, Any]]:
                     f"Behavior events JSONL row {line_number} is not an object.",
                 )
             rows.append(dict(item))
-        return _validate_behavior_event_rows(rows)
+        return _validate_behavior_event_rows(_stamp_loaded_behavior_rows(rows))
     try:
         payload = json.loads(text)
     except json.JSONDecodeError as exc:
@@ -226,10 +255,14 @@ def load_behavior_event_rows(path: Path) -> list[dict[str, Any]]:
             "Behavior events JSON is malformed.",
         ) from exc
     if isinstance(payload, list):
-        return _validate_behavior_event_rows([dict(row) for row in payload if isinstance(row, Mapping)])
+        return _validate_behavior_event_rows(
+            _stamp_loaded_behavior_rows([dict(row) for row in payload if isinstance(row, Mapping)])
+        )
     if isinstance(payload, Mapping):
         rows = payload.get("events") or payload.get("behavior_events") or payload.get("rows") or []
-        return _validate_behavior_event_rows([dict(row) for row in rows if isinstance(row, Mapping)])
+        return _validate_behavior_event_rows(
+            _stamp_loaded_behavior_rows([dict(row) for row in rows if isinstance(row, Mapping)])
+        )
     return []
 
 

@@ -642,9 +642,9 @@ class AippocampusCliRecoveryCardTests(unittest.TestCase):
         self.assertEqual(conversation_choice["requires"], ["input_path"])
         self.assertEqual(executable_command_violations(payload), [])
         self.assertFalse(payload["privacy_boundary"]["raw_local_paths_emitted"])
-        self.assertEqual(doctor.returncode, 0, doctor.stderr)
+        self.assertIn(doctor.returncode, {0, 2}, doctor.stderr)
         self.assertIn("AIppocampus doctor", doctor.stdout)
-        self.assertIn("doctor provider", doctor.stdout)
+        self.assertIn("preflight", doctor.stdout)
 
     def test_import_conversation_missing_input_is_structured_and_path_redacted(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -1162,7 +1162,7 @@ class AippocampusCliRecoveryCardTests(unittest.TestCase):
             ("object-sync", "--json"): "aippocampus_object_sync_chooser",
             ("storage", "--json"): "aippocampus_storage_chooser",
             ("storage", "gc", "--json"): "aippocampus_storage_gc_recovery",
-            ("doctor", "--json"): "aippocampus_doctor_chooser",
+            ("doctor", "--json"): "aippocampus_doctor_preflight",
             ("smoke", "--json"): "aippocampus_smoke_chooser",
             ("logs", "--json"): "aippocampus_logs_chooser",
             ("continuity-domain", "--json"): "aippocampus_continuity_domain_recovery",

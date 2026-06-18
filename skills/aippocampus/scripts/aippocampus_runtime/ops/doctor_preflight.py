@@ -75,14 +75,16 @@ def _preflight_blocker(checks: dict[str, Any]) -> dict[str, Any] | None:
         return {
             "id": "age_encryption_tools",
             "message": "Encrypted sync needs both age and age-keygen on PATH.",
-            "fix_command": "age --version",
+            "fix_command": "aippocampus doctor preflight --json",
+            "external_check_command": "age --version",
             "manual_instruction": "Install age/age-keygen for your OS, then rerun preflight.",
         }
     if not _as_dict(checks.get("host_cli")).get("available"):
         return {
             "id": "host_cli",
             "message": "Neither codex nor claude CLI is resolvable from this host process.",
-            "fix_command": "codex --version",
+            "fix_command": "aippocampus doctor preflight --json",
+            "external_check_command": "codex --version",
             "fallback_command": "claude --version",
         }
     return None
@@ -123,7 +125,7 @@ def build_preflight_report(*, registry_dir: str | Path | None = None) -> dict[st
             claim_boundary="host_setup_not_memory_evidence",
         )
     )
-    for key in ("fallback_command", "manual_instruction"):
+    for key in ("external_check_command", "fallback_command", "manual_instruction"):
         if blocker and blocker.get(key):
             primary[key] = str(blocker[key])
     return {

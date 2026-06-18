@@ -35,6 +35,7 @@ def _artifact(
     *,
     user_data: bool = False,
     purge_supported: bool = True,
+    purge_mode: str = "delete_artifact",
 ) -> dict[str, Any]:
     return {
         "id": artifact_id,
@@ -44,6 +45,7 @@ def _artifact(
         "path_redacted": True,
         "user_data": user_data,
         "purge_supported": purge_supported,
+        "purge_mode": purge_mode if purge_supported else "inspect_only",
     }
 
 
@@ -82,13 +84,15 @@ def build_inventory(
             "claude_home_settings",
             "host_integration",
             claude_code.default_settings_path(),
-            purge_supported=False,
+            purge_supported=True,
+            purge_mode="remove_aippocampus_entries",
         ),
         _artifact(
             "claude_project_settings",
             "host_integration",
             workspace / ".claude" / "settings.json",
-            purge_supported=False,
+            purge_supported=True,
+            purge_mode="remove_aippocampus_entries",
         ),
         _artifact("registry_root", "user_data", registry, user_data=True),
         _artifact("registry_logs", "user_data", registry / "logs", user_data=True),
@@ -98,9 +102,9 @@ def build_inventory(
     existing = [item for item in artifacts if item["exists"]]
     primary = foreground_shell_action(
         action_id="purge_host_artifacts_after_review",
-        command="aippocampus uninstall --purge --json",
+        command="aippocampus uninstall --purge --confirm-host-integration --json",
         label="Purge host integration artifacts",
-        why="Review this inventory first; add --confirm-user-data only when registry/index data should be deleted.",
+        why="Review this inventory first; host settings/cache deletion needs explicit confirmation; add --confirm-user-data only when registry/index data should be deleted.",
         mutation_risk="explicit_host_artifact_delete",
         claim_boundary="uninstall_inventory_not_memory_evidence",
     )
@@ -116,8 +120,8 @@ def build_inventory(
             "local_paths_emitted": False,
             "raw_private_memory_emitted": False,
         },
-        "purge_command": "aippocampus uninstall --purge --json",
-        "purge_user_data_command": "aippocampus uninstall --purge --confirm-user-data --json",
+        "purge_command": "aippocampus uninstall --purge --confirm-host-integration --json",
+        "purge_user_data_command": "aippocampus uninstall --purge --confirm-host-integration --confirm-user-data --json",
         "claim_boundary": "inventory reports filesystem presence only; it does not inspect private memory contents",
     }
 
@@ -137,6 +141,7 @@ def purge(
     codex_home_path: str | Path | None = None,
     registry_dir: str | Path | None = None,
     cwd: str | Path | None = None,
+    confirm_host_integration: bool = False,
     confirm_user_data: bool = False,
 ) -> dict[str, Any]:
     inventory = build_inventory(codex_home_path=codex_home_path, registry_dir=registry_dir, cwd=cwd)
@@ -144,10 +149,13 @@ def purge(
     skipped: list[dict[str, Any]] = []
     codex = Path(codex_home_path).expanduser() if codex_home_path else core.codex_home()
     registry = Path(registry_dir).expanduser() if registry_dir else core.aippocampus_registry_dir()
+    workspace = Path(cwd).resolve() if cwd else Path.cwd()
     path_by_id = {
         "codex_marketplace": codex / "aippocampus-marketplace",
         "codex_installed_plugin_cache": codex / "plugins" / "cache" / "aippocampus-local",
         "staged_skill": codex / "skills" / "aippocampus",
+        "claude_home_settings": claude_code.default_settings_path(),
+        "claude_project_settings": workspace / ".claude" / "settings.json",
         "registry_root": registry,
         "registry_logs": registry / "logs",
         "registry_threads": registry / "threads",
@@ -157,6 +165,9 @@ def purge(
         artifact_id = str(artifact["id"])
         if not artifact.get("exists") or not artifact.get("purge_supported"):
             continue
+        if artifact.get("category") == "host_integration" and not confirm_host_integration:
+            skipped.append({"id": artifact_id, "reason": "requires_confirm_host_integration"})
+            continue
         if artifact.get("user_data") and not confirm_user_data:
             skipped.append({"id": artifact_id, "reason": "requires_confirm_user_data"})
             continue
@@ -164,8 +175,18 @@ def purge(
         if path is None:
             skipped.append({"id": artifact_id, "reason": "no_purge_handler"})
             continue
+        if artifact.get("purge_mode") == "remove_aippocampus_entries":
+            result = claude_code.uninstall_hooks(settings_path=path)
+            removed.append(
+                {
+                    "id": artifact_id,
+                    "removed": bool(result.get("changed")),
+                    "handler": "claude_code_uninstall_hooks",
+                    "ok": bool(result.get("ok")),
+                }
+            )
+            continue
         removed.append({"id": artifact_id, "removed": _safe_remove(path)})
-    claude_uninstall = claude_code.uninstall_hooks()
     primary = foreground_shell_action(
         action_id="check_post_uninstall_status",
         command="aippocampus uninstall --dry-run --json",
@@ -178,10 +199,10 @@ def purge(
         "kind": "aippocampus_uninstall_purge",
         "ok": True,
         "dry_run": False,
+        "confirm_host_integration": bool(confirm_host_integration),
         "confirm_user_data": bool(confirm_user_data),
         "removed": removed,
         "skipped": skipped,
-        "claude_code_uninstall": claude_uninstall,
         "workspace_label": "current_workspace",
         "path_redacted": True,
         **canonical_foreground_action_fields(primary),
@@ -199,6 +220,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--dry-run", "--preview", action="store_true", dest="dry_run")
     parser.add_argument("--purge", action="store_true")
+    parser.add_argument("--confirm-host-integration", action="store_true")
     parser.add_argument("--confirm-user-data", action="store_true")
     parser.add_argument("--codex-home")
     parser.add_argument("--registry-dir")
@@ -210,6 +232,7 @@ def main(argv: list[str] | None = None) -> int:
             codex_home_path=args.codex_home,
             registry_dir=args.registry_dir,
             cwd=args.cwd,
+            confirm_host_integration=args.confirm_host_integration,
             confirm_user_data=args.confirm_user_data,
         )
     else:

@@ -25,7 +25,7 @@ from aippocampus_runtime.privacy import (
     redact_private_paths,
     redact_sensitive_values,
 )
-from aippocampus_runtime.recall.query_policy import split_query_terms
+from aippocampus_runtime.recall.query_policy import cjk_query_sidecar_terms, split_query_terms
 from aippocampus_runtime.source.clean_source import SCOPE_LABEL_ORDER
 from aippocampus_runtime.source.semantic_scope_labels import (
     load_semantic_scope_labels,
@@ -39,6 +39,7 @@ PROCESS_NOISE_PREFIXES = (
     ("<tool", "tool_process"),
 )
 DEFAULT_HUMAN_SNIPPET_CHARS = 220
+DEFAULT_PUBLIC_SNIPPET_CHARS = 260
 
 
 def non_negative_int(value: str) -> int:
@@ -92,6 +93,33 @@ def score_message(message: dict[str, Any], terms: list[str]) -> float:
     elif message.get("phase") == "commentary":
         score -= 2.0
     return score
+
+
+def search_query_terms(patterns: list[str]) -> list[str]:
+    """Return exact-search terms with the same CJK sidecar used by recall.
+
+    Search is the foreground "I remember the wording" fallback. For CJK text,
+    a user can be one character off and still clearly point at the same source
+    phrase, so keep search aligned with recall's measured ngram sidecar instead
+    of making Chinese exact search strictly weaker than the recall route.
+    """
+
+    seen: set[str] = set()
+    terms: list[str] = []
+    for term in [
+        *split_query_terms(patterns),
+        *[
+            sidecar
+            for pattern in patterns
+            for sidecar in cjk_query_sidecar_terms(str(pattern or ""))
+        ],
+    ]:
+        key = term.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        terms.append(term)
+    return terms
 
 
 def as_float(value: Any, default: float = 0.0) -> float:
@@ -148,7 +176,7 @@ def search_clean_source(
         )
     messages_path = source_dir / "messages.jsonl"
     semantic_sidecar = load_semantic_scope_labels(source_dir)
-    terms = split_query_terms(patterns)
+    terms = search_query_terms(patterns)
     label_filter = [str(label).strip() for label in scope_labels or [] if str(label).strip()]
     known_scope_labels = set(SCOPE_LABEL_ORDER)
     warnings: list[dict[str, Any]] = [
@@ -260,7 +288,9 @@ def first_recall_mode_lines() -> list[str]:
 
 def render_human_search_result(result: dict[str, Any]) -> str:
     terms = result.get("query_terms") or []
-    query = " ".join(str(term) for term in terms).strip() or "(empty query)"
+    query = str(result.get("query_text") or "").strip()
+    if not query:
+        query = " ".join(str(term) for term in terms).strip() or "(empty query)"
     matches = list(result.get("matches") or [])
     lines: list[str] = []
     if matches:
@@ -314,11 +344,15 @@ def public_search_result(
     query_text: str | None = None,
 ) -> dict[str, Any]:
     public = dict(result) if include_paths else redact_sensitive_values(redact_private_paths(result))
+    if query_text is not None:
+        public["query_text"] = str(query_text)
     original_matches = [item for item in result.get("matches") or [] if isinstance(item, dict)]
     if metadata_only:
         matches: list[dict[str, Any]] = []
         for index, match in enumerate(public.get("matches") or [], start=1):
             timestamp = str(match.get("timestamp") or "")
+            raw_snippet = "" if match.get("search_noise") else str(match.get("snippet") or "")
+            snippet = compact_text(raw_snippet, DEFAULT_PUBLIC_SNIPPET_CHARS) if raw_snippet else ""
             matches.append(
                 {
                     "match_index": index,
@@ -329,7 +363,8 @@ def public_search_result(
                     "scope_labels": match.get("scope_labels") or [],
                     "semantic_scope_labels": match.get("semantic_scope_labels") or [],
                     "date": timestamp[:10] if timestamp else None,
-                    "snippet_omitted": True,
+                    "snippet": snippet,
+                    "snippet_omitted": not bool(snippet),
                     "source_refs_omitted": True,
                     "search_noise": bool(match.get("search_noise")),
                     "noise_reason": match.get("noise_reason"),
@@ -339,7 +374,7 @@ def public_search_result(
         if not include_paths:
             public["source"] = LOCAL_PATH_REDACTION
             public["source_omitted"] = True
-        public["output_boundary"] = "public_metadata_only_no_source_snippets_or_reopen_refs"
+        public["output_boundary"] = "public_metadata_with_capped_source_snippets_no_reopen_refs"
     else:
         public["output_boundary"] = (
             "local_private_source_snippets"
@@ -362,10 +397,16 @@ def public_search_result(
             "candidate_routes_are_navigation_only": True,
             "reopen_required_before_quoting": True,
         }
+    capped_public_snippets_emitted = any(
+        bool(match.get("snippet")) and not match.get("snippet_omitted")
+        for match in public.get("matches") or []
+        if isinstance(match, dict)
+    )
     public["privacy"] = {
         "paths_included": include_paths,
         "path_redaction": "none" if include_paths else LOCAL_PATH_REDACTION,
         "metadata_only": metadata_only,
+        "capped_source_snippets_emitted": bool(metadata_only and capped_public_snippets_emitted),
         "raw_source_snippets_emitted": bool(public.get("matches")) and not metadata_only,
         "local_reopen_refs_emitted": bool(public.get("matches")) and not metadata_only,
     }
@@ -428,11 +469,12 @@ def search_foreground_authority(
             "entry_state": "explicit_search_invoked",
             "route_state": "reopenable_route",
             "usefulness": "useful_for_next_action",
-            "claim_permission": "metadata_only_no_claim_before_reopen",
+            "claim_permission": "capped_search_snippet_no_claim_before_reopen",
             "source_boundary": {
                 "authority": "reopenable_route",
                 "source_backed_claim_allowed": False,
                 "metadata_only": True,
+                "capped_snippets_are_bounded_receipts": True,
                 "source_reopen_required_before_claim": True,
                 "snippets_are_source_open": False,
             },
@@ -441,7 +483,7 @@ def search_foreground_authority(
                 "tool_name": "recall_context",
                 "arguments": {"intent": query, "max": min(max(len(matches), 1), 5)},
                 "claim_boundary": "source_reopen_required_before_claim",
-                "why": "Metadata-only search found matching clean-source shape; reopen context before quoting or relying on exact wording.",
+                "why": "Capped search snippet found matching clean-source wording; reopen context before quoting or relying on exact wording.",
             },
             "forbidden_claims": [
                 "exact wording",
@@ -584,7 +626,7 @@ No match: refine the cue, try exact wording, or run
 registered. Search snippets are source-backed receipts, not permission to quote
 or make strong claims beyond the reopened source boundary.""",
         epilog=(
-            "Advanced output controls: --public omits snippets and local reopen refs; "
+            "Advanced output controls: --public keeps capped snippets but omits local reopen refs; "
             "--include-paths is local diagnostic only."
         ),
     )
@@ -614,7 +656,7 @@ or make strong claims beyond the reopened source boundary.""",
         "--metadata-only",
         action="store_true",
         dest="metadata_only",
-        help="Emit public-safe metadata only: no snippets, source refs, message ids, or local reopen ids.",
+        help="Emit public-safe compact output: capped snippets, no source refs, message ids, or local reopen ids.",
     )
     args = parser.parse_args(argv)
     if not args.patterns:
@@ -637,6 +679,7 @@ or make strong claims beyond the reopened source boundary.""",
         result,
         include_paths=bool(args.include_paths),
         metadata_only=bool(args.metadata_only),
+        query_text=" ".join(str(pattern) for pattern in args.patterns),
     )
     if args.json_output:
         print(json.dumps(public_result, ensure_ascii=False, indent=2))

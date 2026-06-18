@@ -158,20 +158,24 @@ Register local history only after the user explicitly agrees, then choose the
 matching provider path:
 
 ```sh
-uvx aippocampus onboard --provider codex --status --json
-# Then follow the explicit write recommendation after consent.
-uvx aippocampus onboard --provider claude-code --dry-run
-uvx aippocampus onboard --provider claude-code
+uvx aippocampus onboard --provider codex --dry-run --json
+uvx aippocampus onboard --provider codex --cwd . --json
+uvx aippocampus onboard --provider claude-code --dry-run --json
+uvx aippocampus onboard --provider claude-code --cwd . --json
 uvx aippocampus import conversation --format generic-jsonl --input ./conversation.jsonl --dry-run --json
-uvx aippocampus import conversation --format generic-jsonl --input ./conversation.jsonl
+uvx aippocampus import conversation --format generic-jsonl --input ./conversation.jsonl --json
 uvx aippocampus agent recall "old decision or handoff cue" --json
 uvx aippocampus agent deepen --request 1 --last-recall --json
+uvx aippocampus export --json
+uvx aippocampus sync --json
 ```
 
 Use exact search when the user remembers wording. If the wording is fuzzy, use
 a project cue (`repo / feature / object / topic`) or a time cue (`recent`,
 `last month`, or a known period) through recall/deepen. Those cues are candidate
-navigation until a source-backed snippet or opened source appears. Use
+navigation until a source-backed snippet or opened source appears. Use the
+export or sync line after a successful deepen when the next job is carrying
+that source-backed context to another thread, device, or project. Use
 `--format json` only for automation. Use the GitHub `uvx --from git+...` form
 only when intentionally testing an unreleased main-branch snapshot.
 
@@ -574,12 +578,12 @@ Then register existing local transcript source and build clean-source indexes
 only after user consent, with an explicit provider:
 
 ```sh
-aippocampus onboard --provider codex --status --json
-# Then follow the explicit write recommendation after consent.
+aippocampus onboard --provider codex --dry-run --json
+aippocampus onboard --provider codex --cwd . --json
 aippocampus onboard --provider claude-code --dry-run --json
-aippocampus onboard --provider claude-code --json
+aippocampus onboard --provider claude-code --cwd . --json
 aippocampus import conversation --format generic-jsonl --input ./conversation.jsonl --dry-run --json
-aippocampus import conversation --format generic-jsonl --input ./conversation.jsonl
+aippocampus import conversation --format generic-jsonl --input ./conversation.jsonl --json
 aippocampus agent recall "old decision or handoff cue" --json
 aippocampus agent deepen --request 1 --last-recall --json
 ```

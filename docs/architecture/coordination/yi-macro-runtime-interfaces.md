@@ -25,13 +25,13 @@ macro packet into source evidence.
 | Nuclear / opposite / reverse transforms | `deepen_explain_only` | `macro.hexagram.public_hexagram_projection`, `macro.transform_orbit` | No foreground symbolic prose, route merge, source support, or route-weight change until a usefulness fixture proves lift. |
 | King Wen sequence movement | `recheck_timing`, `deepen_explain_only` | `macro.stage_tracker` | The sequence is not project law and must not auto-mutate state or claims. |
 | Three Powers route facets | `recall_fanout`, `telepathy_handoff_compatibility` | `macro.three_powers` | No source evidence, hard assignment, identity truth, or role truth. |
-| 世 / 应 role positioning | `telepathy_handoff_compatibility`, `deepen_explain_only` | `macro.state.relation_position`, `macro.line_topology` | No agent personality truth or user-intent inference. |
-| 消息卦 momentum | `recheck_timing`, `compact_foreground_packet` | `macro.momentum`, agent macro packet | No energy score, metaphysical project-state claim, or evidence score. |
+| 世 / 应 (Shi/Ying; host/response role positioning) | `telepathy_handoff_compatibility`, `deepen_explain_only` | `macro.state.relation_position`, `macro.line_topology` | No agent personality truth or user-intent inference. |
+| 消息卦 momentum (growth/decline phase) | `recheck_timing`, `compact_foreground_packet` | `macro.momentum`, agent macro packet | No energy score, metaphysical project-state claim, or evidence score. |
 | Total hexagram encoder | `compact_foreground_packet`, `recall_fanout` when complete/reviewed | `macro.total_encoder`, `recall.macro_live_recall` | No defaulting missing lines to 乾/人, no private/local-source projection, no symbolic advice. |
-| 纳甲-like active-axis timing | `recheck_timing`, `research_only` | `macro.timing`, `ops.macro_timing_recheck_experiment` | No currentness replacement, fact assignment, foreground prose, or default ranking change. |
-| 卦气-like source-epoch cadence | `recheck_timing`, `research_only` | `macro.timing`, `ops.macro_timing_recheck_experiment` | No literal calendar/solar-term timing, temporal-head replacement, scheduled background cost, or foreground prose. |
-| 乘 / 承 / 比 / 应 internal line topology | `telepathy_handoff_compatibility`, `deepen_explain_only` | `macro.line_topology`, `macro.three_powers` | No ranking-weight change, source support, or mathematical topology claim. |
-| 当位 / 不当位 | `research_only` | none | No foreground signal, route control, or claim support until usefulness is proven. |
+| 纳甲-like active-axis timing (Najia-style timing) | `recheck_timing`, `research_only` | `macro.timing`, `ops.macro_timing_recheck_experiment` | No currentness replacement, fact assignment, foreground prose, or default ranking change. |
+| 卦气-like source-epoch cadence (hexagram-qi style cadence) | `recheck_timing`, `research_only` | `macro.timing`, `ops.macro_timing_recheck_experiment` | No literal calendar/solar-term timing, temporal-head replacement, scheduled background cost, or foreground prose. |
+| 乘 / 承 / 比 / 应 internal line topology | `telepathy_handoff_compatibility`, `deepen_explain_only` | `macro.line_topology`, `macro.three_powers` | Cheng/Cheng/Bi/Ying relation checks; no ranking-weight change, source support, or mathematical topology claim. |
+| 当位 / 不当位 (proper/improper line position) | `research_only` | none | No foreground signal, route control, or claim support until usefulness is proven. |
 
 ## Shi/Ying Restriction Edge Decision
 
@@ -82,7 +82,7 @@ quietly become a full hexagram.
 ## Change-Line Transition Records
 
 `cross_grain.macro_transition_record` names the existing computation
-本卦 -> changing lines -> 之卦 as a lifecycle record. The record carries source
+本卦 -> changing lines -> 之卦 (original hexagram -> changed hexagram) as a lifecycle record. The record carries source
 hexagram, changed lines, target hexagram, perturbation band, optional source
 refs, and review policy.
 
@@ -94,7 +94,7 @@ pressure over source-backed project events.
 
 ## Nuclear Basin Decision
 
-Nuclear/互卦 basins are locked to `explain_only` for V0. The candidate
+Nuclear/互卦 basins (nuclear hexagram basins) are locked to `explain_only` for V0. The candidate
 usefulness path is perspective-change explanation during deepen/debug, but no
 current fixture proves route merging, ranking, or source-support lift. Until a
 future issue supplies wins, no-help cases, and no authority upgrade evidence,

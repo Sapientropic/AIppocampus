@@ -62,12 +62,12 @@ Only after the user consents to register selected local history, choose a
 scoped write path:
 
 ```sh
-uvx aippocampus onboard --provider codex --status --json
-# Then follow the explicit write recommendation after consent.
-uvx aippocampus onboard --provider claude-code --dry-run
-uvx aippocampus onboard --provider claude-code
+uvx aippocampus onboard --provider codex --dry-run --json
+uvx aippocampus onboard --provider codex --cwd . --json
+uvx aippocampus onboard --provider claude-code --dry-run --json
+uvx aippocampus onboard --provider claude-code --cwd . --json
 uvx aippocampus import conversation --format generic-jsonl --input ./conversation.jsonl --dry-run --json
-uvx aippocampus import conversation --format generic-jsonl --input ./conversation.jsonl
+uvx aippocampus import conversation --format generic-jsonl --input ./conversation.jsonl --json
 ```
 
 The generic JSONL path requires a real user-selected local file. Do not paste
@@ -78,7 +78,12 @@ After registration, ask for one route again:
 ```sh
 uvx aippocampus agent recall "old decision or handoff cue" --json
 uvx aippocampus agent deepen --request 1 --last-recall --json
+uvx aippocampus export --json
+uvx aippocampus sync --json
 ```
+
+Use `export` or `sync` only after a source-backed route has been reopened and
+the next goal is carrying that context into another thread, device, or project.
 
 ## 5. Optional Host Checks
 

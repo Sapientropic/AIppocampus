@@ -144,7 +144,7 @@ class AippocampusHealthTests(unittest.TestCase):
         self.assertTrue(payload["readiness_card"]["usable_now"])
         self.assertFalse(payload["readiness_card"]["blocks_first_recall"])
 
-    def test_exit_code_is_nonzero_when_first_recall_is_blocked(self) -> None:
+    def test_default_exit_code_is_nonzero_when_first_recall_is_blocked(self) -> None:
         with (
             mock.patch(
                 "aippocampus_runtime.health.build_health_report",
@@ -172,7 +172,7 @@ class AippocampusHealthTests(unittest.TestCase):
             ),
             mock.patch("sys.stdout", new=StringIO()) as stdout,
         ):
-            code = health.main(["--agent-json", "--exit-code"])
+            code = health.main(["--agent-json"])
 
         payload = json.loads(stdout.getvalue())
         self.assertEqual(code, 2)

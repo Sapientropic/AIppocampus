@@ -49,11 +49,19 @@ class UninstallInventoryTests(unittest.TestCase):
         self.assertTrue(by_id["codex_marketplace"]["exists"])
         self.assertFalse(by_id["codex_marketplace"]["user_data"])
         self.assertTrue(by_id["registry_root"]["user_data"])
-        self.assertEqual(payload["foreground_action"]["command"], "aippocampus uninstall --purge --json")
+        self.assertTrue(by_id["claude_project_settings"]["purge_supported"])
+        self.assertEqual(
+            by_id["claude_project_settings"]["purge_mode"],
+            "remove_aippocampus_entries",
+        )
+        self.assertEqual(
+            payload["foreground_action"]["command"],
+            "aippocampus uninstall --purge --confirm-host-integration --json",
+        )
         self.assertFalse(payload["privacy"]["local_paths_emitted"])
         self.assertNotIn(str(root), encoded)
 
-    def test_purge_skips_registry_without_explicit_user_data_confirmation(self) -> None:
+    def test_purge_requires_separate_host_and_user_data_confirmation(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             codex_home = root / "codex-home"
@@ -72,6 +80,43 @@ class UninstallInventoryTests(unittest.TestCase):
                     codex_home_path=codex_home,
                     registry_dir=registry,
                     cwd=workspace,
+                    confirm_host_integration=False,
+                    confirm_user_data=False,
+                )
+
+            self.assertTrue(marketplace.exists())
+            self.assertTrue(cache.exists())
+            self.assertTrue(skill.exists())
+            self.assertTrue(registry.exists())
+
+        self.assertIn({"id": "codex_marketplace", "reason": "requires_confirm_host_integration"}, payload["skipped"])
+        self.assertIn({"id": "registry_root", "reason": "requires_confirm_user_data"}, payload["skipped"])
+        self.assertFalse(payload["confirm_host_integration"])
+        self.assertFalse(payload["confirm_user_data"])
+        self.assertEqual(payload["foreground_action"]["command"], "aippocampus uninstall --dry-run --json")
+
+    def test_purge_with_host_confirmation_removes_host_artifacts_and_settings_entries(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            codex_home = root / "codex-home"
+            registry = root / "registry"
+            workspace = root / "workspace"
+            marketplace = codex_home / "aippocampus-marketplace"
+            cache = codex_home / "plugins" / "cache" / "aippocampus-local"
+            skill = codex_home / "skills" / "aippocampus"
+            project_settings = workspace / ".claude" / "settings.json"
+            for path in (marketplace, cache, skill, registry, project_settings.parent):
+                path.mkdir(parents=True, exist_ok=True)
+            project_settings.write_text("{}", encoding="utf-8")
+            with mock.patch(
+                "aippocampus_runtime.hooks.claude_code.uninstall_hooks",
+                return_value={"ok": True, "changed": True},
+            ) as uninstall_hooks:
+                payload = uninstall.purge(
+                    codex_home_path=codex_home,
+                    registry_dir=registry,
+                    cwd=workspace,
+                    confirm_host_integration=True,
                     confirm_user_data=False,
                 )
 
@@ -79,10 +124,18 @@ class UninstallInventoryTests(unittest.TestCase):
             self.assertFalse(cache.exists())
             self.assertFalse(skill.exists())
             self.assertTrue(registry.exists())
+            uninstall_hooks.assert_any_call(settings_path=project_settings)
 
-        self.assertIn({"id": "registry_root", "reason": "requires_confirm_user_data"}, payload["skipped"])
-        self.assertFalse(payload["confirm_user_data"])
-        self.assertEqual(payload["foreground_action"]["command"], "aippocampus uninstall --dry-run --json")
+        self.assertTrue(payload["confirm_host_integration"])
+        self.assertIn(
+            {
+                "id": "claude_project_settings",
+                "removed": True,
+                "handler": "claude_code_uninstall_hooks",
+                "ok": True,
+            },
+            payload["removed"],
+        )
 
 
 if __name__ == "__main__":

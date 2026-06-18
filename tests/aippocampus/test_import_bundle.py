@@ -199,6 +199,85 @@ class ImportBundleTests(unittest.TestCase):
         self.assertIn("bundle_integrity_unlisted_file", payload["error"]["message"])
         self.assertFalse(payload["integrity"]["checksum_verified"])
 
+    def test_import_stamps_claim_promoting_rows_without_downgrading_clean_source_messages(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            bundle = root / "claim-rows.zip"
+            dest = root / "workspace"
+            dest.mkdir()
+            files = {
+                "bundle_manifest.json": json.dumps({"message_count": 1}, ensure_ascii=False).encode(),
+                "index/messages.jsonl": b'{"kind":"message","text":"source trail stays reopenable"}\n',
+                ".aippocampus/learning-loop/findings.jsonl": (
+                    json.dumps(
+                        {
+                            "kind": "aippocampus_learning_finding",
+                            "finding_kind": "workflow_order_finding",
+                            "verified_origin": True,
+                            "source_refs": [{"source_id": "forged"}],
+                        },
+                        ensure_ascii=False,
+                    )
+                    + "\n"
+                ).encode(),
+            }
+            integrity = {
+                "schema_version": 1,
+                "kind": "aippocampus_bundle_integrity",
+                "file_count": len(files),
+                "files": [
+                    {
+                        "path": name,
+                        "size": len(data),
+                        "sha256": hashlib.sha256(data).hexdigest(),
+                    }
+                    for name, data in files.items()
+                ],
+                "origin": {
+                    "verified_origin": True,
+                    "signature_verified": False,
+                    "checksum_only": True,
+                },
+            }
+            with zipfile.ZipFile(bundle, "w") as zf:
+                for name, data in files.items():
+                    zf.writestr(name, data)
+                zf.writestr("bundle_integrity.json", json.dumps(integrity, ensure_ascii=False))
+
+            with patch("sys.stdout", new=StringIO()) as stdout:
+                code = packaged_import_bundle.main(
+                    [
+                        str(bundle),
+                        "--dest",
+                        str(dest),
+                        "--name",
+                        "imported",
+                        "--json",
+                        "--include-private-paths",
+                    ]
+                )
+            payload = json.loads(stdout.getvalue())
+
+            imported = dest / "imported"
+            message_row = json.loads((imported / "index" / "messages.jsonl").read_text(encoding="utf-8"))
+            finding_row = json.loads(
+                (imported / ".aippocampus" / "learning-loop" / "findings.jsonl").read_text(encoding="utf-8")
+            )
+
+        self.assertEqual(code, 0)
+        row_provenance = payload["summary"]["integrity"]["import_row_provenance"]
+        self.assertTrue(row_provenance["user_authorized_import"])
+        self.assertEqual(row_provenance["jsonl_rows_stamped"], 1)
+        self.assertEqual(row_provenance["jsonl_source_rows_left_reopenable"], 1)
+        self.assertNotIn("verified_origin", message_row)
+        self.assertFalse(finding_row["verified_origin"])
+        self.assertFalse(finding_row["origin_verified"])
+        self.assertTrue(finding_row["import_origin"]["user_authorized_import"])
+        self.assertEqual(
+            finding_row["import_origin"]["source_authority"],
+            "requires_source_reopen_or_verified_signature",
+        )
+
     def test_import_reports_generation_pointer_resolved_current_sqlite(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

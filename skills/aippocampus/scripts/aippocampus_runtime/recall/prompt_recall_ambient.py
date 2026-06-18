@@ -27,6 +27,7 @@ from aippocampus_runtime.recall.ambient_cards import ambient_recall_from_decisio
 from aippocampus_runtime.recall.ambient_policy import (
     append_policy_events,
     filter_ambient_cards,
+    filter_evidence_cards,
     load_policy_events,
     surface_events_for_cards,
 )
@@ -254,13 +255,25 @@ def attach_ambient_recall(
             }
         if policy_file:
             policy_events = load_policy_events(policy_file)
-            policy_filter = filter_ambient_cards(
-                result["ambient_recall"].get("cards") or [],
-                policy_events,
-                prompt=prompt,
+            filter_cards = (
+                filter_evidence_cards
+                if result.get("decision") == "evidence"
+                else filter_ambient_cards
+            )
+            policy_filter = filter_cards(
+                result["ambient_recall"].get("cards") or [], policy_events, prompt=prompt
             )
             result["ambient_recall"]["cards"] = policy_filter["cards"]
             result["ambient_recall"]["policy_filter"] = policy_filter["diagnostics"]
+            if policy_filter.get("anti_nag_token_ids"):
+                existing = [
+                    str(value)
+                    for value in result["ambient_recall"].get("anti_nag_token_ids") or []
+                    if str(value).strip()
+                ]
+                result["ambient_recall"]["anti_nag_token_ids"] = list(
+                    dict.fromkeys([*existing, *policy_filter["anti_nag_token_ids"]])
+                )[:64]
         feedback_report, feedback_lane = feedback_report_for_prompt(
             registry_path=registry_path,
             workspace=workspace,
@@ -272,6 +285,23 @@ def attach_ambient_recall(
         )
         if feedback_filter["status"] != "no_quiet_routes" or feedback_filter.get("event_count_loaded"):
             result["ambient_recall"]["feedback_filter"] = feedback_filter
+        if result["ambient_recall"].get("anti_nag_token_ids"):
+            result["anti_nag_token_ids"] = list(
+                dict.fromkeys(
+                    [
+                        *[
+                            str(value)
+                            for value in result.get("anti_nag_token_ids") or []
+                            if str(value).strip()
+                        ],
+                        *[
+                            str(value)
+                            for value in result["ambient_recall"].get("anti_nag_token_ids") or []
+                            if str(value).strip()
+                        ],
+                    ]
+                )
+            )[:64]
         promote_reopenable_ambient_cards(result["ambient_recall"], registry_path=registry_path)
         active_lock: dict[str, Any] | None = None
         try:

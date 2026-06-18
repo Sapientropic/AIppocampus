@@ -125,6 +125,29 @@ def _source_refs(row: Mapping[str, Any]) -> list[dict[str, Any]]:
     return [ref] if ref else []
 
 
+def _verified_origin(row: Mapping[str, Any]) -> bool:
+    for key in ("verified_origin", "origin_verified", "support_verified"):
+        if key in row:
+            return bool(row.get(key))
+    for key in ("import_origin", "integrity", "origin"):
+        value = row.get(key)
+        if isinstance(value, Mapping) and "verified_origin" in value:
+            return bool(value.get("verified_origin"))
+    return False
+
+
+def _derived_origin(rows: Iterable[Mapping[str, Any]], *, origin_kind: str) -> dict[str, Any]:
+    materialized = [row for row in rows if isinstance(row, Mapping)]
+    verified = bool(materialized) and all(_verified_origin(row) for row in materialized)
+    return {
+        "verified_origin": verified,
+        "origin_verified": verified,
+        "origin_kind": origin_kind,
+        "source_row_count": len(materialized),
+        "boundary": "derived learning rows inherit explicit origin verification; absence fails closed",
+    }
+
+
 def _text(row: Mapping[str, Any], key: str, default: str = "") -> str:
     return str(row.get(key) or default).strip()
 
@@ -186,6 +209,7 @@ def adapt_behavior_events_to_review_signals(
         grouping = _grouping_fingerprint(signature)
         event_refs = _event_refs(row)
         source_refs = _source_refs(row)
+        origin = _derived_origin([row], origin_kind="behavior_event_review_signal")
         signals.append(
             {
                 "kind": REVIEW_SIGNAL_KIND,
@@ -195,6 +219,9 @@ def adapt_behavior_events_to_review_signals(
                 "learning_signal": "success_after_failure" if success else f"failure:{failure_family}",
                 "event_refs": event_refs,
                 "source_refs": source_refs,
+                "verified_origin": origin["verified_origin"],
+                "origin_verified": origin["origin_verified"],
+                "origin": origin,
                 "command_family": signature["command_family"],
                 "target_class": signature["target_class"],
                 "failure_family": failure_family,
@@ -325,6 +352,7 @@ def detect_recurring_failure_findings(
         refs: list[dict[str, Any]] = []
         for row in [*failures, *successes]:
             refs.extend(_safe_refs(row.get("source_refs")))
+        origin = _derived_origin([*failures, *successes], origin_kind="recurring_failure_finding")
         findings.append(
             {
                 "kind": FINDING_KIND,
@@ -349,6 +377,9 @@ def detect_recurring_failure_findings(
                 "signature": signature,
                 "source_refs": _dedupe_refs(refs)[:6],
                 "source_ref_count": len(_dedupe_refs(refs)),
+                "verified_origin": origin["verified_origin"],
+                "origin_verified": origin["origin_verified"],
+                "origin": origin,
                 "foreground_eligible": status == "open",
                 "navigation_only": True,
                 "claim_permission": CLAIM_PERMISSION,
@@ -548,6 +579,10 @@ def detect_workflow_order_findings(
                 *_safe_refs(success.get("source_refs")),
             ]
         )
+        origin = _derived_origin(
+            [failed, middle, success],
+            origin_kind="workflow_order_finding",
+        )
         findings.append(
             {
                 "kind": FINDING_KIND,
@@ -569,6 +604,9 @@ def detect_workflow_order_findings(
                 "freshness": "current",
                 "source_refs": refs,
                 "source_ref_count": len(refs),
+                "verified_origin": origin["verified_origin"],
+                "origin_verified": origin["origin_verified"],
+                "origin": origin,
                 "foreground_eligible": True,
                 "navigation_only": True,
                 "claim_permission": CLAIM_PERMISSION,

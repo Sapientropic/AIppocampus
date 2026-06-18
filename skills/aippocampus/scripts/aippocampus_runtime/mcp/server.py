@@ -13,6 +13,7 @@ from typing import Any
 
 from aippocampus_runtime import core
 from aippocampus_runtime import health as aippocampus_health
+from aippocampus_runtime.cli.human_io import exit_code_for_payload
 from aippocampus_runtime.contracts import canonical_foreground_action_fields
 from aippocampus_runtime.mcp import memory_health_recovery
 from aippocampus_runtime.mcp.agent_deepen_projection import compact_agent_deepen_payload
@@ -62,8 +63,10 @@ from aippocampus_runtime.recall.agent_continuity_cli_support import (
     compact_aippo_guidance_card,
     handle_from_last_recall_cache,
     last_recall_unavailable_payload,
+    mark_last_recall_request_opened,
     missing_handle_payload,
     normalize_route_limit,
+    opened_route_keys_from_last_recall_cache,
     write_last_recall_cache,
 )
 from aippocampus_runtime.recall.background_findings import background_findings_card
@@ -468,6 +471,7 @@ def call_agent_recall(arguments: dict[str, Any]) -> dict[str, Any]:
         semantic_timeout=int_range(
             arguments.get("semantic_timeout"), default=12, minimum=1, maximum=60
         ),
+        opened_route_keys=opened_route_keys_from_last_recall_cache(arguments.get("last_recall_path")),
     )
     if provider_bridge_report is not None:
         payload["provider_key_bridge"] = provider_bridge_report
@@ -480,6 +484,7 @@ def call_agent_recall(arguments: dict[str, Any]) -> dict[str, Any]:
         project=str(arguments.get("project") or "AIppocampus"),
         max_matches=route_limit_arg(arguments.get("max"), default=agent.MAX_ROUTES),
         schema_version=str(getattr(agent, "SCHEMA_VERSION", "agent-continuity-path-v1")),
+        path=arguments.get("last_recall_path"),
     )
     payload["last_recall_cache_available"] = cache_written
     if detail_arg(arguments) == "compact" and not arguments.get("include_private_paths"):
@@ -555,6 +560,15 @@ def call_agent_deepen(arguments: dict[str, Any]) -> dict[str, Any]:
             default=agent.MAX_ROUTES,
         ),
     )
+    if request_index_arg is not None and payload.get("status") == "ok":
+        try:
+            mark_last_recall_request_opened(
+                request_index_arg,
+                path=arguments.get("last_recall_path"),
+                outcome="source_open",
+            )
+        except Exception:
+            pass
     if detail_arg(arguments) == "compact" and not arguments.get("include_private_paths"):
         payload = compact_agent_deepen_payload(
             payload,
@@ -1214,20 +1228,25 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(raw_argv)
     if args.names and args.command is None:
-        print(json.dumps(tool_names_summary(), ensure_ascii=False, indent=2))
-        return 0
+        payload = tool_names_summary()
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        return exit_code_for_payload(payload)
     if args.list_tools or args.command in {"list-tools", "status"}:
         if args.summary_json or args.command == "status":
-            print(json.dumps(tool_readiness_summary(), ensure_ascii=False, indent=2))
-            return 0
+            payload = tool_readiness_summary()
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
+            return exit_code_for_payload(payload)
         if args.names:
-            print(json.dumps(tool_names_summary(), ensure_ascii=False, indent=2))
-            return 0
-        print(json.dumps({"tools": TOOLS}, ensure_ascii=False, indent=2))
-        return 0
+            payload = tool_names_summary()
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
+            return exit_code_for_payload(payload)
+        payload = {"ok": True, "tools": TOOLS}
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        return exit_code_for_payload(payload)
     if not raw_argv and sys.stdin.isatty():
-        print(json.dumps(tool_readiness_summary(), ensure_ascii=False, indent=2))
-        return 0
+        payload = tool_readiness_summary()
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        return exit_code_for_payload(payload)
     return serve_stdio()
 
 

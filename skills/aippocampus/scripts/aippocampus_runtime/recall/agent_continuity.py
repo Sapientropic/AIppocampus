@@ -16,6 +16,7 @@ from typing import Any
 
 from aippocampus_runtime import core
 from aippocampus_runtime.aippo import working_contract as aippo
+from aippocampus_runtime.cli.human_io import exit_code_for_payload
 from aippocampus_runtime.cli.recovery import action_command_text
 from aippocampus_runtime.contracts import (
     FOREGROUND_ACTION_CONTRACT_VERSION,
@@ -62,12 +63,16 @@ from aippocampus_runtime.recall.agent_continuity_cli_support import (
     handle_boundary_fields,
     handle_from_last_recall_cache,
     handle_recovery_fields,
+    last_recall_route_key,
+    last_recall_route_wildcard_key,
     last_recall_unavailable_payload,
     macro_schema_help,
     macro_state_template,
+    mark_last_recall_request_opened,
     missing_feedback_route_payload,
     missing_handle_payload,
     normalize_route_limit,
+    opened_route_keys_from_last_recall_cache,
     policy_boundary,
     public_recall_projection,
     query_from_last_recall_cache,
@@ -247,6 +252,17 @@ def _json_bytes(value: Mapping[str, Any]) -> int:
     return len(json.dumps(value, ensure_ascii=False, sort_keys=True).encode("utf-8"))
 
 
+def _clean_source_has_messages(source_dir: Path) -> bool:
+    messages = source_dir / "messages.jsonl"
+    if not messages.exists():
+        return False
+    try:
+        with messages.open("r", encoding="utf-8") as handle:
+            return any(line.strip() for line in handle)
+    except OSError:
+        return False
+
+
 def _safe_code_list(value: Any, *, limit: int = 4) -> list[str]:
     if not isinstance(value, list | tuple):
         return []
@@ -403,6 +419,48 @@ def _memory_packet_triage_metrics(memory_packets: list[dict[str, Any]]) -> dict[
             default=0.0,
         ),
     }
+
+
+def _mark_already_opened_routes(
+    memory_packets: list[dict[str, Any]],
+    deepen_requests: list[dict[str, Any]],
+    *,
+    opened_route_keys: set[str],
+) -> int:
+    if not opened_route_keys:
+        return 0
+    requests_by_route = {
+        str(request.get("route_id") or ""): request
+        for request in deepen_requests
+        if isinstance(request, Mapping)
+    }
+    opened_count = 0
+    for packet in memory_packets:
+        route_id = str(packet.get("route_id") or "").strip()
+        if not route_id:
+            continue
+        request = requests_by_route.get(route_id)
+        route_key = last_recall_route_key(
+            route_id,
+            request.get("handle_sha256_12") if request else None,
+        )
+        wildcard_key = last_recall_route_wildcard_key(route_id)
+        exact_opened = bool(route_key and route_key in opened_route_keys)
+        route_opened = exact_opened or bool(wildcard_key and wildcard_key in opened_route_keys)
+        if not route_opened:
+            continue
+        packet["already_opened"] = True
+        packet["recommended_next"] = "use_opened_route_context_or_deepen_if_scope_changed"
+        packet["next_action"] = "use_opened_route_context_or_deepen_if_scope_changed"
+        packet["opened_route_context"] = {
+            "status": "opened_in_this_local_session",
+            "same_route_and_handle_digest": exact_opened,
+            "reopen_again_only_if_scope_changed": True,
+        }
+        if request:
+            request["already_opened"] = True
+        opened_count += 1
+    return opened_count
 
 
 def _is_aippo_deepen_id(value: Any) -> bool:
@@ -852,6 +910,7 @@ def recall(
     semantic_gate_mode: str = "off",
     semantic_timeout: int = 12,
     feedback_path: str | Path | None = None,
+    opened_route_keys: set[str] | None = None,
 ) -> dict[str, Any]:
     """Return compact MemoryPackets plus explicit deepen handles for an agent pull."""
 
@@ -982,11 +1041,17 @@ def recall(
         )
         if route.get("handle")
     ]
+    already_opened_count = _mark_already_opened_routes(
+        memory_packets,
+        deepen_requests,
+        opened_route_keys=opened_route_keys or set(),
+    )
     action_card = foreground_action_card.build_recall_foreground_action_card(
         status="ok" if memory_packets else "no_routes",
         memory_packets=memory_packets,
         deepen_requests=deepen_requests,
         query=str(query or ""),
+        source_registered=_clean_source_has_messages(source_dir),
     )
     navigation_signals = architecture_navigation_affordance.navigation_signals_for_recall(
         query=str(query or ""),
@@ -1030,6 +1095,7 @@ def recall(
         "metrics": {
             "memory_packet_count": len(memory_packets),
             "deepen_request_count": len(deepen_requests),
+            "already_opened_route_count": already_opened_count,
             "macro_orientation_applied": bool(macro_context is not None),
             **attention_route_projection.metrics_for_attention_navigation(attention_navigation),
             "requested_max_routes": requested_limit,
@@ -1713,6 +1779,7 @@ def main(argv: list[str] | None = None) -> int:
                 cwd=args.cwd,
                 registry_dir=args.registry_dir,
             )["path"],
+            opened_route_keys=opened_route_keys_from_last_recall_cache(args.last_recall_path),
         )
         cache_written = write_last_recall_cache(
             payload.get("deepen_requests") or [],
@@ -1743,7 +1810,12 @@ def main(argv: list[str] | None = None) -> int:
             _json_out(payload)
         else:
             print(render_recall_human(payload))
-        return 0
+        # A recall miss is still a successful orientation report: it carries
+        # recovery actions and attention diagnostics. Hard source/read errors
+        # continue through the shared exit-code helper below.
+        if payload.get("mode") == "recall" and payload.get("status") in {"ok", "no_routes"}:
+            return 0
+        return exit_code_for_payload(payload)
     if args.command == "orient":
         return task_orientation.run_agent_command(args, _json_out)
     if args.command == "aippo":
@@ -1849,8 +1921,17 @@ def main(argv: list[str] | None = None) -> int:
             project=args.project or cached_context.get("project") or "AIppocampus",
             max_matches=args.max,
         )
+        request_index = int(args.request or 1) if args.last_recall or args.request is not None else None
+        if request_index is not None and payload.get("status") == "ok":
+            try:
+                mark_last_recall_request_opened(
+                    request_index,
+                    path=args.last_recall_path,
+                    outcome="source_open",
+                )
+            except Exception:
+                pass
         if args.json:
-            request_index = int(args.request or 1) if args.last_recall or args.request is not None else None
             if args.detail == "full":
                 payload = {"detail": "full", "output_boundary": "local_private_diagnostic_full", **payload}
             else:

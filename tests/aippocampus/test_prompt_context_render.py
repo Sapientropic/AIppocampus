@@ -161,6 +161,109 @@ class PromptContextRenderTests(unittest.TestCase):
         self.assertIsNone(render.context_for_hook(result))
         self.assertIsNone(render.hook_stdout_payload(result))
 
+    def test_evidence_context_hides_audit_coordinates_and_raw_reasons(self) -> None:
+        result = {
+            "decision": "evidence",
+            "score": 0.91,
+            "confidence": "high",
+            "query_terms": ["source", "coordinates"],
+            "cognitive_map": [],
+            "concept_expansions": [],
+            "candidates": [],
+            "working_memory": [],
+            "evidence": [],
+            "ambient_recall": {
+                "cards": [
+                    {
+                        "theme": "opened source window",
+                        "support_level": "evidence",
+                        "action_grammar": "bounded_evidence",
+                        "key_line": "A compact source-backed line.",
+                        "source_refs": [
+                            {
+                                "title": "Private source",
+                                "line": 12,
+                                "phase": "final_answer",
+                                "turn_index": 42,
+                            }
+                        ],
+                    }
+                ]
+            },
+            "reasons": ["phase=final_answer turn=42 cannot_claim raw diagnostic"],
+        }
+
+        context = render.context_for_hook(result) or ""
+
+        self.assertIn("opened source window line 12", context)
+        self.assertIn("A compact source-backed line.", context)
+        for raw_marker in ("final_answer", "turn 42", "cannot_claim", "Why:"):
+            self.assertNotIn(raw_marker, context)
+
+    def test_evidence_context_with_only_quieted_source_route_stays_suppressed(self) -> None:
+        result = {
+            "decision": "evidence",
+            "score": 0.91,
+            "confidence": "high",
+            "query_terms": ["repeated source"],
+            "cognitive_map": [],
+            "concept_expansions": [],
+            "candidates": [],
+            "working_memory": [],
+            "evidence": [
+                {
+                    "title": "Repeated source-backed route",
+                    "line": 77,
+                    "snippet": "This line was already surfaced in the previous ambient hook.",
+                }
+            ],
+            "ambient_recall": {
+                "cards": [],
+                "anti_nag_token_ids": ["source-route-1"],
+                "policy_filter": {
+                    "frequency_capped": 1,
+                    "dismissed": 0,
+                },
+            },
+            "reasons": ["source route already shown"],
+        }
+
+        self.assertIsNone(render.context_for_hook(result))
+
+    def test_direction_only_ambient_context_does_not_emit_full_layer_legend(self) -> None:
+        result = {
+            "decision": "scent",
+            "score": 0.7,
+            "confidence": "medium",
+            "query_terms": ["ambient"],
+            "cognitive_map": [],
+            "concept_expansions": [],
+            "candidates": [],
+            "working_memory": [],
+            "evidence": [],
+            "ambient_recall": {
+                "mode": "active_gentle_nudge",
+                "cards": [
+                    {
+                        "card_id": "card-a",
+                        "theme": "quiet route",
+                        "support_level": "scent",
+                        "trust_level": "direction_only",
+                        "action_grammar": "direction_only",
+                        "visibility": "active_gentle_nudge",
+                    }
+                ],
+            },
+            "reasons": ["raw reason should stay in diagnostics"],
+        }
+
+        context = render.context_for_hook(result) or ""
+
+        self.assertIn("quiet route", context)
+        self.assertNotIn("Layers:", context)
+        self.assertNotIn("Use bounded_evidence within scope", context)
+        self.assertNotIn("raw reason", context)
+
 
 if __name__ == "__main__":
     unittest.main()

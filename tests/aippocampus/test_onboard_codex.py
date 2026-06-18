@@ -347,6 +347,12 @@ class OnboardCodexTests(unittest.TestCase):
         self.assertEqual(primary["provider"], "codex")
         self.assertEqual(primary["code"], "preview_current_project_registration")
         self.assertEqual(primary["mutation_risk"], "read_only")
+        self.assertEqual(
+            primary["write_command_after_preview"],
+            "aippocampus onboard --provider codex --cwd . --json",
+        )
+        self.assertEqual(primary["write_mutation_risk"], "writes_local_clean_source")
+        self.assertIn("after reviewing the dry-run preview", primary["write_boundary"])
         self.assertNotEqual(primary["provider"], "generic-jsonl")
         self.assertIn("onboard --provider codex --dry-run", primary["command"])
         self.assertEqual(

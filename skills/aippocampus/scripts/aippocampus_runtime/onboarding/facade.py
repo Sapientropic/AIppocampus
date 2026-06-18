@@ -9,6 +9,7 @@ import sys
 import time
 from typing import Sequence
 
+from aippocampus_runtime.cli.human_io import exit_code_for_payload
 from aippocampus_runtime.contracts import canonical_foreground_action_fields
 from aippocampus_runtime.core import aippocampus_registry_resolution, codex_home
 from aippocampus_runtime.legacy_aliases import legacy_alias_diagnostics
@@ -65,6 +66,15 @@ SEARCH_EXISTING_MEMORY_COMMAND_TEMPLATE = 'aippocampus search "{exact_phrase}" -
 GENERIC_JSONL_IMPORT_PREVIEW_COMMAND_TEMPLATE = (
     "aippocampus import conversation --format generic-jsonl --input {input_path} --dry-run --json"
 )
+
+
+def _provider_write_command(provider: str) -> str | None:
+    clean_provider = normalize_provider_name(str(provider or "").strip().replace("_", "-").casefold())
+    if clean_provider in {"codex", "claude-code"}:
+        return f"aippocampus onboard --provider {clean_provider} --cwd . --json"
+    if clean_provider == "generic-jsonl":
+        return "aippocampus import conversation --format generic-jsonl --input {input_path} --json"
+    return None
 
 
 def _frontstage_state_from_machine_state(state: str) -> str:
@@ -411,6 +421,13 @@ def compact_provider_status_card(report: dict) -> dict:
     primary_action["claim_boundary"] = "setup_status_not_source_evidence"
     if primary_action.get("command_template"):
         primary_action["template_only"] = True
+    write_command = _provider_write_command(str(primary.get("provider") or ""))
+    if primary.get("code") == "preview_current_project_registration" and write_command:
+        primary_action["write_command_after_preview"] = write_command
+        primary_action["write_mutation_risk"] = "writes_local_clean_source"
+        primary_action["write_boundary"] = (
+            "run only after reviewing the dry-run preview and confirming this provider is the intended source"
+        )
 
     status = "no_provider_available"
     if primary.get("code") == "preview_current_project_registration":
@@ -610,7 +627,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(json.dumps(error, ensure_ascii=False, indent=2))
     else:
         print(f"provider not available: {provider}", file=sys.stderr)
-    return 2
+    return exit_code_for_payload(error)
 
 
 def _arg_value(argv: Sequence[str], name: str) -> str | None:

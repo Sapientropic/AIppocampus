@@ -6,6 +6,9 @@ original conversation source, reopen evidence, and carry continuity across
 threads, projects, devices, and life-wide work without pretending the base model
 has innate memory.
 
+Chinese origin essay is canonical: `docs/未干的地图.md`.
+English transcreation: `docs/the-unfinished-map.md`.
+
 For product-shaped evidence before the benchmark wall, see
 `docs/evidence/magic-moments.md`. Treat those examples as claim-bounded
 second-user live-use notes, not as broad benchmark proof.

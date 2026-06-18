@@ -150,20 +150,24 @@ After explicit user consent, choose one provider-specific write path and run the
 first real source-backed recall:
 
 ```sh
-uvx aippocampus onboard --provider codex --status --json
-# Then follow the explicit write recommendation after consent.
-uvx aippocampus onboard --provider claude-code --dry-run
-uvx aippocampus onboard --provider claude-code
+uvx aippocampus onboard --provider codex --dry-run --json
+uvx aippocampus onboard --provider codex --cwd . --json
+uvx aippocampus onboard --provider claude-code --dry-run --json
+uvx aippocampus onboard --provider claude-code --cwd . --json
 uvx aippocampus import conversation --format generic-jsonl --input ./conversation.jsonl --dry-run --json
-uvx aippocampus import conversation --format generic-jsonl --input ./conversation.jsonl
+uvx aippocampus import conversation --format generic-jsonl --input ./conversation.jsonl --json
 uvx aippocampus agent recall "old decision or handoff cue" --json
 uvx aippocampus agent deepen --request 1 --last-recall --json
+uvx aippocampus export --json
+uvx aippocampus sync --json
 ```
 
 Replace `./conversation.jsonl` with the user-selected export. Use exact search
 when the user remembers wording. If the user only remembers a project cue or
 time cue, treat the first result as candidate navigation until the CLI or MCP
-surface returns a source-backed snippet or opened source.
+surface returns a source-backed snippet or opened source. Use `export` or
+`sync` after a successful deepen only when carrying context to another thread,
+device, or project is the next task.
 
 ### Agent-Host Wiring Check
 

@@ -483,6 +483,24 @@ def _bounded_evidence_cards(result: dict[str, Any]) -> list[dict[str, Any]]:
     ]
 
 
+def _evidence_suppressed_by_anti_nag(result: dict[str, Any]) -> bool:
+    raw_ambient = result.get("ambient_recall")
+    ambient: dict[str, Any] = raw_ambient if isinstance(raw_ambient, dict) else {}
+    token_values = [*(ambient.get("anti_nag_token_ids") or []), *(result.get("anti_nag_token_ids") or [])]
+    if not any(str(value).strip() for value in token_values):
+        return False
+    raw_policy_filter = ambient.get("policy_filter")
+    raw_feedback_filter = ambient.get("feedback_filter")
+    policy_suppressed = isinstance(raw_policy_filter, dict) and any(
+        int(raw_policy_filter.get(key) or 0) > 0 for key in ("dismissed", "frequency_capped")
+    )
+    feedback_suppressed = (
+        isinstance(raw_feedback_filter, dict)
+        and int(raw_feedback_filter.get("quieted_card_count") or 0) > 0
+    )
+    return bool(policy_suppressed or feedback_suppressed)
+
+
 def _explicit_architecture_navigation(result: dict[str, Any]) -> bool:
     intent = result.get("agent_surface_intent")
     if not isinstance(intent, dict) or not intent.get("explicit"):
@@ -545,12 +563,18 @@ def _evidence_card_line(card: dict[str, Any]) -> str:
     refs = [ref for ref in card.get("source_refs") or [] if isinstance(ref, dict)]
     ref = refs[0] if refs else {}
     line = f" line {ref.get('line')}" if ref.get("line") is not None else ""
-    phase = f", {ref.get('phase')}" if ref.get("phase") else ""
-    turn = f", turn {ref.get('turn_index')}" if ref.get("turn_index") is not None else ""
     action = str(card.get("action_grammar") or "bounded_evidence")
     title = card.get("theme") or ref.get("title") or ref.get("thread_key") or "source-backed context"
     key_line = compact_text(str(card.get("key_line") or ""), 240)
-    return f"- [{action}] {title}{line}{phase}{turn}: {key_line}"
+    return f"- [{action}] {title}{line}: {key_line}"
+
+
+def _needs_source_court_boundary(cards: list[dict[str, Any]]) -> bool:
+    for card in cards:
+        action = str(card.get("action_grammar") or card.get("trust_level") or "").strip()
+        if action in {"bounded_evidence", "source_open", "reopenable_route", "direction_with_ref"}:
+            return True
+    return False
 
 
 def context_for_hook(result: dict[str, Any], *, max_chars: int = MAX_CONTEXT_CHARS) -> str | None:
@@ -578,19 +602,19 @@ def context_for_hook(result: dict[str, Any], *, max_chars: int = MAX_CONTEXT_CHA
         )
     lines: list[str] = prepend_hook_agent_affordance(result, [])
     if result.get("decision") == "evidence":
+        evidence_cards = _bounded_evidence_cards(result)
+        if not evidence_cards and _evidence_suppressed_by_anti_nag(result):
+            return None
         lines.append(
             "Ambient recall evidence (aippocampus). Use bounded source-backed evidence when relevant; reopen only for disputed exact wording or wider context:"
         )
-        evidence_cards = _bounded_evidence_cards(result)
         if evidence_cards:
             for card in evidence_cards[:3]:
                 lines.append(_evidence_card_line(card))
         else:
             for item in result.get("evidence") or []:
-                phase = f", {item.get('phase')}" if item.get("phase") else ""
-                turn = f", turn {item.get('turn_index')}" if item.get("turn_index") is not None else ""
                 lines.append(
-                    f"- {item.get('title')} line {item.get('line')}{phase}{turn}: "
+                    f"- {item.get('title')} line {item.get('line')}: "
                     f"{compact_text(str(item.get('snippet') or ''), 240)}"
                 )
         lines.append(_evidence_boundary_line(evidence_cards))
@@ -743,7 +767,6 @@ def context_for_hook(result: dict[str, Any], *, max_chars: int = MAX_CONTEXT_CHA
         lines.append(
             "Ambient recall private context (agent guidance; source use follows action grammar):"
         )
-        lines.append("Layers: Memory atmosphere; Working continuity brief; Source court.")
         layered_cards: dict[str, list[str]] = {
             "memory_atmosphere": [],
             "working_continuity_brief": [],
@@ -804,17 +827,11 @@ def context_for_hook(result: dict[str, Any], *, max_chars: int = MAX_CONTEXT_CHA
                 continue
             lines.append(_ambient_brief_layer_heading(layer))
             lines.extend(rows)
-        lines.append(
-            "Use bounded_evidence within scope, source_open for scoped exact wording, "
-            "reopenable_route by reopening source, direction_with_ref as candidate-backed direction, "
-            "and direction_only only as attention. "
-            "Escalate to source court for exact quotes, wider context, conflicts, stale/sensitive/high-risk claims, or ignore_or_blocked routes."
-        )
-    if result.get("reasons"):
-        if not lines:
-            return None
-        lines.append("Why: " + "; ".join(str(reason) for reason in result.get("reasons", [])[:3]))
-    elif not lines:
+        if _needs_source_court_boundary(ambient_cards):
+            lines.append(
+                "Use source-backed cards only within scope; reopen or deepen for exact quotes, wider context, conflicts, or stale/sensitive claims."
+            )
+    if not lines:
         return None
     context = "\n".join(lines)
     return compact_text(str(sanitize_external_model_payload(context)), max_chars)

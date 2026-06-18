@@ -18,6 +18,7 @@ from aippocampus_runtime.artifacts.publish import (
     resolve_sqlite_index_path,
     segment_generation_diagnostics,
 )
+from aippocampus_runtime.cli.errors import cli_exit_code_for_error_code
 from aippocampus_runtime.core import (
     aippocampus_registry_resolution,
     codex_home,
@@ -1182,12 +1183,20 @@ def main(argv: list[str] | None = None) -> int:
     else:
         render_health_text(public_result)
 
-    if args.exit_code:
-        readiness = result.get("product_readiness") if isinstance(result, dict) else {}
-        if isinstance(readiness, dict) and "ordinary_first_recall_usable" in readiness:
-            return 0 if readiness.get("ordinary_first_recall_usable") else 2
-        if not result.get("ok"):
-            return 2
+    readiness = result.get("product_readiness") if isinstance(result, dict) else {}
+    readiness_exit_requested = bool(args.exit_code or compact_json or not json_requested)
+    if (
+        readiness_exit_requested
+        and isinstance(readiness, dict)
+        and "ordinary_first_recall_usable" in readiness
+    ):
+        return (
+            0
+            if readiness.get("ordinary_first_recall_usable")
+            else cli_exit_code_for_error_code("missing_prerequisite")
+        )
+    if args.exit_code and not result.get("ok"):
+        return cli_exit_code_for_error_code("missing_prerequisite")
     return 0
 
 

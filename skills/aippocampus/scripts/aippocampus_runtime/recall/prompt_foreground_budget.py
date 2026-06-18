@@ -221,7 +221,9 @@ def weak_scent_suppressed_by_anti_nag(result: dict[str, Any]) -> bool:
         *cognitive_map_rows(result),
         *ambient_cards(result),
     ]
-    return bool(route_items) and not weak_scent_route_labels(result, max_routes=1)
+    if not route_items:
+        return True
+    return not weak_scent_route_labels(result, max_routes=1)
 
 
 def is_weak_direction_only_scent(result: dict[str, Any]) -> bool:

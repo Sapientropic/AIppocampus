@@ -326,7 +326,8 @@ class AmbientRecallCardTests(unittest.TestCase):
         self.assertIn("direction_with_ref", context)
         self.assertIn("route guidance only, not evidence", context)
         self.assertNotIn("[bounded_evidence]", context)
-        self.assertIn("Escalate to source court", context)
+        self.assertIn("reopen source before quoting or making strong claims", context)
+        self.assertNotIn("Escalate to source court", context)
 
     def test_evidence_decision_becomes_source_backed_card(self) -> None:
         result = {

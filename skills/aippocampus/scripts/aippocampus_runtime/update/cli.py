@@ -14,6 +14,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.cli.human_io import exit_code_for_payload
 from aippocampus_runtime.contracts import write_boundary
 from aippocampus_runtime.core import codex_home, now_utc
 from aippocampus_runtime.hooks import install_action_hint, install_lifecycle, install_prompt
@@ -1766,7 +1767,15 @@ def main(argv: list[str] | None = None) -> int:
             )
         else:
             emit_public_text("AIppocampus update failed: update_failed", stream=sys.stderr)
-        return 1
+        return exit_code_for_payload(
+            {
+                "ok": False,
+                "error": {
+                    "code": "update_failed",
+                    "message": "Update failed; rerun from a trusted shell for local diagnostics.",
+                },
+            }
+        )
 
     if report.get("kind") == "aippocampus_update_recovery" and (
         getattr(args, "agent_json", False)
@@ -1782,9 +1791,7 @@ def main(argv: list[str] | None = None) -> int:
         emit_operator_json(report)
     else:
         emit_public_text(render_text(report), end="")
-    if report.get("kind") == "aippocampus_update_recovery":
-        return 2
-    return 0 if report.get("ok", True) else 1
+    return exit_code_for_payload(report)
 
 
 if __name__ == "__main__":

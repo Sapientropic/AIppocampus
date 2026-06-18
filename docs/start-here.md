@@ -14,14 +14,38 @@ make sense under that branch's assumptions.
 
   ```sh
   aippocampus start --json
+  aippocampus onboard --provider codex --cwd . --json
   aippocampus plugin install --codex --verify
   aippocampus agent recall "old decision or handoff cue" --json
   aippocampus agent deepen --request 1 --last-recall --json
+  aippocampus export --json
+  aippocampus sync --json
   ```
+
+  `plugin install --codex` is Codex host integration. If `start` reports no
+  clean source, the source-registration command is the `onboard --provider
+  codex --cwd . --json` line above; `onboard --status` is only a read-only
+  provider matrix.
 
   After that first route works, offer trusted hook/action-hint setup with
   rollback visible. Use `aippocampus update status --json` only when the plugin
   or hooks feel installed but not visible to the foreground agent.
+
+- Claude Code local setup:
+
+  ```sh
+  aippocampus start --json
+  aippocampus onboard --provider claude-code --cwd . --json
+  aippocampus hooks claude-code status --json
+  aippocampus agent recall "old decision or handoff cue" --json
+  aippocampus agent deepen --request 1 --last-recall --json
+  aippocampus export --json
+  aippocampus sync --json
+  ```
+
+  Install scoped Claude Code hooks only after reviewing status or dry-run:
+  `aippocampus hooks claude-code dry-run --json`, then
+  `aippocampus hooks claude-code install --json`.
 
 - No-clone or read-only probe:
 
@@ -36,6 +60,8 @@ make sense under that branch's assumptions.
   aippocampus start --json
   aippocampus agent recall "old decision or handoff cue" --json
   aippocampus agent deepen --request 1 --last-recall --json
+  aippocampus export --json
+  aippocampus sync --json
   ```
 
   Use `aippocampus search "a distinctive old phrase"` when the user remembers
@@ -46,6 +72,9 @@ public claims, sensitive facts, stale disputes, or high-risk action.
 Use `aippocampus health` and `aippocampus onboard --provider auto --status` as
 read-only recovery cards when no source is registered or the first route is
 blocked.
+When source is missing, follow the explicit write action surfaced by
+`aippocampus start --json` or the matching provider command above; do not loop
+on status output as if it registered memory.
 
 For the longer version, use the
 [agent-mediated Codex plugin path](guides/install-guide.md#agent-mediated-codex-plugin-path),

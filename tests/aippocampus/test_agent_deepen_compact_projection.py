@@ -150,6 +150,17 @@ class AgentDeepenCompactProjectionTests(unittest.TestCase):
         self.assertNotIn('"messages"', compact_encoded)
         self.assertNotIn("macro_navigation_diagnostics", compact_encoded)
         self.assertNotIn("cannot_claim", compact_payload)
+        self.assertEqual(
+            compact_payload["primary_source_snippet"]["text"],
+            "小海马体需要 source-backed continuity。",
+        )
+        self.assertEqual(
+            compact_payload["primary_source_snippet"]["claim_boundary"],
+            "exact_wording_inside_this_snippet_only",
+        )
+        action_ids = [action["id"] for action in compact_payload["safe_next_actions"]]
+        self.assertIn("choose_export_for_next_thread", action_ids)
+        self.assertIn("choose_sync_for_next_device", action_ids)
         self.assertNotIn("AIppocampus 使用 clean source", compact_encoded)
         self.assertNotIn(str(self.cwd), compact_encoded)
 
@@ -340,6 +351,16 @@ class AgentDeepenCompactProjectionTests(unittest.TestCase):
         self.assertNotIn("result", compact_payload)
         self.assertNotIn("source_window", compact_payload)
         self.assertNotIn('"messages"', compact_encoded)
+        self.assertEqual(
+            compact_payload["primary_source_snippet"]["text"],
+            "小海马体需要 source-backed continuity。",
+        )
+        self.assertEqual(
+            compact_payload["primary_source_snippet"]["source_scope"],
+            "opened_window_primary_message",
+        )
+        carry_ids = [action["id"] for action in compact_payload["carry_next_actions"]]
+        self.assertEqual(carry_ids, ["choose_export_for_next_thread", "choose_sync_for_next_device"])
         self.assertNotIn("AIppocampus 使用 clean source", compact_encoded)
 
         full_payload = self._call_tool_payload(

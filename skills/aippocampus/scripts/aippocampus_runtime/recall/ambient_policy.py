@@ -36,7 +36,15 @@ FRONTIER_CAP_SECONDS = 14 * 24 * 60 * 60
 QUESTION_TYPES = {"question_link", "theme_candidate"}
 FRONTIER_TYPES = {"frontier_marker"}
 AMBIENT_CARD_TYPES = {"ambient_card"}
+EVIDENCE_ROUTE_TYPES = {
+    "bounded_evidence",
+    "evidence_route",
+    "reopenable_route",
+    "source_backed_reopen",
+    "source_open",
+}
 TRACKED_TYPES = QUESTION_TYPES | FRONTIER_TYPES | AMBIENT_CARD_TYPES
+TRACKED_CARD_TYPES = TRACKED_TYPES | EVIDENCE_ROUTE_TYPES
 
 DISMISS_PATTERNS = (
     r"\bstop tracking\b(?P<target>.*)",
@@ -235,18 +243,21 @@ def filter_ambient_cards(
         "frontier_not_requested": 0,
         "policy_event_count": len(events),
     }
+    anti_nag_token_ids: list[str] = []
     current_continuation = current_topic_continuation_intent(prompt)
     for card in cards:
         keys = surface_keys_from_card(card)
         target_kind = surface_kind_from_card(card)
-        if not keys or target_kind not in TRACKED_TYPES:
+        if not keys or target_kind not in TRACKED_CARD_TYPES:
             filtered.append(card)
             continue
         if any(target_is_dismissed(key, events) for key in keys):
             diagnostics["dismissed"] += 1
+            anti_nag_token_ids.extend(anti_nag_tokens_from_card(card))
             continue
         if target_kind in FRONTIER_TYPES and not frontier_prompt_intent(prompt):
             diagnostics["frontier_not_requested"] += 1
+            anti_nag_token_ids.extend(anti_nag_tokens_from_card(card))
             continue
         if any(frequency_cap_active(key, target_kind, events, now_unix=now_unix) for key in keys):
             # Surface events are anti-nag hints, not hard dismissals. If the
@@ -258,9 +269,37 @@ def filter_ambient_cards(
                 filtered.append(card)
                 continue
             diagnostics["frequency_capped"] += 1
+            anti_nag_token_ids.extend(anti_nag_tokens_from_card(card))
             continue
         filtered.append(card)
-    return {"cards": filtered, "diagnostics": diagnostics}
+    return {
+        "cards": filtered,
+        "diagnostics": diagnostics,
+        "anti_nag_token_ids": unique_preserve(anti_nag_token_ids, limit=64),
+    }
+
+
+def filter_evidence_cards(
+    cards: list[dict[str, Any]],
+    events: list[dict[str, Any]],
+    *,
+    prompt: str = "",
+    now: float | None = None,
+) -> dict[str, Any]:
+    """Apply anti-nag to source-backed foreground evidence routes.
+
+    Evidence/source-open cards are stronger than weak ambient scent, but the
+    live hook is still ambient foreground output. A route shown or dismissed in
+    the local overlay should stay reachable through explicit recall/deepen while
+    not re-emitting every prompt turn.
+    """
+
+    result = filter_ambient_cards(cards, events, prompt=prompt, now=now)
+    result["diagnostics"] = {
+        **result["diagnostics"],
+        "evidence_route_policy": True,
+    }
+    return result
 
 
 def surface_events_for_cards(
@@ -275,7 +314,7 @@ def surface_events_for_cards(
     seen: set[str] = set()
     for card in cards:
         target_kind = surface_kind_from_card(card)
-        if target_kind not in TRACKED_TYPES:
+        if target_kind not in TRACKED_CARD_TYPES:
             continue
         for target_key in surface_keys_from_card(card):
             if target_key in seen:
@@ -472,6 +511,34 @@ def fallback_surface_keys_from_card(card: dict[str, Any]) -> list[str]:
 def surface_keys_from_card(card: dict[str, Any]) -> list[str]:
     keys = policy_keys_from_card(card)
     return keys if keys else fallback_surface_keys_from_card(card)
+
+
+def anti_nag_tokens_from_card(card: dict[str, Any]) -> list[str]:
+    """Return privacy-safe tokens that can suppress a card after it was quieted.
+
+    Render-time anti-nag matching mostly sees route/card ids, while policy
+    capping may only know hashed surface keys. Keep both in the local prompt
+    result so a filtered cached card cannot be resurrected by raw reasons or
+    weaker fallback routes on the next prompt.
+    """
+
+    tokens: list[str] = list(surface_keys_from_card(card))
+    for key in (
+        "card_id",
+        "route_id",
+        "query_pattern_route_id",
+        "domain_id",
+        "lock_id",
+        "path_id",
+        "deepen_route_id",
+        "token_id",
+        "id",
+        "record_id",
+    ):
+        value = compact_text(str(card.get(key) or ""), 120)
+        if value:
+            tokens.append(value)
+    return unique_preserve(tokens, limit=16)
 
 
 def policy_kind_from_card(card: dict[str, Any]) -> str:

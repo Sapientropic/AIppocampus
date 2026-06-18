@@ -417,6 +417,10 @@ class AippocampusMcpServerTests(unittest.TestCase):
         self.assertEqual(deepen_payload["status"], "ok")
         self.assertEqual(deepen_payload["detail"], "compact")
         self.assertEqual(deepen_payload["source_window_summary"]["message_count"], 2)
+        self.assertEqual(
+            deepen_payload["primary_source_snippet"]["text"],
+            "小海马体需要 source-backed continuity。",
+        )
         self.assertNotIn("result", deepen_payload)
         self.assertNotIn("AIppocampus 使用 clean source", deepen_encoded)
         self.assertNotIn(str(self.cwd), deepen_encoded)
@@ -1044,12 +1048,15 @@ class AippocampusMcpServerTests(unittest.TestCase):
 
         payload = self.tool_payload(response)
         self.assertFalse(response["result"].get("isError", False))
-        self.assertEqual(payload["output_boundary"], "public_metadata_only_no_source_snippets_or_reopen_refs")
+        self.assertEqual(
+            payload["output_boundary"],
+            "public_metadata_with_capped_source_snippets_no_reopen_refs",
+        )
         self.assertEqual(payload["matches"][0]["match_index"], 1)
-        self.assertTrue(payload["matches"][0]["snippet_omitted"])
+        self.assertFalse(payload["matches"][0]["snippet_omitted"])
+        self.assertIn("不是摘要替代事实", payload["matches"][0]["snippet"])
         self.assertTrue(payload["matches"][0]["source_refs_omitted"])
         self.assertNotIn("message_id", payload["matches"][0])
-        self.assertNotIn("snippet", payload["matches"][0])
         self.assertIn("agent_next_action", payload)
 
     def test_search_memory_can_emit_source_snippets_when_explicitly_requested(self) -> None:
@@ -2196,8 +2203,9 @@ class AippocampusMcpServerTests(unittest.TestCase):
         self.assertEqual(payload["status"], "ok")
         self.assertEqual(payload["kind"], "aippocampus_search_result")
         self.assertEqual(payload["entry_state"], "explicit_search_invoked")
-        self.assertEqual(payload["claim_permission"], "metadata_only_no_claim_before_reopen")
+        self.assertEqual(payload["claim_permission"], "capped_search_snippet_no_claim_before_reopen")
         self.assertEqual(payload["source_boundary"]["authority"], "reopenable_route")
+        self.assertTrue(payload["source_boundary"]["capped_snippets_are_bounded_receipts"])
         self.assertEqual(payload["foreground_action"]["id"], "recall_context_from_search")
         self.assertEqual(payload["foreground_action"]["tool_name"], "recall_context")
         self.assertEqual(payload["foreground_action"]["arguments"]["intent"], "clean source")

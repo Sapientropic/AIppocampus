@@ -214,12 +214,16 @@ keep that filename in the command you run rather than copying a placeholder
 from this agent context:
 
 ```sh
-uvx aippocampus onboard --provider codex --status --json
-# Then follow the explicit write recommendation after consent.
-uvx aippocampus onboard --provider claude-code --dry-run
-uvx aippocampus onboard --provider claude-code
+uvx aippocampus onboard --provider codex --dry-run --json
+uvx aippocampus onboard --provider codex --cwd . --json
+uvx aippocampus onboard --provider claude-code --dry-run --json
+uvx aippocampus onboard --provider claude-code --cwd . --json
+uvx aippocampus import conversation --format generic-jsonl --input ./conversation.jsonl --dry-run --json
+uvx aippocampus import conversation --format generic-jsonl --input ./conversation.jsonl --json
 uvx aippocampus agent recall "old decision or handoff cue" --json
 uvx aippocampus agent deepen --request 1 --last-recall --json
+uvx aippocampus export --json
+uvx aippocampus sync --json
 ```
 
 These commands scan selected local agent transcript history or visible-message
