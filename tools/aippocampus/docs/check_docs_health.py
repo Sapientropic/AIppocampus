@@ -24,7 +24,6 @@ from cognitive_maturity_guard import (
     proof_slice_maturity_board_issues,
 )
 from current_claims_guard import (
-    current_claims_foreground_issues,
     current_claims_snapshot_issues,
 )
 from discussion_atlas_guard import discussion_atlas_static_issues

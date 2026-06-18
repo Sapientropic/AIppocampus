@@ -22,8 +22,8 @@ from aippocampus_runtime.sync import contract as sync_contract
 from aippocampus_runtime.sync.object_storage.cli_support import (
     explicit_object_prefix_arg,
     explicit_object_store_url_arg,
-    object_sync_backend_chooser,
     object_provider_kwargs,
+    object_sync_backend_chooser,
     object_sync_direction,
     object_sync_direction_plan,
     object_sync_help_card,

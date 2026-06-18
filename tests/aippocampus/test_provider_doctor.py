@@ -271,6 +271,38 @@ class ProviderDoctorTests(unittest.TestCase):
         self.assertNotIn("credential_validation", payload)
         self.assertNotIn(fixture_value, proc.stdout)
 
+    def test_cli_compact_json_missing_key_returns_guidance_card_without_failure(self) -> None:
+        env = dict(os.environ)
+        for name in PROVIDER_ENV_NAMES:
+            env.pop(name, None)
+        proc = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "aippocampus_runtime.cli.facade",
+                "doctor",
+                "provider",
+                "--json",
+            ],
+            cwd=SCRIPTS,
+            env=env,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            check=False,
+        )
+
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        payload = json.loads(proc.stdout)
+        self.assertEqual(payload["kind"], "aippocampus_provider_doctor_card")
+        self.assertEqual(payload["detail"], "compact")
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["status"], "missing_provider_env_var")
+        self.assertEqual(payload["foreground_action"]["id"], "set_provider_env_in_hook_environment")
+        self.assertNotIn("provider_env", payload)
+        self.assertNotIn("legacy_aliases", payload)
+
     def test_cli_doctor_provider_full_detail_keeps_operator_report(self) -> None:
         fixture_value = fake_provider_doctor_value("CLI_FULL")
         env = dict(os.environ)

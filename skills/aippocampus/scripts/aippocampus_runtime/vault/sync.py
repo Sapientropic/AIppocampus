@@ -9,7 +9,10 @@ import os
 import sys
 from pathlib import Path
 
-from aippocampus_runtime.contracts import canonical_foreground_action_fields, foreground_shell_action
+from aippocampus_runtime.contracts import (
+    canonical_foreground_action_fields,
+    foreground_shell_action,
+)
 from aippocampus_runtime.core import codex_home, default_thread_index_dir, parse_anchor_file
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 from aippocampus_runtime.registry.api import register_current_thread
@@ -23,6 +26,10 @@ from aippocampus_runtime.vault.notes import (
     homepage,
     obsidian_snippet_css,
 )
+from aippocampus_runtime.vault.sync_cards import (
+    vault_status_action,
+    vault_sync_read_only_payload,
+)
 from aippocampus_runtime.vault.utils import (
     DEFAULT_SITE_TITLE,
     DEFAULT_VAULT,
@@ -34,10 +41,6 @@ from aippocampus_runtime.vault.utils import (
     run_text,
     safe_filename,
     write,
-)
-from aippocampus_runtime.vault.sync_cards import (
-    vault_status_action,
-    vault_sync_read_only_payload,
 )
 from conversation_sources import PROVIDER_CHOICES, create_conversation_provider
 
