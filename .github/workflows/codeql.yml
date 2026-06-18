@@ -107,6 +107,7 @@ jobs:
           languages: python
           build-mode: none
           config-file: ./.github/codeql/codeql-config.yml
+          packs: codeql/python-queries:AlertSuppression.ql
 
       - name: Initialize CodeQL for deep scan
         if: ${{ github.event_name != 'pull_request' }}
