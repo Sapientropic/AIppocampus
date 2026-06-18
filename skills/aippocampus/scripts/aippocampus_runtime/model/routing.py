@@ -195,7 +195,7 @@ class ModelRoute:
             "model": self.model,
             "provider": self.provider,
             "base_url": self.base_url,
-            "api_key_env": self.api_key_env,
+            "provider_env_var_omitted": True,
             "capabilities": capabilities.as_dict(),
         }
 
@@ -388,10 +388,11 @@ def route_payload_with_effective_values(
     base_url: str,
     api_key_env: str,
 ) -> dict[str, Any]:
+    provider_env_var_known = bool(api_key_env or route.api_key_env)
     payload = route.as_dict()
     payload["model"] = model
     payload["base_url"] = base_url
-    payload["api_key_env"] = api_key_env
+    payload["provider_env_var_omitted"] = provider_env_var_known
     payload["cache_contract"] = route_cache_contract(route)
     return payload
 

@@ -101,7 +101,6 @@ def _emit_json(payload: Any) -> None:
     # Update JSON is a local/operator control surface. Payload builders decide
     # which fields are public-safe; sanitizing here breaks executable rollback
     # paths and private provider bridge locators that users need for recovery.
-    # codeql[py/clear-text-logging-sensitive-data]
     print(json.dumps(payload, ensure_ascii=False, indent=2, default=_json_default))
 
 
@@ -775,18 +774,43 @@ def status_llm(
     provider_env: dict[str, Any] = raw_provider_env if isinstance(raw_provider_env, dict) else {}
     raw_route = report.get("route")
     route: dict[str, Any] = raw_route if isinstance(raw_route, dict) else {}
+    safe_actions = [
+        {
+            "id": "inspect_provider_doctor_detail",
+            "command": "aippocampus doctor provider --detail full --json",
+            "mutation_risk": "read_only",
+            "claim_boundary": "operator_detail_not_memory_evidence",
+        }
+    ]
+    if report.get("status") == "missing_provider_env_var":
+        safe_actions.insert(
+            0,
+            {
+                "id": "plan_provider_key_bridge",
+                "command": "aippocampus onboard provider-key --plan --json",
+                "mutation_risk": "read_only_plan",
+                "claim_boundary": "provider_key_setup_not_memory_evidence",
+            },
+        )
     return {
         "surface": "llm",
         "status": report.get("status"),
         "ready": bool(report.get("ok")),
         "provider": route.get("provider"),
         "model": route.get("model"),
-        "provider_env_var": provider_env.get("env_var"),
+        "provider_env_var_omitted": bool(provider_env.get("env_var")),
         "visible_in_current_process": provider_env.get("visible_in_current_process"),
         "visible_in_child_process": provider_env.get("visible_in_child_process"),
         "cognitive_worker": report.get("cognitive_worker") or {},
-        "recommended_actions": report.get("recommended_actions") or [],
-        "privacy": report.get("privacy") or {},
+        "recommended_actions": safe_actions,
+        "privacy": {
+            "env_var_value_printed": False,
+            "env_var_value_checked": False,
+            "provider_env_var_name_omitted": bool(provider_env.get("env_var")),
+            "local_paths_included": False,
+            "base_url_value_printed": False,
+            "operator_detail_available": True,
+        },
         "safety_notes": [
             "LLM key setup is presence-only and redacted; update never prints or guesses key values",
             "set the provider key in the environment that launches Codex or the hook process",

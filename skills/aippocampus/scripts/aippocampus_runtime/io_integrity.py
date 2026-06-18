@@ -48,7 +48,6 @@ def _atomic_replace_bytes(path: Path, payload_bytes: bytes) -> None:
             # private local control manifests. Callers own that boundary through
             # `sanitize=True`; provider bridge locators must remain executable
             # on the local machine and are not public artifacts.
-            # codeql[py/clear-text-storage-sensitive-data]
             handle.write(payload_bytes)
         tmp.replace(path)
     except BaseException:
