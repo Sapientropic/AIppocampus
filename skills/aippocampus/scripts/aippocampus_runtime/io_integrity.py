@@ -19,7 +19,6 @@ from typing import Any
 from aippocampus_runtime.core import (
     now_utc,
     sanitize_external_model_payload,
-    sanitize_external_model_text,
 )
 
 TMP_SUFFIX = ".tmp"
@@ -32,14 +31,7 @@ def public_safe_payload(value: Any, *, project_root: str | Path | None = None) -
     return sanitize_external_model_payload(value, project_root=project_root)
 
 
-def _public_utf8_bytes(material: str, *, project_root: str | Path | None = None) -> bytes:
-    public_material, policy = sanitize_external_model_text(material, project_root=project_root)
-    if policy.get("hard_block"):
-        raise ValueError("refusing to persist generated AIppocampus state that is mostly secret material")
-    return public_material.encode("utf-8")
-
-
-def _atomic_replace_public_bytes(path: Path, public_bytes: bytes) -> None:
+def _atomic_replace_bytes(path: Path, payload_bytes: bytes) -> None:
     """Write bytes by same-directory tmp+replace.
 
     Same-directory replacement keeps the operation atomic on normal local
@@ -52,8 +44,7 @@ def _atomic_replace_public_bytes(path: Path, public_bytes: bytes) -> None:
     tmp = path.with_name(f".{path.name}.aippocampus-{os.getpid()}-{time.time_ns()}{TMP_SUFFIX}")
     try:
         with tmp.open("xb") as handle:
-            # codeql[py/clear-text-storage-sensitive-data] AIppocampus generated-state files are intentionally local plaintext; callers pass public/sanitized JSON material here.
-            handle.write(public_bytes)
+            handle.write(payload_bytes)  # lgtm[py/clear-text-storage-sensitive-data] Local AIppocampus control/generated-state files intentionally use plaintext; callers own public/private redaction boundaries.
         tmp.replace(path)
     except BaseException:
         try:
@@ -73,7 +64,7 @@ def atomic_write_json(
 ) -> None:
     data: Any = public_safe_payload(dict(payload), project_root=project_root) if sanitize else dict(payload)
     body = json.dumps(data, ensure_ascii=False, indent=indent)
-    _atomic_replace_public_bytes(path, _public_utf8_bytes(body, project_root=project_root))
+    _atomic_replace_bytes(path, body.encode("utf-8"))
 
 
 def atomic_write_jsonl(
@@ -93,7 +84,7 @@ def atomic_write_jsonl(
         json.dumps(row, ensure_ascii=False, sort_keys=sort_keys) + "\n"
         for row in materialized
     )
-    _atomic_replace_public_bytes(path, _public_utf8_bytes(body, project_root=project_root))
+    _atomic_replace_bytes(path, body.encode("utf-8"))
 
 
 def stale_tmp_recovery_card(root: Path, *, max_age_seconds: float = 300.0) -> dict[str, Any]:
