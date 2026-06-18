@@ -9,7 +9,7 @@ import os
 import sys
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from aippocampus_runtime.contracts import (
     canonical_foreground_action_fields,
@@ -377,7 +377,7 @@ def status_payload(*, cwd: Path, no_default_learning: bool = False) -> dict[str,
         primary_action,
         safe_next_actions=followup_actions,
     )
-    next_actions = list(action_fields["safe_next_actions"])[:3]
+    next_actions = cast(list[dict[str, object]], action_fields["safe_next_actions"])[:3]
     return _public_payload(
         _with_boundary_detail(
             {
