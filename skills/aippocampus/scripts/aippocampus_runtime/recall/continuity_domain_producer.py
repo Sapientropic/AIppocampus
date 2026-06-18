@@ -113,6 +113,7 @@ GENERIC_PRODUCER_TERMS = {
     "normalized",
     "plugin",
     "plugins",
+    "sapientropic",
     "recent",
     "rollout",
     "rollouts",

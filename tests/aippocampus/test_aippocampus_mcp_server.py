@@ -2139,6 +2139,9 @@ class AippocampusMcpServerTests(unittest.TestCase):
         self.assertEqual(payload["foreground_action"]["tool_name"], "recall_context")
         self.assertEqual(payload["foreground_action"]["arguments"]["intent"], "clean source")
         self.assertEqual(payload["foreground_action"]["claim_boundary"], "source_reopen_required_before_claim")
+        self.assertIsInstance(payload["agent_next_action"], dict)
+        self.assertEqual(payload["agent_next_action"], payload["foreground_action"])
+        self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
         self.assertNotIn(str(self.cwd), encoded)
 
     def test_memory_health_runs_in_process_for_frozen_binary_entrypoints(self) -> None:

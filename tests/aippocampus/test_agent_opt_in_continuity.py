@@ -899,6 +899,38 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertTrue(wrote)
         self.assertEqual(json.loads(handle), handle_dict)
 
+    def test_last_recall_cache_keeps_public_safe_query_for_recovery(self) -> None:
+        cache_path = self.cwd / "last-recall-query.json"
+        wrote = agent_continuity_cli_support.write_last_recall_cache(
+            [{"request_index": 1, "route_id": "route_query", "handle": "handle_query"}],
+            query="agent-native recall opt-in SECRET_TOKEN=abc123",
+            cwd=self.cwd,
+            clean_source_dir=self.clean,
+            registry_dir=None,
+            macro_state_path=None,
+            project="AIppocampus",
+            max_matches=1,
+            schema_version=agent_continuity.SCHEMA_VERSION,
+            path=cache_path,
+        )
+
+        cue = agent_continuity_cli_support.query_from_last_recall_cache(cache_path)
+        recovery = agent_continuity_cli_support.last_recall_unavailable_payload(
+            mode="deepen",
+            exc=ValueError("same-machine last recall cache does not match"),
+            schema_version=agent_continuity.SCHEMA_VERSION,
+            kind="aippocampus_agent_continuity_path",
+            cue=cue,
+        )
+        encoded = json.dumps(recovery, ensure_ascii=False)
+
+        self.assertTrue(wrote)
+        self.assertIn("agent-native recall opt-in", cue or "")
+        self.assertNotIn("abc123", cue or "")
+        self.assertIn("agent-native recall opt-in", recovery["foreground_action"]["command"])
+        self.assertNotIn("{cue}", recovery["foreground_action"].get("command", ""))
+        self.assertNotIn("abc123", encoded)
+
     def test_agent_deepen_accepts_json_thread_candidate_handle(self) -> None:
         registry_dir = self.cwd / "registry"
         thread_key = "session:thread-candidate"
@@ -1712,11 +1744,15 @@ class AgentOptInContinuityTests(unittest.TestCase):
         cache_text = Path(env[agent_continuity.LAST_RECALL_CACHE_ENV]).read_text()
         cache = json.loads(cache_text)
         cache_context = cache["context"]
-        self.assertEqual(cache_context["path_scope"], "cwd_only_explicit_overrides_required")
+        self.assertEqual(cache_context["path_scope"], "caller_supplied_cwd_only_not_persisted")
+        self.assertNotIn("cwd", cache_context)
+        self.assertNotIn(str(self.cwd), cache_text)
         self.assertNotIn("clean_source_dir", cache_context)
         self.assertNotIn("registry_dir", cache_context)
         self.assertNotIn("macro_state_jsonl", cache_context)
-        self.assertFalse(cache["privacy_boundary"]["derived_local_source_paths_persisted"])
+        self.assertTrue(cache["privacy_boundary"]["derived_local_source_paths_persisted"])
+        self.assertFalse(cache["privacy_boundary"]["derived_local_source_paths_plaintext_persisted"])
+        self.assertTrue(cache["privacy_boundary"]["local_reopen_context_token_persisted"])
         self.assertFalse(cache["privacy_boundary"]["opaque_handles_cleartext_persisted"])
         self.assertFalse(cache["privacy_boundary"]["local_reopen_token_encoding_is_encryption"])
         self.assertNotIn("aippo-nav:", cache_text)
@@ -2027,11 +2063,42 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertEqual(action["action_id"], "provide_task_cue")
         self.assertEqual(action["tool_name"], "agent_aippo")
         self.assertEqual(action["requires"], ["task_cue"])
+        self.assertEqual(action["blocked_by"], ["task_cue_required"])
+        self.assertEqual(payload["contract_status"]["availability_basis"], "task_cue_required")
+        self.assertEqual(payload["contract_status"]["blocked_by"], ["task_cue_required"])
         self.assertEqual(payload["safe_next_actions"][0], action)
         self.assertNotIn("operator_json_command", payload)
         self.assertIn("operator_json_command_template", payload)
         self.assertNotIn("task cue", encoded)
         self.assertEqual(executable_command_violations(payload), [])
+
+    def test_cli_agent_aippo_operator_json_aligns_no_task_foreground_action(self) -> None:
+        proc = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "aippocampus_runtime.cli.facade",
+                "agent",
+                "aippo",
+                "--json",
+                "--operator-json",
+            ],
+            cwd=SCRIPTS,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            check=False,
+        )
+
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        payload = json.loads(proc.stdout)
+        packet = payload["activation_packet"]
+
+        self.assertEqual(payload["foreground_action"]["action_id"], "provide_task_cue")
+        self.assertEqual(packet["next_action"], "provide_task_cue")
+        self.assertEqual(packet["contract_next_action"], "stay_silent")
+        self.assertEqual(packet["blocked_by"], ["task_cue_required"])
 
     def test_cli_agent_aippo_operator_json_exposes_foreground_contract(self) -> None:
         proc = subprocess.run(

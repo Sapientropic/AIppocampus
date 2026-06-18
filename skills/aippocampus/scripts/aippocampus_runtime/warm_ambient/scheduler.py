@@ -55,7 +55,7 @@ DEFAULT_DETACHED_PREFIX_CACHE_WARMUP_DELAY = (
 DEFAULT_DETACHED_WARM_TIMEOUT = DEFAULT_WARM_DETACHED_JOB_CONFIG.timeout
 DEFAULT_WARM_JOB_STALE_SECONDS = 24 * 60 * 60
 WARM_STATUS_COMMAND = "aippocampus warm status --json"
-WARM_REPAIR_COMMAND = WARM_STATUS_COMMAND
+WARM_REPAIR_COMMAND = "aippocampus doctor provider --json"
 TRUTHY = {"1", "true", "yes", "on", "enabled"}
 FALSY = {"0", "false", "no", "off", "disabled"}
 
@@ -286,22 +286,22 @@ def warm_status_payload(
         next_command = WARM_STATUS_COMMAND
     if status == "blocked":
         agent_next_action = {
-            "id": "inspect_blocked_warm_queue",
-            "label": "Inspect blocked warm queue",
-            "command": WARM_STATUS_COMMAND,
+            "id": "inspect_provider_status",
+            "label": "Inspect provider status",
+            "command": WARM_REPAIR_COMMAND,
             "mutation_risk": "read_only",
-            "claim_boundary": "warm_ambient_optional_not_first_recall_blocker",
-            "why": "Warm ambient is enabled but stale queued work is blocked; inspect before changing setup.",
+            "claim_boundary": "provider_presence_only_no_key_values_emitted",
+            "why": "Warm ambient has stale queued work; check whether the optional worker can see a provider before changing setup.",
         }
         safe_next_actions = [
             agent_next_action,
             {
-                "id": "inspect_provider_status",
-                "label": "Inspect provider status",
-                "command": "aippocampus doctor provider --json",
+                "id": "recheck_warm_status",
+                "label": "Recheck warm status",
+                "command": WARM_STATUS_COMMAND,
                 "mutation_risk": "read_only",
-                "claim_boundary": "provider_presence_only_no_key_values_emitted",
-                "why": "Check whether the worker process can see the optional model provider.",
+                "claim_boundary": "warm_ambient_optional_not_first_recall_blocker",
+                "why": "Use this after provider or configuration review to confirm whether the stale queue is still blocked.",
             },
             {
                 "id": "plan_warm_repair",

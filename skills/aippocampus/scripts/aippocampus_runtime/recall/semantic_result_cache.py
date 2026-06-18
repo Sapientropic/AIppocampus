@@ -11,13 +11,13 @@ from __future__ import annotations
 import contextlib
 import json
 import os
-import tempfile
 import time
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any, Mapping
 
 from aippocampus_runtime.core import now_utc
+from aippocampus_runtime.io_integrity import atomic_write_json
 
 SCHEMA_VERSION = 1
 DEFAULT_MAX_CACHE_ENTRIES = 256
@@ -49,26 +49,7 @@ def _load_json(path: Path) -> dict[str, Any]:
 
 
 def _write_json(path: Path, data: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp_name = ""
-    try:
-        with tempfile.NamedTemporaryFile(
-            "w",
-            encoding="utf-8",
-            newline="\n",
-            dir=path.parent,
-            prefix=f".{path.name}.",
-            suffix=".tmp",
-            delete=False,
-        ) as handle:
-            tmp_name = handle.name
-            json.dump(data, handle, ensure_ascii=False, indent=2, sort_keys=True)
-            handle.write("\n")
-        Path(tmp_name).replace(path)
-    finally:
-        if tmp_name:
-            with contextlib.suppress(FileNotFoundError):
-                Path(tmp_name).unlink()
+    atomic_write_json(path, data, sanitize=True)
 
 
 @contextlib.contextmanager

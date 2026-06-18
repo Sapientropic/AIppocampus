@@ -164,6 +164,14 @@ def _base_record(
         "schema_version": SCHEMA_VERSION,
         "kind": RECORD_KIND,
         "record_id": record_id,
+        "guidance_id": str(
+            row.get("guidance_id")
+            or row.get("lesson_id")
+            or row.get("clause_id")
+            or record_id
+        ),
+        "guidance_lifecycle_stage": str(row.get("guidance_lifecycle_stage") or "prepared"),
+        "review_status": str(row.get("review_status") or row.get("review_state") or ""),
         "provider_family": provider_family,
         "action_hint_kind": action_hint_kind,
         "next_action": next_action,

@@ -140,6 +140,9 @@ class AippocampusHealthTests(unittest.TestCase):
         payload = json.loads(stdout.getvalue())
         self.assertEqual(code, 0)
         self.assertTrue(payload["ordinary_first_recall_usable"])
+        self.assertEqual(payload["readiness_card"]["state"], "ready_with_optional_maintenance")
+        self.assertTrue(payload["readiness_card"]["usable_now"])
+        self.assertFalse(payload["readiness_card"]["blocks_first_recall"])
 
     def test_exit_code_is_nonzero_when_first_recall_is_blocked(self) -> None:
         with (
@@ -322,6 +325,10 @@ class AippocampusHealthTests(unittest.TestCase):
 
         self.assertEqual(code, 0)
         self.assertEqual(payload["agent_next_action"]["id"], "continue_with_nonblocking_maintenance")
+        self.assertEqual(payload["readiness_card"]["state"], "ready_with_freshness_degraded")
+        self.assertTrue(payload["readiness_card"]["usable_now"])
+        self.assertFalse(payload["readiness_card"]["blocks_first_recall"])
+        self.assertTrue(payload["readiness_card"]["blocks_exact_latest"])
         self.assertEqual(
             payload["agent_next_action"]["before_exact_latest_claims"]["command"],
             "aippocampus maintenance plan --summary-json",

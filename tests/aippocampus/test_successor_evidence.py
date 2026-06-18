@@ -493,7 +493,54 @@ class SuccessorEvidenceTests(unittest.TestCase):
         self.assertFalse(metrics["live_host_behavior_lift_claimed"])
         self.assertFalse(metrics["representative_e2e50_quality_claimed"])
         self.assertFalse(metrics["semantic_judge_quality_claimed"])
-        self.assertFalse(metrics["private_shortfall_blocks_public_pack"])
+        self.assertTrue(metrics["private_shortfall_blocks_public_pack"])
+
+    def test_hard_blocker_successor_hygiene_is_itself_tracked(self) -> None:
+        report = build_successor_evidence_sweep_report()
+        by_issue = {row["issue"]: row for row in report["issues"]}
+        metrics = by_issue[1998]["metrics"]
+
+        self.assertIn(1998, report["covered_issue_numbers"])
+        self.assertGreaterEqual(metrics["hard_blocker_successor_path_count"], 3)
+        self.assertEqual(metrics["hard_blocker_without_successor_count"], 0)
+        self.assertEqual(metrics["closed_blocker_without_execution_owner_count"], 0)
+        self.assertFalse(metrics["hard_blocker_closed_as_product_done"])
+
+    def test_external_provider_blockers_publish_public_provider_artifact_metadata(self) -> None:
+        report = build_successor_evidence_sweep_report()
+        by_issue = {row["issue"]: row for row in report["issues"]}
+
+        for issue_number in (1929, 1931):
+            metrics = by_issue[issue_number]["metrics"]
+            artifact = metrics["provider_artifact"]
+
+            self.assertIn(artifact["provider"], {"openrouter", "not_requested", "local_scripted"})
+            self.assertIn("model", artifact)
+            self.assertIn("prompt", artifact)
+            self.assertIn("runner", artifact)
+            self.assertIn("cost", artifact)
+            self.assertIn("run_date", artifact)
+            self.assertEqual(artifact["blocker_metadata"]["successor_issue"], 2043)
+            self.assertFalse(artifact["privacy_boundary"]["raw_provider_payload_included"])
+            self.assertFalse(artifact["privacy_boundary"]["provider_credentials_included"])
+            self.assertFalse(metrics["official_provider_score_claimed"])
+
+    def test_live_blockers_publish_private_trace_index_without_raw_trace(self) -> None:
+        report = build_successor_evidence_sweep_report()
+        by_issue = {row["issue"]: row for row in report["issues"]}
+
+        for issue_number in (1942, 1944, 1945):
+            metrics = by_issue[issue_number]["metrics"]
+            index = metrics["private_trace_artifact_index"]
+
+            self.assertEqual(index["successor_issue"], 2044)
+            self.assertGreaterEqual(index["case_count"], 0)
+            self.assertRegex(index["trace_hash"], r"^ptr_[0-9a-f]{16}$")
+            self.assertIn("public_issue_summary_redacted", index)
+            self.assertEqual(index["local_pointer_kind"], "private_operator_artifact_pointer")
+            self.assertFalse(index["privacy_boundary"]["raw_trace_included"])
+            self.assertFalse(index["privacy_boundary"]["local_path_public"])
+            self.assertFalse(metrics["live_product_lift_claimed"])
 
     def test_live_or_provider_successors_close_as_blocked_not_promoted(self) -> None:
         report = build_successor_evidence_sweep_report()

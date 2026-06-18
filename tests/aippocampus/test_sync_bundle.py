@@ -336,10 +336,25 @@ class SyncBundleTests(unittest.TestCase):
 
         self.assertGreaterEqual(result["copied"], 6)
         self.assertEqual(result["conflicts"], 1)
+        self.assertTrue(result["write_boundary"]["written"])
+        self.assertFalse(result["write_boundary"]["explicit_write_required"])
+        self.assertEqual(result["recovery_actions"][0]["id"], "rollback_sync_pull")
+        self.assertEqual(result["rollback"]["status"], "available")
+        self.assertIn("aippocampus sync rollback", result["rollback"]["command"])
         self.assertEqual(target_messages.read_text(encoding="utf-8"), "different local content\n")
         conflict_files = list((target_registry / ".sync-conflicts").rglob("messages.jsonl"))
         self.assertEqual(len(conflict_files), 1)
         self.assertIn("source backed", conflict_files[0].read_text(encoding="utf-8"))
+
+        rollback = sync_bundle.rollback_sync_pull(
+            target_registry,
+            rollback_id=result["rollback"]["rollback_id"],
+        )
+
+        self.assertTrue(rollback["ok"], rollback)
+        self.assertTrue(rollback["write_boundary"]["written"])
+        self.assertFalse((target_registry / "threads.json").exists())
+        self.assertEqual(target_messages.read_text(encoding="utf-8"), "different local content\n")
 
     def test_pull_repairs_registry_paths_for_target_device(self) -> None:
         sync_bundle.push_sync_bundle(self.registry, self.sync_dir)
@@ -492,9 +507,12 @@ class SyncBundleTests(unittest.TestCase):
         sentinel = unmanaged_registry / "sentinel.txt"
         sentinel.write_text("do not delete\n", encoding="utf-8")
 
-        with self.assertRaisesRegex(ValueError, "without a valid"):
-            sync_bundle.push_sync_bundle(self.registry, self.sync_dir)
+        result = sync_bundle.push_sync_bundle(self.registry, self.sync_dir)
 
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["status"], "managed_sync_dir_collision")
+        self.assertFalse(result["write_boundary"]["written"])
+        self.assertEqual(result["recovery_actions"][0]["command"], "aippocampus sync repair --sync-dir <sync-dir> --json")
         self.assertEqual(sentinel.read_text(encoding="utf-8"), "do not delete\n")
 
     def test_push_refuses_when_managed_dir_overlaps_registry_root_even_with_manifest(self) -> None:
@@ -524,7 +542,32 @@ class SyncBundleTests(unittest.TestCase):
 
         self.assertTrue(status["manifest_exists"])
         self.assertEqual(status["issues"][0]["code"], "invalid_manifest")
+        self.assertEqual(status["recovery_actions"][0]["command"], "aippocampus sync repair --sync-dir <sync-dir> --json")
+        self.assertFalse(status["write_boundary"]["written"])
         self.assertEqual(repair["issues"][0]["code"], "invalid_manifest")
+
+    def test_status_reports_sync_schema_drift_with_rebuild_card(self) -> None:
+        self.sync_dir.mkdir()
+        manifest_path = self.sync_dir / sync_bundle.SYNC_MANIFEST_NAME
+        manifest_path.write_text(
+            json.dumps(
+                {
+                    "kind": sync_bundle.SYNC_BUNDLE_KIND,
+                    "schema_version": sync_bundle.SYNC_SCHEMA_VERSION + 100,
+                    "files": [],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        status = sync_bundle.status_sync_bundle(self.sync_dir)
+
+        self.assertFalse(status["ok"])
+        self.assertEqual(status["status"], "unsupported_sync_manifest_schema")
+        self.assertEqual(status["issues"][0]["code"], "unsupported_sync_manifest_schema")
+        self.assertEqual(status["recovery_actions"][0]["id"], "rebuild_sync_bundle")
+        self.assertFalse(status["write_boundary"]["written"])
 
     def test_plaintext_push_rejects_raw_rollout_without_debug_override(self) -> None:
         with self.assertRaisesRegex(ValueError, "raw_requires_encryption"):

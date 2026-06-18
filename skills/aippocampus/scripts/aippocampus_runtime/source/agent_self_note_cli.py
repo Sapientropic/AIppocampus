@@ -212,45 +212,58 @@ def _write_boundary() -> dict[str, Any]:
 
 
 def _self_note_recovery_payload() -> dict[str, Any]:
+    choices = [
+        {
+            "id": "append_direction_only_note",
+            "label": "append",
+            "command_template": 'aippocampus self-note append --current-thread "{note_text}"',
+            "requires": ["note_text"],
+            "template_only": True,
+            "mutation_risk": "direction_only_note_write",
+            "claim_boundary": "direction_only_not_source_truth",
+            "when": "Leave a weak foreground-agent margin note after an explicit decision.",
+        },
+        {
+            "id": "search_direction_only_notes",
+            "label": "search",
+            "command_template": 'aippocampus self-note search "{cue}" --json',
+            "requires": ["cue"],
+            "template_only": True,
+            "mutation_risk": "read_only",
+            "claim_boundary": "direction_only_not_source_truth",
+            "when": "Find direction-only atmosphere for the current workspace.",
+        },
+        {
+            "id": "list_direction_only_notes",
+            "label": "list",
+            "command": "aippocampus self-note list --json",
+            "mutation_risk": "read_only",
+            "claim_boundary": "direction_only_not_source_truth",
+            "when": "Review recent scoped notes without treating them as evidence.",
+        },
+        {
+            "id": "read_direction_only_note",
+            "label": "read",
+            "command_template": "aippocampus self-note read {note_id} --json",
+            "requires": ["note_id"],
+            "template_only": True,
+            "mutation_risk": "read_only",
+            "claim_boundary": "direction_only_not_source_truth",
+            "when": "Inspect one known note id with the weak-memory boundary visible.",
+        },
+    ]
+    primary = choices[0]
     return {
         "kind": "aippocampus_agent_self_note_recovery",
         "ok": False,
         "error": {
             "code": "self_note_command_required",
-            "message": "self-note needs one explicit action: append, search, list, or read.",
+                "message": "self-note needs one explicit action: append, search, list, or read.",
         },
-        "choices": [
-            {
-                "label": "append",
-                "command_template": 'aippocampus self-note append --current-thread "{note_text}"',
-                "requires": ["note_text"],
-                "template_only": True,
-                "when": "Leave a weak foreground-agent margin note after an explicit decision.",
-            },
-            {
-                "label": "search",
-                "command_template": 'aippocampus self-note search "{cue}" --json',
-                "requires": ["cue"],
-                "template_only": True,
-                "when": "Find direction-only atmosphere for the current workspace.",
-            },
-            {
-                "label": "list",
-                "command": "aippocampus self-note list --json",
-                "when": "Review recent scoped notes without treating them as evidence.",
-            },
-            {
-                "label": "read",
-                "command_template": "aippocampus self-note read {note_id} --json",
-                "requires": ["note_id"],
-                "template_only": True,
-                "when": "Inspect one known note id with the weak-memory boundary visible.",
-            },
-        ],
-        "agent_next_action": (
-            "Pick append/search/list/read; use `aippocampus agent recall` when you need "
-            "source-backed continuity instead of direction_only atmosphere."
-        ),
+        "choices": choices,
+        "foreground_action": primary,
+        "agent_next_action": primary,
+        "safe_next_actions": choices,
         "source_boundary": {
             "authority": "direction_only",
             "direction_only_is_not_source_truth": True,
@@ -602,6 +615,7 @@ def main(argv: list[str] | None = None) -> int:
         payload = _self_note_recovery_payload()
         if "--json" in raw_args:
             print(json.dumps(payload, ensure_ascii=False, indent=2))
+            return 0
         else:
             _print_self_note_recovery_card(payload)
         return 0
@@ -782,7 +796,7 @@ def _run_append(args: argparse.Namespace, *, text: str, notes_path: Path) -> int
                 print("Next: " + formatted[0], file=sys.stderr)
                 for line in formatted[1:]:
                     print(line, file=sys.stderr)
-        return 1
+        return 0
     cwd_path = Path(args.cwd).resolve()
     current_thread = (
         current_thread_self_note_route(cwd=cwd_path, rollout=args.rollout)

@@ -15,6 +15,16 @@ _HOST_INTERNAL_MARKERS = (
 )
 
 
+def contains_host_internal_material(text: str) -> bool:
+    original = str(text or "")
+    lowered_original = original.lstrip().casefold()
+    if any(lowered_original.startswith(marker) for marker in _HOST_INTERNAL_MARKERS):
+        return True
+    if any(marker in original.casefold() for marker in _HOST_INTERNAL_MARKERS):
+        return True
+    return any(pattern.search(original) for pattern in _HOST_INTERNAL_BLOCK_PATTERNS)
+
+
 def filter_host_internal_clean_text(text: str) -> tuple[str, bool]:
     """Remove host-control envelopes before text enters ordinary clean source.
 

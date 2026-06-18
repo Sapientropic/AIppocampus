@@ -24,9 +24,14 @@ from aippocampus_runtime.core import (
     now_utc,
     resolve_artifact_path,
 )
+from aippocampus_runtime.io_integrity import atomic_write_json, atomic_write_jsonl
 from aippocampus_runtime.recall.route_notes import extract_route_note_candidates_for_source
 from aippocampus_runtime.source.behavior_events import extract_rollout_behavior_events
 from aippocampus_runtime.source.host_internal_filter import filter_host_internal_clean_text
+from aippocampus_runtime.source.material_sanitizer import (
+    classify_source_material,
+    clean_source_material_contract,
+)
 from aippocampus_runtime.source.redaction_profiles import write_clean_source_redaction_profiles
 from aippocampus_runtime.source.scope_labels import (
     SCOPE_LABEL_ORDER,
@@ -140,7 +145,7 @@ def _clean_behavior_events(
 
 
 def _clean_messages(
-    messages: list[dict], turns: list[dict], source_id: str
+    messages: list[dict], turns: list[dict], source_id: str, *, source_provider: str
 ) -> tuple[list[dict], list[dict]]:
     by_turn: dict[int, list[dict]] = {}
     for message in messages:
@@ -174,6 +179,11 @@ def _clean_messages(
             text, host_internal_filtered = filter_host_internal_clean_text(item.get("text") or "")
             if not text.strip():
                 continue
+            material = classify_source_material(
+                text,
+                source_surface=source_provider,
+                metadata={"provider": source_provider, "phase": phase},
+            )
             content_sha256 = _content_sha256(text)
             message_id = _stable_id(
                 "msg",
@@ -204,6 +214,9 @@ def _clean_messages(
                 "semantic_key": _semantic_key(str(item.get("role") or ""), phase, text),
                 "signature_key": message_id,
                 "scope_labels": infer_scope_labels(text),
+                "material_class": material["material_class"],
+                "public_projection_policy": material["public_projection_policy"],
+                "source_claim_policy": material["source_claim_policy"],
                 "text": text,
             }
             if host_internal_filtered:
@@ -274,7 +287,12 @@ def build_clean_source(
     source_thread_key = active_provider.thread_key(source_path, meta)
     source_key = source_thread_key or meta.get("id") or str(source_path.resolve())
     source_id = _stable_id("src", source_key, length=20)
-    clean_messages, clean_turns = _clean_messages(messages, turns, source_id)
+    clean_messages, clean_turns = _clean_messages(
+        messages,
+        turns,
+        source_id,
+        source_provider=active_provider.name,
+    )
     clean_events = (
         _clean_behavior_events(
             extract_rollout_behavior_events(source_path),
@@ -304,9 +322,7 @@ def build_clean_source(
         item["source_session_id"] = meta.get("id")
 
     messages_path = out / "messages.jsonl"
-    with messages_path.open("w", encoding="utf-8", newline="\n") as f:
-        for item in clean_messages:
-            f.write(json.dumps(item, ensure_ascii=False) + "\n")
+    atomic_write_jsonl(messages_path, clean_messages)
 
     profile_outputs, profile_summary = write_clean_source_redaction_profiles(
         clean_messages,
@@ -317,19 +333,13 @@ def build_clean_source(
     )
 
     turns_path = out / "turns.jsonl"
-    with turns_path.open("w", encoding="utf-8", newline="\n") as f:
-        for item in clean_turns:
-            f.write(json.dumps(item, ensure_ascii=False) + "\n")
+    atomic_write_jsonl(turns_path, clean_turns)
 
     events_path = out / "events.jsonl"
-    with events_path.open("w", encoding="utf-8", newline="\n") as f:
-        for item in clean_events:
-            f.write(json.dumps(item, ensure_ascii=False) + "\n")
+    atomic_write_jsonl(events_path, clean_events)
 
     route_notes_path = out / "route-notes.jsonl"
-    with route_notes_path.open("w", encoding="utf-8", newline="\n") as f:
-        for item in clean_route_notes:
-            f.write(json.dumps(item, ensure_ascii=False) + "\n")
+    atomic_write_jsonl(route_notes_path, clean_route_notes)
 
     source_texture = materialize_source_texture_sidecar(
         clean_messages, clean_events, clean_route_notes, out, meta.get("id"), profile_summary
@@ -364,6 +374,7 @@ def build_clean_source(
         "source_transcript_mtime": stat.st_mtime,
         "source_transcript_sha256": source_sha256,
         "source_artifact": source_artifact,
+        "material_class_contract": clean_source_material_contract(),
         "legacy_field_aliases": {
             "source_rollout": "source_transcript",
             "source_rollout_size": "source_transcript_size",
@@ -488,7 +499,7 @@ def build_clean_source(
     }
     manifest_path = out / "manifest.json"
     manifest["outputs"]["manifest_json"] = str(manifest_path)
-    manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+    atomic_write_json(manifest_path, manifest)
     return manifest
 
 

@@ -373,10 +373,20 @@ class AippocampusCliRecoveryCardTests(unittest.TestCase):
         self.assertEqual(navigate.returncode, 0, navigate.stderr)
         navigation_payload = json.loads(navigate.stdout)
         self.assertEqual(navigation_payload["status"], "needs_cue")
+        self.assertEqual(navigation_payload["foreground_action_contract"], "foreground-action-v1")
         self.assertFalse(navigation_payload["source_boundary"]["model_job_started"])
         self.assertNotIn("old cue", json.dumps(navigation_payload, ensure_ascii=False))
         self.assertNotIn("foreground_next_action", navigation_payload)
-        navigate_action = navigation_payload["foreground_next_actions"][0]
+        self.assertNotIn("foreground_next_actions", navigation_payload)
+        self.assertEqual(
+            navigation_payload["agent_next_action"],
+            navigation_payload["foreground_action"],
+        )
+        self.assertEqual(
+            navigation_payload["safe_next_actions"][0],
+            navigation_payload["foreground_action"],
+        )
+        navigate_action = navigation_payload["foreground_action"]
         self.assertEqual(navigate_action["requires"], ["cue"])
         self.assertIn("command_template", navigate_action)
         self.assertNotIn("command", navigate_action)
@@ -404,7 +414,9 @@ class AippocampusCliRecoveryCardTests(unittest.TestCase):
         cued_payload = json.loads(cued.stdout)
         self.assertEqual(cued_payload["status"], "foreground_route_available")
         self.assertTrue(cued_payload["cue_supplied"])
-        self.assertIn("provider orchestration", cued_payload["foreground_next_actions"][0]["command"])
+        self.assertEqual(cued_payload["foreground_action_contract"], "foreground-action-v1")
+        self.assertEqual(cued_payload["agent_next_action"], cued_payload["foreground_action"])
+        self.assertIn("provider orchestration", cued_payload["foreground_action"]["command"])
 
         self.assertEqual(operator.returncode, 0, operator.stderr)
         operator_payload = json.loads(operator.stdout)

@@ -15,6 +15,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Protocol
 
+from aippocampus_runtime.io_integrity import atomic_write_json
+
 SCHEMA_VERSION = 1
 PROVIDER_CONFIG_STATUS_KIND = "aippocampus_vector_provider_config_status"
 
@@ -274,13 +276,27 @@ class LocalQuestionVectorIndex:
             "records": [record.as_dict() for record in self._records.values()],
             "truth_boundary": "vector_neighbors_are_hints_requiring_clean_source_verification",
         }
-        path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        atomic_write_json(path, payload)
 
     @classmethod
     def load(cls, path: Path) -> "LocalQuestionVectorIndex":
-        payload = json.loads(path.read_text(encoding="utf-8"))
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            raise ValueError(
+                "question vector index is interrupted or corrupt; rerun "
+                "`aippocampus questions rebuild --json` before relying on vector hints"
+            ) from exc
+        if not isinstance(payload, dict):
+            raise ValueError(
+                "question vector index has an unsupported shape; rerun "
+                "`aippocampus questions rebuild --json`"
+            )
         if int(payload.get("schema_version") or 0) != SCHEMA_VERSION:
-            raise ValueError("unsupported question vector index schema_version")
+            raise ValueError(
+                "unsupported question vector index schema_version; rerun "
+                "`aippocampus questions rebuild --json` or run the matching migration"
+            )
         index = cls(dimensions=payload.get("dimensions"))
         for item in payload.get("records") or []:
             if not isinstance(item, dict):

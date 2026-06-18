@@ -54,6 +54,7 @@ PUBLIC_RUNTIME_SURFACE_CLASSES = (
 )
 
 FOREGROUND_ACTION_CONTRACT_VERSION = "foreground-action-v1"
+READINESS_CARD_CONTRACT_VERSION = "readiness-card-v1"
 
 EXECUTABLE_COMMAND_FIELDS = {
     "command",
@@ -303,6 +304,46 @@ def canonical_foreground_action_fields(
     return payload
 
 
+def foreground_readiness_card(
+    *,
+    subject: str,
+    scope: str,
+    state: str,
+    usable_now: bool,
+    blocks_first_recall: bool,
+    blocks_exact_latest: bool = False,
+    recommended: Sequence[str] | None = None,
+    next_actions: Sequence[Mapping[str, object]] | None = None,
+    claim_boundary: str = "readiness_is_operational_status_not_source_truth",
+) -> dict[str, object]:
+    """Build the shared compact readiness shape for foreground surfaces.
+
+    This card intentionally stays smaller than an internal diagnostics model.
+    It answers the product question a foreground agent has first: can ordinary
+    continuity proceed now, and what must be refreshed before higher-risk or
+    exact-latest claims? Avoid putting path-bearing operator commands here;
+    attach executable/template actions through the foreground action contract.
+    """
+
+    payload: dict[str, object] = {
+        "readiness_contract": READINESS_CARD_CONTRACT_VERSION,
+        "subject": subject,
+        "scope": scope,
+        "state": state,
+        "usable_now": bool(usable_now),
+        "blocks_first_recall": bool(blocks_first_recall),
+        "blocks_exact_latest": bool(blocks_exact_latest),
+        "recommended": [str(item) for item in (recommended or []) if str(item)],
+        "next_actions": [dict(action) for action in (next_actions or []) if action],
+        "claim_boundary": claim_boundary,
+    }
+    return {
+        key: value
+        for key, value in payload.items()
+        if value not in (None, "", [])
+    }
+
+
 def foreground_action_contract_violations(payload: Mapping[str, object]) -> list[dict[str, str]]:
     """Lint compact-card action aliases against the foreground-action contract."""
 
@@ -375,6 +416,34 @@ def foreground_recovery_card(
             }
         ),
     }
+
+
+def write_boundary(
+    *,
+    written: bool,
+    explicit_write_required: bool = False,
+    target: str | None = None,
+    rollback_available: bool | None = None,
+) -> dict[str, object]:
+    """Machine-readable receipt for mutating or would-mutate surfaces.
+
+    Do not infer write state from `ok`, `applied`, or human text. Some recovery
+    cards are successful precisely because no write happened, and some conflict
+    paths write safe side artifacts while leaving the primary local state
+    unchanged. Keep this tiny helper vocabulary stable so new mutating surfaces
+    do not invent one-off aliases again.
+    """
+
+    payload: dict[str, object] = {
+        "written": bool(written),
+        "no_write_happened": not bool(written),
+        "explicit_write_required": bool(explicit_write_required),
+    }
+    if target:
+        payload["target"] = target
+    if rollback_available is not None:
+        payload["rollback_available"] = bool(rollback_available)
+    return payload
 
 
 def foreground_chooser_card(

@@ -27,6 +27,7 @@ ELIGIBLE_FINDING_KINDS = {
     "source_backed_do_not_repeat",
     "do_not_repeat",
 }
+SOURCE_BACKED_LESSON_KIND = "source_backed_lesson_candidate"
 BLOCKED_STATUSES = {"stale", "resolved", "refuted", "retired", "superseded", "blocked"}
 REOPEN_FIRST_FINDINGS = {
     "recurring_failure_finding",
@@ -71,6 +72,13 @@ def _source_refs(value: Any, *, limit: int = 6) -> list[dict[str, Any]]:
     if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
         return refs
     for item in value:
+        if isinstance(item, str):
+            clean = {"source_ref": _text(item, 140)}
+            if clean not in refs:
+                refs.append(clean)
+            if len(refs) >= limit:
+                break
+            continue
         if not isinstance(item, Mapping):
             continue
         clean = {
@@ -90,6 +98,100 @@ def _source_refs(value: Any, *, limit: int = 6) -> list[dict[str, Any]]:
         if len(refs) >= limit:
             break
     return refs
+
+
+def _first_string(value: Any, *, limit: int = 160) -> str:
+    if isinstance(value, str):
+        return _text(value, limit)
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+        for item in value:
+            text = _text(item, limit)
+            if text:
+                return text
+    return _text(value, limit)
+
+
+def _source_backed_lesson_to_aippo_row(
+    lesson: Mapping[str, Any],
+    *,
+    built_at: str,
+) -> dict[str, Any] | None:
+    if str(lesson.get("kind") or "") != SOURCE_BACKED_LESSON_KIND:
+        return None
+    if str(lesson.get("status") or "").casefold() != "ripe":
+        return None
+    if not lesson.get("foreground_activation_allowed"):
+        return None
+    refs = _source_refs(lesson.get("source_refs"))
+    if not refs:
+        return None
+    raw_structured = lesson.get("structured_lesson")
+    structured: Mapping[str, Any] = raw_structured if isinstance(raw_structured, Mapping) else {}
+    scope_values = lesson.get("scope")
+    scope_terms = _strings(scope_values, limit=6)
+    source_count = int(lesson.get("source_ref_count") or len(refs))
+    lesson_id = (
+        _text(lesson.get("lesson_id") or lesson.get("candidate_id") or lesson.get("clause_id"), 120)
+        or _stable_id("source_lesson_clause", lesson.get("failed_route"), lesson.get("proposed_lesson"))
+    )
+    guidance = (
+        _text(lesson.get("proposed_lesson"), 320)
+        or _text(structured.get("safer_next_action"), 220)
+        or "Reopen the source-backed lesson before repeating this route."
+    )
+    applies_when = [
+        *scope_terms,
+        _text(structured.get("trigger_condition"), 120),
+        _text(lesson.get("failed_route"), 120),
+        _text(lesson.get("candidate_kind"), 120),
+    ]
+    return {
+        "clause_id": lesson_id,
+        "lesson_id": lesson_id,
+        "kind": "reopen_first_workflow_clause",
+        "scope": _first_string(scope_values) or _text(structured.get("scope"), 160) or "task_family",
+        "target_fingerprint": _text(lesson.get("target_fingerprint"), 160),
+        "path_category_fingerprint": _text(lesson.get("path_category_fingerprint"), 160),
+        "topic_epoch": _text(lesson.get("topic_epoch"), 120) or "source-backed-lessons",
+        "workspace_or_environment_profile": (
+            _text(structured.get("environment_profile"), 160)
+            or _text(lesson.get("workspace_or_environment_profile"), 160)
+            or "unknown_environment"
+        ),
+        "guidance": guidance,
+        "next_action": "apply_source_backed_lesson_before_repeat",
+        "applies_when": _strings(applies_when, limit=8),
+        "does_not_apply_when": _strings(
+            lesson.get("does_not_apply_when")
+            or ["source_already_visible", "lesson_refuted_or_superseded"],
+            limit=8,
+        ),
+        "allowed_without_reopen_for": ["planning", "patch_shape", "task_ordering"],
+        "support_grade": "source_supported" if source_count >= 1 else "candidate_only",
+        "source_refs": refs,
+        "source_ref_count": source_count,
+        "independent_trail_count": int(lesson.get("independent_trail_count") or min(2, source_count)),
+        "support_types": ["source_backed_lesson", "reopen_first"],
+        "counter_evidence_ref_count": int(lesson.get("counter_evidence_ref_count") or 0),
+        "path_provenance": "complete" if refs else "gappy",
+        "status": "ripe",
+        "freshness": str(structured.get("freshness") or lesson.get("freshness") or "current"),
+        "review_state": "reviewed",
+        "built_at": built_at,
+        "last_source_seen_at": _text(lesson.get("last_source_seen_at"), 40) or built_at,
+        "invalidators": _strings(
+            lesson.get("invalidators")
+            or ["newer_source_correction", "lesson_refuted", "environment_changed"],
+            limit=8,
+        ),
+        "learning_loop": {
+            "source_backed_lesson_id": lesson_id,
+            "candidate_kind": _text(lesson.get("candidate_kind"), 120),
+            "navigation_only": True,
+            "source_reopen_required_before_claim": True,
+            "raw_tool_payload_serialized": False,
+        },
+    }
 
 
 def _status(row: Mapping[str, Any]) -> str:
@@ -168,6 +270,12 @@ def learning_findings_to_aippo_source_rows(
     rows: list[dict[str, Any]] = []
     for finding in findings:
         if not isinstance(finding, Mapping):
+            continue
+        lesson_row = _source_backed_lesson_to_aippo_row(finding, built_at=built_at)
+        if lesson_row:
+            rows.append(lesson_row)
+            continue
+        if str(finding.get("kind") or "") == SOURCE_BACKED_LESSON_KIND:
             continue
         refs = _source_refs(finding.get("source_refs"))
         suppression = _suppression_reason(finding, refs)

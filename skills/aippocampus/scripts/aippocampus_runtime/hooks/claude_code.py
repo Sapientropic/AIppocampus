@@ -18,7 +18,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from aippocampus_runtime.contracts import foreground_shell_action
+from aippocampus_runtime.contracts import (
+    canonical_foreground_action_fields,
+    foreground_shell_action,
+)
 
 HOST = "claude-code"
 CONFIG_SURFACE = "claude_settings_json"
@@ -694,12 +697,29 @@ def status_report(
 def dry_run_report(*, settings_path: Path | None = None) -> dict[str, Any]:
     settings_path = default_settings_path() if settings_path is None else settings_path
     command_report = handler_command_report()
-    next_step = (
-        "copy the dry-run handlers into Claude settings only after explicit local approval"
-        if command_report["copy_paste_ready"]
-        else "put the aippocampus console script or a Python module command on the Claude hook PATH before copying handlers"
+    ready_action = foreground_shell_action(
+        action_id="install_claude_code_hooks_after_review",
+        command="aippocampus hooks claude-code install --json",
+        label="Install Claude Code hooks after review",
+        why="The dry-run handler command is resolvable; install is still an explicit local write.",
+        mutation_risk="writes_claude_settings",
+        claim_boundary="host_hook_install_status_not_memory_evidence",
     )
-    return {
+    blocked_action = foreground_shell_action(
+        action_id="inspect_claude_code_hook_status",
+        command="aippocampus hooks claude-code status --json",
+        label="Inspect Claude Code hook status",
+        why="The handler command is not safely resolvable yet; inspect status after fixing PATH or module fallback.",
+        mutation_risk="read_only",
+        claim_boundary="host_hook_status_not_memory_evidence",
+    )
+    primary_action = ready_action if command_report["copy_paste_ready"] else blocked_action
+    next_step = (
+        "run aippocampus hooks claude-code install --json after reviewing this dry-run"
+        if command_report["copy_paste_ready"]
+        else "make the handler command resolvable, then run aippocampus hooks claude-code status --json"
+    )
+    payload = {
         "ok": True,
         "host": HOST,
         "action": "dry_run",
@@ -713,6 +733,13 @@ def dry_run_report(*, settings_path: Path | None = None) -> dict[str, Any]:
         "rollback": "aippocampus hooks claude-code uninstall --json",
         "next_operator_step": next_step,
     }
+    payload.update(
+        canonical_foreground_action_fields(
+            primary_action,
+            safe_next_actions=[primary_action, ready_action, blocked_action],
+        )
+    )
+    return payload
 
 
 def hook_event_from_stdin() -> dict[str, Any]:

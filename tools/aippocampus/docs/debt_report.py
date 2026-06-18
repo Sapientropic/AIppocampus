@@ -49,6 +49,80 @@ def budget_entries() -> dict[str, int]:
     return dict(sorted(entries.items()))
 
 
+def layer_for_path(rel_path: str) -> str:
+    if rel_path.startswith("skills/aippocampus/scripts/"):
+        return "runtime"
+    if rel_path.startswith("tests/"):
+        return "tests"
+    if rel_path.startswith("benchmarks/"):
+        return "benchmarks"
+    if rel_path.startswith("docs/"):
+        return "docs"
+    if rel_path.startswith("tools/"):
+        return "tools"
+    return "other"
+
+
+def build_system_weight(rows: list[dict[str, object]]) -> dict[str, object]:
+    layers: dict[str, dict[str, object]] = {
+        name: {
+            "tracked_file_count": 0,
+            "tracked_lines": 0,
+            "guard_budget_total": 0,
+            "over_budget_count": 0,
+            "near_budget_count": 0,
+        }
+        for name in ("runtime", "tests", "benchmarks", "docs", "tools")
+    }
+    archive_or_split_targets: list[dict[str, object]] = []
+    for row in rows:
+        rel_path = str(row["path"])
+        layer = layer_for_path(rel_path)
+        if layer not in layers:
+            continue
+        current = int(row["current_count"])
+        budget = int(row["guard_budget"])
+        margin = int(row["margin"])
+        bucket = layers[layer]
+        bucket["tracked_file_count"] = int(bucket["tracked_file_count"]) + 1
+        bucket["tracked_lines"] = int(bucket["tracked_lines"]) + current
+        bucket["guard_budget_total"] = int(bucket["guard_budget_total"]) + budget
+        if bool(row["over_budget"]):
+            bucket["over_budget_count"] = int(bucket["over_budget_count"]) + 1
+        if margin <= max(25, int(budget * 0.08)):
+            bucket["near_budget_count"] = int(bucket["near_budget_count"]) + 1
+            archive_or_split_targets.append(
+                {
+                    "path": rel_path,
+                    "layer": layer,
+                    "current_count": current,
+                    "guard_budget": budget,
+                    "margin": margin,
+                    "recommendation": "split_owner_or_archive_stale_supporting_material",
+                }
+            )
+    total_lines = sum(int(layer["tracked_lines"]) for layer in layers.values())
+    archive_or_split_targets.sort(key=lambda item: (int(item["margin"]), str(item["path"])))
+    return {
+        "schema_version": "aippocampus-system-weight-v1",
+        "total_tracked_lines": total_lines,
+        "layers": layers,
+        "fresh_agent_load": {
+            "tracked_file_count": sum(int(layer["tracked_file_count"]) for layer in layers.values()),
+            "tracked_lines": total_lines,
+            "interpretation": "tracked large-file surface only; not whole repository LOC",
+        },
+        "product_proof_audit_research_split": {
+            "runtime": "product_runtime",
+            "tests": "proof_regression",
+            "benchmarks": "proof_benchmark",
+            "docs": "architecture_or_research_context",
+            "tools": "operator_audit_or_maintenance",
+        },
+        "archive_or_split_targets": archive_or_split_targets[:20],
+    }
+
+
 def build_report() -> dict[str, object]:
     entries = budget_entries()
     rows: list[dict[str, object]] = []
@@ -75,6 +149,7 @@ def build_report() -> dict[str, object]:
         "entry_count": len(entries),
         "missing_files": missing_files,
         "over_budget": over_budget,
+        "system_weight": build_system_weight(rows),
         "rows": rows,
     }
 

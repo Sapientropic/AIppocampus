@@ -20,6 +20,7 @@ from typing import Any
 
 from aippocampus_runtime.core import codex_home, now_utc
 from aippocampus_runtime.hooks import install_lifecycle, install_prompt
+from aippocampus_runtime.io_integrity import atomic_write_json
 from aippocampus_runtime.ops.provider_credentials import public_token
 
 SCHEMA_VERSION = 1
@@ -100,7 +101,11 @@ def _selector_attributes_from_legacy(
     return selector_attributes
 
 
-def _privacy(include_local_paths: bool) -> dict[str, bool]:
+def _privacy(
+    include_local_paths: bool,
+    *,
+    persistent_manifest_locator: bool = False,
+) -> dict[str, bool]:
     return {
         "secret_values_printed": False,
         "secret_values_hashed": False,
@@ -108,6 +113,7 @@ def _privacy(include_local_paths: bool) -> dict[str, bool]:
         "local_paths_included": include_local_paths,
         "base_url_value_printed": False,
         "credential_store_service_names_included": include_local_paths,
+        "credential_source_locator_persisted_in_private_manifest": persistent_manifest_locator,
         "hooks_json_contains_secret_value": False,
         "manifest_contains_secret_value": False,
         "default_runtime_reads_credential_stores": False,
@@ -287,6 +293,12 @@ def build_bridge_manifest(
         "provider_env_var": public_token(provider_env_var, fallback=DEFAULT_PROVIDER_ENV_VAR),
         "created_at": now_utc(),
         "secret_value_stored": False,
+        "privacy_boundary": {
+            "secret_values_persisted": False,
+            "credential_source_locator_persisted": normalized_source != "visible-env-key",
+            "manifest_is_private_local_control_file": True,
+            "public_reports_redact_locator_by_default": True,
+        },
         "claim_boundary": (
             "This manifest is an explicit bridge for future/restarted hook processes; "
             "normal AIppocampus runtime hooks still consume provider credentials from process env."
@@ -295,10 +307,7 @@ def build_bridge_manifest(
 
 
 def write_bridge_manifest(path: Path, manifest: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8", newline="\n")
-    tmp.replace(path)
+    atomic_write_json(path, manifest)
     try:
         os.chmod(path, 0o600)
     except OSError:
@@ -700,6 +709,7 @@ def apply_provider_key_bridge(
         **plan,
         "action": "apply",
         "applied": True,
+        "privacy": _privacy(include_local_paths, persistent_manifest_locator=True),
         "manifest": {
             **_public_path_item("bridge_manifest", manifest_path, include_local_paths=include_local_paths),
             "written": True,

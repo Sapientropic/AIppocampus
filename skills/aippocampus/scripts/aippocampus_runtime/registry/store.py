@@ -99,7 +99,20 @@ def load_registry(path: Path) -> dict:
     registry = load_existing_json_object(path, label="thread registry")
     if not registry:
         registry = {"schema_version": REGISTRY_SCHEMA_VERSION, "updated_at": None, "threads": []}
-    registry.setdefault("schema_version", REGISTRY_SCHEMA_VERSION)
+    try:
+        schema_version = int(registry.get("schema_version") or REGISTRY_SCHEMA_VERSION)
+    except (TypeError, ValueError) as exc:
+        raise RegistryReadError(
+            f"Cannot read thread registry at {path}: unsupported schema_version "
+            f"{registry.get('schema_version')!r}; run aippocampus registry migrate --json "
+            "or rebuild the local registry"
+        ) from exc
+    if schema_version != REGISTRY_SCHEMA_VERSION:
+        raise RegistryReadError(
+            f"Cannot read thread registry at {path}: unsupported schema_version "
+            f"{schema_version}; run aippocampus registry migrate --json or rebuild the local registry"
+        )
+    registry["schema_version"] = REGISTRY_SCHEMA_VERSION
     registry.setdefault("threads", [])
     return registry
 

@@ -69,6 +69,7 @@ from aippocampus_runtime.recall.agent_continuity_cli_support import (
     normalize_route_limit,
     policy_boundary,
     public_recall_projection,
+    query_from_last_recall_cache,
     render_aippo_human,
     render_deepen_human,
     render_macro_human,
@@ -1079,6 +1080,41 @@ def activate_aippo(*, task: str = "") -> dict[str, Any]:
     return _public_payload(result)
 
 
+def _operator_aippo_payload_with_foreground_card(
+    payload: dict[str, Any],
+    guidance_card: dict[str, Any],
+    *,
+    task: str,
+) -> dict[str, Any]:
+    activation_packet = dict(payload.get("activation_packet") or {})
+    foreground_action = guidance_card.get("foreground_action")
+    if isinstance(foreground_action, dict):
+        action_id = str(foreground_action.get("action_id") or foreground_action.get("id") or "")
+        activation_packet["foreground_action_id"] = action_id
+        if not str(task or "").strip() and action_id == "provide_task_cue":
+            # The working contract's internal fallback is "stay_silent", but
+            # operator JSON is still a foreground surface. Preserve the raw
+            # contract decision while aligning the visible next action with the
+            # input-required card so agents do not see two competing primaries.
+            activation_packet["contract_next_action"] = activation_packet.get("next_action")
+            activation_packet["next_action"] = "provide_task_cue"
+            activation_packet["next_action_basis"] = "foreground_input_required"
+            activation_packet["availability_basis"] = "task_cue_required"
+            activation_packet["blocked_by"] = ["task_cue_required"]
+    return {
+        **payload,
+        "activation_packet": activation_packet,
+        "foreground_action_contract": guidance_card.get(
+            "foreground_action_contract",
+            FOREGROUND_ACTION_CONTRACT_VERSION,
+        ),
+        "foreground_action": guidance_card.get("foreground_action"),
+        "agent_next_action": guidance_card.get("agent_next_action"),
+        "safe_next_actions": guidance_card.get("safe_next_actions", []),
+        "foreground_guidance_card": guidance_card,
+    }
+
+
 def deepen(
     handle: Any,
     *,
@@ -1668,6 +1704,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         cache_written = write_last_recall_cache(
             payload.get("deepen_requests") or [],
+            query=query,
             cwd=args.cwd,
             clean_source_dir=args.clean_source_dir,
             registry_dir=args.registry_dir,
@@ -1703,17 +1740,11 @@ def main(argv: list[str] | None = None) -> int:
         if args.json:
             guidance_card = compact_aippo_guidance_card(payload, task=task)
             if args.operator_json:
-                payload = {
-                    **payload,
-                    "foreground_action_contract": guidance_card.get(
-                        "foreground_action_contract",
-                        FOREGROUND_ACTION_CONTRACT_VERSION,
-                    ),
-                    "foreground_action": guidance_card.get("foreground_action"),
-                    "agent_next_action": guidance_card.get("agent_next_action"),
-                    "safe_next_actions": guidance_card.get("safe_next_actions", []),
-                    "foreground_guidance_card": guidance_card,
-                }
+                payload = _operator_aippo_payload_with_foreground_card(
+                    payload,
+                    guidance_card,
+                    task=task,
+                )
             else:
                 payload = guidance_card
             _json_out(payload)
@@ -1785,7 +1816,13 @@ def main(argv: list[str] | None = None) -> int:
                     path=args.last_recall_path,
                 )
             except (OSError, ValueError, json.JSONDecodeError) as exc:
-                payload = last_recall_unavailable_payload(mode="deepen", exc=exc, schema_version=SCHEMA_VERSION, kind=KIND)
+                payload = last_recall_unavailable_payload(
+                    mode="deepen",
+                    exc=exc,
+                    schema_version=SCHEMA_VERSION,
+                    kind=KIND,
+                    cue=query_from_last_recall_cache(args.last_recall_path),
+                )
                 if args.json:
                     _json_out(payload)
                 else:
@@ -1825,7 +1862,13 @@ def main(argv: list[str] | None = None) -> int:
                     path=args.last_recall_path,
                 )
             except (OSError, ValueError, json.JSONDecodeError) as exc:
-                payload = last_recall_unavailable_payload(mode="explain", exc=exc, schema_version=SCHEMA_VERSION, kind=KIND)
+                payload = last_recall_unavailable_payload(
+                    mode="explain",
+                    exc=exc,
+                    schema_version=SCHEMA_VERSION,
+                    kind=KIND,
+                    cue=query_from_last_recall_cache(args.last_recall_path),
+                )
                 if args.json:
                     _json_out(project_agent_explain_cli_payload(payload, args, surface="agent_cli_route_explain_compact"))
                 else:

@@ -249,13 +249,13 @@ def action_hint_frontstage_card(status_result: Mapping[str, Any]) -> dict[str, A
     next_steps = [{"label": "check", "command": "aippocampus hooks action status --json"}]
     if not installed:
         next_steps.append({"label": "review_guidance", "command": first_command})
+        next_steps.append({"label": "install", "command": "aippocampus hooks action install --json"})
         next_steps.append(
             {
                 "label": "prepare_cache",
                 "command": "aippocampus hooks action refresh-cache --write --json",
             }
         )
-        next_steps.append({"label": "install", "command": "aippocampus hooks action install --json"})
     elif not ready:
         next_steps.append({"label": "refresh_cache", "command": first_command})
     next_steps.append(
@@ -623,11 +623,17 @@ def main(argv: list[str] | None = None) -> int:
         print(f"support: {result.get('support_status')}")
         steps = (result.get("frontstage_card") or {}).get("next_steps") or []
         if steps:
+            installed = bool(result.get("installed"))
+            preferred_labels = (
+                {"review_guidance", "install", "prepare_cache", "refresh_cache"}
+                if not installed
+                else {"prepare_cache", "refresh_cache", "install"}
+            )
             preferred = next(
                 (
                     step
                     for step in steps
-                    if step.get("label") in {"prepare_cache", "refresh_cache", "install"}
+                    if step.get("label") in preferred_labels
                 ),
                 next((step for step in steps if step.get("label") == "check"), steps[0]),
             )

@@ -28,6 +28,7 @@ from aippocampus_runtime.core import (
     parse_anchor_file,
     resolve_artifact_path,
 )
+from aippocampus_runtime.io_integrity import atomic_write_json, atomic_write_jsonl
 from aippocampus_runtime.recall.retrieval import build_rag_chunks
 from aippocampus_runtime.safety import project_clean_source_row
 from conversation_sources import create_conversation_provider
@@ -400,9 +401,7 @@ def main(argv: list[str] | None = None) -> int:
 
     with artifact_lease(output_dir, ".index-publish.lock"):
         messages_path = output_dir / "messages.jsonl"
-        with messages_path.open("w", encoding="utf-8", newline="\n") as f:
-            for m in messages:
-                f.write(json.dumps(m, ensure_ascii=False) + "\n")
+        atomic_write_jsonl(messages_path, messages)
 
         sqlite_path = output_dir / "source_index.sqlite"
         anchor_path = Path(args.anchors)
@@ -427,7 +426,7 @@ def main(argv: list[str] | None = None) -> int:
         sqlite_pointer = sqlite_publish.get("pointer")
         graph = build_anchor_graph(anchors, meta.get("id"))
         graph_path = output_dir / "graph.json"
-        graph_path.write_text(json.dumps(graph, ensure_ascii=False, indent=2), encoding="utf-8")
+        atomic_write_json(graph_path, graph)
 
         stat = rollout.stat()
         manifest = {
@@ -481,7 +480,7 @@ def main(argv: list[str] | None = None) -> int:
             },
         }
         manifest_path = output_dir / "manifest.json"
-        manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+        atomic_write_json(manifest_path, manifest)
 
     if args.json_output:
         print(json.dumps(manifest, ensure_ascii=False, indent=2))

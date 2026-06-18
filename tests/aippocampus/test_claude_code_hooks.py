@@ -60,6 +60,9 @@ class ClaudeCodeHooksTests(unittest.TestCase):
         self.assertFalse(dry_run["handler_command"]["resolved_executable_path_emitted"])
         self.assertEqual(dry_run["rollback_command"], "aippocampus hooks claude-code uninstall --json")
         self.assertEqual(dry_run["install_command"], "aippocampus hooks claude-code install --json")
+        self.assertEqual(dry_run["foreground_action_contract"], "foreground-action-v1")
+        self.assertEqual(dry_run["agent_next_action"], dry_run["foreground_action"])
+        self.assertNotIn("copy the dry-run handlers", dry_run["next_operator_step"])
         self.assertNotIn(str(settings), encoded)
 
     def test_install_is_idempotent_and_uninstall_preserves_unrelated_settings(self) -> None:
@@ -228,7 +231,8 @@ class ClaudeCodeHooksTests(unittest.TestCase):
         self.assertEqual(dry_run["handler_command"]["command_kind"], "console_script_unverified")
         self.assertFalse(dry_run["handler_command"]["command_resolvable"])
         self.assertFalse(dry_run["handler_command"]["copy_paste_ready"])
-        self.assertIn("PATH", dry_run["next_operator_step"])
+        self.assertIn("resolvable", dry_run["next_operator_step"])
+        self.assertEqual(dry_run["agent_next_action"]["id"], "inspect_claude_code_hook_status")
 
     def test_synthetic_smoke_handles_claude_events_without_payload_leakage(self) -> None:
         from aippocampus_runtime.hooks import claude_code

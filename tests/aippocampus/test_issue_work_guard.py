@@ -83,6 +83,26 @@ class IssueWorkGuardTests(unittest.TestCase):
         self.assertIn("agent_continuity_cards", packet["existing_owner_ref_ids"])
         self.assertIn("foreground_card_contract", packet["lead_kinds"])
 
+    def test_repeating_mistakes_issue_prefers_learning_loop_owners(self) -> None:
+        packet = build_issue_active_pull_packet(
+            title="Fix repeating mistakes learning loop",
+            body=(
+                "Agent feedback, do-not-use-here events, and source-backed lessons should "
+                "drive action-time guidance before another generic router patch."
+            ),
+        )
+
+        self.assertTrue(packet["should_pull"])
+        self.assertEqual(packet["owner_refs_confidence"], "high")
+        self.assertIn("learning_loop_cli", packet["existing_owner_ref_ids"])
+        self.assertIn("feedback_events", packet["existing_owner_ref_ids"])
+        self.assertIn("source_backed_lessons", packet["existing_owner_ref_ids"])
+        self.assertIn("action_hint_cache", packet["existing_owner_ref_ids"])
+        self.assertNotIn("attention_router", packet["existing_owner_ref_ids"])
+        self.assertNotIn("semantic_scope_builder", packet["existing_owner_ref_ids"])
+        self.assertIn("learning_feedback_owner", packet["lead_kinds"])
+        self.assertIn("check_learning_feedback_and_lesson_owner_before_router_patch", packet["constraints"])
+
     def test_trivial_issue_stays_silent(self) -> None:
         packet = build_issue_active_pull_packet(
             title="Fix typo in README",

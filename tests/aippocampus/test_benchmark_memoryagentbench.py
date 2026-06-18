@@ -13,6 +13,7 @@ if str(BENCHMARKS) not in sys.path:
     sys.path.insert(0, str(BENCHMARKS))
 
 import benchmark_memoryagentbench as benchmark  # noqa: E402
+from shared.provider_artifacts import public_provider_artifact  # noqa: E402
 
 RAW_CONTEXT_AR = "SECRET AR CONTEXT SHOULD ONLY APPEAR IN EXPLICIT CASE PACKS"
 RAW_QUESTION_AR = "RAW AR QUESTION SHOULD NOT APPEAR IN DEFAULT REPORTS"
@@ -23,6 +24,32 @@ LOCAL_PATH_SENTINEL = "LOCAL_PRIVATE_PATH_SENTINEL\\memoryagentbench.parquet"
 
 
 class MemoryAgentBenchSmokeTests(unittest.TestCase):
+    def test_public_provider_artifact_never_echoes_raw_prompt_or_local_paths(self) -> None:
+        artifact = public_provider_artifact(
+            benchmark_id="memoryagentbench_raw_input_guard",
+            provider="openrouter",
+            model="test-model",
+            prompt={
+                "kind": "safe_prompt_metadata",
+                "raw_prompt": RAW_CONTEXT_AR,
+                "local_debug_path": LOCAL_PATH_SENTINEL,
+                "token": "sk-FAKE_TEST_SECRET",
+                "surface_count": 2,
+            },
+            runner={
+                "kind": "safe_runner_metadata",
+                "runner": LOCAL_PATH_SENTINEL,
+                "status": "dry_run",
+            },
+        )
+
+        encoded = json.dumps(artifact, ensure_ascii=False)
+        self.assertNotIn(RAW_CONTEXT_AR, encoded)
+        self.assertNotIn(LOCAL_PATH_SENTINEL, encoded)
+        self.assertNotIn("sk-FAKE", encoded)
+        self.assertFalse(artifact["privacy_boundary"]["raw_provider_payload_included"])
+        self.assertEqual(artifact["prompt"]["surface_count"], 2)
+
     def test_missing_dataset_returns_public_safe_metadata_boundary(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             payload = benchmark.run_memoryagentbench_smoke(dataset_dir=Path(tmp) / "missing")

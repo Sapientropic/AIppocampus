@@ -585,6 +585,14 @@ class ArchitectureBoundaryTests(unittest.TestCase):
             report["sources"],
         )
         self.assertGreater(report["entry_count"], 40)
+        system_weight = report["system_weight"]
+        self.assertEqual(
+            set(system_weight["layers"]),
+            {"runtime", "tests", "benchmarks", "docs", "tools"},
+        )
+        self.assertGreater(system_weight["total_tracked_lines"], 0)
+        self.assertIn("fresh_agent_load", system_weight)
+        self.assertIn("archive_or_split_targets", system_weight)
         self.assertEqual(
             rows["tests/aippocampus/test_subconscious_jobs.py"]["current_count"],
             script_line_count(REPO_ROOT / "tests/aippocampus/test_subconscious_jobs.py"),

@@ -9,6 +9,8 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.update import status_actions
+
 PLUGIN_NAME = "aippocampus"
 MARKETPLACE_NAME = "aippocampus-local"
 MANIFEST_RELATIVE = Path(".codex-plugin") / "plugin.json"
@@ -331,6 +333,22 @@ def build_plugin_cache_status(
         recommended_actions.append(
             "pass --plugin-installed-dir, or reinstall the plugin in Codex after refreshing the local marketplace"
         )
+    recommended_action_cards = [
+        {
+            "id": "plugin_cache_recovery",
+            "status": "plugin_cache_needs_refresh",
+            "why": "The plugin package can be current while the Codex installed cache or marketplace copy is stale.",
+            **status_actions.executable_update_action_fields(
+                item,
+                fallback_command=status_actions.PLUGIN_CACHE_DEFAULT_REPAIR_COMMAND,
+                manual_instruction=(
+                    "Use the ordinary Codex plugin refresh unless a custom marketplace/cache path "
+                    "is intentionally being repaired."
+                ),
+            ),
+        }
+        for item in recommended_actions
+    ]
     return {
         "source_plugin_version": source.get("version"),
         "source_plugin_tree_hash": source.get("tree_hash"),
@@ -343,6 +361,7 @@ def build_plugin_cache_status(
         "ignored_legacy_cache_roots": [str(path) for path in ignored_cached_roots],
         "installed_cache_auto_resolution": auto_resolution,
         "recommended_actions": recommended_actions,
+        "recommended_action_cards": recommended_action_cards,
         "boundary": {
             "package_artifact_is_not_installed_cache": True,
             "local_marketplace_is_not_codex_installed_cache": True,
@@ -392,7 +411,11 @@ def _replace_plugin_tree(source: Path, target: Path, *, preserve_portable_mcp: b
         shutil.rmtree(target)
     tmp.replace(target)
     return {
-        "target_path": str(target),
+        # Cache-refresh receipts are surfaced to agents after `update apply`.
+        # Keep the actual write path private: rollback/install commands own
+        # machine-local paths, but this foreground receipt only needs to say
+        # the configured cache layer was refreshed.
+        "target_path": "<redacted:local-path>",
         "ok": True,
         "portable_mcp_config_preserved": preserved_mcp is not None,
         "version": _manifest_info(target).get("version"),

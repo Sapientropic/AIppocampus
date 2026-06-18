@@ -72,6 +72,14 @@ class UpdateAgentStatusTests(unittest.TestCase):
         self.assertEqual(code, 0, payload)
         child_probe.assert_not_called()
         self.assertTrue(payload["summary"]["partial_readiness"])
+        self.assertIn("readiness_card", payload)
+        self.assertEqual(payload["readiness_card"]["subject"], "update_status")
+        self.assertTrue(payload["readiness_card"]["usable_now"])
+        self.assertFalse(payload["readiness_card"]["blocks_first_recall"])
+        self.assertEqual(
+            payload["summary"]["magic_ready_semantics"],
+            "legacy_alias_for_product_magic_ready",
+        )
         deferred = set(payload["summary"]["deferred_components"])
         self.assertIn("skill_tree_fingerprint", deferred)
         self.assertIn("plugin_cache_fingerprint", deferred)

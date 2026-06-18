@@ -75,6 +75,23 @@ class QuestionVectorIndexTests(unittest.TestCase):
         self.assertEqual(loaded.dimensions, 2)
         self.assertEqual(loaded.search([0.5, 0.5])[0].source_id, "question:source")
 
+    def test_local_index_schema_drift_has_rebuild_recovery_message(self) -> None:
+        path = self.root / "question_index.json"
+        path.write_text(
+            json.dumps({"schema_version": 999, "kind": "aippocampus_question_vector_index"}),
+            encoding="utf-8",
+        )
+
+        with self.assertRaisesRegex(ValueError, "questions rebuild"):
+            qvi.LocalQuestionVectorIndex.load(path)
+
+    def test_local_index_interrupted_json_has_rebuild_recovery_message(self) -> None:
+        path = self.root / "question_index.json"
+        path.write_text('{"schema_version":', encoding="utf-8")
+
+        with self.assertRaisesRegex(ValueError, "interrupted or corrupt"):
+            qvi.LocalQuestionVectorIndex.load(path)
+
     def test_local_index_rejects_unstable_or_mismatched_vectors(self) -> None:
         index = qvi.LocalQuestionVectorIndex()
 

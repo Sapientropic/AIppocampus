@@ -15,16 +15,7 @@ operator catalog. The point is not that AIppocampus has innate memory; the point
 is that a later agent can find a source route, reopen the source, and carry the
 bounded context forward.
 
-1. Verify an exact public receipt:
-
-   ```sh
-   aippocampus search "without pretending it has innate memory" --clean-source-dir ./examples/public-memory-bundle/clean-source --json
-   ```
-
-   Expected result: matches point back to visible clean-source text. This is the
-   fallback/proof lane, not the ordinary continuity flow.
-
-2. Ask for a vague continuity route:
+1. Ask for a vague continuity route:
 
    ```sh
    aippocampus agent recall "AIppocampus continuity without innate memory" --cwd . --clean-source-dir ./examples/public-memory-bundle/clean-source --json
@@ -33,7 +24,7 @@ bounded context forward.
    Expected result: compact JSON returns route rows plus a foreground action to
    deepen a selected route. Route rows are navigation, not source evidence yet.
 
-3. Reopen the selected source:
+2. Reopen the selected source:
 
    ```sh
    aippocampus agent deepen --request 1 --last-recall --json
@@ -41,6 +32,15 @@ bounded context forward.
 
    Expected result: the response reports source-backed evidence for the selected
    route and keeps claim boundaries tied to the opened source window.
+
+3. Use exact search only as the fallback/proof lane:
+
+   ```sh
+   aippocampus search "without pretending it has innate memory" --clean-source-dir ./examples/public-memory-bundle/clean-source --json
+   ```
+
+   Expected result: matches point back to visible clean-source text when the
+   user remembers exact wording or a recall route is blocked.
 
 Use exact search when proving a known phrase exists. Use recall/deepen when the
 user gives a vague cue and needs source-backed continuity.

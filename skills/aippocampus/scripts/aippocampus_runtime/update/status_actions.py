@@ -325,19 +325,35 @@ def foreground_status_cards(report: dict[str, Any]) -> list[dict[str, Any]]:
             }
         )
     elif summary.get("plugin_cache_needs_action"):
-        command = (
-            (plugin.get("plugin_cache_recommended_actions") or [None])[0]
-            or (summary.get("plugin_cache_recommended_actions") or [None])[0]
-            or PLUGIN_CACHE_DEFAULT_REPAIR_COMMAND
-        )
-        command_fields = executable_update_action_fields(
-            command,
-            fallback_command=PLUGIN_CACHE_DEFAULT_REPAIR_COMMAND,
-            manual_instruction=(
-                "Use the ordinary Codex plugin refresh unless a custom marketplace/cache path "
-                "is intentionally being repaired."
-            ),
-        )
+        action_card = (plugin.get("recommended_action_cards") or [None])[0]
+        command_fields: dict[str, Any]
+        if isinstance(action_card, dict):
+            command_fields = {
+                key: value
+                for key, value in action_card.items()
+                if key
+                in {
+                    "command",
+                    "command_template",
+                    "requires",
+                    "template_only",
+                    "manual_instruction",
+                }
+            }
+        else:
+            command = (
+                (plugin.get("plugin_cache_recommended_actions") or [None])[0]
+                or (summary.get("plugin_cache_recommended_actions") or [None])[0]
+                or PLUGIN_CACHE_DEFAULT_REPAIR_COMMAND
+            )
+            command_fields = executable_update_action_fields(
+                command,
+                fallback_command=PLUGIN_CACHE_DEFAULT_REPAIR_COMMAND,
+                manual_instruction=(
+                    "Use the ordinary Codex plugin refresh unless a custom marketplace/cache path "
+                    "is intentionally being repaired."
+                ),
+            )
         cards.append(
             {
                 "id": "plugin_cache_recovery",

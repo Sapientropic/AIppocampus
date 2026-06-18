@@ -8,6 +8,12 @@ import json
 import shlex
 from typing import Any
 
+from aippocampus_runtime.contracts import (
+    canonical_foreground_action_fields,
+    foreground_shell_action,
+    foreground_template_action,
+)
+
 _OPERATOR_LANES = (
     (
         "cognitive_map",
@@ -43,54 +49,53 @@ def navigation_payload(*, cue: str | None = None, operator_detail: bool = False)
     foreground_next_actions: list[dict[str, Any]]
     if clean_cue:
         foreground_next_actions = [
-            {
-                "id": "recall_with_supplied_cue",
-                "kind": "shell_command",
-                "command": f"aippocampus agent recall {_quote(clean_cue)} --json",
-                "requires": "none",
-                "mutation_risk": "read_only",
-                "claim_boundary": "no_claim_before_reopen",
-            },
-            {
-                "id": "search_exact_supplied_cue",
-                "kind": "shell_command",
-                "command": f"aippocampus search {_quote(clean_cue)} --json",
-                "requires": "none",
-                "mutation_risk": "read_only",
-                "claim_boundary": "search_result_requires_source_boundary",
-            },
+            foreground_shell_action(
+                action_id="recall_with_supplied_cue",
+                command=f"aippocampus agent recall {_quote(clean_cue)} --json",
+                label="Recall from supplied cue",
+                why="Use recall first so a foreground agent gets reopenable route choices.",
+                mutation_risk="read_only",
+                claim_boundary="no_claim_before_reopen",
+            ),
+            foreground_shell_action(
+                action_id="search_exact_supplied_cue",
+                command=f"aippocampus search {_quote(clean_cue)} --json",
+                label="Search supplied cue",
+                why="Use search when the cue is exact wording or a stable source phrase.",
+                mutation_risk="read_only",
+                claim_boundary="search_result_requires_source_boundary",
+            ),
         ]
         status = "foreground_route_available"
     else:
         foreground_next_actions = [
-            {
-                "id": "provide_navigation_cue",
-                "kind": "shell_command_template",
-                "command_template": 'aippocampus navigate "{cue}" --json',
-                "requires": ["cue"],
-                "template_only": True,
-                "mutation_risk": "read_only",
-                "claim_boundary": "no_claim_before_reopen",
-            },
-            {
-                "id": "use_recall_directly",
-                "kind": "shell_command_template",
-                "command_template": 'aippocampus agent recall "{cue}" --json',
-                "requires": ["cue"],
-                "template_only": True,
-                "mutation_risk": "read_only",
-                "claim_boundary": "no_claim_before_reopen",
-            },
+            foreground_template_action(
+                action_id="provide_navigation_cue",
+                command_template='aippocampus navigate "{cue}" --json',
+                requires=["cue"],
+                label="Provide navigation cue",
+                why="Navigation sidecars need a concrete cue before they can route useful attention.",
+                mutation_risk="read_only",
+                claim_boundary="no_claim_before_reopen",
+            ),
+            foreground_template_action(
+                action_id="use_recall_directly",
+                command_template='aippocampus agent recall "{cue}" --json',
+                requires=["cue"],
+                label="Use recall directly",
+                why="Recall is the ordinary frontdoor when you already have a user/task cue.",
+                mutation_risk="read_only",
+                claim_boundary="no_claim_before_reopen",
+            ),
         ]
         status = "needs_cue"
-    return {
+    payload = {
         "kind": "aippocampus_navigation_frontdoor",
         "ok": True,
         "status": status,
         "detail": "operator" if operator_detail else "compact",
         "cue_supplied": bool(clean_cue),
         "lanes": lanes,
-        "foreground_next_actions": foreground_next_actions,
         "operator_next_action": "aippocampus navigate --operator-json",
         "source_boundary": {
             "navigation_sidecars_are_not_source_truth": True,
@@ -98,15 +103,18 @@ def navigation_payload(*, cue: str | None = None, operator_detail: bool = False)
             "model_job_started": False,
         },
     }
+    payload.update(
+        canonical_foreground_action_fields(
+            foreground_next_actions[0],
+            safe_next_actions=foreground_next_actions,
+        )
+    )
+    return payload
 
 
 def render_text(payload: dict[str, Any]) -> str:
-    actions = payload.get("foreground_next_actions") or []
-    next_command = (
-        actions[0].get("command") or actions[0].get("command_template")
-        if actions and isinstance(actions[0], dict)
-        else ""
-    )
+    action = payload.get("foreground_action") if isinstance(payload.get("foreground_action"), dict) else {}
+    next_command = action.get("command") or action.get("command_template") or ""
     lines = [
         "AIppocampus navigation sidecars",
         f"status: {payload.get('status')}",

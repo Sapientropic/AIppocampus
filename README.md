@@ -107,9 +107,12 @@ agent continuity path. The short public walkthrough lives in
 [Demo Scenarios](docs/guides/demo-scenarios.md#first-useful-recall-demo):
 
 ```sh
-aippocampus search "without pretending it has innate memory" --clean-source-dir ./examples/public-memory-bundle/clean-source --json
-aippocampus search "a distinctive old phrase"
+aippocampus agent recall "AIppocampus continuity without innate memory" --cwd . --clean-source-dir ./examples/public-memory-bundle/clean-source --json
+aippocampus agent deepen --request 1 --last-recall --json
 ```
+
+Use exact search as the fallback/proof lane when the user remembers exact
+wording or the recall route is blocked.
 
 For the felt product shape after that first route, read
 [Magic Moments, Claim-Bounded](docs/evidence/magic-moments.md). For the current

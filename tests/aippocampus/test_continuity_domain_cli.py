@@ -213,7 +213,7 @@ class ContinuityDomainCliTests(unittest.TestCase):
                     "title": "AIppocampus maintenance",
                     "domain_type": "recurring_question",
                     "scale": "thread",
-                    "activation_cues": ["锚点", "--append", "provider orchestration route"],
+                    "activation_cues": ["锚点", "Sapientropic", "--append", "provider orchestration route"],
                     "source_refs": [{"message_id": "msg-1"}],
                 }
             ],
@@ -225,6 +225,7 @@ class ContinuityDomainCliTests(unittest.TestCase):
         command = preview["agent_next_action"]["command"]
         self.assertIn("provider orchestration route", command)
         self.assertNotIn("锚点", command)
+        self.assertNotIn("Sapientropic", command)
         self.assertNotIn("--append", command)
 
 

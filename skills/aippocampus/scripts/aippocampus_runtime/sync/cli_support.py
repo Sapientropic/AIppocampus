@@ -8,7 +8,7 @@ from typing import Any
 
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 
-SYNC_COMMANDS = {"status", "push", "pull", "repair"}
+SYNC_COMMANDS = {"status", "push", "pull", "repair", "rollback"}
 
 
 def parser_command(
@@ -40,6 +40,13 @@ def sync_direction(command: str) -> dict[str, Any]:
             "destination_side": "sync_dir_manifest",
             "mutates": ["sync_dir_manifest"],
             "description": "verify sync files and repair the sync manifest",
+        }
+    if command == "rollback":
+        return {
+            "source_side": "local_registry_sync_rollback",
+            "destination_side": "local_registry",
+            "mutates": ["local_registry"],
+            "description": "restore files recorded by a previous sync pull rollback manifest",
         }
     return {
         "source_side": "sync_dir",

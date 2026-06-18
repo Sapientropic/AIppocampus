@@ -22,9 +22,16 @@ import time
 from pathlib import Path
 from typing import Any
 
-from aippocampus_runtime.core import aippocampus_registry_dir, now_utc
+from aippocampus_runtime.core import (
+    aippocampus_registry_dir,
+    compact_text,
+    now_utc,
+    sanitize_external_model_payload,
+)
 from aippocampus_runtime.hooks import lifecycle_preemptive as preemptive
+from aippocampus_runtime.io_integrity import atomic_write_json
 from aippocampus_runtime.ops import log_retention
+from aippocampus_runtime.public_output import emit_public_text
 from aippocampus_runtime.source import emergency_snapshot
 
 SCRIPT_DIR = Path(__file__).resolve().parents[2]
@@ -82,10 +89,16 @@ def load_json(path: Path) -> dict[str, Any]:
 
 
 def save_json(path: Path, data: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8", newline="\n")
-    tmp.replace(path)
+    atomic_write_json(path, data, sanitize=True)
+
+
+def _public_error_text(exc: BaseException) -> str:
+    return compact_text(str(sanitize_external_model_payload(str(exc))), 800)
+
+
+def _emit_public_json(payload: dict[str, Any]) -> None:
+    public_payload = sanitize_external_model_payload(payload)
+    emit_public_text(json.dumps(public_payload, ensure_ascii=False, indent=2))
 
 
 def load_state(path: Path | None = None) -> dict[str, Any]:
@@ -563,7 +576,7 @@ def run_maintenance(
         if not dry_run:
             update_workspace_state(workspace_state, event, [], now_ts=now_ts)
             workspace_state["failure_count"] = int(workspace_state.get("failure_count") or 0) + 1
-            workspace_state["last_error"] = str(exc)
+            workspace_state["last_error"] = _public_error_text(exc)
             workspace_state["last_error_at"] = now_utc()
             save_state(state, state_file)
         return {
@@ -574,7 +587,7 @@ def run_maintenance(
             "dry_run": dry_run,
             "results": [],
             "skipped": "health_error",
-            "error": str(exc),
+            "error": _public_error_text(exc),
             "emergency_snapshot": emergency_snapshot_diagnostic,
             "elapsed_ms": round((time.perf_counter() - start) * 1000, 2),
         }
@@ -604,7 +617,7 @@ def run_maintenance(
                 completed_actions.append(action)
                 results.append({"id": action, "result": result})
             except Exception as exc:
-                error = {"id": action, "error": str(exc)}
+                error = {"id": action, "error": _public_error_text(exc)}
                 errors.append(error)
                 results.append(error)
         update_workspace_state(
@@ -616,7 +629,10 @@ def run_maintenance(
         )
         if errors:
             workspace_state["failure_count"] = int(workspace_state.get("failure_count") or 0) + 1
-            workspace_state["last_error"] = "; ".join(str(item.get("error")) for item in errors[:3])
+            workspace_state["last_error"] = compact_text(
+                "; ".join(str(item.get("error")) for item in errors[:3]),
+                800,
+            )
             workspace_state["last_error_at"] = now_utc()
         save_state(state, state_file)
     preemptive.record_preemptive_outcome(
@@ -683,7 +699,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.log:
             write_log(result)
         if args.json_output:
-            print(json.dumps(result, ensure_ascii=False, indent=2))
+            _emit_public_json(result)
         return 0
     except Exception as exc:
         if args.strict:
@@ -692,12 +708,12 @@ def main(argv: list[str] | None = None) -> int:
             "event": args.event or hook_input.get("hook_event_name"),
             "cwd": args.cwd or hook_input.get("cwd"),
             "actions": [],
-            "error": str(exc),
+            "error": _public_error_text(exc),
         }
         if args.log:
             write_log(result)
         if args.json_output:
-            print(json.dumps(result, ensure_ascii=False, indent=2))
+            _emit_public_json(result)
         return 0
 
 

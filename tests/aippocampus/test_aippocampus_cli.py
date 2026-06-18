@@ -263,6 +263,8 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertEqual(learning_status.returncode, 0, learning_status.stderr)
         status_payload = json.loads(learning_status.stdout)
         status_encoded = json.dumps(status_payload, ensure_ascii=False)
+        self.assertNotIn("cannot_claim", status_payload)
+        self.assertIn("cannot_claim", status_payload["boundary_detail"])
         self.assertEqual(status_payload["lanes"]["prepared_guidance"]["status"], "not_found")
         self.assertEqual(status_payload["lanes"]["sanitized_replay"]["status"], "available_on_request")
         self.assertIn("effectiveness_ledger", status_payload["lanes"])
@@ -294,6 +296,8 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertEqual(learning_guidance.returncode, 0, learning_guidance.stderr)
         guidance_payload = json.loads(learning_guidance.stdout)
         self.assertEqual(guidance_payload["mode"], "guidance")
+        self.assertNotIn("cannot_claim", guidance_payload)
+        self.assertIn("cannot_claim", guidance_payload["boundary_detail"])
         self.assertIn("semantic_guidance", guidance_payload)
         self.assertGreaterEqual(guidance_payload["semantic_guidance"]["guidance_count"], 1)
         self.assertEqual(
@@ -303,6 +307,21 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertGreaterEqual(
             guidance_payload["semantic_guidance"]["lifecycle"]["candidate_count"],
             1,
+        )
+        lifecycle = guidance_payload["semantic_guidance"]["lifecycle"]
+        self.assertEqual(lifecycle["row_lifecycle_contract"], "guidance-row-lifecycle-v1")
+        self.assertGreaterEqual(len(lifecycle["guidance_lifecycle_ledger"]), 1)
+        ledger_row = lifecycle["guidance_lifecycle_ledger"][0]
+        self.assertEqual(
+            {
+                event["guidance_id"]
+                for event in ledger_row["events"]
+            },
+            {ledger_row["guidance_id"]},
+        )
+        self.assertEqual(
+            [event["stage"] for event in ledger_row["events"]],
+            ["candidate", "reviewed", "prepared", "surfaced", "outcome"],
         )
         self.assertEqual(
             guidance_payload["semantic_guidance"]["lifecycle"]["candidate_actions"][0][
@@ -2084,6 +2103,15 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertEqual(unknown_result.exit_code, 2)
         self.assertIn("unknown command: nope", unknown_result.stderr)
         self.assertIn("Commands:", unknown_result.stderr)
+
+        unknown_json = facade.run_command(["nope", "--json"], capture_output=True)
+        payload = json.loads(unknown_json.stdout)
+        self.assertFalse(unknown_json.ok)
+        self.assertEqual(unknown_json.exit_code, 2)
+        self.assertEqual(payload["error"]["code"], "unsupported_operation")
+        self.assertEqual(payload["error"]["class"], "usage_error")
+        self.assertEqual(payload["safe_next_actions"][0]["command"], "aippocampus --help")
+        self.assertEqual(unknown_json.stderr, "")
 
     def test_background_routes_are_discoverable_without_raw_unknown_command(self) -> None:
         from aippocampus_runtime.cli import facade

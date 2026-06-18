@@ -35,6 +35,7 @@ from aippocampus_runtime.recall.source_backed_lessons import (
     promote_lesson_candidate,
 )
 from benchmarks.aippocampus.shared.claim_boundary_refs import claim_boundary_ref
+from benchmarks.aippocampus.shared.provider_artifacts import public_provider_artifact
 
 SCHEMA_VERSION = 1
 DEFAULT_CASE_LIMIT = 20
@@ -1373,6 +1374,28 @@ def run_memoryagentbench_smoke(
             if prediction_template_path
             else None,
         },
+        "provider_artifact": public_provider_artifact(
+            benchmark_id="memoryagentbench_metadata_and_stage3_dry_run",
+            provider="not_requested",
+            model=None,
+            prompt={
+                "kind": "prediction_template_or_stage3_case_prompt",
+                "raw_gold_answers_included": False,
+                "case_pack_split": case_pack_split,
+            },
+            runner={
+                "kind": "memoryagentbench_metadata_smoke",
+                "status": status,
+                "stage3_incremental_dry_run": stage3_incremental_dry_run,
+            },
+            cost={"status": "not_run", "estimated_cost_usd": None},
+            status="blocked_not_run" if status == "skipped_missing_dataset" else status,
+            blocker_metadata={
+                "successor_issue": 2043,
+                "answer_generation_or_judge_run": False,
+                "official_score_claimed": False,
+            },
+        ),
         "claim_boundary_ref": claim_boundary_ref(
             "docs/evidence/benchmarks/design/benchmark-priority-map.md"
         ),

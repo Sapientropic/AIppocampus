@@ -9,7 +9,12 @@ import re
 from typing import Any, cast
 
 from aippocampus_runtime import core
-from aippocampus_runtime.contracts import command_value_needs_input, foreground_template_action
+from aippocampus_runtime.contracts import (
+    canonical_foreground_action_fields,
+    command_value_needs_input,
+    foreground_readiness_card,
+    foreground_template_action,
+)
 from aippocampus_runtime.mcp import agent_recall_compact_choices as recall_choices
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 
@@ -292,9 +297,10 @@ def compact_health_payload(payload: dict[str, Any]) -> dict[str, Any]:
                 readiness.get("high_severity_action_count") if isinstance(readiness, dict) else None
             ),
             "recommended_action_ids": recommended_action_ids,
-            "freshness": freshness_summary,
-            "storage": storage_summary,
-            "host_state": host_state_summary,
+            "freshness_degraded": True if freshness_summary else None,
+            "storage": {"pressure": True} if storage_pressure.get("pressure") else None,
+            "storage_cleanup_recommended": True if storage_summary else None,
+            "host_state_confounds_detected": True if host_state_summary else None,
         }
     )
     if ordinary_usable and all_recommended:
@@ -317,11 +323,11 @@ def compact_health_payload(payload: dict[str, Any]) -> dict[str, Any]:
             agent_next_action["before_exact_latest_claims"] = _action_command_projection(
                 exact_latest_action
             ) | {
-                "reason": "refresh source/index artifacts before exact latest current-thread claims",
+                "reason": "refresh before exact latest claims",
             }
         if storage_cleanup_action:
             agent_next_action["when_idle"] = _action_command_projection(storage_cleanup_action) | {
-                "reason": "bounded storage cleanup audit; non-blocking for ordinary recall",
+                "reason": "optional storage cleanup audit",
             }
     else:
         agent_next_action = (
@@ -337,6 +343,16 @@ def compact_health_payload(payload: dict[str, Any]) -> dict[str, Any]:
             }
         )
     foreground_action = dict(agent_next_action)
+    readiness_card = foreground_readiness_card(
+        subject="memory_health",
+        scope="current_workspace",
+        state=str(ready_status or ("ok" if ordinary_usable else "attention_needed")),
+        usable_now=ordinary_usable,
+        blocks_first_recall=not ordinary_usable,
+        blocks_exact_latest=freshness_degraded,
+        recommended=recommended_action_ids,
+        claim_boundary="health_readiness_not_source_evidence",
+    )
     card = {
         "kind": "aippocampus_health_card",
         "detail": "compact",
@@ -345,12 +361,20 @@ def compact_health_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "ordinary_first_recall_usable": ordinary_usable,
         "blocks_first_recall": not ordinary_usable,
         "blocks_exact_latest_claims": freshness_degraded,
-        "foreground_action": foreground_action,
-        "agent_next_action": foreground_action,
+        "readiness_card": readiness_card,
         "maintenance_summary": maintenance_summary,
         "operator_detail_command": "aippocampus health --detail full --json",
         "output_boundary": "compact_foreground_no_operator_diagnostic_objects",
     }
+    foreground_fields = canonical_foreground_action_fields(foreground_action)
+    # Health compact JSON is often read inline by the foreground agent. When
+    # there is only one action, `safe_next_actions` repeats the same command
+    # already present in `foreground_action` and the legacy `agent_next_action`
+    # alias; omit that duplicate so the card stays card-sized.
+    safe_actions = foreground_fields.get("safe_next_actions")
+    if isinstance(safe_actions, list) and safe_actions == [foreground_action]:
+        foreground_fields.pop("safe_next_actions", None)
+    card.update(foreground_fields)
     return _without_empty(card)
 
 

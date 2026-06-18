@@ -676,6 +676,8 @@ def main(argv: list[str] | None = None) -> int:
         "-m", "aippocampus_runtime.health",
         "--cwd",
         str(cwd),
+        "--detail",
+        "full",
         "--json",
     ]
     initial_health_returncode = 0

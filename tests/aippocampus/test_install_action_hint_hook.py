@@ -100,11 +100,22 @@ class InstallActionHintHookTests(unittest.TestCase):
             [
                 "review_action_hint_guidance",
                 "check_action_hint_status",
-                "refresh_action_hint_cache",
                 "install_action_hint_hook",
+                "refresh_action_hint_cache",
             ],
         )
-        self.assertEqual(result["safe_next_actions"][2]["follow_up_action"]["id"], "install_action_hint_hook")
+        self.assertEqual(
+            result["safe_next_actions"][0]["follow_up_action"]["id"],
+            "install_action_hint_hook",
+        )
+        self.assertEqual(
+            result["safe_next_actions"][2]["follow_up_action"]["id"],
+            "refresh_action_hint_cache",
+        )
+        self.assertNotIn(
+            "refresh-cache --write",
+            result["agent_next_action"].get("command", ""),
+        )
 
     def test_status_reports_cache_records_without_leaking_cache_path(self) -> None:
         cache_path = self.codex_home / "action-hints.jsonl"
@@ -324,7 +335,8 @@ class InstallActionHintHookTests(unittest.TestCase):
         self.assertIn("Action-time hints:", output)
         self.assertIn("fail-open: true", output)
         self.assertIn("authority: navigation_only", output)
-        self.assertIn("aippocampus hooks action refresh-cache --write --json", output)
+        self.assertIn("aippocampus learning guidance --json", output)
+        self.assertNotIn("aippocampus hooks action refresh-cache --write --json", output)
         self.assertNotIn("<local-cache.jsonl>", output)
 
     def test_cli_install_without_cache_uses_default_cache_path_not_inert_hook(self) -> None:
