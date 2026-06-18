@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import sys
 import unittest
 from pathlib import Path
@@ -67,6 +69,33 @@ class PostureRelationPolicyTests(unittest.TestCase):
         self.assertFalse(rejected["accepted"])
         self.assertIn("counterexample_ratio_too_high", rejected["rejection_reasons"])
         self.assertIn("public_default_requires_separate_evidence", rejected["rejection_reasons"])
+
+    def test_policy_id_uses_sha256_fingerprint_for_stable_non_secret_ids(self) -> None:
+        candidate = {
+            "candidate_id": "candidate-id",
+            "relation": "seed_needs_source_boundary",
+            "from_posture_id": "seed_probe",
+            "to_posture_id": "archivist_boundary",
+            "scope": "project",
+            "observed_sequence_count": 4,
+            "counterexample_count": 0,
+            "source_refs": [{"source_id": "s1"}],
+        }
+
+        row = posture_relation_policy.promotion_gate(candidate)
+        raw = "\n".join(
+            json.dumps(part, ensure_ascii=False, sort_keys=True)
+            for part in (
+                candidate["candidate_id"],
+                candidate["relation"],
+                candidate["scope"],
+            )
+        )
+        sha1_id = f"posture_policy_{hashlib.sha1(raw.encode('utf-8', errors='replace')).hexdigest()[:18]}"
+        sha256_id = f"posture_policy_{hashlib.sha256(raw.encode('utf-8', errors='replace')).hexdigest()[:18]}"
+
+        self.assertEqual(row["policy_id"], sha256_id)
+        self.assertNotEqual(row["policy_id"], sha1_id)
 
 
 if __name__ == "__main__":
