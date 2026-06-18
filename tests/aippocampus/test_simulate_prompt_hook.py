@@ -5,6 +5,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SMOKE = REPO_ROOT / "tools" / "aippocampus" / "smoke"
@@ -75,6 +76,33 @@ class SimulatePromptHookSmokeTests(unittest.TestCase):
         encoded = json.dumps(report, ensure_ascii=False)
         self.assertNotIn("secret raw prompt", encoded)
         self.assertNotIn("private source text", encoded)
+
+    def test_latency_probe_cli_accepts_hook_budget_switches(self) -> None:
+        with mock.patch(
+            "smoke_prompt_hook_latency.run_latency_probe",
+            return_value={
+                "run_count": 1,
+                "wall_ms": {"p95": 1.0},
+                "startup_import_io_ms": {"p95": 1.0},
+            },
+        ) as run_probe:
+            code = latency_smoke.main(
+                [
+                    "--runs",
+                    "1",
+                    "--semantic-gate",
+                    "off",
+                    "--search-budget",
+                    "0",
+                    "--json",
+                ]
+            )
+
+        self.assertEqual(code, 0)
+        run_probe.assert_called_once()
+        kwargs = run_probe.call_args.kwargs
+        self.assertEqual(kwargs["semantic_gate"], "off")
+        self.assertEqual(kwargs["search_budget"], 0)
 
 
 if __name__ == "__main__":

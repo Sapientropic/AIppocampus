@@ -14,9 +14,9 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from aippocampus_runtime.core import codex_home
+from aippocampus_runtime.contracts import write_boundary
+from aippocampus_runtime.core import codex_home, now_utc
 from aippocampus_runtime.hooks import install_action_hint, install_lifecycle, install_prompt
-from aippocampus_runtime.ops.provider_doctor import build_provider_doctor_report
 from aippocampus_runtime.public_output import emit_public_text
 from aippocampus_runtime.update import status_actions as update_actions
 from aippocampus_runtime.update import status_foreground
@@ -33,6 +33,13 @@ from aippocampus_runtime.update.agent_status_summary import (
 )
 from aippocampus_runtime.update.capability_ladder import build_capability_ladder
 from aippocampus_runtime.update.host_conformance import build_host_conformance_status
+from aippocampus_runtime.update.llm_status import status_llm
+from aippocampus_runtime.update.operator_output import (
+    emit_operator_json,
+    emit_update_recovery,
+    render_update_recovery,
+    update_recovery_payload,
+)
 from aippocampus_runtime.update.plugin_cache import (
     build_plugin_cache_status,
     installed_cache_auto_resolution,
@@ -88,62 +95,6 @@ PROVIDER_KEY_BRIDGE_MARKERS = (
 OLD_MCP_SCRIPT_NAMES = ("aippocampus_mcp_server.py",)
 CURRENT_MCP_MARKERS = ("aippocampus_runtime.mcp.server", "aippocampus mcp")
 RESOLVED_INSTALLED_CACHE_AUTO_STATUSES = {"unique", "unique_version_match"}
-
-
-def _json_default(value: Any) -> str:
-    if isinstance(value, Path):
-        return str(value)
-    return str(value)
-
-
-def _update_recovery_payload(*, code: str, message: str, next_command: str) -> dict[str, Any]:
-    return {
-        "schema_version": SCHEMA_VERSION,
-        "kind": "aippocampus_update_recovery",
-        "ok": False,
-        "error": {
-            "code": code,
-            "message": message,
-            "next_command": next_command,
-        },
-        "next_actions": [
-            {
-                "label": "read update status",
-                "command": "aippocampus update status --json",
-                "mutates": False,
-            },
-            {
-                "label": "preview update plan",
-                "command": "aippocampus update plan --json",
-                "mutates": False,
-            },
-        ],
-        "safety": {
-            "no_write_happened": True,
-            "apply_requires_surface": True,
-            "all_local_is_repair_shortcut_not_default": True,
-        },
-    }
-
-
-def _render_update_recovery(payload: dict[str, Any]) -> str:
-    error = payload.get("error") or {}
-    lines = [
-        "AIppocampus update recovery card",
-        f"reason: {error.get('code')}",
-        "No write happened.",
-        f"Try: {error.get('next_command')}",
-        "choose a surface before apply; --all-local is a broad repair/bootstrap shortcut",
-    ]
-    return "\n".join(lines) + "\n"
-
-
-def _emit_update_recovery(payload: dict[str, Any], *, json_output: bool) -> int:
-    if json_output:
-        emit_public_text(json.dumps(payload, ensure_ascii=False, indent=2, default=_json_default))
-    else:
-        emit_public_text(_render_update_recovery(payload), end="", stream=sys.stderr)
-    return 2
 
 
 def _plugin_manifest_version(root: Path) -> str | None:
@@ -751,40 +702,6 @@ def status_hooks(codex_home_path: Path, hooks_json: Path | None = None) -> dict[
     }
 
 
-def status_llm(
-    *,
-    model_route: str | None = "default",
-    provider_env_var: str | None = None,
-    check_child_process: bool = True,
-) -> dict[str, Any]:
-    report = build_provider_doctor_report(
-        model_route=model_route,
-        provider_env_var=provider_env_var,
-        check_child_process=check_child_process,
-    )
-    raw_provider_env = report.get("provider_env")
-    provider_env: dict[str, Any] = raw_provider_env if isinstance(raw_provider_env, dict) else {}
-    raw_route = report.get("route")
-    route: dict[str, Any] = raw_route if isinstance(raw_route, dict) else {}
-    return {
-        "surface": "llm",
-        "status": report.get("status"),
-        "ready": bool(report.get("ok")),
-        "provider": route.get("provider"),
-        "model": route.get("model"),
-        "provider_env_var": provider_env.get("env_var"),
-        "visible_in_current_process": provider_env.get("visible_in_current_process"),
-        "visible_in_child_process": provider_env.get("visible_in_child_process"),
-        "cognitive_worker": report.get("cognitive_worker") or {},
-        "recommended_actions": report.get("recommended_actions") or [],
-        "privacy": report.get("privacy") or {},
-        "safety_notes": [
-            "LLM key setup is presence-only and redacted; update never prints or guesses key values",
-            "set the provider key in the environment that launches Codex or the hook process",
-        ],
-    }
-
-
 def build_status(args: argparse.Namespace, *, mode: str) -> dict[str, Any]:
     repo_root = find_repo_root(Path(args.repo_root).resolve() if args.repo_root else None)
     codex_home_path = Path(args.codex_home).resolve() if args.codex_home else codex_home()
@@ -860,7 +777,6 @@ def build_status(args: argparse.Namespace, *, mode: str) -> dict[str, Any]:
     plan_surface_filter = update_actions.plan_surface_filter(mode, getattr(args, "surface", []))
     actionable, core_blockers, magic_blockers, optional_surfaces, operator_blockers = update_actions.filter_plan_surface_groups(plan_surface_filter, actionable, core_blockers, magic_blockers, optional_surfaces, operator_blockers)
     core_ready = not core_blockers
-    magic_ready = not magic_blockers
     capability_ladder = build_capability_ladder(surfaces, core_ready=core_ready)
     dirty_worktree_guards = _status_dirty_worktree_guards(
         args,
@@ -868,6 +784,15 @@ def build_status(args: argparse.Namespace, *, mode: str) -> dict[str, Any]:
             [*core_blockers, *magic_blockers, *operator_blockers, *actionable]
         ),
     )
+    host_conformance = surfaces["host_conformance"]
+    subsystem_magic_ready = not magic_blockers
+    first_magic_moment_ready = bool(
+        (host_conformance.get("dimensions") or {}).get("first_magic_moment_path")
+    )
+    product_magic_ready = bool(
+        core_ready and subsystem_magic_ready and first_magic_moment_ready
+    )
+    magic_ready = product_magic_ready
     return {
         "schema_version": SCHEMA_VERSION,
         "kind": f"aippocampus_update_{mode}",
@@ -879,6 +804,11 @@ def build_status(args: argparse.Namespace, *, mode: str) -> dict[str, Any]:
             "core_ready": core_ready,
             "core_blockers": core_blockers,
             "magic_ready": magic_ready,
+            "magic_ready_semantics": "legacy_alias_for_product_magic_ready",
+            "subsystem_magic_ready": subsystem_magic_ready,
+            "subsystem_magic_surfaces": list(MAGIC_SURFACES),
+            "first_magic_moment_ready": first_magic_moment_ready,
+            "product_magic_ready": product_magic_ready,
             "magic_blockers": magic_blockers,
             "optional_surfaces": optional_surfaces,
             "operator_surfaces": list(OPERATOR_SURFACES),
@@ -898,7 +828,7 @@ def build_status(args: argparse.Namespace, *, mode: str) -> dict[str, Any]:
             "agent_callable_foreground_probe_state": surfaces["agent_callable"].get(
                 "foreground_probe_state"
             ),
-            "host_conformance_label": surfaces["host_conformance"]["label"],
+            "host_conformance_label": host_conformance["label"],
             "capability_ladder": capability_ladder,
             "needs_action": actionable,
             "stale_or_missing_surfaces": actionable,
@@ -934,6 +864,79 @@ def _require_replace_safe(target: Path, *, source: Path, repo_root: Path, expect
         raise ValueError(f"refusing to replace shallow filesystem path: {resolved}")
 
 
+def _update_operation_id() -> str:
+    return now_utc().replace(":", "").replace(".", "").replace("+", "")
+
+
+def _backup_root(base: Path) -> Path:
+    root = base / ".aippocampus-update-backups"
+    root.mkdir(parents=True, exist_ok=True)
+    return root
+
+
+def _rollback_command(surface: str, backup_path: Path, args: argparse.Namespace) -> str:
+    parts = [
+        "aippocampus update rollback",
+        f"--surface {surface}",
+        f'--backup-path "{backup_path}"',
+    ]
+    if getattr(args, "repo_root", None):
+        parts.append(f'--repo-root "{Path(args.repo_root).resolve()}"')
+    if getattr(args, "codex_home", None):
+        parts.append(f'--codex-home "{Path(args.codex_home).resolve()}"')
+    if surface == "skill" and getattr(args, "skill_target", None):
+        parts.append(f'--skill-target "{Path(args.skill_target).resolve()}"')
+    if surface == "hooks" and getattr(args, "hooks_json", None):
+        parts.append(f'--hooks-json "{Path(args.hooks_json).resolve()}"')
+    parts.append("--json")
+    return " ".join(parts)
+
+
+def _replace_tree_with_backup(
+    source_tmp: Path,
+    target: Path,
+    *,
+    backup_parent: Path,
+) -> Path | None:
+    backup: Path | None = None
+    if target.exists():
+        backup = _backup_root(backup_parent) / f"{target.name}-{_update_operation_id()}"
+        target.rename(backup)
+    try:
+        source_tmp.replace(target)
+    except BaseException:
+        if target.exists():
+            shutil.rmtree(target, ignore_errors=True)
+        if backup is not None and backup.exists():
+            backup.replace(target)
+        raise
+    return backup
+
+
+def _copy_file_backup(path: Path) -> Path | None:
+    if not path.exists():
+        return None
+    backup = _backup_root(path.parent) / f"{path.name}-{_update_operation_id()}.bak"
+    backup.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(path, backup)
+    return backup
+
+
+def _rollback_payload(surface: str, backup_path: Path | None, args: argparse.Namespace) -> dict[str, Any]:
+    if backup_path is None:
+        return {
+            "status": "not_available_initial_target_missing",
+            "backup_path": None,
+            "command": None,
+        }
+    command = _rollback_command(surface, backup_path, args)
+    return {
+        "status": "available",
+        "backup_path": str(backup_path),
+        "command": command,
+    }
+
+
 def apply_skill(args: argparse.Namespace) -> dict[str, Any]:
     repo_root = find_repo_root(Path(args.repo_root).resolve() if args.repo_root else None)
     codex_home_path = Path(args.codex_home).resolve() if args.codex_home else codex_home()
@@ -955,9 +958,7 @@ def apply_skill(args: argparse.Namespace) -> dict[str, Any]:
     if not verify_before_replace.get("current"):
         shutil.rmtree(tmp, ignore_errors=True)
         raise RuntimeError("copied skill package did not match source hashes before replace")
-    if target.exists():
-        shutil.rmtree(target)
-    tmp.replace(target)
+    backup = _replace_tree_with_backup(tmp, target, backup_parent=target.parent)
     verification = compare_skill(
         repo_root=repo_root,
         codex_home_path=codex_home_path,
@@ -970,6 +971,13 @@ def apply_skill(args: argparse.Namespace) -> dict[str, Any]:
         "source_path": str(source),
         "target_path": str(target),
         "verification": verification["diff"]["counts"],
+        "rollback": _rollback_payload("skill", backup, args),
+        "rollback_command": _rollback_payload("skill", backup, args)["command"],
+        "write_boundary": write_boundary(
+            written=True,
+            target="skill",
+            rollback_available=backup is not None,
+        ),
     }
 
 
@@ -997,6 +1005,7 @@ def apply_plugin(args: argparse.Namespace) -> dict[str, Any]:
             "ok": True,
             "status": "detect_only",
             "message": "plugin package builder is not available in this installation",
+            "write_boundary": write_boundary(written=False, explicit_write_required=True),
         }
     result = builder.build_package(repo_root, output)
     installed_arg = _optional_path_or_auto(args.plugin_installed_dir)
@@ -1092,6 +1101,11 @@ def apply_plugin(args: argparse.Namespace) -> dict[str, Any]:
         "builder": result,
         "verification": verification["diff"]["counts"],
         "cache_refresh": cache_refresh,
+        "write_boundary": write_boundary(
+            written=True,
+            target="plugin",
+            rollback_available=bool(cache_refresh.get("rollback_command")),
+        ),
     }
 
 
@@ -1102,9 +1116,17 @@ def apply_hooks(args: argparse.Namespace) -> dict[str, Any]:
         if args.hooks_json
         else install_prompt.hooks_json_path(codex_home_path)
     )
-    prompt = install_prompt.install(hooks_path)
-    lifecycle = install_lifecycle.install(hooks_path)
+    backup = _copy_file_backup(hooks_path)
+    try:
+        prompt = install_prompt.install(hooks_path)
+        lifecycle = install_lifecycle.install(hooks_path)
+    except BaseException:
+        if backup is not None and backup.exists():
+            hooks_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(backup, hooks_path)
+        raise
     verification = status_hooks(codex_home_path, hooks_json=hooks_path)
+    rollback = _rollback_payload("hooks", backup, args)
     return {
         "surface": "hooks",
         "applied": True,
@@ -1117,6 +1139,13 @@ def apply_hooks(args: argparse.Namespace) -> dict[str, Any]:
             "prompt_installed": verification["prompt_installed"],
             "lifecycle_installed": verification["lifecycle_installed"],
         },
+        "rollback": rollback,
+        "rollback_command": rollback["command"],
+        "write_boundary": write_boundary(
+            written=True,
+            target="hooks",
+            rollback_available=backup is not None,
+        ),
     }
 
 
@@ -1136,6 +1165,7 @@ def detect_only_apply(surface: str, args: argparse.Namespace) -> dict[str, Any]:
             "and recommended action without mutating user config"
         ),
         "recommended_actions": recommended_actions,
+        "write_boundary": write_boundary(written=False, explicit_write_required=True),
     }
 
 
@@ -1255,6 +1285,119 @@ def _status_dirty_worktree_guards(
     return guards
 
 
+def rollback_update(args: argparse.Namespace) -> dict[str, Any]:
+    surface = str(args.surface or "")
+    backup = Path(args.backup_path).resolve() if args.backup_path else None
+    if surface not in {"skill", "hooks"} or backup is None or not backup.exists():
+        return {
+            "schema_version": SCHEMA_VERSION,
+            "kind": "aippocampus_update_rollback",
+            "mode": "rollback",
+            "ok": False,
+            "status": "rollback_requires_existing_skill_or_hooks_backup",
+            "surface": surface,
+            "issues": [{"code": "missing_or_unsupported_backup"}],
+            "write_boundary": write_boundary(written=False, explicit_write_required=True),
+        }
+    repo_root = find_repo_root(Path(args.repo_root).resolve() if args.repo_root else None)
+    codex_home_path = Path(args.codex_home).resolve() if args.codex_home else codex_home()
+    if surface == "skill":
+        target = (
+            Path(args.skill_target).resolve()
+            if args.skill_target
+            else codex_home_path / "skills" / "aippocampus"
+        )
+        _require_replace_safe(target, source=backup, repo_root=repo_root, expected_name="aippocampus")
+        tmp = target.parent / f".{target.name}.tmp-rollback"
+        if tmp.exists():
+            shutil.rmtree(tmp)
+        shutil.copytree(backup, tmp, ignore=distribution_ignore(backup))
+        displaced = target.parent / f".{target.name}.rollback-displaced-{_update_operation_id()}"
+        if target.exists():
+            target.rename(displaced)
+        try:
+            tmp.replace(target)
+        except BaseException:
+            if target.exists():
+                shutil.rmtree(target, ignore_errors=True)
+            if displaced.exists():
+                displaced.replace(target)
+            raise
+        if displaced.exists():
+            shutil.rmtree(displaced, ignore_errors=True)
+        return {
+            "schema_version": SCHEMA_VERSION,
+            "kind": "aippocampus_update_rollback",
+            "mode": "rollback",
+            "ok": True,
+            "status": "rolled_back",
+            "surface": "skill",
+            "backup_path": str(backup),
+            "target_path": str(target),
+            "write_boundary": write_boundary(written=True, target="skill"),
+        }
+    hooks_path = (
+        Path(args.hooks_json).resolve()
+        if args.hooks_json
+        else install_prompt.hooks_json_path(codex_home_path)
+    )
+    hooks_path.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(backup, hooks_path)
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "kind": "aippocampus_update_rollback",
+        "mode": "rollback",
+        "ok": True,
+        "status": "rolled_back",
+        "surface": "hooks",
+        "backup_path": str(backup),
+        "target_path": str(hooks_path),
+        "write_boundary": write_boundary(written=True, target="hooks"),
+    }
+
+
+def _apply_failure_recovery(
+    surface: str,
+    args: argparse.Namespace,
+    exc: BaseException,
+    completed: list[dict[str, Any]],
+) -> dict[str, Any]:
+    safe_message = type(exc).__name__
+    rollback_actions = [
+        {
+            "surface": item.get("surface"),
+            "command": item.get("rollback_command"),
+        }
+        for item in completed
+        if item.get("rollback_command")
+    ]
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "kind": "aippocampus_update_recovery",
+        "mode": "apply_recovery",
+        "ok": False,
+        "status": "apply_failed_with_recovery",
+        "surface": surface,
+        "failed_surface": surface,
+        "completed_surfaces": [item.get("surface") for item in completed],
+        "half_applied": bool(completed),
+        "error": {"code": "update_apply_failed", "type": safe_message},
+        "rollback_actions": rollback_actions,
+        "safe_next_actions": [
+            {
+                "label": "inspect update status",
+                "command": "aippocampus update status --json",
+                "mutation_risk": "read_only",
+            }
+        ],
+        "write_boundary": write_boundary(
+            written=any(bool(item.get("write_boundary", {}).get("written")) for item in completed),
+            target="update_apply",
+            rollback_available=bool(rollback_actions),
+        ),
+    }
+
+
 def apply_update(args: argparse.Namespace) -> dict[str, Any]:
     surfaces = list(args.surface or [])
     if args.all_local:
@@ -1262,7 +1405,7 @@ def apply_update(args: argparse.Namespace) -> dict[str, Any]:
             if surface not in surfaces:
                 surfaces.append(surface)
     if not surfaces:
-        report = _update_recovery_payload(
+        report = update_recovery_payload(
             code="update_apply_surface_required",
             message=(
                 "update apply is mutating and needs an explicit --surface or --all-local. "
@@ -1294,23 +1437,27 @@ def apply_update(args: argparse.Namespace) -> dict[str, Any]:
                 return blocker
     results: list[dict[str, Any]] = []
     for surface in surfaces:
-        if surface == "skill":
-            results.append(apply_skill(args))
-        elif surface == "plugin":
-            results.append(apply_plugin(args))
-        elif surface == "hooks":
-            results.append(apply_hooks(args))
-        elif surface in {"cli", "mcp", "llm"}:
-            results.append(detect_only_apply(surface, args))
-        else:
-            results.append(
-                {
-                    "surface": surface,
-                    "applied": False,
-                    "ok": True,
-                    "status": "unsupported",
-                }
-            )
+        try:
+            if surface == "skill":
+                results.append(apply_skill(args))
+            elif surface == "plugin":
+                results.append(apply_plugin(args))
+            elif surface == "hooks":
+                results.append(apply_hooks(args))
+            elif surface in {"cli", "mcp", "llm"}:
+                results.append(detect_only_apply(surface, args))
+            else:
+                results.append(
+                    {
+                        "surface": surface,
+                        "applied": False,
+                        "ok": True,
+                        "status": "unsupported",
+                        "write_boundary": write_boundary(written=False),
+                    }
+                )
+        except Exception as exc:
+            return _apply_failure_recovery(surface, args, exc, results)
     if getattr(args, "force_dirty_worktree", False):
         for item in results:
             if item.get("applied"):
@@ -1326,6 +1473,11 @@ def apply_update(args: argparse.Namespace) -> dict[str, Any]:
         "post_status": post_status["summary"],
         "next_actions": next_actions,
         "safety_notes": post_status["safety_notes"],
+        "write_boundary": write_boundary(
+            written=any(bool(item.get("write_boundary", {}).get("written")) for item in results),
+            target="update_apply",
+            rollback_available=any(bool(item.get("rollback_command")) for item in results),
+        ),
     }
 
 
@@ -1333,19 +1485,19 @@ def render_text(report: dict[str, Any]) -> str:
     mode = report.get("mode")
     if report.get("kind") == "aippocampus_update_recovery":
         if mode == "apply_recovery":
-            text = _render_update_recovery(report)
+            text = render_update_recovery(report)
             return text.replace(
                 "choose a surface before apply",
                 "valid surfaces: skill, cli, mcp, plugin, hooks, llm; choose a surface before apply",
             )
-        return _render_update_recovery(report)
+        return render_update_recovery(report)
     if mode == "apply":
         lines = ["AIppocampus update apply"]
         for item in report.get("applied_surfaces") or []:
             marker = "applied" if item.get("applied") else "detect-only"
             lines.append(f"- {item.get('surface')}: {marker}, status={item.get('status') or item.get('ok')}")
         post = report.get("post_status") or {}
-        lines.append(f"- Magic ready: {str(post.get('magic_ready')).lower()}")
+        lines.append(f"- Product magic ready: {str(post.get('product_magic_ready', post.get('magic_ready'))).lower()}")
         if post.get("needs_action"):
             lines.append("- Still needs action: " + ", ".join(post.get("needs_action") or []))
         lines.extend(update_actions.apply_next_action_lines(report))
@@ -1359,7 +1511,11 @@ def render_text(report: dict[str, Any]) -> str:
     lines.append(f"- Core ready: {str(summary.get('core_ready')).lower()}")
     if summary.get("core_blockers"):
         lines.append("- Core blockers: " + ", ".join(summary.get("core_blockers") or []))
-    lines.append(f"- Magic ready: {str(summary.get('magic_ready')).lower()}")
+    legacy_magic_ready = summary.get("product_magic_ready", summary.get("magic_ready"))
+    lines.append(f"- Magic ready: {str(legacy_magic_ready).lower()}")
+    lines.append(f"- Product magic ready: {str(legacy_magic_ready).lower()}")
+    lines.append(f"- Subsystem magic ready: {str(summary.get('subsystem_magic_ready')).lower()}")
+    lines.append(f"- First magic moment ready: {str(summary.get('first_magic_moment_ready')).lower()}")
     if summary.get("magic_blockers"):
         lines.append("- Magic blockers: " + ", ".join(summary.get("magic_blockers") or []))
     if summary.get("optional_surfaces"):
@@ -1513,10 +1669,28 @@ def build_parser() -> argparse.ArgumentParser:
         help="Apply local package/effect surfaces: skill, plugin package, and Codex hooks.",
     )
     apply_parser.add_argument(
+        "--dry-run",
+        "--preview",
+        action="store_true",
+        dest="dry_run",
+        help="Preview the selected apply surface(s) as an update plan. Performs no writes.",
+    )
+    apply_parser.add_argument(
         "--force-dirty-worktree",
         action="store_true",
         help="Override the dirty Git worktree guard after human review; never stashes or cleans.",
     )
+    rollback_parser = subparsers.add_parser(
+        "rollback",
+        usage="aippocampus update rollback --surface {skill,hooks} --backup-path PATH --json",
+        description=(
+            "Restore a skill or hooks backup created by update apply. This is an "
+            "explicit mutating recovery action and never runs automatically."
+        ),
+    )
+    _add_common_options(rollback_parser)
+    rollback_parser.add_argument("--surface", choices=("skill", "hooks"), required=True)
+    rollback_parser.add_argument("--backup-path", required=True)
     return parser
 
 
@@ -1529,8 +1703,8 @@ def main(argv: list[str] | None = None) -> int:
         item for item in raw_argv if item not in {"--agent-json", "--json", "--operator-json"}
     ]
     if not filtered:
-        return _emit_update_recovery(
-            _update_recovery_payload(
+        return emit_update_recovery(
+            update_recovery_payload(
                 code="update_command_required",
                 message="Choose status, plan, or apply. No write happened.",
                 next_command="aippocampus update status --json",
@@ -1542,8 +1716,8 @@ def main(argv: list[str] | None = None) -> int:
         command = "aippocampus update status --json"
         if filtered[0] != "check":
             command = "aippocampus update plan --json"
-        return _emit_update_recovery(
-            _update_recovery_payload(
+        return emit_update_recovery(
+            update_recovery_payload(
                 code=code,
                 message=f"`update {filtered[0]}` is a natural guess; use the named command instead. No write happened.",
                 next_command=command,
@@ -1553,7 +1727,18 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(raw_argv)
     try:
-        if args.action == "apply":
+        if args.action == "apply" and getattr(args, "dry_run", False):
+            report = build_status(args, mode="plan")
+            report["dry_run_alias_for"] = "apply"
+            report["write_boundary"] = {
+                "written": False,
+                "no_write_happened": True,
+                "previewed_action": "apply",
+                "explicit_apply_required": True,
+            }
+        elif args.action == "rollback":
+            report = rollback_update(args)
+        elif args.action == "apply":
             report = apply_update(args)
         elif args.action == "status" and args.agent_json and not args.operator_json:
             report = status_foreground.build_partial_status(args, mode=args.action, cli_helpers=globals())
@@ -1568,20 +1753,16 @@ def main(argv: list[str] | None = None) -> int:
             or getattr(args, "agent_json", False)
             or getattr(args, "operator_json", False)
         ):
-            emit_public_text(
-                json.dumps(
-                    {
-                        "schema_version": SCHEMA_VERSION,
-                        "kind": "aippocampus_update_error",
-                        "ok": False,
-                        "error": {
-                            "code": "update_failed",
-                            "message": "Update failed; rerun from a trusted shell for local diagnostics.",
-                        },
+            emit_operator_json(
+                {
+                    "schema_version": SCHEMA_VERSION,
+                    "kind": "aippocampus_update_error",
+                    "ok": False,
+                    "error": {
+                        "code": "update_failed",
+                        "message": "Update failed; rerun from a trusted shell for local diagnostics.",
                     },
-                    ensure_ascii=False,
-                    indent=2,
-                )
+                }
             )
         else:
             emit_public_text("AIppocampus update failed: update_failed", stream=sys.stderr)
@@ -1592,20 +1773,13 @@ def main(argv: list[str] | None = None) -> int:
         or getattr(args, "json_output", False)
         or getattr(args, "operator_json", False)
     ):
-        emit_public_text(json.dumps(report, ensure_ascii=False, indent=2, default=_json_default))
+        emit_operator_json(report)
     elif args.agent_json or (
         args.action in {"status", "plan"} and args.json_output and not args.operator_json
     ):
-        emit_public_text(
-            json.dumps(
-                compact_agent_status_report(report, schema_version=SCHEMA_VERSION),
-                ensure_ascii=False,
-                indent=2,
-                default=_json_default,
-            )
-        )
+        emit_operator_json(compact_agent_status_report(report, schema_version=SCHEMA_VERSION))
     elif args.json_output or args.operator_json:
-        emit_public_text(json.dumps(report, ensure_ascii=False, indent=2, default=_json_default))
+        emit_operator_json(report)
     else:
         emit_public_text(render_text(report), end="")
     if report.get("kind") == "aippocampus_update_recovery":

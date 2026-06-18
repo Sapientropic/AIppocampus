@@ -161,7 +161,14 @@ class AgentFeedbackMacroCliTests(unittest.TestCase):
         self.assertEqual(payload["status"], "needs_route_id")
         self.assertEqual(payload["last_recall_route_choice_count"], 2)
         self.assertEqual(payload["agent_next_action"]["source"], "last_recall_cache")
-        self.assertIn("route_cached_feedback", payload["agent_next_action"]["command"])
+        self.assertEqual(payload["agent_next_action"]["route_id"], "route_cached_feedback")
+        self.assertIn("route_cached_feedback", payload["agent_next_action"]["command_template"])
+        self.assertIn("{feedback_outcome}", payload["agent_next_action"]["command_template"])
+        self.assertEqual(payload["agent_next_action"]["requires"], ["feedback_outcome"])
+        self.assertNotIn(
+            "source_reopen_success",
+            json.dumps(payload["safe_next_actions"], ensure_ascii=False),
+        )
         self.assertNotIn("old cue", json.dumps(payload, ensure_ascii=False))
 
     def test_cli_agent_explain_json_errors_return_foreground_recovery_cards(self) -> None:

@@ -72,7 +72,7 @@ def _primary_spend_action(decision: Mapping[str, Any]) -> dict[str, Any]:
     return {
         "action_id": "continue_with_spend_guardrails",
         "label": "Continue with current spend guardrails",
-        "command": command,
+        "next_step": "continue_current_task",
         "why": "No local spend/yield warning crossed the configured thresholds.",
         "mutation_risk": "read_only",
         "claim_boundary": "operator_diagnostic_not_source_evidence",

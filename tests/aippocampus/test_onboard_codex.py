@@ -705,7 +705,14 @@ class OnboardCodexTests(unittest.TestCase):
             "data": {
                 "dry_run": True,
                 "stats_before": {"thread_count": 1},
-                "plan": {"would_register_count": 1},
+                "plan": {
+                    "would_register_count": 1,
+                    "dry_run_scope": {
+                        "kind": "current_cwd_refresh",
+                        "write_command_args": ["--cwd", "."],
+                        "scope_escalation": "none",
+                    },
+                },
                 "boundary": {"frontier": {"status": "not_run"}},
                 "storage_policy": {"default": "CODEX_HOME/aippocampus-registry"},
             },
@@ -720,8 +727,11 @@ class OnboardCodexTests(unittest.TestCase):
         commands = [item["command"] for item in public["next_actions"]]
 
         self.assertEqual(public["next_count"], len(public["next_actions"]))
-        self.assertIn("aippocampus onboard --provider codex --all --json", commands)
+        self.assertIn("aippocampus onboard --provider codex --cwd . --json", commands)
+        self.assertNotIn("aippocampus onboard --provider codex --all --json", commands)
         self.assertEqual(public["next_actions"][0]["mutation_risk"], "explicit_registration_write")
+        self.assertEqual(public["next_actions"][0]["scope"], "same_as_dry_run_preview")
+        self.assertEqual(public["next_actions"][0]["scope_escalation"], "none")
         self.assertNotIn("--format json", json.dumps(public, ensure_ascii=False))
 
     def test_facade_passes_json_format_to_provider_write_path(self) -> None:

@@ -279,6 +279,27 @@ class PluginInstallerTests(unittest.TestCase):
         finally:
             shutil.rmtree(output, ignore_errors=True)
 
+    def test_interrupted_plugin_install_tmp_can_be_recovered(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            marketplace_root = root / "marketplace"
+            target = marketplace_root / "plugins" / "aippocampus"
+            tmp_install = target.parent / ".aippocampus.tmp-aippocampus-install"
+            tmp_install.mkdir(parents=True)
+            (tmp_install / ".codex-plugin").mkdir()
+            (tmp_install / ".codex-plugin" / "plugin.json").write_text(
+                json.dumps({"name": "aippocampus", "version": "0.0.1"}),
+                encoding="utf-8",
+            )
+
+            report = plugin_installer.recover_interrupted_plugin_install(target)
+
+            self.assertTrue(report["interrupted_install_found"])
+            self.assertIn("published_tmp_install", report["recovered"])
+            self.assertTrue((target / ".codex-plugin" / "plugin.json").exists())
+            self.assertFalse(tmp_install.exists())
+            self.assertTrue(report["write_boundary"]["written"])
+
     def test_codex_install_buckets_nonfatal_host_probe_stderr_after_success(self) -> None:
         output = REPO_ROOT / "dist" / "test-plugin-installer-stderr-summary"
         try:

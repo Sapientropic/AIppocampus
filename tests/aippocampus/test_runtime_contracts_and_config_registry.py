@@ -30,6 +30,7 @@ from aippocampus_runtime.contracts import (  # noqa: E402
     foreground_action_contract_violations,
     public_envelope,
 )
+from aippocampus_runtime.registry import store as registry_store  # noqa: E402
 
 ENV_PATTERN = re.compile(r"\bAIPPOCAMPUS_[A-Z0-9_]+\b")
 
@@ -48,6 +49,26 @@ def aippocampus_env_names_from(paths: list[Path]) -> set[str]:
 
 
 class RuntimeContractsAndConfigRegistryTests(unittest.TestCase):
+    def test_thread_registry_rejects_future_schema_instead_of_silent_downgrade(self) -> None:
+        path = REPO_ROOT / ".tmp" / "test-thread-registry-future-schema" / "threads.json"
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(
+                json.dumps({"schema_version": 999, "threads": []}),
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(
+                registry_store.RegistryReadError,
+                "unsupported schema_version",
+            ):
+                registry_store.load_registry(path)
+        finally:
+            if path.parent.exists():
+                import shutil
+
+                shutil.rmtree(path.parent, ignore_errors=True)
+
     def test_public_envelope_uses_shared_status_and_failure_vocabulary(self) -> None:
         envelope = public_envelope(
             ok=True,

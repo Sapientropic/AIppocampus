@@ -337,6 +337,7 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/knowledge/capability_types.py",
     "skills/aippocampus/scripts/aippocampus_runtime/knowledge/schema.py",
     "skills/aippocampus/scripts/aippocampus_runtime/learning_loop/__init__.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/learning_loop/aippo_adapter.py",
     "skills/aippocampus/scripts/aippocampus_runtime/learning_loop/cli.py",
     "skills/aippocampus/scripts/aippocampus_runtime/learning_loop/core.py",
     "skills/aippocampus/scripts/aippocampus_runtime/learning_loop/dogfood_cases.py",

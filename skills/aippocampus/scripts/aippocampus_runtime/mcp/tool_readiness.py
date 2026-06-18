@@ -7,6 +7,7 @@ from typing import Any
 from aippocampus_runtime.contracts import (
     canonical_foreground_action_fields,
     foreground_shell_action,
+    foreground_template_action,
 )
 from aippocampus_runtime.mcp.tool_catalog import TOOLS
 
@@ -60,4 +61,15 @@ def tool_readiness_summary() -> dict[str, Any]:
             claim_boundary="tool_visibility_not_memory_evidence",
         )
         payload.update(canonical_foreground_action_fields(primary, safe_next_actions=[primary, status]))
+    else:
+        primary = foreground_template_action(
+            action_id="try_agent_recall",
+            command_template='aippocampus agent recall "{cue}" --json',
+            requires=["cue"],
+            label="Try source-backed recall",
+            why="Key agent-native MCP tools are visible; use recall with a concrete task or memory cue.",
+            mutation_risk="read_only",
+            claim_boundary="no_claim_before_reopen",
+        )
+        payload.update(canonical_foreground_action_fields(primary, safe_next_actions=[primary]))
     return payload

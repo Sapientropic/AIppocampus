@@ -55,6 +55,7 @@ from benchmarks.aippocampus.shared import provider_execution_budget  # noqa: E40
 from benchmarks.aippocampus.shared.benchmark_entrypoints import (  # noqa: E402
     json_report_exit_code,
 )
+from benchmarks.aippocampus.shared.provider_artifacts import public_provider_artifact  # noqa: E402
 
 SCHEMA_VERSION = 1
 DEFAULT_UPSTREAM_ROOT = _paths.REPO_ROOT / ".tmp" / "amemgym-upstream"
@@ -1577,6 +1578,31 @@ def build_official_bridge_report(
             provider_plan_environment=provider_plan_environment,
         ),
         "provider": provider_env.public_status,
+        "provider_artifact": public_provider_artifact(
+            benchmark_id="amemgym_official_fixed_arm",
+            provider=provider,
+            model=openrouter_model if provider == "openrouter" else provider,
+            prompt={
+                "kind": "official_runner_or_adapter_prompt",
+                "arm": arm,
+                "surface_count": len(run_surfaces),
+                "dataset_boundary": dataset_boundary.get("status"),
+            },
+            runner={
+                "kind": "amemgym_official_bridge",
+                "runner": runner,
+                "run_surfaces": list(run_surfaces),
+                "status": status,
+            },
+            cost=provider_budget_summary,
+            run_date=generated_at,
+            status=status,
+            blocker_metadata={
+                "successor_issue": 2043,
+                "official_score_claimed": official_score_claim != "not_claimed",
+                "missing_outputs": missing_outputs,
+            },
+        ),
         "provider_execution_budget": provider_budget_summary,
         "provider_route_preflight": provider_route_preflight_payload,
         "provider_runtime": {

@@ -101,6 +101,54 @@ class LearningLoopAIppoAdapterTests(unittest.TestCase):
         self.assertEqual(matches[0]["target_fingerprint"], "other-repo:specific-target")
         self.assertFalse(matches[0]["can_support_factual_claim"])
 
+    def test_ripe_source_backed_lesson_becomes_aippo_clause_and_prepared_hint(self) -> None:
+        lesson = {
+            "kind": "source_backed_lesson_candidate",
+            "lesson_id": "lesson-preflight-before-broad-test",
+            "candidate_kind": "workflow_order_candidate",
+            "status": "ripe",
+            "foreground_activation_allowed": True,
+            "scope": ["coding", "benchmark_reporting", "project:AIppocampus"],
+            "failed_route": "broad_pytest_without_preflight",
+            "source_refs": [source_ref("lesson-a"), source_ref("lesson-b")],
+            "source_ref_count": 2,
+            "independent_trail_count": 2,
+            "proposed_lesson": (
+                "For coding patch or benchmark reporting work, run the cheap "
+                "preflight before broad pytest."
+            ),
+            "structured_lesson": {
+                "trigger_condition": "coding patch before broad test",
+                "scope": "coding",
+                "safer_next_action": "run cheap preflight before broad pytest",
+                "freshness": "current",
+            },
+        }
+
+        report = aippo_adapter.build_learning_aippo_bridge_report(
+            [lesson],
+            task="coding patch benchmark reporting before broad pytest",
+        )
+        encoded = json.dumps(report, ensure_ascii=False, sort_keys=True)
+
+        self.assertTrue(report["ok"], encoded)
+        self.assertEqual(report["metrics"]["aippo_source_row_count"], 1)
+        self.assertEqual(report["source_rows"][0]["learning_loop"]["source_backed_lesson_id"], lesson["lesson_id"])
+        self.assertIn("source_backed_lesson", report["source_rows"][0]["support_types"])
+        self.assertGreaterEqual(report["activation_packet"]["active_clause_count"], 1)
+        self.assertTrue(
+            any("preflight" in item for item in report["activation_packet"]["use_guidance"]),
+            encoded,
+        )
+        self.assertEqual(
+            report["prepared_cache"]["provider_counts"]["aippo_learned_clause"],
+            1,
+        )
+        self.assertEqual(
+            report["prepared_cache"]["records"][0]["guidance_id"],
+            "lesson-preflight-before-broad-test",
+        )
+
     def test_immature_private_stale_and_expected_red_findings_do_not_foreground(self) -> None:
         rows = aippo_adapter.learning_findings_to_aippo_source_rows(
             [

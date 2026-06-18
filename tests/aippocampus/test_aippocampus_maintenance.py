@@ -487,6 +487,9 @@ class AippocampusMaintenanceTests(unittest.TestCase):
         def fake_json(cmd: list[str]) -> tuple[int, dict | None, str, str]:
             seen_modules.append(cmd[2])
             if cmd[2] == "aippocampus_runtime.health":
+                self.assertIn("--detail", cmd)
+                detail_index = cmd.index("--detail")
+                self.assertEqual(cmd[detail_index + 1], "full")
                 return (
                     0,
                     {

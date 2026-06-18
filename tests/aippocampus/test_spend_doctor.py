@@ -13,6 +13,7 @@ SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 from aippocampus_runtime.ops import spend_doctor  # noqa: E402
+from aippocampus_runtime.ops.spend_doctor_card import compact_spend_doctor_card  # noqa: E402
 from aippocampus_runtime.warm_ambient import recall as warm_recall  # noqa: E402
 
 FAKE_PRIVATE_MARKER = "spend-doctor-private-marker"
@@ -386,6 +387,29 @@ class SpendDoctorTests(unittest.TestCase):
         )
         self.assertIn("decision", payload)
         self.assertNotIn(str(root), proc.stdout)
+
+    def test_continue_spend_card_does_not_primary_open_operator_detail(self) -> None:
+        card = compact_spend_doctor_card(
+            {
+                "ok": True,
+                "status": "ok",
+                "generated_at": "2026-06-18T00:00:00Z",
+                "window": {"days": 7},
+                "totals": {"spend": {"effective_tokens": 0, "request_count": 0}},
+                "decision": {
+                    "action": "continue",
+                    "reason": "no warnings crossed thresholds",
+                    "safe_next_command": "aippocampus doctor spend --detail full --json",
+                },
+            }
+        )
+
+        self.assertEqual(card["foreground_action"]["action_id"], "continue_with_spend_guardrails")
+        self.assertNotIn("--detail full", card["foreground_action"].get("command", ""))
+        self.assertEqual(
+            card["operator_json_available"]["detail_full_command"],
+            "aippocampus doctor spend --detail full --json",
+        )
 
     def test_default_compact_json_warns_with_inspect_action_without_self_looping(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

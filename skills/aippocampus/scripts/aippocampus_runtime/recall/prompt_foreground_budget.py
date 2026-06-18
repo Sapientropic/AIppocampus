@@ -28,6 +28,8 @@ DEBUG_ONLY_FOREGROUND_MARKERS = (
     "route id",
     "candidate-ref counts",
     "cannot_claim",
+    "phase=",
+    "turn=",
 )
 HIGHER_AUTHORITY_ACTIONS = {
     "bounded_evidence",
@@ -146,6 +148,42 @@ def _weak_scent_cognitive_map_label(row: dict[str, Any]) -> str:
     return str(row.get("title") or label_text or "").strip()
 
 
+def _anti_nag_token_ids(result: Mapping[str, Any]) -> set[str]:
+    values: list[Any] = []
+    for key in ("anti_nag_token_ids", "dismissed_route_ids", "suppressed_route_ids"):
+        raw = result.get(key)
+        if isinstance(raw, list):
+            values.extend(raw)
+    ambient = result.get("ambient_recall")
+    if isinstance(ambient, Mapping):
+        raw = ambient.get("anti_nag_token_ids")
+        if isinstance(raw, list):
+            values.extend(raw)
+    return {str(value).strip() for value in values if str(value).strip()}
+
+
+def _route_item_ids(item: Mapping[str, Any]) -> set[str]:
+    ids: set[str] = set()
+    for key in (
+        "route_id",
+        "card_id",
+        "token_id",
+        "id",
+        "record_id",
+        "deepen_route_id",
+        "lock_id",
+    ):
+        value = str(item.get(key) or "").strip()
+        if value:
+            ids.add(value)
+    return ids
+
+
+def _anti_nagged(item: Mapping[str, Any], result: Mapping[str, Any]) -> bool:
+    tokens = _anti_nag_token_ids(result)
+    return bool(tokens and (_route_item_ids(item) & tokens))
+
+
 def weak_scent_route_labels(result: dict[str, Any], *, max_routes: int = 3) -> list[str]:
     labels: list[str] = []
     seen: set[str] = set()
@@ -161,12 +199,29 @@ def weak_scent_route_labels(result: dict[str, Any], *, max_routes: int = 3) -> l
     for item in result.get("candidates") or []:
         if not isinstance(item, dict):
             continue
+        if _anti_nagged(item, result):
+            continue
         add(item.get("title") or ", ".join(item.get("anchors") or []))
     for row in cognitive_map_rows(result):
+        if _anti_nagged(row, result):
+            continue
         add(_weak_scent_cognitive_map_label(row))
     for card in ambient_cards(result):
+        if _anti_nagged(card, result):
+            continue
         add(_weak_scent_card_label(card))
     return labels
+
+
+def weak_scent_suppressed_by_anti_nag(result: dict[str, Any]) -> bool:
+    if not _anti_nag_token_ids(result):
+        return False
+    route_items = [
+        *[item for item in result.get("candidates") or [] if isinstance(item, Mapping)],
+        *cognitive_map_rows(result),
+        *ambient_cards(result),
+    ]
+    return bool(route_items) and not weak_scent_route_labels(result, max_routes=1)
 
 
 def is_weak_direction_only_scent(result: dict[str, Any]) -> bool:
@@ -187,18 +242,13 @@ def is_weak_direction_only_scent(result: dict[str, Any]) -> bool:
 
 
 def compact_weak_scent_lines(result: dict[str, Any]) -> list[str]:
-    reasons = [
-        str(reason).strip()
-        for reason in result.get("reasons") or []
-        if str(reason).strip()
-    ][:2]
-    why_now = compact_text("; ".join(reasons), 140) if reasons else "weak route scent"
+    labels = weak_scent_route_labels(result, max_routes=3)
+    why_now = "related route cue" if labels else "weak route scent"
     lines = [
         "Ambient recall scent:",
         f"why_now: {why_now}",
         "routes:",
     ]
-    labels = weak_scent_route_labels(result, max_routes=3)
     if labels:
         lines.extend(f"- {label}" for label in labels)
     else:

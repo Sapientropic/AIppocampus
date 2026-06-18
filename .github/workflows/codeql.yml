@@ -116,7 +116,6 @@ jobs:
           build-mode: none
           config-file: ./.github/codeql/codeql-config.yml
           queries: +security-extended
-          packs: codeql/python-queries:AlertSuppression.ql
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v4

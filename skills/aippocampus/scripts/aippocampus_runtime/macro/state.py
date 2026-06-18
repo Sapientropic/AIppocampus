@@ -357,6 +357,18 @@ def load_macro_orientation_states(
                 )
             continue
         if isinstance(row, dict):
+            validation = validate_macro_orientation_state(row)
+            validation_errors = validation.get("errors")
+            if isinstance(validation_errors, list) and "unsupported_schema_version" in validation_errors:
+                if warnings is not None:
+                    warnings.append(
+                        {
+                            "code": "unsupported_macro_state_schema",
+                            "line": line_number,
+                            "recovery_command": "aippocampus agent macro --init-template --json",
+                        }
+                    )
+                continue
             rows.append(row)
         elif warnings is not None:
             warnings.append(

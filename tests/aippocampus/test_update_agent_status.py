@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import tempfile
 import unittest
 from contextlib import ExitStack, redirect_stdout
@@ -11,6 +12,12 @@ from unittest.mock import patch
 from aippocampus_runtime.contracts import executable_command_violations
 from aippocampus_runtime.update import cli as update_cli
 from tests.aippocampus.test_update_sync import REPO_ROOT, provider_env
+
+PROVIDER_KEY_ENV_NAMES = (
+    "AIPPOCAMPUS_DEEPSEEK_API_KEY",
+    "DEEPSEEK_API_KEY",
+    "AIPPOCAMPUS_OPENAI_COMPAT_API_KEY_ENV",
+)
 
 
 class UpdateAgentStatusTests(unittest.TestCase):
@@ -72,6 +79,14 @@ class UpdateAgentStatusTests(unittest.TestCase):
         self.assertEqual(code, 0, payload)
         child_probe.assert_not_called()
         self.assertTrue(payload["summary"]["partial_readiness"])
+        self.assertIn("readiness_card", payload)
+        self.assertEqual(payload["readiness_card"]["subject"], "update_status")
+        self.assertTrue(payload["readiness_card"]["usable_now"])
+        self.assertFalse(payload["readiness_card"]["blocks_first_recall"])
+        self.assertEqual(
+            payload["summary"]["magic_ready_semantics"],
+            "legacy_alias_for_product_magic_ready",
+        )
         deferred = set(payload["summary"]["deferred_components"])
         self.assertIn("skill_tree_fingerprint", deferred)
         self.assertIn("plugin_cache_fingerprint", deferred)
@@ -94,3 +109,30 @@ class UpdateAgentStatusTests(unittest.TestCase):
         self.assertNotIn("action_hints", {item["surface"] for item in payload["next_actions"]})
         violations = executable_command_violations(payload["foreground_status_cards"])
         self.assertEqual(violations, [])
+
+    def test_operator_status_omits_provider_key_env_names(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, {}, clear=False):
+            for name in PROVIDER_KEY_ENV_NAMES:
+                os.environ.pop(name, None)
+            stdout = StringIO()
+            with redirect_stdout(stdout):
+                code = update_cli.main(
+                    [
+                        "status",
+                        "--repo-root",
+                        str(REPO_ROOT),
+                        "--codex-home",
+                        str(Path(tmp) / "codex-home"),
+                        "--no-child-check",
+                        "--operator-json",
+                    ]
+                )
+
+        raw = stdout.getvalue()
+        self.assertEqual(code, 0)
+        for name in PROVIDER_KEY_ENV_NAMES:
+            self.assertNotIn(name, raw)
+        payload = json.loads(raw)
+        llm = payload["surfaces"]["llm"]
+        self.assertEqual(llm["status"], "missing_provider_env_var")
+        self.assertTrue(llm["provider_env_var_omitted"])

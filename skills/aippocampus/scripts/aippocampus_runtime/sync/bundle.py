@@ -12,7 +12,9 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from aippocampus_runtime.artifacts.publish import resolve_sqlite_index_path
+from aippocampus_runtime.contracts import write_boundary
 from aippocampus_runtime.core import aippocampus_registry_dir, file_sha256, now_utc, safe_path_name
+from aippocampus_runtime.io_integrity import stale_tmp_recovery_card
 from aippocampus_runtime.sync.cli_support import (
     parser_command,
     print_sync_human_result,
@@ -55,6 +57,8 @@ ROOT_SIDECARS = (
     "working_memory.jsonl",
 )
 MANAGED_SYNC_DIRS = ("registry", "raw-rollouts")
+SYNC_CONFLICTS_DIR = ".sync-conflicts"
+SYNC_ROLLBACKS_DIR = ".sync-rollbacks"
 THREAD_FILES = (
     ("clean-source", "manifest.json"),
     ("index", "manifest.json"),
@@ -114,12 +118,89 @@ def load_sync_manifest(path: Path, *, missing_ok: bool = False) -> dict[str, Any
 
 def validate_existing_sync_manifest(path: Path) -> dict[str, Any]:
     manifest = load_sync_manifest(path)
+    for item in manifest.get("files") or []:
+        if isinstance(item, dict):
+            validate_relative_sync_path(str(item.get("path") or ""))
+    for item in clean_source_delta_files(manifest):
+        validate_relative_sync_path(str(item.get("path") or ""))
+        for chunk in item.get("chunks") or []:
+            if isinstance(chunk, dict):
+                validate_relative_sync_path(str(chunk.get("path") or ""))
     if (
         manifest.get("kind") != SYNC_BUNDLE_KIND
         or manifest.get("schema_version") != SYNC_SCHEMA_VERSION
     ):
         raise SyncManifestError(f"unrecognized sync manifest: {path}")
     return manifest
+
+
+def sync_recovery_action(
+    action_id: str,
+    command: str,
+    *,
+    mutation_risk: str = "read_only",
+) -> dict[str, Any]:
+    return {
+        "id": action_id,
+        "command": command,
+        "mutation_risk": mutation_risk,
+        "claim_boundary": "local_sync_recovery_not_source_truth",
+    }
+
+
+def sync_manifest_recovery_payload(
+    sync_root: Path,
+    *,
+    status: str,
+    code: str,
+    message: str,
+) -> dict[str, Any]:
+    repair = sync_recovery_action(
+        "repair_sync_manifest",
+        "aippocampus sync repair --sync-dir <sync-dir> --json",
+    )
+    rebuild = sync_recovery_action(
+        "rebuild_sync_bundle",
+        "aippocampus sync push --sync-dir <sync-dir> --json",
+        mutation_risk="writes_sync_dir",
+    )
+    actions = [rebuild, repair] if code == "unsupported_sync_manifest_schema" else [repair, rebuild]
+    return {
+        "ok": False,
+        "status": status,
+        "sync_dir": str(sync_root),
+        "manifest_exists": True,
+        "schema_version": None,
+        "file_count": 0,
+        "raw_rollout_included": False,
+        "issues": [{"code": code, "path": str(sync_root / SYNC_MANIFEST_NAME), "message": message}],
+        "recovery_actions": actions,
+        "agent_next_action": actions[0],
+        "foreground_action": actions[0],
+        "safe_next_actions": actions,
+        "write_boundary": write_boundary(written=False, explicit_write_required=True),
+    }
+
+
+def managed_sync_dir_collision_payload(sync_root: Path, names: list[str]) -> dict[str, Any]:
+    action = sync_recovery_action(
+        "repair_sync_manifest",
+        "aippocampus sync repair --sync-dir <sync-dir> --json",
+    )
+    return {
+        "ok": False,
+        "status": "managed_sync_dir_collision",
+        "sync_dir": str(sync_root),
+        "issues": [
+            {
+                "code": "managed_sync_dir_without_valid_manifest",
+                "managed_dirs": names,
+                "message": "AIppocampus-owned sync dirs are present but no trusted manifest allows clearing them.",
+            }
+        ],
+        "recovery_actions": [action],
+        "write_boundary": write_boundary(written=False, explicit_write_required=True),
+    }
 
 
 def _relative_sync_path_parts(value: str | Path) -> tuple[str, ...]:
@@ -407,7 +488,7 @@ def clear_managed_sync_dirs(sync_root: Path) -> None:
             shutil.rmtree(target)
 
 
-def ensure_push_sync_root_safe(registry_root: Path, sync_root: Path) -> None:
+def ensure_push_sync_root_safe(registry_root: Path, sync_root: Path) -> dict[str, Any] | None:
     for name in MANAGED_SYNC_DIRS:
         managed_target = sync_root / name
         if paths_overlap(managed_target, registry_root):
@@ -418,16 +499,21 @@ def ensure_push_sync_root_safe(registry_root: Path, sync_root: Path) -> None:
 
     managed_dirs = [sync_root / name for name in MANAGED_SYNC_DIRS if (sync_root / name).exists()]
     if not managed_dirs:
-        return
+        return None
 
     manifest_path = sync_root / SYNC_MANIFEST_NAME
     if not manifest_path.exists():
-        names = ", ".join(path.name for path in managed_dirs)
-        raise ValueError(
-            "refusing to clear existing managed sync dirs without a valid "
-            f"{SYNC_MANIFEST_NAME}: {names}"
+        return managed_sync_dir_collision_payload(sync_root, names=[path.name for path in managed_dirs])
+    try:
+        validate_existing_sync_manifest(manifest_path)
+    except SyncManifestError as exc:
+        return sync_manifest_recovery_payload(
+            sync_root,
+            status="unsupported_sync_manifest_schema",
+            code="unsupported_sync_manifest_schema",
+            message=str(exc),
         )
-    validate_existing_sync_manifest(manifest_path)
+    return None
 
 
 def push_sync_bundle(
@@ -444,7 +530,9 @@ def push_sync_bundle(
     )
     sync_root = Path(sync_dir).resolve()
     sync_root.mkdir(parents=True, exist_ok=True)
-    ensure_push_sync_root_safe(registry_root, sync_root)
+    safety_recovery = ensure_push_sync_root_safe(registry_root, sync_root)
+    if safety_recovery is not None:
+        return safety_recovery
     clear_managed_sync_dirs(sync_root)
 
     copied: list[dict] = []
@@ -472,12 +560,13 @@ def push_sync_bundle(
         include_raw=include_raw,
     )
     manifest_path = sync_root / SYNC_MANIFEST_NAME
-    manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+    save_json(manifest_path, manifest)
     return {
         "ok": True,
         "sync_dir": str(sync_root),
         "manifest": str(manifest_path),
         "file_count": len(copied),
+        "write_boundary": write_boundary(written=True, target="sync_dir"),
     }
 
 
@@ -639,6 +728,121 @@ def repair_registry_locators(target_registry: Path) -> dict[str, Any]:
     }
 
 
+def _operation_id() -> str:
+    return now_utc().replace(":", "").replace(".", "").replace("+", "")
+
+
+def _relative_target_path(root: Path, path: Path) -> str:
+    return path.resolve().relative_to(root.resolve()).as_posix()
+
+
+def _sync_pull_rollback_root(target_registry: Path, rollback_id: str) -> Path:
+    return ensure_within(target_registry, target_registry / SYNC_ROLLBACKS_DIR / rollback_id)
+
+
+def _record_created(manifest: dict[str, Any], target_registry: Path, path: Path) -> None:
+    if not path.exists():
+        return
+    manifest.setdefault("created_files", []).append(
+        {
+            "path": _relative_target_path(target_registry, path),
+            "sha256": file_sha256(path),
+        }
+    )
+
+
+def _backup_for_rollback(
+    manifest: dict[str, Any],
+    target_registry: Path,
+    rollback_root: Path,
+    path: Path,
+) -> None:
+    if not path.exists():
+        return
+    rel = Path(_relative_target_path(target_registry, path))
+    backup_path = rollback_root / "backups" / rel
+    copy_file(path, backup_path)
+    manifest.setdefault("backed_up_files", []).append(
+        {
+            "path": rel.as_posix(),
+            "backup_path": _relative_target_path(target_registry, backup_path),
+            "sha256": file_sha256(path),
+        }
+    )
+
+
+def _rollback_result(
+    target_registry: Path,
+    rollback_id: str,
+    *,
+    available: bool,
+) -> dict[str, Any]:
+    command = (
+        f'aippocampus sync rollback --registry-dir "{target_registry}" '
+        f"--rollback-id {rollback_id} --json"
+    )
+    return {
+        "status": "available" if available else "not_needed",
+        "rollback_id": rollback_id,
+        "command": command if available else None,
+        "manifest": str(_sync_pull_rollback_root(target_registry, rollback_id) / "manifest.json")
+        if available
+        else None,
+    }
+
+
+def rollback_sync_pull(
+    target_registry_dir: str | Path,
+    *,
+    rollback_id: str,
+) -> dict[str, Any]:
+    target_registry = Path(target_registry_dir).resolve()
+    rollback_root = _sync_pull_rollback_root(target_registry, rollback_id)
+    manifest_path = rollback_root / "manifest.json"
+    manifest = load_json(manifest_path)
+    if not manifest:
+        return {
+            "ok": False,
+            "status": "missing_rollback_manifest",
+            "rollback_id": rollback_id,
+            "issues": [{"code": "missing_rollback_manifest"}],
+            "write_boundary": write_boundary(written=False, explicit_write_required=True),
+        }
+    issues: list[dict[str, Any]] = []
+    restored = 0
+    removed = 0
+    for item in manifest.get("created_files") or []:
+        rel = validate_relative_sync_path(str(item.get("path") or ""))
+        target = ensure_within(target_registry, target_registry / rel)
+        if not target.exists():
+            continue
+        expected = str(item.get("sha256") or "")
+        if expected and file_sha256(target) != expected:
+            issues.append({"code": "created_file_modified_after_pull", "path": rel.as_posix()})
+            continue
+        target.unlink()
+        removed += 1
+    for item in manifest.get("backed_up_files") or []:
+        rel = validate_relative_sync_path(str(item.get("path") or ""))
+        backup_rel = validate_relative_sync_path(str(item.get("backup_path") or ""))
+        target = ensure_within(target_registry, target_registry / rel)
+        backup = ensure_within(target_registry, target_registry / backup_rel)
+        if not backup.exists():
+            issues.append({"code": "missing_backup_file", "path": rel.as_posix()})
+            continue
+        copy_file(backup, target)
+        restored += 1
+    return {
+        "ok": not issues,
+        "status": "rolled_back" if not issues else "rollback_needs_attention",
+        "rollback_id": rollback_id,
+        "removed_created_files": removed,
+        "restored_files": restored,
+        "issues": issues,
+        "write_boundary": write_boundary(written=bool(removed or restored), target="local_registry"),
+    }
+
+
 def pull_sync_bundle(sync_dir: str | Path, target_registry_dir: str | Path | None = None) -> dict:
     sync_root = Path(sync_dir).resolve()
     target_registry = (
@@ -646,7 +850,15 @@ def pull_sync_bundle(sync_dir: str | Path, target_registry_dir: str | Path | Non
         if target_registry_dir
         else aippocampus_registry_dir().resolve()
     )
-    manifest = load_sync_manifest(sync_root / SYNC_MANIFEST_NAME)
+    try:
+        manifest = validate_existing_sync_manifest(sync_root / SYNC_MANIFEST_NAME)
+    except SyncManifestError as exc:
+        return sync_manifest_recovery_payload(
+            sync_root,
+            status="unsupported_sync_manifest_schema",
+            code="unsupported_sync_manifest_schema",
+            message=str(exc),
+        )
     delta_file_paths = {
         validate_relative_sync_path(str(item.get("path") or "")).as_posix()
         for item in clean_source_delta_files(manifest)
@@ -655,7 +867,17 @@ def pull_sync_bundle(sync_dir: str | Path, target_registry_dir: str | Path | Non
     copied = 0
     skipped = 0
     conflicts = 0
-    conflict_root = target_registry / ".sync-conflicts" / now_utc().replace(":", "")
+    rollback_id = _operation_id()
+    rollback_root = _sync_pull_rollback_root(target_registry, rollback_id)
+    rollback_manifest: dict[str, Any] = {
+        "schema_version": SYNC_SCHEMA_VERSION,
+        "kind": "aippocampus_sync_pull_rollback",
+        "created_at": now_utc(),
+        "rollback_id": rollback_id,
+        "created_files": [],
+        "backed_up_files": [],
+    }
+    conflict_root = target_registry / SYNC_CONFLICTS_DIR / rollback_id
     for item in manifest.get("files") or []:
         relative_path = validate_relative_sync_path(str(item.get("path") or ""))
         source = sync_path_under(sync_root, relative_path)
@@ -670,6 +892,7 @@ def pull_sync_bundle(sync_dir: str | Path, target_registry_dir: str | Path | Non
         )
         if not destination.exists():
             copy_file(source, destination)
+            _record_created(rollback_manifest, target_registry, destination)
             copied += 1
             continue
         if file_sha256(destination) == item.get("sha256"):
@@ -688,6 +911,7 @@ def pull_sync_bundle(sync_dir: str | Path, target_registry_dir: str | Path | Non
         )
         if not destination.exists():
             materialize_clean_source_delta_file(sync_root, item, destination)
+            _record_created(rollback_manifest, target_registry, destination)
             copied += 1
             continue
         if file_sha256(destination) == item.get("sha256"):
@@ -699,7 +923,39 @@ def pull_sync_bundle(sync_dir: str | Path, target_registry_dir: str | Path | Non
         materialize_clean_source_delta_file(sync_root, item, conflict_path)
         conflicts += 1
 
+    registry_path = target_registry / "threads.json"
+    if registry_path.exists() and not any(
+        item.get("path") == "threads.json"
+        for item in rollback_manifest.get("created_files") or []
+    ):
+        _backup_for_rollback(rollback_manifest, target_registry, rollback_root, registry_path)
     path_repair = repair_registry_locators(target_registry)
+    for item in rollback_manifest.get("created_files") or []:
+        rel = validate_relative_sync_path(str(item.get("path") or ""))
+        target = ensure_within(target_registry, target_registry / rel)
+        if target.exists():
+            item["sha256"] = file_sha256(target)
+    rollback_available = bool(
+        rollback_manifest.get("created_files") or rollback_manifest.get("backed_up_files")
+    )
+    if rollback_available:
+        save_json(rollback_root / "manifest.json", rollback_manifest)
+    recovery_actions: list[dict[str, Any]] = []
+    if rollback_available:
+        recovery_actions.append(
+            sync_recovery_action(
+                "rollback_sync_pull",
+                _rollback_result(target_registry, rollback_id, available=True)["command"],
+                mutation_risk="writes_local_registry",
+            )
+        )
+    if conflicts:
+        recovery_actions.append(
+            sync_recovery_action(
+                "inspect_sync_conflicts",
+                "aippocampus sync repair --sync-dir <sync-dir> --json",
+            )
+        )
     return {
         "ok": conflicts == 0 and bool(path_repair.get("ok")),
         "target_registry_dir": str(target_registry),
@@ -708,6 +964,14 @@ def pull_sync_bundle(sync_dir: str | Path, target_registry_dir: str | Path | Non
         "conflicts": conflicts,
         "conflict_dir": str(conflict_root) if conflicts else None,
         "path_repair": path_repair,
+        "rollback": _rollback_result(target_registry, rollback_id, available=rollback_available),
+        "rollback_command": _rollback_result(target_registry, rollback_id, available=rollback_available)["command"],
+        "recovery_actions": recovery_actions,
+        "write_boundary": write_boundary(
+            written=bool(copied or conflicts or path_repair.get("repaired_entries")),
+            target="local_registry",
+            rollback_available=rollback_available,
+        ),
     }
 
 
@@ -717,19 +981,23 @@ def repair_sync_bundle(sync_dir: str | Path) -> dict:
     try:
         manifest = load_sync_manifest(manifest_path, missing_ok=True)
     except SyncManifestError as exc:
-        return {
-            "ok": False,
-            "sync_dir": str(sync_root),
-            "issues": [
-                {
-                    "code": "invalid_manifest",
-                    "path": str(manifest_path),
-                    "message": str(exc),
-                }
-            ],
-        }
+        return sync_manifest_recovery_payload(
+            sync_root,
+            status="invalid_manifest",
+            code="invalid_manifest",
+            message=str(exc),
+        )
     if not manifest:
         return missing_manifest_recovery_payload()
+    try:
+        validate_existing_sync_manifest(manifest_path)
+    except SyncManifestError as exc:
+        return sync_manifest_recovery_payload(
+            sync_root,
+            status="unsupported_sync_manifest_schema",
+            code="unsupported_sync_manifest_schema",
+            message=str(exc),
+        )
 
     issues: list[dict] = []
     for item in manifest.get("files") or []:
@@ -772,6 +1040,7 @@ def repair_sync_bundle(sync_dir: str | Path) -> dict:
         "sync_dir": str(sync_root),
         "checked": len(manifest.get("files") or []),
         "issues": issues,
+        "write_boundary": write_boundary(written=False),
     }
 
 
@@ -781,24 +1050,17 @@ def status_sync_bundle(sync_dir: str | Path) -> dict:
     try:
         manifest = load_sync_manifest(manifest_path, missing_ok=True)
     except SyncManifestError as exc:
-        return {
-            "ok": False,
-            "sync_dir": str(sync_root),
-            "manifest_exists": True,
-            "schema_version": None,
-            "file_count": 0,
-            "raw_rollout_included": False,
-            "issues": [
-                {
-                    "code": "invalid_manifest",
-                    "path": str(manifest_path),
-                    "message": str(exc),
-                }
-            ],
-        }
+        return sync_manifest_recovery_payload(
+            sync_root,
+            status="invalid_manifest",
+            code="invalid_manifest",
+            message=str(exc),
+        )
     repair = repair_sync_bundle(sync_root) if manifest else None
     if not manifest:
         return missing_manifest_recovery_payload()
+    if repair and repair.get("status") == "unsupported_sync_manifest_schema":
+        return repair
     return {
         "ok": bool(manifest) and bool(repair and repair.get("ok")),
         "sync_dir": str(sync_root),
@@ -807,6 +1069,8 @@ def status_sync_bundle(sync_dir: str | Path) -> dict:
         "file_count": manifest.get("file_count") if manifest else 0,
         "raw_rollout_included": manifest.get("raw_rollout_included") if manifest else False,
         "issues": (repair or {}).get("issues", []),
+        "interrupted_write_recovery": stale_tmp_recovery_card(sync_root),
+        "write_boundary": write_boundary(written=False),
     }
 
 
@@ -934,23 +1198,24 @@ def main(argv: list[str] | None = None) -> int:
     description = (
         sync_direction(command_label)["description"]
         if command_override
-        else "Local-folder sync status/push/pull/repair for AIppocampus."
+        else "Local-folder sync status/push/pull/repair/rollback for AIppocampus."
     )
     parser = argparse.ArgumentParser(
         prog=prog,
         usage=f"{prog} [options]"
         if command_override
-        else "aippocampus sync {status,push,pull,repair} [options]",
+            else "aippocampus sync {status,push,pull,repair,rollback} [options]",
         description=f"{description}\n\n{sync_help_card(command_override)}",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     if command_override is None:
-        parser.add_argument("command", choices=["status", "push", "pull", "repair"])
+        parser.add_argument("command", choices=["status", "push", "pull", "repair", "rollback"])
     action_group = parser.add_argument_group("action options")
     raw_group = parser.add_argument_group("raw and encryption options")
     output_group = parser.add_argument_group("output")
     action_group.add_argument("--sync-dir")
     action_group.add_argument("--registry-dir", default=None)
+    action_group.add_argument("--rollback-id")
     raw_group.add_argument(
         "--include-raw",
         action="store_true",
@@ -1074,7 +1339,7 @@ def main(argv: list[str] | None = None) -> int:
                 )
             else:
                 result = pull_sync_bundle(args.sync_dir, args.registry_dir)
-        else:
+        elif args.command == "repair":
             if not args.sync_dir:
                 raise ValueError("missing_sync_dir: repair requires --sync-dir")
             if args.require_encrypted:
@@ -1090,6 +1355,12 @@ def main(argv: list[str] | None = None) -> int:
                 )
             else:
                 result = repair_sync_bundle(args.sync_dir)
+        else:
+            if not args.registry_dir:
+                raise ValueError("missing_registry_dir: rollback requires --registry-dir")
+            if not args.rollback_id:
+                raise ValueError("missing_rollback_id: rollback requires --rollback-id")
+            result = rollback_sync_pull(args.registry_dir, rollback_id=args.rollback_id)
     except ValueError as exc:
         result = {
             "ok": False,

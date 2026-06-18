@@ -7,9 +7,10 @@ import argparse
 import json
 import os
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 from aippocampus_runtime.contracts import (
+    canonical_foreground_action_fields,
     foreground_recovery_card,
     foreground_shell_action,
     foreground_template_action,
@@ -377,6 +378,9 @@ def public_search_result(
             query_text=query_text,
         )
     )
+    foreground_action = public.get("foreground_action")
+    if isinstance(foreground_action, Mapping):
+        public.update(canonical_foreground_action_fields(foreground_action))
     return public
 
 

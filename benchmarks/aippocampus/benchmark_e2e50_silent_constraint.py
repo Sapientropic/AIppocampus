@@ -713,7 +713,7 @@ def build_private_local_field_behavior_report(
         "evidence_separation": {
             "public_safe_contract_pack": "scored_separately",
             "private_local_field_validation": "aggregate_or_blocker_only",
-            "private_scarcity_blocks_public_pack": False,
+            "private_scarcity_blocks_public_pack": bool(retained_shortfall),
         },
         "privacy_boundary": {
             "private_text_emitted": False,

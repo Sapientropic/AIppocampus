@@ -19,6 +19,7 @@ from aippocampus_runtime.hooks.action_hint_cache_records import (
     WEAK_SUPPORT_LEVELS,
     build_action_hint_cache_report,
 )
+from aippocampus_runtime.io_integrity import atomic_write_jsonl, public_safe_payload
 from aippocampus_runtime.learning_loop.effectiveness_ledger import (
     apply_effectiveness_to_guidance,
     load_ledger_rows,
@@ -381,11 +382,11 @@ def write_action_hint_cache(path: Path, report: Mapping[str, Any]) -> dict[str, 
     it without appending stale duplicate records forever.
     """
 
-    payload = dict(report)
+    payload = public_safe_payload(dict(report))
     if payload.get("kind") != CACHE_KIND:
         raise ValueError(f"unsupported action-hint cache kind: {payload.get('kind')}")
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, ensure_ascii=False, sort_keys=True) + "\n", encoding="utf-8")
+    atomic_write_jsonl(path, [payload], sort_keys=True)
     return {
         "ok": True,
         "kind": "aippocampus_action_hint_cache_write_report",

@@ -110,6 +110,56 @@ class PromptForegroundBudgetTests(unittest.TestCase):
         self.assertEqual(public["foreground_context"]["debug_only_field_leak_count"], 0)
         self.assertTrue(public["foreground_context"]["observatory_debug_payload_available"])
 
+    def test_weak_scent_anti_nag_and_reason_render_gate(self) -> None:
+        result = {
+            "decision": "scent",
+            "score": 0.71,
+            "confidence": "medium",
+            "query_terms": ["hook", "nag"],
+            "concept_expansions": [],
+            "candidates": [
+                {
+                    "route_id": "weak-repeat-route",
+                    "title": "Repeated weak scent",
+                    "anchors": ["already shown"],
+                }
+            ],
+            "evidence": [],
+            "working_memory": [],
+            "cognitive_map": [],
+            "ambient_recall": {
+                "mode": "scent",
+                "confidence": "medium",
+                "cache_status": {"status": "hit", "card_count": 1},
+                "cards": [
+                    {
+                        "card_id": "weak-repeat-route",
+                        "theme": "Repeated weak scent",
+                        "support_level": "scent",
+                        "trust_level": "direction_only",
+                        "action_grammar": "direction_only",
+                        "visibility": "active_gentle_nudge",
+                        "provenance_class": "cached_warm_card",
+                    }
+                ],
+            },
+            "anti_nag_token_ids": ["weak-repeat-route"],
+            "reasons": [
+                "phase=final turn=42 cannot_claim raw heuristic reason should stay backstage",
+            ],
+        }
+
+        self.assertIsNone(hook.context_for_hook(result))
+
+        visible_again = {**result, "anti_nag_token_ids": []}
+        context = hook.context_for_hook(visible_again) or ""
+        public = hook.public_hook_debug_payload(visible_again)
+
+        self.assertIn("Repeated weak scent", context)
+        for raw_marker in ("phase=final", "turn=42", "cannot_claim", "raw heuristic reason"):
+            self.assertNotIn(raw_marker, context)
+        self.assertEqual(public["foreground_context"]["debug_only_field_leak_count"], 0)
+
     def test_cognitive_map_direction_only_scent_uses_compact_foreground(self) -> None:
         result = {
             "decision": "scent",

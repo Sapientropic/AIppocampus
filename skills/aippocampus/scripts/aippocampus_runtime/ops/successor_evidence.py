@@ -7,6 +7,7 @@ the guard itself from drifting when new GitHub successor issues appear.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import subprocess
@@ -113,6 +114,7 @@ SUCCESSOR_ISSUE_STATE_MANIFEST: dict[int, dict[str, Any]] = {
     1976: _issue("governed_knowledge_runtime", "Validate high-risk knowledge gates through an opt-in governed runtime caller"),
     1977: _issue("segmented_merge_replay", "Validate segmented merge on replayed long-thread recall cohorts"),
     1981: _issue("e2e50_field_validation", "Validate E2E50 private/local field behavior beyond the public-safe contract pack", parent=1918),
+    1998: _issue("hard_blocker_successor_hygiene", "Keep hard-blocker closeouts alive as explicit successor work", parent=1918),
 }
 
 SUCCESSOR_ISSUES: dict[int, tuple[str, str]] = {
@@ -1193,6 +1195,59 @@ def _e2e50_field_validation_metrics() -> dict[str, Any]:
     }
 
 
+def _provider_blocker_artifact() -> dict[str, Any]:
+    _ensure_benchmark_import_path()
+    from benchmarks.aippocampus.shared.provider_artifacts import public_provider_artifact
+
+    return public_provider_artifact(
+        benchmark_id="successor_external_provider_blocker",
+        provider="not_requested",
+        model=None,
+        prompt={
+            "kind": "provider_run_prompt_metadata_required_before_score",
+            "raw_prompt_included": False,
+        },
+        runner={
+            "kind": "successor_evidence_sweep",
+            "status": "blocked_until_provider_artifact",
+        },
+        cost={"status": "not_run", "estimated_cost_usd": None},
+        status="blocked_not_run",
+        blocker_metadata={
+            "successor_issue": 2043,
+            "provider_model_prompt_runner_cost_date_required": True,
+        },
+    )
+
+
+def _private_trace_artifact_index(source_issue: int) -> dict[str, Any]:
+    trace_hash = "ptr_" + hashlib.sha256(
+        f"private-live-trace:{source_issue}:2044".encode("utf-8")
+    ).hexdigest()[:16]
+    return {
+        "schema_version": "private-live-trace-artifact-index-v1",
+        "successor_issue": 2044,
+        "source_issue": source_issue,
+        "status": "private_trace_required",
+        "public_issue_summary_redacted": True,
+        "case_count": 0,
+        "trace_hash": trace_hash,
+        "local_pointer_kind": "private_operator_artifact_pointer",
+        "local_pointer_public": False,
+        "privacy_boundary": {
+            "raw_trace_included": False,
+            "local_path_public": False,
+            "private_text_included": False,
+            "provider_payload_included": False,
+        },
+        "next_private_artifact_shape": {
+            "case_count": "aggregate_count_only",
+            "trace_hash": "stable_hash_of_private_artifact",
+            "local_pointer": "operator_private_path_or_registry_handle_not_public",
+        },
+    }
+
+
 def _track_metrics(
     track: str,
     inventory: Mapping[str, Any],
@@ -1292,6 +1347,37 @@ def _track_metrics(
             "adapter_boundary_case_count": max(3, public_cases),
             "official_score_claimed": False,
             "proxy_as_leaderboard_score_count": 0,
+        }
+    if track == "external_provider":
+        return {
+            **common,
+            "hard_blocker": "missing_live_provider_or_pretooluse_trace",
+            "provider_artifact_blocker": "missing_declared_provider_model_prompt_runner_cost_date_artifact",
+            "provider_or_live_trace_available": False,
+            "adoption_boundary": "blocked_until_declared_provider_artifact_exists",
+            "provider_artifact": _provider_blocker_artifact(),
+            "official_provider_score_claimed": False,
+            "raw_provider_payload_leak_count": 0,
+        }
+    if track == "hard_blocker_successor_hygiene":
+        path_count = sum(
+            1
+            for path in HARD_BLOCKER_EXECUTION_PATHS.values()
+            if int(path.get("successor_issue") or 0) in {2043, 2044}
+        )
+        deferred_count = sum(
+            1
+            for path in BOUNDED_VALIDATION_DEFERRED_PATHS.values()
+            if int(path.get("successor_issue") or 0) == 2045
+        )
+        return {
+            **common,
+            "hard_blocker_successor_path_count": path_count + deferred_count,
+            "hard_blocker_without_successor_count": 0,
+            "closed_blocker_without_execution_owner_count": 0,
+            "deferred_private_validation_successor_count": deferred_count,
+            "hard_blocker_closed_as_product_done": False,
+            "successor_issues": [2043, 2044, 2045],
         }
     if track == "macro_topology":
         return {
@@ -1615,6 +1701,8 @@ def _track_metrics(
             "hard_blocker": "missing_live_provider_or_pretooluse_trace",
             "provider_or_live_trace_available": False,
             "adoption_boundary": "blocked_until_live_or_provider_artifact_exists",
+            "private_trace_artifact_index": _private_trace_artifact_index(0),
+            "live_product_lift_claimed": False,
         }
     return {
         **common,
@@ -1734,6 +1822,8 @@ def build_successor_evidence_sweep_report(
         track, fallback_title = SUCCESSOR_ISSUES[number]
         title = str(spec.get("title") or fallback_title)
         metrics = _track_metrics(track, inventory, coverage=coverage)
+        if track == "live_blocked":
+            metrics["private_trace_artifact_index"] = _private_trace_artifact_index(number)
         if _specific_metric_keys(metrics):
             specific_rows += 1
         else:

@@ -14,7 +14,10 @@ sys.path.insert(0, str(SCRIPTS))
 
 from aippocampus_runtime.contracts import executable_command_violations  # noqa: E402
 from aippocampus_runtime.update import cli as update_cli  # noqa: E402
-from aippocampus_runtime.update import status_actions  # noqa: E402
+from aippocampus_runtime.update import (
+    plugin_cache,  # noqa: E402
+    status_actions,  # noqa: E402
+)
 from tests.aippocampus.test_update_sync import (  # noqa: E402
     provider_env,
     run_update,
@@ -87,3 +90,62 @@ class UpdateForegroundActionTests(unittest.TestCase):
         )
         self.assertIn("plugin_marketplace_dir", fields["requires"])
         self.assertEqual(executable_command_violations(fields), [])
+
+    def test_plugin_cache_status_exposes_structured_repair_cards(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "source"
+            package = root / "package"
+            marketplace = root / "marketplace"
+            for plugin_root in (source, package):
+                manifest = plugin_root / ".codex-plugin" / "plugin.json"
+                manifest.parent.mkdir(parents=True)
+                manifest.write_text(
+                    json.dumps({"id": "aippocampus", "version": "1.0.0"}),
+                    encoding="utf-8",
+                )
+
+            payload = plugin_cache.build_plugin_cache_status(
+                source_root=source,
+                package_root=package,
+                codex_home_path=root / "codex-home",
+                marketplace_dir=marketplace,
+            )
+
+        self.assertTrue(payload["recommended_action_cards"])
+        card = payload["recommended_action_cards"][0]
+        self.assertEqual(card["id"], "plugin_cache_recovery")
+        self.assertEqual(card["command"], status_actions.PLUGIN_CACHE_DEFAULT_REPAIR_COMMAND)
+        self.assertIn("command_template", card)
+        self.assertIn("plugin_marketplace_dir", card["requires"])
+        self.assertEqual(executable_command_violations(payload["recommended_action_cards"]), [])
+
+    def test_apply_dry_run_agent_json_maps_to_scoped_plan_without_write(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, provider_env():
+            root = Path(tmp)
+            repo = root / "repo"
+            codex_home = root / "codex-home"
+            write_minimal_repo(repo)
+            stdout = StringIO()
+            with redirect_stdout(stdout):
+                code = update_cli.main(
+                    [
+                        "apply",
+                        "--surface",
+                        "hooks",
+                        "--dry-run",
+                        "--repo-root",
+                        str(repo),
+                        "--codex-home",
+                        str(codex_home),
+                        "--no-child-check",
+                        "--agent-json",
+                    ]
+                )
+
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(code, 0, payload)
+        self.assertEqual(payload["mode"], "plan")
+        self.assertTrue(payload["write_boundary"]["no_write_happened"])
+        self.assertEqual(payload["summary"]["plan_scope"], "selected_surfaces")
+        self.assertEqual(payload["summary"]["plan_surface_filter"], ["hooks"])

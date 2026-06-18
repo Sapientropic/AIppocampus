@@ -437,13 +437,19 @@ def action_hint_status_contract(frontstage_card: Mapping[str, Any]) -> dict[str,
         (action for action in mapped_steps if action.get("id") == "review_action_hint_guidance"),
         None,
     )
-    if isinstance(refresh_action, dict) and isinstance(install_action, dict):
-        refresh_action["follow_up_action"] = {
+    if isinstance(install_action, dict) and isinstance(refresh_action, dict):
+        install_action["follow_up_action"] = {
+            key: refresh_action[key]
+            for key in ("id", "label", "command", "mutation_risk", "claim_boundary")
+            if key in refresh_action
+        }
+    if isinstance(review_action, dict) and isinstance(install_action, dict):
+        review_action["follow_up_action"] = {
             key: install_action[key]
             for key in ("id", "label", "command", "mutation_risk", "claim_boundary")
             if key in install_action
         }
-    if isinstance(review_action, dict) and isinstance(refresh_action, dict):
+    elif isinstance(review_action, dict) and isinstance(refresh_action, dict):
         review_action["follow_up_action"] = {
             key: refresh_action[key]
             for key in ("id", "label", "command", "mutation_risk", "claim_boundary")

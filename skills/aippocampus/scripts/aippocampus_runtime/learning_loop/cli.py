@@ -44,6 +44,27 @@ def _public_payload(payload: Any) -> Any:
     return redact_sensitive_values(redact_private_paths(payload))
 
 
+def _with_boundary_detail(
+    payload: Mapping[str, Any],
+    *,
+    cannot_claim: list[str],
+) -> dict[str, Any]:
+    """Keep compact foreground JSON useful while preserving inspectable bounds."""
+
+    out = dict(payload)
+    detail_raw = out.get("boundary_detail")
+    detail: dict[str, Any] = dict(detail_raw) if isinstance(detail_raw, Mapping) else {}
+    if cannot_claim:
+        detail["cannot_claim"] = list(dict.fromkeys(str(item) for item in cannot_claim if item))
+    detail.setdefault(
+        "frontstage_rule",
+        "compact learning/repro surfaces summarize bounds here instead of top-level caveat walls",
+    )
+    out["boundary_detail"] = detail
+    out.pop("cannot_claim", None)
+    return out
+
+
 def _cwd(value: str | None) -> Path:
     return Path(value or os.getcwd())
 
@@ -130,7 +151,8 @@ def discover_history_payload(*, cwd: Path) -> dict[str, Any]:
             }
         )
     return _public_payload(
-        {
+        _with_boundary_detail(
+            {
             "kind": KIND,
             "schema_version": SCHEMA_VERSION,
             "mode": "discover-history",
@@ -145,11 +167,12 @@ def discover_history_payload(*, cwd: Path) -> dict[str, Any]:
             },
             "safe_next_actions": _learning_setup_actions(),
             "privacy_boundary": _privacy_boundary(),
-            "cannot_claim": [
+            },
+            cannot_claim=[
                 "private_history_scanned_by_default",
                 "learned_guidance_as_source_truth",
             ],
-        }
+        )
     )
 
 
@@ -225,9 +248,11 @@ def status_payload(*, cwd: Path, no_default_learning: bool = False) -> dict[str,
     semantic_lifecycle = semantic_guidance_lifecycle(
         semantic_report,
         prepared_count=prepared_count,
+        prepared_rows=(report.get("cache") or {}).get("records") or [],
     )
     return _public_payload(
-        {
+        _with_boundary_detail(
+            {
             "kind": KIND,
             "schema_version": SCHEMA_VERSION,
             "mode": "status",
@@ -287,13 +312,14 @@ def status_payload(*, cwd: Path, no_default_learning: bool = False) -> dict[str,
             ),
             "next_actions": next_actions,
             "safe_next_actions": _learning_setup_actions(),
-            "cannot_claim": [
+            "privacy_boundary": _privacy_boundary(),
+            },
+            cannot_claim=[
                 "causal_live_behavior_lift",
                 "learned_guidance_as_source_truth",
                 "private_history_scanned_by_default",
             ],
-            "privacy_boundary": _privacy_boundary(),
-        }
+        )
     )
 
 
@@ -340,7 +366,8 @@ def guidance_payload(*, cwd: Path, no_default_learning: bool = False) -> dict[st
 
 def replay_needs_source_payload() -> dict[str, Any]:
     return _public_payload(
-        {
+        _with_boundary_detail(
+            {
             "kind": KIND,
             "schema_version": SCHEMA_VERSION,
             "mode": "replay",
@@ -354,12 +381,13 @@ def replay_needs_source_payload() -> dict[str, Any]:
                 "real_history_replay_requires_sanitized_events": True,
             },
             "privacy_boundary": _privacy_boundary(),
-            "cannot_claim": [
+            },
+            cannot_claim=[
                 "causal_live_behavior_lift",
                 "private_history_scanned_by_default",
                 "guidance_as_source_truth",
             ],
-        }
+        )
     )
 
 
@@ -445,7 +473,8 @@ def replay_payload(args: argparse.Namespace) -> dict[str, Any]:
             }
         )
     return _public_payload(
-        {
+        _with_boundary_detail(
+            {
             "kind": KIND,
             "schema_version": SCHEMA_VERSION,
             "mode": "replay",
@@ -461,14 +490,15 @@ def replay_payload(args: argparse.Namespace) -> dict[str, Any]:
             "intervention_report": intervention_report_from_replay(report),
             "guidance_authority": report.get("guidance_authority") or {},
             "privacy_boundary": report.get("privacy_boundary") or _privacy_boundary(),
-            "cannot_claim": report.get("cannot_claim") or [],
             "agent_next_action": (
                 replay_next_actions[0]["command"]
                 if replay_next_actions
                 else "inspect replay metrics and append an effectiveness ledger only after review"
             ),
             "next_actions": replay_next_actions,
-        }
+            },
+            cannot_claim=report.get("cannot_claim") or [],
+        )
     )
 
 
@@ -507,7 +537,8 @@ def repro_package_payload(args: argparse.Namespace) -> dict[str, Any]:
         plugin_manifest_version=args.plugin_manifest_version or "unknown",
     )
     return _public_payload(
-        {
+        _with_boundary_detail(
+            {
             "kind": KIND,
             "schema_version": SCHEMA_VERSION,
             "mode": "repro_package",
@@ -515,12 +546,13 @@ def repro_package_payload(args: argparse.Namespace) -> dict[str, Any]:
             "repro_package": package,
             "agent_next_action": "paste repro_package into a public issue after human review",
             "privacy_boundary": package.get("privacy_boundary") or _privacy_boundary(),
-            "cannot_claim": [
+            },
+            cannot_claim=[
                 "source_truth_from_repro_package",
                 "official_benchmark_score_from_repro_package",
                 "private_history_quality",
             ],
-        }
+        )
     )
 
 
@@ -613,7 +645,8 @@ def repro_package_input_schema() -> dict[str, Any]:
 def repro_package_recovery_payload(*, malformed_error: str | None = None) -> dict[str, Any]:
     code = "learning_repro_input_malformed" if malformed_error else "learning_repro_input_required"
     return _public_payload(
-        {
+        _with_boundary_detail(
+            {
             "kind": KIND,
             "schema_version": SCHEMA_VERSION,
             "mode": "repro_package_recovery",
@@ -670,11 +703,12 @@ def repro_package_recovery_payload(*, malformed_error: str | None = None) -> dic
                 }
             ],
             "privacy_boundary": _privacy_boundary(),
-            "cannot_claim": [
+            },
+            cannot_claim=[
                 "source_truth_from_repro_package",
                 "private_history_quality",
             ],
-        }
+        )
     )
 
 

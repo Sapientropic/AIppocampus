@@ -19,6 +19,7 @@ for _path in (
     sys.path.insert(0, str(_path))
 
 from aippocampus_runtime.source import clean_source as clean_source  # noqa: E402
+from aippocampus_runtime.source import material_sanitizer  # noqa: E402
 from conversation_sources import ConversationSourceRef, GenericConversationProvider  # noqa: E402
 from tests.aippocampus.redaction_fixtures import (  # noqa: E402
     fake_test_database_dsn,
@@ -209,6 +210,14 @@ class BuildCleanSourceTests(unittest.TestCase):
         )
         self.assertIn("message_id", result["identity_policy"]["stable_join_keys"])
         self.assertEqual(result["artifact_scope"], "global_thread_store")
+        self.assertEqual(
+            result["material_class_contract"]["clean_source_policy"],
+            "visible_user_and_assistant_final_text_only",
+        )
+        self.assertEqual(
+            result["material_class_contract"]["host_control_envelope_policy"],
+            "audit_only_not_clean_source",
+        )
         self.assertEqual(result["source_transcript"], str(self.rollout))
         self.assertEqual(result["source_transcript_size"], self.rollout.stat().st_size)
         self.assertEqual(result["source_transcript_mtime"], self.rollout.stat().st_mtime)
@@ -278,6 +287,8 @@ class BuildCleanSourceTests(unittest.TestCase):
         self.assertTrue(first["turn_id"].startswith("turn_"))
         self.assertEqual(first["id"], first["message_id"])
         self.assertTrue(first["message_id"].startswith("msg_"))
+        self.assertEqual(first["material_class"], "clean_source_text")
+        self.assertEqual(first["source_claim_policy"], "source_open_required_for_exact_claim")
         self.assertTrue(first["semantic_key"].startswith("sem_"))
         self.assertEqual(first["signature_key"], first["message_id"])
         self.assertEqual(first["raw_start_line"], first["source_line"])
@@ -350,6 +361,19 @@ class BuildCleanSourceTests(unittest.TestCase):
         self.assertNotIn("C:\\private\\workspace", joined)
         filtered = [item for item in messages if item.get("host_internal_filtered")]
         self.assertEqual(filtered[0]["text"], "Visible user correction survives.")
+        self.assertEqual(filtered[0]["material_class"], "clean_source_text")
+
+    def test_material_sanitizer_classifies_host_control_as_audit_only(self) -> None:
+        result = material_sanitizer.classify_source_material(
+            "<subagent_notification>{\"path\":\"C:\\\\private\\\\workspace\"}</subagent_notification>",
+            source_surface="codex_rollout",
+        )
+
+        self.assertEqual(result["material_class"], "host_control_envelope")
+        self.assertEqual(result["clean_source_policy"], "exclude_from_clean_source")
+        self.assertEqual(result["public_projection_policy"], "redacted_metadata_only")
+        self.assertEqual(result["source_claim_policy"], "not_source_evidence")
+        self.assertFalse(result["public_projection"]["raw_text_included"])
 
     def test_clean_source_adds_life_wide_scope_labels(self) -> None:
         self._append(

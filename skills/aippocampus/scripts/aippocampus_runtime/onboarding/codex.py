@@ -19,6 +19,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shlex
 import sys
 import time
 from pathlib import Path
@@ -156,13 +157,77 @@ def build_next_hints(*, dry_run: bool, frontier_mode: str) -> list[str]:
         'aippocampus search "recent or last month"',
     ]
     if dry_run:
-        hints.append("aippocampus onboard --provider codex --all --format json")
+        hints.append("aippocampus onboard --provider codex --cwd . --format json")
     if frontier_mode == "off":
         hints.append("aippocampus onboard --provider codex --frontier-mode smoke --format json")
     return hints[:4]
 
 
-def public_next_actions(*, dry_run: bool, frontier_mode: str, provider: str = "codex") -> list[dict[str, Any]]:
+def _quote_command_arg(value: object) -> str:
+    text = str(value)
+    if not text:
+        return '""'
+    return shlex.quote(text)
+
+
+def dry_run_scope_descriptor(
+    *,
+    cwd_filter: str | None = None,
+    project: str | None = None,
+    tags: list[str] | None = None,
+    max_count: int | None = None,
+    refresh_current: bool = True,
+    refresh_registered: bool = False,
+) -> dict[str, Any]:
+    """Describe which preview scope the explicit write action should preserve.
+
+    The public card must not silently broaden a scoped preview into an `--all`
+    write. Local cwd values are intentionally represented as `.` because the
+    foreground command should be runnable from the current project without
+    publishing private filesystem paths.
+    """
+
+    args: list[str] = []
+    if refresh_current:
+        args.extend(["--cwd", "."])
+    if cwd_filter:
+        args.extend(["--cwd-filter", cwd_filter])
+    if project:
+        args.extend(["--project", project])
+    for tag in tags or []:
+        args.extend(["--tag", tag])
+    if max_count is not None:
+        args.extend(["--max", str(max(0, int(max_count)))])
+    if refresh_registered:
+        args.append("--refresh-registered")
+    if args:
+        return {
+            "kind": "current_or_filtered_preview",
+            "write_command_args": args,
+            "scope_escalation": "none",
+        }
+    return {
+        "kind": "global_scan_preview",
+        "write_command_args": ["--all"],
+        "scope_escalation": "explicit_all_sessions",
+    }
+
+
+def _scope_command_suffix(scope: dict[str, Any] | None) -> tuple[str, str]:
+    if not isinstance(scope, dict):
+        scope = {"write_command_args": ["--all"], "scope_escalation": "explicit_all_sessions"}
+    args = [str(item) for item in scope.get("write_command_args") or [] if str(item)]
+    suffix = " ".join(_quote_command_arg(arg) for arg in args)
+    return suffix, str(scope.get("scope_escalation") or "unknown")
+
+
+def public_next_actions(
+    *,
+    dry_run: bool,
+    frontier_mode: str,
+    provider: str = "codex",
+    dry_run_scope: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
     actions = [
         foreground_shell_action(
             action_id="try_source_backed_search",
@@ -182,16 +247,24 @@ def public_next_actions(*, dry_run: bool, frontier_mode: str, provider: str = "c
         ),
     ]
     if dry_run:
+        scope_suffix, scope_escalation = _scope_command_suffix(dry_run_scope)
+        write_command = f"aippocampus onboard --provider {provider}"
+        if scope_suffix:
+            write_command = f"{write_command} {scope_suffix}"
+        write_command = f"{write_command} --json"
+        write_action = foreground_shell_action(
+            action_id="register_after_dry_run_review",
+            label="Register after reviewing the dry-run plan",
+            command=write_command,
+            why="Dry-run found a plan; this explicit write step preserves the preview scope.",
+            mutation_risk="explicit_registration_write",
+            claim_boundary="host_setup_not_memory_evidence",
+        )
+        write_action["scope"] = "same_as_dry_run_preview"
+        write_action["scope_escalation"] = scope_escalation
         actions.insert(
             0,
-            foreground_shell_action(
-                action_id="register_after_dry_run_review",
-                label="Register after reviewing the dry-run plan",
-                command=f"aippocampus onboard --provider {provider} --all --json",
-                why="Dry-run found a plan; this is the explicit write step if the plan is intended.",
-                mutation_risk="explicit_registration_write",
-                claim_boundary="host_setup_not_memory_evidence",
-            ),
+            write_action,
         )
         actions.insert(
             1,
@@ -282,6 +355,14 @@ def run_onboarding(
         "would_refresh_current": bool(refresh_current),
         "would_build_timeline": bool(build_timeline),
         "would_build_cognitive_map": bool(build_cognitive_map),
+        "dry_run_scope": dry_run_scope_descriptor(
+            cwd_filter=cwd_filter,
+            project=project,
+            tags=tags,
+            max_count=max_count,
+            refresh_current=refresh_current,
+            refresh_registered=refresh_registered,
+        ),
         "frontier_mode": frontier_mode,
         "frontier_project_scope": planned_frontier_project,
         "frontier_project_scope_reason": planned_frontier_project_reason,
@@ -515,7 +596,7 @@ def public_stats(stats: Any) -> dict[str, int]:
 def public_plan_summary(plan: Any) -> dict[str, Any]:
     if not isinstance(plan, dict):
         return {}
-    return {
+    summary: dict[str, Any] = {
         "would_register_count": public_count(plan.get("would_register_count")),
         "would_repair_count": public_count(plan.get("would_repair_count")),
         "would_refresh_current": bool(plan.get("would_refresh_current")),
@@ -523,6 +604,18 @@ def public_plan_summary(plan: Any) -> dict[str, Any]:
         "would_build_cognitive_map": bool(plan.get("would_build_cognitive_map")),
         "frontier_mode": public_frontier_status(plan.get("frontier_mode")),
     }
+    dry_run_scope = plan.get("dry_run_scope")
+    if isinstance(dry_run_scope, dict):
+        summary["dry_run_scope"] = {
+            "kind": str(dry_run_scope.get("kind") or "unknown"),
+            "write_command_args": [
+                str(item)
+                for item in dry_run_scope.get("write_command_args") or []
+                if str(item)
+            ],
+            "scope_escalation": str(dry_run_scope.get("scope_escalation") or "unknown"),
+        }
+    return summary
 
 
 def public_action_summaries(actions: Any) -> dict[str, Any]:
@@ -590,10 +683,12 @@ def public_onboarding_result(result: dict[str, Any]) -> dict[str, Any]:
     actions: dict[str, Any] = raw_actions if isinstance(raw_actions, dict) else {}
     dry_run = bool(data.get("dry_run"))
     provider = str(meta.get("provider") or "codex")
+    plan_summary = public_plan_summary(data.get("plan"))
     next_actions = public_next_actions(
         dry_run=dry_run,
         frontier_mode=str(frontier.get("status") or "off"),
         provider=provider,
+        dry_run_scope=plan_summary.get("dry_run_scope"),
     )
     return {
         "ok": result.get("ok"),
@@ -601,7 +696,7 @@ def public_onboarding_result(result: dict[str, Any]) -> dict[str, Any]:
             "dry_run": dry_run,
             "stats_before": public_stats(data.get("stats_before")),
             "stats_after": public_stats(data.get("stats_after")),
-            "plan": public_plan_summary(data.get("plan")),
+            "plan": plan_summary,
             "actions": public_action_summaries(actions),
             "frontier_status": public_frontier_status(frontier.get("status")),
             "action_count": len(actions),

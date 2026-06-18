@@ -272,7 +272,7 @@ class AgentSelfNoteTests(unittest.TestCase):
             code = agent_self_note_cli.main(["append", "--json"])
 
         payload = json.loads(stdout.getvalue())
-        self.assertNotEqual(code, 0)
+        self.assertEqual(code, 0)
         self.assertEqual(payload["error"]["code"], "agent_self_note_empty")
         self.assertIsInstance(payload["agent_next_action"], dict)
         self.assertEqual(payload["agent_next_action"]["id"], "append_direction_only_note")
@@ -282,6 +282,21 @@ class AgentSelfNoteTests(unittest.TestCase):
         self.assertNotIn("recovery_actions", payload)
         encoded = json.dumps(payload, ensure_ascii=False)
         self.assertNotIn("<cue>", encoded)
+
+    def test_bare_self_note_json_returns_structured_chooser_action(self) -> None:
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            code = agent_self_note_cli.main(["--json"])
+
+        payload = json.loads(stdout.getvalue())
+
+        self.assertEqual(code, 0)
+        self.assertEqual(payload["error"]["code"], "self_note_command_required")
+        self.assertIsInstance(payload["agent_next_action"], dict)
+        self.assertEqual(payload["foreground_action"], payload["agent_next_action"])
+        self.assertEqual(payload["safe_next_actions"][0], payload["agent_next_action"])
+        self.assertEqual(payload["agent_next_action"]["id"], "append_direction_only_note")
+        self.assertEqual({choice["label"] for choice in payload["choices"]}, {"append", "search", "list", "read"})
 
 
 if __name__ == "__main__":

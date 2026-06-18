@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from aippocampus_runtime.contracts import foreground_readiness_card
 from aippocampus_runtime.core import compact_text
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 from aippocampus_runtime.update import status_actions as update_actions
@@ -206,6 +207,35 @@ def compact_agent_status_report(
     )
     agent_status = agent.get("status") or summary.get("agent_callable_status")
     foreground_cards = update_actions.foreground_status_cards(report)
+    readiness_state = (
+        "partial_foreground_status"
+        if foreground_partial or deferred_components
+        else "ready"
+        if bool(summary.get("core_ready")) and not needs_action
+        else "attention_needed"
+    )
+    readiness_card = foreground_readiness_card(
+        subject="update_status",
+        scope=str(summary.get("plan_scope") or "all_surfaces"),
+        state=readiness_state,
+        usable_now=bool(report.get("ok", True)),
+        blocks_first_recall=False,
+        blocks_exact_latest=bool(deferred_components),
+        recommended=[
+            str(card.get("id") or "")
+            for card in foreground_cards
+            if isinstance(card, dict) and str(card.get("id") or "")
+        ],
+        next_actions=[
+            card
+            for card in foreground_cards[:2]
+            if isinstance(card, dict)
+        ],
+        claim_boundary=(
+            "update readiness guides setup actions; it is not source evidence "
+            "and partial foreground status is not release-grade readiness"
+        ),
+    )
     public = {
         "kind": f"aippocampus_update_{report.get('mode') or 'status'}_agent_json",
         "schema_version": schema_version,
@@ -214,6 +244,13 @@ def compact_agent_status_report(
         "summary": {
             "core_ready": bool(summary.get("core_ready")),
             "magic_ready": bool(summary.get("magic_ready")),
+            "magic_ready_semantics": str(
+                summary.get("magic_ready_semantics")
+                or "legacy_alias_for_product_magic_ready"
+            ),
+            "subsystem_magic_ready": bool(summary.get("subsystem_magic_ready")),
+            "first_magic_moment_ready": bool(summary.get("first_magic_moment_ready")),
+            "product_magic_ready": bool(summary.get("product_magic_ready")),
             "core_blockers": summary.get("core_blockers") or [],
             "magic_blockers": summary.get("magic_blockers") or [],
             "agent_callable_ready": agent_ready,
@@ -246,6 +283,12 @@ def compact_agent_status_report(
                 "release-grade or exact latest readiness"
             ),
         },
+        **(
+            {"write_boundary": report["write_boundary"]}
+            if isinstance(report.get("write_boundary"), dict)
+            else {}
+        ),
+        "readiness_card": readiness_card,
         "foreground_status_cards": foreground_cards,
         "action_hints": {
             "installed": bool(action_hints.get("installed")),

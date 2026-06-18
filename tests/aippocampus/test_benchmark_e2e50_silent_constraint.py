@@ -259,7 +259,7 @@ class E2E50SilentConstraintBenchmarkTests(unittest.TestCase):
         )
         self.assertIn("private_history_behavior_lift", report["cannot_claim"])
         self.assertIn("representative_e2e50_quality", report["cannot_claim"])
-        self.assertFalse(report["evidence_separation"]["private_scarcity_blocks_public_pack"])
+        self.assertTrue(report["evidence_separation"]["private_scarcity_blocks_public_pack"])
         self.assertNotIn("PRIVATE_SENTINEL_TEXT", encoded)
         self.assertNotIn("C:\\", encoded)
 

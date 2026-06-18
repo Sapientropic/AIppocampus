@@ -11,6 +11,29 @@ AIppocampus validation categories. It is not a competitor scorecard. Each item
 is treated as public issue evidence or user feedback, not as a universal claim
 about the referenced project.
 
+## Rolling Public Incident Corpus
+
+Cadence: 3-day rolling sweep while AIppocampus is in public-readiness and
+benchmark-hardening mode; manual runs are also appropriate before upgrading a
+benchmark or readiness claim.
+
+Scope: public metadata and short failure-class summaries only. Do not collect
+raw user secrets, private traces, full issue bodies, or competitor scorecards.
+Each row should keep enough shape to build a synthetic negative-control check:
+`repo`, `issue`, `checked_date`, `status`, `symptom`, `trigger`,
+`affected_surface`, `agent_or_user_visible_failure`,
+`AIppocampus_equivalent_risk`, `existing_guard_or_issue`, and
+`synthetic_check_candidate`.
+
+Checked date: 2026-06-17.
+
+| Source | Public symptom class | AIppocampus equivalent risk | Existing guard or issue |
+|---|---|---|---|
+| [rohitg00/agentmemory#843](https://github.com/rohitg00/agentmemory/issues/843) | Data loss on restart / shutdown-flush ordering. | Interrupted write or missing last-known-good recovery. | #2197 interrupted writes; sync/update rollback work. |
+| [rohitg00/agentmemory#926](https://github.com/rohitg00/agentmemory/issues/926) | MCP save/recall path silently drops `project`. | Scope propagation loss across MCP / CLI / plugin boundaries. | Registry/sync path contracts and foreground recovery-card tests. |
+| [rohitg00/agentmemory#930](https://github.com/rohitg00/agentmemory/issues/930) | Multi-byte UTF-8 corruption on large import / observe payloads. | Import/source-cleaning round trip can corrupt multilingual clean source. | Clean-source UTF-8 fixtures and material-class sanitizer contract. |
+| [rohitg00/agentmemory#911](https://github.com/rohitg00/agentmemory/issues/911) | Remember skill stores user secrets verbatim. | Secret-like content enters durable memory or public projection. | Public-safe redaction, self-note rejection, source material classification. |
+
 ## Source Signals
 
 | Source | Public signal | Status when checked |

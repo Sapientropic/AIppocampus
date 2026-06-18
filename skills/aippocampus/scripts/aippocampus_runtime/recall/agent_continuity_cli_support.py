@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
@@ -18,6 +19,7 @@ from aippocampus_runtime.contracts import (
     foreground_shell_action,
     foreground_template_action,
 )
+from aippocampus_runtime.io_integrity import atomic_write_json
 from aippocampus_runtime.macro import state as macro_state
 from aippocampus_runtime.mcp.public_projection import compact_agent_recall_payload
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
@@ -42,6 +44,10 @@ LOCAL_REOPEN_TOKEN_ENCODING = "utf8_xor_v1_not_encryption"
 _LOCAL_REOPEN_TOKEN_MASK = 0xA5
 MIN_ROUTE_LIMIT = 1
 MAX_ROUTE_LIMIT = 25
+SENSITIVE_ASSIGNMENT_RE = re.compile(
+    r"\b[A-Za-z0-9_]*(?:TOKEN|SECRET|PASSWORD|API_KEY|ACCESS_KEY)[A-Za-z0-9_]*=\S+",
+    re.I,
+)
 
 
 class RouteLimitError(ValueError):
@@ -276,6 +282,7 @@ def last_recall_unavailable_payload(
     exc: Exception,
     schema_version: str,
     kind: str,
+    cue: str | None = None,
 ) -> dict[str, Any]:
     return _public_payload(
         {
@@ -291,7 +298,7 @@ def last_recall_unavailable_payload(
                     "message": str(exc),
                 }
             },
-            **last_recall_cache_recovery_fields(mode),
+            **last_recall_cache_recovery_fields(mode, cue=cue),
             "policy_boundary": policy_boundary(),
             "cannot_claim": ["source_backed_claim", "route_handle_as_fact"],
         }
@@ -464,20 +471,32 @@ def missing_feedback_route_payload(
     schema_version: str = "agent-continuity-path-v1",
     kind: str = "aippocampus_agent_continuity_path",
 ) -> dict[str, Any]:
+    outcome_choices = [
+        "helped",
+        "wrong_route",
+        "stale",
+        "noisy",
+        "not_enough_evidence",
+    ]
     route_choices = [
         {
             "id": f"feedback_last_recall_route_{choice['request_index']}",
             "label": f"Record feedback on last recall route {choice['request_index']}",
-            "command": (
+            "command_template": (
                 f"aippocampus agent feedback {choice['route_id']} "
-                "--outcome source_reopen_success --json"
+                "--outcome {{feedback_outcome}} --json"
             ),
+            "requires": ["feedback_outcome"],
+            "outcome_choices": outcome_choices,
             "route_id": choice["route_id"],
             "request_index": choice["request_index"],
             "source": "last_recall_cache",
             "mutation_risk": "durable_low_authority_feedback_write",
             "claim_boundary": "feedback_is_not_source_truth",
-            "why": "Use when the selected route from the current recall was helpful.",
+            "why": (
+                "Choose this route only after judging it, then fill feedback_outcome; "
+                "last recall presence is not success evidence."
+            ),
         }
         for choice in last_recall_route_choices(limit=3)
     ]
@@ -671,6 +690,7 @@ def compact_aippo_guidance_card(payload: Mapping[str, Any], *, task: str = "") -
                 "cli_command_template": 'aippocampus agent aippo --task "{task_cue}" --json',
                 "requires": ["task_cue"],
                 "template_only": True,
+                "blocked_by": ["task_cue_required"],
                 "claim_boundary": "no_aippo_guidance_no_claim",
                 "why": "AIppo needs a concrete task description before it can choose a working contract.",
             }
@@ -746,9 +766,12 @@ def compact_aippo_guidance_card(payload: Mapping[str, Any], *, task: str = "") -
                 "active_not_foreground_available_count": active_not_foreground_available_count,
                 "suppressed_clause_count": suppressed_clause_count,
                 "availability_basis": str(
-                    packet.get("availability_basis")
+                    "task_cue_required"
+                    if not task_text
+                    else packet.get("availability_basis")
                     or "unknown_packet_projection"
                 ),
+                **({"blocked_by": ["task_cue_required"]} if not task_text else {}),
             },
             "match_diagnostics": {
                 "task_family_count": len(families),
@@ -829,6 +852,46 @@ def _decode_local_reopen_token(value: Any) -> str:
     return ""
 
 
+def _local_reopen_context_token(
+    *,
+    cwd: str | Path | None,
+    clean_source_dir: str | Path | None,
+    registry_dir: str | Path | None,
+    macro_state_path: str | Path | None,
+) -> dict[str, Any] | None:
+    context: dict[str, str] = {}
+    if cwd:
+        context["cwd"] = str(Path(cwd).resolve())
+    if clean_source_dir:
+        context["clean_source_dir"] = str(Path(clean_source_dir).resolve())
+    if registry_dir:
+        context["registry_dir"] = str(Path(registry_dir).resolve())
+    if macro_state_path:
+        context["macro_state_jsonl"] = str(Path(macro_state_path).resolve())
+    if not context:
+        return None
+    return _encode_local_reopen_token(context)
+
+
+def _decode_local_reopen_context(value: Any) -> dict[str, Any]:
+    raw = _decode_local_reopen_token(value)
+    if not raw:
+        return {}
+    try:
+        decoded = json.loads(raw)
+    except json.JSONDecodeError:
+        return {}
+    return dict(decoded) if isinstance(decoded, Mapping) else {}
+
+
+def _public_safe_recall_query(query: str | None) -> str:
+    clean = str(redact_sensitive_values(redact_private_paths(query or ""))).strip()
+    clean = SENSITIVE_ASSIGNMENT_RE.sub("", clean)
+    clean = clean.replace("<sensitive-value-redacted>", "")
+    clean = " ".join(clean.split())
+    return clean[:240]
+
+
 def _mapping_or_empty(value: Any) -> Mapping[str, Any]:
     return value if isinstance(value, Mapping) else {}
 
@@ -851,6 +914,7 @@ def _public_projection_route_ids(data: Mapping[str, Any]) -> dict[int, str]:
 def write_last_recall_cache(
     deepen_requests: Iterable[Any],
     *,
+    query: str | None = None,
     cwd: str | Path | None,
     clean_source_dir: str | Path | None,
     registry_dir: str | Path | None,
@@ -874,36 +938,42 @@ def write_last_recall_cache(
     if not requests:
         return False
     target = last_recall_cache_path(path)
+    context_token = _local_reopen_context_token(
+        cwd=cwd,
+        clean_source_dir=clean_source_dir,
+        registry_dir=registry_dir,
+        macro_state_path=macro_state_path,
+    )
     cache = {
         "kind": "aippocampus_agent_last_recall",
         "schema_version": schema_version,
         "written_at": core.now_utc(),
         "requests": requests[:25],
         "context": {
-            "cwd": str(cwd) if cwd else None,
             "project": project,
             "max": max_matches,
-            "path_scope": "cwd_only_explicit_overrides_required",
+            "query": _public_safe_recall_query(query),
+            "path_scope": "caller_supplied_cwd_only_not_persisted",
+            "local_reopen_context_token": context_token,
         },
         "privacy_boundary": {
             "local_cache_only": True,
             "default_human_output_prints_cache_path": False,
-            "derived_local_source_paths_persisted": False,
+            "derived_local_source_paths_persisted": True,
+            "derived_local_source_paths_plaintext_persisted": False,
             "opaque_handles_are_navigation_not_facts": True,
             "opaque_handles_cleartext_persisted": False,
+            "local_reopen_context_token_persisted": bool(context_token),
             "local_reopen_token_encoding": LOCAL_REOPEN_TOKEN_ENCODING,
             "local_reopen_token_encoding_is_encryption": False,
         },
     }
     try:
-        target.parent.mkdir(parents=True, exist_ok=True)
-        tmp = target.with_suffix(target.suffix + ".tmp")
         # Local-only reopen handles are not credentials, but they are still
         # intentionally private navigation tokens. The cache stores an encoded
         # token for same-machine follow-through only; keep it out of human
         # output and avoid persisting derived source/registry paths above.
-        tmp.write_text(json.dumps(cache, ensure_ascii=False, indent=2), encoding="utf-8")
-        tmp.replace(target)
+        atomic_write_json(target, cache)
     except OSError:
         return False
     return True
@@ -999,8 +1069,23 @@ def handle_from_last_recall_cache(
                 # Backward compatibility for caches written before the
                 # local-reopen-token boundary existed.
                 handle = str(request.get("handle") or "")
-            return handle, dict(cache.get("context") or {})
+            context = dict(cache.get("context") or {})
+            context.update(_decode_local_reopen_context(context.pop("local_reopen_context_token", None)))
+            return handle, context
     raise ValueError(f"last recall cache does not contain request {request_index}")
+
+
+def query_from_last_recall_cache(path: str | Path | None = None) -> str | None:
+    try:
+        cache = read_last_recall_cache(path)
+    except Exception:
+        return None
+    context_value = cache.get("context")
+    if not isinstance(context_value, Mapping):
+        return None
+    context = context_value
+    query = str(context.get("query") or "").strip()
+    return query or None
 
 
 def macro_state_template(project: str) -> dict[str, Any]:

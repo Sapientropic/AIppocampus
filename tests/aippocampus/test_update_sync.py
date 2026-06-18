@@ -257,6 +257,10 @@ class UpdateSyncTests(unittest.TestCase):
         )
         self.assertFalse(payload["summary"]["agent_callable_ready"])
         self.assertFalse(payload["summary"]["magic_ready"])
+        self.assertFalse(payload["summary"]["subsystem_magic_ready"])
+        self.assertFalse(payload["summary"]["first_magic_moment_ready"])
+        self.assertFalse(payload["summary"]["product_magic_ready"])
+        self.assertEqual(payload["summary"]["magic_ready_semantics"], "legacy_alias_for_product_magic_ready")
         self.assertEqual(surfaces["hooks"]["status"], "missing")
         self.assertEqual(surfaces["llm"]["status"], "missing_provider_env_var")
         self.assertFalse(hooks_json.exists())
@@ -289,6 +293,10 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertTrue(summary["core_ready"])
         self.assertEqual(summary["core_blockers"], [])
         self.assertFalse(summary["magic_ready"])
+        self.assertFalse(summary["subsystem_magic_ready"])
+        self.assertFalse(summary["first_magic_moment_ready"])
+        self.assertFalse(summary["product_magic_ready"])
+        self.assertEqual(summary["magic_ready"], summary["product_magic_ready"])
         self.assertIn("llm", summary["magic_blockers"])
         self.assertIn("plugin", summary["optional_surfaces"])
         self.assertIn("mcp", summary["operator_surfaces"])
@@ -1373,6 +1381,83 @@ class UpdateSyncTests(unittest.TestCase):
             self.assertFalse((target / "scripts" / "runtime.pyo").exists())
             self.assertFalse((target / ".aippocampus").exists())
             self.assertTrue(payload["applied_surfaces"][0]["ok"])
+            applied = payload["applied_surfaces"][0]
+            self.assertTrue(applied["write_boundary"]["written"])
+            self.assertFalse(applied["write_boundary"]["explicit_write_required"])
+            self.assertEqual(applied["rollback"]["status"], "available")
+            self.assertIn("aippocampus update rollback --surface skill", applied["rollback_command"])
+
+            backup_path = Path(applied["rollback"]["backup_path"])
+            (target / "SKILL.md").write_text("changed after apply\n", encoding="utf-8")
+            rollback_code, rollback_payload = run_update(
+                "rollback",
+                "--surface",
+                "skill",
+                "--backup-path",
+                str(backup_path),
+                "--repo-root",
+                str(repo),
+                "--codex-home",
+                str(codex_home),
+                "--no-child-check",
+            )
+
+            self.assertEqual(rollback_code, 0, rollback_payload)
+            self.assertTrue(rollback_payload["write_boundary"]["written"])
+            self.assertEqual((target / "SKILL.md").read_text(encoding="utf-8"), "old\n")
+
+    def test_hooks_apply_returns_backup_rollback_and_write_boundary(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, provider_env():
+            root = Path(tmp)
+            repo = root / "repo"
+            codex_home = root / "codex-home"
+            hooks_json = codex_home / "hooks.json"
+            write_minimal_repo(repo)
+            hooks_json.parent.mkdir(parents=True)
+            hooks_json.write_text(
+                json.dumps({"hooks": {"Stop": [{"hooks": [{"type": "command", "command": "echo old"}]}]}}),
+                encoding="utf-8",
+            )
+
+            code, payload = run_update(
+                "apply",
+                "--surface",
+                "hooks",
+                "--repo-root",
+                str(repo),
+                "--codex-home",
+                str(codex_home),
+                "--hooks-json",
+                str(hooks_json),
+                "--no-child-check",
+            )
+
+            self.assertEqual(code, 0, payload)
+            applied = payload["applied_surfaces"][0]
+            self.assertTrue(applied["ok"], applied)
+            self.assertTrue(applied["write_boundary"]["written"])
+            self.assertEqual(applied["rollback"]["status"], "available")
+            self.assertIn("aippocampus update rollback --surface hooks", applied["rollback_command"])
+
+            rollback_code, rollback_payload = run_update(
+                "rollback",
+                "--surface",
+                "hooks",
+                "--backup-path",
+                applied["rollback"]["backup_path"],
+                "--repo-root",
+                str(repo),
+                "--codex-home",
+                str(codex_home),
+                "--hooks-json",
+                str(hooks_json),
+                "--no-child-check",
+            )
+
+            self.assertEqual(rollback_code, 0, rollback_payload)
+            self.assertTrue(rollback_payload["write_boundary"]["written"])
+            restored = hooks_json.read_text(encoding="utf-8")
+            self.assertIn("echo old", restored)
 
     def test_apply_blocks_dirty_git_source_before_replacing_skill_target(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, provider_env():

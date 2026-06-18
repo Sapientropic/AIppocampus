@@ -15,6 +15,8 @@ from io import StringIO
 from pathlib import Path
 from typing import Any, Callable, TextIO
 
+from aippocampus_runtime.cli.errors import cli_error_object
+from aippocampus_runtime.cli.human_io import emit_json, exit_code_for_payload
 from aippocampus_runtime.cli.recovery import handle_module_exception
 from aippocampus_runtime.cli.recovery_cards import (
     import_recovery_payload,
@@ -1301,6 +1303,25 @@ def dispatch(argv: list[str]) -> tuple[CommandInvocation | None, int]:
     if invocation is not None:
         return invocation, run_invocation(invocation)
 
+    if "--json" in args:
+        payload = {
+            "kind": "aippocampus_cli_error",
+            "ok": False,
+            "error": cli_error_object(
+                "unsupported_operation",
+                f"unknown command: {args[0]}",
+            ),
+            "safe_next_actions": [
+                {
+                    "id": "show_help",
+                    "label": "Show AIppocampus commands",
+                    "command": "aippocampus --help",
+                    "mutation_risk": "read_only",
+                }
+            ],
+        }
+        emit_json(payload)
+        return None, exit_code_for_payload(payload)
     print(f"unknown command: {args[0]}", file=sys.stderr)
     print_help(file=sys.stderr)
     return None, 2

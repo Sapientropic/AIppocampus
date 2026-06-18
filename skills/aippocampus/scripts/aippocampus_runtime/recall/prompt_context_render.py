@@ -25,6 +25,7 @@ from aippocampus_runtime.recall.prompt_foreground_budget import (
     has_direction_with_ref_card,
     is_weak_direction_only_scent,
     truncate_preserving_lines,
+    weak_scent_suppressed_by_anti_nag,
 )
 from aippocampus_runtime.recall.prompt_recall_hot_path_debug import hot_path_debug_summary
 from aippocampus_runtime.recall.semantic_gate_response import (
@@ -568,6 +569,8 @@ def context_for_hook(result: dict[str, Any], *, max_chars: int = MAX_CONTEXT_CHA
     if is_weak_direction_only_scent(result):
         if legacy_candidate_summary_suppressed(result) and not _ambient_cards(result):
             return None
+        if weak_scent_suppressed_by_anti_nag(result):
+            return None
         weak_lines = prepend_hook_agent_affordance(result, compact_weak_scent_lines(result))
         return truncate_preserving_lines(
             "\n".join(weak_lines),
@@ -814,7 +817,7 @@ def context_for_hook(result: dict[str, Any], *, max_chars: int = MAX_CONTEXT_CHA
     elif not lines:
         return None
     context = "\n".join(lines)
-    return compact_text(context, max_chars)
+    return compact_text(str(sanitize_external_model_payload(context)), max_chars)
 
 
 def hook_stdout_payload(result: dict[str, Any]) -> dict[str, Any] | None:

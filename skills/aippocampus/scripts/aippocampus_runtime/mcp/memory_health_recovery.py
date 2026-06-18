@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime import core
+from aippocampus_runtime.contracts import foreground_readiness_card
 
 
 def payload_for_health_exception(arguments: dict[str, Any]) -> dict[str, Any]:
@@ -61,6 +62,17 @@ def recall_first_health_payload(
             "blocks_first_recall": False,
             "health_artifacts_missing": _health_artifacts_missing(payload),
             "recall_capability": recall_capability,
+            "readiness_card": foreground_readiness_card(
+                subject="memory_health",
+                scope="current_workspace",
+                state="degraded_recall_available",
+                usable_now=True,
+                blocks_first_recall=False,
+                blocks_exact_latest=True,
+                recommended=["refresh_health_artifacts_after_recall"],
+                next_actions=[recall_action, deepen_action],
+                claim_boundary="health_readiness_not_source_evidence",
+            ),
             "agent_next_action": recall_action,
             "foreground_action": recall_action,
             "safe_next_actions": safe_next_actions,

@@ -84,7 +84,14 @@ def summarize_latency_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def run_probe_once(*, prompt: str, cwd: Path, timeout: float) -> dict[str, Any]:
+def run_probe_once(
+    *,
+    prompt: str,
+    cwd: Path,
+    timeout: float,
+    semantic_gate: str,
+    search_budget: int,
+) -> dict[str, Any]:
     cmd = [
         sys.executable,
         "-m",
@@ -95,9 +102,9 @@ def run_probe_once(*, prompt: str, cwd: Path, timeout: float) -> dict[str, Any]:
         str(cwd),
         "--json",
         "--semantic-gate",
-        "off",
+        semantic_gate,
         "--search-budget",
-        "0",
+        str(max(0, int(search_budget))),
         "--no-skip-telemetry",
     ]
     start = time.perf_counter()
@@ -126,12 +133,32 @@ def run_probe_once(*, prompt: str, cwd: Path, timeout: float) -> dict[str, Any]:
     }
 
 
-def run_latency_probe(*, prompt: str, cwd: Path, runs: int, timeout: float) -> dict[str, Any]:
+def run_latency_probe(
+    *,
+    prompt: str,
+    cwd: Path,
+    runs: int,
+    timeout: float,
+    semantic_gate: str = "off",
+    search_budget: int = 0,
+) -> dict[str, Any]:
     rows = [
-        run_probe_once(prompt=prompt, cwd=cwd, timeout=timeout)
+        run_probe_once(
+            prompt=prompt,
+            cwd=cwd,
+            timeout=timeout,
+            semantic_gate=semantic_gate,
+            search_budget=search_budget,
+        )
         for _ in range(max(1, int(runs)))
     ]
-    return summarize_latency_rows(rows)
+    report = summarize_latency_rows(rows)
+    report["probe_options"] = {
+        "semantic_gate": semantic_gate,
+        "search_budget": max(0, int(search_budget)),
+        "skip_telemetry": False,
+    }
+    return report
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -140,6 +167,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--cwd", default=str(Path.cwd()))
     parser.add_argument("--runs", type=int, default=3)
     parser.add_argument("--timeout", type=float, default=8.0)
+    parser.add_argument("--semantic-gate", choices=["auto", "on", "off"], default="off")
+    parser.add_argument("--search-budget", type=int, default=0)
     parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args(argv)
 
@@ -148,6 +177,8 @@ def main(argv: list[str] | None = None) -> int:
         cwd=Path(args.cwd),
         runs=args.runs,
         timeout=args.timeout,
+        semantic_gate=args.semantic_gate,
+        search_budget=args.search_budget,
     )
     if args.json_output:
         print(json.dumps(report, ensure_ascii=False, indent=2))

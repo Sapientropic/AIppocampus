@@ -33,6 +33,12 @@ ARCHITECTURE_RE = re.compile(
     r"learning guidance|action hints|architecture|design)\b",
     re.I,
 )
+LEARNING_LOOP_RE = re.compile(
+    r"\b(learning[-_ ]loop|repeated mistakes?|repeating mistakes?|repeated failures?|"
+    r"feedback events?|source-backed lessons?|action[-_ ]time guidance|"
+    r"agent feedback|do-not-use-here|behavior events?)\b",
+    re.I,
+)
 SKILL_DOCS_RE = re.compile(
     r"\b(SKILL\.md|skill entrypoint|installable skill|README|quickstart|"
     r"public api|install guide|setup doc|docs?/|documentation|foreground continuity bootstrap)\b",
@@ -94,6 +100,22 @@ OWNER_REFS: dict[str, dict[str, str]] = {
     "public_docs": {
         "kind": "documentation",
         "path": "docs/guides/public-api.md",
+    },
+    "learning_loop_cli": {
+        "kind": "runtime_owner",
+        "path": "skills/aippocampus/scripts/aippocampus_runtime/learning_loop/cli.py",
+    },
+    "feedback_events": {
+        "kind": "runtime_owner",
+        "path": "skills/aippocampus/scripts/aippocampus_runtime/recall/feedback_events.py",
+    },
+    "source_backed_lessons": {
+        "kind": "runtime_owner",
+        "path": "skills/aippocampus/scripts/aippocampus_runtime/recall/source_backed_lessons.py",
+    },
+    "action_hint_cache": {
+        "kind": "runtime_owner",
+        "path": "skills/aippocampus/scripts/aippocampus_runtime/hooks/action_hint_cache.py",
     },
 }
 
@@ -201,6 +223,7 @@ def build_issue_active_pull_packet(
     changed = list(changed_files)
     path_text = "\n".join(changed)
     benchmark_like = "benchmark_or_external_evaluation" in categories or BENCHMARK_RE.search(path_text)
+    learning_loop_like = bool(LEARNING_LOOP_RE.search(_text(title, body)) or LEARNING_LOOP_RE.search(path_text))
     skill_docs_like = "skill_or_docs_surface" in categories or SKILL_DOCS_RE.search(path_text)
     foreground_card_like = (
         "foreground_card_or_cli_surface" in categories or FOREGROUND_CARD_RE.search(path_text)
@@ -271,6 +294,19 @@ def build_issue_active_pull_packet(
             }
         )
         owner_confidence = "high"
+    if learning_loop_like:
+        owner_ids.extend(
+            ["learning_loop_cli", "feedback_events", "source_backed_lessons", "action_hint_cache"]
+        )
+        owner_reasons.update(
+            {
+                "learning_loop_cli": "learning-loop issue should start at learning guidance/replay frontdoors",
+                "feedback_events": "repeated mistake fixes depend on captured route/tool feedback",
+                "source_backed_lessons": "durable guidance should be source-backed before foreground use",
+                "action_hint_cache": "action-time guidance reaches hooks through the prepared hint cache",
+            }
+        )
+        owner_confidence = "high"
     elif architecture_like:
         owner_ids.extend(["attention_router", "semantic_scope_builder"])
         owner_reasons.update(
@@ -288,6 +324,8 @@ def build_issue_active_pull_packet(
         constraints.append("check_existing_routes_before_manual_benchmark_scaffold")
     if architecture_like and not benchmark_like:
         constraints.append("check_existing_architecture_owner_before_patch")
+    if learning_loop_like:
+        constraints.append("check_learning_feedback_and_lesson_owner_before_router_patch")
     if skill_docs_like or foreground_card_like:
         constraints.append("check_foreground_surface_owner_before_runtime_patch")
     lead_kinds = ["memory_route", "aippo_working_contract"]
@@ -297,6 +335,8 @@ def build_issue_active_pull_packet(
         lead_kinds.append("skill_or_docs_surface_owner")
     if foreground_card_like:
         lead_kinds.append("foreground_card_contract")
+    if learning_loop_like:
+        lead_kinds.append("learning_feedback_owner")
 
     return {
         "kind": "aippocampus_issue_work_orientation_packet",

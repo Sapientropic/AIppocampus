@@ -239,11 +239,6 @@ def call_search_memory(arguments: dict[str, Any]) -> dict[str, Any]:
         metadata_only=not include_source_snippets,
         query_text=query,
     )
-    if not include_source_snippets:
-        payload["agent_next_action"] = (
-            "Use recall_context or recall_deepen before quoting source; "
-            "set include_source_snippets=true only for local diagnostic work."
-        )
     return text_result(public_payload(arguments, payload))
 
 

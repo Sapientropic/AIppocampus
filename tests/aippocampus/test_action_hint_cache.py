@@ -311,6 +311,8 @@ class ActionHintCacheTests(unittest.TestCase):
         self.assertEqual(result["cache_status"], "with_cache_records")
         self.assertEqual(len(records), 1)
         self.assertEqual(records[0]["provider_family"], "learning_loop")
+        self.assertEqual(records[0]["guidance_id"], "learn-preflight")
+        self.assertEqual(records[0]["guidance_lifecycle_stage"], "prepared")
 
     def test_refresh_cache_loads_default_learning_findings_into_aippo_clauses(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

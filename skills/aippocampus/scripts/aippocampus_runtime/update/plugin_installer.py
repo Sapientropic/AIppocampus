@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any, Callable, cast
 
 from aippocampus_runtime.core import codex_home
+from aippocampus_runtime.io_integrity import atomic_write_json
 from aippocampus_runtime.public_output import emit_public_text
 from aippocampus_runtime.update.agent_callable import (
     default_host_probe_report_path as _default_host_probe_report_path,
@@ -289,10 +290,54 @@ def _write_owner_marker(marketplace_root: Path, marketplace_name: str) -> None:
         "plugin": PLUGIN_NAME,
         "safe_to_remove": True,
     }
-    (marketplace_root / MARKETPLACE_MARKER).write_text(
-        json.dumps(marker, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    atomic_write_json(marketplace_root / MARKETPLACE_MARKER, marker)
+
+
+def _install_tmp_path(target: Path) -> Path:
+    return target.parent / f".{target.name}.tmp-aippocampus-install"
+
+
+def _install_backup_path(target: Path) -> Path:
+    return target.parent / f".{target.name}.backup-aippocampus-install"
+
+
+def recover_interrupted_plugin_install(target: Path) -> dict[str, Any]:
+    """Finish or roll back an AIppocampus-owned interrupted plugin publish.
+
+    The installer owns only the hidden tmp/backup directories it creates beside
+    the target plugin directory. Recovery must not infer anything about other
+    marketplace contents or remove user-managed plugin directories.
+    """
+
+    target = target.resolve()
+    tmp = _install_tmp_path(target)
+    backup = _install_backup_path(target)
+    recovered: list[str] = []
+    cleaned: list[str] = []
+    if not target.exists() and tmp.exists():
+        tmp.replace(target)
+        recovered.append("published_tmp_install")
+    if not target.exists() and backup.exists():
+        backup.replace(target)
+        recovered.append("restored_backup_install")
+    if target.exists() and tmp.exists():
+        shutil.rmtree(tmp)
+        cleaned.append("removed_stale_tmp_install")
+    if target.exists() and backup.exists():
+        shutil.rmtree(backup)
+        cleaned.append("removed_stale_backup_install")
+    return {
+        "kind": "aippocampus_plugin_install_recovery",
+        "ok": True,
+        "recovered": recovered,
+        "cleaned": cleaned,
+        "interrupted_install_found": bool(recovered or cleaned),
+        "write_boundary": {
+            "written": bool(recovered or cleaned),
+            "storage": "local_plugin_marketplace",
+            "safe_to_repeat": True,
+        },
+    }
 
 
 def _safe_replace_tree(source: Path, target: Path) -> None:
@@ -302,13 +347,19 @@ def _safe_replace_tree(source: Path, target: Path) -> None:
         raise ValueError("refusing unsafe plugin marketplace refresh path")
     if len(target.parts) <= 2:
         raise ValueError("refusing shallow plugin marketplace refresh path")
-    tmp = target.parent / f".{target.name}.tmp-aippocampus-install"
+    recover_interrupted_plugin_install(target)
+    tmp = _install_tmp_path(target)
+    backup = _install_backup_path(target)
     if tmp.exists():
         shutil.rmtree(tmp)
+    if backup.exists():
+        shutil.rmtree(backup)
     shutil.copytree(source, tmp)
     if target.exists():
-        shutil.rmtree(target)
+        target.rename(backup)
     tmp.replace(target)
+    if backup.exists():
+        shutil.rmtree(backup)
 
 
 def write_local_marketplace(
@@ -340,7 +391,7 @@ def write_local_marketplace(
         ],
     }
     manifest = marketplace_manifest_path(marketplace_root)
-    manifest.write_text(json.dumps(marketplace, ensure_ascii=False, indent=2), encoding="utf-8")
+    atomic_write_json(manifest, marketplace)
     _write_owner_marker(marketplace_root, marketplace_name)
     return {
         "name": marketplace_name,

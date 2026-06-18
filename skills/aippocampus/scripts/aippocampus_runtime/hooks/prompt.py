@@ -56,6 +56,16 @@ def _prepare_dream_delivery(*, prompt: str, hook_input: dict[str, Any], args: ar
         }
     return dream_delivery.prepare_dream_delivery(prompt=prompt, hook_input=hook_input, args=args)
 
+
+def _emit_json(payload: Any, *, indent: int | None = None) -> None:
+    from aippocampus_runtime.core import sanitize_external_model_payload  # noqa: PLC0415
+    from aippocampus_runtime.public_output import emit_public_text  # noqa: PLC0415
+
+    emit_public_text(
+        json.dumps(sanitize_external_model_payload(payload), ensure_ascii=False, indent=indent)
+    )
+
+
 def _load_runtime() -> dict[str, Any]:
     """Load split recall modules lazily so partial installs quietly skip."""
     global _RUNTIME_CACHE
@@ -122,12 +132,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--session-id", help="Dry-run thread/session id for ambient thread cache.")
     parser.add_argument("--topic-epoch", help="Override ambient recall topic epoch for dry runs.")
     parser.add_argument("--semantic-timeout", type=float, default=PROMPT_HOOK_SEMANTIC_TIMEOUT_FALLBACK)
-    parser.add_argument(
-        "--max-elapsed-ms",
-        type=int,
-        default=PROMPT_HOOK_MAX_ELAPSED_MS_FALLBACK,
-        help="Fail-open budget for the whole prompt hook. Set 0 to disable.",
-    )
+    parser.add_argument("--max-elapsed-ms", type=int, default=PROMPT_HOOK_MAX_ELAPSED_MS_FALLBACK, help="Fail-open budget for the whole prompt hook. Set 0 to disable.")
     parser.add_argument("--no-semantic-gate", action="store_true")
     parser.add_argument("--no-thread-cache", action="store_true")
     parser.add_argument("--no-cognitive-map", action="store_true")
@@ -200,10 +205,7 @@ def main(argv: list[str] | None = None) -> int:
             max_dream_hypotheses=1,
             reason=str(dream_delivery["reason"]),
         )
-        can_write_final_diagnostics = _has_final_diagnostic_budget(
-            started=main_start,
-            max_elapsed_ms=args.max_elapsed_ms,
-        )
+        can_write_final_diagnostics = _has_final_diagnostic_budget(started=main_start, max_elapsed_ms=args.max_elapsed_ms)
         try:
             # Diagnostic telemetry must never block Codex prompt submission.
             if can_write_final_diagnostics:
@@ -240,17 +242,17 @@ def main(argv: list[str] | None = None) -> int:
         if args.log or args.log_skip:
             write_debug_log(result, hook_input=hook_input, include_skip=args.log_skip)
         if args.json_output:
-            print(json.dumps(runtime["public_hook_debug_payload"](result), ensure_ascii=False, indent=2))
+            _emit_json(runtime["public_hook_debug_payload"](result), indent=2)
             return 0
         payload = runtime["hook_stdout_payload"](result)
         if payload:
-            print(json.dumps(payload, ensure_ascii=False))
+            _emit_json(payload)
         return 0
     except Exception as exc:
         if args.strict:
             raise
         if args.json_output:
-            print(json.dumps(fallback_payload(exc), ensure_ascii=False, indent=2))
+            _emit_json(fallback_payload(exc), indent=2)
         return 0
 
 

@@ -168,6 +168,7 @@ MappingPayload = dict[str, Any]
 GENERIC_FOREGROUND_CUE_TERMS = {
     "aippocampus",
     "aiippocampus",
+    "sapientropic",
     "ai",
     "codex-hindsight-memory",
     "recall",

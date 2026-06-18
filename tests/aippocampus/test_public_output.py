@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import contextlib
 import io
+import json
 import sys
 import unittest
 from pathlib import Path
@@ -10,6 +12,7 @@ SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 from aippocampus_runtime.public_output import emit_public_text  # noqa: E402
+from aippocampus_runtime.update import operator_output  # noqa: E402
 
 
 class PublicOutputTests(unittest.TestCase):
@@ -25,6 +28,33 @@ class PublicOutputTests(unittest.TestCase):
         self.assertNotIn("abc123", raw)
         self.assertNotIn(r"E:\private\workspace\note.md", raw)
         self.assertIn("<redacted:sensitive-output>", raw)
+
+    def test_operator_json_redacts_credentials_without_breaking_recovery_paths(self) -> None:
+        stream = io.StringIO()
+        payload = {
+            "target_path": r"C:\Users\Name\aippocampus-plugin",
+            "rollback_command": r"aippocampus update rollback --path C:\Users\Name\backup",
+            "api_key_env": "DEEPSEEK_API_KEY",
+            "password": "hunter2",
+            "nested": {
+                "message": "provider failed with token=abc123 and keep path C:\\Users\\Name\\x",
+                "total_tokens": 42,
+            },
+        }
+
+        with contextlib.redirect_stdout(stream):
+            operator_output.emit_operator_json(payload)
+
+        emitted = json.loads(stream.getvalue())
+        encoded = json.dumps(emitted, ensure_ascii=False)
+        self.assertEqual(emitted["password"], "<redacted:sensitive-json-field>")
+        self.assertEqual(emitted["api_key_env"], "DEEPSEEK_API_KEY")
+        self.assertEqual(emitted["nested"]["total_tokens"], 42)
+        self.assertIn(r"C:\Users\Name\aippocampus-plugin", emitted["target_path"])
+        self.assertIn(r"C:\Users\Name\backup", emitted["rollback_command"])
+        self.assertIn("token=<redacted:secret>", emitted["nested"]["message"])
+        self.assertNotIn("hunter2", encoded)
+        self.assertNotIn("token=abc123", encoded)
 
 
 if __name__ == "__main__":
