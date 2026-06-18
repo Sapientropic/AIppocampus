@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import os
 import subprocess
@@ -7,6 +9,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
@@ -48,6 +51,55 @@ class AippocampusStartCliTests(unittest.TestCase):
         self.assertEqual(payload["agent_next_action"]["id"], "recall_continuity_cue")
         self.assertIn("command_template", payload["agent_next_action"])
         self.assertFalse(payload["state_summary"]["clean_source"]["path_serialized"])
+
+    def test_start_json_redacts_operator_sensitive_fields(self) -> None:
+        from aippocampus_runtime.cli import start as start_cli
+
+        raw_card = {
+            "kind": "aippocampus_start_card",
+            "decision": "continue_from_existing_source",
+            "agent_next_action": {"why": "token=raw-start-token", "command": "aippocampus health --json"},
+            "state_summary": {
+                "secret": "raw-secret-value",
+                "cwd": "/Users/example/private-project",
+            },
+        }
+
+        stream = io.StringIO()
+        with patch.object(start_cli, "build_start_card", return_value=raw_card):
+            with contextlib.redirect_stdout(stream):
+                rc = start_cli.main(["--json"])
+
+        self.assertEqual(rc, 0)
+        encoded = stream.getvalue()
+        payload = json.loads(encoded)
+        self.assertEqual(payload["state_summary"]["secret"], "<sensitive-value-redacted>")
+        self.assertEqual(payload["state_summary"]["cwd"], "<local-path-redacted>")
+        self.assertNotIn("raw-secret-value", encoded)
+        self.assertNotIn("raw-start-token", encoded)
+        self.assertNotIn("/Users/example/private-project", encoded)
+
+    def test_start_text_redacts_operator_sensitive_fields(self) -> None:
+        from aippocampus_runtime.cli import start as start_cli
+
+        raw_card = {
+            "kind": "aippocampus_start_card",
+            "decision": "continue_from_existing_source",
+            "agent_next_action": {
+                "why": "password=raw-start-password",
+                "command": "aippocampus health --json",
+            },
+        }
+
+        stream = io.StringIO()
+        with patch.object(start_cli, "build_start_card", return_value=raw_card):
+            with contextlib.redirect_stdout(stream):
+                rc = start_cli.main([])
+
+        self.assertEqual(rc, 0)
+        rendered = stream.getvalue()
+        self.assertNotIn("raw-start-password", rendered)
+        self.assertIn("<redacted", rendered)
 
     def test_start_human_output_labels_templates_instead_of_printing_placeholder_as_next(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
