@@ -195,6 +195,53 @@ class AmbientRecallPolicyTests(unittest.TestCase):
         self.assertEqual(result["cards"], [])
         self.assertEqual(result["diagnostics"]["frequency_capped"], 1)
 
+    def test_cached_warm_card_without_policy_gets_stable_surface_cap(self) -> None:
+        card = {
+            "card_id": "warm-card-without-policy",
+            "theme": "Warm source-backed route",
+            "support_level": "candidate",
+            "source_refs": [{"thread_key": "session:old", "message_id": "msg-1"}],
+        }
+        events = policy.surface_events_for_cards(
+            [card],
+            thread_id="thread-a",
+            workspace="E:/private/workspace",
+        )
+
+        result = policy.filter_ambient_cards([card], events, prompt="continue warm route")
+
+        self.assertEqual(result["cards"], [])
+        self.assertEqual(result["diagnostics"]["frequency_capped"], 1)
+        self.assertEqual(events[0]["target_kind"], "ambient_card")
+        self.assertTrue(events[0]["target_key"].startswith("ambient_card_"))
+        self.assertNotIn("session:old", json.dumps(events, ensure_ascii=False))
+
+    def test_current_topic_continuation_can_reuse_cached_warm_card_after_surface(self) -> None:
+        card = {
+            "card_id": "warm-card-without-policy",
+            "theme": "Warm source-backed route",
+            "support_level": "candidate",
+            "source_refs": [{"thread_key": "session:old", "message_id": "msg-1"}],
+        }
+        events = policy.surface_events_for_cards(
+            [card],
+            thread_id="thread-a",
+            workspace="E:/private/workspace",
+        )
+
+        result = policy.filter_ambient_cards(
+            [card],
+            events,
+            prompt="continue this warm route",
+        )
+
+        self.assertEqual(result["cards"], [card])
+        self.assertEqual(result["diagnostics"]["frequency_capped"], 0)
+        self.assertEqual(
+            result["diagnostics"]["frequency_cap_bypassed_for_current_continuation"],
+            1,
+        )
+
     def test_stop_tracking_this_writes_hash_only_dismissal_for_cached_card(self) -> None:
         path = self.root / "ambient_policy.jsonl"
         update = policy.policy_update_for_prompt(

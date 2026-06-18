@@ -33,14 +33,22 @@ def _aippocampus_action_required(warning_counts: dict[str, Any], *, ok: bool) ->
     )
 
 
+def _mcp_preflight_action_required(mcp_preflight: dict[str, Any]) -> bool:
+    return bool(mcp_preflight and not mcp_preflight.get("resolves"))
+
+
 def _next_action(
     *,
     ok: bool,
     action_required: bool,
     agent_callable_status: Any,
+    mcp_preflight: dict[str, Any] | None = None,
 ) -> str:
     if not ok:
         return "review plugin install error details with --operator-json"
+    if _mcp_preflight_action_required(mcp_preflight or {}):
+        repair = str((mcp_preflight or {}).get("primary_repair_command") or "").strip()
+        return repair or "repair the aippocampus MCP command path, then rerun plugin install --verify"
     if action_required:
         return "review aippocampus host warnings with --operator-json"
     if agent_callable_status == "host_live_probe_ok":
@@ -101,7 +109,14 @@ def public_install_summary(result: dict[str, Any]) -> dict[str, Any]:
     ok = bool(result.get("ok"))
     agent_callable_status = result.get("agent_callable_status")
     warning_counts = _warning_summary_counts(warning_summary)
-    action_required = _aippocampus_action_required(warning_counts, ok=ok)
+    mcp_preflight = (
+        result.get("mcp_command_preflight")
+        if isinstance(result.get("mcp_command_preflight"), dict)
+        else {}
+    )
+    action_required = _aippocampus_action_required(warning_counts, ok=ok) or _mcp_preflight_action_required(
+        mcp_preflight
+    )
     return {
         "kind": "aippocampus_plugin_install_public_summary",
         "ok": ok,
@@ -113,6 +128,7 @@ def public_install_summary(result: dict[str, Any]) -> dict[str, Any]:
             ok=ok,
             action_required=action_required,
             agent_callable_status=agent_callable_status,
+            mcp_preflight=mcp_preflight,
         ),
         "trusted_codex_next_actions": _trusted_codex_next_actions(
             ok=ok,
@@ -134,6 +150,14 @@ def public_install_summary(result: dict[str, Any]) -> dict[str, Any]:
             else not bool(key_tool_failures),
             "key_tool_failure_count": len(key_tool_failures),
             "warning_summary": warning_counts,
+        },
+        "mcp_command_preflight": {
+            "status": mcp_preflight.get("status"),
+            "command": mcp_preflight.get("command"),
+            "resolves": bool(mcp_preflight.get("resolves")),
+            "primary_repair_command": mcp_preflight.get("primary_repair_command"),
+            "repair_options": list(mcp_preflight.get("repair_options") or [])[:3],
+            "resolved_path_emitted": False,
         },
         "rollback_command": result.get("rollback_command"),
         "rollback_preview_command": result.get("rollback_preview_command")

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shlex
 import sys
 import tempfile
 import unittest
@@ -273,7 +274,10 @@ class RecallWhyDiagnosticsTests(unittest.TestCase):
         encoded = json.dumps(payload, ensure_ascii=False)
         commands = [item["command"] for item in payload["safe_next_actions"]]
         self.assertEqual(payload["next_safe_action"], "check_onboarding_status")
-        self.assertIn('aippocampus agent recall "old correction" --json', commands)
+        self.assertIn(
+            ["aippocampus", "agent", "recall", "old correction", "--json"],
+            [shlex.split(command) for command in commands],
+        )
         self.assertNotIn('"<cue>"', encoded)
         self.assertNotIn('"<distinctive exact phrase>"', encoded)
 

@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from aippocampus_runtime import core
-from aippocampus_runtime.contracts import canonical_foreground_action_fields
+from aippocampus_runtime.contracts import canonical_foreground_action_fields, shell_quote
 
 
 def _as_dict(value: Any) -> dict[str, Any]:
@@ -47,6 +47,7 @@ def _feedback_actions(route_id: Any) -> list[dict[str, Any]]:
     clean_route = str(route_id or "").strip()
     if not clean_route:
         return []
+    quoted_route = shell_quote(clean_route)
     base = {
         "mutation_risk": "durable_low_authority_feedback_write",
         "claim_boundary": "feedback_is_not_source_truth",
@@ -55,21 +56,21 @@ def _feedback_actions(route_id: Any) -> list[dict[str, Any]]:
         {
             "id": "mark_route_helpful",
             "label": "Mark route helpful",
-            "command": f"aippocampus agent feedback {clean_route} --outcome helped --json",
+            "command": f"aippocampus agent feedback {quoted_route} --outcome helped --json",
             "why": "Use after the reopened source helped the task; this calibrates routing only.",
             **base,
         },
         {
             "id": "mark_route_wrong",
             "label": "Mark route wrong",
-            "command": f"aippocampus agent feedback {clean_route} --outcome wrong_route --json",
+            "command": f"aippocampus agent feedback {quoted_route} --outcome wrong_route --json",
             "why": "Use when the route pulled attention to the wrong source or project.",
             **base,
         },
         {
             "id": "keep_route_quiet",
             "label": "Keep route quiet",
-            "command": f"aippocampus agent feedback {clean_route} --outcome ignored --json",
+            "command": f"aippocampus agent feedback {quoted_route} --outcome ignored --json",
             "why": "Use when the route is harmless but should not keep surfacing for this kind of task.",
             **base,
         },

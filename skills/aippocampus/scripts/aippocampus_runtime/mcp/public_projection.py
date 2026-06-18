@@ -14,6 +14,7 @@ from aippocampus_runtime.contracts import (
     command_value_needs_input,
     foreground_readiness_card,
     foreground_template_action,
+    shell_quote,
 )
 from aippocampus_runtime.mcp import agent_recall_compact_choices as recall_choices
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
@@ -572,7 +573,7 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
     search_fields = (
         {
             "arguments": {"query": recovery_cue, "max": 5},
-            "cli_command": f"aippocampus search {json.dumps(recovery_cue, ensure_ascii=False)} --json",
+            "cli_command": f"aippocampus search {shell_quote(recovery_cue)} --json",
         }
         if recovery_cue
         else {

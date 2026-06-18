@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shlex
 import sys
 import tempfile
 import unittest
@@ -137,8 +138,8 @@ class McpLatestReplyTests(unittest.TestCase):
         self.assertNotIn(commentary_text, encoded)
         self.assertNotIn("preview", payload["message"])
         self.assertEqual(
-            payload["safe_next_actions"][0]["command"],
-            'aippocampus agent recall "finish recovery command card" --json',
+            shlex.split(payload["safe_next_actions"][0]["command"]),
+            ["aippocampus", "agent", "recall", "finish recovery command card", "--json"],
         )
         self.assertNotIn("command_template", payload["safe_next_actions"][0])
         self.assertNotIn("latest closeout or current handoff", encoded)

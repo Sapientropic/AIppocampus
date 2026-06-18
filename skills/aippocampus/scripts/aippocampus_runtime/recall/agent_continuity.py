@@ -21,6 +21,7 @@ from aippocampus_runtime.contracts import (
     FOREGROUND_ACTION_CONTRACT_VERSION,
     foreground_recovery_card,
     foreground_shell_action,
+    shell_quote,
 )
 from aippocampus_runtime.macro import state as macro_state
 from aippocampus_runtime.mcp.agent_deepen_projection import compact_agent_deepen_payload
@@ -437,7 +438,7 @@ def _macro_positional_cue_payload(cue: str, *, project: str) -> dict[str, Any]:
                 foreground_shell_action(
                     action_id="recall_positional_cue",
                     label="Recall this cue",
-                    command=f"aippocampus agent recall {json.dumps(cue, ensure_ascii=False)} --json",
+                    command=f"aippocampus agent recall {shell_quote(cue)} --json",
                     why="A positional macro argument is most likely a continuity cue.",
                     mutation_risk="read_only",
                     claim_boundary="no_claim_before_reopen",
@@ -445,7 +446,7 @@ def _macro_positional_cue_payload(cue: str, *, project: str) -> dict[str, Any]:
                 foreground_shell_action(
                     action_id="inspect_macro_project",
                     label="Read macro orientation for the project",
-                    command=f"aippocampus agent macro --project {json.dumps(project, ensure_ascii=False)} --json",
+                    command=f"aippocampus agent macro --project {shell_quote(project)} --json",
                     why="Use macro only as a navigation prior after project state exists.",
                     mutation_risk="read_only",
                     claim_boundary="macro_orientation_not_source_truth",

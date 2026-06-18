@@ -70,6 +70,12 @@ def default_settings_path() -> Path:
     return Path.home() / ".claude" / "settings.json"
 
 
+def default_uninstall_settings_paths(*, cwd: Path | None = None) -> list[tuple[str, Path]]:
+    home = default_settings_path()
+    project = (cwd or Path.cwd()) / ".claude" / "settings.json"
+    return [("home", home)] if str(home.resolve()).casefold() == str(project.resolve()).casefold() else [("home", home), ("project", project)]
+
+
 def redacted_settings_path(path: Path | None) -> str | None:
     return "<redacted:claude-settings-json>" if path is not None else None
 
@@ -400,26 +406,50 @@ def install_hooks(*, settings_path: Path | None = None) -> dict[str, Any]:
 
 
 def uninstall_hooks(*, settings_path: Path | None = None) -> dict[str, Any]:
-    settings_path = default_settings_path() if settings_path is None else settings_path
+    if settings_path is None:
+        paths = default_uninstall_settings_paths()
+        results = [_uninstall_hooks_one(settings_path=path, scope=scope) for scope, path in paths]
+        return {
+            "ok": all(result.get("ok") for result in results),
+            "host": HOST,
+            "action": "uninstall",
+            "scope": "home_and_project",
+            "wrote": any(result.get("wrote") for result in results),
+            "changed": any(result.get("changed") for result in results),
+            "scanned_scope_count": len(results),
+            "changed_scope_count": sum(1 for result in results if result.get("changed")),
+            "results": results,
+            "settings_paths_redacted": True,
+            "path_redacted": True,
+            "rollback_command": "aippocampus hooks claude-code install --json",
+        }
+    return _uninstall_hooks_one(settings_path=settings_path, scope="explicit")
+
+
+def _uninstall_hooks_one(*, settings_path: Path, scope: str) -> dict[str, Any]:
     try:
         before = load_settings_for_mutation(settings_path)
     except Exception as exc:
-        return _mutation_blocked_result(
+        blocked = _mutation_blocked_result(
             action="uninstall",
             settings_path=settings_path,
             error_code=_mutation_settings_error(exc),
         )
+        blocked["scope"] = scope
+        return blocked
     after = _uninstall_supported_hooks(before)
     changed = before != after
     if changed:
         save_settings(settings_path, after)
-    return _mutation_result(
+    result = _mutation_result(
         action="uninstall",
         settings_path=settings_path,
         before=before,
         after=after,
         wrote=changed,
     )
+    result["scope"] = scope
+    return result
 
 
 def read_observed_events(event_log_path: Path | None) -> set[str]:

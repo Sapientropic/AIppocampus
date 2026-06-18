@@ -9,6 +9,7 @@ domain-specific gates; these constants only classify observable runtime state.
 from __future__ import annotations
 
 import re
+import shlex
 from collections.abc import Mapping, Sequence
 
 PUBLIC_RUNTIME_ENVELOPE_FIELDS = (
@@ -117,6 +118,19 @@ def command_value_needs_input(value: object) -> bool:
     if lowered.startswith("run `") or "`" in text:
         return True
     return any(phrase in lowered for phrase in _SAMPLE_COMMAND_PHRASES)
+
+
+def shell_quote(value: object) -> str:
+    """Quote one concrete value for copy-pasteable shell commands.
+
+    JSON quoting is safe for JSON, not for shells: ``$()``, backticks, and other
+    metacharacters still execute inside many double-quoted shells. Foreground
+    command strings are meant to be copy-pasted, so every real user/source value
+    interpolated into ``command`` must pass through this helper. Template-only
+    commands keep placeholders instead of pretending to be executable.
+    """
+
+    return shlex.quote(str(value or ""))
 
 
 def foreground_template_action(

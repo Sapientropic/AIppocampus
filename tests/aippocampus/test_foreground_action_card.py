@@ -1,4 +1,5 @@
 import json
+import shlex
 import sys
 import tempfile
 import unittest
@@ -90,8 +91,8 @@ class ForegroundActionCardTests(unittest.TestCase):
         self.assertEqual(card["next_action"], "search_memory")
         self.assertEqual(card["canonical_action"]["tool_name"], "search_memory")
         self.assertEqual(
-            card["canonical_action"]["cli_command"],
-            'aippocampus search "foreground action card" --json',
+            shlex.split(card["canonical_action"]["cli_command"]),
+            ["aippocampus", "search", "foreground action card", "--json"],
         )
         self.assertEqual(card["safe_next_actions"][0], card["canonical_action"])
         self.assertEqual(card["claim_boundary"], "no_route_claim")

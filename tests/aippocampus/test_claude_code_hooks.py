@@ -123,6 +123,64 @@ class ClaudeCodeHooksTests(unittest.TestCase):
         self.assertNotIn("Stop", final["hooks"])
         self.assertNotIn(str(settings), encoded)
 
+    def test_uninstall_without_explicit_settings_covers_home_and_project_scopes(self) -> None:
+        from aippocampus_runtime.hooks import claude_code
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            home_settings = root / "home" / ".claude" / "settings.json"
+            project_settings = root / "project" / ".claude" / "settings.json"
+            for path in (home_settings, project_settings):
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(
+                    json.dumps(
+                        {
+                            "hooks": {
+                                "UserPromptSubmit": [
+                                    {
+                                        "hooks": [
+                                            {
+                                                "type": "command",
+                                                "command": "aippocampus hooks claude-code handle",
+                                            }
+                                        ]
+                                    }
+                                ],
+                                "Stop": [
+                                    {
+                                        "hooks": [
+                                            {
+                                                "type": "command",
+                                                "command": "aippocampus hooks claude-code handle",
+                                            }
+                                        ]
+                                    }
+                                ],
+                            }
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+
+            with mock.patch.object(
+                claude_code,
+                "default_uninstall_settings_paths",
+                return_value=[("home", home_settings), ("project", project_settings)],
+            ):
+                result = claude_code.uninstall_hooks()
+
+            home_final = json.loads(home_settings.read_text(encoding="utf-8"))
+            project_final = json.loads(project_settings.read_text(encoding="utf-8"))
+
+        encoded = json.dumps(result, ensure_ascii=False)
+        self.assertTrue(result["ok"], result)
+        self.assertEqual(result["scope"], "home_and_project")
+        self.assertEqual(result["changed_scope_count"], 2)
+        self.assertNotIn("hooks", home_final)
+        self.assertNotIn("hooks", project_final)
+        self.assertNotIn(str(home_settings), encoded)
+        self.assertNotIn(str(project_settings), encoded)
+
     def test_status_card_switches_to_smoke_when_supported_hooks_are_installed(self) -> None:
         from aippocampus_runtime.hooks import claude_code
 

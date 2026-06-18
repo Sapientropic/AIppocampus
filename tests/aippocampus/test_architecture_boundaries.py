@@ -78,6 +78,10 @@ OPS_DIRECT_RECALL_HOOK_IMPORT_ALLOWLIST = {
         "aippocampus_runtime.hooks.install_lifecycle",
         "aippocampus_runtime.hooks.install_prompt",
     },
+    "aippocampus_runtime.ops.uninstall": {
+        "aippocampus_runtime.hooks",
+        "aippocampus_runtime.hooks.claude_code",
+    },
     "aippocampus_runtime.ops.recall_navigation_comparison": {
         "aippocampus_runtime.recall.authority",
     },

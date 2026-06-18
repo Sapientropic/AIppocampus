@@ -24,6 +24,7 @@ from aippocampus_runtime.model.routing import (
 
 DEEPSEEK_KV_CACHE_GUIDE_URL = "https://api-docs.deepseek.com/zh-cn/guides/kv_cache"
 VALID_CACHE_CONTRACTS = {DEEPSEEK_PREFIX_CACHE_CONTRACT, NO_PROVIDER_CACHE_CONTRACT}
+DEFAULT_CHAT_TIMEOUT_SECONDS = 1.2
 
 
 @dataclass(frozen=True)
@@ -32,7 +33,7 @@ class ChatClientConfig:
     model: str
     base_url: str
     max_tokens: int | None = None
-    timeout: float = 60.0
+    timeout: float = DEFAULT_CHAT_TIMEOUT_SECONDS
     temperature: float | None = None
     service_name: str = "OpenAI-compatible chat API"
     user_id: str | None = None

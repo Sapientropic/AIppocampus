@@ -31,6 +31,10 @@ from aippocampus_runtime.recall.ambient_policy import (
     surface_events_for_cards,
 )
 from aippocampus_runtime.recall.ambient_source_reopen import promote_reopenable_ambient_cards
+from aippocampus_runtime.recall.prompt_recall_feedback_filter import (
+    apply_feedback_filter,
+    feedback_report_for_prompt,
+)
 from aippocampus_runtime.warm_ambient.hook_seen_threads import (
     hook_seen_ledger_path_for_cache,
     record_hook_seen_thread,
@@ -49,7 +53,6 @@ __all__ = [
     "record_prompt_topic_signal",
     "warm_prompt_trace",
 ]
-
 
 def _ambient_cache_file(
     *,
@@ -258,6 +261,17 @@ def attach_ambient_recall(
             )
             result["ambient_recall"]["cards"] = policy_filter["cards"]
             result["ambient_recall"]["policy_filter"] = policy_filter["diagnostics"]
+        feedback_report, feedback_lane = feedback_report_for_prompt(
+            registry_path=registry_path,
+            workspace=workspace,
+        )
+        feedback_filter = apply_feedback_filter(
+            result["ambient_recall"],
+            feedback_report=feedback_report,
+            lane=feedback_lane,
+        )
+        if feedback_filter["status"] != "no_quiet_routes" or feedback_filter.get("event_count_loaded"):
+            result["ambient_recall"]["feedback_filter"] = feedback_filter
         promote_reopenable_ambient_cards(result["ambient_recall"], registry_path=registry_path)
         active_lock: dict[str, Any] | None = None
         try:

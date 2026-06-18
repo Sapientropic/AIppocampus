@@ -12,6 +12,7 @@ clean-source reopen before claims.
 from __future__ import annotations
 
 import argparse
+import copy
 import hashlib
 import json
 import sys
@@ -26,6 +27,7 @@ if str(SCRIPTS_ROOT) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_ROOT))
 
 from aippocampus_runtime.core import compact_text, now_utc
+from aippocampus_runtime.io_mtime_cache import load_json_object
 from aippocampus_runtime.navigation.associations import (
     normalize_term,
     source_text_is_noise,
@@ -45,6 +47,9 @@ MIN_ROUTE_CONFIDENCE = 0.55
 MIN_ROUTE_QUALITY_BUCKETS = {"usable", "strong"}
 MAX_ROUTE_TERMS = 24
 MAP_QUERY_SCALES = {"far", "mid", "near"}
+
+_MAP_SIGNATURE_BY_ID: dict[int, tuple[str, int, int]] = {}
+_MATCH_CACHE: dict[tuple[tuple[str, int, int], str, tuple[str, ...], str, int], list[dict[str, Any]]] = {}
 
 GENERIC_MAP_TERMS = {
     "memory",
@@ -111,10 +116,17 @@ def load_cognitive_map(path: Path | str) -> dict[str, Any]:
     if not target.exists():
         return {}
     try:
-        data = json.loads(target.read_text(encoding="utf-8"))
+        data = load_json_object(target)
     except Exception:
         return {}
-    return data if isinstance(data, dict) else {}
+    if not isinstance(data, dict):
+        return {}
+    try:
+        stat = target.stat()
+        _MAP_SIGNATURE_BY_ID[id(data)] = (str(target.resolve()), int(stat.st_mtime_ns), int(stat.st_size))
+    except OSError:
+        pass
+    return data
 
 
 def load_cognitive_map_findings(path: Path) -> list[dict[str, Any]]:
@@ -474,6 +486,16 @@ def match_cognitive_map(
     prompt_terms = [
         term.casefold() for term in split_query_terms([prompt]) if len(term.strip()) >= 3
     ]
+    signature = _MAP_SIGNATURE_BY_ID.get(id(cognitive_map))
+    cache_key = (
+        signature,
+        prompt_low,
+        tuple(prompt_terms),
+        str(project_label or "").casefold(),
+        int(limit),
+    ) if signature else None
+    if cache_key is not None and cache_key in _MATCH_CACHE:
+        return copy.deepcopy(_MATCH_CACHE[cache_key])
     matches: list[dict[str, Any]] = []
     for route in cognitive_map.get("routes") or []:
         if not isinstance(route, dict):
@@ -540,7 +562,10 @@ def match_cognitive_map(
         matches = match_registry_overview(
             prompt_low, prompt_terms, cognitive_map, project_label=project_label, limit=limit
         )
-    return matches[:limit]
+    result = matches[:limit]
+    if cache_key is not None:
+        _MATCH_CACHE[cache_key] = copy.deepcopy(result)
+    return result
 
 
 def query_cognitive_map(

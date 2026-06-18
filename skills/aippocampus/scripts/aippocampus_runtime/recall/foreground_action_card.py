@@ -12,6 +12,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from aippocampus_runtime import core, schema_profiles
+from aippocampus_runtime.contracts import shell_quote
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 
 CARD_FIELD_BUDGET = 8
@@ -123,7 +124,7 @@ def _search_recovery_action(query: Any) -> dict[str, Any]:
     if cue:
         return base | {
             "arguments": {"query": cue, "max": 5},
-            "cli_command": f"aippocampus search {json.dumps(cue, ensure_ascii=False)} --json",
+            "cli_command": f"aippocampus search {shell_quote(cue)} --json",
         }
     return base | {
         "arguments_template": {"query": "{exact_phrase}", "max": 5},

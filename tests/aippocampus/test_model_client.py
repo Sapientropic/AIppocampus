@@ -23,6 +23,17 @@ from redaction_fixtures import (  # noqa: E402
 
 
 class ModelClientTests(unittest.TestCase):
+    def test_default_chat_timeout_stays_under_prompt_hook_budget(self) -> None:
+        config = model_client.ChatClientConfig(
+            api_key="test",
+            model="openai-compatible",
+            base_url="https://example.invalid",
+            cache_contract=model_client.NO_PROVIDER_CACHE_CONTRACT,
+        )
+
+        self.assertLessEqual(config.timeout, 1.2)
+        self.assertLess(config.timeout, 3.5)
+
     def test_deepseek_chat_requires_explicit_cache_contract(self) -> None:
         with self.assertRaisesRegex(ValueError, "cache_contract"):
             model_client.chat_json(

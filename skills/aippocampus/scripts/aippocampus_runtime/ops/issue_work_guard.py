@@ -19,6 +19,7 @@ from aippocampus_runtime.contracts import (
     canonical_foreground_action_fields,
     foreground_recovery_card,
     foreground_template_action,
+    shell_quote,
 )
 
 SCHEMA_VERSION = "issue-work-active-pull-v0"
@@ -218,7 +219,7 @@ def _issue_recall_action(title: str) -> dict[str, Any]:
     return {
         "id": "agent_recall_issue_context",
         "tool_name": "agent_recall",
-        "command": f"aippocampus agent recall {json.dumps(cue, ensure_ascii=False)} --json",
+        "command": f"aippocampus agent recall {shell_quote(cue)} --json",
         "arguments": {"cue": cue},
         "mutation_risk": "read_only",
         "claim_boundary": "no_claim_before_reopen",

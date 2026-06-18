@@ -152,6 +152,29 @@ class AgentBackgroundTests(unittest.TestCase):
             ["cue", "query", "task"],
         )
 
+    def test_agent_background_mcp_missing_input_prefers_tool_action(self) -> None:
+        response = mcp.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 205,
+                "method": "tools/call",
+                "params": {"name": "agent_background", "arguments": {}},
+            }
+        )
+
+        payload = self.tool_payload(response)
+        action = payload["foreground_action"]
+        self.assertTrue(response["result"].get("isError", False), payload)
+        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
+        self.assertEqual(action["id"], "background_for_task_cue")
+        self.assertEqual(action["tool_name"], "agent_background")
+        self.assertEqual(action["arguments_template"], {"task": "{task_cue}"})
+        self.assertNotIn("command", action)
+        self.assertIn("cli_fallback", action)
+        self.assertEqual(action["cli_fallback"]["command_template"], 'aippocampus agent background "{task_cue}" --json')
+        self.assertEqual(payload["agent_next_action"], action)
+        self.assertEqual(payload["safe_next_actions"][0], action)
+
     def test_agent_background_mcp_tool_projects_reviewed_findings(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             working_memory = Path(tmp) / "working_memory.jsonl"

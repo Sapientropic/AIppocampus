@@ -12,6 +12,7 @@ from pathlib import Path
 
 from aippocampus_runtime.artifacts.publish import ArtifactLeaseBusyError, artifact_lease
 from aippocampus_runtime.core import aippocampus_registry_dir, now_utc
+from aippocampus_runtime.io_mtime_cache import load_json_object
 
 REGISTRY_SCHEMA_VERSION = 1
 REGISTRY_WRITER_LEASE_NAME = ".threads-registry.lock"
@@ -79,7 +80,7 @@ def load_existing_json_object(path: Path, *, label: str) -> dict:
     if not path.exists():
         return {}
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
+        data = load_json_object(path)
     except json.JSONDecodeError as exc:
         raise RegistryReadError(
             f"Cannot read {label} at {path}: invalid JSON at line {exc.lineno}, "

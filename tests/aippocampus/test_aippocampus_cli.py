@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -823,8 +824,14 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertNotIn("preview", commentary_payload["message"])
         commentary_action = commentary_payload["safe_next_actions"][0]
         self.assertEqual(
-            commentary_action["command"],
-            'aippocampus agent recall "continue vault dashboard mobile issue" --json',
+            shlex.split(commentary_action["command"]),
+            [
+                "aippocampus",
+                "agent",
+                "recall",
+                "continue vault dashboard mobile issue",
+                "--json",
+            ],
         )
         self.assertNotIn("command_template", commentary_action)
         self.assertEqual(operator_proc.returncode, 1)

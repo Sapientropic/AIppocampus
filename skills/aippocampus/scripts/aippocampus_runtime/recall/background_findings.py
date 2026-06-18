@@ -30,6 +30,48 @@ COMPACT_BACKGROUND_ACTION_IDS = {
 }
 
 
+def _mcp_background_for_task_action() -> dict[str, Any]:
+    return {
+        "id": "background_for_task_cue",
+        "tool_name": "agent_background",
+        "arguments_template": {"task": "{task_cue}"},
+        "requires": ["task_cue"],
+        "template_only": True,
+        "mutation_risk": "read_only",
+        "claim_boundary": "background_navigation_not_source_truth",
+        "label": "Ask for reviewed background findings",
+        "why": "Use this for reviewed Dream/subconscious navigation relevant to the current task.",
+        "cli_fallback": {
+            "id": "background_for_task_cue_cli_fallback",
+            "command_template": 'aippocampus agent background "{task_cue}" --json',
+            "requires": ["task_cue"],
+            "mutation_risk": "read_only",
+            "claim_boundary": "background_navigation_not_source_truth",
+        },
+    }
+
+
+def _mcp_ordinary_recall_action() -> dict[str, Any]:
+    return {
+        "id": "ordinary_recall",
+        "tool_name": "agent_recall",
+        "arguments_template": {"query": "{old_decision_or_handoff_cue}"},
+        "requires": ["old_decision_or_handoff_cue"],
+        "template_only": True,
+        "mutation_risk": "read_only",
+        "claim_boundary": "no_claim_before_reopen",
+        "label": "Use ordinary source-backed recall",
+        "why": "Use recall when source routes matter more than background navigation scent.",
+        "cli_fallback": {
+            "id": "ordinary_recall_cli_fallback",
+            "command_template": 'aippocampus agent recall "{old_decision_or_handoff_cue}" --json',
+            "requires": ["old_decision_or_handoff_cue"],
+            "mutation_risk": "read_only",
+            "claim_boundary": "no_claim_before_reopen",
+        },
+    }
+
+
 def _public_payload(payload: Any) -> Any:
     return redact_sensitive_values(redact_private_paths(payload))
 
@@ -173,22 +215,8 @@ def background_findings_card(
             error_code="background_cue_required",
             message="agent background needs a task cue before it can match reviewed background findings.",
             safe_next_actions=[
-                foreground_shell_action(
-                    action_id="background_for_task_cue",
-                    label="Ask for reviewed background findings",
-                    command='aippocampus agent background "task cue" --json',
-                    why="Use this for reviewed Dream/subconscious navigation relevant to the current task.",
-                    mutation_risk="read_only",
-                    claim_boundary="background_navigation_not_source_truth",
-                ),
-                foreground_shell_action(
-                    action_id="ordinary_recall",
-                    label="Use ordinary source-backed recall",
-                    command='aippocampus agent recall "old decision or handoff cue" --json',
-                    why="Use recall when source routes matter more than background navigation scent.",
-                    mutation_risk="read_only",
-                    claim_boundary="no_claim_before_reopen",
-                ),
+                _mcp_background_for_task_action(),
+                _mcp_ordinary_recall_action(),
             ],
         )
 

@@ -9,7 +9,11 @@ import importlib.metadata
 import inspect
 import json
 import sys
-import tomllib
+
+try:
+    import tomllib
+except ModuleNotFoundError:  # pragma: no cover - exercised by older runtimes.
+    tomllib = None  # type: ignore[assignment]
 from dataclasses import dataclass
 from io import StringIO
 from pathlib import Path
@@ -23,6 +27,10 @@ from aippocampus_runtime.cli.recovery_cards import (
     object_sync_chooser_payload,
     storage_chooser_payload,
     storage_gc_recovery_payload,
+)
+from aippocampus_runtime.cli.runtime_floor import (
+    emit_python_runtime_floor,
+    python_runtime_floor_payload,
 )
 from aippocampus_runtime.contracts import (
     foreground_chooser_card,
@@ -51,6 +59,8 @@ def _json_file(path: Path) -> dict[str, Any] | None:
 
 def _pyproject_version(root: Path | None) -> str | None:
     if root is None:
+        return None
+    if tomllib is None:
         return None
     try:
         data = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
@@ -251,7 +261,7 @@ def print_doctor_recovery_card(*, file: TextIO | None = None) -> None:
     target = sys.stdout if file is None else file
     print("AIppocampus doctor", file=target)
     print("decision: pick the health question first", file=target)
-    print("provider: aippocampus doctor provider --json", file=target)
+    print("preflight: aippocampus doctor preflight --json\nprovider: aippocampus doctor provider --json", file=target)
     print("config: aippocampus doctor config --compact-json", file=target)
     print("spend: aippocampus doctor spend --json", file=target)
     print("boundary: doctor output is local diagnostics, not a recall result.", file=target)
@@ -263,6 +273,14 @@ def doctor_chooser_payload() -> dict[str, Any]:
         status="needs_subcommand",
         decision="choose the local diagnostic question",
         choices=[
+            foreground_shell_action(
+                action_id="preflight",
+                label="Check host prerequisites",
+                command="aippocampus doctor preflight --json",
+                why="Use first on a new or brittle host before install, sync, hooks, or recall setup.",
+                mutation_risk="read_only",
+                claim_boundary="host_setup_not_memory_evidence",
+            ),
             foreground_shell_action(
                 action_id="provider",
                 label="Check optional provider visibility",
@@ -810,6 +828,7 @@ COMMANDS = {
     "doctor": CommandSpec("provider_doctor.py", "aippocampus_runtime.ops.provider_doctor"),
     "update": CommandSpec("update.py", "aippocampus_runtime.update.cli"),
     "plugin": CommandSpec("plugin.py", "aippocampus_runtime.update.plugin_installer"),
+    "uninstall": CommandSpec("uninstall.py", "aippocampus_runtime.ops.uninstall"),
     "smoke": CommandSpec("recall_funnel_smoke.py", "aippocampus_runtime.ops.recall_funnel_smoke"),
     "logs": CommandSpec("log_retention.py", "aippocampus_runtime.ops.log_retention"),
     "maintenance": CommandSpec("maintenance.py", "aippocampus_runtime.ops.maintenance"),
@@ -892,6 +911,7 @@ SCRIPT_MODULES = {
     ),
     "update.py": "aippocampus_runtime.update.cli",
     "plugin.py": "aippocampus_runtime.update.plugin_installer",
+    "uninstall.py": "aippocampus_runtime.ops.uninstall",
     "recall_funnel_smoke.py": "aippocampus_runtime.ops.recall_funnel_smoke",
     "maintenance.py": "aippocampus_runtime.ops.maintenance",
     "warm_ambient_cli.py": "aippocampus_runtime.warm_ambient.cli",
@@ -1176,6 +1196,9 @@ def run_invocation(invocation: CommandInvocation) -> int:
 
 def dispatch(argv: list[str]) -> tuple[CommandInvocation | None, int]:
     args = list(argv)
+    if (runtime_floor := python_runtime_floor_payload()) is not None:
+        emit_python_runtime_floor(runtime_floor, args)
+        return None, 2
     if not args:
         invocation = resolve_command(["start"])
         if invocation is not None:
@@ -1649,6 +1672,7 @@ def print_help(*, file: TextIO | None = None) -> None:
     print("  sync                Local-folder sync status/push/pull/repair", file=target)
     print("  object-sync         Object-storage sync status/push/pull/repair", file=target)
     print("  plugin install      Install/verify the local Codex plugin", file=target)
+    print("  uninstall           Inventory or purge AIppocampus-owned local artifacts", file=target)
     print(
         "  hooks [kind]        Host hook status/install/uninstall surfaces (prompt/lifecycle/action)",
         file=target,
