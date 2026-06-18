@@ -358,7 +358,8 @@ def load_macro_orientation_states(
             continue
         if isinstance(row, dict):
             validation = validate_macro_orientation_state(row)
-            if "unsupported_schema_version" in validation.get("errors", []):
+            validation_errors = validation.get("errors")
+            if isinstance(validation_errors, list) and "unsupported_schema_version" in validation_errors:
                 if warnings is not None:
                     warnings.append(
                         {

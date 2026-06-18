@@ -81,7 +81,7 @@ def _source_refs(value: Any, *, limit: int = 6) -> list[dict[str, Any]]:
             continue
         if not isinstance(item, Mapping):
             continue
-        clean = {
+        source_ref_record: dict[str, Any] = {
             "source_ref": _text(
                 item.get("source_ref")
                 or item.get("source_id")
@@ -92,9 +92,9 @@ def _source_refs(value: Any, *, limit: int = 6) -> list[dict[str, Any]]:
             "kind": _text(item.get("kind") or item.get("event_kind"), 80),
             "line": item.get("line") or item.get("source_line"),
         }
-        clean = {key: val for key, val in clean.items() if val not in {"", None}}
-        if clean and clean not in refs:
-            refs.append(clean)
+        source_ref_record = {key: val for key, val in source_ref_record.items() if val not in {"", None}}
+        if source_ref_record and source_ref_record not in refs:
+            refs.append(source_ref_record)
         if len(refs) >= limit:
             break
     return refs

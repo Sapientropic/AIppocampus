@@ -326,9 +326,9 @@ def foreground_status_cards(report: dict[str, Any]) -> list[dict[str, Any]]:
         )
     elif summary.get("plugin_cache_needs_action"):
         action_card = (plugin.get("recommended_action_cards") or [None])[0]
-        command_fields: dict[str, Any]
+        plugin_command_fields: dict[str, Any]
         if isinstance(action_card, dict):
-            command_fields = {
+            plugin_command_fields = {
                 key: value
                 for key, value in action_card.items()
                 if key
@@ -359,7 +359,7 @@ def foreground_status_cards(report: dict[str, Any]) -> list[dict[str, Any]]:
                 "id": "plugin_cache_recovery",
                 "status": "plugin_cache_needs_refresh",
                 "why": "The local package is separate from the Codex plugin cache used by the host.",
-                **command_fields,
+                **plugin_command_fields,
             }
         )
     action_hints_ready = action_hints.get("cache_status") == "with_fresh_records"

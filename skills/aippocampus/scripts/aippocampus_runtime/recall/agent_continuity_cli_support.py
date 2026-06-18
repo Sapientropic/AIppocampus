@@ -1080,7 +1080,10 @@ def query_from_last_recall_cache(path: str | Path | None = None) -> str | None:
         cache = read_last_recall_cache(path)
     except Exception:
         return None
-    context = cache.get("context") if isinstance(cache.get("context"), Mapping) else {}
+    context_value = cache.get("context")
+    if not isinstance(context_value, Mapping):
+        return None
+    context = context_value
     query = str(context.get("query") or "").strip()
     return query or None
 
