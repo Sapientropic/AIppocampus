@@ -17,7 +17,7 @@ def _text(value: Any) -> str:
 
 def _stable_id(prefix: str, *parts: Any) -> str:
     raw = "\n".join(json.dumps(part, ensure_ascii=False, sort_keys=True) for part in parts)
-    return f"{prefix}_{hashlib.sha1(raw.encode('utf-8', errors='replace')).hexdigest()[:18]}"
+    return f"{prefix}_{hashlib.sha256(raw.encode('utf-8', errors='replace')).hexdigest()[:18]}"
 
 
 def promotion_gate(

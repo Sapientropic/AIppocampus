@@ -12,6 +12,8 @@ from aippocampus_runtime.contracts import (
     FOREGROUND_ACTION_CONTRACT_VERSION,
     foreground_shell_action,
 )
+from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
+from aippocampus_runtime.public_output import emit_public_json, emit_public_text
 
 SCHEMA_VERSION = 1
 
@@ -180,6 +182,10 @@ def build_start_card(cwd: Path, *, clean_source_dir: str | None = None, detail: 
     return card
 
 
+def _public_start_card(card: dict[str, Any]) -> dict[str, Any]:
+    return redact_sensitive_values(redact_private_paths(card))
+
+
 def render_text(card: dict[str, Any]) -> str:
     action = card["agent_next_action"]
     lines = [
@@ -215,10 +221,11 @@ def main(argv: list[str] | None = None) -> int:
         clean_source_dir=args.clean_source_dir,
         detail=detail,
     )
+    public_card = _public_start_card(card)
     if args.json_output or args.operator_json:
-        print(json.dumps(card, ensure_ascii=False, indent=2))
+        emit_public_json(public_card)
     else:
-        print(render_text(card), end="")
+        emit_public_text(render_text(public_card), end="")
     return 0
 
 

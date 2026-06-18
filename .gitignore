@@ -57,3 +57,6 @@ benchmark_corpus/longmemeval/v2_questions.jsonl
 benchmark_corpus/longmemeval/v2_trajectories.jsonl
 benchmark_corpus/amemgym/
 benchmark_corpus/memoryagentbench/
+
+# zread generated wiki (local artifact)
+.zread/
