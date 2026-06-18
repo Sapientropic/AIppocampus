@@ -12,7 +12,6 @@ from typing import Any
 
 from aippocampus_runtime import core
 from aippocampus_runtime.contracts import foreground_shell_action
-from aippocampus_runtime.io_integrity import atomic_write_jsonl, public_safe_payload
 from aippocampus_runtime.hooks.action_hint_cache_records import (
     BLOCKED_STATES,
     CACHE_KIND,
@@ -20,6 +19,7 @@ from aippocampus_runtime.hooks.action_hint_cache_records import (
     WEAK_SUPPORT_LEVELS,
     build_action_hint_cache_report,
 )
+from aippocampus_runtime.io_integrity import atomic_write_jsonl, public_safe_payload
 from aippocampus_runtime.learning_loop.effectiveness_ledger import (
     apply_effectiveness_to_guidance,
     load_ledger_rows,

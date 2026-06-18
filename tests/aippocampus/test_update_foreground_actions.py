@@ -14,8 +14,10 @@ sys.path.insert(0, str(SCRIPTS))
 
 from aippocampus_runtime.contracts import executable_command_violations  # noqa: E402
 from aippocampus_runtime.update import cli as update_cli  # noqa: E402
-from aippocampus_runtime.update import plugin_cache  # noqa: E402
-from aippocampus_runtime.update import status_actions  # noqa: E402
+from aippocampus_runtime.update import (
+    plugin_cache,  # noqa: E402
+    status_actions,  # noqa: E402
+)
 from tests.aippocampus.test_update_sync import (  # noqa: E402
     provider_env,
     run_update,

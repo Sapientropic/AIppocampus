@@ -12,8 +12,8 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from aippocampus_runtime.artifacts.publish import resolve_sqlite_index_path
-from aippocampus_runtime.core import aippocampus_registry_dir, file_sha256, now_utc, safe_path_name
 from aippocampus_runtime.contracts import write_boundary
+from aippocampus_runtime.core import aippocampus_registry_dir, file_sha256, now_utc, safe_path_name
 from aippocampus_runtime.io_integrity import stale_tmp_recovery_card
 from aippocampus_runtime.sync.cli_support import (
     parser_command,
@@ -503,7 +503,6 @@ def ensure_push_sync_root_safe(registry_root: Path, sync_root: Path) -> dict[str
 
     manifest_path = sync_root / SYNC_MANIFEST_NAME
     if not manifest_path.exists():
-        names = ", ".join(path.name for path in managed_dirs)
         return managed_sync_dir_collision_payload(sync_root, names=[path.name for path in managed_dirs])
     try:
         validate_existing_sync_manifest(manifest_path)

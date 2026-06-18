@@ -7,11 +7,11 @@ the guard itself from drifting when new GitHub successor issues appear.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import subprocess
 import sys
-import hashlib
 from collections import Counter
 from collections.abc import Mapping
 from pathlib import Path
