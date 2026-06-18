@@ -17,7 +17,6 @@ from typing import Any
 from aippocampus_runtime.contracts import write_boundary
 from aippocampus_runtime.core import codex_home, now_utc
 from aippocampus_runtime.hooks import install_action_hint, install_lifecycle, install_prompt
-from aippocampus_runtime.ops.provider_doctor import build_provider_doctor_report
 from aippocampus_runtime.public_output import emit_public_text
 from aippocampus_runtime.update import status_actions as update_actions
 from aippocampus_runtime.update import status_foreground
@@ -34,6 +33,7 @@ from aippocampus_runtime.update.agent_status_summary import (
 )
 from aippocampus_runtime.update.capability_ladder import build_capability_ladder
 from aippocampus_runtime.update.host_conformance import build_host_conformance_status
+from aippocampus_runtime.update.llm_status import status_llm
 from aippocampus_runtime.update.plugin_cache import (
     build_plugin_cache_status,
     installed_cache_auto_resolution,
@@ -755,65 +755,6 @@ def status_hooks(codex_home_path: Path, hooks_json: Path | None = None) -> dict[
             "old flat-script hook commands are replaced by module entrypoints",
             "provider-key bridge wrappers are explicit onboarding artifacts and do not store key values in hooks.json",
             "Windows lifecycle hooks use a hidden launch path so background upkeep does not flash a terminal window",
-        ],
-    }
-
-
-def status_llm(
-    *,
-    model_route: str | None = "default",
-    provider_env_var: str | None = None,
-    check_child_process: bool = True,
-) -> dict[str, Any]:
-    report = build_provider_doctor_report(
-        model_route=model_route,
-        provider_env_var=provider_env_var,
-        check_child_process=check_child_process,
-    )
-    raw_provider_env = report.get("provider_env")
-    provider_env: dict[str, Any] = raw_provider_env if isinstance(raw_provider_env, dict) else {}
-    raw_route = report.get("route")
-    route: dict[str, Any] = raw_route if isinstance(raw_route, dict) else {}
-    safe_actions = [
-        {
-            "id": "inspect_provider_doctor_detail",
-            "command": "aippocampus doctor provider --detail full --json",
-            "mutation_risk": "read_only",
-            "claim_boundary": "operator_detail_not_memory_evidence",
-        }
-    ]
-    if report.get("status") == "missing_provider_env_var":
-        safe_actions.insert(
-            0,
-            {
-                "id": "plan_provider_key_bridge",
-                "command": "aippocampus onboard provider-key --plan --json",
-                "mutation_risk": "read_only_plan",
-                "claim_boundary": "provider_key_setup_not_memory_evidence",
-            },
-        )
-    return {
-        "surface": "llm",
-        "status": report.get("status"),
-        "ready": bool(report.get("ok")),
-        "provider": route.get("provider"),
-        "model": route.get("model"),
-        "provider_env_var_omitted": bool(provider_env.get("env_var")),
-        "visible_in_current_process": provider_env.get("visible_in_current_process"),
-        "visible_in_child_process": provider_env.get("visible_in_child_process"),
-        "cognitive_worker": report.get("cognitive_worker") or {},
-        "recommended_actions": safe_actions,
-        "privacy": {
-            "env_var_value_printed": False,
-            "env_var_value_checked": False,
-            "provider_env_var_name_omitted": bool(provider_env.get("env_var")),
-            "local_paths_included": False,
-            "base_url_value_printed": False,
-            "operator_detail_available": True,
-        },
-        "safety_notes": [
-            "LLM key setup is presence-only and redacted; update never prints or guesses key values",
-            "set the provider key in the environment that launches Codex or the hook process",
         ],
     }
 
