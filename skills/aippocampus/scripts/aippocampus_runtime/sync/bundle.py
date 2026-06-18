@@ -1270,21 +1270,40 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         if args.plan:
-            result = sync_direction_plan(
-                args,
-                estimated_file_count=_estimate_plan_file_count(
-                    str(args.command),
-                    args.sync_dir,
-                    args.registry_dir,
-                    include_raw=bool(args.include_raw),
-                ),
-                file_count_breakdown=_sync_plan_file_breakdown(
-                    str(args.command),
-                    args.sync_dir,
-                    args.registry_dir,
-                    include_raw=bool(args.include_raw),
-                ),
-            )
+            if not args.sync_dir:
+                result = available_requires_sync_dir_status()
+                result.update(
+                    {
+                        "kind": "aippocampus_sync_destination_chooser",
+                        "status": "needs_sync_dir_before_plan",
+                        "requested_command": str(args.command),
+                        "plan_skipped_no_destination": True,
+                        "estimated_file_count": None,
+                        "count_interpretation": "not_available_without_destination",
+                        "privacy_boundary": {
+                            "local_paths_included": False,
+                            "raw_rollout_included_only_if_requested": True,
+                            "writes_performed": False,
+                            "registry_scanned": False,
+                        },
+                    }
+                )
+            else:
+                result = sync_direction_plan(
+                    args,
+                    estimated_file_count=_estimate_plan_file_count(
+                        str(args.command),
+                        args.sync_dir,
+                        args.registry_dir,
+                        include_raw=bool(args.include_raw),
+                    ),
+                    file_count_breakdown=_sync_plan_file_breakdown(
+                        str(args.command),
+                        args.sync_dir,
+                        args.registry_dir,
+                        include_raw=bool(args.include_raw),
+                    ),
+                )
         elif args.command == "status":
             if not args.sync_dir:
                 result = available_requires_sync_dir_status()

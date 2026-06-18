@@ -226,15 +226,23 @@ class EpisodeArcPrivateAdjudicationTests(unittest.TestCase):
         self.assertEqual(payload["kind"], private_arcs.REPORT_KIND)
         self.assertEqual(payload["metrics"]["complete_rejected_route_arc_count"], 1)
         self.assertEqual(summary_payload["kind"], "aippocampus_episode_arcs_summary")
+        self.assertEqual(summary_payload["foreground_action_contract"], "foreground-action-v1")
+        self.assertEqual(summary_payload["foreground_action"], summary_payload["agent_next_action"])
+        self.assertEqual(summary_payload["safe_next_actions"][0], summary_payload["foreground_action"])
+        self.assertEqual(summary_payload["foreground_action"]["id"], "retrieve_actionable_arc_handles")
+        self.assertEqual(
+            summary_payload["route_value"],
+            "navigation_only_sequence_hints_need_source_reopen",
+        )
+        self.assertIn("summary_metrics", summary_payload)
         self.assertEqual(summary_payload["complete_arc_count"], 1)
+        self.assertEqual(summary_payload["summary_metrics"]["complete_arc_count"], 1)
         self.assertEqual(summary_payload["current_validity_counts"]["needs_reopen"], 1)
         self.assertIn("refresh_sources", summary_payload["safe_use_counts"])
         self.assertEqual(
             summary_payload["safe_next_actions"][0]["command"],
             "aippocampus episode-arcs --json --top 5",
         )
-        self.assertEqual(summary_payload["safe_next_actions"][0]["kind"], "retrieve_actionable_arc_handles")
-        self.assertEqual(summary_payload["foreground_action"], summary_payload["agent_next_action"])
         self.assertEqual(summary_payload["what_to_do"], "retrieve_actionable_arc_handles")
         self.assertFalse(summary_payload["no_op"])
         self.assertEqual(

@@ -182,11 +182,15 @@ class AgentFeedbackMacroCliTests(unittest.TestCase):
         deepen_payload = json.loads(deepen_missing.stdout)
         missing_payload = json.loads(missing.stdout)
         malformed_payload = json.loads(malformed.stdout)
-        self.assertEqual(deepen_payload["result"]["error"]["code"], "missing_recall_handle")
+        self.assertEqual(deepen_payload["error"]["code"], "missing_recall_handle")
+        self.assertEqual(
+            deepen_payload["operator_detail"]["result"]["error"]["code"],
+            "missing_recall_handle",
+        )
         self.assertEqual(missing_payload["error"]["code"], "missing_recall_handle")
         self.assertEqual(malformed_payload["error"]["code"], "malformed_recall_handle")
         for payload, mode, error_container, has_nested_error in (
-            (deepen_payload, "deepen", deepen_payload["result"], True),
+            (deepen_payload, "deepen", deepen_payload["operator_detail"]["result"], True),
             (missing_payload, "explain", missing_payload, False),
             (malformed_payload, "explain", malformed_payload, False),
         ):

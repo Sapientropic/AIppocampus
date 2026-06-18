@@ -23,9 +23,20 @@ from cognitive_maturity_guard import (
     cognitive_mechanism_public_claim_issues,
     proof_slice_maturity_board_issues,
 )
-from current_claims_guard import current_claims_snapshot_issues
+from current_claims_guard import (
+    current_claims_foreground_issues as current_claims_foreground_issues,
+)
+from current_claims_guard import (
+    current_claims_snapshot_issues,
+)
 from discussion_atlas_guard import discussion_atlas_static_issues
 from evidence_index_guard import evidence_index_issues
+from foreground_continuity_guard import (
+    benchmark_report_followup_warnings,
+    benchmark_report_router_issues,
+    currentness_card_issues,
+    foreground_continuity_doc_issues,
+)
 from installable_reference_guard import installable_reference_tracker_identity_issues
 from legacy_alias_guard import legacy_alias_inventory_issues
 from product_profile_guard import (
@@ -1279,6 +1290,14 @@ def check_repo_docs(repo_root: Path) -> tuple[list[str], dict[str, Any]]:
     issues.extend(evidence_index_issues(repo_root))
     issues.extend(benchmark_evidence_map_issues(repo_root))
     issues.extend(current_claims_snapshot_issues(repo_root))
+    issues.extend(foreground_continuity_doc_issues(repo_root))
+    issues.extend(benchmark_report_router_issues(repo_root))
+    issues.extend(currentness_card_issues(repo_root))
+    report_followup_warnings, report_followup_metrics = benchmark_report_followup_warnings(
+        repo_root
+    )
+    metrics["benchmark_report_followup"] = report_followup_metrics
+    metrics["_warnings"] = [*metrics.get("_warnings", []), *report_followup_warnings]
     evidence_line_issues, evidence_line_metrics = evidence_ledger_line_length_payload(
         repo_root
     )

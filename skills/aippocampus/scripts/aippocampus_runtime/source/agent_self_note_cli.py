@@ -214,14 +214,12 @@ def _write_boundary() -> dict[str, Any]:
 def _self_note_recovery_payload() -> dict[str, Any]:
     choices = [
         {
-            "id": "append_direction_only_note",
-            "label": "append",
-            "command_template": 'aippocampus self-note append --current-thread "{note_text}"',
-            "requires": ["note_text"],
-            "template_only": True,
-            "mutation_risk": "direction_only_note_write",
+            "id": "list_direction_only_notes",
+            "label": "list",
+            "command": "aippocampus self-note list --json",
+            "mutation_risk": "read_only",
             "claim_boundary": "direction_only_not_source_truth",
-            "when": "Leave a weak foreground-agent margin note after an explicit decision.",
+            "when": "Review recent scoped notes without treating them as evidence.",
         },
         {
             "id": "search_direction_only_notes",
@@ -234,12 +232,14 @@ def _self_note_recovery_payload() -> dict[str, Any]:
             "when": "Find direction-only atmosphere for the current workspace.",
         },
         {
-            "id": "list_direction_only_notes",
-            "label": "list",
-            "command": "aippocampus self-note list --json",
-            "mutation_risk": "read_only",
+            "id": "append_direction_only_note",
+            "label": "append",
+            "command_template": 'aippocampus self-note append --current-thread "{note_text}"',
+            "requires": ["note_text"],
+            "template_only": True,
+            "mutation_risk": "explicit_direction_only_note_write",
             "claim_boundary": "direction_only_not_source_truth",
-            "when": "Review recent scoped notes without treating them as evidence.",
+            "when": "Write only after the user or foreground task explicitly asks to leave a note.",
         },
         {
             "id": "read_direction_only_note",
@@ -258,7 +258,7 @@ def _self_note_recovery_payload() -> dict[str, Any]:
         "ok": False,
         "error": {
             "code": "self_note_command_required",
-                "message": "self-note needs one explicit action: append, search, list, or read.",
+            "message": "self-note defaults to read-only list/search; append only after an explicit write request.",
         },
         "choices": choices,
         "foreground_action": primary,

@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from aippocampus_runtime.coding import decision_events, episode_arcs, sequence_reopen
+from aippocampus_runtime.contracts import canonical_foreground_action_fields
 from aippocampus_runtime.core import aippocampus_registry_dir, now_utc
 from aippocampus_runtime.registry.api import load_registry, registry_paths, unique_preserve
 
@@ -485,7 +486,18 @@ def render_text(report: dict[str, Any]) -> str:
 def summary_projection(report: Mapping[str, Any]) -> dict[str, Any]:
     metrics = _as_mapping(report.get("metrics"))
     episode_arc_count = int(metrics.get("episode_arc_count") or 0)
+    complete_arc_count = metrics.get("complete_arc_count", 0)
+    gappy_arc_count = metrics.get("gappy_arc_count", 0)
+    current_validity_counts = dict(_as_mapping(report.get("current_validity_counts")))
+    safe_use_counts = dict(_as_mapping(report.get("safe_use_counts")))
+    summary_metrics = {
+        "episode_arc_count": episode_arc_count,
+        "complete_arc_count": complete_arc_count,
+        "gappy_arc_count": gappy_arc_count,
+        "needs_reopen_count": current_validity_counts.get("needs_reopen", 0),
+    }
     owner_route = {
+        "id": "current_owner_route",
         "kind": "current_owner_route",
         "command": "aippocampus episode-arcs --json --top 5",
         "mutation_risk": "read_only",
@@ -493,6 +505,7 @@ def summary_projection(report: Mapping[str, Any]) -> dict[str, Any]:
         "why": "Use this owner route when there are actionable arc handles to inspect.",
     }
     route_action = {
+        "id": "retrieve_actionable_arc_handles",
         "kind": "retrieve_actionable_arc_handles",
         "command": "aippocampus episode-arcs --json --top 5",
         "mutation_risk": "read_only",
@@ -500,6 +513,7 @@ def summary_projection(report: Mapping[str, Any]) -> dict[str, Any]:
         "why": "Aggregate counts are only a signal; retrieve a small redacted handle set before acting on an arc.",
     }
     no_op_action = {
+        "id": "no_episode_arcs_to_route",
         "kind": "no_episode_arcs_to_route",
         "command": "no-op",
         "mutation_risk": "none",
@@ -508,22 +522,28 @@ def summary_projection(report: Mapping[str, Any]) -> dict[str, Any]:
     }
     no_op = episode_arc_count == 0
     action = no_op_action if no_op else route_action
+    action_fields = canonical_foreground_action_fields(action, safe_next_actions=[action])
     return {
         "kind": "aippocampus_episode_arcs_summary",
         "ok": bool(report.get("ok")),
         "status": report.get("status"),
-        "episode_arc_count": episode_arc_count,
-        "complete_arc_count": metrics.get("complete_arc_count", 0),
-        "gappy_arc_count": metrics.get("gappy_arc_count", 0),
-        "current_validity_counts": dict(_as_mapping(report.get("current_validity_counts"))),
-        "safe_use_counts": dict(_as_mapping(report.get("safe_use_counts"))),
-        "next_action": "Use arcs as navigation-only sequence hints; retrieve handles before source reopen.",
+        "route_value": "navigation_only_sequence_hints_need_source_reopen",
+        "current_uncertainty": (
+            "no_episode_arcs_found_in_scope"
+            if no_op
+            else "aggregate_arc_counts_do_not_prove_current_source_validity"
+        ),
         "what_to_do": "no_episode_arcs_to_route" if no_op else "retrieve_actionable_arc_handles",
         "no_op": no_op,
         "owner_route": owner_route,
-        "foreground_action": action,
-        "agent_next_action": action,
-        "safe_next_actions": [action],
+        **action_fields,
+        "summary_metrics": summary_metrics,
+        "episode_arc_count": episode_arc_count,
+        "complete_arc_count": complete_arc_count,
+        "gappy_arc_count": gappy_arc_count,
+        "current_validity_counts": current_validity_counts,
+        "safe_use_counts": safe_use_counts,
+        "next_action": "Use arcs as navigation-only sequence hints; retrieve handles before source reopen.",
         "full_audit_flag": "--json",
         "privacy_boundary": report.get("privacy_boundary"),
         "claim_boundary": {

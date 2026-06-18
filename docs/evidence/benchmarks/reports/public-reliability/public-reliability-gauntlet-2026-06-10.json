@@ -3,6 +3,8 @@
   "kind": "aippocampus_public_reliability_gauntlet",
   "generated_at": "2026-06-10T09:37:26Z",
   "source_issue": "https://github.com/Sapientropic/AIppocampus/issues/1102",
+  "current_issue_url": "https://github.com/Sapientropic/AIppocampus/issues/2101",
+  "owner_path": "benchmarks/aippocampus/benchmark_public_reliability_gauntlet.py",
   "status": "public_safe_gauntlet_passed_with_boundaries",
   "ok": true,
   "axis_names": [
@@ -576,6 +578,43 @@
     "output_shape": "sanitized_aggregate_axis_report"
   },
   "claim_boundary": "A public-safe reliability gate exists for runtime pressure, mis-recall diagnostics, and pollution hygiene. The axes are intentionally not collapsed into a single score.",
+  "review_next_actions": [
+    {
+      "id": "review_public_reliability_gauntlet_successor",
+      "label": "Review public reliability gauntlet successor",
+      "status": "open_successor",
+      "reason": "#1102 is closed/historical; #2101 is the current owner route for gauntlet action follow-up without broadening the reliability claim.",
+      "mutation_risk": "read_only_or_review_only",
+      "claim_boundary": "owner_route_not_public_reliability_claim",
+      "command": "gh issue view 2101 --comments",
+      "owner_path": "benchmarks/aippocampus/benchmark_public_reliability_gauntlet.py",
+      "issue_url": "https://github.com/Sapientropic/AIppocampus/issues/2101"
+    },
+    {
+      "id": "rerun_public_reliability_gauntlet_json",
+      "label": "Rerun public reliability gauntlet JSON",
+      "status": "actionable",
+      "reason": "Refresh the public-safe axis report before changing claim posture or writing a review packet.",
+      "mutation_risk": "read_only_or_review_only",
+      "claim_boundary": "diagnostic_rerun_not_public_reliability_claim",
+      "command": "python benchmarks/aippocampus/benchmark_public_reliability_gauntlet.py --json",
+      "owner_path": "benchmarks/aippocampus/benchmark_public_reliability_gauntlet.py",
+      "issue_url": "https://github.com/Sapientropic/AIppocampus/issues/2101"
+    }
+  ],
+  "issue_actions": [
+    {
+      "id": "map_cannot_claim_families_to_current_owner",
+      "label": "Map cannot-claim families to current owner",
+      "status": "actionable",
+      "reason": "The gauntlet has useful boundaries; #2101 owns converting those boundaries into review routes or explicit no-action reasons.",
+      "mutation_risk": "read_only_or_review_only",
+      "claim_boundary": "issue_triage_action_not_quality_evidence",
+      "command": "gh issue view 2101 --comments",
+      "owner_path": "benchmarks/aippocampus/benchmark_public_reliability_gauntlet.py",
+      "issue_url": "https://github.com/Sapientropic/AIppocampus/issues/2101"
+    }
+  ],
   "cannot_claim": [
     "answer_generation_quality",
     "broad_memory_superiority",

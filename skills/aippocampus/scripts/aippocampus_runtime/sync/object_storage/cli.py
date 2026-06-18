@@ -23,6 +23,7 @@ from aippocampus_runtime.sync.object_storage.cli_support import (
     explicit_object_prefix_arg,
     explicit_object_store_url_arg,
     object_provider_kwargs,
+    object_sync_backend_chooser,
     object_sync_direction,
     object_sync_direction_plan,
     object_sync_help_card,
@@ -634,21 +635,12 @@ def main(argv: list[str] | None = None) -> int:
         if args.json_output:
             print(
                 json.dumps(
-                    {
-                        "ok": False,
-                        "error": {
-                            "code": "object_store_config_required",
-                            "message": message,
-                            "next_command": (
-                                "aippocampus object-sync status --object-store-url <url> --json"
-                            ),
-                        },
-                    },
+                    object_sync_backend_chooser(requested_command=str(args.command)),
                     ensure_ascii=False,
                     indent=2,
                 )
             )
-            return 2
+            return 0
         parser.error(message)
 
     token = token_from_env(args.token_env)

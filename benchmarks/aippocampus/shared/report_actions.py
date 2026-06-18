@@ -15,8 +15,10 @@ def report_next_action(
     reason: str,
     command: str | None = None,
     owner_path: str | None = None,
+    doc_path: str | None = None,
     required_artifact: str | None = None,
     issue_url: str | None = None,
+    no_action_reason: str | None = None,
     status: str = "actionable",
     claim_boundary: str = "diagnostic_action_not_source_evidence",
 ) -> dict[str, Any]:
@@ -34,10 +36,13 @@ def report_next_action(
         action["command"] = command
     if owner_path:
         action["owner_path"] = owner_path
+    if doc_path:
+        action["doc_path"] = doc_path
     if required_artifact:
         action["required_artifact"] = required_artifact
-    if issue_url:
-        action["issue_url"] = issue_url
+    action["issue_url"] = issue_url or BENCHMARK_CONTRACT_ISSUE_URL
+    if no_action_reason:
+        action["no_action_reason"] = no_action_reason
     return action
 
 

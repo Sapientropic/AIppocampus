@@ -61,7 +61,20 @@ class AgentBackgroundTests(unittest.TestCase):
         self.assertNotIn("findings", payload)
         self.assertNotIn("operator_detail", payload)
         self.assertNotIn("reader_diagnostic", payload)
-        self.assertNotIn("mark_background_finding_helpful", encoded)
+        action_ids = [action["id"] for action in finding["next_actions"]]
+        self.assertEqual(
+            action_ids,
+            [
+                "reopen_background_finding_source_route",
+                "mark_background_finding_helpful",
+                "mark_background_finding_wrong",
+                "keep_background_finding_quiet",
+            ],
+        )
+        self.assertEqual(finding["next_actions"][0]["mutation_risk"], "read_only")
+        for action in finding["next_actions"][1:]:
+            self.assertEqual(action["mutation_risk"], "durable_low_authority_feedback_write")
+            self.assertEqual(action["claim_boundary"], "feedback_is_not_source_truth")
         self.assertNotIn("materialize_action_hint_from_finding", encoded)
         self.assertEqual(finding["shape_label"], "action_hint_candidate")
         self.assertEqual(finding["finding_title"], "Action hint candidate")
@@ -94,6 +107,10 @@ class AgentBackgroundTests(unittest.TestCase):
         self.assertIn("finding_action_learning", actions["reopen_background_finding_source_route"]["command"])
         self.assertEqual(
             actions["mark_background_finding_helpful"]["target"]["finding_id"],
+            "wm_action_time_learning",
+        )
+        self.assertEqual(
+            actions["keep_background_finding_quiet"]["target"]["finding_id"],
             "wm_action_time_learning",
         )
         self.assertEqual(

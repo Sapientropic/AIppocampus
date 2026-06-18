@@ -264,11 +264,14 @@ def compact_provider_doctor_card(report: dict[str, Any]) -> dict[str, Any]:
             "base_url_value_printed": False,
             "operator_env_objects_omitted": True,
         },
-        "cannot_claim": [
-            "running_hook_process_visibility",
-            "provider_credential_validity_without_explicit_probe",
-            "source_backed_memory_claim",
-        ],
+        "boundary_detail": {
+            "cannot_claim": [
+                "running_hook_process_visibility",
+                "provider_credential_validity_without_explicit_probe",
+                "source_backed_memory_claim",
+            ],
+            "frontstage_rule": "compact provider doctor leads with readiness and next check; full detail owns diagnostics",
+        },
     }
     return {
         key: value
@@ -695,7 +698,8 @@ def main(argv: list[str] | None = None) -> int:
         or args.validate_credentials
         or args.include_local_paths
     )
-    if args.summary_json or (args.json_output and not full_detail_json):
+    compact_foreground_output = args.summary_json or (args.json_output and not full_detail_json)
+    if compact_foreground_output:
         emit_public_text(
             json.dumps(
                 compact_provider_doctor_card(report),
@@ -707,7 +711,11 @@ def main(argv: list[str] | None = None) -> int:
         emit_public_text(public_json_text(report))
     else:
         emit_public_text(render_text(report), end="")
-    return 0 if report["ok"] else 2
+    # Compact provider doctor is a foreground chooser: missing optional provider
+    # keys should guide setup without failing agent/CI flows. Full/operator
+    # diagnostics keep a nonzero exit when the requested provider route is not
+    # usable.
+    return 0 if compact_foreground_output or report["ok"] else 2
 
 
 if __name__ == "__main__":

@@ -3,6 +3,8 @@
   "kind": "aippocampus_longmemeval_rerank_analysis",
   "generated_at": "2026-06-14T08:20:40Z",
   "source_issue": "https://github.com/Sapientropic/AIppocampus/issues/1437",
+  "current_issue_url": "https://github.com/Sapientropic/AIppocampus/issues/1437",
+  "owner_path": "benchmarks/aippocampus/benchmark_longmemeval_rerank_analysis.py",
   "related_issues": [
     "https://github.com/Sapientropic/AIppocampus/issues/1092",
     "https://github.com/Sapientropic/AIppocampus/issues/1193",
@@ -711,6 +713,30 @@
     "output_shape": "sanitized_rerank_aggregate_analysis"
   },
   "claim_boundary": "This is the #1437 post-factual-alias closeout over the same sanitized LongMemEval-S first-500 report. It records the miss split, rejects a default exact-line reranker change from this evidence, and keeps any candidate-builder follow-up separate from source-truth or answer-quality claims.",
+  "review_next_actions": [
+    {
+      "id": "review_longmemeval_rerank_owner_issue",
+      "label": "Review LongMemEval rerank owner issue",
+      "status": "actionable",
+      "reason": "Use the issue route before turning this bounded rerank analysis into a current claim or default reranker change.",
+      "mutation_risk": "read_only_or_review_only",
+      "claim_boundary": "issue_route_not_longmemeval_quality_claim",
+      "command": "gh issue view 1437 --comments",
+      "owner_path": "benchmarks/aippocampus/benchmark_longmemeval_rerank_analysis.py",
+      "issue_url": "https://github.com/Sapientropic/AIppocampus/issues/1437"
+    },
+    {
+      "id": "rerun_sanitized_longmemeval_rerank_analysis",
+      "label": "Rerun sanitized LongMemEval rerank analysis",
+      "status": "actionable",
+      "reason": "Regenerate the sanitized report before changing claim posture or adopting a candidate-builder/reranker policy.",
+      "mutation_risk": "read_only_or_review_only",
+      "claim_boundary": "diagnostic_rerun_not_longmemeval_quality_claim",
+      "command": "python benchmarks/aippocampus/benchmark_longmemeval_rerank_analysis.py --report benchmark_corpus/reports/longmemeval-v1-small-structural-500.json --baseline-report benchmark_corpus/reports/longmemeval-v1-small-lexical-500.json --json",
+      "owner_path": "benchmarks/aippocampus/benchmark_longmemeval_rerank_analysis.py",
+      "issue_url": "https://github.com/Sapientropic/AIppocampus/issues/1437"
+    }
+  ],
   "cannot_claim": [
     "answer_generation_quality",
     "broad_reranker_safety",

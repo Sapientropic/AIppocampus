@@ -601,6 +601,7 @@ def _issue_actions() -> list[dict[str, Any]]:
                 "The gauntlet has useful boundaries; #2101 owns converting those "
                 "boundaries into review routes or explicit no-action reasons."
             ),
+            command="gh issue view 2101 --comments",
             owner_path=OWNER_PATH,
             issue_url=CURRENT_ISSUE_URL,
             claim_boundary="issue_triage_action_not_quality_evidence",

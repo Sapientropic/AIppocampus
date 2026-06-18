@@ -14,6 +14,7 @@ from aippocampus_runtime.artifacts.publish import (
     index_pointer_path,
     resolve_sqlite_index_path,
 )
+from aippocampus_runtime.contracts import canonical_foreground_action_fields
 from aippocampus_runtime.privacy import (
     LOCAL_PATH_REDACTION,
     redact_private_paths,
@@ -148,6 +149,60 @@ def _public_import_projection(payload: dict[str, Any], *, include_private_paths:
     )
 
 
+def _bundle_import_preview(args: argparse.Namespace) -> dict[str, Any]:
+    bundle = Path(args.bundle).resolve()
+    if not bundle.is_file():
+        raise FileNotFoundError(f"bundle not found: {bundle}")
+    manifest: dict[str, Any] = {}
+    member_count = 0
+    with zipfile.ZipFile(bundle, "r") as zf:
+        names = zf.namelist()
+        member_count = len(names)
+        if "bundle_manifest.json" in names:
+            manifest = json.loads(zf.read("bundle_manifest.json").decode("utf-8"))
+    primary = {
+        "id": "write_bundle_import_after_preview",
+        "label": "Write bundle import after preview",
+        "command_template": (
+            "aippocampus import {bundle_zip} --dest {destination_folder} "
+            "--name {import_name} --json"
+        ),
+        "requires": ["bundle_zip", "destination_folder", "import_name"],
+        "template_only": True,
+        "mutation_risk": "explicit_local_import_write",
+        "claim_boundary": "operator_transfer_not_memory_claim",
+        "why": "Dry-run only inspected the bundle manifest; rerun explicitly to extract files and optionally append an anchor.",
+    }
+    return redact_sensitive_values(
+        redact_private_paths(
+            {
+                "ok": True,
+                "kind": "aippocampus_bundle_import_preview",
+                "mode": "dry_run",
+                "bundle_label": bundle.name,
+                "route_value": "bundle_import_preview_before_local_write",
+                "current_uncertainty": "preview_did_not_extract_files_or_register_sources",
+                **canonical_foreground_action_fields(primary, safe_next_actions=[primary]),
+                "write_preview": {
+                    "would_extract_bundle": True,
+                    "would_append_anchor": not bool(args.no_anchor),
+                    "would_create_destination_folder": True,
+                    "member_count": member_count,
+                    "message_count": manifest.get("message_count"),
+                    "raw_rollout_included": bool(manifest.get("raw_rollout_included")),
+                    "redaction_profile": manifest.get("redaction_profile"),
+                },
+                "privacy_boundary": {
+                    "local_paths_included": False,
+                    "writes_performed": False,
+                    "bundle_contents_extracted": False,
+                    "anchor_written": False,
+                },
+            }
+        )
+    )
+
+
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="aippocampus import",
@@ -170,6 +225,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--name", help="Folder name under --dest. Defaults to timestamped import.")
     parser.add_argument("--no-anchor", action="store_true", help="Do not append thread-anchors.md.")
+    parser.add_argument("--dry-run", action="store_true", help="Preview extract and anchor writes without mutating local files.")
     parser.add_argument("--json", action="store_true", dest="json_output", help="Emit JSON; accepted for facade consistency.")
     parser.add_argument(
         "--include-private-paths",
@@ -213,6 +269,30 @@ def main(argv: list[str] | None = None) -> int:
     if format_guess in {"generic-jsonl", "jsonl"}:
         print(json.dumps(_transcript_intent_payload(format_guess), ensure_ascii=False, indent=2))
         return 2
+    if args.dry_run:
+        try:
+            payload = _bundle_import_preview(args)
+        except FileNotFoundError as exc:
+            message = str(redact_private_paths(str(exc)))
+            payload = {
+                "ok": False,
+                "kind": "aippocampus_bundle_import_preview",
+                "mode": "dry_run",
+                "error": {
+                    "code": "bundle_not_found",
+                    "message": message,
+                    "bundle_label": Path(str(args.bundle)).name,
+                },
+                "privacy_boundary": {
+                    "local_paths_included": False,
+                    "path_redaction": LOCAL_PATH_REDACTION,
+                    "writes_performed": False,
+                },
+            }
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
+            return 2
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        return 0
     try:
         payload = import_bundle(args)
     except FileNotFoundError as exc:

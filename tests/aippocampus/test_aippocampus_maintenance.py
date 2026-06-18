@@ -592,7 +592,8 @@ class AippocampusMaintenanceTests(unittest.TestCase):
         )
         self.assertNotIn("health_error", payload)
         self.assertNotIn("health_returncode", payload)
-        self.assertEqual(payload["best_next_action"]["id"], "build_clean_source")
+        self.assertNotIn("best_next_action", payload)
+        self.assertEqual(payload["operator_detail"]["best_next_action"]["id"], "build_clean_source")
         self.assertEqual(payload["user_impact"]["recall_usable"], "degraded")
 
     def test_natural_status_subcommand_is_read_only_summary_card(self) -> None:
@@ -643,6 +644,8 @@ class AippocampusMaintenanceTests(unittest.TestCase):
         self.assertEqual(payload["apply_command"], "aippocampus maintenance apply --summary-json")
         self.assertEqual(payload["agent_next_action"]["id"], "review_maintenance_plan")
         self.assertFalse(payload["agent_next_action"]["mutates"])
+        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
+        self.assertEqual(payload["foreground_action"], payload["agent_next_action"])
 
     def test_storage_pressure_best_action_routes_to_bounded_audit(self) -> None:
         def fake_json(cmd: list[str]) -> tuple[int, dict | None, str, str]:
@@ -681,11 +684,29 @@ class AippocampusMaintenanceTests(unittest.TestCase):
 
         self.assertEqual(code, 0)
         self.assertEqual(
-            payload["best_next_action"]["command"],
+            payload["operator_detail"]["best_next_action"]["command"],
             "aippocampus storage gc --dry-run --json --top 1 --cwd .",
         )
-        self.assertEqual(payload["agent_next_action"]["id"], "review_storage_gc_bounded_audit")
+        self.assertEqual(payload["agent_next_action"]["id"], "review_maintenance_plan")
         self.assertFalse(payload["agent_next_action"]["mutates"])
+        action_ids = [action["id"] for action in payload["safe_next_actions"]]
+        self.assertIn("storage_gc_audit", action_ids)
+
+    def test_default_help_hides_activation_compaction_flags(self) -> None:
+        with (
+            mock.patch("sys.stdout", new=StringIO()) as stdout,
+            self.assertRaises(SystemExit) as raised,
+        ):
+            maintenance.main(["--help"])
+
+        help_text = stdout.getvalue()
+
+        self.assertEqual(raised.exception.code, 0)
+        self.assertIn("Safe first steps", help_text)
+        self.assertIn("maintenance apply --summary-json", help_text)
+        self.assertNotIn("--activation-dead-letter-manifest", help_text)
+        self.assertNotIn("--activation-ambient-cache", help_text)
+        self.assertNotIn("--apply-activation-payload-compaction", help_text)
 
     def test_fail_fast_preserves_legacy_raise_on_failed_action(self) -> None:
         with (

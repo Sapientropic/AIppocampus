@@ -28,7 +28,7 @@ canonical schema and validation boundary remain in
 From the repository root:
 
 ```sh
-python skills/aippocampus/scripts/aippocampus_cli.py import conversation --format generic-jsonl --input examples/generic-jsonl-integration/internal-agent-session.jsonl --project "Internal Agent Demo" --dry-run --json
+aippocampus import conversation --format generic-jsonl --input examples/generic-jsonl-integration/internal-agent-session.jsonl --project "Internal Agent Demo" --dry-run --json
 ```
 
 PowerShell users can run the same command; no shell-specific environment
@@ -46,7 +46,7 @@ The dry run should report:
 To create clean-source artifacts in your configured AIppocampus registry:
 
 ```sh
-python skills/aippocampus/scripts/aippocampus_cli.py import conversation --format generic-jsonl --input examples/generic-jsonl-integration/internal-agent-session.jsonl --project "Internal Agent Demo" --json
+aippocampus import conversation --format generic-jsonl --input examples/generic-jsonl-integration/internal-agent-session.jsonl --project "Internal Agent Demo" --json
 ```
 
 Use `AIPPOCAMPUS_REGISTRY_DIR` or `AIPPOCAMPUS_HOME` if you want the import to

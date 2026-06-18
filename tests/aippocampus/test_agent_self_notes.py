@@ -295,8 +295,14 @@ class AgentSelfNoteTests(unittest.TestCase):
         self.assertIsInstance(payload["agent_next_action"], dict)
         self.assertEqual(payload["foreground_action"], payload["agent_next_action"])
         self.assertEqual(payload["safe_next_actions"][0], payload["agent_next_action"])
-        self.assertEqual(payload["agent_next_action"]["id"], "append_direction_only_note")
-        self.assertEqual({choice["label"] for choice in payload["choices"]}, {"append", "search", "list", "read"})
+        self.assertEqual(payload["agent_next_action"]["id"], "list_direction_only_notes")
+        self.assertEqual(payload["agent_next_action"]["mutation_risk"], "read_only")
+        self.assertEqual(
+            [choice["label"] for choice in payload["choices"]],
+            ["list", "search", "append", "read"],
+        )
+        self.assertEqual(payload["choices"][2]["id"], "append_direction_only_note")
+        self.assertIn("write", payload["choices"][2]["mutation_risk"])
 
 
 if __name__ == "__main__":

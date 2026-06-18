@@ -9,9 +9,12 @@ import os
 import sys
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
-from aippocampus_runtime.contracts import foreground_shell_action
+from aippocampus_runtime.contracts import (
+    canonical_foreground_action_fields,
+    foreground_shell_action,
+)
 from aippocampus_runtime.hooks.action_hint_cache import refresh_action_hint_cache
 from aippocampus_runtime.learning_loop.dogfood_cases import build_sanitized_repro_package
 from aippocampus_runtime.learning_loop.foreground_lifecycle import (
@@ -37,7 +40,7 @@ SCHEMA_VERSION = 1
 
 
 def _json_out(payload: Mapping[str, Any]) -> None:
-    print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
+    print(json.dumps(payload, ensure_ascii=False, indent=2))
 
 
 def _public_payload(payload: Any) -> Any:
@@ -113,6 +116,102 @@ def _learning_setup_actions() -> list[dict[str, Any]]:
     ]
 
 
+def _action_identity(action: Mapping[str, Any]) -> tuple[str, str, str]:
+    return (
+        str(action.get("id") or ""),
+        str(action.get("command") or ""),
+        str(action.get("command_template") or ""),
+    )
+
+
+def _unique_actions(*actions: Mapping[str, Any] | None) -> list[dict[str, Any]]:
+    seen: set[tuple[str, str, str]] = set()
+    unique: list[dict[str, Any]] = []
+    for action in actions:
+        if not isinstance(action, Mapping) or not action:
+            continue
+        normalized = dict(action)
+        identity = _action_identity(normalized)
+        if identity in seen:
+            continue
+        seen.add(identity)
+        unique.append(normalized)
+    return unique
+
+
+def _compact_semantic_lifecycle(
+    lifecycle: Mapping[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Keep status/guidance scan-friendly while preserving audit ledgers.
+
+    Lifecycle events are useful for debugging materialization, but they drown
+    the foreground question: what guidance exists and what should the agent do
+    next? The compact projection keeps candidate action cards; full row ledgers
+    move to operator_detail so a future maintainer does not accidentally make
+    the first screen ledger-first again.
+    """
+
+    compact = dict(lifecycle)
+    ledger = compact.pop("guidance_lifecycle_ledger", [])
+    raw_candidates = compact.get("candidate_actions")
+    compact_candidates: list[dict[str, Any]] = []
+    if isinstance(raw_candidates, list):
+        for raw in raw_candidates:
+            if not isinstance(raw, Mapping):
+                continue
+            candidate = dict(raw)
+            candidate.pop("lifecycle_events", None)
+            compact_candidates.append(candidate)
+    compact["candidate_actions"] = compact_candidates
+    operator_detail = {
+        "profile": "learning_lifecycle_operator_detail",
+        "detail_command": "aippocampus learning guidance --json",
+        "guidance_lifecycle_ledger": list(ledger) if isinstance(ledger, list) else [],
+        "claim_boundary": "operator lifecycle rows explain candidate state; they are not source truth",
+    }
+    return compact, operator_detail
+
+
+def _current_guidance_rows(lifecycle: Mapping[str, Any], *, limit: int = 3) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    candidates = lifecycle.get("candidate_actions")
+    if not isinstance(candidates, list):
+        return rows
+    for raw in candidates:
+        if not isinstance(raw, Mapping):
+            continue
+        review_action = raw.get("review_action")
+        row = {
+            "guidance_id": raw.get("guidance_id"),
+            "candidate_kind": raw.get("candidate_kind"),
+            "next_action": raw.get("next_action"),
+            "source_ref_count": raw.get("source_ref_count", 0),
+            "materialization_gate": raw.get("materialization_gate"),
+            "outcome_status": raw.get("outcome_status"),
+            "claim_boundary": raw.get("claim_boundary") or "learning_guidance_not_source_truth",
+        }
+        if isinstance(review_action, Mapping):
+            row["review_action"] = dict(review_action)
+        rows.append(row)
+        if len(rows) >= limit:
+            break
+    return rows
+
+
+def _review_current_guidance_action(current_guidance: list[dict[str, Any]]) -> dict[str, Any] | None:
+    if not current_guidance:
+        return None
+    review_action = current_guidance[0].get("review_action")
+    if not isinstance(review_action, Mapping):
+        return None
+    action = dict(review_action)
+    action["why"] = (
+        "Review the top visible semantic guidance candidate before exporting history "
+        "or writing any action-time cache."
+    )
+    return action
+
+
 def discover_history_payload(*, cwd: Path) -> dict[str, Any]:
     root = cwd.resolve()
     candidates: list[dict[str, Any]] = []
@@ -150,6 +249,15 @@ def discover_history_payload(*, cwd: Path) -> dict[str, Any]:
                 "raw_private_text_loaded": False,
             }
         )
+    setup_actions = _learning_setup_actions()
+    primary_action = {
+        **setup_actions[1],
+        "why": "If no candidate is available yet, inspect guidance before exporting or replaying anything.",
+    }
+    action_fields = canonical_foreground_action_fields(
+        primary_action,
+        safe_next_actions=[primary_action, *setup_actions],
+    )
     return _public_payload(
         _with_boundary_detail(
             {
@@ -161,11 +269,7 @@ def discover_history_payload(*, cwd: Path) -> dict[str, Any]:
             "candidate_count": len(candidates),
             "available_candidate_count": sum(1 for row in candidates if row["status"] == "available"),
             "candidates": candidates,
-            "agent_next_action": {
-                **_learning_setup_actions()[1],
-                "why": "If no candidate is available yet, inspect guidance before exporting or replaying anything.",
-            },
-            "safe_next_actions": _learning_setup_actions(),
+            **action_fields,
             "privacy_boundary": _privacy_boundary(),
             },
             cannot_claim=[
@@ -227,21 +331,6 @@ def status_payload(*, cwd: Path, no_default_learning: bool = False) -> dict[str,
             "default_frontdoor": False,
         },
     }
-    next_actions = []
-    if prepared_count:
-        next_actions.append(
-            {
-                "label": "prepare action-time cache",
-                "command": cache_command,
-            }
-        )
-    else:
-        next_actions.append(
-            {
-                "label": "export and replay current eligible history",
-                "command": current_history_command,
-            }
-        )
     semantic_report = build_semantic_learning_dogfood_fixture_report()
     semantic_metrics = dict(semantic_report.get("metrics") or {})
     semantic_stage = dict((semantic_report.get("stage_report") or {}).get("metrics") or {})
@@ -250,6 +339,45 @@ def status_payload(*, cwd: Path, no_default_learning: bool = False) -> dict[str,
         prepared_count=prepared_count,
         prepared_rows=(report.get("cache") or {}).get("records") or [],
     )
+    compact_lifecycle, operator_detail = _compact_semantic_lifecycle(semantic_lifecycle)
+    current_guidance = _current_guidance_rows(compact_lifecycle)
+    semantic_count = int(semantic_metrics.get("action_time_guidance_count") or 0)
+    summary_metrics = {
+        "default_learning_status": intake.get("status"),
+        "finding_count": intake.get("finding_count", 0),
+        "included_count": intake.get("included_count", 0),
+        "prepared_action_hint_count": prepared_count,
+        "effectiveness_ledger_row_count": ledger_intake.get("row_count", 0),
+        "semantic_loop_stage": (semantic_report.get("stage_report") or {}).get("stage"),
+        "semantic_action_time_guidance_count": semantic_count,
+        "cache_write_requested": False,
+    }
+    primary_action = (
+        foreground_shell_action(
+            action_id="refresh_action_hint_cache",
+            label="Prepare action-time cache",
+            command=cache_command,
+            why="Prepared guidance exists and can be materialized into the local action-hint cache.",
+            mutation_risk="explicit_local_cache_write",
+            claim_boundary="learning_guidance_not_source_truth",
+        )
+        if prepared_count
+        else (_review_current_guidance_action(current_guidance) or _learning_discovery_action())
+    )
+    followup_actions = (
+        _unique_actions(primary_action, *_learning_setup_actions())
+        if prepared_count
+        else _unique_actions(
+            primary_action,
+            preview_cache_bridge_action() if current_guidance else None,
+            *_learning_setup_actions(),
+        )
+    )
+    action_fields = canonical_foreground_action_fields(
+        primary_action,
+        safe_next_actions=followup_actions,
+    )
+    next_actions = cast(list[dict[str, object]], action_fields["safe_next_actions"])[:3]
     return _public_payload(
         _with_boundary_detail(
             {
@@ -257,18 +385,21 @@ def status_payload(*, cwd: Path, no_default_learning: bool = False) -> dict[str,
             "schema_version": SCHEMA_VERSION,
             "mode": "status",
             "ok": True,
-            "summary": {
-                "default_learning_status": intake.get("status"),
-                "finding_count": intake.get("finding_count", 0),
-                "included_count": intake.get("included_count", 0),
-                "prepared_action_hint_count": prepared_count,
-                "effectiveness_ledger_row_count": ledger_intake.get("row_count", 0),
-                "semantic_loop_stage": (semantic_report.get("stage_report") or {}).get("stage"),
-                "semantic_action_time_guidance_count": semantic_metrics.get(
-                    "action_time_guidance_count", 0
-                ),
-                "cache_write_requested": False,
-            },
+            "route_value": "current_learning_guidance_is_navigation_for_next_action",
+            "current_uncertainty": (
+                "prepared_guidance_ready_for_explicit_cache_write"
+                if prepared_count
+                else (
+                    "semantic_guidance_requires_review_before_cache"
+                    if current_guidance
+                    else "no_current_guidance_source_selected"
+                )
+            ),
+            **action_fields,
+            "next_actions": next_actions,
+            "current_guidance": current_guidance,
+            "summary_metrics": summary_metrics,
+            "summary": summary_metrics,
             "lanes": lanes,
             "semantic_loop": {
                 "stage": (semantic_report.get("stage_report") or {}).get("stage"),
@@ -297,21 +428,8 @@ def status_payload(*, cwd: Path, no_default_learning: bool = False) -> dict[str,
                     )
                 ),
             },
-            "semantic_guidance_lifecycle": semantic_lifecycle,
-            "agent_next_action": (
-                foreground_shell_action(
-                    action_id="refresh_action_hint_cache",
-                    label="Prepare action-time cache",
-                    command=cache_command,
-                    why="Prepared guidance exists and can be materialized into the local action-hint cache.",
-                    mutation_risk="explicit_local_cache_write",
-                    claim_boundary="learning_guidance_not_source_truth",
-                )
-                if prepared_count
-                else _learning_discovery_action()
-            ),
-            "next_actions": next_actions,
-            "safe_next_actions": _learning_setup_actions(),
+            "semantic_guidance_lifecycle": compact_lifecycle,
+            "operator_detail": operator_detail,
             "privacy_boundary": _privacy_boundary(),
             },
             cannot_claim=[
@@ -344,14 +462,24 @@ def guidance_payload(*, cwd: Path, no_default_learning: bool = False) -> dict[st
         next_action = _learning_discovery_action()
         materialization_status = "needs_learning_input"
     lifecycle = dict(payload.get("semantic_guidance_lifecycle") or {})
-    safe_next_actions = [preview_cache_bridge_action(), *_learning_setup_actions()]
-    if not semantic_count:
-        safe_next_actions = _learning_setup_actions()
+    current_guidance = list(payload.get("current_guidance") or [])
+    review_action = _review_current_guidance_action(
+        [row for row in current_guidance if isinstance(row, dict)]
+    )
+    safe_next_actions = (
+        _unique_actions(next_action, review_action, *_learning_setup_actions())
+        if semantic_count
+        else _unique_actions(next_action, *_learning_setup_actions())
+    )
+    action_fields = canonical_foreground_action_fields(
+        next_action,
+        safe_next_actions=safe_next_actions,
+    )
     return _public_payload(
         {
             **payload,
             "mode": "guidance",
-            "agent_next_action": next_action,
+            **action_fields,
             "cache_command": "aippocampus hooks action refresh-cache --write --json",
             "semantic_guidance": {
                 "guidance_count": semantic_count,
@@ -359,7 +487,6 @@ def guidance_payload(*, cwd: Path, no_default_learning: bool = False) -> dict[st
                 "cache_materialization_command": "aippocampus hooks action refresh-cache --json",
                 "lifecycle": lifecycle,
             },
-            "safe_next_actions": safe_next_actions,
         }
     )
 
@@ -810,7 +937,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    args_list = list(argv or [])
+    args_list = list(sys.argv[1:] if argv is None else argv)
     if not args_list:
         args_list = ["status"]
     parser = build_parser()

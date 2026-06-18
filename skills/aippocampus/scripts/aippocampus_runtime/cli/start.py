@@ -108,21 +108,32 @@ def _start_actions(cwd: Path, state: dict[str, Any]) -> tuple[str, list[dict[str
             ),
         ]
     if state["trusted_codex_candidate"]:
-        return "trusted_codex_setup_then_recall", [
-            foreground_shell_action(
-                action_id="install_or_verify_codex_plugin",
-                label="Install or verify Codex plugin",
-                command="aippocampus plugin install --codex --verify --json",
-                why="Trusted local checkout can refresh the Codex plugin before foreground recall.",
-                mutation_risk="writes_local_plugin_cache",
-                claim_boundary="install_status_not_recall_quality",
-            ),
+        return "try_read_only_continuity_before_setup", [
             _template_action(
-                action_id="recall_after_setup",
-                label="Recall after setup",
+                action_id="try_first_recall",
+                label="Try first recall",
                 command_template='aippocampus agent recall "{continuity_cue}" --json',
                 requires=["continuity_cue"],
-                why="After setup, use source-backed route recall as the normal first continuity path.",
+                why=(
+                    "The packaged CLI is callable from a trusted checkout; try a read-only "
+                    "continuity route before changing plugin or hook state."
+                ),
+            ),
+            _template_action(
+                action_id="public_safe_demo_search",
+                label="Try public-safe exact search",
+                command_template='aippocampus search "{exact_phrase}" --json',
+                requires=["exact_phrase"],
+                why="Use when there is no private source yet but a public fixture or exact phrase is available.",
+                claim_boundary="exact_search_result_requires_source_scope",
+            ),
+            foreground_shell_action(
+                action_id="verify_codex_plugin_secondary",
+                label="Install or verify Codex plugin",
+                command="aippocampus plugin install --codex --verify --json",
+                why="Setup remains available, but it is not the ordinary first continuity answer.",
+                mutation_risk="writes_local_plugin_cache",
+                claim_boundary="install_status_not_recall_quality",
             ),
         ]
     return "register_source_before_continuity", [
@@ -158,7 +169,7 @@ def build_start_card(cwd: Path, *, clean_source_dir: str | None = None, detail: 
         "kind": "aippocampus_start_card",
         "schema_version": SCHEMA_VERSION,
         "ok": True,
-        "status": "ready" if decision.startswith(("continue", "trusted")) else "needs_setup",
+        "status": "ready" if decision.startswith(("continue", "try_read_only")) else "needs_setup",
         "surface_class": "foreground_chooser_card",
         "foreground_action_contract": FOREGROUND_ACTION_CONTRACT_VERSION,
         "decision": decision,

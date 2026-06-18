@@ -9,7 +9,12 @@ import os
 import sys
 from pathlib import Path
 
+from aippocampus_runtime.contracts import (
+    canonical_foreground_action_fields,
+    foreground_shell_action,
+)
 from aippocampus_runtime.core import codex_home, default_thread_index_dir, parse_anchor_file
+from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 from aippocampus_runtime.registry.api import register_current_thread
 from aippocampus_runtime.vault.dashboard import html_dashboard_v2
 from aippocampus_runtime.vault.notes import (
@@ -20,6 +25,10 @@ from aippocampus_runtime.vault.notes import (
     heartbeat_note,
     homepage,
     obsidian_snippet_css,
+)
+from aippocampus_runtime.vault.sync_cards import (
+    vault_status_action,
+    vault_sync_read_only_payload,
 )
 from aippocampus_runtime.vault.utils import (
     DEFAULT_SITE_TITLE,
@@ -41,11 +50,12 @@ from conversation_sources import PROVIDER_CHOICES, create_conversation_provider
 SCRIPT_DIR = Path(__file__).resolve().parents[2]
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="aippocampus vault sync",
         description="Sync thread-memory artifacts into a local human-readable vault and dashboard.",
     )
+    parser.add_argument("mode", nargs="?", choices=["status", "preview", "write"])
     parser.add_argument("--cwd", default=os.getcwd())
     parser.add_argument("--vault", default=str(DEFAULT_VAULT))
     parser.add_argument("--automation-name")
@@ -57,10 +67,32 @@ def main() -> int:
         help="Conversation source provider for registry refresh.",
     )
     parser.add_argument("--json", action="store_true", dest="json_output")
-    args = parser.parse_args()
+    parser.add_argument("--operator-json", action="store_true")
+    parser.add_argument("--dry-run", "--preview", action="store_true", dest="dry_run")
+    parser.add_argument("--write", action="store_true", dest="write_mode")
+    args = parser.parse_args(argv)
 
     cwd = Path(args.cwd).resolve()
     vault = Path(args.vault).resolve()
+    write_requested = bool(args.write_mode or args.mode == "write")
+    read_only_mode = "preview" if args.dry_run or args.mode == "preview" else "status"
+    if not write_requested:
+        payload = vault_sync_read_only_payload(
+            cwd=cwd,
+            vault=vault,
+            mode=read_only_mode,
+            automation_name=args.automation_name,
+            provider=args.provider,
+            include_operator_detail=bool(args.operator_json),
+        )
+        if args.json_output or args.operator_json:
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
+        else:
+            print("vault sync: read-only preview")
+            print("next: aippocampus vault sync --dry-run --json")
+            print("write: aippocampus vault sync --write --json")
+        return 0
+
     vault.mkdir(parents=True, exist_ok=True)
 
     if not args.no_hook:
@@ -138,18 +170,57 @@ def main() -> int:
         provider=create_conversation_provider(args.provider, codex_home_dir=codex_home()),
     )
 
-    summary = {
-        "vault": str(vault),
+    summary: dict[str, object] = {
+        "kind": "aippocampus_vault_sync",
+        "ok": True,
+        "mode": "write",
+        "status": "written",
+        "vault": "<local-vault-redacted>",
         "thread": thread_slug,
-        "dashboard_note": str(dashboard_path),
-        "dashboard_html": str(dashboard_html_path),
+        "dashboard_note": "<local-vault-dashboard-note-redacted>",
+        "dashboard_html": "<local-vault-dashboard-html-redacted>",
         "anchor_notes": len(anchor_paths),
         "health_ok": health.get("ok"),
         "message_count": health.get("rollout", {}).get("message_count"),
         "anchor_count": len(anchors),
-        "registry_json": registry.get("registry_json"),
-        "registry_markdown": registry.get("registry_markdown"),
+        "registry_json": "<local-registry-path-redacted>",
+        "registry_markdown": "<local-registry-path-redacted>",
+        "route_value": "vault_dashboard_written_for_human_review",
+        "current_uncertainty": "vault_dashboard_write_does_not_prove_memory_correctness",
+        **canonical_foreground_action_fields(
+            foreground_shell_action(
+                action_id="inspect_vault_dashboard",
+                label="Inspect vault dashboard",
+                command="aippocampus vault sync --dry-run --json",
+                why="Re-run the read-only card when deciding whether another vault write is needed.",
+                mutation_risk="read_only",
+                claim_boundary="vault_dashboard_status_not_memory_evidence",
+            ),
+            safe_next_actions=[vault_status_action()],
+        ),
+        "write_boundary": {
+            "writes_performed": True,
+            "mutated": [
+                "local_vault_dashboard_files",
+                "local_vault_notes",
+                "local_thread_registry_entry",
+            ],
+        },
+        "privacy_boundary": {
+            "local_paths_included": False,
+            "writes_performed": True,
+            "raw_private_text_serialized": False,
+        },
     }
+    if args.operator_json:
+        summary["operator_detail"] = {
+            "vault": str(vault),
+            "dashboard_note": str(dashboard_path),
+            "dashboard_html": str(dashboard_html_path),
+            "registry_json": registry.get("registry_json"),
+            "registry_markdown": registry.get("registry_markdown"),
+        }
+    summary = redact_sensitive_values(redact_private_paths(summary))
     if args.json_output:
         print(json.dumps(summary, ensure_ascii=False, indent=2))
     else:

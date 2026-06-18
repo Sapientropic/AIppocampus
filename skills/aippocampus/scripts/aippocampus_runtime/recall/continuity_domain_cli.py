@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.contracts import (
+    canonical_foreground_action_fields,
     foreground_recovery_card,
     foreground_shell_action,
 )
@@ -547,8 +548,17 @@ def _producer_candidate_previews(payload: MappingPayload) -> list[MappingPayload
 def _producer_agent_preview(payload: MappingPayload) -> MappingPayload:
     clean = _strip_producer_local_detail(payload)
     previews = _producer_candidate_previews(payload)
+    metrics = dict(payload.get("metrics") or {})
     clean["detail"] = "agent_preview"
     clean["candidate_previews"] = previews
+    clean["summary_metrics"] = {
+        "registered_thread_count": metrics.get("registered_thread_count", 0),
+        "considered_thread_count": metrics.get("considered_thread_count", 0),
+        "scanned_thread_count": metrics.get("scanned_thread_count", 0),
+        "candidate_count": metrics.get("candidate_count", len(previews)),
+        "scan_partial": bool(metrics.get("scan_partial")),
+    }
+    clean["route_value"] = "continuity_domain_candidates_are_navigation_routes"
     clean["preview_boundary"] = {
         "candidate_events_emitted": False,
         "raw_source_refs_emitted": False,
@@ -568,12 +578,18 @@ def _producer_agent_preview(payload: MappingPayload) -> MappingPayload:
             "command": (primary_action or {}).get("command")
             or 'aippocampus agent recall "continuity domain candidate" --json',
             "requires_operator_review": False,
+            "mutation_risk": "read_only",
+            "claim_boundary": "no_claim_before_reopen",
+            "why": "Continuity-domain previews can route attention, but recall/deepen must reopen source before claims.",
         }
+        clean["current_uncertainty"] = "candidate_preview_requires_recall_deepen_before_claim"
         clean["operator_next_action"] = {
             "id": "append_after_reviewed_backfill",
             "label": "Only after operator review, append/publish durable continuity domains.",
             "command": "aippocampus continuity-domain produce --append --publish --json",
             "requires_operator_review": True,
+            "mutation_risk": "explicit_continuity_domain_write",
+            "claim_boundary": "operator_review_required_before_durable_memory",
         }
     elif previews:
         clean["foreground_candidate_quality"] = "needs_broader_scan"
@@ -582,7 +598,11 @@ def _producer_agent_preview(payload: MappingPayload) -> MappingPayload:
             "label": "Only low-information continuity-domain cues surfaced; broaden the scan or provide a user cue.",
             "command": "aippocampus continuity-domain preview --broad-scan --json",
             "requires_operator_review": False,
+            "mutation_risk": "read_only",
+            "claim_boundary": "preview_not_source_truth",
+            "why": "Low-information candidates are not useful enough for foreground routing yet.",
         }
+        clean["current_uncertainty"] = "low_information_candidates_need_broader_scan_or_user_cue"
     else:
         clean["foreground_candidate_quality"] = "needs_broader_scan"
         clean["agent_next_action"] = {
@@ -590,7 +610,21 @@ def _producer_agent_preview(payload: MappingPayload) -> MappingPayload:
             "label": "No supported continuity-domain candidates were found; keep the public dry-run report as evidence.",
             "command": "aippocampus continuity-domain preview --broad-scan --json",
             "requires_operator_review": False,
+            "mutation_risk": "read_only",
+            "claim_boundary": "preview_not_source_truth",
+            "why": "No preview candidate is available in this bounded scan.",
         }
+        clean["current_uncertainty"] = "bounded_scan_found_no_supported_candidates"
+    clean.update(
+        canonical_foreground_action_fields(
+            clean["agent_next_action"],
+            safe_next_actions=[
+                clean["agent_next_action"],
+                _ordinary_recall_path_action(),
+                _preview_domain_candidates_action(broad=True),
+            ],
+        )
+    )
     return redact_sensitive_values(redact_private_paths(clean))
 
 

@@ -3,6 +3,27 @@
 Initial evidence date: 2026-05-27.
 Repository-layout command paths refreshed: 2026-05-29.
 
+## Currentness Card
+
+page_last_structural_review: 2026-06-18; this page is a dated verification
+ledger and router.
+
+latest_numeric_claim_source: `docs/evidence/current-claims.md`; this page keeps
+the command evidence that supported earlier rows.
+
+current_status: use this page to reopen what was actually run, then compare
+against `stage-0-5-readiness.md` and Current Claims before making a present-tense
+readiness statement.
+
+remaining_gaps: public marketplace submission, fresh-clone review, and wider
+provider/client sync evidence still need explicit dated verification before
+claim expansion.
+
+owner_routes: `docs/evidence/readiness/stage-0-5-readiness.md`,
+`docs/evidence/current-claims.md`, `docs/evidence/benchmark-evidence-map.md`.
+
+next_verification_command: `python tools\aippocampus\docs\check_docs_health.py --json`.
+
 This file is a dated verification ledger. It preserves summarized command
 evidence for release-readiness work, but the current Stage 0-5 claim boundary
 lives in `docs/evidence/readiness/stage-0-5-readiness.md` and the canonical product requirements

@@ -9,6 +9,20 @@ benchmark family. Start from [`../README.md`](../README.md),
 [`../../current-claims.md`](../../current-claims.md) before treating any report
 as current evidence.
 
+## Report Router Task Card
+
+current_claim_owner: `docs/evidence/current-claims.md`.
+
+latest_promoted_report: `docs/evidence/benchmarks/reports/longmemeval/factual-alias/longmemeval-post-factual-alias-rerank-closeout-500-2026-06-14.md`.
+
+safe_next_action: open the family README first, then run
+`python tools\aippocampus\docs\check_docs_health.py --json` before promoting a
+dated report into a current claim row.
+
+historical_boundary: reports are provenance and bounded evidence; they do not
+become present-tense claims until Current Claims or a verified issue route owns
+the promotion.
+
 ## Families
 
 | Family | Use |

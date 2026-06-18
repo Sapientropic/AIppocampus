@@ -67,3 +67,57 @@ def storage_gc_foreground_actions(
             "Use --apply only for rebuildable cache candidates with deterministic source, lease, active-thread, and manifest checks.",
         ],
     }
+
+
+def storage_gc_summary_actions(*, limit: int, include_apply: bool) -> list[dict[str, Any]]:
+    """Return compact summary choices without making cleanup feel inevitable.
+
+    Summary JSON is a foreground chooser, not an audit report. Keep bounded
+    audit first so agents can get deterministic candidate detail before any
+    mutation. Keep stop/no-cleanup second because "do nothing" is a valid safe
+    outcome when the user did not ask for cleanup. Only expose apply when the
+    summary was built from existing evidence that can be audited and rebuilt.
+    """
+
+    top = max(1, int(limit))
+    actions: list[dict[str, Any]] = [
+        {
+            "id": "bounded_storage_audit",
+            "label": "Run bounded storage audit",
+            "command": f"aippocampus storage gc --dry-run --json --top {top} --cwd .",
+            "mutation_risk": "read_only",
+            "claim_boundary": "operator_diagnostic_not_source_evidence",
+            "why": "Open a small no-write candidate sample before deciding whether cleanup is worthwhile.",
+        },
+        {
+            "id": "stop_without_cleanup",
+            "label": "Stop without cleanup",
+            "message": "No cleanup is required from this summary; continue without mutating storage.",
+            "mutation_risk": "read_only",
+            "claim_boundary": "storage_pressure_summary_not_memory_quality_evidence",
+            "why": "Storage GC is optional operator work unless the user explicitly chooses audit/apply.",
+        },
+    ]
+    if include_apply:
+        actions.append(
+            {
+                "id": "apply_rebuildable_after_audit",
+                "label": "Apply rebuildable cleanup after audit",
+                "command": "aippocampus storage gc --apply --class rebuildable --summary-json --cwd .",
+                "mutation_risk": "explicit_local_delete_of_rebuildable_cache",
+                "claim_boundary": "operator_action_not_source_evidence",
+                "why": "Apply only after the bounded/full audit confirms rebuildable candidates and checks.",
+                "requires_prior_audit": True,
+                "deterministic_checks": [
+                    "source_or_retention_report_available",
+                    "active_thread_exclusion",
+                    "reader_pin_or_ttl_contract",
+                    "apply_time_manifest_or_rebuild_path",
+                ],
+                "rollback_or_rebuild_boundary": (
+                    "Applies only to rebuildable cache classes; source history is protected "
+                    "and the documented rebuild path must restore the cache."
+                ),
+            }
+        )
+    return actions

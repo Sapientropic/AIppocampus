@@ -8,6 +8,7 @@ from argparse import Namespace
 from collections.abc import Callable
 from typing import Any
 
+from aippocampus_runtime.contracts import canonical_foreground_action_fields
 from aippocampus_runtime.sync.object_storage.client import OBJECT_BACKEND, safe_endpoint_label
 
 OBJECT_SYNC_COMMANDS = {"status", "push", "pull", "repair"}
@@ -138,6 +139,63 @@ def object_sync_direction_plan(args: Namespace) -> dict[str, Any]:
     }
 
 
+def object_sync_backend_chooser(*, requested_command: str) -> dict[str, Any]:
+    actions = [
+        {
+            "id": "check_object_sync_status",
+            "label": "Check object-sync status after choosing backend",
+            "command_template": "aippocampus object-sync status --object-store-url {object_store_url} --json",
+            "requires": ["object_store_url"],
+            "template_only": True,
+            "mutation_risk": "read_only",
+            "claim_boundary": "object_sync_status_not_source_evidence",
+            "why": "Choose an object backend before status or plan touches any object-store route.",
+        },
+        {
+            "id": "check_object_sync_provider_status",
+            "label": "Check provider-backed object-sync status",
+            "command_template": (
+                "aippocampus object-sync status --object-provider {object_provider} "
+                "--object-bucket {object_bucket} --json"
+            ),
+            "requires": ["object_provider", "object_bucket"],
+            "template_only": True,
+            "mutation_risk": "read_only",
+            "claim_boundary": "object_sync_status_not_source_evidence",
+            "why": "Use provider fields when no direct object-store URL is available.",
+        },
+        {
+            "id": "preview_object_sync_after_backend",
+            "label": "Preview object sync after backend selection",
+            "command_template": (
+                "aippocampus object-sync {requested_command} --plan "
+                "--object-store-url {object_store_url} --json"
+            ),
+            "requires": ["requested_command", "object_store_url"],
+            "template_only": True,
+            "mutation_risk": "read_only",
+            "claim_boundary": "object_sync_plan_not_source_evidence",
+            "why": "Preview remains read-only after a backend has been selected.",
+        },
+    ]
+    primary = actions[0]
+    return {
+        "kind": "aippocampus_object_sync_backend_chooser",
+        "ok": True,
+        "status": "needs_object_backend_before_plan",
+        "requested_command": requested_command,
+        "route_value": "object_sync_backend_must_be_selected_before_planning",
+        "current_uncertainty": "no_object_store_url_or_provider_selected",
+        **canonical_foreground_action_fields(primary, safe_next_actions=actions),
+        "privacy_boundary": {
+            "endpoint_included": False,
+            "object_prefix_included": False,
+            "bucket_or_account_included": False,
+            "writes_performed": False,
+        },
+    }
+
+
 def _object_sync_status_actions() -> list[dict[str, Any]]:
     return [
         {
@@ -260,7 +318,8 @@ def print_object_sync_human_result(command: str, result: dict[str, Any]) -> None
         print(f"raw rollout: {str(public.get('raw_rollout_included')).lower()}")
         for issue in public.get("issues") or []:
             print(f"- {issue.get('code')}: {issue.get('path') or issue.get('message')}")
-        action = public.get("agent_next_action") if isinstance(public.get("agent_next_action"), dict) else {}
+        action_raw = public.get("agent_next_action")
+        action = action_raw if isinstance(action_raw, dict) else {}
         print(f"next: {action.get('command') or action.get('label') or 'aippocampus object-sync push --plan --json'}")
         print(
             "boundary: endpoint/prefix/path hidden by default; preview push/pull/repair with --plan first; "

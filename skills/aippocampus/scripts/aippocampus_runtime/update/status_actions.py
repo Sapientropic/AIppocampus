@@ -95,18 +95,25 @@ def action_hint_recommended_actions() -> list[dict[str, str]]:
             "id": "refresh_action_hints",
             "label": "Refresh action-hint cache",
             "command": "aippocampus hooks action refresh-cache --write --json",
+            "mutation_risk": "explicit_local_cache_write",
         },
         {
             "id": "install_action_hints",
             "label": "Install action-time hints",
             "command": "aippocampus hooks action install --json",
+            "mutation_risk": "writes_local_hooks_config",
         },
         {
             "id": "rollback_action_hints",
             "label": "Rollback action-time hints",
             "command": "aippocampus hooks action uninstall --json",
+            "mutation_risk": "writes_local_hooks_config",
         },
     ]
+
+
+def action_hint_status_command() -> str:
+    return "aippocampus hooks action status --json"
 
 
 def _extract_command_template(value: str) -> str:
@@ -375,10 +382,8 @@ def foreground_status_cards(report: dict[str, Any]) -> list[dict[str, Any]]:
                 "why": (
                     "Action-time hints are recommended setup for trusted Codex sessions, but remain fail-open navigation hints rather than source evidence or a recall blocker."
                 ),
-                "command": str(
-                    action_hints.get("next_command")
-                    or "aippocampus hooks action refresh-cache --write --json"
-                ),
+                "command": action_hint_status_command(),
+                "mutation_risk": "read_only",
                 "recommended_next_actions": action_hint_recommended_actions(),
             }
         )

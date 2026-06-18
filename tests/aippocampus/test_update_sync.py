@@ -1181,6 +1181,30 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertFalse(payload["action_hints"]["hot_path_active"])
         self.assertEqual(payload["action_hints"]["setup_role"], "cleanup_or_prepare_required")
         self.assertFalse(payload["action_hints"]["cache_exists"])
+        self.assertEqual(payload["action_hints"]["next_command"], "aippocampus hooks action status --json")
+        recommended_actions = {
+            action["id"]: action for action in payload["action_hints"]["recommended_next_actions"]
+        }
+        self.assertEqual(
+            recommended_actions["refresh_action_hints"]["mutation_risk"],
+            "explicit_local_cache_write",
+        )
+        self.assertEqual(
+            recommended_actions["install_action_hints"]["mutation_risk"],
+            "writes_local_hooks_config",
+        )
+        card = next(
+            item
+            for item in payload["foreground_status_cards"]
+            if item["id"] == "action_hint_cache"
+        )
+        self.assertEqual(card["command"], "aippocampus hooks action status --json")
+        self.assertEqual(card["mutation_risk"], "read_only")
+        self.assertIn("refresh_action_hints", {action["id"] for action in card["recommended_next_actions"]})
+        action_hint_next = next(
+            item for item in payload["next_actions"] if item["surface"] == "action_hints"
+        )
+        self.assertEqual(action_hint_next["command"], "aippocampus hooks action status --json")
         self.assertIn("action_hints", {action["surface"] for action in payload["next_actions"]})
         self.assertNotIn(str(codex_home), raw)
         self.assertNotIn(str(cache_path), raw)

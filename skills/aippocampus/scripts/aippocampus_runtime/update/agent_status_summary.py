@@ -85,10 +85,7 @@ def compact_agent_status_report(
         )
     )
     action_hint_recommended_actions = update_actions.action_hint_recommended_actions()
-    action_hint_primary_command = (
-        action_hints.get("next_command")
-        or action_hint_recommended_actions[0]["command"]
-    )
+    action_hint_primary_command = update_actions.action_hint_status_command()
     deferred_components = []
     for name, item in surfaces.items():
         if not isinstance(item, dict) or not item.get("operator_detail_available"):

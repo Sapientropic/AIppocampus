@@ -6,6 +6,20 @@ import re
 from pathlib import Path
 
 CURRENT_CLAIMS_SNAPSHOT_DOC = "docs/evidence/current-claims.md"
+CURRENT_CLAIMS_FOREGROUND_BUDGET_CHARS = 3200
+CURRENT_CLAIMS_FOREGROUND_TERMS = {
+    "## Claim Reviewer Card": "current claims missing compact claim reviewer card",
+    "current_status:": "current claims reviewer card missing current status",
+    "can_say:": "current claims reviewer card missing can-say line",
+    "cannot_say:": "current claims reviewer card missing cannot-say line",
+    "owner_routes:": "current claims reviewer card missing owner routes",
+    "next_verification_command:": (
+        "current claims reviewer card missing next verification command"
+    ),
+    "## Detailed Evidence Index": (
+        "current claims missing detailed evidence index boundary after reviewer card"
+    ),
+}
 
 REQUIRED_CURRENT_CLAIMS_TERMS = {
     "## Current Claim Snapshot": "current claims snapshot missing current snapshot section",
@@ -108,6 +122,7 @@ def current_claims_snapshot_issues(repo_root: Path) -> list[str]:
             if term not in text:
                 issues.append(issue)
         issues.extend(cannot_claim_retirement_issues(text))
+        issues.extend(current_claims_foreground_issues(repo_root))
 
     for rel_path, issue in CURRENT_CLAIMS_POINTER_DOCS.items():
         path = repo_root / rel_path
@@ -124,6 +139,19 @@ def current_claims_snapshot_issues(repo_root: Path) -> list[str]:
             if phrase in text or phrase in normalized_text:
                 issues.append(issue)
 
+    return issues
+
+
+def current_claims_foreground_issues(repo_root: Path) -> list[str]:
+    issues: list[str] = []
+    snapshot = repo_root / CURRENT_CLAIMS_SNAPSHOT_DOC
+    if not snapshot.exists():
+        return [f"missing current claims snapshot: {CURRENT_CLAIMS_SNAPSHOT_DOC}"]
+    text = snapshot.read_text(encoding="utf-8")
+    foreground = text[:CURRENT_CLAIMS_FOREGROUND_BUDGET_CHARS]
+    for term, issue in CURRENT_CLAIMS_FOREGROUND_TERMS.items():
+        if term not in foreground:
+            issues.append(issue)
     return issues
 
 

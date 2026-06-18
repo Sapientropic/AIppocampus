@@ -301,6 +301,35 @@ class AippocampusMcpServerTests(unittest.TestCase):
         self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
         self.assertEqual(executable_command_violations(payload), [])
 
+    def test_mcp_status_present_tools_gives_current_thread_chooser_and_loop_guide(self) -> None:
+        payload = tool_readiness.tool_readiness_summary()
+
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
+        self.assertEqual(payload["foreground_action"]["id"], "inspect_current_thread_tool_discovery")
+        self.assertEqual(payload["foreground_action"]["mutation_risk"], "read_only")
+        self.assertIn("aippocampus update status --json", payload["foreground_action"]["command"])
+        self.assertEqual(payload["agent_next_action"], payload["foreground_action"])
+        self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
+        self.assertEqual(len(payload["safe_next_actions"]), 4)
+        action_ids = [action["id"] for action in payload["safe_next_actions"]]
+        self.assertEqual(
+            action_ids,
+            [
+                "inspect_current_thread_tool_discovery",
+                "try_agent_recall",
+                "deepen_last_recall_route",
+                "record_route_feedback",
+            ],
+        )
+        guide = payload["tool_use_guide"]
+        self.assertEqual(guide["primary_consumer_field"], "foreground_action")
+        self.assertIn("agent_recall", guide["when_to_use"])
+        self.assertIn("agent_deepen", guide["when_to_use"])
+        self.assertIn("agent_feedback", guide["when_to_use"])
+        self.assertIn("current_thread_visibility_missing", guide["fallbacks"])
+        self.assertEqual(executable_command_violations(payload), [])
+
     def test_mcp_exposes_agent_native_read_tools_with_navigation_boundary(self) -> None:
         last_recall_env = "AIPPOCAMPUS_AGENT_LAST_RECALL_PATH"
         old_last_recall = os.environ.get(last_recall_env)
@@ -433,13 +462,12 @@ class AippocampusMcpServerTests(unittest.TestCase):
         self.assertTrue(aippo_payload["boundary"]["navigation_only_not_fact"])
         self.assertNotIn("cannot_claim", aippo_payload)
         self.assertIn("source_backed_facts", aippo_payload["claim_boundary"]["must_reopen_for"])
+        self.assertNotIn("contract_action", aippo_payload)
+        contract_action = aippo_payload["operator_detail"]["contract_action"]
+        self.assertEqual(contract_action["action_id"], "deepen_aippo_working_contract")
+        self.assertEqual(contract_action["tool_name"], "agent_deepen")
         self.assertEqual(
-            aippo_payload["contract_action"]["action_id"],
-            "deepen_aippo_working_contract",
-        )
-        self.assertEqual(aippo_payload["contract_action"]["tool_name"], "agent_deepen")
-        self.assertEqual(
-            aippo_payload["contract_action"]["claim_boundary"],
+            contract_action["claim_boundary"],
             "source_reopen_required_before_claim",
         )
         self.assertNotIn("activation_packet", aippo_payload)
@@ -470,7 +498,11 @@ class AippocampusMcpServerTests(unittest.TestCase):
             aippo_no_task_payload["agent_next_action"],
         )
         self.assertNotIn("operator_json_command", aippo_no_task_payload)
-        self.assertIn("operator_json_command_template", aippo_no_task_payload)
+        self.assertNotIn("operator_json_command_template", aippo_no_task_payload)
+        self.assertIn(
+            "operator_json_command_template",
+            aippo_no_task_payload["operator_detail"],
+        )
         self.assertNotIn("task cue", encoded_no_task)
         self.assertEqual(executable_command_violations(aippo_no_task_payload), [])
 
@@ -1655,7 +1687,11 @@ class AippocampusMcpServerTests(unittest.TestCase):
         self.assertEqual(agent_payload["status"], "needs_input")
         self.assertEqual(agent_payload["surface_class"], "foreground_recovery_card")
         self.assertEqual(agent_payload["foreground_action_contract"], "foreground-action-v1")
-        self.assertEqual(agent_payload["result"]["error"]["code"], "missing_recall_handle")
+        self.assertEqual(agent_payload["error"]["code"], "missing_recall_handle")
+        self.assertEqual(
+            agent_payload["operator_detail"]["result"]["error"]["code"],
+            "missing_recall_handle",
+        )
         assert_recall_template_action(self, agent_payload["foreground_action"])
         self.assertEqual(agent_payload["agent_next_action"], agent_payload["foreground_action"])
         self.assertIn(

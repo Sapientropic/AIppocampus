@@ -11,6 +11,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.contracts import canonical_foreground_action_fields
 from aippocampus_runtime.privacy import (
     LOCAL_PATH_REDACTION,
     redact_private_paths,
@@ -361,17 +362,8 @@ def maintenance_safe_next_actions(best: dict, *, read_only: bool) -> list[dict[s
 
 def maintenance_agent_next_action(best: dict, *, read_only: bool) -> dict[str, Any]:
     action_id = str(best.get("id") or "")
-    command = best.get("command")
     if read_only and action_id == "continue":
         return _continue_without_maintenance_action(best)
-    if action_id == "storage_gc_rebuildable_cache" and command:
-        return {
-            "id": "review_storage_gc_bounded_audit",
-            "kind": "shell_command",
-            "command": command,
-            "mutates": False,
-            "reason": "storage pressure needs a bounded audit before apply/no-apply",
-        }
     if read_only:
         return _read_only_plan_action()
     return {
@@ -492,6 +484,8 @@ def summary_payload(result: dict) -> dict:
         if isinstance(item, dict)
     ]
     best = best_next_action(result.get("remaining_recommended_actions") or [])
+    agent_action = maintenance_agent_next_action(best, read_only=False)
+    safe_actions = maintenance_safe_next_actions(best, read_only=False)
     return {
         "kind": "aippocampus_maintenance_summary",
         "ok": result.get("maintenance_status") in {"ok", "degraded"},
@@ -514,7 +508,6 @@ def summary_payload(result: dict) -> dict:
             for item in (result.get("action_failures") or [])[:5]
         ],
         "remaining_recommended_actions": remaining,
-        "best_next_action": best,
         "user_impact": user_impact(
             result.get("health_final"),
             result.get("remaining_recommended_actions") or [],
@@ -522,8 +515,12 @@ def summary_payload(result: dict) -> dict:
         "full_audit_available": True,
         "full_audit_flag": "--json",
         "plan_first_command": STATUS_COMMAND,
-        "agent_next_action": maintenance_agent_next_action(best, read_only=False),
-        "safe_next_actions": maintenance_safe_next_actions(best, read_only=False),
+        **canonical_foreground_action_fields(agent_action, safe_next_actions=safe_actions),
+        "operator_detail": {
+            "best_next_action": best,
+            "apply_actions": [action for action in safe_actions if action.get("mutates")],
+            "claim_boundary": "maintenance actions are operational state, not memory evidence",
+        },
     }
 
 
@@ -546,6 +543,8 @@ def plan_payload(
     command_ok = health_returncode == 0 and health is not None
     maintenance_ok = command_ok and health_maintenance_ok(health)
     best = best_next_action(recommended)
+    agent_action = maintenance_agent_next_action(best, read_only=True)
+    safe_actions = maintenance_safe_next_actions(best, read_only=True)
     payload = {
         "kind": (
             "aippocampus_maintenance_summary"
@@ -568,7 +567,6 @@ def plan_payload(
             for item in recommended[:8]
             if isinstance(item, dict)
         ],
-        "best_next_action": best,
         "user_impact": user_impact(health, recommended),
         "apply_command": APPLY_SUMMARY_COMMAND,
         "full_audit_available": True,
@@ -579,8 +577,12 @@ def plan_payload(
             "writes_performed": False,
             "source_text_included": False,
         },
-        "agent_next_action": maintenance_agent_next_action(best, read_only=True),
-        "safe_next_actions": maintenance_safe_next_actions(best, read_only=True),
+        **canonical_foreground_action_fields(agent_action, safe_next_actions=safe_actions),
+        "operator_detail": {
+            "best_next_action": best,
+            "apply_actions": [action for action in safe_actions if action.get("mutates")],
+            "claim_boundary": "maintenance actions are operational state, not memory evidence",
+        },
     }
     if not command_ok and health_error:
         payload["health_probe"] = {
@@ -636,17 +638,17 @@ def main(argv: list[str] | None = None) -> int:
     )
     activation_group.add_argument(
         "--activation-dead-letter-manifest",
-        help="Explicit dead-letter apply manifest for activation payload compaction.",
+        help=argparse.SUPPRESS,
     )
-    activation_group.add_argument("--activation-ambient-cache")
-    activation_group.add_argument("--activation-working-memory")
-    activation_group.add_argument("--activation-semantic-triggers")
-    activation_group.add_argument("--activation-active-recall-locks")
-    activation_group.add_argument("--activation-compacted-at")
+    activation_group.add_argument("--activation-ambient-cache", help=argparse.SUPPRESS)
+    activation_group.add_argument("--activation-working-memory", help=argparse.SUPPRESS)
+    activation_group.add_argument("--activation-semantic-triggers", help=argparse.SUPPRESS)
+    activation_group.add_argument("--activation-active-recall-locks", help=argparse.SUPPRESS)
+    activation_group.add_argument("--activation-compacted-at", help=argparse.SUPPRESS)
     activation_group.add_argument(
         "--apply-activation-payload-compaction",
         action="store_true",
-        help="Allow activation owner files to be rewritten; dry-run is the default.",
+        help=argparse.SUPPRESS,
     )
     foreground_group.add_argument("--json", action="store_true", dest="json_output")
     foreground_group.add_argument(

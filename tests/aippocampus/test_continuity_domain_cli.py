@@ -93,11 +93,18 @@ class ContinuityDomainCliTests(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stderr)
         payload = json.loads(proc.stdout)
         self.assertEqual(payload["detail"], "agent_preview")
+        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
+        self.assertEqual(payload["foreground_action"], payload["agent_next_action"])
+        self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
+        self.assertIn("route_value", payload)
+        self.assertIn("current_uncertainty", payload)
+        self.assertIn("summary_metrics", payload)
         self.assertEqual(
             payload["preview_scan_policy"]["mode"],
             "foreground_bounded_default",
         )
         self.assertEqual(payload["metrics"]["registered_thread_count"], 12)
+        self.assertEqual(payload["summary_metrics"]["registered_thread_count"], 12)
         self.assertEqual(payload["metrics"]["considered_thread_count"], 8)
         self.assertEqual(payload["metrics"]["scanned_thread_count"], 8)
         self.assertTrue(payload["metrics"]["scan_partial"])

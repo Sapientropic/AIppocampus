@@ -5,6 +5,8 @@ from __future__ import annotations
 from typing import Any
 
 from aippocampus_runtime import core
+from aippocampus_runtime.contracts import canonical_foreground_action_fields
+from aippocampus_runtime.ops.storage_governance_actions import storage_gc_summary_actions
 
 
 def _bounded_items(items: list[dict[str, Any]], *, limit: int) -> tuple[list[dict[str, Any]], bool]:
@@ -184,6 +186,14 @@ def bounded_cli_projection(
                 "reclaimable_review_artifact_bytes",
             )
         )
+        summary_actions = storage_gc_summary_actions(
+            limit=limit,
+            include_apply=bool(candidates) and pressure_present,
+        )
+        action_fields = canonical_foreground_action_fields(
+            summary_actions[0],
+            safe_next_actions=summary_actions,
+        )
         projection = {
             "kind": "aippocampus_storage_gc_summary",
             "schema_version": report.get("schema_version", schema_version),
@@ -221,6 +231,7 @@ def bounded_cli_projection(
                 "source_history_protected": True,
                 "full_candidate_preconditions_deferred": True,
             },
+            **action_fields,
             "safe_next_action": {
                 "decision": "inspect bounded audit sample before any apply",
                 "command": audit_command,

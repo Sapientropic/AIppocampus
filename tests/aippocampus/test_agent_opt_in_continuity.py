@@ -1960,9 +1960,10 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
         self.assertNotIn("cannot_claim", payload)
         self.assertIn("source_backed_facts", payload["claim_boundary"]["must_reopen_for"])
-        self.assertIn("operator_json_command_template", payload)
+        self.assertNotIn("operator_json_command_template", payload)
+        self.assertIn("operator_json_command_template", payload["operator_detail"])
         self.assertNotIn("operator_json_command", payload)
-        self.assertEqual(payload["operator_json_requires"], ["task_cue"])
+        self.assertEqual(payload["operator_detail"]["operator_json_requires"], ["task_cue"])
         self.assertNotIn("activation_packet", payload)
         self.assertNotIn("metrics", payload)
         self.assertNotIn("red_lines", payload)
@@ -1992,7 +1993,7 @@ class AgentOptInContinuityTests(unittest.TestCase):
 
         self.assertEqual(proc.returncode, 0, proc.stderr)
         payload = json.loads(proc.stdout)
-        status = payload["contract_status"]
+        status = payload["operator_detail"]["contract_status"]
 
         self.assertEqual(payload["foreground_action"]["action_id"], "use_hint")
         self.assertNotIn("cannot_claim", payload)
@@ -2002,7 +2003,7 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertGreaterEqual(status["contract_active_clause_count"], status["active_clause_count"])
         self.assertIn("active_not_foreground_available_count", status)
         self.assertEqual(
-            payload["match_diagnostics"]["available_active_clause_count"],
+            payload["operator_detail"]["match_diagnostics"]["available_active_clause_count"],
             status["available_active_clause_count"],
         )
 
@@ -2029,7 +2030,10 @@ class AgentOptInContinuityTests(unittest.TestCase):
         payload = json.loads(proc.stdout)
 
         self.assertEqual(payload["status"], "no_active_contract")
-        self.assertEqual(payload["contract_status"]["available_active_clause_count"], 0)
+        self.assertEqual(
+            payload["operator_detail"]["contract_status"]["available_active_clause_count"],
+            0,
+        )
         self.assertNotEqual(payload["foreground_action"]["action_id"], "use_hint")
         self.assertEqual(payload["foreground_action"]["tool_name"], "agent_recall")
         self.assertIn("no_task_family_match", payload["reason_codes"])
@@ -2064,11 +2068,18 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertEqual(action["tool_name"], "agent_aippo")
         self.assertEqual(action["requires"], ["task_cue"])
         self.assertEqual(action["blocked_by"], ["task_cue_required"])
-        self.assertEqual(payload["contract_status"]["availability_basis"], "task_cue_required")
-        self.assertEqual(payload["contract_status"]["blocked_by"], ["task_cue_required"])
+        self.assertEqual(
+            payload["operator_detail"]["contract_status"]["availability_basis"],
+            "task_cue_required",
+        )
+        self.assertEqual(
+            payload["operator_detail"]["contract_status"]["blocked_by"],
+            ["task_cue_required"],
+        )
         self.assertEqual(payload["safe_next_actions"][0], action)
         self.assertNotIn("operator_json_command", payload)
-        self.assertIn("operator_json_command_template", payload)
+        self.assertNotIn("operator_json_command_template", payload)
+        self.assertIn("operator_json_command_template", payload["operator_detail"])
         self.assertNotIn("task cue", encoded)
         self.assertEqual(executable_command_violations(payload), [])
 
@@ -2240,7 +2251,9 @@ class AgentOptInContinuityTests(unittest.TestCase):
         )
 
         self.assertNotEqual(proc.returncode, 0)
-        self.assertIn("max must be >= 1", proc.stderr)
+        payload = json.loads(proc.stdout)
+        self.assertEqual(payload["error"]["code"], "usage_error")
+        self.assertIn("max must be >= 1", payload["error"]["message"])
 
     def test_cli_agent_recall_public_json_writes_local_request_followup_cache(self) -> None:
         last_recall_path = self.cwd / "last-recall.json"

@@ -268,10 +268,15 @@ def missing_handle_payload(
             "error": body["error"],
             "ok": False,
             "cli_exit_recommended": "nonzero",
-            "result" if mode == "deepen" else "explanation": body,
             **handle_recovery_fields(mode),
-            "policy_boundary": policy_boundary(),
-            "cannot_claim": ["source_backed_claim", "route_handle_as_fact"],
+            "boundary_detail": {
+                "cannot_claim": ["source_backed_claim", "route_handle_as_fact"],
+                "frontstage_rule": "compact recovery cards name the next input instead of listing caveats",
+            },
+            "operator_detail": {
+                "result" if mode == "deepen" else "explanation": body,
+                "policy_boundary": policy_boundary(),
+            },
         }
     )
 
@@ -561,6 +566,8 @@ def public_recall_projection(payload: Mapping[str, Any], *, query: str | None = 
     projected.update(handle_boundary_fields())
     projected["surface"] = "agent_cli_public_compact"
     projected["output_boundary"] = "public_compact_no_local_private_handles"
+    projected["routes"] = _public_compact_route_receipts(projected.get("routes"))
+    projected.pop("policy_boundary", None)
     cache_available = bool(source.get("last_recall_cache_available"))
     projected["last_recall_cache_available"] = cache_available
     action = projected.get("foreground_action")
@@ -759,29 +766,6 @@ def compact_aippo_guidance_card(payload: Mapping[str, Any], *, task: str = "") -
             "agent_next_action": foreground_action,
             "safe_next_actions": safe_next_actions,
             "reason_codes": deduped_reason_codes,
-            "contract_status": {
-                "active_clause_count": active_clause_count,
-                "available_active_clause_count": available_active_clause_count,
-                "contract_active_clause_count": contract_active_clause_count,
-                "active_not_foreground_available_count": active_not_foreground_available_count,
-                "suppressed_clause_count": suppressed_clause_count,
-                "availability_basis": str(
-                    "task_cue_required"
-                    if not task_text
-                    else packet.get("availability_basis")
-                    or "unknown_packet_projection"
-                ),
-                **({"blocked_by": ["task_cue_required"]} if not task_text else {}),
-            },
-            "match_diagnostics": {
-                "task_family_count": len(families),
-                "selected_clause_count": active_clause_count,
-                "available_active_clause_count": available_active_clause_count,
-                "contract_active_clause_count": contract_active_clause_count,
-                "active_not_foreground_available_count": active_not_foreground_available_count,
-                "direct_guidance_available": direct_guidance_available,
-            },
-            "contract_action": contract_action,
             "boundary": {
                 "authority": "working_guidance",
                 "navigation_only_not_fact": True,
@@ -800,11 +784,36 @@ def compact_aippo_guidance_card(payload: Mapping[str, Any], *, task: str = "") -
                 ),
                 "detail_requires": ["task_cue"],
             },
-            "operator_json_available": True,
-            "operator_json_command_template": (
-                'aippocampus agent aippo --task "{task_cue}" --json --operator-json'
-            ),
-            "operator_json_requires": ["task_cue"],
+            "operator_detail": {
+                "contract_status": {
+                    "active_clause_count": active_clause_count,
+                    "available_active_clause_count": available_active_clause_count,
+                    "contract_active_clause_count": contract_active_clause_count,
+                    "active_not_foreground_available_count": active_not_foreground_available_count,
+                    "suppressed_clause_count": suppressed_clause_count,
+                    "availability_basis": str(
+                        "task_cue_required"
+                        if not task_text
+                        else packet.get("availability_basis")
+                        or "unknown_packet_projection"
+                    ),
+                    **({"blocked_by": ["task_cue_required"]} if not task_text else {}),
+                },
+                "match_diagnostics": {
+                    "task_family_count": len(families),
+                    "selected_clause_count": active_clause_count,
+                    "available_active_clause_count": available_active_clause_count,
+                    "contract_active_clause_count": contract_active_clause_count,
+                    "active_not_foreground_available_count": active_not_foreground_available_count,
+                    "direct_guidance_available": direct_guidance_available,
+                },
+                "contract_action": contract_action,
+                "operator_json_available": True,
+                "operator_json_command_template": (
+                    'aippocampus agent aippo --task "{task_cue}" --json --operator-json'
+                ),
+                "operator_json_requires": ["task_cue"],
+            },
         }
     )
 
@@ -890,6 +899,42 @@ def _public_safe_recall_query(query: str | None) -> str:
     clean = clean.replace("<sensitive-value-redacted>", "")
     clean = " ".join(clean.split())
     return clean[:240]
+
+
+def _public_compact_route_receipts(routes: Any) -> list[dict[str, Any]]:
+    receipts: list[dict[str, Any]] = []
+    for route in routes or []:
+        if not isinstance(route, Mapping):
+            continue
+        action = route.get("action")
+        action_map = action if isinstance(action, Mapping) else {}
+        compact_action = {
+            "id": action_map.get("id"),
+            "tool_name": action_map.get("tool_name"),
+            "arguments": action_map.get("arguments"),
+            "cli_command": action_map.get("cli_command"),
+            "route_choice_posture": action_map.get("route_choice_posture"),
+            "confidence": action_map.get("confidence"),
+            "claim_boundary": action_map.get("claim_boundary"),
+        }
+        receipts.append(
+            {
+                key: value
+                for key, value in {
+                    "route_index": route.get("route_index"),
+                    "route_id": route.get("route_id"),
+                    "route_label": route.get("route_label"),
+                    "choice_reason": route.get("choice_reason"),
+                    "action": {
+                        key: value
+                        for key, value in compact_action.items()
+                        if value not in (None, "", [])
+                    },
+                }.items()
+                if value not in (None, "", [], {})
+            }
+        )
+    return receipts
 
 
 def _mapping_or_empty(value: Any) -> Mapping[str, Any]:

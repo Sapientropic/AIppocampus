@@ -65,13 +65,13 @@ orphan assistant row.
 Validate the export first:
 
 ```powershell
-python skills\aippocampus\scripts\aippocampus_cli.py import conversation --format generic-jsonl --input path\to\aippocampus-browser-memory-SESSION.jsonl --dry-run --json
+aippocampus import conversation --format generic-jsonl --input path\to\aippocampus-browser-memory-SESSION.jsonl --dry-run --json
 ```
 
 Then import it into the local registry:
 
 ```powershell
-python skills\aippocampus\scripts\aippocampus_cli.py import conversation --format generic-jsonl --input path\to\aippocampus-browser-memory-SESSION.jsonl --json
+aippocampus import conversation --format generic-jsonl --input path\to\aippocampus-browser-memory-SESSION.jsonl --json
 ```
 
 ## Automated Coverage
