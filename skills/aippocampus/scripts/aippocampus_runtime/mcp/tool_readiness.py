@@ -29,6 +29,24 @@ def tool_names_summary() -> dict[str, Any]:
     return {"ok": True, "tool_count": len(names), "tool_names": names}
 
 
+def _tool_use_guide() -> dict[str, Any]:
+    return {
+        "primary_consumer_field": "foreground_action",
+        "when_to_use": {
+            "agent_recall": "Use first when the agent has a task cue, old correction, issue title, or handoff phrase.",
+            "agent_deepen": "Use after recall surfaces a numbered route that may support a claim or decision.",
+            "agent_feedback": "Use after judging a route as helpful, wrong, stale, noisy, or quiet-worthy.",
+        },
+        "fallbacks": {
+            "current_thread_visibility_missing": (
+                "Run recall with a concrete cue or exact search; tool discovery is routing metadata, not source evidence."
+            ),
+            "route_selector_missing": "Run agent_recall again or request detail=full only for local diagnostics.",
+        },
+        "boundary": "tool_discovery_routes_attention_source_claims_require_recall_or_deepen",
+    }
+
+
 def tool_readiness_summary() -> dict[str, Any]:
     names = visible_tool_names()
     key_present = [name for name in KEY_AGENT_NATIVE_TOOLS if name in names]
@@ -62,7 +80,18 @@ def tool_readiness_summary() -> dict[str, Any]:
         )
         payload.update(canonical_foreground_action_fields(primary, safe_next_actions=[primary, status]))
     else:
-        primary = foreground_template_action(
+        primary = foreground_shell_action(
+            action_id="inspect_current_thread_tool_discovery",
+            command="aippocampus update status --json",
+            label="Inspect current-thread continuity tools",
+            why=(
+                "MCP tools are visible; inspect current-thread status before choosing "
+                "recall, deepen, or feedback."
+            ),
+            mutation_risk="read_only",
+            claim_boundary="tool_discovery_not_memory_evidence",
+        )
+        recall = foreground_template_action(
             action_id="try_agent_recall",
             command_template='aippocampus agent recall "{cue}" --json',
             requires=["cue"],
@@ -71,5 +100,31 @@ def tool_readiness_summary() -> dict[str, Any]:
             mutation_risk="read_only",
             claim_boundary="no_claim_before_reopen",
         )
-        payload.update(canonical_foreground_action_fields(primary, safe_next_actions=[primary]))
+        deepen = foreground_template_action(
+            action_id="deepen_last_recall_route",
+            command_template="aippocampus agent deepen --request {request_index} --last-recall --json",
+            requires=["last_recall_cache", "request_index"],
+            label="Open a selected recall route",
+            why="Use only after recall returns a numbered route selector.",
+            mutation_risk="read_only",
+            claim_boundary="no_claim_before_reopen",
+        )
+        feedback = foreground_template_action(
+            action_id="record_route_feedback",
+            command_template=(
+                "aippocampus agent feedback {route_id} --outcome {feedback_outcome} --json"
+            ),
+            requires=["route_id", "feedback_outcome"],
+            label="Record route feedback",
+            why="Use after a route helped, misled, went stale, or should stay quiet.",
+            mutation_risk="durable_low_authority_feedback_write",
+            claim_boundary="feedback_is_not_source_truth",
+        )
+        payload["tool_use_guide"] = _tool_use_guide()
+        payload.update(
+            canonical_foreground_action_fields(
+                primary,
+                safe_next_actions=[primary, recall, deepen, feedback],
+            )
+        )
     return payload

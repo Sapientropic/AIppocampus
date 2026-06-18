@@ -246,11 +246,20 @@ class AgentDeepenCompactProjectionTests(unittest.TestCase):
             },
         )
         encoded_recall = json.dumps(recall_payload, ensure_ascii=False, sort_keys=True)
+        route = recall_payload["routes"][0]
         route_action = recall_payload["routes"][0]["action"]
         self.assertEqual(route_action["id"], "deepen_this_route")
         self.assertEqual(route_action["tool_name"], "agent_deepen")
         self.assertEqual(route_action["arguments"], {"request_index": 1, "last_recall": True})
         self.assertIn("--request 1 --last-recall --json", route_action["cli_command"])
+        self.assertEqual(route["callable_selector"]["kind"], "last_recall_request_index")
+        self.assertEqual(route["callable_selector"]["request_index"], 1)
+        self.assertEqual(route["display_id"], route["route_id"])
+        self.assertEqual(route["feedback_id"], route["route_id"])
+        self.assertEqual(
+            route["private_handle_boundary"],
+            "compact_output_redacts_local_private_handle_use_callable_selector",
+        )
         self.assertNotIn('"handle":', encoded_recall)
         self.assertNotIn('"callable_handle":', encoded_recall)
         self.assertNotIn('"source_refs":', encoded_recall)
@@ -269,6 +278,19 @@ class AgentDeepenCompactProjectionTests(unittest.TestCase):
         self.assertEqual(compact_payload["detail"], "compact")
         self.assertEqual(compact_payload["surface"], "mcp_agent_deepen_compact")
         self.assertEqual(compact_payload["source_window_summary"]["message_count"], 2)
+        self.assertEqual(compact_payload["foreground_action_contract"], "foreground-action-v1")
+        self.assertEqual(compact_payload["foreground_action"]["id"], "use_opened_source_window")
+        self.assertEqual(compact_payload["agent_next_action"], compact_payload["foreground_action"])
+        self.assertEqual(compact_payload["safe_next_actions"][0], compact_payload["foreground_action"])
+        feedback_ids = [action["id"] for action in compact_payload["feedback_actions"]]
+        self.assertEqual(
+            feedback_ids,
+            ["mark_route_helpful", "mark_route_wrong", "keep_route_quiet"],
+        )
+        for action in compact_payload["feedback_actions"]:
+            self.assertEqual(action["mutation_risk"], "durable_low_authority_feedback_write")
+            self.assertEqual(action["claim_boundary"], "feedback_is_not_source_truth")
+            self.assertIn(f"aippocampus agent feedback {route['feedback_id']}", action["command"])
         self.assertNotIn("result", compact_payload)
         self.assertNotIn("source_window", compact_payload)
         self.assertNotIn('"messages"', compact_encoded)

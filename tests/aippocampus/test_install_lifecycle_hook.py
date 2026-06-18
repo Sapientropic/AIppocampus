@@ -149,9 +149,10 @@ class InstallMemoryMaintenanceHookTests(unittest.TestCase):
         installer.install(self.hooks_json, timeout=12)
         installed = installer.public_lifecycle_result(installer.status(self.hooks_json))
         self.assertEqual(installed["foreground_action"]["status"], "installed")
-        self.assertEqual(installed["agent_next_action"]["id"], "no_action_needed")
+        self.assertEqual(installed["agent_next_action"]["id"], "try_first_recall_after_lifecycle_hooks")
+        self.assertEqual(installed["agent_next_action"]["mutation_risk"], "read_only")
         installed_action_ids = [action["id"] for action in installed["safe_next_actions"]]
-        self.assertIn("no_action_needed", installed_action_ids)
+        self.assertIn("check_lifecycle_hook_status", installed_action_ids)
         self.assertIn("rollback_lifecycle_hooks", installed_action_ids)
 
         data = self.read_hooks()

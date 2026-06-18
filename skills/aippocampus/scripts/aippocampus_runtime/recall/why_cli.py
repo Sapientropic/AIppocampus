@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sys
 from typing import Any, Mapping
 
 from aippocampus_runtime.contracts import FOREGROUND_ACTION_CONTRACT_VERSION
@@ -307,7 +308,7 @@ def render_recovery_text(payload: Mapping[str, Any]) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
-    args_list = list(argv or [])
+    args_list = list(sys.argv[1:] if argv is None else argv)
     mode = "why-recall"
     if args_list and args_list[0] in {"why-recall", "why-not-recall", "why-not"}:
         raw_mode = args_list.pop(0)

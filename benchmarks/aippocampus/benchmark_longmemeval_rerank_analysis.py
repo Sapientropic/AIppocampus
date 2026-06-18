@@ -27,9 +27,13 @@ from aippocampus_runtime.core import now_utc
 from benchmarks.aippocampus.shared.benchmark_entrypoints import (  # noqa: E402
     missing_required_input_payload,
 )
+from benchmarks.aippocampus.shared.report_actions import report_next_action  # noqa: E402
 
 SCHEMA_VERSION = 1
 DEFAULT_FULL_RUN_QUESTIONS = 500
+LONGMEMEVAL_RERANK_ANALYSIS_OWNER_PATH = (
+    "benchmarks/aippocampus/benchmark_longmemeval_rerank_analysis.py"
+)
 RERANK_LADDER_KS = (1, 3, 5, 10, 20, 50)
 SEMANTIC_QUERY_CACHE_POLICY_VERSION = "longmemeval-semantic-query-cache-replay-v1"
 SEMANTIC_CACHE_KEY_FIELDS = [
@@ -642,6 +646,40 @@ def _hash_json(value: Any, *, length: int = 16) -> str:
     return hashlib.sha1(payload.encode("utf-8")).hexdigest()[:length]
 
 
+def _review_next_actions(source_issue: str) -> list[dict[str, Any]]:
+    return [
+        report_next_action(
+            action_id="review_longmemeval_rerank_owner_issue",
+            label="Review LongMemEval rerank owner issue",
+            reason=(
+                "Use the issue route before turning this bounded rerank analysis "
+                "into a current claim or default reranker change."
+            ),
+            command=f"gh issue view {source_issue.rsplit('/', maxsplit=1)[-1]} --comments",
+            owner_path=LONGMEMEVAL_RERANK_ANALYSIS_OWNER_PATH,
+            issue_url=source_issue,
+            claim_boundary="issue_route_not_longmemeval_quality_claim",
+        ),
+        report_next_action(
+            action_id="rerun_sanitized_longmemeval_rerank_analysis",
+            label="Rerun sanitized LongMemEval rerank analysis",
+            reason=(
+                "Regenerate the sanitized report before changing claim posture "
+                "or adopting a candidate-builder/reranker policy."
+            ),
+            command=(
+                "python benchmarks/aippocampus/benchmark_longmemeval_rerank_analysis.py "
+                "--report benchmark_corpus/reports/longmemeval-v1-small-structural-500.json "
+                "--baseline-report benchmark_corpus/reports/longmemeval-v1-small-lexical-500.json "
+                "--json"
+            ),
+            owner_path=LONGMEMEVAL_RERANK_ANALYSIS_OWNER_PATH,
+            issue_url=source_issue,
+            claim_boundary="diagnostic_rerun_not_longmemeval_quality_claim",
+        ),
+    ]
+
+
 def _latency_summary(values: Sequence[float]) -> dict[str, Any]:
     if not values:
         return {"count": 0}
@@ -1239,6 +1277,8 @@ def analyze_rerank_report(
         "kind": "aippocampus_longmemeval_rerank_analysis",
         "generated_at": now_utc(),
         "source_issue": source_issue,
+        "current_issue_url": source_issue,
+        "owner_path": LONGMEMEVAL_RERANK_ANALYSIS_OWNER_PATH,
         "related_issues": sorted(related_issues),
         "source_report": {
             "kind": report.get("kind"),
@@ -1386,6 +1426,7 @@ def analyze_rerank_report(
             "output_shape": "sanitized_rerank_aggregate_analysis",
         },
         "claim_boundary": claim_boundary,
+        "review_next_actions": _review_next_actions(source_issue),
         "cannot_claim": sorted(
             {
                 *(str(item) for item in report.get("cannot_claim") or []),

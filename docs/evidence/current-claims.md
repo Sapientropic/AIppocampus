@@ -11,6 +11,33 @@ context. It is not a command ledger and it does not replace source reports.
 
 Snapshot date: 2026-06-15.
 
+## Claim Reviewer Card
+
+current_status: current owner for promoted benchmark/readiness numbers; dated
+reports remain bounded evidence until a row below promotes or supersedes them.
+
+can_say: AIppocampus has source-backed continuity evidence for the named rows,
+within each row's `run_date`, `cohort`, `claim_level`, `supports`, and
+`material_limits`.
+
+cannot_say: do not claim new benchmark quality, public readiness, live host
+behavior, private-history quality, or official external scores from a historical
+report title alone.
+
+owner_routes:
+
+- Current numeric claims: `docs/evidence/current-claims.md#current-claim-snapshot`.
+- Readiness status and gaps: `docs/evidence/readiness/stage-0-5-readiness.md`.
+- Benchmark report routers: `docs/evidence/benchmarks/reports/README.md`.
+
+next_verification_command:
+
+```powershell
+python tools\aippocampus\docs\check_docs_health.py --json
+```
+
+## Detailed Evidence Index
+
 Rules:
 
 - A value is current only for the `run_date`, `cohort`, and `claim_level` named

@@ -15,6 +15,18 @@ or closed remediation routes, start from
 [`../current-claims.md`](../current-claims.md) before opening dated reports in
 this folder.
 
+## Report Router Task Card
+
+current_claim_owner: `docs/evidence/current-claims.md`.
+
+latest_promoted_report: `reports/longmemeval/factual-alias/longmemeval-post-factual-alias-rerank-closeout-500-2026-06-14.md`.
+
+safe_next_action: use `reports/README.md` to choose a family router, then verify
+the claim row with `python tools\aippocampus\docs\check_docs_health.py --json`.
+
+historical_boundary: benchmark reports and design notes are navigation and
+bounded evidence; Current Claims owns present-tense numeric posture.
+
 ## Reader Path
 
 | Reader need | Start here | Why |

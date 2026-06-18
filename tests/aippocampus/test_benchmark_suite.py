@@ -268,6 +268,7 @@ class BenchmarkSuiteTests(unittest.TestCase):
                     "label": "Escalate release evidence",
                     "owner_path": "benchmarks/aippocampus/benchmark_suite.py",
                     "issue_url": "https://github.com/Sapientropic/AIppocampus/issues/2100",
+                    "command": "gh issue view 2100 --comments",
                 }
             ],
             "tracks": {"large_track": {"cases": ["x" * 10_000]}},
@@ -607,21 +608,48 @@ class BenchmarkSuiteTests(unittest.TestCase):
                     "label": "Route owner review",
                     "owner_path": "benchmarks/aippocampus/example.py",
                     "issue_url": "https://github.com/Sapientropic/AIppocampus/issues/2100",
+                    "command": "python benchmarks/aippocampus/example.py --json",
                 }
             ],
         }
+        high_signal_with_owner_but_no_command = {
+            **high_signal_without_followup,
+            "review_next_actions": [
+                {
+                    "id": "route_owner_review",
+                    "label": "Route owner review",
+                    "owner_path": "benchmarks/aippocampus/example.py",
+                    "issue_url": "https://github.com/Sapientropic/AIppocampus/issues/2100",
+                }
+            ],
+        }
+        high_signal_historical_no_action = {
+            **high_signal_without_followup,
+            "no_open_followup_reason": (
+                "Historical diagnostic retained as bounded evidence; "
+                "docs/evidence/current-claims.md owns current claim posture."
+            ),
+        }
 
         rejected = benchmark_report_contract_lint(high_signal_without_followup)
+        owner_only = benchmark_report_contract_lint(high_signal_with_owner_but_no_command)
         accepted = benchmark_report_contract_lint(high_signal_with_followup)
+        historical = benchmark_report_contract_lint(high_signal_historical_no_action)
 
         self.assertFalse(rejected["ok"])
         self.assertIn("cannot_claim_without_followup", rejected["findings"])
         self.assertIn("metrics_without_owner_action", rejected["findings"])
         self.assertEqual(rejected["followup_action_count"], 0)
         self.assertEqual(rejected["owner_route_count"], 0)
+        self.assertFalse(owner_only["ok"])
+        self.assertIn("cannot_claim_without_followup", owner_only["findings"])
+        self.assertEqual(owner_only["followup_action_count"], 0)
+        self.assertEqual(owner_only["owner_route_count"], 1)
         self.assertTrue(accepted["ok"], accepted)
         self.assertEqual(accepted["followup_action_count"], 1)
         self.assertEqual(accepted["owner_route_count"], 1)
+        self.assertTrue(historical["ok"], historical)
+        self.assertEqual(historical["no_action_reason_count"], 1)
 
     def test_linter_accepts_bounded_support_fields_without_public_quality_claim(self) -> None:
         bounded = {

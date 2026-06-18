@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sys
 import tempfile
 import unittest
@@ -164,6 +165,65 @@ class DocsHealthTests(unittest.TestCase):
             claude_skill.index("## First Success Path"),
             claude_skill.index("## Repair And Host Diagnostics"),
         )
+
+    def test_start_here_and_examples_keep_packaged_recall_first(self) -> None:
+        start_here = (REPO_ROOT / "docs" / "start-here.md").read_text(encoding="utf-8")
+        readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+
+        recall_command = 'aippocampus agent recall "old decision or handoff cue" --json'
+        self.assertLess(readme.index(recall_command), readme.index("## Quick Start"))
+        self.assertLess(start_here.index("## First Recall"), start_here.index("## See And Add To Memory"))
+        self.assertLess(start_here.index(recall_command), start_here.index("aippocampus vault sync --json"))
+
+        repo_issues = docs_health.foreground_continuity_doc_issues(REPO_ROOT)
+        self.assertEqual([], repo_issues)
+
+    def test_claim_and_report_router_cards_are_guarded(self) -> None:
+        self.assertEqual([], docs_health.current_claims_foreground_issues(REPO_ROOT))
+        self.assertEqual([], docs_health.benchmark_report_router_issues(REPO_ROOT))
+        self.assertEqual([], docs_health.currentness_card_issues(REPO_ROOT))
+
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            current_claims = repo / "docs" / "evidence" / "current-claims.md"
+            router = repo / "docs" / "evidence" / "benchmarks" / "reports" / "README.md"
+            readiness = repo / "docs" / "evidence" / "readiness" / "stage-0-5-readiness.md"
+            current_claims.parent.mkdir(parents=True)
+            router.parent.mkdir(parents=True)
+            readiness.parent.mkdir(parents=True)
+            current_claims.write_text("# Current Evidence Claims\n", encoding="utf-8")
+            router.write_text("# Benchmark Report Layer\n", encoding="utf-8")
+            readiness.write_text("# Stage 0-5 Readiness Snapshot\n", encoding="utf-8")
+
+            self.assertTrue(docs_health.current_claims_foreground_issues(repo))
+            self.assertTrue(docs_health.benchmark_report_router_issues(repo))
+            self.assertTrue(docs_health.currentness_card_issues(repo))
+
+    def test_signed_benchmark_reports_have_actionable_followup_or_no_action_reason(self) -> None:
+        warnings, metrics = docs_health.benchmark_report_followup_warnings(REPO_ROOT)
+
+        self.assertGreaterEqual(metrics["json_reports_checked"], 2)
+        warning_text = "\n".join(warnings)
+        self.assertNotIn("public-reliability-gauntlet-2026-06-10.json", warning_text)
+        self.assertNotIn(
+            "longmemeval-post-factual-alias-rerank-closeout-500-2026-06-14.analysis.json",
+            warning_text,
+        )
+
+        public_reliability = json.loads(
+            (
+                REPO_ROOT
+                / "docs"
+                / "evidence"
+                / "benchmarks"
+                / "reports"
+                / "public-reliability"
+                / "public-reliability-gauntlet-2026-06-10.json"
+            ).read_text(encoding="utf-8")
+        )
+        self.assertIn("review_next_actions", public_reliability)
+        self.assertTrue(public_reliability["review_next_actions"][0]["owner_path"])
+        self.assertTrue(public_reliability["review_next_actions"][0]["issue_url"])
 
     def test_provider_key_docs_prefer_visible_env_before_dotenv_fallbacks(self) -> None:
         safe_env = (

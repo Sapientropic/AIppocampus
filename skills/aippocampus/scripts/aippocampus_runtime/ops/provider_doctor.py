@@ -264,11 +264,14 @@ def compact_provider_doctor_card(report: dict[str, Any]) -> dict[str, Any]:
             "base_url_value_printed": False,
             "operator_env_objects_omitted": True,
         },
-        "cannot_claim": [
-            "running_hook_process_visibility",
-            "provider_credential_validity_without_explicit_probe",
-            "source_backed_memory_claim",
-        ],
+        "boundary_detail": {
+            "cannot_claim": [
+                "running_hook_process_visibility",
+                "provider_credential_validity_without_explicit_probe",
+                "source_backed_memory_claim",
+            ],
+            "frontstage_rule": "compact provider doctor leads with readiness and next check; full detail owns diagnostics",
+        },
     }
     return {
         key: value

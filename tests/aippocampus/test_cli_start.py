@@ -94,7 +94,7 @@ class AippocampusStartCliTests(unittest.TestCase):
         self.assertIn("next: aippocampus onboard --provider auto --status --json", proc.stdout)
         self.assertNotIn("Commands:", proc.stdout)
 
-    def test_start_json_routes_trusted_codex_setup_before_recall(self) -> None:
+    def test_start_json_routes_trusted_codex_workspace_to_read_only_first_recall(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             manifest = root / "plugins" / "aippocampus" / ".codex-plugin"
@@ -104,9 +104,15 @@ class AippocampusStartCliTests(unittest.TestCase):
 
         self.assertEqual(proc.returncode, 0, proc.stderr)
         payload = json.loads(proc.stdout)
-        self.assertEqual(payload["decision"], "trusted_codex_setup_then_recall")
-        self.assertEqual(payload["agent_next_action"]["id"], "install_or_verify_codex_plugin")
-        self.assertTrue(any(action["id"] == "recall_after_setup" for action in payload["safe_next_actions"]))
+        self.assertEqual(payload["decision"], "try_read_only_continuity_before_setup")
+        self.assertEqual(payload["agent_next_action"]["id"], "try_first_recall")
+        self.assertEqual(payload["foreground_action"], payload["agent_next_action"])
+        self.assertEqual(payload["safe_next_actions"][0], payload["agent_next_action"])
+        self.assertEqual(payload["agent_next_action"]["mutation_risk"], "read_only")
+        action_ids = [action["id"] for action in payload["safe_next_actions"]]
+        self.assertIn("public_safe_demo_search", action_ids)
+        self.assertIn("verify_codex_plugin_secondary", action_ids)
+        self.assertNotEqual(payload["safe_next_actions"][0]["mutation_risk"], "writes_local_plugin_cache")
 
     def test_start_json_routes_stale_source_to_health(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

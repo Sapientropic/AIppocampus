@@ -361,6 +361,35 @@ output.write_bytes(b"FAKEAGE\\n" + base64.b64encode(data))
         self.assertNotIn(self.endpoint, human_output)
         self.assertNotIn(self.prefix, human_output)
 
+    def test_object_sync_plan_without_backend_returns_backend_chooser(self) -> None:
+        env_without_backend = {
+            "AIPPOCAMPUS_OBJECT_STORE_URL": "",
+            "AIPPOCAMPUS_OBJECT_PROVIDER": "",
+            "AIPPOCAMPUS_OBJECT_BUCKET": "",
+        }
+        with (
+            patch.dict(os.environ, env_without_backend, clear=False),
+            patch("sys.stdout", new_callable=StringIO) as stdout,
+        ):
+            code = sync_object_storage.main(["push", "--plan", "--json"])
+
+        payload = json.loads(stdout.getvalue())
+        encoded = json.dumps(payload, ensure_ascii=False)
+
+        self.assertEqual(code, 0)
+        self.assertEqual(payload["kind"], "aippocampus_object_sync_backend_chooser")
+        self.assertEqual(payload["requested_command"], "push")
+        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
+        self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
+        self.assertEqual(payload["foreground_action"]["id"], "check_object_sync_status")
+        self.assertEqual(payload["foreground_action"]["mutation_risk"], "read_only")
+        self.assertNotIn("next_command_template", payload)
+        self.assertNotIn("--json may mutate", encoded)
+        self.assertNotIn("aippocampus object-sync push --object-store-url", encoded)
+        self.assertTrue(
+            all(action["mutation_risk"] == "read_only" for action in payload["safe_next_actions"])
+        )
+
     def test_object_store_token_requires_https_unless_endpoint_is_loopback(self) -> None:
         with self.assertRaisesRegex(ValueError, "requires HTTPS"):
             sync_object_storage.client_for(

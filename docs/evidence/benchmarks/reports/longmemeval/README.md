@@ -4,6 +4,18 @@ Role: dated LongMemEval report router.
 Status: report layer; stable benchmark home is
 [`../../longmemeval.md`](../../longmemeval.md).
 
+## Report Router Task Card
+
+current_claim_owner: `docs/evidence/current-claims.md#current-claim-snapshot`.
+
+latest_promoted_report: `factual-alias/longmemeval-post-factual-alias-rerank-closeout-500-2026-06-14.md`.
+
+safe_next_action: open `../../longmemeval.md`, then compare this family report
+against `docs/evidence/current-claims.md` before citing any LongMemEval number.
+
+historical_boundary: LongMemEval reports here are dated retrieval/fixed-reader
+evidence, not official LongMemEval QA scores or SOTA claims.
+
 Start from [`../../longmemeval.md`](../../longmemeval.md) for the current
 LongMemEval boundary, then open the subfolders here for dated retrieval,
 rerank, source-worker, cache, factual-alias, and fixed-reader evidence. JSON

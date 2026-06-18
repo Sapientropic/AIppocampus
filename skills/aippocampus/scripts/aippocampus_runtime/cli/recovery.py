@@ -7,7 +7,11 @@ import sys
 from pathlib import Path
 from typing import Any, Mapping
 
-from aippocampus_runtime.cli.errors import cli_error_payload, cli_exit_code_for_error_code
+from aippocampus_runtime.cli.errors import (
+    cli_error_object,
+    cli_error_payload,
+    cli_exit_code_for_error_code,
+)
 from aippocampus_runtime.contracts import (
     FOREGROUND_ACTION_CONTRACT_VERSION,
     foreground_shell_action,
@@ -100,9 +104,34 @@ def script_recovery_action(script_name: str, args: list[str]) -> dict[str, Any]:
     )
 
 
-def module_exception_payload(script_name: str, args: list[str], exc: Exception) -> dict[str, Any]:
+def _system_exit_message(stderr_text: str) -> str:
+    lines = [line.strip() for line in str(stderr_text or "").splitlines() if line.strip()]
+    for line in reversed(lines):
+        if "error:" in line:
+            return line.split("error:", maxsplit=1)[-1].strip()
+    return lines[-1] if lines else "Invalid or incomplete aippocampus command."
+
+
+def module_exception_payload(
+    script_name: str,
+    args: list[str],
+    exc: BaseException,
+    *,
+    stderr_text: str = "",
+) -> dict[str, Any]:
     action = script_recovery_action(script_name, args)
-    payload = cli_error_payload(exc)
+    payload = (
+        {
+            "ok": False,
+            "error": cli_error_object(
+                "usage_error",
+                _system_exit_message(stderr_text),
+            ),
+            "data": None,
+        }
+        if isinstance(exc, SystemExit)
+        else cli_error_payload(exc)
+    )
     payload.update(
         {
             "kind": "aippocampus_cli_recovery_error",
@@ -110,6 +139,7 @@ def module_exception_payload(script_name: str, args: list[str], exc: Exception) 
             "surface": "cli_facade",
             "entrypoint": Path(script_name).stem,
             "foreground_action_contract": FOREGROUND_ACTION_CONTRACT_VERSION,
+            "foreground_action": action,
             "agent_next_action": action,
             "safe_next_actions": [action],
             "recovery_boundary": {
@@ -136,8 +166,14 @@ def render_module_exception_text(payload: dict[str, Any]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def handle_module_exception(script_name: str, args: list[str], exc: Exception) -> int:
-    payload = module_exception_payload(script_name, args, exc)
+def handle_module_exception(
+    script_name: str,
+    args: list[str],
+    exc: BaseException,
+    *,
+    stderr_text: str = "",
+) -> int:
+    payload = module_exception_payload(script_name, args, exc, stderr_text=stderr_text)
     error = payload.get("error") if isinstance(payload.get("error"), dict) else {}
     exit_code = cli_exit_code_for_error_code(str(error.get("code") or "runtime_error"))
     if args_request_json(args):

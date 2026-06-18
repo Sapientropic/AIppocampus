@@ -4,6 +4,18 @@ Role: dated public longitudinal user report router.
 Status: report layer; stable benchmark home is
 [`../../public-longitudinal-users.md`](../../public-longitudinal-users.md).
 
+## Report Router Task Card
+
+current_claim_owner: `docs/evidence/current-claims.md#current-claim-snapshot`.
+
+latest_promoted_report: `rollout-hard-event-cohort-v2-2026-06-12.md`.
+
+safe_next_action: open `../../public-longitudinal-users.md`, then check Current
+Claims before using a dated React VCS or rollout report as present evidence.
+
+historical_boundary: reports here are public-safe longitudinal provenance; old
+React VCS rows do not supersede newer claim rows or issue comments by title.
+
 Start from [`../../public-longitudinal-users.md`](../../public-longitudinal-users.md)
 for the current benchmark boundary. Reports here are provenance for public
 longitudinal user, React VCS, rollout hard-event, and sparse-provenance slices.

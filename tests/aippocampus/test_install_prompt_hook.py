@@ -233,9 +233,10 @@ class InstallAmbientRecallHookTests(unittest.TestCase):
         installer.install(self.hooks_json, timeout=5)
         installed = installer.status(self.hooks_json)
         self.assertEqual(installed["foreground_action"]["status"], "installed")
-        self.assertEqual(installed["agent_next_action"]["id"], "no_action_needed")
+        self.assertEqual(installed["agent_next_action"]["id"], "inspect_prompt_hook_output")
+        self.assertEqual(installed["agent_next_action"]["mutation_risk"], "read_only")
         installed_action_ids = [action["id"] for action in installed["safe_next_actions"]]
-        self.assertIn("no_action_needed", installed_action_ids)
+        self.assertIn("try_first_recall_after_prompt_hook", installed_action_ids)
         self.assertIn("rollback_prompt_hook", installed_action_ids)
 
         self.hooks_json.write_text(

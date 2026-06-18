@@ -13,6 +13,6 @@ rollouts, private registry rows, or local machine paths.
 Try:
 
 ```powershell
-python .\skills\aippocampus\scripts\search_clean_source.py "recurring question" --cwd . --clean-source-dir .\examples\public-memory-bundle\clean-source --json
-python .\skills\aippocampus\scripts\search_clean_source.py "lighthouse metaphor pivot" --cwd . --clean-source-dir .\examples\public-memory-bundle\clean-source --scope-label personal_reflection --scope-label idea_seed --json
+aippocampus search "recurring question" --cwd . --clean-source-dir .\examples\public-memory-bundle\clean-source --json
+aippocampus search "lighthouse metaphor pivot" --cwd . --clean-source-dir .\examples\public-memory-bundle\clean-source --scope-label personal_reflection --scope-label idea_seed --json
 ```

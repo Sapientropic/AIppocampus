@@ -13,7 +13,7 @@ import tomllib
 from dataclasses import dataclass
 from io import StringIO
 from pathlib import Path
-from typing import Any, Callable, TextIO
+from typing import Any, Callable, Mapping, TextIO
 
 from aippocampus_runtime.cli.errors import cli_error_object
 from aippocampus_runtime.cli.human_io import emit_json, exit_code_for_payload
@@ -455,6 +455,25 @@ def _with_safe_next_actions(payload: dict[str, Any]) -> dict[str, Any]:
 
     payload["safe_next_actions"] = list(payload.get("choices", []))
     return payload
+
+
+def print_chooser_card(title: str, payload: Mapping[str, Any], *, file: TextIO | None = None) -> None:
+    target = file or sys.stdout
+    print(title, file=target)
+    decision = payload.get("decision") or payload.get("status") or "choose a foreground action"
+    print(f"decision: {decision}", file=target)
+    actions = [
+        action
+        for action in (payload.get("safe_next_actions") or payload.get("choices") or [])
+        if isinstance(action, Mapping)
+    ]
+    for index, action in enumerate(actions[:3]):
+        command = action.get("command") or action.get("command_template") or action.get("label")
+        if not command:
+            continue
+        prefix = "Try" if index == 0 else "Then"
+        print(f"{prefix}: {command}", file=target)
+    print("boundary: compact chooser only; use --help for full command reference.", file=target)
 
 
 def _template_action(
@@ -913,6 +932,13 @@ def _system_exit_code(exc: SystemExit) -> int:
     return 1
 
 
+def _system_exit_status(exc: SystemExit) -> int:
+    code = exc.code
+    if code is None:
+        return 0
+    return code if isinstance(code, int) else 1
+
+
 def main_accepts_argv(main_func: Callable[..., Any]) -> bool:
     """Return whether a command main can be called as `main(argv)`.
 
@@ -949,21 +975,56 @@ def run_module_main(module_name: str, script_name: str, args: list[str]) -> int:
         raise RuntimeError(f"module {module_name} has no callable main()")
 
     if main_accepts_argv(main_func):
+        stderr = StringIO()
         try:
-            return _coerce_exit_code(main_func(list(args)))
+            with contextlib.redirect_stderr(stderr):
+                code = _coerce_exit_code(main_func(list(args)))
         except SystemExit as exc:
-            return _system_exit_code(exc)
+            if _system_exit_status(exc) == 0:
+                print(stderr.getvalue(), end="", file=sys.stderr)
+                return 0
+            return handle_module_exception(
+                script_name,
+                args,
+                exc,
+                stderr_text=stderr.getvalue(),
+            )
         except Exception as exc:
-            return handle_module_exception(script_name, args, exc)
+            return handle_module_exception(
+                script_name,
+                args,
+                exc,
+                stderr_text=stderr.getvalue(),
+            )
+        print(stderr.getvalue(), end="", file=sys.stderr)
+        return code
 
     old_argv = sys.argv[:]
     sys.argv = [str(SCRIPT_DIR / script_name), *args]
+    stderr = StringIO()
     try:
-        return _coerce_exit_code(main_func())
+        with contextlib.redirect_stderr(stderr):
+            code = _coerce_exit_code(main_func())
     except SystemExit as exc:
-        return _system_exit_code(exc)
+        if _system_exit_status(exc) == 0:
+            print(stderr.getvalue(), end="", file=sys.stderr)
+            return 0
+        return handle_module_exception(
+            script_name,
+            args,
+            exc,
+            stderr_text=stderr.getvalue(),
+        )
     except Exception as exc:
-        return handle_module_exception(script_name, args, exc)
+        return handle_module_exception(
+            script_name,
+            args,
+            exc,
+            stderr_text=stderr.getvalue(),
+        )
+    else:
+        print(stderr.getvalue(), end="", file=sys.stderr)
+        return code
     finally:
         sys.argv = old_argv
 
@@ -1152,9 +1213,7 @@ def dispatch(argv: list[str]) -> tuple[CommandInvocation | None, int]:
         if "--json" in args[1:]:
             print(json.dumps(payload, ensure_ascii=False, indent=2))
         else:
-            invocation = resolve_command(["agent"])
-            if invocation is not None:
-                return invocation, run_invocation(invocation)
+            print_chooser_card("AIppocampus agent", payload)
         return None, 0
     if args[0] in {"dream", "subconscious"} and set(args[1:]) <= {"--json"}:
         payload = background_findings.background_recovery_card(args[0])
@@ -1171,9 +1230,7 @@ def dispatch(argv: list[str]) -> tuple[CommandInvocation | None, int]:
         if "--json" in args[1:]:
             print(json.dumps(payload, ensure_ascii=False, indent=2))
         else:
-            invocation = resolve_command(["warm"])
-            if invocation is not None:
-                return invocation, run_invocation(invocation)
+            print_chooser_card("AIppocampus warm ambient", payload)
         return None, 0
     if args[0] == "memory" and (len(args) == 1 or any(arg in {"-h", "--help"} for arg in args[1:])):
         print_memory_card()
@@ -1284,9 +1341,7 @@ def dispatch(argv: list[str]) -> tuple[CommandInvocation | None, int]:
         if "--json" in args[1:]:
             print(json.dumps(payload, ensure_ascii=False, indent=2))
         else:
-            invocation = resolve_command(["logs"])
-            if invocation is not None:
-                return invocation, run_invocation(invocation)
+            print_chooser_card("AIppocampus logs", payload)
         return None, 0
     if args[0] in {"--version", "-V", "version"}:
         payload = version_payload()

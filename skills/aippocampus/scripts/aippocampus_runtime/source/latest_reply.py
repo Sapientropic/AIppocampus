@@ -11,6 +11,7 @@ from typing import Any, Sequence
 
 from aippocampus_runtime import core
 from aippocampus_runtime.contracts import (
+    canonical_foreground_action_fields,
     command_value_needs_input,
     foreground_shell_action,
     foreground_template_action,
@@ -149,16 +150,14 @@ def public_latest_reply_result(result: dict[str, Any], *, detail: str = "compact
     }
     if closeout_available:
         actions = [_latest_reply_full_action()]
-        payload["agent_next_action"] = actions[0]
-        payload["safe_next_actions"] = actions
+        payload.update(canonical_foreground_action_fields(actions[0], safe_next_actions=actions))
         if full:
             payload["message"] = _message_card(message, include_text=True)
     elif status == "only_commentary_found":
         payload["diagnostic_only"] = True
         payload["not_final_closeout"] = True
         actions = [_latest_reply_recall_action(result.get("recovery_cue")), _latest_reply_full_action()]
-        payload["agent_next_action"] = actions[0]
-        payload["safe_next_actions"] = actions
+        payload.update(canonical_foreground_action_fields(actions[0], safe_next_actions=actions))
         payload["message"] = _message_card(
             message,
             include_text=full,
@@ -168,8 +167,7 @@ def public_latest_reply_result(result: dict[str, Any], *, detail: str = "compact
         payload["diagnostic_only"] = True
         payload["not_final_closeout"] = True
         actions = [_latest_reply_recall_action(result.get("recovery_cue"))]
-        payload["agent_next_action"] = actions[0]
-        payload["safe_next_actions"] = actions
+        payload.update(canonical_foreground_action_fields(actions[0], safe_next_actions=actions))
     return payload
 
 
@@ -185,36 +183,32 @@ def latest_reply_unavailable_payload(exc: Exception, *, detail: str = "compact")
             claim_boundary="no_claim_before_reopen",
         ),
     ]
-    return redact_sensitive_values(
-        redact_private_paths(
-            {
-                "kind": "aippocampus_latest_reply",
-                "ok": False,
-                "status": "no_latest_reply_source_found",
-                "detail": detail,
-                "closeout_available": False,
-                "diagnostic_only": True,
-                "error": {
-                    "code": "no_rollout_for_cwd",
-                    "message": str(exc),
-                    "path_redacted": True,
-                },
-                "agent_next_action": actions[0],
-                "safe_next_actions": actions,
-                "examples": ["aippocampus latest-reply --json"],
-                "cannot_claim": [
-                    "latest_final_answer_available",
-                    "source_backed_claim",
-                    "exact_prior_wording",
-                ],
-                "privacy_boundary": {
-                    "local_path_serialized": False,
-                    "rollout_text_serialized": False,
-                    "source_reopen_required_for_claims": True,
-                },
-            }
-        )
-    )
+    payload = {
+        "kind": "aippocampus_latest_reply",
+        "ok": False,
+        "status": "no_latest_reply_source_found",
+        "detail": detail,
+        "closeout_available": False,
+        "diagnostic_only": True,
+        "error": {
+            "code": "no_rollout_for_cwd",
+            "message": str(exc),
+            "path_redacted": True,
+        },
+        **canonical_foreground_action_fields(actions[0], safe_next_actions=actions),
+        "examples": ["aippocampus latest-reply --json"],
+        "cannot_claim": [
+            "latest_final_answer_available",
+            "source_backed_claim",
+            "exact_prior_wording",
+        ],
+        "privacy_boundary": {
+            "local_path_serialized": False,
+            "rollout_text_serialized": False,
+            "source_reopen_required_for_claims": True,
+        },
+    }
+    return redact_sensitive_values(redact_private_paths(payload))
 
 
 def render_latest_reply_text(payload: dict[str, Any]) -> str:

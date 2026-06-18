@@ -228,6 +228,50 @@ class ImportBundleTests(unittest.TestCase):
         self.assertNotIn(str(dest), json.dumps(payload, ensure_ascii=False))
         self.assertIn("aippocampus search", payload["summary"]["next_command"])
 
+    def test_bundle_import_dry_run_previews_extract_and_anchor_without_writing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            bundle = root / "bundle.zip"
+            dest = root / "workspace"
+            with zipfile.ZipFile(bundle, "w") as zf:
+                zf.writestr(
+                    "bundle_manifest.json",
+                    json.dumps({"message_count": 3, "cwd": "source-device"}, ensure_ascii=False),
+                )
+                zf.writestr("index/messages.jsonl", "{}\n")
+
+            with (
+                patch.object(
+                    packaged_import_bundle,
+                    "safe_extract",
+                    side_effect=AssertionError("dry-run must not extract files"),
+                ),
+                patch.object(
+                    packaged_import_bundle,
+                    "append_import_anchor",
+                    side_effect=AssertionError("dry-run must not append anchors"),
+                ),
+                patch("sys.stdout", new=StringIO()) as stdout,
+            ):
+                code = packaged_import_bundle.main(
+                    [str(bundle), "--dest", str(dest), "--name", "preview", "--dry-run", "--json"]
+                )
+
+        payload = json.loads(stdout.getvalue())
+        encoded = json.dumps(payload, ensure_ascii=False)
+
+        self.assertEqual(code, 0)
+        self.assertFalse(dest.exists())
+        self.assertEqual(payload["kind"], "aippocampus_bundle_import_preview")
+        self.assertEqual(payload["mode"], "dry_run")
+        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
+        self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
+        self.assertEqual(payload["foreground_action"]["id"], "write_bundle_import_after_preview")
+        self.assertTrue(payload["write_preview"]["would_extract_bundle"])
+        self.assertTrue(payload["write_preview"]["would_append_anchor"])
+        self.assertFalse(payload["privacy_boundary"]["local_paths_included"])
+        self.assertNotIn(str(dest), encoded)
+
     def test_missing_bundle_accepts_json_and_redacts_local_path(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, patch("sys.stdout", new=StringIO()) as stdout:
             missing = Path(tmp) / "missing-aippo-bundle.zip"

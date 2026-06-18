@@ -571,11 +571,31 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
     cache_available = bool(payload.get("last_recall_cache_available"))
     route_receipts: list[dict[str, Any]] = []
     for index, packet in enumerate(memory_packets[:3], start=1):
+        route_id = str(packet.get("route_id") or f"route:{index}").strip()
+        route_is_callable = cache_available and str(packet.get("output_mode") or "") == "reopenable_route"
+        callable_selector = (
+            {
+                "kind": "last_recall_request_index",
+                "request_index": index,
+                "last_recall": True,
+            }
+            if route_is_callable
+            else {
+                "kind": "not_callable_from_compact_card",
+                "reason": "route_not_reopenable_or_last_recall_cache_missing",
+            }
+        )
         route_receipts.append(
             _without_empty(
                 {
                     "route_index": index,
-                    "route_id": packet.get("route_id"),
+                    "route_id": route_id,
+                    "display_id": route_id,
+                    "feedback_id": route_id,
+                    "callable_selector": callable_selector,
+                    "private_handle_boundary": (
+                        "compact_output_redacts_local_private_handle_use_callable_selector"
+                    ),
                     "route_label": core.compact_text(
                         str(
                             packet.get("route_topic")
@@ -597,8 +617,7 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
                     "claim_permission": packet.get("claim_permission"),
                     "next_action_boundary": "reopen_required_before_claim",
                     "action": route_deepen_action(index, low_confidence=labels_low_specificity)
-                    if cache_available
-                    and str(packet.get("output_mode") or "") == "reopenable_route"
+                    if route_is_callable
                     else None,
                 }
             )

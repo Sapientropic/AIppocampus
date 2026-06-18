@@ -53,6 +53,13 @@ NO_ACTION_REASON_FIELDS = (
     "no_action_reason",
     "no_open_followup_reason",
 )
+FOLLOWUP_EXECUTION_FIELDS = (
+    "command",
+    "doc_path",
+    "required_artifact",
+    "no_action_reason",
+    "no_open_followup_reason",
+)
 OWNER_STATUS_FIELDS = (
     "closeout_allowed",
     "closeout_eligible",
@@ -154,26 +161,59 @@ def benchmark_report_followup_counts(report: Mapping[str, Any]) -> dict[str, int
     """
 
     followup_action_count = 0
+    unqualified_followup_action_count = 0
     owner_route_count = 0
     no_action_reason_count = 0
     for mapping in _walk_mappings(report):
         for field in FOLLOWUP_ACTION_FIELDS:
-            followup_action_count += _count_nonempty_items(mapping.get(field))
+            actions = mapping.get(field)
+            if isinstance(actions, Mapping):
+                actions = [actions]
+            if not isinstance(actions, (list, tuple, set)):
+                if _is_nonempty(actions):
+                    unqualified_followup_action_count += 1
+                continue
+            for action in actions:
+                if _action_has_foreground_route(action):
+                    followup_action_count += 1
+                elif _is_nonempty(action):
+                    unqualified_followup_action_count += 1
         for field in NO_ACTION_REASON_FIELDS:
             no_action_reason_count += _count_nonempty_items(mapping.get(field))
-        if _is_nonempty(mapping.get("owner_path")) and any(
-            _is_nonempty(mapping.get(field)) for field in OWNER_ROUTE_ISSUE_FIELDS
-        ):
+        if _mapping_has_owner_route(mapping):
             owner_route_count += 1
 
     return {
         "followup_action_count": followup_action_count,
+        "unqualified_followup_action_count": unqualified_followup_action_count,
         "owner_route_count": owner_route_count,
         "no_action_reason_count": no_action_reason_count,
         "followup_surface_count": (
-            followup_action_count + owner_route_count + no_action_reason_count
+            followup_action_count + no_action_reason_count
         ),
     }
+
+
+def _mapping_has_owner_route(mapping: Mapping[str, Any]) -> bool:
+    return _is_nonempty(mapping.get("owner_path")) and any(
+        _is_nonempty(mapping.get(field)) for field in OWNER_ROUTE_ISSUE_FIELDS
+    )
+
+
+def _action_has_foreground_route(action: Any) -> bool:
+    """Return whether a benchmark follow-up is usable by a later agent.
+
+    A long caveat list should not be considered resolved merely because a JSON
+    object says "review this later." The action needs a responsible owner route
+    and a concrete next surface: a command, a document/artifact to open, or an
+    explicit no-action reason for historical/background-only output.
+    """
+
+    if not isinstance(action, Mapping):
+        return False
+    if not _mapping_has_owner_route(action):
+        return False
+    return any(_is_nonempty(action.get(field)) for field in FOLLOWUP_EXECUTION_FIELDS)
 
 
 def _closed_or_historical_issue_signal(report: Mapping[str, Any]) -> bool:

@@ -112,6 +112,14 @@ def finding_next_actions(row: Mapping[str, Any], *, cue: str) -> list[dict[str, 
             mutation_risk="durable_low_authority_feedback_write",
             claim_boundary="feedback_is_not_source_truth",
         ),
+        foreground_shell_action(
+            action_id="keep_background_finding_quiet",
+            label="Keep this route quiet",
+            command=f"aippocampus agent feedback {finding_id} --outcome ignored --json",
+            why="Use when the finding is not wrong, but should not keep interrupting this task shape.",
+            mutation_risk="durable_low_authority_feedback_write",
+            claim_boundary="feedback_is_not_source_truth",
+        ),
     ]
     if _is_action_hint_candidate(row):
         # Cache writes stay explicit and narrow: ordinary Dream/subconscious

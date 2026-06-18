@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 from typing import Any, Mapping
 
+from aippocampus_runtime.contracts import canonical_foreground_action_fields
 from aippocampus_runtime.question.constants import DEFAULT_DORMANT_AFTER_DAYS
 from aippocampus_runtime.question.health import (
     aggregate_question_health_stats,
@@ -71,6 +72,10 @@ def _status_payload(args: argparse.Namespace) -> dict[str, Any]:
             "claim_boundary": "question_lifecycle_stats_are_navigation_only",
         },
     ]
+    action_fields = canonical_foreground_action_fields(
+        agent_next_action,
+        safe_next_actions=safe_next_actions,
+    )
     return {
         "kind": "aippocampus_question_tracking_status",
         "ok": True,
@@ -88,8 +93,7 @@ def _status_payload(args: argparse.Namespace) -> dict[str, Any]:
             "local_paths_serialized": False,
             "raw_private_text_serialized": False,
         },
-        "agent_next_action": agent_next_action,
-        "safe_next_actions": safe_next_actions,
+        **action_fields,
     }
 
 
@@ -104,6 +108,24 @@ def _search_command(title: Any) -> str:
     query = str(title or "question route").strip() or "question route"
     query = query.replace("\\", "\\\\").replace('"', '\\"')
     return f'aippocampus search "{query}" --json'
+
+
+def _row_action(
+    *,
+    action_id: str,
+    label: str,
+    command: str,
+    why: str,
+    claim_boundary: str = "question_rows_are_navigation_only_reopen_source_before_claims",
+) -> dict[str, Any]:
+    return {
+        "id": action_id,
+        "label": label,
+        "command": command,
+        "mutation_risk": "read_only",
+        "claim_boundary": claim_boundary,
+        "why": why,
+    }
 
 
 def _question_action_card(item: Mapping[str, Any]) -> dict[str, Any]:
@@ -128,9 +150,15 @@ def _question_action_card(item: Mapping[str, Any]) -> dict[str, Any]:
                 "action_grammar": "ignore_or_blocked",
                 "route_state": "blocked_missing_source_refs",
                 "blocked_reason": "source refs are missing or no longer resolve",
-                "agent_next_action": (
-                    "Do not use this question row yet; refresh question tracking from "
-                    "source or inspect operator diagnostics first."
+                "agent_next_action": _row_action(
+                    action_id="repair_question_source_refs",
+                    label="Repair question source refs",
+                    command="aippocampus questions status --json",
+                    why=(
+                        "This row has no reopenable source refs; inspect question status "
+                        "before using it as a route."
+                    ),
+                    claim_boundary="missing_question_source_refs_block_foreground_claims",
                 ),
                 "source_route": None,
             }
@@ -149,9 +177,11 @@ def _question_action_card(item: Mapping[str, Any]) -> dict[str, Any]:
             {
                 "action_grammar": "bounded_evidence",
                 "route_state": "resolved_recheck_before_use",
-                "agent_next_action": (
-                    "Treat this as resolved only after reopening the source route: "
-                    f"{command}"
+                "agent_next_action": _row_action(
+                    action_id="recheck_resolved_question_source",
+                    label="Recheck resolved question source",
+                    command=command,
+                    why="Treat this as resolved only after reopening the source route.",
                 ),
                 "source_route": route,
             }
@@ -161,7 +191,12 @@ def _question_action_card(item: Mapping[str, Any]) -> dict[str, Any]:
             {
                 "action_grammar": "reopenable_route",
                 "route_state": "dormant_recheck_before_reviving",
-                "agent_next_action": f"Recheck before reviving this question: {command}",
+                "agent_next_action": _row_action(
+                    action_id="recheck_dormant_question_source",
+                    label="Recheck dormant question source",
+                    command=command,
+                    why="Reopen the route before reviving a dormant question.",
+                ),
                 "source_route": route,
             }
         )
@@ -170,7 +205,12 @@ def _question_action_card(item: Mapping[str, Any]) -> dict[str, Any]:
             {
                 "action_grammar": "reopenable_route",
                 "route_state": "ready_to_reopen",
-                "agent_next_action": f"Reopen source before using this question: {command}",
+                "agent_next_action": _row_action(
+                    action_id="reopen_question_source",
+                    label="Reopen question source",
+                    command=command,
+                    why="Reopen source before using this question row as continuity evidence.",
+                ),
                 "source_route": route,
             }
         )
@@ -188,9 +228,14 @@ def _blocked_ref_card(count: int) -> dict[str, Any]:
         "action_grammar": "ignore_or_blocked",
         "route_state": "blocked_missing_source_refs",
         "blocked_reason": "some question rows had missing or unresolved source refs",
-        "agent_next_action": (
-            "Use `aippocampus questions status --json` to confirm the count, then "
-            "refresh or repair question tracking before using those rows."
+        "agent_next_action": _row_action(
+            action_id="repair_question_source_refs",
+            label="Repair question source refs",
+            command="aippocampus questions status --json",
+            why=(
+                "Confirm the unresolved-ref count before using blocked question rows."
+            ),
+            claim_boundary="missing_question_source_refs_block_foreground_claims",
         ),
         "source_route": None,
     }
@@ -211,6 +256,61 @@ def _list_payload(args: argparse.Namespace) -> dict[str, Any]:
     unresolved_count = _safe_int(payload.get("stale_or_unresolved_ref_row_count"))
     if unresolved_count and len(rows) < max_rows:
         rows.append(_blocked_ref_card(unresolved_count))
+    if rows:
+        primary_action = next(
+            (
+                row["agent_next_action"]
+                for row in rows
+                if isinstance(row.get("agent_next_action"), Mapping)
+            ),
+            {
+                "id": "inspect_question_status",
+                "label": "Inspect question status",
+                "command": "aippocampus questions status --json",
+                "mutation_risk": "read_only",
+                "claim_boundary": "question_rows_are_navigation_only_reopen_source_before_claims",
+                "why": "Inspect question status before using ambiguous rows.",
+            },
+        )
+        empty_state = None
+    else:
+        primary_action = {
+            "id": "continue_with_ordinary_recall",
+            "label": "Continue with ordinary recall",
+            "command": "aippocampus agent recall --json",
+            "mutation_risk": "read_only",
+            "claim_boundary": "question_list_empty_not_memory_evidence",
+            "why": "No question tracking rows are ready; use ordinary source-backed recall when needed.",
+        }
+        empty_state = {
+            "state": "no_source_backed_question_rows",
+            "agent_next_action": primary_action,
+            "safe_next_actions": [
+                primary_action,
+                {
+                    "id": "inspect_question_status",
+                    "label": "Inspect question status",
+                    "command": "aippocampus questions status --json",
+                    "mutation_risk": "read_only",
+                    "claim_boundary": "question_lifecycle_stats_are_navigation_only",
+                    "why": "Check whether rows are missing, blocked, or simply absent.",
+                },
+            ],
+        }
+    action_fields = canonical_foreground_action_fields(
+        primary_action,
+        safe_next_actions=[
+            primary_action,
+            {
+                "id": "inspect_question_status",
+                "label": "Inspect question status",
+                "command": "aippocampus questions status --json",
+                "mutation_risk": "read_only",
+                "claim_boundary": "question_lifecycle_stats_are_navigation_only",
+                "why": "Use for aggregate question lifecycle state before row-level reopen.",
+            },
+        ],
+    )
     return {
         "kind": "aippocampus_question_tracking_list",
         "ok": True,
@@ -218,15 +318,7 @@ def _list_payload(args: argparse.Namespace) -> dict[str, Any]:
         "available": bool(payload.get("available")),
         "count": len(rows),
         "rows": rows,
-        "empty_state": None
-        if rows
-        else {
-            "state": "no_source_backed_question_rows",
-            "agent_next_action": (
-                "No question tracking rows are ready; use agent recall/search for "
-                "ordinary continuity, or run background jobs explicitly."
-            ),
-        },
+        "empty_state": empty_state,
         "source_boundary": {
             "rows_are_navigation_not_source_truth": True,
             "source_reopen_required_before_claim": True,
@@ -238,6 +330,7 @@ def _list_payload(args: argparse.Namespace) -> dict[str, Any]:
             "local_paths_serialized": False,
             "raw_private_text_serialized": False,
         },
+        **action_fields,
     }
 
 
@@ -262,7 +355,11 @@ def _print_payload(payload: Mapping[str, Any], *, json_output: bool) -> None:
                 if row.get("blocked_reason"):
                     print(f"  blocked: {row.get('blocked_reason')}")
                 if row.get("agent_next_action"):
-                    print(f"  next: {row.get('agent_next_action')}")
+                    action = row.get("agent_next_action")
+                    if isinstance(action, Mapping):
+                        print(f"  next: {action.get('command') or action.get('command_template')}")
+                    else:
+                        print(f"  next: {action}")
     print("boundary: navigation only; reopen source before claims")
     if payload.get("agent_next_action"):
         action = payload.get("agent_next_action")

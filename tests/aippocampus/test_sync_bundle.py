@@ -4,6 +4,7 @@ import json
 import sys
 import tempfile
 import unittest
+from io import StringIO
 from pathlib import Path
 from unittest import mock
 
@@ -124,6 +125,30 @@ class SyncBundleTests(unittest.TestCase):
         )
     def tearDown(self) -> None:
         self.tmp.cleanup()
+
+    def test_plan_without_sync_dir_returns_chooser_without_scanning_registry(self) -> None:
+        with (
+            mock.patch.object(sync_bundle, "iter_registry_sync_files") as registry_files,
+            mock.patch.object(sync_bundle, "iter_clean_source_sync_files") as clean_files,
+            mock.patch.object(sync_bundle, "iter_raw_rollout_files") as raw_files,
+            mock.patch("sys.stdout", new_callable=StringIO) as stdout,
+        ):
+            code = sync_bundle.main(["push", "--plan", "--json"])
+
+        payload = json.loads(stdout.getvalue())
+
+        self.assertEqual(code, 0)
+        registry_files.assert_not_called()
+        clean_files.assert_not_called()
+        raw_files.assert_not_called()
+        self.assertEqual(payload["status"], "needs_sync_dir_before_plan")
+        self.assertEqual(payload["requested_command"], "push")
+        self.assertTrue(payload["plan_skipped_no_destination"])
+        self.assertIsNone(payload["estimated_file_count"])
+        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
+        self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
+        self.assertEqual(payload["foreground_action"]["id"], "check_local_sync_status")
+        self.assertTrue(all(action["mutation_risk"] == "read_only" for action in payload["safe_next_actions"]))
 
     def test_push_writes_device_neutral_bundle_without_raw_rollout(self) -> None:
         result = sync_bundle.push_sync_bundle(self.registry, self.sync_dir)

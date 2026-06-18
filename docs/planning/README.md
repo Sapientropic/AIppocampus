@@ -6,6 +6,27 @@ canonical roadmap, evidence ledger, or issue queue. Start from
 Project for executable work, and this folder when a slice needs source-backed
 handoff context.
 
+## Currentness Card
+
+page_last_structural_review: 2026-06-18; this index routes planning notes by
+role and does not certify issue state.
+
+latest_numeric_claim_source: not_a_numeric_claim_owner; use
+`../evidence/current-claims.md` for current numbers and
+`../evidence/readiness/public-readiness-verification.md` for dated command
+evidence.
+
+current_status: active handoff docs can guide context, but GitHub Issues/Project
+and canonical evidence docs own execution and claim status.
+
+remaining_gaps: archive or relabel planning notes when implementation supersedes
+them, and avoid mirroring evidence tables here.
+
+owner_routes: `../roadmap.md`, GitHub Issues/Project,
+`../evidence/current-claims.md`.
+
+next_verification_command: `python tools\aippocampus\docs\check_docs_health.py --json`.
+
 ## Current Planning Lanes
 
 | File | Classification | Use |

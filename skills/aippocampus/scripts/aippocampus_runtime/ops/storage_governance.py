@@ -671,6 +671,11 @@ def deferred_summary_payload(*, class_filter: str, limit: int) -> dict[str, Any]
     comparable_metrics = (
         f"aippocampus storage gc --dry-run --json --top {max(1, int(limit))} --cwd ."
     )
+    summary_actions = gc_actions.storage_gc_summary_actions(limit=limit, include_apply=False)
+    action_fields = canonical_foreground_action_fields(
+        summary_actions[0],
+        safe_next_actions=summary_actions,
+    )
     return {
         "kind": "aippocampus_storage_gc_summary",
         "schema_version": SCHEMA_VERSION,
@@ -700,6 +705,7 @@ def deferred_summary_payload(*, class_filter: str, limit: int) -> dict[str, Any]
             "source_history_protected": True,
             "full_candidate_preconditions_deferred": True,
         },
+        **action_fields,
         "safe_next_action": {
             "decision": "run bounded audit sample to compute comparable reclaimable metrics",
             "command": bounded_audit,

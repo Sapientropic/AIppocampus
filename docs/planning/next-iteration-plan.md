@@ -9,6 +9,27 @@ This is the short handoff for the next development slice after the current
 technical-debt baseline. It points to canonical docs instead of duplicating
 their full contracts.
 
+## Currentness Card
+
+page_last_structural_review: 2026-06-18; this page is handoff context plus
+historical cleanup review, not the live issue queue.
+
+latest_numeric_claim_source: not_a_numeric_claim_owner; use
+`docs/evidence/current-claims.md` for current numbers and
+`docs/evidence/readiness/public-readiness-verification.md` for dated command
+evidence.
+
+current_status: GitHub Issues/Project owns executable status; rows below explain
+why older broad issues were treated as bounded, deferred, or superseded.
+
+remaining_gaps: check the latest issue body/comments before closing, reopening,
+or widening any owner track from this historical table.
+
+owner_routes: GitHub Issues/Project, `docs/roadmap.md`,
+`docs/evidence/current-claims.md`.
+
+next_verification_command: `python tools\aippocampus\docs\check_docs_health.py --json`.
+
 Keep this file as a task queue and preservation checklist. Detailed Stage 0-5
 evidence belongs in `stage-0-5-readiness.md`; dated command evidence belongs in
 `public-readiness-verification.md`.

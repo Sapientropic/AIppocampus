@@ -6,6 +6,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from aippocampus_runtime import core
+from aippocampus_runtime.contracts import canonical_foreground_action_fields
 
 
 def _as_dict(value: Any) -> dict[str, Any]:
@@ -42,6 +43,39 @@ def _operator_detail_command(request_index: int | None, *, last_recall: bool) ->
     )
 
 
+def _feedback_actions(route_id: Any) -> list[dict[str, Any]]:
+    clean_route = str(route_id or "").strip()
+    if not clean_route:
+        return []
+    base = {
+        "mutation_risk": "durable_low_authority_feedback_write",
+        "claim_boundary": "feedback_is_not_source_truth",
+    }
+    return [
+        {
+            "id": "mark_route_helpful",
+            "label": "Mark route helpful",
+            "command": f"aippocampus agent feedback {clean_route} --outcome helped --json",
+            "why": "Use after the reopened source helped the task; this calibrates routing only.",
+            **base,
+        },
+        {
+            "id": "mark_route_wrong",
+            "label": "Mark route wrong",
+            "command": f"aippocampus agent feedback {clean_route} --outcome wrong_route --json",
+            "why": "Use when the route pulled attention to the wrong source or project.",
+            **base,
+        },
+        {
+            "id": "keep_route_quiet",
+            "label": "Keep route quiet",
+            "command": f"aippocampus agent feedback {clean_route} --outcome ignored --json",
+            "why": "Use when the route is harmless but should not keep surfacing for this kind of task.",
+            **base,
+        },
+    ]
+
+
 def compact_agent_deepen_payload(
     payload: Mapping[str, Any],
     *,
@@ -66,6 +100,19 @@ def compact_agent_deepen_payload(
     source_refs = [item for item in result.get("source_refs") or [] if isinstance(item, dict)]
     message_count = int(source_window.get("message_count") or len(messages))
     why = core.compact_text(str(result.get("why_this_may_matter") or ""), 180)
+    route_id = result.get("route_id")
+    primary_action = {
+        "id": "use_opened_source_window",
+        "label": "Use the opened source window",
+        "mutation_risk": "read_only",
+        "claim_boundary": "source_open_within_returned_window",
+        "why": "Source has been reopened; use only the returned window unless you deepen or request full detail.",
+    }
+    feedback = _feedback_actions(route_id)
+    foreground_fields = canonical_foreground_action_fields(
+        primary_action,
+        safe_next_actions=[primary_action],
+    )
     return _without_empty(
         {
             "detail": "compact",
@@ -96,6 +143,14 @@ def compact_agent_deepen_payload(
                     "sensitive_or_stale_claims",
                 ],
                 "source_summary_is_not_quote": True,
+            },
+            **foreground_fields,
+            "feedback_id": route_id,
+            "feedback_actions": feedback,
+            "feedback_boundary": {
+                "feedback_is_source_truth": False,
+                "feedback_can_adjust_future_route_ordering": True,
+                "feedback_does_not_expand_opened_source_scope": True,
             },
             "operator_detail_command": _operator_detail_command(
                 request_index,

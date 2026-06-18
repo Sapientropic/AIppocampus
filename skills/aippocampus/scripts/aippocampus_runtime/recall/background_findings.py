@@ -22,6 +22,12 @@ from aippocampus_runtime.subconscious import candidate_router
 
 DEFAULT_BACKGROUND_FINDINGS_LIMIT = 4
 BACKGROUND_FINDING_DETAIL_LEVELS = {"compact", "detail", "full", "operator"}
+COMPACT_BACKGROUND_ACTION_IDS = {
+    "reopen_background_finding_source_route",
+    "mark_background_finding_helpful",
+    "mark_background_finding_wrong",
+    "keep_background_finding_quiet",
+}
 
 
 def _public_payload(payload: Any) -> Any:
@@ -111,6 +117,19 @@ def _read_only_actions(finding: Mapping[str, Any]) -> list[dict[str, Any]]:
     ]
 
 
+def _compact_finding_actions(finding: Mapping[str, Any]) -> list[dict[str, Any]]:
+    actions: list[dict[str, Any]] = []
+    for action in finding.get("next_actions") or []:
+        if not isinstance(action, Mapping):
+            continue
+        if action.get("id") not in COMPACT_BACKGROUND_ACTION_IDS:
+            continue
+        projected = dict(action)
+        projected.pop("target", None)
+        actions.append(projected)
+    return actions
+
+
 def _finding_summary(finding: Mapping[str, Any]) -> dict[str, Any]:
     pairs = {
         "index": finding.get("index"),
@@ -126,6 +145,7 @@ def _finding_summary(finding: Mapping[str, Any]) -> dict[str, Any]:
         "review_state": finding.get("review_state"),
         "boundary": finding.get("boundary"),
         "source_summary": finding.get("source"),
+        "next_actions": _compact_finding_actions(finding),
     }
     return {key: value for key, value in pairs.items() if value not in (None, "", [])}
 
@@ -227,7 +247,11 @@ def background_findings_card(
         "output_boundary": "compact_foreground_no_reader_or_operator_diagnostics",
     }
     if detail_level == "detail":
-        payload["findings"] = [_detail_finding(finding) for finding in findings]
+        detail_findings = [_detail_finding(finding) for finding in findings]
+        detail_summaries = [_finding_summary(finding) for finding in detail_findings[:3]]
+        payload["best_finding"] = detail_summaries[0] if detail_summaries else None
+        payload["finding_summaries"] = detail_summaries
+        payload["findings"] = detail_findings
         payload["output_boundary"] = "detail_no_feedback_write_actions"
     if detail_level in {"full", "operator"}:
         payload["findings"] = findings

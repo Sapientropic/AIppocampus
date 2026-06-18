@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import json
 import sys
 import tempfile
 import unittest
+from io import StringIO
 from pathlib import Path
 from unittest import mock
 
@@ -20,10 +22,42 @@ for _path in (
 
 from aippocampus_runtime.vault import dashboard as packaged_dashboard  # noqa: E402
 from aippocampus_runtime.vault import dashboard as vault_dashboard  # noqa: E402
+from aippocampus_runtime.vault import sync as vault_sync  # noqa: E402
 from aippocampus_runtime.vault import utils as vault_utils  # noqa: E402
 
 
 class VaultDashboardAssetTests(unittest.TestCase):
+    def test_vault_sync_default_json_is_read_only_and_redacts_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            vault = Path(tmp) / "memory-vault"
+            with (
+                mock.patch("sys.argv", ["aippocampus vault sync", "--vault", str(vault), "--json"]),
+                mock.patch("sys.stdout", new_callable=StringIO) as stdout,
+                mock.patch.object(vault_sync, "run_text") as run_text,
+                mock.patch.object(vault_sync, "run_json") as run_json,
+                mock.patch.object(vault_sync, "copy_dashboard_assets") as copy_assets,
+                mock.patch.object(vault_sync, "register_current_thread") as register_thread,
+            ):
+                code = vault_sync.main()
+
+            payload = json.loads(stdout.getvalue())
+            encoded = json.dumps(payload, ensure_ascii=False)
+
+            self.assertEqual(code, 0)
+            self.assertFalse(vault.exists())
+            run_text.assert_not_called()
+            run_json.assert_not_called()
+            copy_assets.assert_not_called()
+            register_thread.assert_not_called()
+            self.assertEqual(payload["kind"], "aippocampus_vault_sync")
+            self.assertEqual(payload["mode"], "status")
+            self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
+            self.assertEqual(payload["foreground_action"], payload["agent_next_action"])
+            self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
+            self.assertEqual(payload["agent_next_action"]["id"], "preview_vault_sync_write_set")
+            self.assertFalse(payload["privacy_boundary"]["local_paths_included"])
+            self.assertNotIn(str(vault), encoded)
+
     def test_public_asset_functions_delegate_to_versioned_assets(self) -> None:
         with mock.patch.object(
             vault_dashboard,

@@ -13,6 +13,7 @@ from typing import Any
 from aippocampus_runtime.contracts import (
     FOREGROUND_ACTION_CONTRACT_VERSION,
     foreground_shell_action,
+    foreground_template_action,
 )
 
 CLAIM_BOUNDARY = "host_setup_not_memory_evidence"
@@ -66,6 +67,18 @@ def _write_action(*, action_id: str, label: str, command: str, why: str) -> dict
             mutation_risk="explicit_config_write",
             claim_boundary=CLAIM_BOUNDARY,
         )
+    )
+
+
+def _first_recall_template(*, action_id: str, label: str, why: str) -> dict[str, Any]:
+    return foreground_template_action(
+        action_id=action_id,
+        label=label,
+        command_template='aippocampus agent recall "{continuity_cue}" --json',
+        requires=["continuity_cue"],
+        why=why,
+        mutation_risk="read_only",
+        claim_boundary="no_claim_before_reopen",
     )
 
 
@@ -233,9 +246,14 @@ def prompt_status_contract(
         )
         primary["claim_boundary"] = "last_prompt_hook_repair_not_memory_evidence"
     elif status == "installed":
-        primary = _no_action_needed(
-            label="Prompt hook ready",
-            message="No foreground prompt-hook setup action is needed.",
+        primary = _status_action(
+            action_id="inspect_prompt_hook_output",
+            label="Inspect prompt hook output",
+            command="aippocampus hooks prompt status --last --json",
+        )
+        primary["why"] = (
+            "Installed wiring is only setup state; inspect the last hook output or "
+            "try ordinary recall before treating continuity as useful."
         )
     elif status == "stale":
         primary = _write_action(
@@ -259,6 +277,11 @@ def prompt_status_contract(
         primary=primary,
         safe_actions=[
             primary,
+            _first_recall_template(
+                action_id="try_first_recall_after_prompt_hook",
+                label="Try first recall",
+                why="Use source-backed recall to verify the foreground continuity path, not hook installation alone.",
+            ),
             _status_action(
                 action_id="check_prompt_hook_status",
                 label="Check prompt hook status",
@@ -299,9 +322,13 @@ def lifecycle_status_contract(
     windows_hidden_launch_status: str,
 ) -> dict[str, Any]:
     if status == "installed":
-        primary = _no_action_needed(
-            label="Lifecycle hooks ready",
-            message="No foreground lifecycle-hook setup action is needed.",
+        primary = _first_recall_template(
+            action_id="try_first_recall_after_lifecycle_hooks",
+            label="Try first recall",
+            why=(
+                "Lifecycle hooks only prove setup wiring; use read-only recall to "
+                "check whether useful continuity is available now."
+            ),
         )
     elif status == "partial":
         primary = _write_action(
@@ -456,11 +483,16 @@ def action_hint_status_contract(frontstage_card: Mapping[str, Any]) -> dict[str,
             if key in refresh_action
         }
     if ready:
-        primary = _no_action_needed(
-            label="Action-time hints ready",
-            message="No foreground action-hint setup action is needed.",
+        primary = _status_action(
+            action_id="check_action_hint_status",
+            label="Check action-hint hook status",
+            command="aippocampus hooks action status --json",
         )
         primary["claim_boundary"] = claim_boundary
+        primary["why"] = (
+            "Ready action-time hints are navigation setup, not source evidence; "
+            "status stays read-only and ordinary recall remains the proof path."
+        )
     elif not installed and isinstance(review_action, dict):
         primary = review_action
     else:
@@ -470,8 +502,8 @@ def action_hint_status_contract(frontstage_card: Mapping[str, Any]) -> dict[str,
                 for action in mapped_steps
                 if action.get("id")
                 in {
-                    "refresh_action_hint_cache",
-                    "install_action_hint_hook",
+                    "check_action_hint_status",
+                    "review_action_hint_guidance",
                 }
             ),
             mapped_steps[0]

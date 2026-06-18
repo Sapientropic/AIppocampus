@@ -8,6 +8,27 @@ Snapshot date: 2026-06-01.
 Repository-layout command paths refreshed: 2026-05-29.
 Public-core license and adapter boundary refreshed: 2026-05-30.
 
+## Currentness Card
+
+page_last_structural_review: 2026-06-18; this page is the readiness boundary
+map, not a fresh command transcript.
+
+latest_numeric_claim_source: `docs/evidence/current-claims.md`; dated command
+evidence stays in `docs/evidence/readiness/public-readiness-verification.md`.
+
+current_status: Stage 0-5 readiness has bounded public-core and smoke evidence,
+with public marketplace, third-party fresh-clone review, and broad live-quality
+claims still outside the current claim.
+
+remaining_gaps: keep release/readiness upgrades tied to a dated command ledger,
+current claim row, or scoped GitHub issue before widening public claims.
+
+owner_routes: `docs/evidence/current-claims.md`,
+`docs/evidence/readiness/public-readiness-verification.md`,
+`docs/planning/next-iteration-plan.md`.
+
+next_verification_command: `python tools\aippocampus\docs\check_docs_health.py --json`.
+
 Keep this page focused on claim boundaries and missing proof. Dated command
 evidence belongs in `docs/evidence/readiness/public-readiness-verification.md`;
 current numeric benchmark/readiness claims and supersession rules live in

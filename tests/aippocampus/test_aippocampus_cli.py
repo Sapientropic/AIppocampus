@@ -245,8 +245,8 @@ class AippocampusCliTests(unittest.TestCase):
         learning_payload = json.loads(learning.stdout)
         self.assertEqual(learning_payload["kind"], "aippocampus_learning_frontdoor")
         self.assertEqual(learning_payload["mode"], "status")
-        self.assertEqual(learning_payload["agent_next_action"]["id"], "discover_eligible_learning_sources")
-        self.assertIn("learning discover-history --json", learning_payload["agent_next_action"]["command"])
+        self.assertEqual(learning_payload["agent_next_action"]["id"], "review_semantic_guidance_candidate")
+        self.assertIn("learning guidance --json", learning_payload["agent_next_action"]["command"])
         self.assertTrue(learning_payload["privacy_boundary"]["raw_rollouts_serialized"] is False)
 
         self.assertEqual(learning_replay.returncode, 2, learning_replay.stderr)
@@ -269,7 +269,40 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertEqual(status_payload["lanes"]["sanitized_replay"]["status"], "available_on_request")
         self.assertIn("effectiveness_ledger", status_payload["lanes"])
         self.assertEqual(status_payload["lanes"]["operator_diagnostics"]["status"], "operator_only")
-        self.assertEqual(status_payload["agent_next_action"]["id"], "discover_eligible_learning_sources")
+        self.assertEqual(status_payload["agent_next_action"]["id"], "review_semantic_guidance_candidate")
+        self.assertEqual(status_payload["foreground_action_contract"], "foreground-action-v1")
+        self.assertEqual(status_payload["foreground_action"], status_payload["agent_next_action"])
+        self.assertEqual(status_payload["safe_next_actions"][0], status_payload["foreground_action"])
+        self.assertEqual(status_payload["next_actions"][0], status_payload["foreground_action"])
+        self.assertEqual(
+            len(status_payload["safe_next_actions"]),
+            len(
+                {
+                    (
+                        action.get("id"),
+                        action.get("command"),
+                        action.get("command_template"),
+                    )
+                    for action in status_payload["safe_next_actions"]
+                }
+            ),
+        )
+        self.assertEqual(
+            status_payload["route_value"],
+            "current_learning_guidance_is_navigation_for_next_action",
+        )
+        self.assertIn("current_uncertainty", status_payload)
+        self.assertIn("summary_metrics", status_payload)
+        self.assertGreaterEqual(len(status_payload["current_guidance"]), 1)
+        self.assertEqual(
+            status_payload["current_guidance"][0]["review_action"]["id"],
+            "review_semantic_guidance_candidate",
+        )
+        self.assertNotIn(
+            "guidance_lifecycle_ledger",
+            status_payload["semantic_guidance_lifecycle"],
+        )
+        self.assertIn("guidance_lifecycle_ledger", status_payload["operator_detail"])
         self.assertNotIn("<events.jsonl>", status_encoded)
         self.assertNotIn("<sanitized-events.jsonl>", status_encoded)
         self.assertEqual(status_payload["semantic_loop"]["stage"], "action_time_capable")
@@ -293,6 +326,28 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertTrue(
             status_payload["lanes"]["current_history_extraction"]["requires_explicit_source"]
         )
+
+        module_status = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "aippocampus_runtime.learning_loop.cli",
+                "status",
+                "--json",
+            ],
+            cwd=SCRIPTS,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(module_status.returncode, 0, module_status.stderr)
+        module_payload = json.loads(module_status.stdout)
+        self.assertEqual(module_payload["kind"], "aippocampus_learning_frontdoor")
+        self.assertEqual(module_payload["mode"], "status")
+        self.assertEqual(module_payload["foreground_action_contract"], "foreground-action-v1")
+
         self.assertEqual(learning_guidance.returncode, 0, learning_guidance.stderr)
         guidance_payload = json.loads(learning_guidance.stdout)
         self.assertEqual(guidance_payload["mode"], "guidance")
@@ -310,8 +365,9 @@ class AippocampusCliTests(unittest.TestCase):
         )
         lifecycle = guidance_payload["semantic_guidance"]["lifecycle"]
         self.assertEqual(lifecycle["row_lifecycle_contract"], "guidance-row-lifecycle-v1")
-        self.assertGreaterEqual(len(lifecycle["guidance_lifecycle_ledger"]), 1)
-        ledger_row = lifecycle["guidance_lifecycle_ledger"][0]
+        self.assertNotIn("guidance_lifecycle_ledger", lifecycle)
+        self.assertIn("guidance_lifecycle_ledger", guidance_payload["operator_detail"])
+        ledger_row = guidance_payload["operator_detail"]["guidance_lifecycle_ledger"][0]
         self.assertEqual(
             {
                 event["guidance_id"]
@@ -734,6 +790,9 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertEqual(final_proc.returncode, 0, final_proc.stderr)
         final_payload = json.loads(final_proc.stdout)
         self.assertTrue(final_payload["closeout_available"])
+        self.assertEqual(final_payload["foreground_action_contract"], "foreground-action-v1")
+        self.assertEqual(final_payload["foreground_action"], final_payload["agent_next_action"])
+        self.assertEqual(final_payload["safe_next_actions"][0], final_payload["foreground_action"])
         self.assertNotIn("text", final_payload["message"])
         self.assertIn("settled final closeout", final_payload["message"]["preview"])
         self.assertEqual(
@@ -747,6 +806,9 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertNotEqual(commentary_proc.returncode, 0)
         commentary_payload = json.loads(commentary_proc.stdout)
         encoded_commentary = json.dumps(commentary_payload, ensure_ascii=False)
+        self.assertEqual(commentary_payload["foreground_action_contract"], "foreground-action-v1")
+        self.assertEqual(commentary_payload["foreground_action"], commentary_payload["agent_next_action"])
+        self.assertEqual(commentary_payload["safe_next_actions"][0], commentary_payload["foreground_action"])
         self.assertTrue(commentary_payload["not_final_closeout"])
         self.assertTrue(commentary_payload["diagnostic_only"])
         self.assertNotIn(commentary_text, encoded_commentary)
@@ -778,6 +840,9 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertEqual(proc.returncode, 2, raw)
         payload = json.loads(proc.stdout)
         self.assertEqual(payload["status"], "no_latest_reply_source_found")
+        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
+        self.assertEqual(payload["foreground_action"], payload["agent_next_action"])
+        self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
         self.assertEqual(payload["error"]["code"], "no_rollout_for_cwd")
         self.assertTrue(payload["error"]["path_redacted"])
         self.assertIn("agent recall", payload["agent_next_action"]["command_template"])
@@ -2319,7 +2384,9 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertNotIn("session:private", encoded_public)
         self.assertNotIn(private_marker, encoded_public)
         self.assertNotEqual(negative.returncode, 0)
-        self.assertIn("must be >= 1", negative.stderr)
+        negative_payload = json.loads(negative.stdout)
+        self.assertEqual(negative_payload["error"]["code"], "usage_error")
+        self.assertIn("must be >= 1", negative_payload["error"]["message"])
         self.assertNotEqual(no_match.returncode, 0)
         no_match_payload = json.loads(no_match.stdout)
         self.assertEqual(no_match_payload["match_count"], 0)
