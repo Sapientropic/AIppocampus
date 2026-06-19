@@ -387,7 +387,6 @@ class ActionHintCacheTests(unittest.TestCase):
             effectiveness_ledger_rows=ledger_rows,
             now_unix=1000,
         )
-        records = result["cache"]["records"]
 
         self.assertTrue(result["effectiveness_ledger_intake"]["applied_to_guidance_before_cache"])
         self.assertEqual(result["effectiveness_ledger_intake"]["summary"]["row_count"], 2)

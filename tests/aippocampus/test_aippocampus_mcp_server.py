@@ -2158,7 +2158,10 @@ class AippocampusMcpServerTests(unittest.TestCase):
         self.assertEqual(executable_command_violations(list_payload), [])
         self.assertTrue(missing_response["result"].get("isError", False))
         self.assertEqual(missing_payload["error"]["code"], "handoff_not_found")
-        self.assertIn("telepathy list --status all", missing_payload["agent_next_action"])
+        self.assertEqual(missing_payload["foreground_action_contract"], "foreground-action-v1")
+        self.assertEqual(missing_payload["agent_next_action"], missing_payload["foreground_action"])
+        self.assertEqual(missing_payload["safe_next_actions"][0], missing_payload["foreground_action"])
+        self.assertIn("telepathy list --status all", missing_payload["agent_next_action"]["command"])
         self.assertNotIn(str(self.cwd), encoded)
         self.assertNotIn("empty-handoffs.jsonl", encoded)
 
