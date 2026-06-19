@@ -200,9 +200,8 @@ def compact_agent_deepen_payload(
                 **foreground_fields,
                 "next_safe_action": primary_action,
                 "next_safe_action_id": source.get("next_safe_action_id") or primary_action.get("id"),
-                "boundary_detail": source.get("boundary_detail"),
-                "operator_detail": source.get("operator_detail"),
-                "output_boundary": "compact_recovery_operator_detail_gated",
+                "claim_boundary": source.get("claim_boundary"),
+                "operator_detail_command": source.get("operator_detail_command"),
             }
         )
     if source.get("status") != "ok" or source.get("surface") != "recall":

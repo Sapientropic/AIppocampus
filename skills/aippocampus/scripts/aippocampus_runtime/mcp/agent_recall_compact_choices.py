@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from aippocampus_runtime import core
@@ -38,6 +39,58 @@ def low_specificity_route_choices(metrics: dict[str, Any], route_count: int) -> 
     floor = _metric_float(metrics, "route_label_specificity_floor")
     topic_count = _metric_int(metrics, "topic_label_present_count")
     return route_count > 1 and floor is not None and floor <= 0.0 and (topic_count or 0) <= 0
+
+
+_CUE_TOKEN_RE = re.compile(r"[\u4e00-\u9fff]{2,}|[A-Za-z0-9][A-Za-z0-9_-]{3,}")
+_ANCHOR_NORMALIZE_RE = re.compile(r"[^0-9A-Za-z\u4e00-\u9fff]+")
+_LOW_SIGNAL_WORDS = {
+    "about",
+    "clean",
+    "continuity",
+    "decision",
+    "handoff",
+    "memory",
+    "recall",
+    "route",
+    "search",
+    "source",
+    "technical",
+    "work",
+}
+
+
+def distinctive_cue_anchor_gap(cue: str | None, packets: list[dict[str, Any]]) -> bool:
+    """Return whether compact route labels fail to carry distinctive cue anchors.
+
+    This is a foreground affordance, not a ranking layer: the underlying recall
+    may still have a plausible source route, but if the compact labels do not
+    echo any distinctive cue anchor, the safe default is to refine/search before
+    blindly deepening a generic-looking route.
+    """
+
+    raw = str(cue or "")
+    tokens = []
+    seen: set[str] = set()
+    for match in _CUE_TOKEN_RE.finditer(raw):
+        token = _ANCHOR_NORMALIZE_RE.sub("", match.group(0).casefold())
+        if token in _LOW_SIGNAL_WORDS or token in seen:
+            continue
+        seen.add(token)
+        tokens.append(token)
+    if len(tokens) < 2 or not packets:
+        return False
+    label_text = _ANCHOR_NORMALIZE_RE.sub(
+        "",
+        " ".join(
+            str(packet.get(key) or "")
+            for packet in packets[:3]
+            for key in ("route_label", "route_topic", "display_hint", "output_mode", "route_kind")
+        ).casefold(),
+    )
+    if not label_text:
+        return False
+    matched = [token for token in tokens if token in label_text]
+    return len(matched) == 0
 
 
 def route_choice_reason(
@@ -94,6 +147,7 @@ def with_low_specificity_foreground_action(
     )
     next_action = {
         "id": "refine_low_specificity_recall_cue",
+        "label": "Refine low-specificity recall cue",
         "tool_name": "agent_recall",
         "secondary_action": {
             key: value
@@ -112,10 +166,12 @@ def with_low_specificity_foreground_action(
             "route_label_specificity_floor",
         ),
         "topic_label_present_count": _metric_int(metrics, "topic_label_present_count"),
+        "mutation_risk": "read_only",
         "why": (
-            "Route labels are not meaningfully distinguishable in compact output; "
-            "use a tighter cue before choosing a route. Blind deepen remains a secondary "
-            "low-confidence navigation option only."
+            "Route labels are not meaningfully distinguishable, or they fail to carry "
+            "the distinctive cue anchors in compact output; use a tighter cue before "
+            "choosing a route. Blind deepen remains a secondary low-confidence "
+            "navigation option only."
         ),
         "claim_boundary": "no_claim_before_reopen",
     }

@@ -1414,18 +1414,6 @@ def apply_update(args: argparse.Namespace) -> dict[str, Any]:
             ),
             next_command="aippocampus update plan --json",
         )
-        report["next_actions"] = [
-            {
-                "label": "preview update plan",
-                "command": "aippocampus update plan --json",
-                "mutates": False,
-            },
-            {
-                "label": "read update status",
-                "command": "aippocampus update status --json",
-                "mutates": False,
-            },
-        ]
         return {
             **report,
             "mode": "apply_recovery",

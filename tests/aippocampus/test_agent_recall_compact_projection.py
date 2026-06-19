@@ -176,6 +176,52 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
         self.assertNotIn("secondary_action", action)
         self.assertIn("topic_roadmap_closeout", public["routes"][0]["choice_reason"])
 
+    def test_single_generic_route_with_distinctive_cue_anchors_refines_before_deepen(
+        self,
+    ) -> None:
+        public = agent_continuity.public_recall_projection(
+            {
+                "kind": "aippocampus_agent_continuity_path",
+                "schema_version": "agent-continuity-path-v1",
+                "mode": "recall",
+                "status": "ok",
+                "query": "关于联想回忆 黏菌 探索算法 检索不强",
+                "opt_in_required": False,
+                "last_recall_cache_available": True,
+                "foreground_action_card": {
+                    "decision": "use_route_first",
+                    "canonical_action": {
+                        "action_id": "agent_deepen_selected_route",
+                        "tool_name": "agent_deepen",
+                        "arguments": {"request_index": 1, "last_recall": True},
+                        "claim_boundary": "no_claim_before_reopen",
+                    },
+                },
+                "memory_packets": [
+                    {
+                        "route_id": "route_generic",
+                        "route_label": "technical_work route",
+                        "route_kind": "clean_source_route",
+                        "output_mode": "reopenable_route",
+                        "claim_permission": "no_claim_before_reopen",
+                    }
+                ],
+                "metrics": {
+                    "memory_packet_count": 1,
+                    "deepen_request_count": 1,
+                    "route_label_specificity_floor": 0.42,
+                    "topic_label_present_count": 1,
+                },
+            }
+        )
+
+        action = public["foreground_action"]
+        self.assertEqual(action["id"], "refine_low_specificity_recall_cue")
+        self.assertEqual(action["tool_name"], "agent_recall")
+        self.assertEqual(action["secondary_action"]["id"], "deepen_top_route_low_confidence")
+        self.assertIn("distinctive cue anchors", action["why"])
+        self.assertIn("labels_low_specificity", public["routes"][0]["choice_reason"])
+
     def test_recovery_actions_fill_known_recall_query_commands(self) -> None:
         no_route = agent_continuity.public_recall_projection(
             {

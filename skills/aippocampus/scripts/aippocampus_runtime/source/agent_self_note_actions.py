@@ -8,6 +8,7 @@ from typing import Any
 from aippocampus_runtime.contracts import (
     canonical_foreground_action_fields,
     foreground_shell_action,
+    foreground_template_action,
 )
 
 
@@ -21,15 +22,15 @@ def append_error_payload(
         "agent_self_note_empty": "self-note append needs a short note, --stdin input, or a source-backed cue.",
         "agent_self_note_raw_payload_rejected": "self-note append refused raw tool/log payload text.",
     }
-    append_note_action: dict[str, Any] = {
-        "id": "append_direction_only_note",
-        "label": "Append a short direction-only self-note",
-        "command_template": 'aippocampus self-note append --current-thread "{note_text}" --json',
-        "requires": ["note_text"],
-        "why": "Use only for low-authority handoff, posture, or route scent; reopen source for factual claims.",
-        "mutation_risk": "explicit_self_note_write",
-        "claim_boundary": "direction_only_note_not_source_truth",
-    }
+    append_note_action: dict[str, Any] = foreground_template_action(
+        action_id="append_direction_only_note",
+        label="Append a short direction-only self-note",
+        command_template='aippocampus self-note append --current-thread "{note_text}" --json',
+        requires=["note_text"],
+        why="Use only for low-authority handoff, posture, or route scent; reopen source for factual claims.",
+        mutation_risk="explicit_self_note_write",
+        claim_boundary="direction_only_note_not_source_truth",
+    )
     stdin_note_action = foreground_shell_action(
         action_id="append_direction_only_note_from_stdin",
         label="Pipe a short direction-only note",
@@ -38,38 +39,38 @@ def append_error_payload(
         mutation_risk="explicit_self_note_write",
         claim_boundary="direction_only_note_not_source_truth",
     )
-    recall_action: dict[str, Any] = {
-        "id": "use_source_backed_recall_instead",
-        "label": "Use recall when you need source-backed evidence",
-        "command_template": 'aippocampus agent recall "{cue}" --json',
-        "requires": ["cue"],
-        "why": "Self-notes are scent only; recall/deepen is the path for evidence-backed claims.",
-        "mutation_risk": "read_only",
-        "claim_boundary": "no_claim_before_reopen",
-    }
-    search_action: dict[str, Any] = {
-        "id": "search_exact_phrase_instead",
-        "label": "Search clean source for an exact phrase",
-        "command_template": 'aippocampus search "{exact_phrase}" --json',
-        "requires": ["exact_phrase"],
-        "why": "Use when the cue is a phrase from source material rather than a direction-only margin note.",
-        "mutation_risk": "read_only",
-        "claim_boundary": "source_reopen_required_before_claim",
-    }
+    recall_action: dict[str, Any] = foreground_template_action(
+        action_id="use_source_backed_recall_instead",
+        label="Use recall when you need source-backed evidence",
+        command_template='aippocampus agent recall "{cue}" --json',
+        requires=["cue"],
+        why="Self-notes are scent only; recall/deepen is the path for evidence-backed claims.",
+        mutation_risk="read_only",
+        claim_boundary="no_claim_before_reopen",
+    )
+    search_action: dict[str, Any] = foreground_template_action(
+        action_id="search_exact_phrase_instead",
+        label="Search clean source for an exact phrase",
+        command_template='aippocampus search "{exact_phrase}" --json',
+        requires=["exact_phrase"],
+        why="Use when the cue is a phrase from source material rather than a direction-only margin note.",
+        mutation_risk="read_only",
+        claim_boundary="source_reopen_required_before_claim",
+    )
     next_actions: dict[str, dict[str, Any]] = {
         "agent_self_note_empty": append_note_action,
-        "agent_self_note_raw_payload_rejected": {
-            "id": "summarize_direction_only_note",
-            "label": "Summarize the breadcrumb before writing a self-note",
-            "command_template": (
+        "agent_self_note_raw_payload_rejected": foreground_template_action(
+            action_id="summarize_direction_only_note",
+            label="Summarize the breadcrumb before writing a self-note",
+            command_template=(
                 'aippocampus self-note append --current-thread '
                 '"{short_direction_only_summary}" --json'
             ),
-            "requires": ["short_direction_only_summary"],
-            "why": "Do not store raw tool output, logs, or source text as a self-note.",
-            "mutation_risk": "explicit_self_note_write",
-            "claim_boundary": "direction_only_note_not_source_truth",
-        },
+            requires=["short_direction_only_summary"],
+            why="Do not store raw tool output, logs, or source text as a self-note.",
+            mutation_risk="explicit_self_note_write",
+            claim_boundary="direction_only_note_not_source_truth",
+        ),
     }
     safe_next_actions = {
         "agent_self_note_empty": [

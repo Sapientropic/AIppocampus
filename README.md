@@ -155,17 +155,10 @@ uvx aippocampus onboard --provider auto --status --json
 ```
 
 This is a read-only provider matrix, not consent to ingest every detected
-provider. Only after the user explicitly agrees to register local history, pick
-one provider-specific write path:
-
-```sh
-uvx aippocampus onboard --provider codex --dry-run --json
-uvx aippocampus onboard --provider codex --cwd . --json
-uvx aippocampus onboard --provider claude-code --dry-run --json
-uvx aippocampus onboard --provider claude-code --cwd . --json
-uvx aippocampus import conversation --format generic-jsonl --input ./conversation.jsonl --dry-run --json
-uvx aippocampus import conversation --format generic-jsonl --input ./conversation.jsonl --json
-```
+provider. Only after the user explicitly agrees to register local history,
+route to [Start Here](docs/start-here.md) or the
+[First Recall Decision Card](docs/guides/first-recall-decision-card.md) for the
+right provider-specific write path.
 
 For human-facing demos, omit `--format json` so onboarding and search show the
 first-recall next steps. Agents should read [docs/agent-context.md](docs/agent-context.md) and

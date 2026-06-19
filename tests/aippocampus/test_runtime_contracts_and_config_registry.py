@@ -200,6 +200,53 @@ class RuntimeContractsAndConfigRegistryTests(unittest.TestCase):
             reasons,
         )
 
+    def test_foreground_action_contract_lint_rejects_unmarked_command_templates(self) -> None:
+        action = {
+            "id": "recall_with_cue",
+            "label": "Recall with cue",
+            "command_template": 'aippocampus agent recall "{cue}" --json',
+            "requires": ["cue"],
+            "why": "Use after the caller supplies a concrete continuity cue.",
+            "mutation_risk": "read_only",
+            "claim_boundary": "no_claim_before_reopen",
+        }
+        payload = canonical_foreground_action_fields(action)
+
+        self.assertIn(
+            {
+                "field": "foreground_action.template_only",
+                "reason": "command_template_requires_template_only_true",
+            },
+            foreground_action_contract_violations(payload),
+        )
+
+    def test_foreground_action_contract_lint_rejects_unmarked_secondary_templates(self) -> None:
+        primary = {
+            "id": "open_detail",
+            "label": "Open detail",
+            "command": "aippocampus agent deepen --request 1 --last-recall --json",
+            "why": "Open the selected source before claims.",
+            "mutation_risk": "read_only",
+            "claim_boundary": "no_claim_before_reopen",
+            "secondary_action": {
+                "id": "recall_with_cue",
+                "label": "Recall with cue",
+                "command_template": 'aippocampus agent recall "{cue}" --json',
+                "why": "Use after the caller supplies a cue.",
+                "mutation_risk": "read_only",
+                "claim_boundary": "no_claim_before_reopen",
+            },
+        }
+        payload = canonical_foreground_action_fields(primary)
+
+        self.assertIn(
+            {
+                "field": "foreground_action.secondary_action.template_only",
+                "reason": "command_template_requires_template_only_true",
+            },
+            foreground_action_contract_violations(payload),
+        )
+
     def test_foreground_chooser_card_exposes_canonical_action_fields(self) -> None:
         primary = {
             "id": "check_sync_status",

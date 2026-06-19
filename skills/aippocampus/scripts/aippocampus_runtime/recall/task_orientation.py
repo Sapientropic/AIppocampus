@@ -16,6 +16,7 @@ from typing import Any
 from aippocampus_runtime import core
 from aippocampus_runtime.contracts import (
     FOREGROUND_ACTION_CONTRACT_VERSION,
+    canonical_foreground_action_fields,
     foreground_template_action,
     shell_quote,
 )
@@ -69,12 +70,14 @@ def missing_task_payload(*, project: str = "AIppocampus") -> dict[str, Any]:
             "status": "needs_input",
             "ok": False,
             "project": project,
-            "foreground_action_contract": FOREGROUND_ACTION_CONTRACT_VERSION,
-            "foreground_action": action,
-            "agent_next_action": action,
-            "safe_next_actions": [action],
+            "error": {
+                "code": "task_required",
+                "message": "agent orient needs a task cue before route selection.",
+            },
+            **canonical_foreground_action_fields(action, safe_next_actions=[action]),
             "source_boundary": _source_boundary(),
-            "cannot_claim": ["task_scoped_orientation_without_task"],
+            "claim_boundary": "orientation is route guidance, not source evidence; reopen/deepen before claims.",
+            "operator_detail_command": 'aippocampus agent orient "{task}" --json --detail full',
         }
     )
 

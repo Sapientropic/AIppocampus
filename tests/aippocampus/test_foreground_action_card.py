@@ -164,7 +164,7 @@ class ForegroundActionCardTests(unittest.TestCase):
         self.assertEqual(action["arguments"]["request_index"], 1)
         self.assertNotIn("foreground_action_card", public)
         self.assertNotIn("deepen_requests", public)
-        self.assertIn("foreground_action_card.callable_handle", public["local_private_fields"])
+        self.assertNotIn("local_private_fields", public)
         self.assertNotIn(report["foreground_action_card"]["callable_handle"], encoded)
 
     def test_replay_report_shows_card_reduces_manual_compile_steps_without_truth_claim(self) -> None:

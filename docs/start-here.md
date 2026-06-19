@@ -18,34 +18,35 @@ honestly ready.
 
   ```sh
   aippocampus start --json
-  aippocampus onboard --provider codex --cwd . --json
-  aippocampus plugin install --codex --verify
   aippocampus agent recall "old decision or handoff cue" --json
   aippocampus agent deepen --request 1 --last-recall --json
-  aippocampus export --json
-  aippocampus sync --json
   ```
 
-  `plugin install --codex` is Codex host integration. If `start` reports no
-  clean source, the source-registration command is the `onboard --provider
-  codex --cwd . --json` line above; `onboard --status` is only a read-only
-  provider matrix.
+  If `start` reports no clean source, stay read-only first:
+  `aippocampus onboard --provider auto --status --json` and
+  `aippocampus onboard --provider codex --dry-run --json`. Register Codex
+  source with `aippocampus onboard --provider codex --cwd . --json` only after
+  explicit consent. `plugin install --codex` is Codex host integration, not the
+  first recall step.
 
   After that first route works, offer trusted hook/action-hint setup with
-  rollback visible. Use `aippocampus update status --json` only when the plugin
-  or hooks feel installed but not visible to the foreground agent.
+  rollback visible, then use `aippocampus export --json` and
+  `aippocampus sync --json` as carry-forward checks. Use
+  `aippocampus update status --json` only when the plugin or hooks feel
+  installed but not visible to the foreground agent.
 
 - Claude Code local setup:
 
   ```sh
   aippocampus start --json
-  aippocampus onboard --provider claude-code --cwd . --json
-  aippocampus hooks claude-code status --json
   aippocampus agent recall "old decision or handoff cue" --json
   aippocampus agent deepen --request 1 --last-recall --json
-  aippocampus export --json
-  aippocampus sync --json
   ```
+
+  If source is missing, check `aippocampus onboard --provider auto --status
+  --json` and preview `aippocampus onboard --provider claude-code --dry-run
+  --json` before writing. Register Claude Code source with `aippocampus onboard
+  --provider claude-code --cwd . --json` only after explicit consent.
 
   Install scoped Claude Code hooks only after reviewing status or dry-run:
   `aippocampus hooks claude-code dry-run --json`, then
@@ -55,7 +56,7 @@ honestly ready.
 
   ```sh
   uvx aippocampus --help
-  uvx aippocampus onboard --provider auto --status
+  uvx aippocampus onboard --provider auto --status --json
   ```
 
 - Existing source memory:
@@ -64,12 +65,12 @@ honestly ready.
   aippocampus start --json
   aippocampus agent recall "old decision or handoff cue" --json
   aippocampus agent deepen --request 1 --last-recall --json
-  aippocampus export --json
-  aippocampus sync --json
   ```
 
   Use `aippocampus search "a distinctive old phrase"` when the user remembers
-  exact wording or the recall route is blocked.
+  exact wording or the recall route is blocked. After the first useful route,
+  `aippocampus export --json` and `aippocampus sync --json` are carry-forward
+  checks, not prerequisites for recall.
 
 Use the recall output as a route. Deepen/reopen source before exact wording,
 public claims, sensitive facts, stale disputes, or high-risk action.

@@ -4,13 +4,26 @@ This reference owns prompt-time recall, lifecycle upkeep, semantic gating, and
 the hook-safe subconscious scheduler. `SKILL.md` should only summarize these
 boundaries.
 
-## Start With The Hook Path
+## Start With Status And Rollback
 
 ```bash
-aippocampus hooks prompt status --last
-aippocampus hooks prompt install --json
+aippocampus hooks prompt status --last --json
+aippocampus hooks action status --json
+aippocampus update status --json
 aippocampus agent recall "old decision or handoff cue" --json
 ```
+
+These are read-only checks. They tell the agent whether prompt/lifecycle hooks,
+action-time hints, and foreground visibility are ready, degraded, or simply not
+installed. If a hook is installed but degraded, prefer the smallest surfaced
+status action before reinstalling.
+
+Install only after reviewing the status card and keeping rollback visible:
+`aippocampus hooks prompt install --json` installs Codex prompt wiring, and
+`aippocampus hooks prompt uninstall --json` rolls it back. For action-time
+hints, use `aippocampus hooks action status --json` before
+`aippocampus hooks action install --json`, and rollback with
+`aippocampus hooks action uninstall --json`.
 
 The prompt hook keeps ordinary work quiet and surfaces a small route hint only
 when continuity may change the next action. Its happy path is: stay silent for

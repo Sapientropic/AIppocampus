@@ -8,6 +8,10 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.contracts import (
+    canonical_foreground_action_fields,
+    foreground_shell_action,
+)
 from aippocampus_runtime.public_output import emit_public_text
 
 SECRET_ASSIGNMENT_RE = re.compile(
@@ -103,6 +107,22 @@ def update_recovery_payload(
     next_command: str,
     schema_version: int = 1,
 ) -> dict[str, Any]:
+    read_status = foreground_shell_action(
+        action_id="read_update_status",
+        label="Read update status",
+        command="aippocampus update status --json",
+        why="Use status first to see the next setup or repair action without writing.",
+        mutation_risk="read_only",
+        claim_boundary="update_status_not_source_evidence",
+    )
+    preview_plan = foreground_shell_action(
+        action_id="preview_update_plan",
+        label="Preview update plan",
+        command="aippocampus update plan --json",
+        why="Preview the candidate update before applying any local change.",
+        mutation_risk="read_only",
+        claim_boundary="update_plan_not_yet_applied",
+    )
     return {
         "schema_version": schema_version,
         "kind": "aippocampus_update_recovery",
@@ -112,18 +132,10 @@ def update_recovery_payload(
             "message": message,
             "next_command": next_command,
         },
-        "next_actions": [
-            {
-                "label": "read update status",
-                "command": "aippocampus update status --json",
-                "mutates": False,
-            },
-            {
-                "label": "preview update plan",
-                "command": "aippocampus update plan --json",
-                "mutates": False,
-            },
-        ],
+        **canonical_foreground_action_fields(
+            read_status,
+            safe_next_actions=[read_status, preview_plan],
+        ),
         "safety": {
             "no_write_happened": True,
             "apply_requires_surface": True,

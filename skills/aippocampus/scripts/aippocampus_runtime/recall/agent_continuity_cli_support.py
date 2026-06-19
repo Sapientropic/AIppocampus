@@ -213,6 +213,17 @@ def _request_index_followup_action(mode: str) -> dict[str, Any]:
     return action
 
 
+def _safe_recall_cue(cue: str | None) -> str:
+    return str(redact_sensitive_values(redact_private_paths(str(cue or "").strip())) or "")
+
+
+def _recall_detail_command(cue: str | None) -> str:
+    clean_cue = _safe_recall_cue(cue)
+    if clean_cue and not command_value_needs_input(clean_cue):
+        return f"aippocampus agent recall {shell_quote(clean_cue)} --json --detail full"
+    return 'aippocampus agent recall "{cue}" --json --detail full'
+
+
 def handle_recovery_fields(mode: str) -> dict[str, Any]:
     actions = [
         _recall_with_cue_action(
@@ -234,12 +245,13 @@ def handle_recovery_fields(mode: str) -> dict[str, Any]:
 
 def last_recall_cache_recovery_fields(mode: str, *, cue: str | None = None) -> dict[str, Any]:
     del mode
-    clean_cue = str(redact_sensitive_values(redact_private_paths(str(cue or "").strip())) or "")
+    clean_cue = _safe_recall_cue(cue)
+    detail_command = _recall_detail_command(cue)
     if clean_cue and not command_value_needs_input(clean_cue):
         action = foreground_shell_action(
             action_id="recall_with_cue_full_detail",
             label="Rerun agent recall with full detail",
-            command=f"aippocampus agent recall {shell_quote(clean_cue)} --json --detail full",
+            command=detail_command,
             why="The last-recall cache was unavailable; rerun recall for a fresh route.",
             mutation_risk="read_only",
             claim_boundary="no_claim_before_reopen",
@@ -260,6 +272,30 @@ def last_recall_cache_recovery_fields(mode: str, *, cue: str | None = None) -> d
         "next_safe_action_id": "recall_with_cue_full_detail",
         "safe_next_actions": [action],
     }
+
+
+def last_recall_selector_recovery_fields(
+    mode: str,
+    *,
+    request_index: int,
+    cue: str | None = None,
+) -> dict[str, Any]:
+    fields = last_recall_cache_recovery_fields(mode, cue=cue)
+    fields.update(
+        {
+            "selector_recovery": {
+                "status": "stale_or_unavailable",
+                "request_index": request_index,
+                "cue_preserved": bool(str(cue or "").strip()),
+                "reason": "rerun recall before using this mutable last-recall selector",
+            },
+            "claim_boundary": (
+                "last-recall selector could not reopen current source; rerun recall before claims."
+            ),
+            "operator_detail_command": _recall_detail_command(cue),
+        }
+    )
+    return fields
 
 
 def missing_handle_payload(
@@ -290,14 +326,8 @@ def missing_handle_payload(
             "ok": False,
             "cli_exit_recommended": "nonzero",
             **handle_recovery_fields(mode),
-            "boundary_detail": {
-                "cannot_claim": ["source_backed_claim", "route_handle_as_fact"],
-                "frontstage_rule": "compact recovery cards name the next input instead of listing caveats",
-            },
-            "operator_detail": {
-                "result" if mode == "deepen" else "explanation": body,
-                "policy_boundary": policy_boundary(),
-            },
+            "claim_boundary": "missing selector; run recall first and reopen/deepen before source-backed claims.",
+            "operator_detail_command": f"aippocampus agent {mode} --json --detail full",
         }
     )
 
@@ -325,8 +355,8 @@ def last_recall_unavailable_payload(
                 }
             },
             **last_recall_cache_recovery_fields(mode, cue=cue),
-            "policy_boundary": policy_boundary(),
-            "cannot_claim": ["source_backed_claim", "route_handle_as_fact"],
+            "claim_boundary": "last-recall cache unavailable; rerun recall before selecting a route.",
+            "operator_detail_command": _recall_detail_command(cue),
         }
     )
 
@@ -603,9 +633,7 @@ def public_recall_projection(payload: Mapping[str, Any], *, query: str | None = 
     source["query"] = query if query is not None else source.get("query")
     source.update(handle_boundary_fields())
     projected = compact_agent_recall_payload(source)
-    projected.update(handle_boundary_fields())
     projected["surface"] = "agent_cli_public_compact"
-    projected["output_boundary"] = "public_compact_no_local_private_handles"
     projected["routes"] = _public_compact_route_receipts(projected.get("routes"))
     projected.pop("policy_boundary", None)
     cache_available = bool(source.get("last_recall_cache_available"))
@@ -614,8 +642,16 @@ def public_recall_projection(payload: Mapping[str, Any], *, query: str | None = 
     action_map = action if isinstance(action, Mapping) else {}
     raw_action_args = action_map.get("arguments")
     action_args = raw_action_args if isinstance(raw_action_args, Mapping) else {}
+    raw_card = source.get("foreground_action_card")
+    card_map = raw_card if isinstance(raw_card, Mapping) else {}
+    raw_canonical = card_map.get("canonical_action")
+    canonical_action = raw_canonical if isinstance(raw_canonical, Mapping) else {}
+    raw_canonical_args = canonical_action.get("arguments")
+    canonical_args = raw_canonical_args if isinstance(raw_canonical_args, Mapping) else {}
     advertises_last_recall = bool(action_args.get("last_recall")) or "--last-recall" in str(
         action_map.get("command") or action_map.get("cli_command") or ""
+    ) or bool(canonical_args.get("last_recall")) or "--last-recall" in str(
+        canonical_action.get("command") or canonical_action.get("cli_command") or ""
     )
     if not cache_available and advertises_last_recall:
         recovery_cue = str(
@@ -626,11 +662,13 @@ def public_recall_projection(payload: Mapping[str, Any], *, query: str | None = 
             recovery_cue = ""
         repair_action: dict[str, Any] = {
             "id": "repair_last_recall_cache",
+            "label": "Repair last recall cache",
             "tool_name": "agent_recall",
             "why": (
                 "Recall found route-shaped context, but the same-machine request cache was "
                 "not written, so request-index deepen is not available from compact output."
             ),
+            "mutation_risk": "read_only",
             "claim_boundary": "no_claim_before_reopen",
         }
         if recovery_cue:

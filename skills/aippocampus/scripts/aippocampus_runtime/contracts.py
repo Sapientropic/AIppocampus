@@ -428,6 +428,7 @@ def foreground_action_contract_violations(payload: Mapping[str, object]) -> list
         return violations
     foreground_dict = dict(foreground)
     violations.extend(_foreground_action_shape_violations(foreground, field="foreground_action"))
+    violations.extend(_command_template_marker_violations(foreground, field="foreground_action"))
     if isinstance(agent_next, Mapping) and dict(agent_next) != foreground_dict:
         violations.append(
             {
@@ -453,6 +454,37 @@ def foreground_action_contract_violations(payload: Mapping[str, object]) -> list
             )
         else:
             violations.extend(_foreground_action_shape_violations(first, field="safe_next_actions.0"))
+        for index, action in enumerate(safe_actions):
+            if index == 0 or not isinstance(action, Mapping):
+                continue
+            violations.extend(
+                _command_template_marker_violations(action, field=f"safe_next_actions.{index}")
+            )
+    for key in ("next_safe_action", "follow_up_action", "secondary_action"):
+        action = payload.get(key)
+        if isinstance(action, Mapping):
+            violations.extend(_command_template_marker_violations(action, field=key))
+    return violations
+
+
+def _command_template_marker_violations(
+    action: Mapping[str, object],
+    *,
+    field: str,
+) -> list[dict[str, str]]:
+    violations: list[dict[str, str]] = []
+    if isinstance(action.get("command_template"), str) and action.get("template_only") is not True:
+        violations.append(
+            {
+                "field": f"{field}.template_only",
+                "reason": "command_template_requires_template_only_true",
+            }
+        )
+    nested = action.get("secondary_action")
+    if isinstance(nested, Mapping):
+        violations.extend(
+            _command_template_marker_violations(nested, field=f"{field}.secondary_action")
+        )
     return violations
 
 
@@ -480,6 +512,13 @@ def _foreground_action_shape_violations(action: Mapping[str, object], *, field: 
         isinstance(action.get(key), str) and str(action.get(key)).strip()
         for key in ("command", "command_template", "tool_name")
     )
+    if isinstance(action.get("command_template"), str) and action.get("template_only") is not True:
+        violations.append(
+            {
+                "field": f"{field}.template_only",
+                "reason": "command_template_requires_template_only_true",
+            }
+        )
     has_continue_marker = any(
         bool(action.get(key))
         for key in ("continue_without_command", "no_op", "no_command_needed")
