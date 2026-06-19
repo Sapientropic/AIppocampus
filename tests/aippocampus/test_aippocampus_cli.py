@@ -267,7 +267,7 @@ class AippocampusCliTests(unittest.TestCase):
         status_payload = json.loads(learning_status.stdout)
         status_encoded = json.dumps(status_payload, ensure_ascii=False)
         self.assertNotIn("cannot_claim", status_payload)
-        self.assertIn("cannot_claim", status_payload["boundary_detail"])
+        self.assertNotIn("cannot_claim", status_payload["boundary_detail"])
         self.assertEqual(status_payload["lanes"]["prepared_guidance"]["status"], "not_found")
         self.assertEqual(status_payload["lanes"]["sanitized_replay"]["status"], "available_on_request")
         self.assertIn("effectiveness_ledger", status_payload["lanes"])
@@ -296,7 +296,9 @@ class AippocampusCliTests(unittest.TestCase):
         )
         self.assertIn("current_uncertainty", status_payload)
         self.assertIn("summary_metrics", status_payload)
-        self.assertGreaterEqual(len(status_payload["current_guidance"]), 1)
+        self.assertEqual(len(status_payload["current_guidance"]), 1)
+        self.assertEqual(status_payload["current_guidance_summary"]["selected_count"], 1)
+        self.assertIn("guidance is navigation", status_payload["current_guidance_summary"]["boundary"])
         self.assertEqual(
             status_payload["current_guidance"][0]["review_action"]["id"],
             "review_semantic_guidance_candidate",
@@ -314,24 +316,26 @@ class AippocampusCliTests(unittest.TestCase):
             status_operator_payload["semantic_guidance_lifecycle"],
         )
         self.assertIn("guidance_lifecycle_ledger", status_operator_payload["operator_detail"])
+        self.assertIn("cannot_claim", status_operator_payload["boundary_detail"])
         self.assertNotIn("<events.jsonl>", status_encoded)
         self.assertNotIn("<sanitized-events.jsonl>", status_encoded)
-        self.assertEqual(status_payload["semantic_loop"]["stage"], "action_time_capable")
+        self.assertNotIn("semantic_loop", status_payload)
+        self.assertEqual(status_operator_payload["semantic_loop"]["stage"], "action_time_capable")
         self.assertGreaterEqual(
-            status_payload["semantic_loop"]["stage_counts"]["promoted_guidance_candidate_count"],
+            status_operator_payload["semantic_loop"]["stage_counts"]["promoted_guidance_candidate_count"],
             1,
         )
         self.assertGreaterEqual(
-            status_payload["semantic_loop"]["stage_counts"]["action_time_guidance_count"],
+            status_operator_payload["semantic_loop"]["stage_counts"]["action_time_guidance_count"],
             1,
         )
         self.assertEqual(
-            status_payload["semantic_loop"]["stage_counts"]["raw_private_text_leak_count"],
+            status_operator_payload["semantic_loop"]["stage_counts"]["raw_private_text_leak_count"],
             0,
         )
         self.assertIn(
             "candidate_only_safety_is_not_sufficient",
-            status_payload["semantic_loop"]["closeout_gate"],
+            status_operator_payload["semantic_loop"]["closeout_gate"],
         )
         self.assertNotIn("benchmark", status_payload["agent_next_action"]["command"])
         self.assertTrue(
@@ -363,9 +367,11 @@ class AippocampusCliTests(unittest.TestCase):
         guidance_payload = json.loads(learning_guidance.stdout)
         self.assertEqual(guidance_payload["mode"], "guidance")
         self.assertNotIn("cannot_claim", guidance_payload)
-        self.assertIn("cannot_claim", guidance_payload["boundary_detail"])
+        self.assertNotIn("cannot_claim", guidance_payload["boundary_detail"])
         self.assertIn("semantic_guidance", guidance_payload)
         self.assertGreaterEqual(guidance_payload["semantic_guidance"]["guidance_count"], 1)
+        self.assertLessEqual(len(guidance_payload["current_guidance"]), 1)
+        self.assertNotIn("semantic_loop", guidance_payload)
         self.assertNotIn("semantic_guidance_lifecycle", guidance_payload)
         self.assertNotIn("operator_detail", guidance_payload)
         self.assertNotIn("lifecycle", guidance_payload["semantic_guidance"])
@@ -379,6 +385,8 @@ class AippocampusCliTests(unittest.TestCase):
             learning_guidance_operator.stderr,
         )
         guidance_operator_payload = json.loads(learning_guidance_operator.stdout)
+        self.assertIn("cannot_claim", guidance_operator_payload["boundary_detail"])
+        self.assertIn("semantic_loop", guidance_operator_payload)
         self.assertEqual(
             guidance_operator_payload["semantic_guidance"]["lifecycle"]["contract"],
             "semantic-guidance-lifecycle-v1",

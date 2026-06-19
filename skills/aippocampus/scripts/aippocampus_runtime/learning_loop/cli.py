@@ -348,7 +348,10 @@ def status_payload(
         prepared_rows=(report.get("cache") or {}).get("records") or [],
     )
     compact_lifecycle, operator_detail = _compact_semantic_lifecycle(semantic_lifecycle)
-    current_guidance = _current_guidance_rows(compact_lifecycle)
+    current_guidance = _current_guidance_rows(
+        compact_lifecycle,
+        limit=3 if include_operator_detail else 1,
+    )
     semantic_count = int(semantic_metrics.get("action_time_guidance_count") or 0)
     summary_metrics = {
         "default_learning_status": intake.get("status"),
@@ -387,67 +390,76 @@ def status_payload(
     )
     next_actions = cast(list[dict[str, object]], action_fields["safe_next_actions"])[:3]
     payload: dict[str, Any] = {
-            "kind": KIND,
-            "schema_version": SCHEMA_VERSION,
-            "mode": "status",
-            "ok": True,
-            "route_value": "current_learning_guidance_is_navigation_for_next_action",
-            "current_uncertainty": (
-                "prepared_guidance_ready_for_explicit_cache_write"
-                if prepared_count
-                else (
-                    "semantic_guidance_requires_review_before_cache"
-                    if current_guidance
-                    else "no_current_guidance_source_selected"
-                )
-            ),
-            **action_fields,
-            "next_actions": next_actions,
-            "current_guidance": current_guidance,
-            "summary_metrics": summary_metrics,
-            "summary": summary_metrics,
-            "lanes": lanes,
-            "semantic_loop": {
-                "stage": (semantic_report.get("stage_report") or {}).get("stage"),
-                "stage_counts": {
-                    "semantic_hypothesis_count": semantic_metrics.get(
-                        "semantic_hypothesis_count", 0
-                    ),
-                    "review_queued_count": semantic_metrics.get("review_queued_count", 0),
-                    "promoted_guidance_candidate_count": semantic_metrics.get(
-                        "promoted_guidance_candidate_count", 0
-                    ),
-                    "action_time_guidance_count": semantic_metrics.get(
-                        "action_time_guidance_count", 0
-                    ),
-                    "stale_private_thin_suppression_count": semantic_stage.get(
-                        "stale_private_thin_suppression_count", 0
-                    ),
-                    "raw_private_text_leak_count": semantic_metrics.get(
-                        "raw_private_text_leak_count", 0
-                    ),
-                },
-                "closeout_gate": semantic_report.get("closeout_gate") or [],
-                "deterministic_learning_metrics_separate": bool(
-                    (semantic_report.get("deterministic_learning_metrics") or {}).get(
-                        "separate_from_semantic"
-                    )
-                ),
-            },
-            "operator_detail_command": LEARNING_OPERATOR_DETAIL_COMMAND,
-            "privacy_boundary": _privacy_boundary(),
+        "kind": KIND,
+        "schema_version": SCHEMA_VERSION,
+        "mode": "status",
+        "ok": True,
+        "route_value": "current_learning_guidance_is_navigation_for_next_action",
+        "current_uncertainty": (
+            "prepared_guidance_ready_for_explicit_cache_write"
+            if prepared_count
+            else (
+                "semantic_guidance_requires_review_before_cache"
+                if current_guidance
+                else "no_current_guidance_source_selected"
+            )
+        ),
+        **action_fields,
+        "next_actions": next_actions,
+        "current_guidance": current_guidance,
+        "summary_metrics": summary_metrics,
+        "summary": summary_metrics,
+        "lanes": lanes,
+        "current_guidance_summary": {
+            "selected_count": len(current_guidance),
+            "available_action_time_guidance_count": semantic_count,
+            "boundary": "guidance is navigation, not source truth; reopen source before claims.",
+        },
+        "operator_detail_command": LEARNING_OPERATOR_DETAIL_COMMAND,
+        "privacy_boundary": _privacy_boundary(),
     }
     if include_operator_detail:
+        payload["semantic_loop"] = {
+            "stage": (semantic_report.get("stage_report") or {}).get("stage"),
+            "stage_counts": {
+                "semantic_hypothesis_count": semantic_metrics.get(
+                    "semantic_hypothesis_count", 0
+                ),
+                "review_queued_count": semantic_metrics.get("review_queued_count", 0),
+                "promoted_guidance_candidate_count": semantic_metrics.get(
+                    "promoted_guidance_candidate_count", 0
+                ),
+                "action_time_guidance_count": semantic_metrics.get(
+                    "action_time_guidance_count", 0
+                ),
+                "stale_private_thin_suppression_count": semantic_stage.get(
+                    "stale_private_thin_suppression_count", 0
+                ),
+                "raw_private_text_leak_count": semantic_metrics.get(
+                    "raw_private_text_leak_count", 0
+                ),
+            },
+            "closeout_gate": semantic_report.get("closeout_gate") or [],
+            "deterministic_learning_metrics_separate": bool(
+                (semantic_report.get("deterministic_learning_metrics") or {}).get(
+                    "separate_from_semantic"
+                )
+            ),
+        }
         payload["semantic_guidance_lifecycle"] = compact_lifecycle
         payload["operator_detail"] = operator_detail
     return _public_payload(
         _with_boundary_detail(
             payload,
-            cannot_claim=[
-                "causal_live_behavior_lift",
-                "learned_guidance_as_source_truth",
-                "private_history_scanned_by_default",
-            ],
+            cannot_claim=(
+                [
+                    "causal_live_behavior_lift",
+                    "learned_guidance_as_source_truth",
+                    "private_history_scanned_by_default",
+                ]
+                if include_operator_detail
+                else []
+            ),
         )
     )
 
@@ -461,7 +473,7 @@ def guidance_payload(
     payload = status_payload(
         cwd=cwd,
         no_default_learning=no_default_learning,
-        include_operator_detail=True,
+        include_operator_detail=include_operator_detail,
     )
     summary = dict(payload.get("summary") or {})
     semantic_count = int(summary.get("semantic_action_time_guidance_count") or 0)

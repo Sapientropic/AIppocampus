@@ -11,6 +11,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime import health as health_runtime
 from aippocampus_runtime.contracts import canonical_foreground_action_fields
 from aippocampus_runtime.first_recall_readiness import maintenance_impact_readiness_fields
 from aippocampus_runtime.privacy import (
@@ -48,6 +49,27 @@ def run_json_checked(cmd: list[str]) -> tuple[int, dict | None, str, str]:
         return proc.returncode, json.loads(proc.stdout), proc.stdout, proc.stderr
     except json.JSONDecodeError as exc:
         return 1, None, proc.stdout, f"invalid JSON output: {exc}"
+
+
+def read_only_health_probe(cwd: Path) -> tuple[int, dict | None, str]:
+    """Return the foreground maintenance health source without full diagnostics.
+
+    Status/summary cards are used while an agent is deciding whether ordinary
+    recall can continue. They must not wait behind the operator-only probes
+    (storage pressure scans, background cognition health, path-heavy audits)
+    that `maintenance apply/run` still need before and after writes.
+    """
+
+    try:
+        return (
+            0,
+            health_runtime.build_health_report(health_runtime.HealthOptions(cwd=cwd)),
+            "",
+        )
+    except FileNotFoundError as exc:
+        return 0, health_runtime.missing_rollout_health_report(cwd, exc), ""
+    except Exception as exc:  # pragma: no cover - defensive fail-open for CLI foreground card
+        return 1, None, public_failure_message(stderr=str(exc))
 
 
 def run_text(cmd: list[str]) -> str:
@@ -576,6 +598,11 @@ def plan_payload(
         "apply_command": APPLY_SUMMARY_COMMAND,
         "full_audit_available": True,
         "full_audit_flag": "--json",
+        "health_probe": {
+            "status": "compact_readiness_probe",
+            "full_diagnostics_deferred": True,
+            "full_diagnostics_command": "aippocampus health --detail full --json",
+        },
         "full_audit_apply_command": "aippocampus maintenance apply --json",
         "privacy_boundary": {
             "local_paths_included": False,
@@ -678,6 +705,39 @@ def main(argv: list[str] | None = None) -> int:
     action_failures: list[dict] = []
     skipped_due_to_failure: list[dict] = []
 
+    operation = args.operation or ("summary" if args.summary_json else "status")
+    read_only = args.plan or operation in READ_ONLY_OPERATIONS
+    if read_only:
+        initial_health_returncode, health, initial_health_error = read_only_health_probe(cwd)
+        if initial_health_returncode != 0 or health is None:
+            action_failures.append(
+                {
+                    "id": "health_initial",
+                    "command": ["aippocampus", "health", "--json"],
+                    "returncode": initial_health_returncode,
+                    "message": initial_health_error,
+                }
+            )
+        else:
+            action_results.append({"id": "health_initial", "result": health})
+        mode = "plan" if args.plan or operation == "plan" else operation
+        payload = plan_payload(
+            cwd=cwd,
+            health=health,
+            health_returncode=initial_health_returncode,
+            health_error=initial_health_error,
+            refresh_cognitive_map=not args.no_refresh_cognitive_map,
+            refresh_graphify=not args.no_refresh_graphify,
+            mode=mode,
+        )
+        if args.json_output or args.summary_json:
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
+        else:
+            print(f"maintenance {payload['mode']} for {payload['cwd_label']}: no writes")
+            print(f"would run: {', '.join(payload['would_run_action_ids']) or 'nothing'}")
+            print(f"next: {payload['apply_command']}")
+        return 0 if payload["command_ok"] else 1
+
     health_cmd = [
         sys.executable,
         "-m", "aippocampus_runtime.health",
@@ -702,27 +762,6 @@ def main(argv: list[str] | None = None) -> int:
         else:
             health = health_payload
             action_results.append({"id": "health_initial", "result": health})
-
-    operation = args.operation or ("summary" if args.summary_json else "status")
-    read_only = args.plan or operation in READ_ONLY_OPERATIONS
-    if read_only:
-        mode = "plan" if args.plan or operation == "plan" else operation
-        payload = plan_payload(
-            cwd=cwd,
-            health=health,
-            health_returncode=initial_health_returncode,
-            health_error=initial_health_error,
-            refresh_cognitive_map=not args.no_refresh_cognitive_map,
-            refresh_graphify=not args.no_refresh_graphify,
-            mode=mode,
-        )
-        if args.json_output or args.summary_json:
-            print(json.dumps(payload, ensure_ascii=False, indent=2))
-        else:
-            print(f"maintenance {payload['mode']} for {payload['cwd_label']}: no writes")
-            print(f"would run: {', '.join(payload['would_run_action_ids']) or 'nothing'}")
-            print(f"next: {payload['apply_command']}")
-        return 0 if payload["command_ok"] else 1
 
     if has_action(health, "build_clean_source"):
         cmd = [

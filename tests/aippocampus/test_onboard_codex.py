@@ -447,10 +447,16 @@ class OnboardCodexTests(unittest.TestCase):
 
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
         data = json.loads(proc.stdout)
-        providers = [item["provider"] for item in data["data"]["providers"]]
+        providers = [item["provider"] for item in data["provider_summary"]]
 
+        self.assertEqual(data["kind"], "aippocampus_onboard_status_card")
+        self.assertEqual(data["provider_scope"], "codex")
+        self.assertEqual(data["foreground_action_contract"], "foreground-action-v1")
+        self.assertEqual(data["agent_next_action"], data["foreground_action"])
+        self.assertEqual(data["safe_next_actions"][0], data["foreground_action"])
+        self.assertNotIsInstance(data["agent_next_action"], str)
+        self.assertNotIn("data", data)
         self.assertEqual(providers, ["codex"])
-        self.assertEqual(data["data"]["provider_scope"], "codex")
 
     def test_onboard_status_generic_jsonl_routes_to_explicit_import_preview(self) -> None:
         generic = self.root / "generic" / "sessions.jsonl"
@@ -469,20 +475,22 @@ class OnboardCodexTests(unittest.TestCase):
 
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
         data = json.loads(proc.stdout)
-        provider = data["data"]["providers"][0]
-        primary = data["data"]["primary_next_action"]
+        provider = data["provider_summary"][0]
+        primary = data["primary_next_action"]
         encoded = json.dumps(data, ensure_ascii=False)
 
+        self.assertEqual(data["kind"], "aippocampus_onboard_status_card")
+        self.assertEqual(data["provider_scope"], "generic-jsonl")
+        self.assertEqual(data["foreground_action_contract"], "foreground-action-v1")
+        self.assertEqual(data["agent_next_action"], data["foreground_action"])
+        self.assertEqual(data["safe_next_actions"][0], data["foreground_action"])
         self.assertEqual(primary["provider"], "generic-jsonl")
         self.assertEqual(primary["code"], "import_conversation_preview")
-        self.assertEqual(provider["next_action_code"], "import_conversation_preview")
+        self.assertEqual(provider["provider"], "generic-jsonl")
         self.assertIn("import conversation --format generic-jsonl", primary["command_template"])
         self.assertEqual(primary["requires"], ["input_path"])
-        self.assertIn(
-            "import conversation --format generic-jsonl",
-            provider["preview_command_template"],
-        )
         self.assertEqual(provider["requires"], ["input_path"])
+        self.assertNotIn("data", data)
         self.assertEqual(executable_command_violations(data), [])
         self.assertNotIn("onboard --provider generic-jsonl --dry-run", encoded)
 

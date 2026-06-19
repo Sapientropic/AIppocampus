@@ -590,7 +590,6 @@ def main(argv: Sequence[str] | None = None) -> int:
             output = (
                 compact_provider_status_card(public_report)
                 if not detailed
-                and (public_report.get("data") or {}).get("provider_scope") == "auto"
                 else public_report
             )
             print(json.dumps(output, ensure_ascii=False, indent=2))

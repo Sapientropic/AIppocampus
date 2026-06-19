@@ -409,9 +409,41 @@ output.write_bytes(b"FAKEAGE\\n" + base64.b64encode(data))
         self.assertEqual(code, 0)
         self.assertEqual(payload["kind"], "aippocampus_object_sync_direction_plan")
         self.assertEqual(payload["requires"], ["object_store_url"])
+        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
+        self.assertEqual(payload["agent_next_action"], payload["foreground_action"])
+        self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
+        self.assertTrue(payload["foreground_action"]["template_only"])
+        self.assertEqual(payload["foreground_action"]["mutation_risk"], "read_only")
+        self.assertEqual(payload["foreground_action"]["requires"], ["object_store_url"])
+        self.assertIn("{object_store_url}", payload["foreground_action"]["command_template"])
         self.assertIn("--plan", payload["next_command_template"])
         self.assertNotIn("object-sync push --object-store-url {object_store_url} --json", encoded)
         self.assertFalse(payload["privacy_boundary"]["writes_performed"])
+
+    def test_object_sync_plan_with_direct_backend_uses_foreground_action_contract(self) -> None:
+        with patch("sys.stdout", new_callable=StringIO) as stdout:
+            code = sync_object_storage.main(
+                [
+                    "repair",
+                    "--object-store-url",
+                    self.endpoint,
+                    "--plan",
+                    "--json",
+                ]
+            )
+
+        payload = json.loads(stdout.getvalue())
+        encoded = json.dumps(payload, ensure_ascii=False)
+
+        self.assertEqual(code, 0)
+        self.assertEqual(payload["kind"], "aippocampus_object_sync_direction_plan")
+        self.assertEqual(payload["command"], "repair")
+        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
+        self.assertEqual(payload["agent_next_action"], payload["foreground_action"])
+        self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
+        self.assertTrue(payload["foreground_action"]["template_only"])
+        self.assertNotIn(self.endpoint, encoded)
+        self.assertFalse(payload["privacy_boundary"]["endpoint_included"])
 
     def test_object_store_token_requires_https_unless_endpoint_is_loopback(self) -> None:
         with self.assertRaisesRegex(ValueError, "requires HTTPS"):

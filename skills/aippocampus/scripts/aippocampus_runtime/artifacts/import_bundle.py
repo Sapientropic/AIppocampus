@@ -374,6 +374,45 @@ def _bundle_import_preview(args: argparse.Namespace) -> dict[str, Any]:
     )
 
 
+def _missing_bundle_recovery_payload(
+    args: argparse.Namespace,
+    *,
+    kind: str,
+    mode: str | None = None,
+    message: str,
+) -> dict[str, Any]:
+    primary = {
+        "id": "choose_existing_bundle_and_preview_import",
+        "label": "Choose an existing bundle and preview import",
+        "command_template": "aippocampus import {bundle_zip} --dry-run --json",
+        "requires": ["bundle_zip"],
+        "template_only": True,
+        "mutation_risk": "read_only",
+        "claim_boundary": "operator_transfer_not_memory_claim",
+        "why": "No bundle was opened and no write happened; rerun a dry-run with an existing bundle path.",
+    }
+    payload = {
+        "ok": False,
+        "kind": kind,
+        "error": {
+            "code": "bundle_not_found",
+            "message": message,
+            "bundle_label": Path(str(args.bundle)).name,
+        },
+        "route_value": "bundle_path_required_before_import_preview",
+        "current_uncertainty": "no_existing_bundle_selected",
+        **canonical_foreground_action_fields(primary, safe_next_actions=[primary]),
+        "privacy_boundary": {
+            "local_paths_included": False,
+            "path_redaction": LOCAL_PATH_REDACTION,
+            "writes_performed": False,
+        },
+    }
+    if mode:
+        payload["mode"] = mode
+    return payload
+
+
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="aippocampus import",
@@ -445,21 +484,12 @@ def main(argv: list[str] | None = None) -> int:
             payload = _bundle_import_preview(args)
         except FileNotFoundError as exc:
             message = str(redact_private_paths(str(exc)))
-            payload = {
-                "ok": False,
-                "kind": "aippocampus_bundle_import_preview",
-                "mode": "dry_run",
-                "error": {
-                    "code": "bundle_not_found",
-                    "message": message,
-                    "bundle_label": Path(str(args.bundle)).name,
-                },
-                "privacy_boundary": {
-                    "local_paths_included": False,
-                    "path_redaction": LOCAL_PATH_REDACTION,
-                    "writes_performed": False,
-                },
-            }
+            payload = _missing_bundle_recovery_payload(
+                args,
+                kind="aippocampus_bundle_import_preview",
+                mode="dry_run",
+                message=message,
+            )
             print(json.dumps(payload, ensure_ascii=False, indent=2))
             return 2
         print(json.dumps(payload, ensure_ascii=False, indent=2))
@@ -468,20 +498,11 @@ def main(argv: list[str] | None = None) -> int:
         payload = import_bundle(args)
     except FileNotFoundError as exc:
         message = str(redact_private_paths(str(exc)))
-        payload = {
-            "ok": False,
-            "kind": "aippocampus_bundle_import_summary",
-            "error": {
-                "code": "bundle_not_found",
-                "message": message,
-                "bundle_label": Path(str(args.bundle)).name,
-                "next_command": "aippocampus import <existing-bundle.zip> --dest <folder>",
-            },
-            "privacy_boundary": {
-                "local_paths_included": False,
-                "path_redaction": LOCAL_PATH_REDACTION,
-            },
-        }
+        payload = _missing_bundle_recovery_payload(
+            args,
+            kind="aippocampus_bundle_import_summary",
+            message=message,
+        )
         print(json.dumps(payload, ensure_ascii=False, indent=2))
         return 2
     except ValueError as exc:
