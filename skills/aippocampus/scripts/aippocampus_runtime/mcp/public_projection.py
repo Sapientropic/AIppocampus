@@ -16,6 +16,7 @@ from aippocampus_runtime.contracts import (
     foreground_template_action,
     shell_quote,
 )
+from aippocampus_runtime.first_recall_readiness import compact_health_first_recall_fields
 from aippocampus_runtime.mcp import agent_recall_compact_choices as recall_choices
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 
@@ -271,6 +272,11 @@ def compact_health_payload(payload: dict[str, Any]) -> dict[str, Any]:
             for item in all_recommended
         )
     )
+    first_recall_fields = compact_health_first_recall_fields(
+        readiness if isinstance(readiness, dict) else None,
+        ordinary_usable=ordinary_usable,
+        freshness_degraded=freshness_degraded,
+    )
     storage_pressure_obj = payload.get("storage_pressure")
     storage_pressure = (
         cast(dict[str, Any], storage_pressure_obj) if isinstance(storage_pressure_obj, dict) else {}
@@ -391,6 +397,7 @@ def compact_health_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "ordinary_first_recall_usable": ordinary_usable,
         "blocks_first_recall": not ordinary_usable,
         "blocks_exact_latest_claims": freshness_degraded,
+        **first_recall_fields,
         "readiness_card": readiness_card,
         "maintenance_summary": maintenance_summary,
         "operator_detail_command": "aippocampus health --detail full --json",

@@ -595,6 +595,8 @@ class AippocampusMaintenanceTests(unittest.TestCase):
         self.assertNotIn("best_next_action", payload)
         self.assertEqual(payload["operator_detail"]["best_next_action"]["id"], "build_clean_source")
         self.assertEqual(payload["user_impact"]["recall_usable"], "degraded")
+        self.assertEqual(payload["user_impact"]["first_recall_phase"], "cold_start_maintenance_required")
+        self.assertTrue(payload["user_impact"]["cold_start_expected"])
 
     def test_natural_status_subcommand_is_read_only_summary_card(self) -> None:
         seen_modules: list[str] = []
@@ -640,6 +642,8 @@ class AippocampusMaintenanceTests(unittest.TestCase):
         self.assertEqual(payload["maintenance_status"], "degraded")
         self.assertTrue(payload["user_impact"]["can_continue_normally"])
         self.assertEqual(payload["user_impact"]["recall_usable"], "yes_latest_may_be_missing")
+        self.assertEqual(payload["user_impact"]["first_recall_phase"], "steady_state_latest_degraded")
+        self.assertFalse(payload["user_impact"]["cold_start_expected"])
         self.assertEqual(payload["would_run_action_ids"], ["build_index", "build_cognitive_map"])
         self.assertEqual(payload["apply_command"], "aippocampus maintenance apply --summary-json")
         self.assertEqual(payload["agent_next_action"]["id"], "review_maintenance_plan")

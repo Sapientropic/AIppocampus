@@ -1,0 +1,195 @@
+"""Shared first-recall readiness phases for foreground cards."""
+
+from __future__ import annotations
+
+from typing import Any, Mapping
+
+EXPECTATIONS = {
+    "cold_start_maintenance_required": (
+        "Required source/index artifacts are missing or degraded; apply the "
+        "next maintenance action before expecting private recall."
+    ),
+    "cold_start_no_current_thread": (
+        "No current thread source is available in this cwd; open/register a "
+        "thread or run registry-wide health before expecting private recall."
+    ),
+    "steady_state_with_live_delta": (
+        "Ordinary recall can continue; refresh before relying on the latest "
+        "current-thread details."
+    ),
+    "steady_state_latest_degraded": (
+        "Ordinary recall can continue from existing artifacts; refresh before "
+        "exact latest claims."
+    ),
+    "steady_state_available": (
+        "Ordinary source-backed recall/search can continue from existing artifacts."
+    ),
+    "cold_start_or_maintenance_required": (
+        "Required source/index artifacts are missing or degraded; apply maintenance "
+        "before expecting private recall."
+    ),
+}
+
+
+def health_readiness_fields(
+    *,
+    maintenance_required_before_recall: bool,
+    live_delta_tolerated: bool,
+    freshness_degraded: bool,
+) -> dict[str, Any]:
+    if maintenance_required_before_recall:
+        phase = "cold_start_maintenance_required"
+    elif live_delta_tolerated:
+        phase = "steady_state_with_live_delta"
+    elif freshness_degraded:
+        phase = "steady_state_latest_degraded"
+    else:
+        phase = "steady_state_available"
+    return {
+        "first_recall_phase": phase,
+        "cold_start_expected": bool(maintenance_required_before_recall),
+        "first_recall_expectation": EXPECTATIONS[phase],
+    }
+
+
+def missing_rollout_readiness_fields() -> dict[str, Any]:
+    phase = "cold_start_no_current_thread"
+    return {
+        "first_recall_phase": phase,
+        "cold_start_expected": True,
+        "first_recall_expectation": EXPECTATIONS[phase],
+    }
+
+
+def compact_health_first_recall_fields(
+    readiness: Mapping[str, Any] | None,
+    *,
+    ordinary_usable: bool,
+    freshness_degraded: bool,
+) -> dict[str, Any]:
+    phase = str((readiness or {}).get("first_recall_phase") or "")
+    if not phase:
+        if ordinary_usable and freshness_degraded:
+            phase = "steady_state_latest_degraded"
+        elif ordinary_usable:
+            phase = "steady_state_available"
+        else:
+            phase = "cold_start_or_maintenance_required"
+    cold = (
+        bool(readiness.get("cold_start_expected"))
+        if readiness and "cold_start_expected" in readiness
+        else not ordinary_usable
+    )
+    return {"first_recall_phase": phase, "cold_start_expected": cold}
+
+
+def maintenance_impact_readiness_fields(
+    readiness: Mapping[str, Any] | None,
+    *,
+    fallback_phase: str,
+    fallback_cold_start: bool,
+) -> dict[str, Any]:
+    source = readiness or {}
+    phase = str(source.get("first_recall_phase") or fallback_phase)
+    fields = {
+        "first_recall_phase": phase,
+        "cold_start_expected": bool(source.get("cold_start_expected", fallback_cold_start)),
+    }
+    expectation = str(source.get("first_recall_expectation") or EXPECTATIONS.get(phase) or "")
+    if expectation:
+        fields["first_recall_expectation"] = expectation
+    return fields
+
+
+def start_first_recall_readiness(
+    *,
+    decision: str,
+    source_exists: bool,
+    source_stale: bool,
+    action_id: str,
+) -> dict[str, Any]:
+    base = {
+        "next_action_id": action_id,
+        "source_registered": bool(source_exists),
+        "source_stale": bool(source_stale),
+        "requires_user_consent_for_writes": True,
+        "claim_boundary": "readiness_is_operational_status_not_source_evidence",
+    }
+    by_decision: dict[str, dict[str, Any]] = {
+        "continue_from_existing_source": {
+            "phase": "steady_state_available",
+            "status": "ready",
+            "ordinary_first_recall_usable": True,
+            "private_source_ready": True,
+            "cold_start_expected": False,
+            "progress_signal": "clean_source_available",
+            "user_expectation": (
+                "Existing source is available; start with recall/deepen and keep "
+                "exact or sensitive claims source-open."
+            ),
+            "performance_expectation": {
+                "mode": "steady_state",
+                "message": "Recall should stay on the established local route; deepen may reopen source.",
+            },
+        },
+        "repair_stale_source_before_continuity": {
+            "phase": "cold_start_maintenance_required",
+            "status": "needs_source_repair",
+            "ordinary_first_recall_usable": False,
+            "private_source_ready": False,
+            "cold_start_expected": True,
+            "progress_signal": "source_exists_but_stale",
+            "user_expectation": (
+                "Source exists but is stale or degraded; inspect health before using "
+                "continuity as evidence."
+            ),
+            "performance_expectation": {
+                "mode": "cold_start_or_repair",
+                "message": (
+                    "The first useful recall may wait on source/index repair; steady-state "
+                    "recall is faster after artifacts are current."
+                ),
+            },
+        },
+        "try_read_only_continuity_before_setup": {
+            "phase": "cold_start_probe_or_public_demo",
+            "status": "probe_only_until_source_found",
+            "ordinary_first_recall_usable": False,
+            "private_source_ready": False,
+            "read_only_probe_available": True,
+            "public_demo_available": True,
+            "cold_start_expected": True,
+            "progress_signal": "trusted_cli_available_source_not_confirmed",
+            "user_expectation": (
+                "A read-only recall or public fixture demo can be tried, but private "
+                "memory is not ready until local source is found or registered."
+            ),
+            "performance_expectation": {
+                "mode": "first_run_probe",
+                "message": (
+                    "First setup may need registration or index preparation; future "
+                    "recall is faster once source artifacts exist."
+                ),
+            },
+        },
+    }
+    fallback = {
+        "phase": "cold_start_setup_required",
+        "status": "needs_source_registration",
+        "ordinary_first_recall_usable": False,
+        "private_source_ready": False,
+        "cold_start_expected": True,
+        "progress_signal": "no_clean_source_registered",
+        "user_expectation": (
+            "No local clean source is ready; preview or run an explicit registration "
+            "command before expecting private recall."
+        ),
+        "performance_expectation": {
+            "mode": "cold_start_setup",
+            "message": (
+                "The first useful recall may spend time building source/index artifacts; "
+                "steady-state recall is faster after that setup exists."
+            ),
+        },
+    }
+    return {**base, **by_decision.get(decision, fallback)}

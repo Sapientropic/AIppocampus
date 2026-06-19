@@ -32,6 +32,23 @@ aippocampus agent recall "old decision or handoff cue" --json
 aippocampus agent deepen --request 1 --last-recall --json
 ```
 
+## Cold Start Versus Steady State
+
+First recall has two different experiences:
+
+- **steady state**: local clean source and route/index artifacts already exist;
+  start with `aippocampus start --json`, then recall/deepen;
+- **cold start/setup**: clean source is missing, stale, or not yet registered;
+  preview or register source first, and expect the first useful recall to spend
+  time preparing source/index artifacts.
+
+Do not imply private memory is ready until source is available. A trusted
+checkout can offer a read-only probe or the public demo fixture, but that is not
+the same as private source readiness. After registration/build artifacts exist,
+ordinary recall should be faster and should stay on the compact recall/deepen
+route unless exact latest, sensitive, stale, disputed, or high-risk claims need
+source reopen.
+
 ## Decide The First Move
 
 1. Choose the setup branch before running recall commands:
@@ -48,6 +65,12 @@ aippocampus agent deepen --request 1 --last-recall --json
 
    If local source is already registered, skip setup/probe and start with the
    recall or exact-search branch below.
+
+   `aippocampus start --json` reports `first_recall_readiness`. Treat
+   `phase=steady_state_available` as the ordinary recall path. Treat
+   `cold_start_setup_required`, `cold_start_probe_or_public_demo`, or
+   `cold_start_maintenance_required` as honest setup/progress states, not
+   proof that memory is already ready.
 
 1. If the user remembers a vague decision, handoff, correction, or project cue,
    ask the agent facade for a bounded foreground packet:

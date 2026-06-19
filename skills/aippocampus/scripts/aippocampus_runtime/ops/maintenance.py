@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.contracts import canonical_foreground_action_fields
+from aippocampus_runtime.first_recall_readiness import maintenance_impact_readiness_fields
 from aippocampus_runtime.privacy import (
     LOCAL_PATH_REDACTION,
     redact_private_paths,
@@ -408,6 +409,7 @@ def user_impact(health: dict | None, recommended: list[dict]) -> dict:
                 "recall_usable": "degraded",
                 "can_continue_normally": False,
                 "ordinary_first_recall_usable": False,
+                **maintenance_impact_readiness_fields(readiness, fallback_phase="cold_start_maintenance_required", fallback_cold_start=True),
                 "latest_current_thread_may_be_missing": bool(
                     readiness.get("latest_current_thread_may_be_missing")
                 ),
@@ -423,6 +425,7 @@ def user_impact(health: dict | None, recommended: list[dict]) -> dict:
                 "recall_usable": "yes_latest_may_be_missing",
                 "can_continue_normally": True,
                 "ordinary_first_recall_usable": True,
+                **maintenance_impact_readiness_fields(readiness, fallback_phase="steady_state_latest_degraded", fallback_cold_start=False),
                 "latest_current_thread_may_be_missing": True,
                 "maintenance_recommended": bool(readiness.get("maintenance_recommended")),
                 "maintenance_required_before_recall": False,
@@ -436,6 +439,7 @@ def user_impact(health: dict | None, recommended: list[dict]) -> dict:
                 "recall_usable": "yes_with_optional_maintenance",
                 "can_continue_normally": True,
                 "ordinary_first_recall_usable": True,
+                **maintenance_impact_readiness_fields(readiness, fallback_phase="steady_state_available", fallback_cold_start=False),
                 "latest_current_thread_may_be_missing": False,
                 "maintenance_recommended": True,
                 "maintenance_required_before_recall": False,
@@ -445,6 +449,7 @@ def user_impact(health: dict | None, recommended: list[dict]) -> dict:
             "recall_usable": "yes",
             "can_continue_normally": True,
             "ordinary_first_recall_usable": True,
+            **maintenance_impact_readiness_fields(readiness, fallback_phase="steady_state_available", fallback_cold_start=False),
             "latest_current_thread_may_be_missing": False,
             "maintenance_recommended": False,
             "maintenance_required_before_recall": False,

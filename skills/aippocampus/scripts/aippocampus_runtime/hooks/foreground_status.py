@@ -320,6 +320,9 @@ def prompt_status_contract(
             "command_count": int(command_count),
             "provider_key_bridge_installed": bool(provider_key_bridge_installed),
             "prompt_hook_latency_risk_status": latency_status,
+            "foreground_latency_red_line_violation_count": int(
+                (latency_risk or {}).get("foreground_latency_red_line_violation_count") or 0
+            ),
             "prompt_hook_near_timeout_event_count": int(
                 (latency_risk or {}).get("near_timeout_event_count") or 0
             ),

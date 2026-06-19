@@ -32,6 +32,10 @@ from aippocampus_runtime.core import (
     parse_anchor_file,
     resolve_artifact_path,
 )
+from aippocampus_runtime.first_recall_readiness import (
+    health_readiness_fields,
+    missing_rollout_readiness_fields,
+)
 from aippocampus_runtime.health_actions import action, dependency_ordered_actions
 from aippocampus_runtime.health_background_cognition import background_cognition_health
 from aippocampus_runtime.health_freshness import rollout_visibility_stats
@@ -790,6 +794,11 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
         ),
         "ready": ordinary_first_recall_usable,
         "ordinary_first_recall_usable": ordinary_first_recall_usable,
+        **health_readiness_fields(
+            maintenance_required_before_recall=maintenance_required_before_recall,
+            live_delta_tolerated=live_delta_tolerated,
+            freshness_degraded=freshness_degraded,
+        ),
         "freshness_degraded": freshness_degraded,
         "latest_current_thread_may_be_missing": bool(freshness["latest_visible_gap"]),
         "maintenance_recommended": maintenance_recommended,
@@ -954,6 +963,7 @@ def missing_rollout_health_report(cwd: str | Path, exc: FileNotFoundError) -> di
             "status": "no_current_thread",
             "ready": False,
             "ordinary_first_recall_usable": False,
+            **missing_rollout_readiness_fields(),
             "freshness_degraded": False,
             "latest_current_thread_may_be_missing": True,
             "maintenance_recommended": True,
