@@ -413,7 +413,36 @@ def _error_payload(code: str, message: str, **details: Any) -> dict[str, Any]:
     }
 
 
+def _ordinary_recall_action() -> dict[str, Any]:
+    return foreground_template_action(
+        action_id="ordinary_recall_if_no_handoff_expected",
+        label="Use ordinary recall if no handoff is expected",
+        command_template='aippocampus agent recall "{cue}" --json',
+        requires=["cue"],
+        why="A missing Telepathy card id should not block ordinary source-backed recall.",
+        mutation_risk="read_only",
+        claim_boundary="no_claim_before_reopen",
+    )
+
+
 def _handoff_not_found_payload(*, card_id: str, path: Path) -> dict[str, Any]:
+    list_action = foreground_shell_action(
+        action_id="list_telepathy_handoffs",
+        label="List Telepathy handoffs",
+        command="aippocampus telepathy list --status all --json",
+        why="Choose an existing handoff card id before reading or deepening it.",
+        mutation_risk="read_only",
+        claim_boundary="telepathy_cards_are_navigation_not_source_truth",
+    )
+    create_action = foreground_template_action(
+        action_id="create_telepathy_handoff_if_needed",
+        label="Create a handoff if needed",
+        command_template='aippocampus telepathy create --preset handoff --scope "{scope}" --owner codex --json',
+        requires=["scope"],
+        why="Only create a new local coordination card when a handoff is actually needed.",
+        mutation_risk="explicit_local_coordination_write",
+        claim_boundary="telepathy_cards_are_navigation_not_source_truth",
+    )
     payload = _error_payload(
         "handoff_not_found",
         "No Telepathy handoff card matched the requested card_id.",
@@ -422,14 +451,14 @@ def _handoff_not_found_payload(*, card_id: str, path: Path) -> dict[str, Any]:
     )
     payload.update(
         {
-            "agent_next_action": (
-                "Run `aippocampus telepathy list --status all` to choose an existing "
-                "card, or continue with normal recall/search if no handoff is expected."
+            **canonical_foreground_action_fields(
+                list_action,
+                safe_next_actions=[
+                    list_action,
+                    _ordinary_recall_action(),
+                    create_action,
+                ],
             ),
-            "follow_up_commands": [
-                "aippocampus telepathy list --status all",
-                'aippocampus telepathy create --preset handoff --scope "issue:#123" --owner codex',
-            ],
             "privacy_boundary": "Telepathy card ids are local coordination selectors, not source truth.",
         }
     )

@@ -454,6 +454,20 @@ def compact_feedback_receipt(
     wrote_event = bool(payload.get("wrote_event"))
     raw_lane = payload.get("feedback_lane")
     lane: Mapping[str, Any] = raw_lane if isinstance(raw_lane, Mapping) else {}
+    primary = foreground_template_action(
+        action_id="continue_after_feedback",
+        label="Continue after feedback",
+        command_template='aippocampus agent recall "{cue}" --json',
+        requires=["cue"],
+        why=(
+            "Feedback was recorded as low-authority calibration; continue the task and "
+            "reopen source before making claims."
+            if wrote_event
+            else "Receipt only; provide a feedback lane when future recall should consume this signal."
+        ),
+        mutation_risk="read_only",
+        claim_boundary="no_claim_before_reopen",
+    )
     return _public_payload(
         {
             "kind": kind,
@@ -476,12 +490,19 @@ def compact_feedback_receipt(
                 "feedback_is_source_truth": False,
             },
             "feedback_lane": dict(lane) if lane else None,
-            "agent_next_action": (
-                "Feedback was written to the scoped local calibration lane; continue the task "
-                "and reopen source before making claims."
-                if wrote_event
-                else "This is only a receipt. Add --feedback-jsonl <path> when you want future "
-                "agent recall to consume the feedback signal."
+            **canonical_foreground_action_fields(
+                primary,
+                safe_next_actions=[
+                    primary,
+                    foreground_shell_action(
+                        action_id="inspect_feedback_lane",
+                        label="Inspect feedback lane",
+                        command="aippocampus agent feedback --operator-json",
+                        why="Use operator detail only when auditing the local feedback lane.",
+                        mutation_risk="read_only",
+                        claim_boundary="feedback_is_not_source_truth",
+                    ),
+                ],
             ),
             "operator_json_available": True,
             "policy_boundary": {
@@ -559,9 +580,7 @@ def missing_feedback_route_payload(
             "status": "needs_route_id",
             "ok": False,
             "last_recall_route_choice_count": len(route_choices),
-            "agent_next_action": actions[0],
-            "foreground_action": actions[0],
-            "safe_next_actions": actions,
+            **canonical_foreground_action_fields(actions[0], safe_next_actions=actions),
             "write_boundary": {
                 "wrote_event": False,
                 "storage": "none",

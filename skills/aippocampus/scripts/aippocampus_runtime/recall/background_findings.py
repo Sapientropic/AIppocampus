@@ -28,9 +28,6 @@ DEFAULT_BACKGROUND_FINDINGS_LIMIT = 4
 BACKGROUND_FINDING_DETAIL_LEVELS = {"compact", "detail", "full", "operator"}
 COMPACT_BACKGROUND_ACTION_IDS = {
     "reopen_background_finding_source_route",
-    "mark_background_finding_helpful",
-    "mark_background_finding_wrong",
-    "keep_background_finding_quiet",
 }
 
 
@@ -251,6 +248,8 @@ def background_findings_card(
     )
     detail_level = _normalize_detail(detail)
     finding_summaries = [_finding_summary(finding) for finding in findings[:3]]
+    best_finding = finding_summaries[0] if finding_summaries else None
+    compact_other_summaries = finding_summaries[1:] if detail_level == "compact" else finding_summaries
     action_fields = canonical_foreground_action_fields(
         primary_action,
         safe_next_actions=[primary_action],
@@ -264,8 +263,8 @@ def background_findings_card(
         "surface": "agent_background",
         "cue_used": task,
         "finding_count": len(findings),
-        "best_finding": finding_summaries[0] if finding_summaries else None,
-        "finding_summaries": finding_summaries,
+        "best_finding": best_finding,
+        "finding_summaries": compact_other_summaries,
         **action_fields,
         "boundary": {
             "background_findings_are_source_truth": False,

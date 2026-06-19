@@ -169,18 +169,60 @@ class ContinuityDomainCliTests(unittest.TestCase):
     def test_empty_snapshot_json_uses_structured_safe_next_actions(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             proc = self.run_cli("continuity-domain", "--cwd", tmp, "list", "--json")
+            latest = self.run_cli("continuity-domain", "--cwd", tmp, "latest", "--json")
 
         self.assertEqual(proc.returncode, 0, proc.stderr)
-        payload = json.loads(proc.stdout)
-        self.assertEqual(payload["status"], "empty")
-        self.assertIsInstance(payload["agent_next_action"], dict)
-        self.assertIn("safe_next_actions", payload)
-        self.assertNotIn("recovery_actions", payload)
-        recall = next(action for action in payload["safe_next_actions"] if action["id"] == "ordinary_recall_path")
-        self.assertEqual(recall["requires"], ["cue"])
-        self.assertIn("{cue}", recall["command_template"])
-        encoded = json.dumps(payload, ensure_ascii=False)
-        self.assertNotIn("<cue>", encoded)
+        self.assertEqual(latest.returncode, 0, latest.stderr)
+        for payload in (json.loads(proc.stdout), json.loads(latest.stdout)):
+            self.assertEqual(payload["status"], "empty")
+            self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
+            self.assertEqual(payload["agent_next_action"], payload["foreground_action"])
+            self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
+            self.assertIsInstance(payload["agent_next_action"], dict)
+            self.assertIn("safe_next_actions", payload)
+            self.assertNotIn("recovery_actions", payload)
+            recall = next(
+                action for action in payload["safe_next_actions"] if action["id"] == "ordinary_recall_path"
+            )
+            self.assertEqual(recall["requires"], ["cue"])
+            self.assertIn("{cue}", recall["command_template"])
+            encoded = json.dumps(payload, ensure_ascii=False)
+            self.assertNotIn("<cue>", encoded)
+
+    def test_agent_preview_filters_path_and_identity_cues_from_default_projection(self) -> None:
+        payload = {
+            "ok": True,
+            "mode": "dry_run",
+            "metrics": {},
+            "top_domain_labels": [],
+            "candidate_events": [
+                {
+                    "domain_id": "private-path-route",
+                    "title": "AIppocampus workspace route",
+                    "domain_type": "maintenance",
+                    "scale": "thread",
+                    "activation_cues": [
+                        "SDY",
+                        "Claude长期空间",
+                        "单道杨",
+                        "provider orchestration route",
+                    ],
+                    "source_refs": [{"message_id": "msg-1"}],
+                }
+            ],
+        }
+
+        preview = continuity_domain_cli._producer_agent_preview(payload)
+        encoded = json.dumps(preview["candidate_previews"], ensure_ascii=False)
+
+        self.assertNotIn("SDY", encoded)
+        self.assertNotIn("Claude长期空间", encoded)
+        self.assertNotIn("单道杨", encoded)
+        self.assertIn("provider orchestration route", encoded)
+        self.assertIn(
+            preview["candidate_previews"][0].get("candidate_detail_deferred", []),
+            (["path_or_identity_cues_filtered"], ["some_activation_cues_filtered"]),
+        )
 
     def test_agent_preview_does_not_promote_low_information_cues_to_recall_commands(self) -> None:
         payload = {

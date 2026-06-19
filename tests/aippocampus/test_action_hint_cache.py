@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import os
 import sys
@@ -389,10 +391,57 @@ class ActionHintCacheTests(unittest.TestCase):
 
         self.assertTrue(result["effectiveness_ledger_intake"]["applied_to_guidance_before_cache"])
         self.assertEqual(result["effectiveness_ledger_intake"]["summary"]["row_count"], 2)
-        self.assertEqual(len(records), 1)
-        self.assertEqual(records[0]["record_id"], "useful-guidance")
-        self.assertEqual(records[0]["effectiveness_status"], "useful_signal")
-        self.assertGreater(records[0]["navigation_priority_delta"], 0)
+
+    def test_refresh_cache_default_json_is_compact_foreground_action_card(self) -> None:
+        stdout = io.StringIO()
+        with tempfile.TemporaryDirectory() as tmp, contextlib.redirect_stdout(stdout):
+            code = cache.main(
+                [
+                    "refresh-cache",
+                    "--cwd",
+                    tmp,
+                    "--no-default-learning",
+                    "--no-default-effectiveness-ledger",
+                    "--json",
+                ]
+            )
+        result = json.loads(stdout.getvalue())
+
+        self.assertEqual(code, 0)
+        self.assertEqual(result["foreground_action_contract"], "foreground-action-v1")
+        self.assertEqual(result["agent_next_action"], result["foreground_action"])
+        self.assertEqual(result["safe_next_actions"][0], result["foreground_action"])
+        self.assertEqual(result["foreground_action"]["id"], "review_semantic_guidance_before_cache")
+        self.assertIn("readiness", result)
+        self.assertNotIn("cache", result)
+        self.assertNotIn("effectiveness_ledger_intake", result)
+        self.assertNotIn("cannot_claim", json.dumps(result, ensure_ascii=False))
+
+    def test_refresh_cache_write_json_receipt_keeps_foreground_contract(self) -> None:
+        stdout = io.StringIO()
+        with tempfile.TemporaryDirectory() as tmp, contextlib.redirect_stdout(stdout):
+            code = cache.main(
+                [
+                    "refresh-cache",
+                    "--cwd",
+                    tmp,
+                    "--cache-jsonl",
+                    str(Path(tmp) / "cache.jsonl"),
+                    "--write",
+                    "--no-default-learning",
+                    "--no-default-effectiveness-ledger",
+                    "--json",
+                ]
+            )
+        result = json.loads(stdout.getvalue())
+
+        self.assertEqual(code, 0)
+        self.assertTrue(result["write_requested"])
+        self.assertEqual(result["foreground_action_contract"], "foreground-action-v1")
+        self.assertEqual(result["agent_next_action"], result["foreground_action"])
+        self.assertEqual(result["safe_next_actions"][0], result["foreground_action"])
+        self.assertNotIn("cache", result)
+        self.assertNotIn("effectiveness_ledger_intake", result)
 
     def test_refresh_cache_loads_default_effectiveness_ledger_from_workspace(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

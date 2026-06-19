@@ -421,6 +421,9 @@ def rotation_plan(
 ) -> dict[str, Any]:
     health = log_health_report(root, max_bytes=max_bytes, backups=backups)
     would_rotate_count = int(health["oversized_count"])
+    primary_action = _log_status_action(
+        why="No known log artifact exceeds the retention threshold; do not run cleanup."
+    )
     plan = {
         "kind": "aippocampus_logs_rotation_plan",
         "ok": True,
@@ -434,13 +437,11 @@ def rotation_plan(
         "items": [item for item in health["items"] if item["oversized"]],
         "privacy_boundary": health["privacy_boundary"]
         | {"writes_performed": False, "local_paths_emitted": False},
-        "agent_next_action": _log_status_action(
-            why="No known log artifact exceeds the retention threshold; do not run cleanup."
-        ),
     }
     if would_rotate_count:
         plan["apply_command"] = "aippocampus logs rotate --apply"
-        plan["agent_next_action"] = _log_apply_action(count=would_rotate_count)
+        primary_action = _log_apply_action(count=would_rotate_count)
+    plan.update(canonical_foreground_action_fields(primary_action, safe_next_actions=[primary_action]))
     return plan
 
 

@@ -568,6 +568,37 @@ class SearchCleanSourceTests(unittest.TestCase):
         self.assertNotIn("action_id", payload["foreground_action"])
         self.assertEqual(payload["foreground_action"]["tool_name"], "agent_recall")
 
+    def test_empty_query_json_is_needs_input_not_no_match(self) -> None:
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            code = search.main(
+                [
+                    "   ",
+                    "--cwd",
+                    str(self.cwd),
+                    "--clean-source-dir",
+                    str(self.source),
+                    "--json",
+                ]
+            )
+
+        payload = json.loads(stdout.getvalue())
+
+        self.assertEqual(code, 2)
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["status"], "needs_input")
+        self.assertEqual(payload["error"]["code"], "search_cue_required")
+        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
+        self.assertEqual(payload["agent_next_action"], payload["foreground_action"])
+        self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
+        self.assertTrue(
+            set(payload["foreground_action"]["requires"]) & {"query", "cue", "exact_phrase"}
+        )
+        self.assertNotIn(
+            "Search found no source-backed snippet",
+            json.dumps(payload, ensure_ascii=False),
+        )
+
     def test_registry_search_cli_can_request_deep_budget(self) -> None:
         registry_file = self.cwd / "threads.json"
         registry_file.write_text(

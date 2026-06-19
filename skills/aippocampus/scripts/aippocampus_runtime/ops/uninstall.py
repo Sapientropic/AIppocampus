@@ -101,11 +101,27 @@ def build_inventory(
     ]
     existing = [item for item in artifacts if item["exists"]]
     primary = foreground_shell_action(
+        action_id="review_uninstall_inventory",
+        command="aippocampus uninstall --dry-run --json",
+        label="Review uninstall inventory",
+        why="Inspect what exists before choosing any explicit deletion path.",
+        mutation_risk="read_only",
+        claim_boundary="uninstall_inventory_not_memory_evidence",
+    )
+    purge_host = foreground_shell_action(
         action_id="purge_host_artifacts_after_review",
         command="aippocampus uninstall --purge --confirm-host-integration --json",
         label="Purge host integration artifacts",
-        why="Review this inventory first; host settings/cache deletion needs explicit confirmation; add --confirm-user-data only when registry/index data should be deleted.",
+        why="Deletes host integration artifacts only after explicit host confirmation.",
         mutation_risk="explicit_host_artifact_delete",
+        claim_boundary="uninstall_inventory_not_memory_evidence",
+    )
+    purge_user_data = foreground_shell_action(
+        action_id="purge_user_data_after_separate_confirmation",
+        command="aippocampus uninstall --purge --confirm-host-integration --confirm-user-data --json",
+        label="Purge host integration and user data",
+        why="Deletes registry/index data only after separate user-data confirmation.",
+        mutation_risk="explicit_user_data_delete",
         claim_boundary="uninstall_inventory_not_memory_evidence",
     )
     return {
@@ -115,7 +131,10 @@ def build_inventory(
         "artifact_count": len(artifacts),
         "existing_artifact_count": len(existing),
         "artifacts": artifacts,
-        **canonical_foreground_action_fields(primary),
+        **canonical_foreground_action_fields(
+            primary,
+            safe_next_actions=[primary, purge_host, purge_user_data],
+        ),
         "privacy": {
             "local_paths_emitted": False,
             "raw_private_memory_emitted": False,

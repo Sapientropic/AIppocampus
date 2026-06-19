@@ -17,6 +17,7 @@ from aippocampus_runtime import core
 from aippocampus_runtime.contracts import (
     FOREGROUND_ACTION_CONTRACT_VERSION,
     foreground_template_action,
+    shell_quote,
 )
 from aippocampus_runtime.ops.issue_work_guard import build_issue_active_pull_packet
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
@@ -241,6 +242,7 @@ def build_task_orientation_packet(
     *,
     project: str = "AIppocampus",
     max_paths: int = 3,
+    detail: str = "compact",
 ) -> dict[str, Any]:
     clean_task = _task_value(task)
     if not clean_task:
@@ -270,10 +272,13 @@ def build_task_orientation_packet(
         suppressed_constraints=suppressed_constraints,
         max_foreground_routes=max_paths,
     )
+    detail_level = str(detail or "compact").strip().casefold()
+    full_detail = detail_level in {"full", "detail", "operator"}
     packet: dict[str, Any] = {
         "kind": KIND,
         "schema_version": SCHEMA_VERSION,
         "mode": "orient",
+        "detail": "full" if full_detail else "compact",
         "status": "ok",
         "ok": True,
         "project": project,
@@ -297,6 +302,14 @@ def build_task_orientation_packet(
         "agent_next_action": actions[0],
         "safe_next_actions": actions,
         "source_boundary": _source_boundary(),
+        "product_boundary": (
+            "Orientation is navigation for choosing the next source route; reopen recall/deepen "
+            "source before exact, stale, sensitive, or issue-closeout claims."
+        ),
+        "operator_detail_command": (
+            "aippocampus agent orient "
+            f"{shell_quote(clean_task)} --json --detail full"
+        ),
         "metrics": {
             "route_readiness_row_count": len(route_rows),
             "external_source_anchor_count": len(anchors),
@@ -309,23 +322,38 @@ def build_task_orientation_packet(
             "external_model_calls": 0,
             "writes_performed": 0,
         },
-        "red_lines": {
-            "source_truth_overclaim_count": 0,
-            "learning_constraint_promoted_to_fact": 0,
-            "unripe_constraint_ranked_as_current": 0,
-            "raw_private_text_serialized": 0,
-        },
-        "cannot_claim": [
-            "task_orientation_packet_proves_memory_fact",
-            "external_anchor_is_current_fact_without_reopen",
-            "private_replay_quality_lift_without_opt_in_aggregate_eval",
-        ],
     }
-    foreground_bytes = len(json.dumps(packet, ensure_ascii=False, sort_keys=True).encode("utf-8"))
-    packet["metrics"]["foreground_json_bytes"] = foreground_bytes
-    packet["metrics"]["foreground_byte_budget"] = FOREGROUND_BYTE_BUDGET
-    packet["metrics"]["foreground_too_heavy"] = foreground_bytes > FOREGROUND_BYTE_BUDGET
-    packet["red_lines"]["foreground_too_heavy"] = 1 if foreground_bytes > FOREGROUND_BYTE_BUDGET else 0
+    if full_detail:
+        packet.update(
+            {
+                "suppressed_external_source_anchors": suppressed_anchors,
+                "suppressed_constraints": suppressed_constraints,
+                "red_lines": {
+                    "source_truth_overclaim_count": 0,
+                    "learning_constraint_promoted_to_fact": 0,
+                    "unripe_constraint_ranked_as_current": 0,
+                    "raw_private_text_serialized": 0,
+                },
+                "cannot_claim": [
+                    "task_orientation_packet_proves_memory_fact",
+                    "external_anchor_is_current_fact_without_reopen",
+                    "private_replay_quality_lift_without_opt_in_aggregate_eval",
+                ],
+            }
+        )
+    else:
+        packet["suppressed_detail"] = {
+            "suppressed_external_source_anchor_count": len(suppressed_anchors),
+            "suppressed_unripe_constraint_count": len(suppressed_constraints),
+            "red_line_ledger_deferred": True,
+            "cannot_claim_deferred": True,
+        }
+    if full_detail:
+        foreground_bytes = len(json.dumps(packet, ensure_ascii=False, sort_keys=True).encode("utf-8"))
+        packet["metrics"]["foreground_json_bytes"] = foreground_bytes
+        packet["metrics"]["foreground_byte_budget"] = FOREGROUND_BYTE_BUDGET
+        packet["metrics"]["foreground_too_heavy"] = foreground_bytes > FOREGROUND_BYTE_BUDGET
+        packet["red_lines"]["foreground_too_heavy"] = 1 if foreground_bytes > FOREGROUND_BYTE_BUDGET else 0
     return _public_payload(packet)
 
 
@@ -382,6 +410,12 @@ def add_agent_subparser(sub: Any) -> None:
         help="Sanitized private replay events JSON/JSONL to aggregate for --eval.",
     )
     orient_parser.add_argument("--json", action="store_true")
+    orient_parser.add_argument(
+        "--detail",
+        choices=["compact", "full", "operator"],
+        default="compact",
+        help="Use full/operator to include red-line and cannot_claim diagnostics.",
+    )
 
 
 def run_agent_command(args: Any, json_out: Any) -> int:
@@ -395,6 +429,7 @@ def run_agent_command(args: Any, json_out: Any) -> int:
             args.task_flag or " ".join(args.task),
             project=args.project,
             max_paths=args.max,
+            detail=args.detail,
         )
     if args.json:
         json_out(payload)

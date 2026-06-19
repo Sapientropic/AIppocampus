@@ -76,11 +76,13 @@ def _json_error(code: str, message: str) -> dict[str, Any]:
             "code": code,
             "message": message,
         },
-        "agent_next_action": next_action,
-        "safe_next_actions": [
+        **canonical_foreground_action_fields(
             next_action,
-            _ordinary_recall_path_action(),
-        ],
+            safe_next_actions=[
+                next_action,
+                _ordinary_recall_path_action(),
+            ],
+        ),
     }
 
 
@@ -377,11 +379,13 @@ def _no_snapshot_payload() -> MappingPayload:
             "source_reopen_required_before_claim": True,
             "local_paths_serialized": False,
         },
-        "agent_next_action": next_action,
-        "safe_next_actions": [
+        **canonical_foreground_action_fields(
             next_action,
-            _ordinary_recall_path_action(),
-        ],
+            safe_next_actions=[
+                next_action,
+                _ordinary_recall_path_action(),
+            ],
+        ),
     }
 
 
@@ -493,6 +497,36 @@ def _foreground_cue_quality(cue: str) -> tuple[str, str]:
     return "actionable", ""
 
 
+def _looks_path_or_identity_cue(cue: str) -> bool:
+    text = compact_text(str(cue or ""), 80).strip()
+    if not text:
+        return False
+    low = text.casefold()
+    if any(marker in low for marker in (":\\", ":/", "\\", "/", "长期空间", "long-term-space")):
+        return True
+    if re.fullmatch(r"[A-Z]{2,4}", text):
+        return True
+    if re.fullmatch(r"[\u4e00-\u9fff]{3}", text):
+        return True
+    return False
+
+
+def _foreground_activation_cues(raw_cues: Any) -> tuple[list[str], bool]:
+    filtered = False
+    cues: list[str] = []
+    for raw in raw_cues or []:
+        cue = compact_text(str(raw), 80).strip()
+        if not cue:
+            continue
+        if _looks_path_or_identity_cue(cue):
+            filtered = True
+            continue
+        cues.append(cue)
+        if len(cues) >= 6:
+            break
+    return cues, filtered
+
+
 def _best_foreground_cue(cues: list[str], fallback_title: str) -> tuple[str, str, str]:
     for cue in [*cues, fallback_title]:
         quality, reason = _foreground_cue_quality(cue)
@@ -509,11 +543,7 @@ def _producer_candidate_previews(payload: MappingPayload) -> list[MappingPayload
         if not isinstance(event, dict):
             continue
         refs = event.get("source_refs") or []
-        cues = [
-            compact_text(str(cue), 80)
-            for cue in event.get("activation_cues") or []
-            if str(cue).strip()
-        ][:6]
+        cues, cues_filtered = _foreground_activation_cues(event.get("activation_cues") or [])
         title = compact_text(str(event.get("title") or "untitled domain"), 96)
         cue, quality, reason = _best_foreground_cue(cues, title)
         preview = {
@@ -526,6 +556,9 @@ def _producer_candidate_previews(payload: MappingPayload) -> list[MappingPayload
                 "source_ref_count": len(refs) if isinstance(refs, list) else 0,
                 "source_reopen_required_before_claim": True,
             }
+        if cues_filtered:
+            preview["candidate_detail_deferred"] = ["path_or_identity_cues_filtered"]
+            preview["current_uncertainty"] = "some_activation_cues_filtered_for_public_default"
         if reason:
             preview["suppression_reason"] = reason
         if quality == "actionable" and cue:
