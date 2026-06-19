@@ -646,7 +646,8 @@ def compact_refresh_cache_report(result: Mapping[str, Any]) -> dict[str, Any]:
     did this write, and what is the next explicit action?
     """
 
-    cache_report = result.get("cache") if isinstance(result.get("cache"), Mapping) else {}
+    raw_cache_report = result.get("cache")
+    cache_report: Mapping[str, Any] = raw_cache_report if isinstance(raw_cache_report, Mapping) else {}
     record_count = int(cache_report.get("record_count") or 0)
     write_requested = bool(result.get("write_requested"))
     wrote = bool(result.get("wrote"))
