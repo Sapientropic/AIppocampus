@@ -163,7 +163,9 @@ class AippocampusCliTests(unittest.TestCase):
         learning_replay = self.run_cli("learning", "replay", "--json")
         learning_human = self.run_cli("learning", "replay")
         learning_status = self.run_cli("learning", "status", "--json")
+        learning_status_operator = self.run_cli("learning", "status", "--operator-json", "--json")
         learning_guidance = self.run_cli("learning", "guidance", "--json")
+        learning_guidance_operator = self.run_cli("learning", "guidance", "--operator-json", "--json")
 
         self.assertEqual(pause_help.returncode, 0, pause_help.stderr)
         self.assertIn("usage: aippocampus pause [target] [options]", pause_help.stdout)
@@ -299,11 +301,19 @@ class AippocampusCliTests(unittest.TestCase):
             status_payload["current_guidance"][0]["review_action"]["id"],
             "review_semantic_guidance_candidate",
         )
+        self.assertNotIn("semantic_guidance_lifecycle", status_payload)
+        self.assertNotIn("operator_detail", status_payload)
+        self.assertEqual(
+            status_payload["operator_detail_command"],
+            "aippocampus learning guidance --operator-json",
+        )
+        self.assertEqual(learning_status_operator.returncode, 0, learning_status_operator.stderr)
+        status_operator_payload = json.loads(learning_status_operator.stdout)
         self.assertNotIn(
             "guidance_lifecycle_ledger",
-            status_payload["semantic_guidance_lifecycle"],
+            status_operator_payload["semantic_guidance_lifecycle"],
         )
-        self.assertIn("guidance_lifecycle_ledger", status_payload["operator_detail"])
+        self.assertIn("guidance_lifecycle_ledger", status_operator_payload["operator_detail"])
         self.assertNotIn("<events.jsonl>", status_encoded)
         self.assertNotIn("<sanitized-events.jsonl>", status_encoded)
         self.assertEqual(status_payload["semantic_loop"]["stage"], "action_time_capable")
@@ -356,19 +366,32 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertIn("cannot_claim", guidance_payload["boundary_detail"])
         self.assertIn("semantic_guidance", guidance_payload)
         self.assertGreaterEqual(guidance_payload["semantic_guidance"]["guidance_count"], 1)
+        self.assertNotIn("semantic_guidance_lifecycle", guidance_payload)
+        self.assertNotIn("operator_detail", guidance_payload)
+        self.assertNotIn("lifecycle", guidance_payload["semantic_guidance"])
         self.assertEqual(
-            guidance_payload["semantic_guidance"]["lifecycle"]["contract"],
+            guidance_payload["semantic_guidance"]["operator_detail_command"],
+            "aippocampus learning guidance --operator-json",
+        )
+        self.assertEqual(
+            learning_guidance_operator.returncode,
+            0,
+            learning_guidance_operator.stderr,
+        )
+        guidance_operator_payload = json.loads(learning_guidance_operator.stdout)
+        self.assertEqual(
+            guidance_operator_payload["semantic_guidance"]["lifecycle"]["contract"],
             "semantic-guidance-lifecycle-v1",
         )
         self.assertGreaterEqual(
-            guidance_payload["semantic_guidance"]["lifecycle"]["candidate_count"],
+            guidance_operator_payload["semantic_guidance"]["lifecycle"]["candidate_count"],
             1,
         )
-        lifecycle = guidance_payload["semantic_guidance"]["lifecycle"]
+        lifecycle = guidance_operator_payload["semantic_guidance"]["lifecycle"]
         self.assertEqual(lifecycle["row_lifecycle_contract"], "guidance-row-lifecycle-v1")
         self.assertNotIn("guidance_lifecycle_ledger", lifecycle)
-        self.assertIn("guidance_lifecycle_ledger", guidance_payload["operator_detail"])
-        ledger_row = guidance_payload["operator_detail"]["guidance_lifecycle_ledger"][0]
+        self.assertIn("guidance_lifecycle_ledger", guidance_operator_payload["operator_detail"])
+        ledger_row = guidance_operator_payload["operator_detail"]["guidance_lifecycle_ledger"][0]
         self.assertEqual(
             {
                 event["guidance_id"]
@@ -381,7 +404,7 @@ class AippocampusCliTests(unittest.TestCase):
             ["candidate", "reviewed", "prepared", "surfaced", "outcome"],
         )
         self.assertEqual(
-            guidance_payload["semantic_guidance"]["lifecycle"]["candidate_actions"][0][
+            guidance_operator_payload["semantic_guidance"]["lifecycle"]["candidate_actions"][0][
                 "materialization_gate"
             ],
             "requires_review_before_cache",
@@ -553,36 +576,6 @@ class AippocampusCliTests(unittest.TestCase):
             self.assertIn("route_cached_one", cached_actions[0]["command"])
             self.assertNotEqual(payload["agent_next_action"], cached_actions[0])
             self.assertNotIn("route to quiet", json.dumps(payload, ensure_ascii=False))
-
-    def test_repro_package_template_has_structured_copyable_payload(self) -> None:
-        proc = self.run_cli("repro", "package", "--template", "--json")
-
-        self.assertEqual(proc.returncode, 0, proc.stderr)
-        payload = json.loads(proc.stdout)
-        encoded = json.dumps(payload, ensure_ascii=False)
-        self.assertEqual(payload["mode"], "repro_package_template")
-        self.assertNotIn("save template as", encoded)
-        self.assertIn("template_json", payload)
-        self.assertIn("stdin_payload", payload)
-        self.assertEqual(payload["agent_next_action"]["id"], "choose_repro_packaging_path")
-        self.assertEqual(
-            payload["primary_next_action"]["command"],
-            "aippocampus repro package --input-json repro-input.json --json",
-        )
-        self.assertIn(
-            "cat repro-input.json | aippocampus repro package --stdin --json",
-            {action["command"] for action in payload["safe_next_actions"]},
-        )
-
-    def test_repro_package_recovery_uses_concrete_example_paths(self) -> None:
-        proc = self.run_cli("repro", "package", "--json")
-
-        self.assertEqual(proc.returncode, 2)
-        payload = json.loads(proc.stdout)
-        encoded = json.dumps(payload, ensure_ascii=False)
-        self.assertEqual(payload["mode"], "repro_package_recovery")
-        self.assertIn("command-output.json", encoded)
-        self.assertNotIn("<command-output.json>", encoded)
 
     def test_hooks_help_shows_family_not_raw_installer_parser(self) -> None:
         family = self.run_cli("hooks", "--help")

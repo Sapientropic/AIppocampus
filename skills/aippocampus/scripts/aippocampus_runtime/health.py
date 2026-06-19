@@ -33,13 +33,17 @@ from aippocampus_runtime.core import (
     resolve_artifact_path,
 )
 from aippocampus_runtime.first_recall_readiness import (
-    health_readiness_fields,
     missing_rollout_readiness_fields,
 )
 from aippocampus_runtime.health_actions import action, dependency_ordered_actions
 from aippocampus_runtime.health_background_cognition import background_cognition_health
 from aippocampus_runtime.health_freshness import rollout_visibility_stats
 from aippocampus_runtime.health_host_state import codex_host_state_confounds
+from aippocampus_runtime.health_recall_availability import (
+    build_product_readiness,
+    operator_detail_placeholder,
+    registry_recall_availability,
+)
 from aippocampus_runtime.health_registry import registry_health_report
 from aippocampus_runtime.health_render import render_health_text, render_registry_health_text
 from aippocampus_runtime.health_trajectory import attach_health_trajectory
@@ -85,6 +89,7 @@ class HealthOptions:
     deep_graph_messages: int = 1000
     deep_graph_bytes: int = 100 * 1024 * 1024
     segment_threshold_bytes: int = 100 * 1024 * 1024
+    include_operator_diagnostics: bool = False
 
 
 def load_json(path: Path) -> dict:
@@ -415,6 +420,7 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
         if options.registry
         else registry_paths(Path(options.registry_dir).resolve() if options.registry_dir else None)[0]
     )
+    registry_recall = registry_recall_availability(registry_path)
     registry_resolution = aippocampus_registry_resolution()
     legacy_aliases = legacy_alias_diagnostics(
         registry_resolution=registry_resolution,
@@ -696,7 +702,11 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
         actions.append(
             action("consider_graphify", "info", "thread size crossed the deep graph threshold", f'Use $graphify on "{graphify_corpus}" when conceptual navigation is worth the cost.')
         )
-    storage_pressure = registry_cache_pressure_report(cwd, registry_path.resolve().parent)
+    storage_pressure = (
+        registry_cache_pressure_report(cwd, registry_path.resolve().parent)
+        if options.include_operator_diagnostics
+        else operator_detail_placeholder(pressure=True)
+    )
     if storage_pressure.get("pressure"):
         metrics = storage_pressure.get("metrics") or {}
         actions.append(
@@ -774,53 +784,21 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
         or freshness_action_recommended
     )
     storage_pressure_cleanup_recommended = bool(storage_pressure.get("pressure"))
-    maintenance_required_before_recall = critical_action_count > 0
-    ordinary_first_recall_usable = not maintenance_required_before_recall
-    maintenance_recommended = bool(actions)
-    checkpoint_status = "due_when_idle" if checkpoint_due else "current"
-    product_readiness = {
-        "status": (
-            "needs_maintenance"
-            if maintenance_required_before_recall
-            else "ready_with_live_delta"
-            if live_delta_tolerated
-            else "ready_with_freshness_degraded"
-            if freshness_degraded
-            else "ready_with_storage_pressure"
-            if storage_pressure_cleanup_recommended
-            else "ready_with_optional_maintenance"
-            if maintenance_recommended
-            else "ready"
-        ),
-        "ready": ordinary_first_recall_usable,
-        "ordinary_first_recall_usable": ordinary_first_recall_usable,
-        **health_readiness_fields(
-            maintenance_required_before_recall=maintenance_required_before_recall,
-            live_delta_tolerated=live_delta_tolerated,
-            freshness_degraded=freshness_degraded,
-        ),
-        "freshness_degraded": freshness_degraded,
-        "latest_current_thread_may_be_missing": bool(freshness["latest_visible_gap"]),
-        "maintenance_recommended": maintenance_recommended,
-        "maintenance_required_before_recall": maintenance_required_before_recall,
-        "storage_pressure_cleanup_recommended": storage_pressure_cleanup_recommended,
-        "blocking_action_count": critical_action_count,
-        "high_severity_action_count": high_severity_action_count,
-        "advisory_action_count": max(0, len(actions) - critical_action_count),
-        "live_delta_tolerated": live_delta_tolerated,
-        "checkpoint_status": checkpoint_status,
-        "next_best_action": (
-            "apply_required_maintenance"
-            if maintenance_required_before_recall
-            else "run_maintenance_when_latest_context_matters"
-            if freshness_degraded and not live_delta_tolerated
-            else "review_storage_gc_dry_run_when_idle"
-            if storage_pressure_cleanup_recommended
-            else "run_checkpoint_when_idle"
-            if checkpoint_due
-            else "continue"
-        ),
-    }
+    product_readiness = build_product_readiness(
+        actions=actions,
+        registry_recall=registry_recall,
+        clean_source_message_count=clean_source_message_count,
+        critical_action_count=critical_action_count,
+        high_severity_action_count=high_severity_action_count,
+        live_delta_tolerated=live_delta_tolerated,
+        freshness_degraded=freshness_degraded,
+        storage_pressure_cleanup_recommended=storage_pressure_cleanup_recommended,
+        checkpoint_due=checkpoint_due,
+    )
+    ordinary_first_recall_usable = bool(product_readiness["ordinary_first_recall_usable"])
+    checkpoint_status = str(product_readiness["checkpoint_status"])
+    product_readiness["latest_current_thread_may_be_missing"] = bool(freshness["latest_visible_gap"])
+    product_readiness["live_delta_tolerated"] = live_delta_tolerated
 
     result: dict[str, Any] = {
         "ok": ordinary_first_recall_usable,
@@ -850,6 +828,7 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
                 else registry_resolution["source"]
             ),
         },
+        "continuity_recall": registry_recall,
         "legacy_aliases": legacy_aliases,
         "index": {
             "dir": str(index_dir),
@@ -935,9 +914,23 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
             "activity_class": segments_activity_class,
         },
         "question_stats": question_stats,
-        "background_cognition": background_cognition_health(root=registry_path.resolve().parent, registry_path=registry_path, jobs_path=jobs_path, cwd=cwd, now=now),
+        "background_cognition": (
+            background_cognition_health(
+                root=registry_path.resolve().parent,
+                registry_path=registry_path,
+                jobs_path=jobs_path,
+                cwd=cwd,
+                now=now,
+            )
+            if options.include_operator_diagnostics
+            else operator_detail_placeholder()
+        ),
         "storage_pressure": storage_pressure,
-        "host_state_confounds": codex_host_state_confounds(host_home),
+        "host_state_confounds": (
+            codex_host_state_confounds(host_home)
+            if options.include_operator_diagnostics
+            else operator_detail_placeholder(include_command=False)
+        ),
         "logs": logs,
         "product_readiness": product_readiness,
         "recommended_actions": actions,
@@ -1154,6 +1147,14 @@ def options_from_args(args: argparse.Namespace) -> HealthOptions:
         deep_graph_messages=args.deep_graph_messages,
         deep_graph_bytes=args.deep_graph_bytes,
         segment_threshold_bytes=args.segment_threshold_bytes,
+        include_operator_diagnostics=bool(
+            args.operator_json
+            or args.full
+            or args.detail == "full"
+            or args.include_paths
+            or args.question_stats
+            or args.question_stats_details
+        ),
     )
 
 

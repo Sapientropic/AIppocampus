@@ -389,6 +389,11 @@ def compact_health_payload(payload: dict[str, Any]) -> dict[str, Any]:
         recommended=recommended_action_ids,
         claim_boundary="health_readiness_not_source_evidence",
     )
+    workspace_maintenance = None
+    continuity_available = None
+    if isinstance(readiness, dict):
+        workspace_maintenance = readiness.get("workspace_source_maintenance_required")
+        continuity_available = readiness.get("continuity_recall_available")
     card = {
         "kind": "aippocampus_health_card",
         "detail": "compact",
@@ -397,6 +402,8 @@ def compact_health_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "ordinary_first_recall_usable": ordinary_usable,
         "blocks_first_recall": not ordinary_usable,
         "blocks_exact_latest_claims": freshness_degraded,
+        "workspace_source_maintenance_required": None if workspace_maintenance is None else bool(workspace_maintenance),
+        "continuity_recall_available": None if continuity_available is None else bool(continuity_available),
         **first_recall_fields,
         "readiness_card": readiness_card,
         "maintenance_summary": maintenance_summary,

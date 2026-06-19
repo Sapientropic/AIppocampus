@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import importlib.metadata
 import json
 import os
 import sys
@@ -25,10 +24,23 @@ from aippocampus_runtime.learning_loop.behavioral_records import (
 from aippocampus_runtime.learning_loop.behavioral_records import (
     purge_payload as purge_behavioral_records_payload,
 )
-from aippocampus_runtime.learning_loop.dogfood_cases import build_sanitized_repro_package
 from aippocampus_runtime.learning_loop.foreground_lifecycle import (
     preview_cache_bridge_action,
     semantic_guidance_lifecycle,
+)
+from aippocampus_runtime.learning_loop.frontdoor_common import (
+    KIND,
+    LEARNING_OPERATOR_DETAIL_COMMAND,
+    SCHEMA_VERSION,
+)
+from aippocampus_runtime.learning_loop.frontdoor_common import (
+    privacy_boundary as _privacy_boundary,
+)
+from aippocampus_runtime.learning_loop.frontdoor_common import (
+    public_payload as _public_payload,
+)
+from aippocampus_runtime.learning_loop.frontdoor_common import (
+    with_boundary_detail as _with_boundary_detail,
 )
 from aippocampus_runtime.learning_loop.private_export import (
     LearningReplayInputError,
@@ -39,57 +51,22 @@ from aippocampus_runtime.learning_loop.private_replay import (
     build_private_history_replay_report,
     replay_recovery_payload,
 )
+from aippocampus_runtime.learning_loop.repro_package import (
+    repro_package_payload,
+    repro_package_recovery_payload,
+    repro_package_template_payload,
+)
 from aippocampus_runtime.learning_loop.semantic_learning import (
     build_semantic_learning_dogfood_fixture_report,
 )
-from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
-
-KIND = "aippocampus_learning_frontdoor"
-SCHEMA_VERSION = 1
 
 
 def _json_out(payload: Mapping[str, Any]) -> None:
     print(json.dumps(payload, ensure_ascii=False, indent=2))
 
 
-def _public_payload(payload: Any) -> Any:
-    return redact_sensitive_values(redact_private_paths(payload))
-
-
-def _with_boundary_detail(
-    payload: Mapping[str, Any],
-    *,
-    cannot_claim: list[str],
-) -> dict[str, Any]:
-    """Keep compact foreground JSON useful while preserving inspectable bounds."""
-
-    out = dict(payload)
-    detail_raw = out.get("boundary_detail")
-    detail: dict[str, Any] = dict(detail_raw) if isinstance(detail_raw, Mapping) else {}
-    if cannot_claim:
-        detail["cannot_claim"] = list(dict.fromkeys(str(item) for item in cannot_claim if item))
-    detail.setdefault(
-        "frontstage_rule",
-        "compact learning/repro surfaces summarize bounds here instead of top-level caveat walls",
-    )
-    out["boundary_detail"] = detail
-    out.pop("cannot_claim", None)
-    return out
-
-
 def _cwd(value: str | None) -> Path:
     return Path(value or os.getcwd())
-
-
-def _privacy_boundary() -> dict[str, Any]:
-    return {
-        "raw_rollout_scan_default": False,
-        "raw_rollouts_serialized": False,
-        "raw_prompt_or_stdout_serialized": False,
-        "learning_guidance_is_source_truth": False,
-        "source_reopen_required_for_claims": True,
-        "default_output_redacts_local_paths": True,
-    }
 
 
 def _learning_discovery_action() -> dict[str, Any]:
@@ -174,7 +151,7 @@ def _compact_semantic_lifecycle(
     compact["candidate_actions"] = compact_candidates
     operator_detail = {
         "profile": "learning_lifecycle_operator_detail",
-        "detail_command": "aippocampus learning guidance --json",
+        "detail_command": LEARNING_OPERATOR_DETAIL_COMMAND,
         "guidance_lifecycle_ledger": list(ledger) if isinstance(ledger, list) else [],
         "claim_boundary": "operator lifecycle rows explain candidate state; they are not source truth",
     }
@@ -306,7 +283,12 @@ def discover_history_payload(*, cwd: Path) -> dict[str, Any]:
     )
 
 
-def status_payload(*, cwd: Path, no_default_learning: bool = False) -> dict[str, Any]:
+def status_payload(
+    *,
+    cwd: Path,
+    no_default_learning: bool = False,
+    include_operator_detail: bool = False,
+) -> dict[str, Any]:
     report = refresh_action_hint_cache(
         cwd=cwd,
         write=False,
@@ -404,9 +386,7 @@ def status_payload(*, cwd: Path, no_default_learning: bool = False) -> dict[str,
         safe_next_actions=followup_actions,
     )
     next_actions = cast(list[dict[str, object]], action_fields["safe_next_actions"])[:3]
-    return _public_payload(
-        _with_boundary_detail(
-            {
+    payload: dict[str, Any] = {
             "kind": KIND,
             "schema_version": SCHEMA_VERSION,
             "mode": "status",
@@ -454,10 +434,15 @@ def status_payload(*, cwd: Path, no_default_learning: bool = False) -> dict[str,
                     )
                 ),
             },
-            "semantic_guidance_lifecycle": compact_lifecycle,
-            "operator_detail": operator_detail,
+            "operator_detail_command": LEARNING_OPERATOR_DETAIL_COMMAND,
             "privacy_boundary": _privacy_boundary(),
-            },
+    }
+    if include_operator_detail:
+        payload["semantic_guidance_lifecycle"] = compact_lifecycle
+        payload["operator_detail"] = operator_detail
+    return _public_payload(
+        _with_boundary_detail(
+            payload,
             cannot_claim=[
                 "causal_live_behavior_lift",
                 "learned_guidance_as_source_truth",
@@ -467,8 +452,17 @@ def status_payload(*, cwd: Path, no_default_learning: bool = False) -> dict[str,
     )
 
 
-def guidance_payload(*, cwd: Path, no_default_learning: bool = False) -> dict[str, Any]:
-    payload = status_payload(cwd=cwd, no_default_learning=no_default_learning)
+def guidance_payload(
+    *,
+    cwd: Path,
+    no_default_learning: bool = False,
+    include_operator_detail: bool = False,
+) -> dict[str, Any]:
+    payload = status_payload(
+        cwd=cwd,
+        no_default_learning=no_default_learning,
+        include_operator_detail=True,
+    )
     summary = dict(payload.get("summary") or {})
     semantic_count = int(summary.get("semantic_action_time_guidance_count") or 0)
     if summary.get("prepared_action_hint_count"):
@@ -501,18 +495,24 @@ def guidance_payload(*, cwd: Path, no_default_learning: bool = False) -> dict[st
         next_action,
         safe_next_actions=safe_next_actions,
     )
+    semantic_guidance = {
+        "guidance_count": semantic_count,
+        "materialization_status": materialization_status,
+        "cache_materialization_command": "aippocampus hooks action refresh-cache --json",
+        "operator_detail_command": LEARNING_OPERATOR_DETAIL_COMMAND,
+    }
+    if include_operator_detail:
+        semantic_guidance["lifecycle"] = lifecycle
+    if not include_operator_detail:
+        payload.pop("semantic_guidance_lifecycle", None)
+        payload.pop("operator_detail", None)
     return _public_payload(
         {
             **payload,
             "mode": "guidance",
             **action_fields,
             "cache_command": "aippocampus hooks action refresh-cache --write --json",
-            "semantic_guidance": {
-                "guidance_count": semantic_count,
-                "materialization_status": materialization_status,
-                "cache_materialization_command": "aippocampus hooks action refresh-cache --json",
-                "lifecycle": lifecycle,
-            },
+            "semantic_guidance": semantic_guidance,
         }
     )
 
@@ -655,216 +655,6 @@ def replay_payload(args: argparse.Namespace) -> dict[str, Any]:
     )
 
 
-def _runtime_version() -> str:
-    try:
-        return importlib.metadata.version("aippocampus")
-    except importlib.metadata.PackageNotFoundError:
-        return "unknown"
-
-
-def _load_repro_package_input(args: argparse.Namespace) -> Any:
-    if args.input_json and args.stdin:
-        raise ValueError("choose only one of --input-json or --stdin")
-    if args.stdin:
-        return json.loads(sys.stdin.read())
-    return json.loads(args.input_json.read_text(encoding="utf-8"))
-
-
-def repro_package_payload(args: argparse.Namespace) -> dict[str, Any]:
-    payload = _load_repro_package_input(args)
-    if not isinstance(payload, Mapping):
-        raise ValueError("--input-json must contain a JSON object")
-    missing = [
-        field
-        for field in ("command", "expected", "actual")
-        if not str(payload.get(field) or "").strip()
-    ]
-    if missing:
-        raise ValueError("missing required repro fields: " + ", ".join(missing))
-    if not (payload.get("output") is not None or payload.get("stdout") is not None or payload.get("output_ref")):
-        raise ValueError("missing one of output, stdout, or output_ref")
-    package = build_sanitized_repro_package(
-        payload,
-        version=args.version or _runtime_version(),
-        commit=args.commit or "unknown",
-        plugin_manifest_version=args.plugin_manifest_version or "unknown",
-    )
-    return _public_payload(
-        _with_boundary_detail(
-            {
-            "kind": KIND,
-            "schema_version": SCHEMA_VERSION,
-            "mode": "repro_package",
-            "ok": bool(package.get("ok")),
-            "repro_package": package,
-            "agent_next_action": "paste repro_package into a public issue after human review",
-            "privacy_boundary": package.get("privacy_boundary") or _privacy_boundary(),
-            },
-            cannot_claim=[
-                "source_truth_from_repro_package",
-                "official_benchmark_score_from_repro_package",
-                "private_history_quality",
-            ],
-        )
-    )
-
-
-def repro_package_template_payload() -> dict[str, Any]:
-    schema = repro_package_input_schema()
-    template = schema["redacted_example"]
-    template_json = json.dumps(template, ensure_ascii=False, indent=2, sort_keys=True)
-    primary = foreground_shell_action(
-        action_id="package_repro_input_file",
-        label="Package a saved repro input JSON file",
-        command="aippocampus repro package --input-json repro-input.json --json",
-        why="Use this after writing the template JSON to repro-input.json and filling expected/actual.",
-        mutation_risk="read_only",
-        claim_boundary="repro_package_not_source_truth",
-    )
-    return _public_payload(
-        {
-            "kind": KIND,
-            "schema_version": SCHEMA_VERSION,
-            "mode": "repro_package_template",
-            "ok": True,
-            "template": template,
-            "template_json": template_json,
-            "stdin_payload": template_json,
-            "expected_input_schema": schema,
-            "agent_next_action": {
-                "id": "choose_repro_packaging_path",
-                "primary": primary,
-                "no_file_payload_field": "stdin_payload",
-            },
-            "primary_next_action": primary,
-            "safe_next_actions": [
-                primary,
-                foreground_shell_action(
-                    action_id="package_repro_stdin",
-                    label="Package repro JSON through stdin",
-                    command="cat repro-input.json | aippocampus repro package --stdin --json",
-                    why="Portable Unix stdin path when a pipe is preferred.",
-                    mutation_risk="read_only",
-                    claim_boundary="repro_package_not_source_truth",
-                ),
-                foreground_shell_action(
-                    action_id="validate_repro_input_json",
-                    label="Validate repro input JSON",
-                    command="python -m json.tool repro-input.json",
-                    why="Check JSON syntax before packaging.",
-                    mutation_risk="read_only",
-                    claim_boundary="syntax_check_not_source_evidence",
-                ),
-            ],
-            "next_actions": [
-                {
-                    "label": str(action.get("label") or action.get("id")),
-                    "command": str(action["command"]),
-                    "mutates": False,
-                }
-                for action in [
-                    primary,
-                    foreground_shell_action(
-                        action_id="package_repro_stdin_legacy_list",
-                        label="Package repro JSON through stdin",
-                        command="cat repro-input.json | aippocampus repro package --stdin --json",
-                        mutation_risk="read_only",
-                        claim_boundary="repro_package_not_source_truth",
-                    ),
-                ]
-            ],
-            "privacy_boundary": _privacy_boundary(),
-        }
-    )
-
-
-def repro_package_input_schema() -> dict[str, Any]:
-    return {
-        "required": ["command", "expected", "actual"],
-        "one_of": ["output", "output_ref"],
-        "optional": ["surface", "source_refs", "privacy_boundary"],
-        "redacted_example": {
-            "surface": "agent_recall",
-            "command": "aippocampus agent recall \"old decision or handoff cue\" --json",
-            "output_ref": "saved-output://local/redacted-command-output.json",
-            "expected": "source-backed route appears with reopen boundary",
-            "actual": "route was missing or degraded",
-            "source_refs": [{"source_id": "public-fixture-source", "message_id": "msg_public_001"}],
-            "privacy_boundary": "no raw private stdout or prompt text",
-        },
-    }
-
-
-def repro_package_recovery_payload(*, malformed_error: str | None = None) -> dict[str, Any]:
-    code = "learning_repro_input_malformed" if malformed_error else "learning_repro_input_required"
-    return _public_payload(
-        _with_boundary_detail(
-            {
-            "kind": KIND,
-            "schema_version": SCHEMA_VERSION,
-            "mode": "repro_package_recovery",
-            "ok": False,
-            "error": {
-                "code": code,
-                "message": (
-                    "repro-package needs a saved JSON object with command plus output or "
-                    "output_ref and expected/actual fields; no private stdout or prompt text "
-                    "was read."
-                ),
-                "malformed_error": malformed_error or "",
-                "next_command": (
-                    "aippocampus repro package --template --json"
-                ),
-            },
-            "expected_input_schema": repro_package_input_schema(),
-            "recovery_paths": [
-                {
-                    "label": "from sanitized replay or guidance output",
-                    "steps": [
-                        "run `aippocampus learning guidance --json` or sanitized replay",
-                        "save the relevant command outcome as the expected input schema",
-                        "run `aippocampus repro package --input-json command-output.json --json`",
-                    ],
-                    "copyable_validate_command": (
-                        "python -m json.tool command-output.json"
-                    ),
-                    "copyable_package_command": (
-                        "aippocampus repro package --input-json command-output.json --json"
-                    ),
-                    "mutates": False,
-                },
-                {
-                    "label": "fresh command/output capture template",
-                    "steps": [
-                        "run the foreground command manually",
-                        "record only redacted output or an output_ref",
-                        "fill command/expected/actual/source_refs before packaging",
-                    ],
-                    "template": repro_package_input_schema()["redacted_example"],
-                    "copyable_template_command": "aippocampus repro package --template --json",
-                    "copyable_stdin_command": (
-                        "cat command-output.json | aippocampus repro package --stdin --json"
-                    ),
-                    "mutates": False,
-                },
-            ],
-            "next_actions": [
-                {
-                    "label": "inspect learning guidance first",
-                    "command": "aippocampus learning guidance --json",
-                    "mutates": False,
-                }
-            ],
-            "privacy_boundary": _privacy_boundary(),
-            },
-            cannot_claim=[
-                "source_truth_from_repro_package",
-                "private_history_quality",
-            ],
-        )
-    )
-
-
 def render_human(payload: Mapping[str, Any]) -> str:
     mode = str(payload.get("mode") or "status")
     lines = [f"AIppocampus learning {mode}: {'ok' if payload.get('ok') else 'needs-review'}"]
@@ -927,15 +717,21 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--cwd")
     parser.add_argument("--no-default-learning", action="store_true")
     parser.add_argument("--json", action="store_true")
+    parser.add_argument("--operator-json", action="store_true")
+    parser.add_argument("--detail", choices=["compact", "full"], default="compact")
     status = sub.add_parser("status")
     status.add_argument("--cwd")
     status.add_argument("--no-default-learning", action="store_true")
     status.add_argument("--json", action="store_true")
+    status.add_argument("--operator-json", action="store_true")
+    status.add_argument("--detail", choices=["compact", "full"], default="compact")
 
     guidance = sub.add_parser("guidance")
     guidance.add_argument("--cwd")
     guidance.add_argument("--no-default-learning", action="store_true")
     guidance.add_argument("--json", action="store_true")
+    guidance.add_argument("--operator-json", action="store_true")
+    guidance.add_argument("--detail", choices=["compact", "full"], default="compact")
 
     replay = sub.add_parser("replay")
     replay.add_argument("--events", type=Path)
@@ -1025,9 +821,17 @@ def main(argv: list[str] | None = None) -> int:
                     malformed_error=f"{exc.__class__.__name__}: invalid or unreadable JSON"
                 )
     elif args.command == "guidance":
-        payload = guidance_payload(cwd=_cwd(args.cwd), no_default_learning=args.no_default_learning)
+        payload = guidance_payload(
+            cwd=_cwd(args.cwd),
+            no_default_learning=args.no_default_learning,
+            include_operator_detail=bool(args.operator_json or args.detail == "full"),
+        )
     else:
-        payload = status_payload(cwd=_cwd(args.cwd), no_default_learning=args.no_default_learning)
+        payload = status_payload(
+            cwd=_cwd(args.cwd),
+            no_default_learning=args.no_default_learning,
+            include_operator_detail=bool(args.operator_json or args.detail == "full"),
+        )
     if getattr(args, "json", False):
         _json_out(payload)
     else:
