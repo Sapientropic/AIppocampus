@@ -5,7 +5,10 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from aippocampus_runtime.contracts import foreground_shell_action
+from aippocampus_runtime.contracts import (
+    canonical_foreground_action_fields,
+    foreground_shell_action,
+)
 
 
 def append_error_payload(
@@ -82,12 +85,17 @@ def append_error_payload(
         ],
     }
     error: dict[str, Any] = {"code": code, "message": messages.get(code, code)}
+    primary_action = next_actions.get(code, recall_action)
+    action_fields = canonical_foreground_action_fields(
+        primary_action,
+        safe_next_actions=safe_next_actions.get(code, [primary_action, recall_action, search_action]),
+    )
     payload = {
         "kind": "aippocampus_agent_self_note_append",
         "ok": False,
+        "status": "needs_input" if code == "agent_self_note_empty" else "rejected",
         "error": error,
-        "agent_next_action": next_actions.get(code, recall_action),
-        "safe_next_actions": safe_next_actions.get(code, [recall_action, search_action]),
+        **action_fields,
         "privacy_boundary": dict(privacy_boundary),
     }
     if details:

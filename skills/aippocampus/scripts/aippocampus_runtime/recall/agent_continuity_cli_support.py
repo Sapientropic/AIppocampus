@@ -683,11 +683,6 @@ def compact_aippo_guidance_card(payload: Mapping[str, Any], *, task: str = "") -
         if isinstance(available_raw, (int, float)) and not isinstance(available_raw, bool)
         else active_clause_count
     )
-    contract_active_clause_count = int(packet.get("contract_active_clause_count") or 0)
-    active_not_foreground_available_count = int(
-        packet.get("active_not_foreground_available_count") or 0
-    )
-    suppressed_clause_count = int(packet.get("suppressed_clause_count") or 0)
     direct_guidance_available = bool(guidance and next_action and next_action != "use_hint")
     use_hint_available = (
         status == "ok"
@@ -705,26 +700,32 @@ def compact_aippo_guidance_card(payload: Mapping[str, Any], *, task: str = "") -
         else None
     )
     task_text = str(task or "").strip()
+    card_status = "needs_input" if not task_text else status
     foreground_action: dict[str, Any]
     if use_hint_available or (status == "ok" and direct_guidance_available):
         foreground_action = {
             "id": next_action or "use_aippo_working_contract_guidance",
             "action_id": next_action or "use_aippo_working_contract_guidance",
+            "label": "Use AIppo working guidance",
             "action_type": "use_project_working_guidance",
             "selected_task_families": families[:3],
             "guidance_preview": guidance[:2],
             "mutation_risk": "read_only",
             "claim_boundary": "working_guidance_not_source_truth",
             "why": "AIppo found low-risk project workflow guidance for this task.",
+            "continue_without_command": True,
         }
     else:
         if task_text:
             foreground_action = {
                 "id": "run_agent_recall_if_prior_source_matters",
                 "action_id": "run_agent_recall_if_prior_source_matters",
+                "label": "Run recall if prior source matters",
                 "tool_name": "agent_recall",
                 "arguments": {"query": task_text},
+                "command": f"aippocampus agent recall {shell_quote(task_text)} --json",
                 "cli_command": f"aippocampus agent recall {shell_quote(task_text)} --json",
+                "mutation_risk": "read_only",
                 "claim_boundary": "no_aippo_guidance_no_claim",
                 "why": "No active AIppo working contract matched strongly enough.",
             }
@@ -732,12 +733,14 @@ def compact_aippo_guidance_card(payload: Mapping[str, Any], *, task: str = "") -
             foreground_action = {
                 "id": "provide_task_cue",
                 "action_id": "provide_task_cue",
+                "label": "Provide an AIppo task cue",
                 "tool_name": "agent_aippo",
                 "arguments_template": {"task": "{task_cue}"},
                 "cli_command_template": 'aippocampus agent aippo --task "{task_cue}" --json',
                 "requires": ["task_cue"],
                 "template_only": True,
                 "blocked_by": ["task_cue_required"],
+                "mutation_risk": "read_only",
                 "claim_boundary": "no_aippo_guidance_no_claim",
                 "why": "AIppo needs a concrete task description before it can choose a working contract.",
             }
@@ -747,6 +750,7 @@ def compact_aippo_guidance_card(payload: Mapping[str, Any], *, task: str = "") -
             {
                 "id": "refresh_aippo_guidance_for_task",
                 "action_id": "refresh_aippo_guidance_for_task",
+                "label": "Refresh AIppo guidance for this task",
                 "tool_name": "agent_aippo",
                 "arguments": {"task": task_text},
                 "mutation_risk": "read_only",
@@ -759,11 +763,13 @@ def compact_aippo_guidance_card(payload: Mapping[str, Any], *, task: str = "") -
             {
                 "id": "run_agent_recall_if_prior_source_matters",
                 "action_id": "run_agent_recall_if_prior_source_matters",
+                "label": "Run recall if prior source matters",
                 "tool_name": "agent_recall",
                 "arguments_template": {"query": "{continuity_cue}"},
                 "cli_command_template": 'aippocampus agent recall "{continuity_cue}" --json',
                 "requires": ["continuity_cue"],
                 "template_only": True,
+                "mutation_risk": "read_only",
                 "claim_boundary": "source_reopen_required_before_claims",
                 "why": "Use recall first when the task depends on old local source context.",
             }
@@ -772,6 +778,7 @@ def compact_aippo_guidance_card(payload: Mapping[str, Any], *, task: str = "") -
             {
                 "id": "inspect_operator_detail",
                 "action_id": "inspect_operator_detail",
+                "label": "Inspect AIppo operator detail",
                 "tool_name": "agent_aippo",
                 "arguments_template": {"task": "{task_cue}", "operator_json": True},
                 "cli_command_template": (
@@ -779,6 +786,7 @@ def compact_aippo_guidance_card(payload: Mapping[str, Any], *, task: str = "") -
                 ),
                 "requires": ["task_cue"],
                 "template_only": True,
+                "mutation_risk": "read_only",
                 "claim_boundary": "local_operator_diagnostic_not_public_claim",
                 "why": "Open the full activation packet only for local operator diagnostics.",
             }
@@ -802,21 +810,31 @@ def compact_aippo_guidance_card(payload: Mapping[str, Any], *, task: str = "") -
             continue
         seen_reason_codes.add(reason_code)
         deduped_reason_codes.append(reason_code)
+    action_fields = canonical_foreground_action_fields(
+        foreground_action,
+        safe_next_actions=safe_next_actions,
+    )
+    error = (
+        {
+            "code": "aippo_task_required",
+            "message": "AIppo needs a concrete task cue before it can choose a working contract.",
+        }
+        if not task_text
+        else None
+    )
     return _public_payload(
         {
             "kind": payload.get("kind"),
             "schema_version": payload.get("schema_version"),
             "mode": "aippo",
             "surface": "agent_aippo_guidance_card",
-            "foreground_action_contract": FOREGROUND_ACTION_CONTRACT_VERSION,
-            "status": status,
-            "ok": status == "ok",
+            "status": card_status,
+            "ok": card_status == "ok",
+            **({"error": error} if error else {}),
             "task_hint_used": bool(payload.get("task_hint_used")),
             "task_families": families[:4],
             "use_guidance": guidance[:3],
-            "foreground_action": foreground_action,
-            "agent_next_action": foreground_action,
-            "safe_next_actions": safe_next_actions,
+            **action_fields,
             "reason_codes": deduped_reason_codes,
             "boundary": {
                 "authority": "working_guidance",
@@ -836,36 +854,11 @@ def compact_aippo_guidance_card(payload: Mapping[str, Any], *, task: str = "") -
                 ),
                 "detail_requires": ["task_cue"],
             },
-            "operator_detail": {
-                "contract_status": {
-                    "active_clause_count": active_clause_count,
-                    "available_active_clause_count": available_active_clause_count,
-                    "contract_active_clause_count": contract_active_clause_count,
-                    "active_not_foreground_available_count": active_not_foreground_available_count,
-                    "suppressed_clause_count": suppressed_clause_count,
-                    "availability_basis": str(
-                        "task_cue_required"
-                        if not task_text
-                        else packet.get("availability_basis")
-                        or "unknown_packet_projection"
-                    ),
-                    **({"blocked_by": ["task_cue_required"]} if not task_text else {}),
-                },
-                "match_diagnostics": {
-                    "task_family_count": len(families),
-                    "selected_clause_count": active_clause_count,
-                    "available_active_clause_count": available_active_clause_count,
-                    "contract_active_clause_count": contract_active_clause_count,
-                    "active_not_foreground_available_count": active_not_foreground_available_count,
-                    "direct_guidance_available": direct_guidance_available,
-                },
-                "contract_action": contract_action,
-                "operator_json_available": True,
-                "operator_json_command_template": (
-                    'aippocampus agent aippo --task "{task_cue}" --json --operator-json'
-                ),
-                "operator_json_requires": ["task_cue"],
-            },
+            "operator_json_available": True,
+            "operator_json_command_template": (
+                'aippocampus agent aippo --task "{task_cue}" --json --operator-json'
+            ),
+            "operator_json_requires": ["task_cue"],
         }
     )
 

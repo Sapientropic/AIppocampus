@@ -99,13 +99,17 @@ class RuntimeContractsAndConfigRegistryTests(unittest.TestCase):
     def test_canonical_foreground_action_fields_keep_compat_aliases_identical(self) -> None:
         primary = {
             "id": "inspect_detail",
+            "label": "Inspect provider detail",
             "command": "aippocampus doctor provider --detail full --json",
+            "why": "Open local provider diagnostics without treating them as memory evidence.",
             "mutation_risk": "read_only",
             "claim_boundary": "operator_detail_not_memory_evidence",
         }
         secondary = {
             "id": "check_hook_visibility",
+            "label": "Check prompt hook visibility",
             "command": "aippocampus hooks prompt status --last --json",
+            "why": "Check whether the launcher scope can see the prompt hook state.",
             "mutation_risk": "read_only",
             "claim_boundary": "launcher_scope_not_running_hook_process",
         }
@@ -155,16 +159,61 @@ class RuntimeContractsAndConfigRegistryTests(unittest.TestCase):
             violations,
         )
 
+    def test_foreground_action_contract_lint_rejects_skeletal_cards(self) -> None:
+        payload = {
+            "foreground_action_contract": "foreground-action-v1",
+            "foreground_action": {
+                "id": "continue_with_nonblocking_maintenance",
+                "continue_without_command": True,
+            },
+            "agent_next_action": {
+                "id": "continue_with_nonblocking_maintenance",
+                "continue_without_command": True,
+            },
+            "safe_next_actions": [
+                {
+                    "id": "continue_with_nonblocking_maintenance",
+                    "continue_without_command": True,
+                }
+            ],
+        }
+
+        reasons = {
+            (violation["field"], violation["reason"])
+            for violation in foreground_action_contract_violations(payload)
+        }
+
+        self.assertIn(
+            ("foreground_action.label", "required_foreground_action_field_missing"),
+            reasons,
+        )
+        self.assertIn(
+            ("foreground_action.why", "required_foreground_action_field_missing"),
+            reasons,
+        )
+        self.assertIn(
+            ("foreground_action.mutation_risk", "required_foreground_action_field_missing"),
+            reasons,
+        )
+        self.assertIn(
+            ("foreground_action.claim_boundary", "required_foreground_action_field_missing"),
+            reasons,
+        )
+
     def test_foreground_chooser_card_exposes_canonical_action_fields(self) -> None:
         primary = {
             "id": "check_sync_status",
+            "label": "Check sync status",
             "command": "aippocampus sync status --json",
+            "why": "Choose a read-only sync status before push or pull.",
             "mutation_risk": "read_only",
             "claim_boundary": "operator_diagnostic_not_source_evidence",
         }
         secondary = {
             "id": "check_object_sync_status",
+            "label": "Check object sync status",
             "command": "aippocampus object-sync status --json",
+            "why": "Check object sync state before choosing a write path.",
             "mutation_risk": "read_only",
             "claim_boundary": "operator_diagnostic_not_source_evidence",
         }

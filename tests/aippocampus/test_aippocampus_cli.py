@@ -550,12 +550,12 @@ class AippocampusCliTests(unittest.TestCase):
         payload = json.loads(proc.stdout)
         encoded = json.dumps(payload, ensure_ascii=False)
         self.assertEqual(payload["status"], "needs_target")
-        surfaces = {item["surface"] for item in payload["safe_next_actions"]}
-        self.assertEqual(surfaces, {"recall-route", "coding-ticket"})
+        self.assertEqual({item["surface"] for item in payload["safe_next_actions"]}, {"recall-route", "control-boundary"})
+        self.assertEqual({item["surface"] for item in payload["convenience_write_actions"]}, {"recall-route", "coding-ticket"})
         self.assertIn("agent recall", payload["agent_next_action"]["command_template"])
         self.assertEqual(payload["agent_next_action"]["requires"], ["cue_for_route_to_quiet"])
-        self.assertEqual(payload["safe_next_actions"][1]["requires"], ["route_id"])
-        self.assertEqual(payload["safe_next_actions"][2]["requires"], ["ticket_id"])
+        self.assertEqual([action["requires"] for action in payload["convenience_write_actions"][:2]], [["route_id"], ["ticket_id"]])
+        self.assertTrue(all(action.get("requires_explicit_user_confirmation") for action in payload["convenience_write_actions"]))
         self.assertNotIn("<route_id>", encoded)
         self.assertNotIn("<ticket_id>", encoded)
         self.assertNotIn("route to quiet", encoded)
@@ -576,7 +576,7 @@ class AippocampusCliTests(unittest.TestCase):
             self.assertIn("command_template", payload["agent_next_action"])
             cached_actions = [
                 action
-                for action in payload["safe_next_actions"]
+                for action in payload["convenience_write_actions"]
                 if action.get("source") == "last_recall_cache"
             ]
             self.assertTrue(cached_actions)

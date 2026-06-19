@@ -11,6 +11,10 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from aippocampus_runtime import core
+from aippocampus_runtime.contracts import (
+    canonical_foreground_action_fields,
+    foreground_shell_action,
+)
 from aippocampus_runtime.recall.agent_continuity_cli_support import feedback_lane_resolution
 
 TARGET_ALIASES = {
@@ -84,8 +88,50 @@ def public_record(row: dict[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in row.items() if key != "path"}
 
 
+def _inventory_action() -> dict[str, Any]:
+    return foreground_shell_action(
+        action_id="review_behavioral_records_inventory",
+        label="Review behavioral records inventory",
+        command="aippocampus learning behavioral-records --json",
+        why="Show which local behavioral feedback records exist without reading private text or changing them.",
+        mutation_risk="read_only",
+        claim_boundary="behavioral_records_are_feedback_not_source_truth",
+    )
+
+
+def _purge_preview_action(target: str = "all") -> dict[str, Any]:
+    return foreground_shell_action(
+        action_id="preview_behavioral_records_purge",
+        label="Preview behavioral-record purge",
+        command=(
+            "aippocampus learning purge-behavioral-records "
+            f"--target {target} --dry-run --json"
+        ),
+        why="Preview exactly which local feedback files would be removed before asking for confirmation.",
+        mutation_risk="read_only",
+        claim_boundary="behavioral_records_are_feedback_not_source_truth",
+    )
+
+
+def _confirm_purge_action(target: str = "all") -> dict[str, Any]:
+    action = foreground_shell_action(
+        action_id="confirm_behavioral_records_purge",
+        label="Confirm behavioral-record purge",
+        command=(
+            "aippocampus learning purge-behavioral-records "
+            f"--target {target} --confirm --json"
+        ),
+        why="Delete selected local feedback records only after explicit user confirmation.",
+        mutation_risk="explicit_local_feedback_delete",
+        claim_boundary="behavioral_records_are_feedback_not_source_truth",
+    )
+    action["requires_explicit_user_confirmation"] = True
+    return action
+
+
 def inventory_payload(cwd: Path) -> dict[str, Any]:
     records = behavioral_records(cwd)
+    primary_action = _inventory_action()
     return {
         "kind": "aippocampus_behavioral_records_inventory",
         "schema_version": 1,
@@ -98,6 +144,10 @@ def inventory_payload(cwd: Path) -> dict[str, Any]:
             "local_paths_included": False,
             "source_truth": False,
         },
+        **canonical_foreground_action_fields(
+            primary_action,
+            safe_next_actions=[primary_action, _purge_preview_action()],
+        ),
         "purge_command": "aippocampus learning purge-behavioral-records --target all --dry-run --json",
     }
 
@@ -155,7 +205,12 @@ def purge_payload(
                 "reason": reason,
             }
         )
-    return {
+    primary_action = _inventory_action()
+    action_fields = canonical_foreground_action_fields(
+        primary_action,
+        safe_next_actions=[primary_action, _purge_preview_action(target)],
+    )
+    payload: dict[str, Any] = {
         "kind": "aippocampus_behavioral_records_purge",
         "schema_version": 1,
         "ok": True,
@@ -170,5 +225,8 @@ def purge_payload(
             "local_paths_included": False,
             "source_truth": False,
         },
+        **action_fields,
     }
-
+    if effective_dry_run:
+        payload["write_next_actions"] = [_confirm_purge_action(target)]
+    return payload

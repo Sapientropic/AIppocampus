@@ -503,7 +503,8 @@ def call_agent_aippo(arguments: dict[str, Any]) -> dict[str, Any]:
         payload = compact_aippo_guidance_card(payload, task=task)
     else:
         payload = {"detail": "full", "output_boundary": "local_private_diagnostic_full", **payload}
-    return text_result(public_payload(arguments, payload))
+    is_error = payload.get("ok") is False or payload.get("status") == "needs_input"
+    return text_result(public_payload(arguments, payload), is_error=is_error)
 
 
 def call_agent_background(arguments: dict[str, Any]) -> dict[str, Any]:

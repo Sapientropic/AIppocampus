@@ -102,6 +102,17 @@ def _last_recall_control_actions(command: str, *, limit: int = 3) -> list[dict[s
     return actions
 
 
+def _convenience_write_actions(actions: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Mark convenience writes so they never look like safe automatic steps."""
+
+    result: list[dict[str, Any]] = []
+    for action in actions:
+        item = dict(action)
+        item["requires_explicit_user_confirmation"] = True
+        result.append(item)
+    return result
+
+
 def _claim_boundary(command: str, *, scoped: bool = False) -> dict[str, Any]:
     return {
         "can_use_for": [
@@ -144,7 +155,7 @@ def _with_boundary_detail(
 
 
 def _safe_plan_card(command: str, *, target: str = "") -> dict[str, Any]:
-    cached_actions = _last_recall_control_actions(command)
+    cached_actions = _convenience_write_actions(_last_recall_control_actions(command))
     if command == "pause":
         actions = [
             _template_action(
@@ -161,8 +172,8 @@ def _safe_plan_card(command: str, *, target: str = "") -> dict[str, Any]:
                 why="Use this when choosing between pause, forget, and do-not-use-here.",
                 mutation_risk="read_only",
                 claim_boundary="operator_diagnostic_not_source_evidence",
-            ),
-            *cached_actions,
+            )
+            | {"surface": "control-boundary"},
         ]
         return _with_boundary_detail(
             {
@@ -179,6 +190,7 @@ def _safe_plan_card(command: str, *, target: str = "") -> dict[str, Any]:
                     "show the safe boundary for broader pause decisions without mutating source truth",
                 ],
                 "safe_next_actions": actions,
+                "convenience_write_actions": cached_actions,
                 "boundary": _boundary(),
             },
             cannot_claim=[
@@ -202,7 +214,6 @@ def _safe_plan_card(command: str, *, target: str = "") -> dict[str, Any]:
             mutation_risk="read_only",
             claim_boundary="operator_diagnostic_not_source_evidence",
         ),
-        *cached_actions,
     ]
     return _with_boundary_detail(
         {
@@ -219,6 +230,7 @@ def _safe_plan_card(command: str, *, target: str = "") -> dict[str, Any]:
                 "route scoped quieting to do-not-use-here when the target is a route or ticket",
             ],
             "safe_next_actions": actions,
+            "convenience_write_actions": cached_actions,
             "boundary": _boundary(),
         },
         cannot_claim=[
@@ -306,8 +318,8 @@ def _load_ticket_json(path: str | None) -> dict[str, Any] | None:
 
 def do_not_use_here_payload(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     if not args.target:
-        cached_actions = _last_recall_control_actions("do-not-use-here")
-        fallback_actions = [
+        cached_actions = _convenience_write_actions(_last_recall_control_actions("do-not-use-here"))
+        safe_actions = [
             _template_action(
                 action_id="find_recall_route",
                 label="Find recall route",
@@ -316,6 +328,18 @@ def do_not_use_here_payload(args: argparse.Namespace) -> tuple[dict[str, Any], i
                 why="Use a real cue to get a concrete route id before applying scoped quieting.",
             )
             | {"surface": "recall-route"},
+            foreground_shell_action(
+                action_id="review_control_boundary",
+                label="Review the control frontdoor",
+                command="aippocampus controls --json",
+                why="Use this when choosing between pause, forget, and do-not-use-here.",
+                mutation_risk="read_only",
+                claim_boundary="operator_diagnostic_not_source_evidence",
+            )
+            | {"surface": "control-boundary"},
+        ]
+        write_actions = _convenience_write_actions(
+            [
             _template_action(
                 action_id="quiet_recall_route_here",
                 label="Quiet recall route here",
@@ -336,8 +360,8 @@ def do_not_use_here_payload(args: argparse.Namespace) -> tuple[dict[str, Any], i
                 claim_boundary="feedback_is_not_source_truth",
             )
             | {"surface": "coding-ticket"},
-        ]
-        actions = [*fallback_actions, *cached_actions]
+            ]
+        )
         return (
             _public_payload(
                 {
@@ -348,7 +372,8 @@ def do_not_use_here_payload(args: argparse.Namespace) -> tuple[dict[str, Any], i
                     "ok": False,
                     "control_applied": False,
                     "last_recall_route_choice_count": len(cached_actions),
-                    **canonical_foreground_action_fields(actions[0], safe_next_actions=actions),
+                    **canonical_foreground_action_fields(safe_actions[0], safe_next_actions=safe_actions),
+                    "convenience_write_actions": [*write_actions, *cached_actions],
                     "boundary": _boundary(),
                 }
             ),

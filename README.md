@@ -50,189 +50,60 @@ For role-based documentation paths, use
 
 ## Quick Start
 
-First run should end in one source-backed recall moment, not a diagnostics
-maze. Use the canonical
-[first recall decision card](docs/guides/first-recall-decision-card.md) when a
-human or agent needs the shortest safe path.
+First run should end in one useful decision card, then one source-backed recall
+route. The fuller guided version is
+[First Recall Decision Card](docs/guides/first-recall-decision-card.md); role
+paths live in [Start Here](docs/start-here.md).
 
-If the `aippocampus` command already exists from a source checkout or editable
-install, start with the foreground chooser. When no clean source is registered,
-run one explicit source-registration command before recall; status cards are
-read-only checks, not registration.
-`aippocampus start --json` labels `first_recall_readiness`: steady-state recall
-can begin when source is ready, while cold-start/setup paths may need
-registration or index preparation before private memory feels fast.
+If `aippocampus` already exists from a source checkout or editable install,
+start here:
 
 ```sh
 aippocampus start --json
-aippocampus onboard --provider codex --cwd . --json
 aippocampus agent recall "old decision or handoff cue" --json
 aippocampus agent deepen --request 1 --last-recall --json
-aippocampus export --json
-aippocampus sync --json
 ```
 
-Use `aippocampus onboard --provider claude-code --cwd . --json` instead when
-Claude Code transcripts are the intended source. Use
-`aippocampus import conversation --format generic-jsonl --input ./conversation.jsonl --json`
-only with a user-selected visible-message export file. After a successful
-deepen, `export` and `sync` are the carry-forward choices for the next thread,
-device, or project.
+`start` is the foreground chooser. If it says source is missing or stale, stay
+read-only until the user agrees to register local history:
+
+```sh
+aippocampus onboard --provider auto --status --json
+aippocampus onboard --provider codex --dry-run --json
+```
+
+After consent, choose the provider path from
+[Start Here](docs/start-here.md) rather than copying a setup matrix out of the
+README. Codex, Claude Code, generic JSONL import, plugin install, hooks,
+export, and sync each have different consent and host boundaries.
 
 If the command does not exist yet, use the no-clone probe first:
 
 ```sh
 uvx aippocampus --help
-uvx aippocampus onboard --provider auto --status
+uvx aippocampus onboard --provider auto --status --json
 ```
 
-The Codex plugin command is a source checkout / editable local package path; the
-`uvx` path is the public package probe. It is Codex-only host integration, not
-source registration. For a user-facing install closeout,
-agents can ask for JSON directly; successful installs return a concise
-public-safe summary:
+That proves the package is reachable without registering private history. If a
+public no-private-data demo is all you need, use the bundled clean source:
 
 ```sh
-aippocampus plugin install --codex --verify --json
+aippocampus search "without pretending it has innate memory" --clean-source-dir ./examples/public-memory-bundle/clean-source --json
 ```
 
-`--compact-json`, `--public`, and `--summary` remain aliases for the same
-public-safe summary. Use `--operator-json` only when you need the full
-marketplace/cache/host-probe detail.
-
-If this machine is trusted for ambient continuity, make hook/action-hint setup
-the visible next setup choice after plugin verification and the first route.
-Hooks are never installed silently, and rollback stays explicit:
-
-```sh
-aippocampus update apply --surface hooks
-```
-
-```sh
-aippocampus plugin uninstall --codex
-aippocampus hooks prompt uninstall
-aippocampus hooks lifecycle uninstall
-```
-
-Then make the public-safe demo receipt visible when you need a no-private-data
-example. Exact phrase search is useful, but it should not replace the core
-agent continuity path. The short public walkthrough lives in
-[Demo Scenarios](docs/guides/demo-scenarios.md#first-useful-recall-demo):
-
-```sh
-aippocampus agent recall "AIppocampus continuity without innate memory" --cwd . --clean-source-dir ./examples/public-memory-bundle/clean-source --json
-aippocampus agent deepen --request 1 --last-recall --json
-```
-
-Use exact search as the fallback/proof lane when the user remembers exact
-wording or the recall route is blocked.
-
-For the felt product shape after that first route, read
+Exact search is the proof lane when the user remembers wording; agent
+recall/deepen is the continuity lane when the user has a cue. For the short
+public walkthrough, use
+[10-Minute Public Path](docs/guides/ten-minute-public-path.md). For the felt
+product shape after the first route, read
 [Magic Moments, Claim-Bounded](docs/evidence/magic-moments.md). For the current
 proof map, use the [Can-Claim Ladder](docs/evidence/can-claim-ladder.md). For a
 compact origin and current-value trail, use the
 [Public Provenance And Current Value Ledger](docs/evidence/public-provenance-ledger.md).
 
-External-model semantic/background routes are a separate first-run choice. Ask
-once whether to enable an LLM-backed route with a key; if the answer is no or
-the key is missing, keep the no-key source-backed search, MCP, plugin, and hook
-path useful.
-
-For a no-clone or non-Codex probe, use the read-only package check, then try a
-source-backed moment if local source is already registered:
-
-```sh
-uvx aippocampus --help
-uvx aippocampus agent recall "old decision or handoff cue" --json
-uvx aippocampus agent deepen --request 1 --last-recall --json
-uvx aippocampus search "a distinctive old phrase"
-```
-
-Use the search line when the user remembers exact wording or the route is
-blocked.
-
-If source is missing or stale, use the status card:
-
-```sh
-uvx aippocampus onboard --provider auto --status
-```
-
-The status command is read-only. It reports a provider-matrix readiness view;
-`auto` may list Codex, Claude Code, and generic JSONL providers, but it does
-not silently register every provider.
-
-Only after you explicitly agree to register local history, choose the matching
-provider path and then ask for one old source-backed continuity route:
-
-```sh
-# Codex: local history plus the most complete hook-capable host path.
-uvx aippocampus onboard --provider codex --dry-run --json
-uvx aippocampus onboard --provider codex --cwd . --json
-
-# Claude Code: local transcript onboarding plus scoped explicit hooks.
-uvx aippocampus onboard --provider claude-code --dry-run --json
-uvx aippocampus onboard --provider claude-code --cwd . --json
-
-# Generic visible-message export from a user-selected local JSONL file.
-uvx aippocampus import conversation --format generic-jsonl --input ./conversation.jsonl --dry-run --json
-uvx aippocampus import conversation --format generic-jsonl --input ./conversation.jsonl --json
-
-uvx aippocampus agent recall "old decision or handoff cue" --json
-uvx aippocampus agent deepen --request 1 --last-recall --json
-uvx aippocampus export --json
-uvx aippocampus sync --json
-```
-
-Manual search demonstrates the source substrate; agent recall/deepen is the
-foreground continuity route. Codex is currently the complete
-AIppocampus prompt/lifecycle hook path: prompt hooks notice recall scents as a
-conversation starts, and lifecycle hooks refresh clean source and indexes after
-session events. Claude Code supports local-history onboarding, MCP/project-skill
-setup, and scoped explicit AIppocampus hook handlers for `UserPromptSubmit` and
-`Stop`; see the
-[Ecosystem Integration Matrix](docs/guides/ecosystem-integration-matrix.md)
-and [Claude Code MCP guide](docs/guides/setup/claude-code-mcp.md). Do not claim
-real-host firing, `PostToolUse` / `PostToolBatch` capture, compaction hook
-utility, all Claude Code versions, or broad native ambient quality without
-source/event evidence. Hooks are never installed silently; review status first,
-then install them only when this machine is allowed to let AIppocampus touch the
-relevant host settings. Codex and Claude Code use different hook surfaces:
-
-```sh
-# Codex prompt/lifecycle hooks.
-aippocampus update status
-aippocampus update apply --surface hooks
-
-# Claude Code scoped UserPromptSubmit/Stop hooks.
-aippocampus hooks claude-code status --json
-aippocampus hooks claude-code dry-run --json
-aippocampus hooks claude-code install --json
-```
-
-Rollback stays visible:
-
-```sh
-aippocampus hooks prompt uninstall
-aippocampus hooks lifecycle uninstall
-```
-
-Local hook install does not require an external model key. Reviewed foreground
-cards from semantic, warm, subconscious, or Dream-style systems can be part of
-the ordinary continuity experience when local setup and provider consent allow
-it. Their output remains navigation/scent, not source-backed evidence, until
-the original source is reopened.
-
-The short readiness ladder is:
-
-- Source search ready: onboarding and `search` can find source-backed snippets.
-- Ambient hooks ready: prompt/lifecycle hooks can notice and refresh continuity.
-- Active recall ready: MCP/progressive recall is wired for agent source reopen.
-- Semantic/Dream ready: provider-backed background work is configured and
-  visible to the process that will run it.
-
-`aippocampus update status` prints those first-run readiness labels so users can
-see whether they are in manual source-search mode, ambient continuity mode, or a
-deeper opt-in route.
+After a useful deepen, `aippocampus export --json` and
+`aippocampus sync --json` are the carry-forward checks for the next thread,
+device, or project.
 
 Good first queries are an exact phrase, a project cue, or a time cue such as
 `recent` / `last month`. Exact hits are source-backed snippets. Project/time
@@ -240,10 +111,10 @@ cues are candidate navigation until AIppocampus shows a source-backed snippet.
 Do not publish or commit raw rollouts, registry exports, `.aippocampus/` output,
 API keys, cookies, or sync bundles while following the quick path.
 
-If you are deciding which AIppocampus surface another tool should depend on,
-use the [10-minute public path](docs/guides/ten-minute-public-path.md).
-If you are deciding whether a feature belongs in the low-friction personal path
-or in governed/high-risk opt-in behavior, use
+When you are choosing an integration surface, see the
+[Ecosystem Integration Matrix](docs/guides/ecosystem-integration-matrix.md).
+When you are deciding whether a feature belongs in the low-friction personal
+path or in governed/high-risk opt-in behavior, use
 [Product Profiles](docs/architecture/host/product-profiles.md).
 Repository checks for maintainers live in
 [Operator And Maintainer Paths](#operator-and-maintainer-paths).

@@ -408,8 +408,9 @@ def foreground_action_contract_violations(payload: Mapping[str, object]) -> list
     foreground = payload.get("foreground_action")
     agent_next = payload.get("agent_next_action")
     safe_actions = payload.get("safe_next_actions")
+    contract = payload.get("foreground_action_contract")
     if foreground is None:
-        if agent_next is not None:
+        if agent_next is not None or contract == FOREGROUND_ACTION_CONTRACT_VERSION:
             violations.append(
                 {
                     "field": "foreground_action",
@@ -426,6 +427,7 @@ def foreground_action_contract_violations(payload: Mapping[str, object]) -> list
         )
         return violations
     foreground_dict = dict(foreground)
+    violations.extend(_foreground_action_shape_violations(foreground, field="foreground_action"))
     if isinstance(agent_next, Mapping) and dict(agent_next) != foreground_dict:
         violations.append(
             {
@@ -434,14 +436,61 @@ def foreground_action_contract_violations(payload: Mapping[str, object]) -> list
             }
         )
     if isinstance(safe_actions, Sequence) and not isinstance(safe_actions, str):
-        first = next((item for item in safe_actions if isinstance(item, Mapping)), None)
-        if isinstance(first, Mapping) and dict(first) != foreground_dict:
+        first = next(iter(safe_actions), None)
+        if not isinstance(first, Mapping):
+            violations.append(
+                {
+                    "field": "safe_next_actions.0",
+                    "reason": "primary_safe_action_must_be_object",
+                }
+            )
+        elif dict(first) != foreground_dict:
             violations.append(
                 {
                     "field": "safe_next_actions.0",
                     "reason": "primary_safe_action_must_match_foreground_action",
                 }
             )
+        else:
+            violations.extend(_foreground_action_shape_violations(first, field="safe_next_actions.0"))
+    return violations
+
+
+def _foreground_action_shape_violations(action: Mapping[str, object], *, field: str) -> list[dict[str, str]]:
+    """Return minimum usability violations for one foreground action card.
+
+    Alias equality protects machines from precedence ambiguity, but it does not
+    stop a skeletal card from reaching the foreground. The v1 card must also
+    tell the next agent what the action is, why it is safe/useful, and what risk
+    and claim boundary it carries. Healthy no-work cards use an explicit
+    continue/no-op marker instead of pretending to have a shell command.
+    """
+
+    violations: list[dict[str, str]] = []
+    for key in ("id", "label", "mutation_risk", "claim_boundary", "why"):
+        value = action.get(key)
+        if not isinstance(value, str) or not value.strip():
+            violations.append(
+                {
+                    "field": f"{field}.{key}",
+                    "reason": "required_foreground_action_field_missing",
+                }
+            )
+    has_target = any(
+        isinstance(action.get(key), str) and str(action.get(key)).strip()
+        for key in ("command", "command_template", "tool_name")
+    )
+    has_continue_marker = any(
+        bool(action.get(key))
+        for key in ("continue_without_command", "no_op", "no_command_needed")
+    )
+    if not has_target and not has_continue_marker:
+        violations.append(
+            {
+                "field": field,
+                "reason": "foreground_action_needs_target_or_explicit_continue_marker",
+            }
+        )
     return violations
 
 

@@ -26,6 +26,16 @@ class LearningLoopBehavioralRecordsCliTests(unittest.TestCase):
             check=False,
         )
 
+    def test_replay_missing_source_uses_foreground_action_contract(self) -> None:
+        proc = self.run_cli_with_env("learning", "replay", "--json", env=os.environ.copy())
+
+        self.assertEqual(proc.returncode, 2, proc.stderr)
+        payload = json.loads(proc.stdout)
+        self.assertEqual(payload["status"], "needs_source_selection")
+        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
+        self.assertEqual(payload["foreground_action"], payload["agent_next_action"])
+        self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
+
     def test_behavioral_records_are_discoverable_and_purgeable(self) -> None:
         tmp_ctx = tempfile.TemporaryDirectory()
         self.addCleanup(tmp_ctx.cleanup)
@@ -64,6 +74,12 @@ class LearningLoopBehavioralRecordsCliTests(unittest.TestCase):
         self.assertIn("effectiveness_ledger", candidate_ids)
         self.assertIn("recall_outcome_feedback", candidate_ids)
         self.assertIn("agent_route_feedback", candidate_ids)
+        self.assertEqual(discover_payload["foreground_action_contract"], "foreground-action-v1")
+        discover_action_ids = [action["id"] for action in discover_payload["safe_next_actions"]]
+        self.assertEqual(
+            discover_action_ids.count(discover_payload["foreground_action"]["id"]),
+            1,
+        )
 
         self.assertEqual(inventory.returncode, 0, inventory.stderr)
         inventory_payload = json.loads(inventory.stdout)
@@ -71,9 +87,31 @@ class LearningLoopBehavioralRecordsCliTests(unittest.TestCase):
         self.assertEqual(records["effectiveness_ledger"]["row_count"], 1)
         self.assertEqual(records["recall_outcome_feedback"]["row_count"], 1)
         self.assertFalse(inventory_payload["privacy_boundary"]["source_truth"])
+        self.assertEqual(inventory_payload["foreground_action_contract"], "foreground-action-v1")
+        self.assertEqual(
+            inventory_payload["foreground_action"]["id"],
+            "review_behavioral_records_inventory",
+        )
+        self.assertEqual(
+            inventory_payload["safe_next_actions"][1]["id"],
+            "preview_behavioral_records_purge",
+        )
+        self.assertTrue(
+            all(action["mutation_risk"] == "read_only" for action in inventory_payload["safe_next_actions"])
+        )
 
         self.assertEqual(dry_run.returncode, 0, dry_run.stderr)
-        self.assertEqual(json.loads(dry_run.stdout)["status"], "dry_run")
+        dry_run_payload = json.loads(dry_run.stdout)
+        self.assertEqual(dry_run_payload["status"], "dry_run")
+        self.assertEqual(dry_run_payload["foreground_action_contract"], "foreground-action-v1")
+        self.assertTrue(
+            all(action["mutation_risk"] == "read_only" for action in dry_run_payload["safe_next_actions"])
+        )
+        self.assertEqual(
+            dry_run_payload["write_next_actions"][0]["id"],
+            "confirm_behavioral_records_purge",
+        )
+        self.assertTrue(dry_run_payload["write_next_actions"][0]["requires_explicit_user_confirmation"])
         self.assertTrue(ledger.exists())
         self.assertTrue(outcome.exists())
 
@@ -92,6 +130,8 @@ class LearningLoopBehavioralRecordsCliTests(unittest.TestCase):
         confirmed_payload = json.loads(confirmed.stdout)
         self.assertEqual(confirmed_payload["status"], "purged")
         self.assertEqual(confirmed_payload["deleted_count"], 2)
+        self.assertEqual(confirmed_payload["foreground_action_contract"], "foreground-action-v1")
+        self.assertNotIn("write_next_actions", confirmed_payload)
         self.assertFalse(ledger.exists())
         self.assertFalse(outcome.exists())
 
