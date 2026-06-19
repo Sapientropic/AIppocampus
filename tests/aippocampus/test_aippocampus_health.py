@@ -843,11 +843,7 @@ class AippocampusHealthTests(unittest.TestCase):
                 ),
             ):
                 payload = health.build_health_report(
-                    health.HealthOptions(
-                        cwd=workspace,
-                        registry_dir=registry_dir,
-                        **paths,
-                    )
+                    health.HealthOptions(cwd=workspace, registry_dir=registry_dir, include_operator_diagnostics=True, **paths)
                 )
 
         action_ids = [item["id"] for item in payload["recommended_actions"]]
@@ -895,11 +891,7 @@ class AippocampusHealthTests(unittest.TestCase):
                 mock.patch.object(health, "locate_rollout", return_value=rollout),
             ):
                 payload = health.build_health_report(
-                    health.HealthOptions(
-                        cwd=workspace,
-                        registry_dir=registry_dir,
-                        **paths,
-                    )
+                    health.HealthOptions(cwd=workspace, registry_dir=registry_dir, include_operator_diagnostics=True, **paths)
                 )
 
         confounds = payload["host_state_confounds"]

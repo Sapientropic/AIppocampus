@@ -10,6 +10,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
+from aippocampus_runtime.mcp.public_projection import compact_health_payload  # noqa: E402
 from aippocampus_runtime.recall import agent_continuity, foreground_action_card  # noqa: E402
 
 
@@ -186,3 +187,43 @@ class ForegroundActionCardTests(unittest.TestCase):
 
         self.assertEqual(metrics["foreground_action_card_audit_key_leak_count"], 1)
         self.assertTrue(metrics["foreground_action_card_profile_ok"])
+
+    def test_compact_health_separates_workspace_maintenance_from_recall_availability(self) -> None:
+        compact = compact_health_payload(
+            {
+                "ok": True,
+                "status": "ready_with_freshness_degraded",
+                "product_readiness": {
+                    "status": "ready_with_freshness_degraded",
+                    "ready": True,
+                    "ordinary_first_recall_usable": True,
+                    "first_recall_phase": "steady_state_latest_degraded",
+                    "cold_start_expected": False,
+                    "workspace_source_maintenance_required": True,
+                    "continuity_recall_available": True,
+                    "maintenance_recommended": True,
+                    "maintenance_required_before_recall": False,
+                    "blocking_action_count": 0,
+                    "high_severity_action_count": 1,
+                },
+                "recommended_actions": [
+                    {
+                        "id": "build_clean_source",
+                        "severity": "critical",
+                        "reason": "workspace clean source missing",
+                        "facade_command": "aippocampus maintenance plan --summary-json",
+                    }
+                ],
+                "freshness": {"latest_visible_gap": True},
+            }
+        )
+
+        self.assertTrue(compact["ok"])
+        self.assertTrue(compact["ordinary_first_recall_usable"])
+        self.assertFalse(compact["blocks_first_recall"])
+        self.assertTrue(compact["workspace_source_maintenance_required"])
+        self.assertTrue(compact["continuity_recall_available"])
+        self.assertEqual(compact["agent_next_action"]["id"], "continue_with_nonblocking_maintenance")
+        self.assertIn("before_exact_latest_claims", compact["agent_next_action"])
+        self.assertEqual(compact["readiness_card"]["state"], "ready_with_freshness_degraded")
+        self.assertFalse(compact["readiness_card"]["blocks_first_recall"])

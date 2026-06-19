@@ -14,6 +14,9 @@ import os
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.contracts import (
+    canonical_foreground_action_fields,
+)
 from aippocampus_runtime.mcp import server as mcp_server
 from aippocampus_runtime.mcp.recall_navigation import NAVIGATION_SCHEMA_VERSION
 
@@ -21,6 +24,24 @@ SCHEMA_VERSION = 1
 
 
 def cue_required_recovery_card() -> dict[str, Any]:
+    primary = {
+        "id": "run_smoke_recall_funnel",
+        "label": "Run recall funnel smoke diagnostic",
+        "command_template": 'aippocampus smoke recall-funnel "{cue}" --json',
+        "requires": ["cue"],
+        "template_only": True,
+        "mutation_risk": "read_only",
+        "claim_boundary": "smoke_diagnostic_not_source_evidence",
+    }
+    ordinary = {
+        "id": "ordinary_agent_recall",
+        "label": "Use ordinary continuity recall",
+        "command_template": 'aippocampus agent recall "{cue}" --json',
+        "requires": ["cue"],
+        "template_only": True,
+        "mutation_risk": "read_only",
+        "claim_boundary": "no_claim_before_reopen",
+    }
     return {
         "schema_version": SCHEMA_VERSION,
         "kind": "aippocampus_recall_funnel_smoke_recovery",
@@ -31,24 +52,7 @@ def cue_required_recovery_card() -> dict[str, Any]:
             "code": "cue_required",
             "message": "Provide a cue before running the recall funnel smoke diagnostic.",
         },
-        "safe_next_actions": [
-            {
-                "id": "run_smoke_recall_funnel",
-                "label": "Run recall funnel smoke diagnostic",
-                "command_template": 'aippocampus smoke recall-funnel "<cue>" --json',
-                "requires": ["cue"],
-                "mutation_risk": "read_only",
-                "claim_boundary": "smoke_diagnostic_not_source_evidence",
-            },
-            {
-                "id": "ordinary_agent_recall",
-                "label": "Use ordinary continuity recall",
-                "command_template": 'aippocampus agent recall "<cue>" --json',
-                "requires": ["cue"],
-                "mutation_risk": "read_only",
-                "claim_boundary": "no_claim_before_reopen",
-            },
-        ],
+        **canonical_foreground_action_fields(primary, safe_next_actions=[primary, ordinary]),
         "source_boundary": {
             "claim_boundary": "smoke output is diagnostic, not source evidence",
             "source_backed_claim_allowed": False,

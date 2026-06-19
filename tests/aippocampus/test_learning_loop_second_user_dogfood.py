@@ -197,9 +197,15 @@ class LearningLoopSecondUserDogfoodTests(unittest.TestCase):
         template_payload = json.loads(template.stdout)
         self.assertEqual(template_payload["mode"], "repro_package_template")
         self.assertIn("template", template_payload)
+        self.assertEqual(template_payload["foreground_action_contract"], "foreground-action-v1")
+        self.assertEqual(template_payload["foreground_action"], template_payload["agent_next_action"])
+        self.assertEqual(template_payload["safe_next_actions"][0], template_payload["foreground_action"])
         self.assertEqual(
-            template_payload["agent_next_action"]["primary"]["command"],
+            template_payload["agent_next_action"]["command"],
             "aippocampus repro package --input-json repro-input.json --json",
+        )
+        self.assertTrue(
+            template_payload["compatibility"]["legacy_nested_agent_next_action_retired"]
         )
         encoded_template = json.dumps(template_payload, ensure_ascii=False)
         self.assertIn(
@@ -211,6 +217,29 @@ class LearningLoopSecondUserDogfoodTests(unittest.TestCase):
             encoded_template,
         )
         self.assertNotIn("type repro-input.json |", encoded_template)
+
+        recovery = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "aippocampus_runtime.cli.facade",
+                "repro",
+                "package",
+                "--json",
+            ],
+            cwd=SCRIPTS,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(recovery.returncode, 2)
+        recovery_payload = json.loads(recovery.stdout)
+        self.assertEqual(recovery_payload["mode"], "repro_package_recovery")
+        self.assertEqual(recovery_payload["foreground_action_contract"], "foreground-action-v1")
+        self.assertEqual(recovery_payload["foreground_action"], recovery_payload["agent_next_action"])
+        self.assertEqual(recovery_payload["agent_next_action"]["id"], "show_repro_package_template")
 
         stdin_payload = {
             "surface": "agent_recall",
@@ -241,6 +270,10 @@ class LearningLoopSecondUserDogfoodTests(unittest.TestCase):
         packaged_payload = json.loads(packaged.stdout)
         encoded = json.dumps(packaged_payload, ensure_ascii=False, sort_keys=True)
         self.assertEqual(packaged_payload["mode"], "repro_package")
+        self.assertEqual(packaged_payload["foreground_action_contract"], "foreground-action-v1")
+        self.assertEqual(packaged_payload["foreground_action"], packaged_payload["agent_next_action"])
+        self.assertEqual(packaged_payload["safe_next_actions"][0], packaged_payload["foreground_action"])
+        self.assertEqual(packaged_payload["foreground_action"]["id"], "review_public_safe_repro_package")
         self.assertNotIn("PRIVATE_USER_PROMPT_SHOULD_NOT_SURVIVE", encoded)
 
     def test_learning_repro_package_missing_input_json_returns_recovery_card(self) -> None:

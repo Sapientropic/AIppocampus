@@ -266,6 +266,9 @@ class RecallFunnelSmokeTests(unittest.TestCase):
         self.assertFalse(payload["ok"])
         self.assertTrue(payload["cue_required"])
         self.assertEqual(payload["error"]["code"], "cue_required")
+        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
+        self.assertEqual(payload["foreground_action"], payload["agent_next_action"])
+        self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
         self.assertIn("diagnostic", payload["source_boundary"]["claim_boundary"])
         self.assertIn("not source evidence", payload["source_boundary"]["claim_boundary"])
 
@@ -273,8 +276,9 @@ class RecallFunnelSmokeTests(unittest.TestCase):
         ordinary_action = payload["safe_next_actions"][1]
         self.assertNotIn("command", smoke_action)
         self.assertNotIn("command", ordinary_action)
-        self.assertIn("<cue>", smoke_action["command_template"])
-        self.assertIn("<cue>", ordinary_action["command_template"])
+        self.assertIn("{cue}", smoke_action["command_template"])
+        self.assertIn("{cue}", ordinary_action["command_template"])
+        self.assertNotIn("<cue>", json.dumps(payload, ensure_ascii=False))
         self.assertIn("cue", smoke_action["requires"])
         self.assertIn("cue", ordinary_action["requires"])
 
