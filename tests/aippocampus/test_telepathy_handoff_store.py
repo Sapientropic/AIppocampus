@@ -475,7 +475,12 @@ class TelepathyHandoffStoreTests(unittest.TestCase):
         self.assertEqual(missing_json.returncode, 1)
         missing_payload = json.loads(missing_json.stdout)
         self.assertEqual(missing_payload["error"]["code"], "handoff_not_found")
-        self.assertIn("telepathy list --status all", missing_payload["agent_next_action"])
+        self.assertEqual(missing_payload["foreground_action_contract"], "foreground-action-v1")
+        self.assertEqual(missing_payload["agent_next_action"], missing_payload["foreground_action"])
+        self.assertEqual(missing_payload["safe_next_actions"][0], missing_payload["foreground_action"])
+        self.assertEqual(missing_payload["foreground_action"]["id"], "list_telepathy_handoffs")
+        self.assertIn("telepathy list --status all", missing_payload["foreground_action"]["command"])
+        self.assertNotIn("follow_up_commands", missing_payload)
         self.assertIn("next:", missing_text.stdout)
         self.assertIn("telepathy list --status all", missing_text.stdout)
 

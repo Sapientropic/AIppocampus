@@ -38,9 +38,20 @@ class TaskOrientationPacketTests(unittest.TestCase):
         self.assertTrue(packet["source_boundary"]["navigation_not_truth"])
         self.assertFalse(packet["source_boundary"]["raw_source_text_serialized"])
         self.assertFalse(packet["source_boundary"]["local_paths_serialized"])
-        self.assertLessEqual(len(packet["cannot_claim"]), 3)
-        self.assertLessEqual(packet["metrics"]["foreground_json_bytes"], task_orientation.FOREGROUND_BYTE_BUDGET)
-        self.assertFalse(packet["metrics"]["foreground_too_heavy"])
+        self.assertIn("product_boundary", packet)
+        self.assertIn("operator_detail_command", packet)
+        self.assertNotIn("cannot_claim", packet)
+        self.assertNotIn("red_lines", packet)
+        self.assertNotIn("foreground_json_bytes", packet["metrics"])
+        self.assertNotIn("foreground_byte_budget", packet["metrics"])
+        full_packet = task_orientation.build_task_orientation_packet(
+            "Land Task Orientation Packets across agent recall, AIppo, and issue work guard",
+            project="AIppocampus",
+            detail="full",
+        )
+        self.assertIn("cannot_claim", full_packet)
+        self.assertIn("red_lines", full_packet)
+        self.assertIn("foreground_json_bytes", full_packet["metrics"])
         self.assertNotIn("trust_taxonomy", packet["active_path_packet"])
         self.assertNotIn("active_path_packet_proves_memory_fact", encoded)
         self.assertEqual(executable_command_violations(packet), [])
@@ -93,8 +104,12 @@ class TaskOrientationPacketTests(unittest.TestCase):
         self.assertTrue(all("effectiveness_feedback" in item for item in constraints))
         self.assertGreaterEqual(packet["metrics"]["learning_constraint_count"], 5)
         self.assertGreaterEqual(packet["metrics"]["suppressed_unripe_constraint_count"], 1)
-        self.assertEqual(packet["red_lines"]["learning_constraint_promoted_to_fact"], 0)
-        self.assertEqual(packet["red_lines"]["unripe_constraint_ranked_as_current"], 0)
+        full_packet = task_orientation.build_task_orientation_packet(
+            "Use learning-loop and AIppo constraints when orienting a new agent to issue work",
+            detail="full",
+        )
+        self.assertEqual(full_packet["red_lines"]["learning_constraint_promoted_to_fact"], 0)
+        self.assertEqual(full_packet["red_lines"]["unripe_constraint_ranked_as_current"], 0)
 
         quiet = task_orientation.build_task_orientation_packet("Fix typo in README")
         self.assertFalse(quiet["issue_work_guard"]["should_pull"])
@@ -247,8 +262,27 @@ class TaskOrientationPacketTests(unittest.TestCase):
         payload = json.loads(result.stdout)
         self.assertEqual(payload["kind"], "aippocampus_task_orientation_packet")
         self.assertEqual(payload["mode"], "orient")
+        self.assertIn("product_boundary", payload)
+        self.assertNotIn("cannot_claim", payload)
+        self.assertNotIn("red_lines", payload)
         self.assertEqual(payload["foreground_action"]["command_template"], 'aippocampus agent recall "{task}" --json')
         self.assertEqual(executable_command_violations(payload), [])
+
+        full_result = facade.run_command(
+            [
+                "agent",
+                "orient",
+                "fresh-thread task orientation for AIppocampus issue work",
+                "--json",
+                "--detail",
+                "full",
+            ],
+            capture_output=True,
+        )
+        full_payload = json.loads(full_result.stdout)
+        self.assertEqual(full_result.exit_code, 0, full_result.stderr)
+        self.assertIn("cannot_claim", full_payload)
+        self.assertIn("red_lines", full_payload)
 
         missing = facade.run_command(["agent", "orient", "--json"], capture_output=True)
         missing_payload = json.loads(missing.stdout)

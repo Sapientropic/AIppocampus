@@ -11,7 +11,10 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime import core
-from aippocampus_runtime.contracts import foreground_shell_action
+from aippocampus_runtime.contracts import (
+    canonical_foreground_action_fields,
+    foreground_shell_action,
+)
 from aippocampus_runtime.hooks.action_hint_cache_records import (
     BLOCKED_STATES,
     CACHE_KIND,
@@ -634,6 +637,106 @@ def refresh_action_hint_cache(
     return result
 
 
+def compact_refresh_cache_report(result: Mapping[str, Any]) -> dict[str, Any]:
+    """Project refresh-cache output as a foreground card.
+
+    The full refresh report is still useful operator material, especially when
+    debugging provider intake or effectiveness-ledger influence. The default
+    CLI path should answer the foreground question first: is anything ready,
+    did this write, and what is the next explicit action?
+    """
+
+    raw_cache_report = result.get("cache")
+    cache_report: Mapping[str, Any] = raw_cache_report if isinstance(raw_cache_report, Mapping) else {}
+    record_count = int(cache_report.get("record_count") or 0)
+    write_requested = bool(result.get("write_requested"))
+    wrote = bool(result.get("wrote"))
+    action_ready = bool(result.get("action_hints_ready", record_count > 0))
+    raw_primary = result.get("foreground_action")
+    if isinstance(raw_primary, Mapping):
+        primary = dict(raw_primary)
+    elif wrote:
+        primary = foreground_shell_action(
+            action_id="check_action_hint_status",
+            label="Check action hint status",
+            command="aippocampus hooks action status --json",
+            why="Cache refresh wrote records; verify hook readiness before relying on hot-path hints.",
+            mutation_risk="read_only",
+            claim_boundary="action_hints_are_navigation_not_source_truth",
+        )
+    elif record_count:
+        primary = foreground_shell_action(
+            action_id="write_action_hint_cache_after_review",
+            label="Write action hint cache after review",
+            command="aippocampus hooks action refresh-cache --write --json",
+            why="Prepared action-time hints exist; write only after the preview matches the intended guidance.",
+            mutation_risk="explicit_local_cache_write",
+            claim_boundary="action_hints_are_navigation_not_source_truth",
+        )
+    else:
+        primary = foreground_shell_action(
+            action_id="review_semantic_guidance_before_cache",
+            label="Review semantic guidance before cache",
+            command="aippocampus learning guidance --json",
+            why="No hot-cache records are ready; inspect guidance before trying to materialize action hints.",
+            mutation_risk="read_only",
+            claim_boundary="learning_guidance_not_source_truth",
+        )
+    safe_actions = [
+        dict(action)
+        for action in (result.get("safe_next_actions") or [])
+        if isinstance(action, Mapping)
+    ]
+    if wrote and not any(action.get("id") == "check_action_hint_status" for action in safe_actions):
+        safe_actions.append(
+            foreground_shell_action(
+                action_id="check_action_hint_status",
+                label="Check action hint status",
+                command="aippocampus hooks action status --json",
+                why="Confirm the installed hook can see the refreshed cache.",
+                mutation_risk="read_only",
+                claim_boundary="action_hints_are_navigation_not_source_truth",
+            )
+        )
+    payload: dict[str, Any] = {
+        "ok": bool(result.get("ok", True)),
+        "kind": result.get("kind") or "aippocampus_action_hint_cache_refresh_report",
+        "schema_version": result.get("schema_version") or SCHEMA_VERSION,
+        "detail": "compact",
+        "write_requested": write_requested,
+        "wrote": wrote,
+        "cache_status": result.get("cache_status"),
+        "cache_path_label": result.get("cache_path_label"),
+        "cache_path_source": result.get("cache_path_source"),
+        "cache_scope": result.get("cache_scope"),
+        "action_hints_ready": action_ready,
+        "readiness": {
+            "record_count": record_count,
+            "provider_counts": dict(cache_report.get("provider_counts") or {}),
+            "write_required_for_hot_path": bool(record_count and not wrote),
+            "cache_contains_records": record_count > 0,
+        },
+        "write_receipt": {
+            "cache_status": result.get("cache_status"),
+            "path_redacted": True,
+        }
+        if write_requested
+        else None,
+        "empty_cache_recovery": result.get("empty_cache_recovery"),
+        "privacy_boundary": {
+            "local_paths_emitted": False,
+            "action_hints_are_navigation_not_source_truth": True,
+            "effectiveness_ledger_detail_deferred": True,
+        },
+        "operator_detail_command": (
+            "aippocampus hooks action refresh-cache --operator-json"
+            + (" --write" if write_requested else "")
+        ),
+    }
+    payload.update(canonical_foreground_action_fields(primary, safe_next_actions=safe_actions))
+    return {key: value for key, value in payload.items() if value is not None}
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("action", choices=["report", "refresh-cache"], nargs="?", default="report")
@@ -653,6 +756,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--now-unix", type=float)
     parser.add_argument("--include-private-paths", action="store_true")
     parser.add_argument("--json", action="store_true", dest="json_output")
+    parser.add_argument("--operator-json", action="store_true")
     args = parser.parse_args(argv)
 
     result = refresh_action_hint_cache(
@@ -682,8 +786,9 @@ def main(argv: list[str] | None = None) -> int:
             if key != "path"
         }
         result["cache_path_redacted"] = True
-    if args.json_output:
-        print(json.dumps(result, ensure_ascii=False, indent=2))
+    if args.json_output or args.operator_json:
+        output = result if args.operator_json else compact_refresh_cache_report(result)
+        print(json.dumps(output, ensure_ascii=False, indent=2))
     else:
         status = result.get("cache_status")
         count = (result.get("cache") or {}).get("record_count") if isinstance(result.get("cache"), Mapping) else 0

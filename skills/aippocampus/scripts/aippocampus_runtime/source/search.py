@@ -666,6 +666,16 @@ or make strong claims beyond the reopened source boundary.""",
         else:
             print(render_search_recovery_text(payload))
         return 2
+    if not search_query_terms(args.patterns):
+        payload = search_recovery_payload()
+        payload["status"] = "needs_input"
+        payload["query_text"] = ""
+        payload["query_terms"] = []
+        if args.json_output:
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
+        else:
+            print(render_search_recovery_text(payload))
+        return 2
 
     result = search_clean_source(
         args.cwd,

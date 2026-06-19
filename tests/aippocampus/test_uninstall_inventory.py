@@ -54,8 +54,19 @@ class UninstallInventoryTests(unittest.TestCase):
             by_id["claude_project_settings"]["purge_mode"],
             "remove_aippocampus_entries",
         )
-        self.assertEqual(
-            payload["foreground_action"]["command"],
+        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
+        self.assertEqual(payload["foreground_action"], payload["agent_next_action"])
+        self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
+        self.assertEqual(payload["foreground_action"]["id"], "review_uninstall_inventory")
+        self.assertEqual(payload["foreground_action"]["mutation_risk"], "read_only")
+        safe_commands = [action.get("command") for action in payload["safe_next_actions"]]
+        self.assertIn("aippocampus uninstall --purge --confirm-host-integration --json", safe_commands)
+        self.assertIn(
+            "aippocampus uninstall --purge --confirm-host-integration --confirm-user-data --json",
+            safe_commands,
+        )
+        self.assertNotEqual(
+            payload["safe_next_actions"][0].get("command"),
             "aippocampus uninstall --purge --confirm-host-integration --json",
         )
         self.assertFalse(payload["privacy"]["local_paths_emitted"])
