@@ -34,12 +34,22 @@ Default V0 budget:
 max packet bytes: 480
 max total foreground bytes: 1800
 max hints: 4
+prompt hook steady-state p95 target: 750 ms
+prompt hook fail-open red line: 3500 ms internal budget / 5000 ms host timeout
+lifecycle hook foreground p95 target: 3000 ms for enqueue/status work
+lifecycle hook fail-open red line: configured lifecycle max-elapsed budget
 ```
 
 These are foreground projection limits, not source-reopen limits.
 [`source-reopen-budget.md`](../source/source-reopen-budget.md) owns latency/cost budgets
 for hot/warm/cold reopen paths. #1129 owns the agent-native recall/deepen/explain
 facade shape.
+
+The latency targets are subjective responsiveness budgets, not universal
+cross-machine performance claims. Fixture and smoke reports must label cold
+startup/import/I/O separately from steady-state hook work, and live status cards
+must report aggregate timing without prompt text, source text, private handles,
+or local paths.
 
 ## Packet Families
 
@@ -66,6 +76,7 @@ false_personalization_count
 anti_nag_violation_count
 source_backed_claim_without_reopen
 debug_or_source_field_leak_count
+foreground_latency_red_line_violation_count
 ```
 
 All must be `0` for the fixture report to pass.
@@ -83,6 +94,42 @@ high-risk claims still require source reopen.
 
 `anti_nag_violation_count` protects recency and dismissal boundaries. A route
 that was just dismissed must not reappear in ordinary foreground output.
+
+## Responsiveness Red Line
+
+Foreground memory can be source-backed and still feel broken if every user
+prompt stalls while hooks import, search, write telemetry, or approach the host
+timeout. Treat responsiveness as a contract peer to packet size and privacy
+red lines.
+
+V0 public-safe timing reports expose:
+
+- `foreground_latency_red_line_violation_count`: hard foreground breakage,
+  including nonzero hook process returns, prompt hook elapsed time above the
+  internal fail-open budget, or hook/wall time close enough to the host timeout
+  to feel unsafe;
+- `hook_elapsed_budget_violation_count`: prompt-hook runtime exceeded the
+  configured internal budget;
+- `host_timeout_violation_count`: subprocess wall time reached the host timeout
+  boundary;
+- `near_host_timeout_event_count`: the subset close enough to timeout to need
+  repair before users feel random stalls;
+- `subjective_prompt_p95_target_miss_count`: advisory target drift for the
+  prompt hook p95, kept separate from hard red-line failure;
+- `wall_ms`, `hook_elapsed_ms`, and `startup_import_io_ms` p50/p95 summaries.
+
+`tools/aippocampus/smoke/smoke_prompt_hook_latency.py` owns the fixture/smoke
+projection. `aippocampus_runtime.hooks.skip_telemetry` owns the live aggregate
+prompt-hook risk path used by hook status cards. Lifecycle hooks must use the
+same public-safe pattern when surfaced: aggregate `elapsed_ms`, budget/timeout
+violations, and foreground-budget skips, never raw event payloads or local
+paths.
+
+Cold start and steady state must not be collapsed. First-run Python imports,
+missing source, missing indexes, or source repair may be slower; reports should
+label those costs as cold-start/setup overhead and avoid claiming steady-state
+p95 from cold samples. Conversely, cold-start honesty must not excuse a prompt
+hook repeatedly approaching the host timeout after artifacts already exist.
 
 ## Usefulness And Attention Gate
 

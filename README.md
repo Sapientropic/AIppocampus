@@ -59,6 +59,9 @@ If the `aippocampus` command already exists from a source checkout or editable
 install, start with the foreground chooser. When no clean source is registered,
 run one explicit source-registration command before recall; status cards are
 read-only checks, not registration.
+`aippocampus start --json` labels `first_recall_readiness`: steady-state recall
+can begin when source is ready, while cold-start/setup paths may need
+registration or index preparation before private memory feels fast.
 
 ```sh
 aippocampus start --json

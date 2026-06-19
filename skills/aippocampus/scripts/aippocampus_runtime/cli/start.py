@@ -12,6 +12,7 @@ from aippocampus_runtime.contracts import (
     FOREGROUND_ACTION_CONTRACT_VERSION,
     foreground_shell_action,
 )
+from aippocampus_runtime.first_recall_readiness import start_first_recall_readiness
 from aippocampus_runtime.onboarding.facade import provider_status_report
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 from aippocampus_runtime.public_output import emit_public_json, emit_public_text
@@ -277,7 +278,7 @@ def _start_actions(cwd: Path, state: dict[str, Any]) -> tuple[str, list[dict[str
 
 
 def build_start_card(cwd: Path, *, clean_source_dir: str | None = None, detail: str = "compact") -> dict[str, Any]:
-    state = {
+    state: dict[str, Any] = {
         "clean_source": _clean_source_state(cwd, clean_source_dir),
         "trusted_codex_candidate": _trusted_codex_candidate(cwd),
         "provider_registration_candidates": _provider_registration_candidates(cwd),
@@ -297,6 +298,13 @@ def build_start_card(cwd: Path, *, clean_source_dir: str | None = None, detail: 
         )
     )
     primary = actions[0]
+    source_state = state["clean_source"]
+    first_recall_readiness = start_first_recall_readiness(
+        decision=decision,
+        source_exists=bool(source_state.get("exists")),
+        source_stale=bool(source_state.get("stale")),
+        action_id=str(primary.get("id") or ""),
+    )
     card: dict[str, Any] = {
         "kind": "aippocampus_start_card",
         "schema_version": SCHEMA_VERSION,
@@ -308,6 +316,8 @@ def build_start_card(cwd: Path, *, clean_source_dir: str | None = None, detail: 
         "agent_next_action": primary,
         "foreground_action": primary,
         "safe_next_actions": actions,
+        "first_recall_readiness": first_recall_readiness,
+        "performance_expectation": first_recall_readiness.get("performance_expectation"),
         "write_boundary": {
             "written": False,
             "no_write_happened": True,
@@ -331,10 +341,18 @@ def _public_start_card(card: dict[str, Any]) -> dict[str, Any]:
 
 def render_text(card: dict[str, Any]) -> str:
     action = card["agent_next_action"]
+    readiness = card.get("first_recall_readiness") if isinstance(card, dict) else {}
+    readiness_status = (
+        str(readiness.get("status") or "")
+        if isinstance(readiness, dict)
+        else ""
+    )
     lines = [
         "AIppocampus start",
         f"decision: {card['decision']}",
     ]
+    if readiness_status:
+        lines.append(f"first recall: {readiness_status}")
     if action.get("command_template"):
         requires = action.get("requires") or []
         if requires:

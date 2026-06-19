@@ -415,6 +415,7 @@ class InstallAmbientRecallHookTests(unittest.TestCase):
         self.assertEqual(result["agent_next_action"]["mutation_risk"], "read_only")
         self.assertEqual(result["foreground_action"], result["agent_next_action"])
         self.assertEqual(result["prompt_hook_latency_risk_status"], "near_host_timeout_risk")
+        self.assertGreaterEqual(result["foreground_latency_red_line_violation_count"], 1)
         action_ids = [action["id"] for action in result["safe_next_actions"]]
         self.assertIn("refresh_prompt_hook_safe_budget", action_ids)
         repair_action = next(action for action in result["safe_next_actions"] if action["id"] == "refresh_prompt_hook_safe_budget")
@@ -429,6 +430,7 @@ class InstallAmbientRecallHookTests(unittest.TestCase):
         )
         risk = operator["prompt_hook_latency_risk"]
         self.assertEqual(risk["status"], "near_host_timeout_risk")
+        self.assertGreaterEqual(risk["foreground_latency_red_line_violation_count"], 1)
         self.assertGreaterEqual(risk["near_timeout_event_count"], 1)
 
     def test_status_last_includes_sanitized_prompt_hook_audit_summary(self) -> None:

@@ -140,6 +140,7 @@ class AippocampusHealthTests(unittest.TestCase):
         payload = json.loads(stdout.getvalue())
         self.assertEqual(code, 0)
         self.assertTrue(payload["ordinary_first_recall_usable"])
+        self.assertEqual((payload["first_recall_phase"], payload["cold_start_expected"]), ("steady_state_available", False))
         self.assertEqual(payload["readiness_card"]["state"], "ready_with_optional_maintenance")
         self.assertTrue(payload["readiness_card"]["usable_now"])
         self.assertFalse(payload["readiness_card"]["blocks_first_recall"])

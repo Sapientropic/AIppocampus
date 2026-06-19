@@ -9,6 +9,10 @@ Goal: install or probe AIppocampus and see one source-backed recall moment.
 
 Choose one ordinary branch first. Each branch below only shows commands that
 make sense under that branch's assumptions.
+Use `aippocampus start --json` to read `first_recall_readiness`: steady-state
+means source exists and ordinary recall/deepen can begin; cold-start/setup means
+preview, registration, or maintenance must happen before private recall is
+honestly ready.
 
 - Codex agent/local setup:
 

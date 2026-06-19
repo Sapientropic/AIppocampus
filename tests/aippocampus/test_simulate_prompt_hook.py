@@ -73,9 +73,55 @@ class SimulatePromptHookSmokeTests(unittest.TestCase):
         self.assertEqual(report["wall_ms"]["p50"], 120.0)
         self.assertEqual(report["hook_elapsed_ms"]["p95"], 40.0)
         self.assertEqual(report["startup_import_io_ms"]["max"], 200.0)
+        self.assertEqual(report["foreground_latency_red_line_violation_count"], 0)
+        self.assertEqual(
+            report["responsiveness_contract"]["privacy_boundary"],
+            "aggregate_timing_only_no_raw_prompt_source_or_local_path",
+        )
         encoded = json.dumps(report, ensure_ascii=False)
         self.assertNotIn("secret raw prompt", encoded)
         self.assertNotIn("private source text", encoded)
+
+    def test_latency_probe_summary_reports_responsiveness_red_lines(self) -> None:
+        rows = [
+            {
+                "wall_ms": 600.0,
+                "hook_elapsed_ms": 90.0,
+                "startup_import_io_ms": 510.0,
+                "decision": "skip",
+                "returncode": 0,
+            },
+            {
+                "wall_ms": 4310.0,
+                "hook_elapsed_ms": 180.0,
+                "startup_import_io_ms": 4130.0,
+                "decision": "skip",
+                "returncode": 0,
+            },
+            {
+                "wall_ms": 5050.0,
+                "hook_elapsed_ms": 3600.0,
+                "startup_import_io_ms": 1450.0,
+                "decision": "skip",
+                "returncode": 0,
+            },
+        ]
+
+        report = latency_smoke.summarize_latency_rows(
+            rows,
+            hook_budget_ms=3500.0,
+            host_timeout_ms=5000.0,
+            subjective_prompt_p95_target_ms=250.0,
+        )
+        contract = report["responsiveness_contract"]
+
+        self.assertEqual(report["foreground_latency_red_line_violation_count"], 2)
+        self.assertEqual(contract["foreground_latency_red_line_violation_count"], 2)
+        self.assertEqual(contract["hook_elapsed_budget_violation_count"], 1)
+        self.assertEqual(contract["host_timeout_violation_count"], 1)
+        self.assertEqual(contract["near_host_timeout_event_count"], 2)
+        self.assertEqual(contract["subjective_prompt_p95_target_miss_count"], 1)
+        self.assertEqual(contract["claim_boundary"].count("universal host latency"), 1)
 
     def test_latency_probe_cli_accepts_hook_budget_switches(self) -> None:
         with mock.patch(
@@ -94,6 +140,12 @@ class SimulatePromptHookSmokeTests(unittest.TestCase):
                     "off",
                     "--search-budget",
                     "0",
+                    "--hook-budget-ms",
+                    "3000",
+                    "--host-timeout-ms",
+                    "4800",
+                    "--subjective-p95-target-ms",
+                    "600",
                     "--json",
                 ]
             )
@@ -103,6 +155,9 @@ class SimulatePromptHookSmokeTests(unittest.TestCase):
         kwargs = run_probe.call_args.kwargs
         self.assertEqual(kwargs["semantic_gate"], "off")
         self.assertEqual(kwargs["search_budget"], 0)
+        self.assertEqual(kwargs["hook_budget_ms"], 3000.0)
+        self.assertEqual(kwargs["host_timeout_ms"], 4800.0)
+        self.assertEqual(kwargs["subjective_prompt_p95_target_ms"], 600.0)
 
 
 if __name__ == "__main__":

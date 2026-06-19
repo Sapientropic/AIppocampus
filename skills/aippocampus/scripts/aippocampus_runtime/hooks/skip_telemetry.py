@@ -147,11 +147,16 @@ def prompt_hook_latency_risk(
         if near_timeout_event_count > 0 or high_budget_count > 0
         else "within_safe_margin"
     )
+    foreground_latency_red_line_violation_count = max(
+        near_timeout_event_count,
+        high_budget_count,
+    )
     return {
         "kind": "aippocampus_prompt_hook_latency_risk",
         "status": status,
         "telemetry_found": True,
         "total_events": int(telemetry.get("total_events") or 0),
+        "foreground_latency_red_line_violation_count": foreground_latency_red_line_violation_count,
         "near_timeout_event_count": near_timeout_event_count,
         "high_internal_budget_event_count": high_budget_count,
         "host_timeout_ms": int(host_timeout_ms),
