@@ -94,20 +94,26 @@ def action_hint_recommended_actions() -> list[dict[str, str]]:
         {
             "id": "refresh_action_hints",
             "label": "Refresh action-hint cache",
+            "why": "A fresh cache keeps action-time route hints useful without making them source evidence.",
             "command": "aippocampus hooks action refresh-cache --write --json",
             "mutation_risk": "explicit_local_cache_write",
+            "claim_boundary": "action_hints_are_navigation_not_source_evidence",
         },
         {
             "id": "install_action_hints",
             "label": "Install action-time hints",
+            "why": "Trusted Codex sessions can use action hints as fail-open navigation for common foreground moves.",
             "command": "aippocampus hooks action install --json",
             "mutation_risk": "writes_local_hooks_config",
+            "claim_boundary": "action_hints_are_navigation_not_source_evidence",
         },
         {
             "id": "rollback_action_hints",
             "label": "Rollback action-time hints",
+            "why": "Rollback removes local hook hints when they are stale, unwanted, or causing foreground friction.",
             "command": "aippocampus hooks action uninstall --json",
             "mutation_risk": "writes_local_hooks_config",
+            "claim_boundary": "action_hints_are_navigation_not_source_evidence",
         },
     ]
 
@@ -274,11 +280,13 @@ def foreground_status_cards(report: dict[str, Any]) -> list[dict[str, Any]]:
         cards.append(
             {
                 "id": "partial_readiness",
+                "label": "Open full update readiness",
                 "status": "slow_checks_deferred",
                 "why": "Foreground status skipped operator freshness sweeps and should not be treated as release-grade readiness.",
                 "command": "aippocampus update status --operator-json",
                 "deferred_components": summary.get("deferred_components") or [],
                 "mutation_risk": "read_only",
+                "claim_boundary": "update_status_not_source_evidence",
             }
         )
     if bool(summary.get("agent_callable_host_ready")) and not bool(
@@ -290,6 +298,7 @@ def foreground_status_cards(report: dict[str, Any]) -> list[dict[str, Any]]:
         cards.append(
             {
                 "id": "current_thread_tool_discovery",
+                "label": "Verify current-thread tools",
                 "status": (
                     "foreground_mcp_runtime_mismatch"
                     if stale
@@ -303,6 +312,8 @@ def foreground_status_cards(report: dict[str, Any]) -> list[dict[str, Any]]:
                     else "The host probe passed, but this foreground thread has not proved it can see and call the AIppocampus tools."
                 ),
                 "command": action["command"],
+                "mutation_risk": "read_only",
+                "claim_boundary": "current_thread_tool_probe_not_source_evidence",
                 **(
                     {"manual_instruction": action["manual_instruction"]}
                     if action.get("manual_instruction")
@@ -326,8 +337,11 @@ def foreground_status_cards(report: dict[str, Any]) -> list[dict[str, Any]]:
         cards.append(
             {
                 "id": "plugin_cache_recovery",
+                "label": "Recover Codex plugin cache",
                 "status": reason,
                 "why": "The plugin package can be current while the installed Codex cache still needs a human-friendly refresh path.",
+                "mutation_risk": "writes_local_plugin_cache",
+                "claim_boundary": "update_status_not_source_evidence",
                 **command_fields,
             }
         )
@@ -364,8 +378,11 @@ def foreground_status_cards(report: dict[str, Any]) -> list[dict[str, Any]]:
         cards.append(
             {
                 "id": "plugin_cache_recovery",
+                "label": "Refresh Codex plugin cache",
                 "status": "plugin_cache_needs_refresh",
                 "why": "The local package is separate from the Codex plugin cache used by the host.",
+                "mutation_risk": "writes_local_plugin_cache",
+                "claim_boundary": "update_status_not_source_evidence",
                 **plugin_command_fields,
             }
         )
@@ -375,6 +392,7 @@ def foreground_status_cards(report: dict[str, Any]) -> list[dict[str, Any]]:
         cards.append(
             {
                 "id": "action_hint_cache" if installed else "action_hint_setup",
+                "label": "Review action-time hints",
                 "status": str(
                     action_hints.get("cache_status")
                     or ("action_hints_cache_not_ready" if installed else "not_installed")
@@ -384,6 +402,7 @@ def foreground_status_cards(report: dict[str, Any]) -> list[dict[str, Any]]:
                 ),
                 "command": action_hint_status_command(),
                 "mutation_risk": "read_only",
+                "claim_boundary": "action_hints_are_navigation_not_source_evidence",
                 "recommended_next_actions": action_hint_recommended_actions(),
             }
         )
@@ -400,6 +419,7 @@ def foreground_status_cards(report: dict[str, Any]) -> list[dict[str, Any]]:
             cards.append(
                 {
                     "id": "core_repair",
+                    "label": "Inspect dirty worktree before repair",
                     "status": "blocked_dirty_worktree",
                     "why": (
                         "The first core repair would write across a dirty git worktree; inspect or plan before applying."
@@ -415,15 +435,20 @@ def foreground_status_cards(report: dict[str, Any]) -> list[dict[str, Any]]:
                     "would_write": dirty_guard.get("would_write") or {},
                     "safe_next_actions": safe_next_actions,
                     "override": dirty_guard.get("override"),
+                    "mutation_risk": "read_only",
+                    "claim_boundary": "update_status_not_source_evidence",
                 }
             )
         else:
             cards.append(
                 {
                     "id": "core_repair",
+                    "label": "Repair core update surface",
                     "status": f"{blocker}_not_ready",
                     "why": "Fix the first core surface before chasing optional plugin or hook polish.",
                     "command": f"aippocampus update apply --surface {blocker}",
+                    "mutation_risk": "writes_local_install_surface",
+                    "claim_boundary": "update_status_not_source_evidence",
                 }
             )
     return cards[:4]
@@ -451,15 +476,22 @@ def post_apply_next_actions(results: list[dict[str, Any]]) -> list[dict[str, Any
         return []
     return [
         {
+            "id": "review_agent_callable_after_apply",
+            "label": "Verify foreground tools after apply",
             "surface": "agent_callable",
             "reason": (
                 "local plugin or hook files changed; the host may need a reload "
                 "before the current foreground thread can see updated tools"
             ),
+            "why": (
+                "Local plugin or hook files changed; the current foreground thread should prove tool visibility again before claiming agent-callable readiness."
+            ),
             "command": (
                 "aippocampus update status --foreground-tools-visible "
                 "--agent-json"
             ),
+            "mutation_risk": "read_only",
+            "claim_boundary": "current_thread_tool_probe_not_source_evidence",
             "manual_instruction": (
                 "Reload Codex Desktop after local plugin or hook files change, then call "
                 "agent_recall and agent_deepen in the foreground thread before rerunning status. "

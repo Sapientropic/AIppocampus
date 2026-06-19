@@ -807,7 +807,7 @@ def _run_append(args: argparse.Namespace, *, text: str, notes_path: Path) -> int
                 print("Next: " + formatted[0], file=sys.stderr)
                 for line in formatted[1:]:
                     print(line, file=sys.stderr)
-        return 0
+        return 2
     cwd_path = Path(args.cwd).resolve()
     current_thread = (
         current_thread_self_note_route(cwd=cwd_path, rollout=args.rollout)

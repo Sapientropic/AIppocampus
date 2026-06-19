@@ -20,6 +20,7 @@ from aippocampus_runtime.cli.human_io import exit_code_for_payload
 from aippocampus_runtime.cli.recovery import action_command_text
 from aippocampus_runtime.contracts import (
     FOREGROUND_ACTION_CONTRACT_VERSION,
+    canonical_foreground_action_fields,
     foreground_recovery_card,
     foreground_shell_action,
     shell_quote,
@@ -47,6 +48,7 @@ from aippocampus_runtime.recall import (
     feedback_events,
     foreground_action_card,
     macro_field_live,
+    macro_foreground,
     macro_live_recall,
     task_orientation,
 )
@@ -699,6 +701,7 @@ def macro_orientation(
     project: str = "AIppocampus",
     macro_state_path: str | Path | None = None,
     cwd: str | Path | None = None,
+    detail: str = "compact",
 ) -> dict[str, Any]:
     projection = _load_macro_projection(
         project=project,
@@ -759,9 +762,21 @@ def macro_orientation(
             },
         ]
         foreground_action = safe_next_actions[0]
+        if detail != "full":
+            return _public_payload(
+                macro_foreground.compact_missing_state_card(
+                    kind=KIND,
+                    schema_version=SCHEMA_VERSION,
+                    macro_packet_schema_version=MACRO_PACKET_SCHEMA_VERSION,
+                    suggested_next=suggested_next,
+                    foreground_action=foreground_action,
+                    safe_next_actions=safe_next_actions,
+                )
+            )
     else:
         suggested_next = "continue_normally"
         foreground_action = None
+    action_fields = canonical_foreground_action_fields(foreground_action, safe_next_actions=safe_next_actions) if isinstance(foreground_action, Mapping) else {}
     result = {
         "kind": KIND,
         "schema_version": SCHEMA_VERSION,
@@ -773,10 +788,7 @@ def macro_orientation(
         "memory_packets": memory_packets,
         "deepen_requests": deepen_requests,
         "suggested_next": suggested_next,
-        "foreground_action_contract": FOREGROUND_ACTION_CONTRACT_VERSION,
-        "foreground_action": foreground_action,
-        "agent_next_action": foreground_action,
-        "safe_next_actions": safe_next_actions,
+        **action_fields,
         "warnings": projection.get("warnings", []),
         "diagnostics": diagnostics,
         "metrics": {
@@ -1177,6 +1189,9 @@ def _operator_aippo_payload_with_foreground_card(
             activation_packet["blocked_by"] = ["task_cue_required"]
     return {
         **payload,
+        "status": guidance_card.get("status", payload.get("status")),
+        "ok": guidance_card.get("ok", payload.get("ok")),
+        **({"error": guidance_card["error"]} if isinstance(guidance_card.get("error"), dict) else {}),
         "activation_packet": activation_packet,
         "foreground_action_contract": guidance_card.get(
             "foreground_action_contract",
@@ -1634,6 +1649,8 @@ def _parser() -> argparse.ArgumentParser:
     macro_parser.add_argument("--macro-state-jsonl")
     macro_parser.add_argument("--init-template", action="store_true")
     macro_parser.add_argument("--explain-schema", action="store_true")
+    macro_parser.add_argument("--detail", choices=["compact", "full"], default="compact")
+    macro_parser.add_argument("--operator-json", action="store_true", help="Emit full macro-orientation audit ledgers.")
     macro_parser.add_argument("--json", action="store_true")
 
     deepen_parser = sub.add_parser(
@@ -1834,7 +1851,7 @@ def main(argv: list[str] | None = None) -> int:
             _json_out(payload)
         else:
             print(render_aippo_human(payload))
-        return 0
+        return 2 if payload.get("status") == "needs_input" else 0
     if args.command == "background":
         cue = args.task_flag or " ".join(args.cue)
         payload = background_findings.background_findings_card(
@@ -1884,6 +1901,7 @@ def main(argv: list[str] | None = None) -> int:
             project=args.project,
             macro_state_path=args.macro_state_jsonl,
             cwd=args.cwd,
+            detail="full" if args.operator_json else args.detail,
         )
         if args.json:
             _json_out(payload)

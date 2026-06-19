@@ -1144,14 +1144,15 @@ class AippocampusCliRecoveryCardTests(unittest.TestCase):
         self.assertNotIn("cannot_claim", provider_payload)
         self.assertIn("boundary_detail", provider_payload)
 
-        self.assertEqual(aippo.returncode, 0, aippo.stderr)
+        self.assertEqual(aippo.returncode, 2, aippo.stderr)
         aippo_payload = json.loads(aippo.stdout)
         self.assertEqual(aippo_payload["foreground_action_contract"], "foreground-action-v1")
+        self.assertEqual(aippo_payload["status"], "needs_input")
         self.assertNotIn("contract_status", aippo_payload)
         self.assertNotIn("match_diagnostics", aippo_payload)
         self.assertNotIn("contract_action", aippo_payload)
-        self.assertIn("operator_detail", aippo_payload)
-        self.assertIn("contract_status", aippo_payload["operator_detail"])
+        self.assertNotIn("operator_detail", aippo_payload)
+        self.assertIn("operator_json_command_template", aippo_payload)
 
     def test_bare_parent_json_commands_return_recovery_or_chooser_cards(self) -> None:
         cases = {

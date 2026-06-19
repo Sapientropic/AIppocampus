@@ -2093,16 +2093,16 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertCanonicalForegroundAction(payload)
         self.assertNotIn("cannot_claim", payload)
         self.assertIn("source_backed_facts", payload["claim_boundary"]["must_reopen_for"])
-        self.assertNotIn("operator_json_command_template", payload)
-        self.assertIn("operator_json_command_template", payload["operator_detail"])
+        self.assertNotIn("operator_detail", payload)
+        self.assertIn("operator_json_command_template", payload)
         self.assertNotIn("operator_json_command", payload)
-        self.assertEqual(payload["operator_detail"]["operator_json_requires"], ["task_cue"])
+        self.assertEqual(payload["operator_json_requires"], ["task_cue"])
         self.assertNotIn("activation_packet", payload)
         self.assertNotIn("metrics", payload)
         self.assertNotIn("red_lines", payload)
         self.assertNotIn("source_refs", encoded)
         self.assertNotIn("candidate_provenance", encoded)
-        self.assertNotIn("task cue", encoded)
+        self.assertNotIn("<task_cue>", encoded)
         self.assertEqual(executable_command_violations(payload), [])
 
     def test_cli_agent_aippo_use_hint_reports_available_clause(self) -> None:
@@ -2114,6 +2114,7 @@ class AgentOptInContinuityTests(unittest.TestCase):
                 "agent",
                 "aippo",
                 "--json",
+                "--operator-json",
                 "fix failing pytest after forgetting ruff",
             ],
             cwd=SCRIPTS,
@@ -2126,21 +2127,18 @@ class AgentOptInContinuityTests(unittest.TestCase):
 
         self.assertEqual(proc.returncode, 0, proc.stderr)
         payload = json.loads(proc.stdout)
-        status = payload["operator_detail"]["contract_status"]
+        card = payload["foreground_guidance_card"]
+        packet = payload["activation_packet"]
 
-        self.assertEqual(payload["foreground_action"]["action_id"], "use_hint")
-        self.assertEqual(payload["foreground_action"]["action_type"], "use_project_working_guidance")
-        self.assertNotIn("arguments", payload["foreground_action"])
-        self.assertNotIn("cannot_claim", payload)
-        self.assertIn("source_backed_facts", payload["claim_boundary"]["must_reopen_for"])
-        self.assertGreaterEqual(status["available_active_clause_count"], 1)
-        self.assertEqual(status["available_active_clause_count"], status["active_clause_count"])
-        self.assertGreaterEqual(status["contract_active_clause_count"], status["active_clause_count"])
-        self.assertIn("active_not_foreground_available_count", status)
-        self.assertEqual(
-            payload["operator_detail"]["match_diagnostics"]["available_active_clause_count"],
-            status["available_active_clause_count"],
-        )
+        self.assertEqual(card["foreground_action"]["id"], "use_hint")
+        self.assertEqual(card["foreground_action"]["action_type"], "use_project_working_guidance")
+        self.assertNotIn("arguments", card["foreground_action"])
+        self.assertNotIn("cannot_claim", card)
+        self.assertIn("source_backed_facts", card["claim_boundary"]["must_reopen_for"])
+        self.assertGreaterEqual(packet["available_active_clause_count"], 1)
+        self.assertEqual(packet["available_active_clause_count"], packet["active_clause_count"])
+        self.assertGreaterEqual(packet["contract_active_clause_count"], packet["active_clause_count"])
+        self.assertIn("active_not_foreground_available_count", packet)
 
     def test_cli_agent_aippo_no_match_recovers_instead_of_use_hint(self) -> None:
         proc = subprocess.run(
@@ -2165,11 +2163,8 @@ class AgentOptInContinuityTests(unittest.TestCase):
         payload = json.loads(proc.stdout)
 
         self.assertEqual(payload["status"], "no_active_contract")
-        self.assertEqual(
-            payload["operator_detail"]["contract_status"]["available_active_clause_count"],
-            0,
-        )
-        self.assertNotEqual(payload["foreground_action"]["action_id"], "use_hint")
+        self.assertNotIn("operator_detail", payload)
+        self.assertNotEqual(payload["foreground_action"]["id"], "use_hint")
         self.assertEqual(payload["foreground_action"]["tool_name"], "agent_recall")
         self.assertIn("no_task_family_match", payload["reason_codes"])
         self.assertEqual(len(payload["reason_codes"]), len(set(payload["reason_codes"])))
@@ -2192,26 +2187,23 @@ class AgentOptInContinuityTests(unittest.TestCase):
             check=False,
         )
 
-        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(proc.returncode, 2, proc.stderr)
         payload = json.loads(proc.stdout)
         encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True)
         action = payload["agent_next_action"]
 
-        self.assertEqual(payload["status"], "no_active_contract")
+        self.assertEqual(payload["status"], "needs_input")
+        self.assertEqual(payload["error"]["code"], "aippo_task_required")
         self.assertCanonicalForegroundAction(payload)
-        self.assertEqual(action["action_id"], "provide_task_cue")
+        self.assertEqual(action["id"], "provide_task_cue")
         self.assertEqual(action["tool_name"], "agent_aippo")
         self.assertEqual(action["requires"], ["task_cue"])
         self.assertEqual(action["blocked_by"], ["task_cue_required"])
-        self.assertEqual(payload["operator_detail"]["contract_status"]["availability_basis"], "task_cue_required")
-        self.assertEqual(
-            payload["operator_detail"]["contract_status"]["blocked_by"],
-            ["task_cue_required"],
-        )
+        self.assertNotIn("operator_detail", payload)
         self.assertNotIn("operator_json_command", payload)
-        self.assertNotIn("operator_json_command_template", payload)
-        self.assertIn("operator_json_command_template", payload["operator_detail"])
-        self.assertNotIn("task cue", encoded)
+        self.assertIn("operator_json_command_template", payload)
+        self.assertEqual(payload["operator_json_requires"], ["task_cue"])
+        self.assertNotIn("<task_cue>", encoded)
         self.assertEqual(executable_command_violations(payload), [])
 
     def test_cli_agent_aippo_operator_json_aligns_no_task_foreground_action(self) -> None:
@@ -2233,11 +2225,13 @@ class AgentOptInContinuityTests(unittest.TestCase):
             check=False,
         )
 
-        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(proc.returncode, 2, proc.stderr)
         payload = json.loads(proc.stdout)
         packet = payload["activation_packet"]
 
-        self.assertEqual(payload["foreground_action"]["action_id"], "provide_task_cue")
+        self.assertEqual(payload["status"], "needs_input")
+        self.assertEqual(payload["error"]["code"], "aippo_task_required")
+        self.assertEqual(payload["foreground_action"]["id"], "provide_task_cue")
         self.assertEqual(packet["next_action"], "provide_task_cue")
         self.assertEqual(packet["contract_next_action"], "stay_silent")
         self.assertEqual(packet["blocked_by"], ["task_cue_required"])
@@ -2273,7 +2267,7 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertIn("product_workflow", payload["activation_packet"]["task_families"])
         self.assertIn("foreground_guidance_card", payload)
         self.assertNotIn("operator_json_command", payload["foreground_guidance_card"])
-        self.assertNotIn("task cue", encoded)
+        self.assertNotIn("<task_cue>", encoded)
         self.assertEqual(executable_command_violations(payload), [])
 
     def test_cli_agent_aippo_core_product_journeys_are_not_empty_contracts(self) -> None:
@@ -2299,7 +2293,7 @@ class AgentOptInContinuityTests(unittest.TestCase):
         payload = json.loads(proc.stdout)
         self.assertEqual(payload["status"], "ok")
         self.assertIn("host_readiness", payload["task_families"])
-        self.assertEqual(payload["foreground_action"]["action_id"], "verify_plugin_mcp_hooks")
+        self.assertEqual(payload["foreground_action"]["id"], "verify_plugin_mcp_hooks")
 
     def test_cli_agent_aippo_product_workflow_terms_are_not_empty_contracts(self) -> None:
         proc = subprocess.run(
@@ -2326,7 +2320,7 @@ class AgentOptInContinuityTests(unittest.TestCase):
         guidance = " ".join(payload["use_guidance"])
         self.assertEqual(payload["status"], "ok")
         self.assertIn("product_workflow", payload["task_families"])
-        self.assertNotEqual(payload["foreground_action"]["action_id"], "stay_silent")
+        self.assertNotEqual(payload["foreground_action"]["id"], "stay_silent")
         self.assertIn("semantic gate", guidance)
 
     def test_cli_agent_aippo_default_output_is_human_guidance(self) -> None:

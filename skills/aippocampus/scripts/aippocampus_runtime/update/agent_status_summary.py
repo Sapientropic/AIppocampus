@@ -37,10 +37,19 @@ def _compact_update_action(
     )
     result = {
         "id": f"review_{surface}",
+        "label": f"Review {surface.replace('_', ' ')}",
         "surface": surface,
         "reason": compact_text(reason, 220),
+        "why": compact_text(reason, 220),
+        "claim_boundary": "update_status_not_source_evidence",
         **command_fields,
     }
+    if not command_fields:
+        result["command"] = "aippocampus update status --operator-json"
+        result["manual_instruction"] = (
+            manual_instruction
+            or "Open the operator status view for the affected update surface before applying repairs."
+        )
     result.setdefault("mutation_risk", "read_only")
     if "manual_instruction" in result:
         result["manual_instruction"] = compact_text(str(result["manual_instruction"]), 220)
@@ -240,9 +249,12 @@ def compact_agent_status_report(
     )
     primary_action = actions[0] if actions else {
         "id": "continue_after_update_status",
+        "label": "Continue after update status",
         "message": "Update status has no foreground setup action; continue normal source-backed work.",
+        "why": "No update status surface is asking for foreground setup or repair.",
         "mutation_risk": "read_only",
         "claim_boundary": "update_status_not_source_evidence",
+        "continue_without_command": True,
     }
     public = {
         "kind": f"aippocampus_update_{report.get('mode') or 'status'}_agent_json",

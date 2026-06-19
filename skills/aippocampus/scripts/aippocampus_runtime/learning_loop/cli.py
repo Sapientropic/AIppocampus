@@ -259,7 +259,7 @@ def discover_history_payload(*, cwd: Path) -> dict[str, Any]:
     }
     action_fields = canonical_foreground_action_fields(
         primary_action,
-        safe_next_actions=[primary_action, *setup_actions],
+        safe_next_actions=_unique_actions(primary_action, *setup_actions),
     )
     return _public_payload(
         _with_boundary_detail(
@@ -530,6 +530,11 @@ def guidance_payload(
 
 
 def replay_needs_source_payload() -> dict[str, Any]:
+    primary_action = _learning_discovery_action()
+    action_fields = canonical_foreground_action_fields(
+        primary_action,
+        safe_next_actions=_unique_actions(primary_action, *_learning_setup_actions()),
+    )
     return _public_payload(
         _with_boundary_detail(
             {
@@ -539,8 +544,7 @@ def replay_needs_source_payload() -> dict[str, Any]:
             "ok": False,
             "status": "needs_source_selection",
             "fixture_input": False,
-            "agent_next_action": _learning_discovery_action(),
-            "safe_next_actions": _learning_setup_actions(),
+            **action_fields,
             "metrics_boundary": {
                 "fixture_metrics_are_not_real_history": True,
                 "real_history_replay_requires_sanitized_events": True,

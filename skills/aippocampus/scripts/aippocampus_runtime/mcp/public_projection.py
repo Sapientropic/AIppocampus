@@ -345,15 +345,14 @@ def compact_health_payload(payload: dict[str, Any]) -> dict[str, Any]:
     if ordinary_usable and all_recommended:
         agent_next_action: dict[str, Any] = {
             "id": "continue_with_nonblocking_maintenance",
+            "label": "Continue recall", "why": "Recall is usable; maintenance is advisory.",
+            "mutation_risk": "read_only", "claim_boundary": "health_not_source", "continue_without_command": True,
             "primary": {
-                "kind": "recall_policy",
                 "ordinary_first_recall_usable": True,
                 "message": "ordinary source-backed recall/search can continue",
             },
         }
-        if (
-            freshness_degraded and exact_latest_action
-        ):
+        if freshness_degraded and exact_latest_action:
             agent_next_action["before_exact_latest_claims"] = _action_command_projection(
                 exact_latest_action
             )
@@ -361,10 +360,7 @@ def compact_health_payload(payload: dict[str, Any]) -> dict[str, Any]:
             agent_next_action["when_idle"] = _storage_summary_projection(
                 storage_cleanup_action,
                 storage_pressure,
-            ) | {
-                "id": "review_storage_gc_summary",
-                "mutation_risk": "read_only",
-            }
+            ) | {"id": "review_storage_gc_summary", "mutation_risk": "read_only"}
     else:
         agent_next_action = (
             promotable_blocking[0]
@@ -373,9 +369,9 @@ def compact_health_payload(payload: dict[str, Any]) -> dict[str, Any]:
             if all_recommended and not ordinary_usable
             else {
                 "id": "no_action",
-                "reason": (
-                    "Memory health is ready; advisory actions can wait unless you are doing local diagnostics."
-                ),
+                "label": "Continue", "why": "Health is ready; no action is needed.",
+                "mutation_risk": "read_only", "claim_boundary": "health_not_source", "continue_without_command": True,
+                "reason": "Memory health is ready; advisory actions can wait unless you are doing local diagnostics.",
             }
         )
     foreground_action = dict(agent_next_action)
@@ -411,6 +407,12 @@ def compact_health_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "output_boundary": "compact_foreground_no_operator_diagnostic_objects",
     }
     foreground_fields = canonical_foreground_action_fields(foreground_action)
+    # Health compact JSON already carries the canonical foreground action and
+    # the legacy agent_next_action alias. A one-item safe_next_actions list is a
+    # byte-for-byte mirror, not an alternate path, and it is the easiest way for
+    # operator health diagnostics to crowd out the foreground budget.
+    if foreground_fields.get("safe_next_actions") == [foreground_fields.get("foreground_action")]:
+        foreground_fields.pop("safe_next_actions", None)
     card.update(foreground_fields)
     return _without_empty(card)
 

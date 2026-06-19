@@ -272,12 +272,20 @@ class AgentSelfNoteTests(unittest.TestCase):
             code = agent_self_note_cli.main(["append", "--json"])
 
         payload = json.loads(stdout.getvalue())
-        self.assertEqual(code, 0)
+        self.assertEqual(code, 2)
+        self.assertEqual(payload["status"], "needs_input")
         self.assertEqual(payload["error"]["code"], "agent_self_note_empty")
+        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
         self.assertIsInstance(payload["agent_next_action"], dict)
+        self.assertEqual(payload["foreground_action"], payload["agent_next_action"])
+        self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
         self.assertEqual(payload["agent_next_action"]["id"], "append_direction_only_note")
         self.assertEqual(payload["agent_next_action"]["requires"], ["note_text"])
         self.assertIn("command_template", payload["agent_next_action"])
+        self.assertIn(
+            "use_source_backed_recall_instead",
+            [action["id"] for action in payload["safe_next_actions"]],
+        )
         self.assertIn("safe_next_actions", payload)
         self.assertNotIn("recovery_actions", payload)
         encoded = json.dumps(payload, ensure_ascii=False)
