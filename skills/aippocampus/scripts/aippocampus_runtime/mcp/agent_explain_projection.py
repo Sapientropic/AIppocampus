@@ -6,6 +6,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from aippocampus_runtime import core
+from aippocampus_runtime.contracts import canonical_foreground_action_fields
 
 
 def _as_dict(value: Any) -> dict[str, Any]:
@@ -43,7 +44,7 @@ def _deepen_action(request_index: int | None, *, last_recall: bool) -> dict[str,
             "id": "deepen_selected_route",
             "tool_name": "agent_deepen",
             "arguments": {"request_index": request_index, "last_recall": True},
-            "cli_command": (
+            "command": (
                 f"aippocampus agent deepen --request {request_index} --last-recall --json"
             ),
             "mutation_risk": "read_only",
@@ -55,7 +56,7 @@ def _deepen_action(request_index: int | None, *, last_recall: bool) -> dict[str,
         "arguments_template": {"query": "{memory_cue}"},
         "requires": ["memory_cue"],
         "template_only": True,
-        "cli_command_template": 'aippocampus agent recall "{memory_cue}" --json',
+        "command_template": 'aippocampus agent recall "{memory_cue}" --json',
         "why": "Compact explain cannot expose local-private handles; recall again and use a request index.",
         "claim_boundary": "no_claim_before_reopen",
     }
@@ -100,13 +101,22 @@ def compact_agent_explain_payload(
     if source.get("status") != "ok":
         primary = action or _deepen_action(request_index, last_recall=last_recall)
         next_action = _as_dict(source.get("agent_next_action")) or primary
-        safe_actions = _as_list(source.get("safe_next_actions")) or [next_action]
+        safe_actions = [
+            dict(item)
+            for item in _as_list(source.get("safe_next_actions"))
+            if isinstance(item, Mapping)
+        ] or [next_action]
         result = _as_dict(source.get("result"))
         error = (
             _as_dict(source.get("error"))
             or _as_dict(result.get("error"))
             or _as_dict(explanation.get("error"))
         )
+        action_fields = canonical_foreground_action_fields(
+            primary,
+            safe_next_actions=safe_actions,
+        )
+        next_action = dict(action_fields["foreground_action"])
         return _without_empty(
             {
                 "detail": "compact",
@@ -117,9 +127,7 @@ def compact_agent_explain_payload(
                 "status": source.get("status"),
                 "ok": source.get("ok", False),
                 "error": error,
-                "foreground_action": primary,
-                "agent_next_action": next_action,
-                "safe_next_actions": safe_actions,
+                **action_fields,
                 "next_safe_action": next_action,
                 "next_safe_action_id": next_action.get("id"),
                 "follow_up_action": source.get("follow_up_action"),
@@ -140,6 +148,8 @@ def compact_agent_explain_payload(
         + "; ".join(foreground_reasons),
         220,
     )
+    action_fields = canonical_foreground_action_fields(primary, safe_next_actions=[primary])
+    next_action = dict(action_fields["foreground_action"])
     return _without_empty(
         {
             "detail": "compact",
@@ -152,11 +162,9 @@ def compact_agent_explain_payload(
             "decision": decision,
             "route_id": explanation.get("route_id"),
             "route_reason": route_reason,
-            "foreground_action": primary,
-            "agent_next_action": primary,
-            "safe_next_actions": [primary],
-            "next_safe_action": primary,
-            "next_safe_action_id": primary.get("id"),
+            **action_fields,
+            "next_safe_action": next_action,
+            "next_safe_action_id": next_action.get("id"),
             "claim_boundary": "navigation_only_until_source_reopened",
             "detail_command": _detail_command(request_index, last_recall=last_recall),
             "output_boundary": "compact_explain_no_macro_diagnostics",

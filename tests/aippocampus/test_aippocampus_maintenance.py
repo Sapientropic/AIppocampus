@@ -437,13 +437,16 @@ class AippocampusMaintenanceTests(unittest.TestCase):
     def test_summary_json_is_bounded_and_omits_full_health_audit(self) -> None:
         health_calls = [{"ok": True, "status": "ok", "recommended_actions": []}]
 
-        def fake_json(cmd: list[str]) -> tuple[int, dict | None, str, str]:
-            if len(cmd) > 2 and cmd[2] == "aippocampus_runtime.health":
-                return 0, health_calls.pop(0), "{}", ""
-            self.fail(f"unexpected JSON command: {cmd}")
+        def fake_probe(cwd: Path) -> tuple[int, dict | None, str]:
+            return 0, health_calls.pop(0), ""
 
         with (
-            mock.patch.object(maintenance, "run_json_checked", side_effect=fake_json),
+            mock.patch.object(maintenance, "read_only_health_probe", side_effect=fake_probe),
+            mock.patch.object(
+                maintenance,
+                "run_json_checked",
+                side_effect=AssertionError("summary card must not run full health subprocess"),
+            ),
             mock.patch("sys.stdout", new=StringIO()) as stdout,
         ):
             code = maintenance.main(
@@ -477,35 +480,62 @@ class AippocampusMaintenanceTests(unittest.TestCase):
         self.assertTrue(payload["command_ok"])
         self.assertTrue(payload["maintenance_ok"])
         self.assertNotIn("health_final", payload)
+        self.assertEqual(payload["health_probe"]["status"], "compact_readiness_probe")
+        self.assertTrue(payload["health_probe"]["full_diagnostics_deferred"])
         self.assertEqual(payload["full_audit_flag"], "--json")
         self.assertEqual(payload["apply_command"], "aippocampus maintenance apply --summary-json")
         self.assertEqual(health_calls, [])
 
-    def test_plan_is_read_only_and_does_not_run_maintenance_actions(self) -> None:
-        seen_modules: list[str] = []
+    def test_summary_json_returns_action_card_when_compact_health_probe_fails(self) -> None:
+        with (
+            mock.patch.object(
+                maintenance,
+                "read_only_health_probe",
+                return_value=(1, None, "health probe timeout"),
+            ),
+            mock.patch.object(
+                maintenance,
+                "run_json_checked",
+                side_effect=AssertionError("failed compact probe must not fall through to full health"),
+            ),
+            mock.patch("sys.stdout", new=StringIO()) as stdout,
+        ):
+            code = maintenance.main(["summary", "--cwd", ".", "--summary-json"])
 
-        def fake_json(cmd: list[str]) -> tuple[int, dict | None, str, str]:
-            seen_modules.append(cmd[2])
-            if cmd[2] == "aippocampus_runtime.health":
-                self.assertIn("--detail", cmd)
-                detail_index = cmd.index("--detail")
-                self.assertEqual(cmd[detail_index + 1], "full")
-                return (
-                    0,
-                    {
-                        "ok": False,
-                        "recommended_actions": [
-                            {"id": "build_clean_source", "severity": "warning"},
-                            {"id": "build_index", "severity": "warning"},
-                        ],
-                    },
-                    "{}",
-                    "",
-                )
-            self.fail(f"unexpected JSON command: {cmd}")
+        payload = json.loads(stdout.getvalue())
+
+        self.assertEqual(code, 1)
+        self.assertEqual(payload["kind"], "aippocampus_maintenance_summary")
+        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
+        self.assertEqual(payload["foreground_action"], payload["agent_next_action"])
+        self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
+        self.assertEqual(payload["health_probe"]["status"], "failed")
+        self.assertIn("health probe timeout", payload["health_probe"]["message"])
+
+    def test_plan_is_read_only_and_does_not_run_maintenance_actions(self) -> None:
+        probe_calls: list[Path] = []
+
+        def fake_probe(cwd: Path) -> tuple[int, dict | None, str]:
+            probe_calls.append(cwd)
+            return (
+                0,
+                {
+                    "ok": False,
+                    "recommended_actions": [
+                        {"id": "build_clean_source", "severity": "warning"},
+                        {"id": "build_index", "severity": "warning"},
+                    ],
+                },
+                "",
+            )
 
         with (
-            mock.patch.object(maintenance, "run_json_checked", side_effect=fake_json),
+            mock.patch.object(maintenance, "read_only_health_probe", side_effect=fake_probe),
+            mock.patch.object(
+                maintenance,
+                "run_json_checked",
+                side_effect=AssertionError("read-only plan must not run full health subprocess"),
+            ),
             mock.patch("sys.stdout", new=StringIO()) as stdout,
         ):
             code = maintenance.main(
@@ -521,7 +551,7 @@ class AippocampusMaintenanceTests(unittest.TestCase):
 
         payload = json.loads(stdout.getvalue())
         self.assertEqual(code, 0)
-        self.assertEqual(seen_modules, ["aippocampus_runtime.health"])
+        self.assertEqual(len(probe_calls), 1)
         self.assertEqual(payload["kind"], "aippocampus_maintenance_plan")
         self.assertTrue(payload["read_only"])
         self.assertEqual(
@@ -547,34 +577,36 @@ class AippocampusMaintenanceTests(unittest.TestCase):
         self.assertNotIn("health_error", payload)
 
     def test_plan_projects_health_state_without_nested_health_error_or_duplicate_actions(self) -> None:
-        def fake_json(cmd: list[str]) -> tuple[int, dict | None, str, str]:
-            if len(cmd) > 2 and cmd[2] == "aippocampus_runtime.health":
-                return (
-                    0,
-                    {
-                        "ok": False,
-                        "status": "attention_needed",
-                        "product_readiness": {"ready": False, "status": "needs_clean_source"},
-                        "recommended_actions": [
-                            {
-                                "id": "build_clean_source",
-                                "severity": "critical",
-                                "reason": "clean-source manifest missing",
-                            },
-                            {
-                                "id": "prepare_graphify_corpus",
-                                "severity": "info",
-                                "reason": "graphify stale",
-                            },
-                        ],
-                    },
-                    json.dumps({"ok": False, "status": "attention_needed"}),
-                    "",
-                )
-            self.fail(f"unexpected JSON command: {cmd}")
+        def fake_probe(cwd: Path) -> tuple[int, dict | None, str]:
+            return (
+                0,
+                {
+                    "ok": False,
+                    "status": "attention_needed",
+                    "product_readiness": {"ready": False, "status": "needs_clean_source"},
+                    "recommended_actions": [
+                        {
+                            "id": "build_clean_source",
+                            "severity": "critical",
+                            "reason": "clean-source manifest missing",
+                        },
+                        {
+                            "id": "prepare_graphify_corpus",
+                            "severity": "info",
+                            "reason": "graphify stale",
+                        },
+                    ],
+                },
+                "",
+            )
 
         with (
-            mock.patch.object(maintenance, "run_json_checked", side_effect=fake_json),
+            mock.patch.object(maintenance, "read_only_health_probe", side_effect=fake_probe),
+            mock.patch.object(
+                maintenance,
+                "run_json_checked",
+                side_effect=AssertionError("read-only plan must not run full health subprocess"),
+            ),
             mock.patch("sys.stdout", new=StringIO()) as stdout,
         ):
             code = maintenance.main(["--cwd", ".", "--plan", "--summary-json"])
@@ -599,35 +631,37 @@ class AippocampusMaintenanceTests(unittest.TestCase):
         self.assertTrue(payload["user_impact"]["cold_start_expected"])
 
     def test_natural_status_subcommand_is_read_only_summary_card(self) -> None:
-        seen_modules: list[str] = []
+        probe_calls: list[Path] = []
 
-        def fake_json(cmd: list[str]) -> tuple[int, dict | None, str, str]:
-            seen_modules.append(cmd[2])
-            if cmd[2] == "aippocampus_runtime.health":
-                return (
-                    0,
-                    {
-                        "ok": True,
-                        "product_readiness": {
-                            "ready": True,
-                            "ordinary_first_recall_usable": True,
-                            "freshness_degraded": True,
-                            "latest_current_thread_may_be_missing": True,
-                            "maintenance_recommended": True,
-                            "maintenance_required_before_recall": False,
-                            "status": "ready_with_freshness_degraded",
-                        },
-                        "recommended_actions": [
-                            {"id": "build_index", "severity": "warning", "reason": "index stale"}
-                        ],
+        def fake_probe(cwd: Path) -> tuple[int, dict | None, str]:
+            probe_calls.append(cwd)
+            return (
+                0,
+                {
+                    "ok": True,
+                    "product_readiness": {
+                        "ready": True,
+                        "ordinary_first_recall_usable": True,
+                        "freshness_degraded": True,
+                        "latest_current_thread_may_be_missing": True,
+                        "maintenance_recommended": True,
+                        "maintenance_required_before_recall": False,
+                        "status": "ready_with_freshness_degraded",
                     },
-                    "{}",
-                    "",
-                )
-            self.fail(f"unexpected JSON command: {cmd}")
+                    "recommended_actions": [
+                        {"id": "build_index", "severity": "warning", "reason": "index stale"}
+                    ],
+                },
+                "",
+            )
 
         with (
-            mock.patch.object(maintenance, "run_json_checked", side_effect=fake_json),
+            mock.patch.object(maintenance, "read_only_health_probe", side_effect=fake_probe),
+            mock.patch.object(
+                maintenance,
+                "run_json_checked",
+                side_effect=AssertionError("read-only status must not run full health subprocess"),
+            ),
             mock.patch("sys.stdout", new=StringIO()) as stdout,
         ):
             code = maintenance.main(["status", "--cwd", ".", "--json"])
@@ -635,7 +669,7 @@ class AippocampusMaintenanceTests(unittest.TestCase):
         payload = json.loads(stdout.getvalue())
 
         self.assertEqual(code, 0)
-        self.assertEqual(seen_modules, ["aippocampus_runtime.health"])
+        self.assertEqual(len(probe_calls), 1)
         self.assertEqual(payload["mode"], "status")
         self.assertTrue(payload["read_only"])
         self.assertTrue(payload["maintenance_ok"])
@@ -652,34 +686,36 @@ class AippocampusMaintenanceTests(unittest.TestCase):
         self.assertEqual(payload["foreground_action"], payload["agent_next_action"])
 
     def test_storage_pressure_best_action_routes_to_bounded_audit(self) -> None:
-        def fake_json(cmd: list[str]) -> tuple[int, dict | None, str, str]:
-            if len(cmd) > 2 and cmd[2] == "aippocampus_runtime.health":
-                return (
-                    0,
-                    {
-                        "ok": True,
-                        "product_readiness": {
-                            "ready": True,
-                            "ordinary_first_recall_usable": True,
-                            "maintenance_recommended": True,
-                            "storage_pressure_cleanup_recommended": True,
-                            "status": "ready_with_storage_pressure",
-                        },
-                        "recommended_actions": [
-                            {
-                                "id": "storage_gc_rebuildable_cache",
-                                "severity": "warning",
-                                "reason": "generated cache pressure",
-                            }
-                        ],
+        def fake_probe(cwd: Path) -> tuple[int, dict | None, str]:
+            return (
+                0,
+                {
+                    "ok": True,
+                    "product_readiness": {
+                        "ready": True,
+                        "ordinary_first_recall_usable": True,
+                        "maintenance_recommended": True,
+                        "storage_pressure_cleanup_recommended": True,
+                        "status": "ready_with_storage_pressure",
                     },
-                    "{}",
-                    "",
-                )
-            self.fail(f"unexpected JSON command: {cmd}")
+                    "recommended_actions": [
+                        {
+                            "id": "storage_gc_rebuildable_cache",
+                            "severity": "warning",
+                            "reason": "generated cache pressure",
+                        }
+                    ],
+                },
+                "",
+            )
 
         with (
-            mock.patch.object(maintenance, "run_json_checked", side_effect=fake_json),
+            mock.patch.object(maintenance, "read_only_health_probe", side_effect=fake_probe),
+            mock.patch.object(
+                maintenance,
+                "run_json_checked",
+                side_effect=AssertionError("read-only status must not run full health subprocess"),
+            ),
             mock.patch("sys.stdout", new=StringIO()) as stdout,
         ):
             code = maintenance.main(["status", "--cwd", ".", "--json"])

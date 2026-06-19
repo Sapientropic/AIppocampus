@@ -439,6 +439,68 @@ def build_private_history_episode_arc_adjudication_report(
     }
 
 
+def build_compact_episode_arc_summary_report(
+    registry: Mapping[str, Any],
+    *,
+    max_threads: int = DEFAULT_MAX_THREADS,
+) -> dict[str, Any]:
+    """Build the default foreground card without private-history aggregation.
+
+    Full Episode/Arc adjudication reads clean messages/events and computes
+    per-arc resolution/safe-use counts. That is valuable operator detail, but
+    the first foreground card only needs to route the agent toward the explicit
+    detail command. Keep the default path honest: counts are deferred, not
+    guessed from a partial private-history scan.
+    """
+
+    entries = list(_thread_entries(registry, max_threads))
+    has_scope = bool(entries)
+    return {
+        "ok": True,
+        "kind": REPORT_KIND,
+        "schema_version": SCHEMA_VERSION,
+        "created_at": now_utc(),
+        "status": (
+            "compact_foreground_counts_deferred"
+            if has_scope
+            else "insufficient_real_history"
+        ),
+        "counts_deferred": has_scope,
+        "input_surface": {
+            "thread_count_seen": len(entries),
+            "max_threads": max(0, max_threads),
+            "clean_message_rows_scanned": 0,
+            "clean_event_rows_scanned": 0,
+            "full_history_aggregation_deferred": True,
+        },
+        "metrics": {
+            "episode_arc_count": None if has_scope else 0,
+            "complete_arc_count": None if has_scope else 0,
+            "gappy_arc_count": None if has_scope else 0,
+            "source_ref_count": None if has_scope else 0,
+        },
+        "current_validity_counts": {},
+        "safe_use_counts": {},
+        "privacy_boundary": {
+            "aggregate_only": True,
+            "raw_source_text_emitted": False,
+            "raw_command_text_emitted": False,
+            "source_refs_emitted": False,
+            "source_ref_hash_samples_emitted": False,
+            "event_ids_emitted": False,
+            "thread_ids_emitted": False,
+            "local_paths_emitted": False,
+        },
+        "contract": {
+            "episode_arcs_are_read_models": True,
+            "sequence_packets_are_navigation_only": True,
+            "current_validity_requires_source_reopen": True,
+            "source_truth_unchanged": True,
+            "formal_memory_promoted": False,
+        },
+    }
+
+
 def _resolve_registry_path(raw: str | None) -> Path:
     if raw:
         path = Path(raw).expanduser()
@@ -485,16 +547,20 @@ def render_text(report: dict[str, Any]) -> str:
 
 def summary_projection(report: Mapping[str, Any]) -> dict[str, Any]:
     metrics = _as_mapping(report.get("metrics"))
-    episode_arc_count = int(metrics.get("episode_arc_count") or 0)
-    complete_arc_count = metrics.get("complete_arc_count", 0)
-    gappy_arc_count = metrics.get("gappy_arc_count", 0)
+    counts_deferred = bool(report.get("counts_deferred"))
+    episode_arc_count = None if counts_deferred else int(metrics.get("episode_arc_count") or 0)
+    complete_arc_count = None if counts_deferred else metrics.get("complete_arc_count", 0)
+    gappy_arc_count = None if counts_deferred else metrics.get("gappy_arc_count", 0)
     current_validity_counts = dict(_as_mapping(report.get("current_validity_counts")))
     safe_use_counts = dict(_as_mapping(report.get("safe_use_counts")))
     summary_metrics = {
         "episode_arc_count": episode_arc_count,
         "complete_arc_count": complete_arc_count,
         "gappy_arc_count": gappy_arc_count,
-        "needs_reopen_count": current_validity_counts.get("needs_reopen", 0),
+        "needs_reopen_count": (
+            None if counts_deferred else current_validity_counts.get("needs_reopen", 0)
+        ),
+        "counts_status": "deferred_to_detail" if counts_deferred else "measured",
     }
     owner_route = {
         "id": "current_owner_route",
@@ -520,7 +586,7 @@ def summary_projection(report: Mapping[str, Any]) -> dict[str, Any]:
         "claim_boundary": "sequence_hint_not_source_truth",
         "why": "No episode arcs are currently present in the scoped aggregate readout.",
     }
-    no_op = episode_arc_count == 0
+    no_op = (not counts_deferred) and episode_arc_count == 0
     action = no_op_action if no_op else route_action
     action_fields = canonical_foreground_action_fields(action, safe_next_actions=[action])
     return {
@@ -531,6 +597,8 @@ def summary_projection(report: Mapping[str, Any]) -> dict[str, Any]:
         "current_uncertainty": (
             "no_episode_arcs_found_in_scope"
             if no_op
+            else "arc_counts_deferred_to_keep_foreground_fast"
+            if counts_deferred
             else "aggregate_arc_counts_do_not_prove_current_source_validity"
         ),
         "what_to_do": "no_episode_arcs_to_route" if no_op else "retrieve_actionable_arc_handles",
@@ -538,6 +606,11 @@ def summary_projection(report: Mapping[str, Any]) -> dict[str, Any]:
         "owner_route": owner_route,
         **action_fields,
         "summary_metrics": summary_metrics,
+        "summary_source": (
+            "bounded_registry_scan_no_private_history_aggregation"
+            if counts_deferred
+            else "private_history_aggregate"
+        ),
         "episode_arc_count": episode_arc_count,
         "complete_arc_count": complete_arc_count,
         "gappy_arc_count": gappy_arc_count,
@@ -569,8 +642,17 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     registry_path = _resolve_registry_path(args.registry)
+    compact_requested = args.summary_json or (args.json_output and args.detail != "full")
+    registry = load_registry(registry_path)
+    if compact_requested and not args.arc_handle and not args.output:
+        report = build_compact_episode_arc_summary_report(
+            registry,
+            max_threads=args.max_threads,
+        )
+        print(json.dumps(summary_projection(report), ensure_ascii=False, indent=2))
+        return 0
     report = build_private_history_episode_arc_adjudication_report(
-        load_registry(registry_path),
+        registry,
         max_threads=args.max_threads,
         max_line_gap=args.max_line_gap,
     )

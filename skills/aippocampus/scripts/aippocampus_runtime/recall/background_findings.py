@@ -14,7 +14,11 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime import core
-from aippocampus_runtime.contracts import foreground_recovery_card, foreground_shell_action
+from aippocampus_runtime.contracts import (
+    canonical_foreground_action_fields,
+    foreground_recovery_card,
+    foreground_shell_action,
+)
 from aippocampus_runtime.dream import working_memory_publication
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 from aippocampus_runtime.recall import background_finding_actions, background_finding_projection
@@ -247,6 +251,10 @@ def background_findings_card(
     )
     detail_level = _normalize_detail(detail)
     finding_summaries = [_finding_summary(finding) for finding in findings[:3]]
+    action_fields = canonical_foreground_action_fields(
+        primary_action,
+        safe_next_actions=[primary_action],
+    )
     payload = {
         "kind": "aippocampus_background_findings_card",
         "detail": detail_level,
@@ -258,8 +266,7 @@ def background_findings_card(
         "finding_count": len(findings),
         "best_finding": finding_summaries[0] if finding_summaries else None,
         "finding_summaries": finding_summaries,
-        "agent_next_action": primary_action,
-        "safe_next_actions": [dict(primary_action)],
+        **action_fields,
         "boundary": {
             "background_findings_are_source_truth": False,
             "dream_findings_are_fact": False,

@@ -9,7 +9,7 @@ from collections.abc import Callable
 from typing import Any
 
 from aippocampus_runtime.contracts import canonical_foreground_action_fields
-from aippocampus_runtime.sync.object_storage.client import OBJECT_BACKEND, safe_endpoint_label
+from aippocampus_runtime.sync.object_storage.client import OBJECT_BACKEND
 
 OBJECT_SYNC_COMMANDS = {"status", "push", "pull", "repair"}
 
@@ -115,11 +115,32 @@ def object_sync_direction_plan(args: Namespace) -> dict[str, Any]:
     )
     if command == "status":
         command_preview = "aippocampus object-sync status --object-store-url {object_store_url} --json"
-    safe_store = (
-        safe_endpoint_label(args.object_store_url)
-        if args.object_store_url
-        else "<provider-object-store>"
-    )
+    safe_store = "<object-store-redacted>" if args.object_store_url else "<provider-object-store>"
+    primary = {
+        "id": f"review_object_sync_{command}_plan_after_backend",
+        "label": "Review object-sync plan after backend selection",
+        "command_template": command_preview,
+        "requires": ["object_store_url"],
+        "template_only": True,
+        "mutation_risk": "read_only",
+        "claim_boundary": "object_sync_plan_not_source_evidence",
+        "why": (
+            "Plan mode performs no writes; provide the backend value explicitly again "
+            "before deciding whether a write-capable sync command is intended."
+        ),
+    }
+    status_action = {
+        "id": "inspect_object_sync_status_after_backend",
+        "label": "Inspect object-sync status after backend selection",
+        "command_template": (
+            "aippocampus object-sync status --object-store-url {object_store_url} --json"
+        ),
+        "requires": ["object_store_url"],
+        "template_only": True,
+        "mutation_risk": "read_only",
+        "claim_boundary": "object_sync_status_not_source_evidence",
+        "why": "Use status before any write-capable object-sync operation when backend state is uncertain.",
+    }
     return {
         "ok": True,
         "kind": "aippocampus_object_sync_direction_plan",
@@ -133,6 +154,10 @@ def object_sync_direction_plan(args: Namespace) -> dict[str, Any]:
         "encryption_requested": bool(args.encrypt or args.require_encrypted),
         "next_command_template": command_preview,
         "requires": ["object_store_url"],
+        **canonical_foreground_action_fields(
+            primary,
+            safe_next_actions=[primary, status_action],
+        ),
         "privacy_boundary": {
             "local_paths_included": False,
             "endpoint_included": False,

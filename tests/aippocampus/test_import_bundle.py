@@ -473,7 +473,33 @@ class ImportBundleTests(unittest.TestCase):
         encoded = json.dumps(payload, ensure_ascii=False)
         self.assertEqual(code, 2)
         self.assertEqual(payload["error"]["code"], "bundle_not_found")
+        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
+        self.assertEqual(payload["agent_next_action"], payload["foreground_action"])
+        self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
+        self.assertEqual(
+            payload["foreground_action"]["id"],
+            "choose_existing_bundle_and_preview_import",
+        )
+        self.assertTrue(payload["foreground_action"]["template_only"])
+        self.assertEqual(payload["foreground_action"]["requires"], ["bundle_zip"])
         self.assertIn("<local-path-redacted>", payload["error"]["message"])
+        self.assertNotIn(str(missing.parent), encoded)
+
+    def test_missing_bundle_dry_run_returns_recovery_action_card(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, patch("sys.stdout", new=StringIO()) as stdout:
+            missing = Path(tmp) / "missing-aippo-bundle.zip"
+            code = packaged_import_bundle.main([str(missing), "--dry-run", "--json"])
+
+        payload = json.loads(stdout.getvalue())
+        encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertEqual(code, 2)
+        self.assertEqual(payload["kind"], "aippocampus_bundle_import_preview")
+        self.assertEqual(payload["mode"], "dry_run")
+        self.assertEqual(payload["error"]["code"], "bundle_not_found")
+        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
+        self.assertEqual(payload["agent_next_action"], payload["foreground_action"])
+        self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
+        self.assertEqual(payload["foreground_action"]["mutation_risk"], "read_only")
         self.assertNotIn(str(missing.parent), encoded)
 
 

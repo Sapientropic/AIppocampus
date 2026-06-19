@@ -209,8 +209,13 @@ class AgentDeepenCompactProjectionTests(unittest.TestCase):
         self.assertEqual(compact_payload["decision"], "reopenable_route_available")
         self.assertNotIn("macro_", compact_payload["route_reason"])
         self.assertNotIn("projection_status_", compact_payload["route_reason"])
+        self.assertEqual(compact_payload["foreground_action_contract"], "foreground-action-v1")
+        self.assertEqual(compact_payload["agent_next_action"], compact_payload["foreground_action"])
+        self.assertEqual(compact_payload["safe_next_actions"][0], compact_payload["foreground_action"])
         self.assertEqual(compact_payload["foreground_action"]["tool_name"], "agent_deepen")
         self.assertEqual(compact_payload["foreground_action"]["arguments"]["request_index"], 1)
+        self.assertIn("agent deepen --request 1 --last-recall --json", compact_payload["foreground_action"]["command"])
+        self.assertNotIn("cli_command", compact_payload["foreground_action"])
         self.assertEqual(
             compact_payload["claim_boundary"],
             "navigation_only_until_source_reopened",
@@ -326,7 +331,11 @@ class AgentDeepenCompactProjectionTests(unittest.TestCase):
         self.assertEqual(explain_payload["detail"], "compact")
         self.assertEqual(explain_payload["kind"], "aippocampus_route_explain_card")
         self.assertEqual(explain_payload["surface"], "mcp_agent_explain_compact")
+        self.assertEqual(explain_payload["foreground_action_contract"], "foreground-action-v1")
+        self.assertEqual(explain_payload["agent_next_action"], explain_payload["foreground_action"])
+        self.assertEqual(explain_payload["safe_next_actions"][0], explain_payload["foreground_action"])
         self.assertEqual(explain_payload["foreground_action"]["tool_name"], "agent_deepen")
+        self.assertIn("agent deepen --request 1 --last-recall --json", explain_payload["foreground_action"]["command"])
         self.assertNotIn("macro_navigation_diagnostics", explain_payload)
         self.assertNotIn("cannot_claim", explain_encoded)
 

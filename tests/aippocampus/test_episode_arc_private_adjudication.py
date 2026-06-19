@@ -4,7 +4,9 @@ import json
 import sys
 import tempfile
 import unittest
+from io import StringIO
 from pathlib import Path
+from unittest.mock import patch
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
@@ -253,10 +255,15 @@ class EpisodeArcPrivateAdjudicationTests(unittest.TestCase):
             "navigation_only_sequence_hints_need_source_reopen",
         )
         self.assertIn("summary_metrics", summary_payload)
-        self.assertEqual(summary_payload["complete_arc_count"], 1)
-        self.assertEqual(summary_payload["summary_metrics"]["complete_arc_count"], 1)
-        self.assertEqual(summary_payload["current_validity_counts"]["needs_reopen"], 1)
-        self.assertIn("refresh_sources", summary_payload["safe_use_counts"])
+        self.assertEqual(
+            summary_payload["summary_source"],
+            "bounded_registry_scan_no_private_history_aggregation",
+        )
+        self.assertEqual(summary_payload["summary_metrics"]["counts_status"], "deferred_to_detail")
+        self.assertIsNone(summary_payload["episode_arc_count"])
+        self.assertIsNone(summary_payload["complete_arc_count"])
+        self.assertEqual(summary_payload["current_validity_counts"], {})
+        self.assertEqual(summary_payload["safe_use_counts"], {})
         self.assertEqual(
             summary_payload["safe_next_actions"][0]["command"],
             "aippocampus episode-arcs --json --detail full --top 5",
@@ -293,6 +300,51 @@ class EpisodeArcPrivateAdjudicationTests(unittest.TestCase):
         self.assertIn("safe use:", human.stdout)
         self.assertNotIn('"metrics"', human.stdout)
         self.assertNotIn("session:cli-private-arc", human.stdout)
+
+    def test_compact_episode_arcs_does_not_build_full_private_history_report(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            registry = {
+                "schema_version": 1,
+                "threads": [
+                    registry_entry(
+                        root,
+                        "session:compact-fast",
+                        rows=[
+                            rejected_message(
+                                18,
+                                thread_key="session:compact-fast",
+                                text="Do not repeat the slow full aggregation before a foreground card.",
+                            )
+                        ],
+                        events=[],
+                    )
+                ],
+            }
+            registry_path = root / "threads.json"
+            registry_path.write_text(json.dumps(registry, ensure_ascii=False), encoding="utf-8")
+
+            with (
+                patch.object(
+                    private_arcs,
+                    "build_private_history_episode_arc_adjudication_report",
+                    side_effect=AssertionError("compact foreground card must not run full aggregation"),
+                ),
+                patch("sys.stdout", new=StringIO()) as stdout,
+            ):
+                code = private_arcs.main(["--registry", str(registry_path), "--json"])
+
+        payload = json.loads(stdout.getvalue())
+
+        self.assertEqual(code, 0)
+        self.assertEqual(payload["kind"], "aippocampus_episode_arcs_summary")
+        self.assertEqual(payload["summary_metrics"]["counts_status"], "deferred_to_detail")
+        self.assertEqual(
+            payload["summary_source"],
+            "bounded_registry_scan_no_private_history_aggregation",
+        )
+        self.assertEqual(payload["foreground_action"]["id"], "retrieve_actionable_arc_handles")
+        self.assertFalse(payload["no_op"])
 
     def test_episode_arcs_empty_summary_is_structured_no_op(self) -> None:
         summary_payload = private_arcs.summary_projection(
