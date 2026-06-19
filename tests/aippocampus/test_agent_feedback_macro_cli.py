@@ -191,14 +191,13 @@ class AgentFeedbackMacroCliTests(unittest.TestCase):
         missing_payload = json.loads(missing.stdout)
         malformed_payload = json.loads(malformed.stdout)
         self.assertEqual(deepen_payload["error"]["code"], "missing_recall_handle")
-        self.assertEqual(
-            deepen_payload["operator_detail"]["result"]["error"]["code"],
-            "missing_recall_handle",
-        )
+        self.assertNotIn("operator_detail", deepen_payload)
+        self.assertNotIn("boundary_detail", deepen_payload)
+        self.assertIn("operator_detail_command", deepen_payload)
         self.assertEqual(missing_payload["error"]["code"], "missing_recall_handle")
         self.assertEqual(malformed_payload["error"]["code"], "malformed_recall_handle")
         for payload, mode, error_container, has_nested_error in (
-            (deepen_payload, "deepen", deepen_payload["operator_detail"]["result"], True),
+            (deepen_payload, "deepen", deepen_payload, True),
             (missing_payload, "explain", missing_payload, False),
             (malformed_payload, "explain", malformed_payload, False),
         ):
@@ -217,7 +216,7 @@ class AgentFeedbackMacroCliTests(unittest.TestCase):
             self.assertEqual(payload["next_safe_action_id"], "recall_with_cue")
             if has_nested_error and error_container["error"]["code"] == "missing_recall_handle":
                 self.assertEqual(error_container["next_safe_action_id"], "recall_with_cue")
-                self.assertNotIn("next_safe_action", error_container)
+                self.assertEqual(error_container["next_safe_action"], payload["agent_next_action"])
             self.assertNotIn("recovery_actions", payload)
             self.assertNotIn('agent recall "old decision or handoff cue"', encoded)
             follow_up = payload["safe_next_actions"][1]

@@ -79,35 +79,30 @@ class UpdateAgentStatusTests(unittest.TestCase):
         self.assertEqual(code, 0, payload)
         child_probe.assert_not_called()
         self.assertTrue(payload["summary"]["partial_readiness"])
-        self.assertIn("readiness_card", payload)
-        self.assertEqual(payload["readiness_card"]["subject"], "update_status")
-        self.assertTrue(payload["readiness_card"]["usable_now"])
-        self.assertFalse(payload["readiness_card"]["blocks_first_recall"])
-        self.assertEqual(
-            payload["summary"]["magic_ready_semantics"],
-            "legacy_alias_for_product_magic_ready",
-        )
+        self.assertNotIn("readiness_card", payload)
+        self.assertNotIn("foreground_status_cards", payload)
+        self.assertNotIn("action_hints", payload)
+        self.assertNotIn("agent_callable", payload)
+        self.assertNotIn("host_conformance", payload)
+        self.assertNotIn("next_actions", payload)
+        self.assertTrue(payload["setup_card"]["usable_now"])
+        self.assertFalse(payload["setup_card"].get("blocks_first_recall", False))
         deferred = set(payload["summary"]["deferred_components"])
         self.assertIn("skill_tree_fingerprint", deferred)
         self.assertIn("plugin_cache_fingerprint", deferred)
         self.assertIn("hooks_status", deferred)
         self.assertIn("llm_child_process", deferred)
-        self.assertEqual(payload["partial_readiness"]["status"], "partial")
+        self.assertEqual(payload["setup_card"]["state"], "partial_foreground_status")
         self.assertEqual(
-            payload["partial_readiness"]["operator_detail_command"],
+            payload["setup_card"]["operator_detail_command"],
             "aippocampus update status --operator-json",
         )
-        cards = {card["id"]: card for card in payload["foreground_status_cards"]}
-        self.assertIn("partial_readiness", cards)
-        self.assertIn("current_thread_tool_discovery", cards)
-        self.assertNotIn("action_hint_setup", cards)
-        self.assertEqual(
-            cards["partial_readiness"]["command"],
-            "aippocampus update status --operator-json",
-        )
-        self.assertEqual(payload["next_actions"][0]["surface"], "operator_detail")
-        self.assertNotIn("action_hints", {item["surface"] for item in payload["next_actions"]})
-        violations = executable_command_violations(payload["foreground_status_cards"])
+        self.assertEqual(payload["foreground_action"]["surface"], "operator_detail")
+        surfaces = {item.get("surface") for item in payload["safe_next_actions"]}
+        self.assertIn("operator_detail", surfaces)
+        self.assertIn("agent_callable", surfaces)
+        self.assertNotIn("action_hints", surfaces)
+        violations = executable_command_violations(payload["safe_next_actions"])
         self.assertEqual(violations, [])
 
     def test_operator_status_omits_provider_key_env_names(self) -> None:

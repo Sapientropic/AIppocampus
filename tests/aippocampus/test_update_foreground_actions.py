@@ -70,12 +70,11 @@ class UpdateForegroundActionTests(unittest.TestCase):
         self.assertEqual(compact_code, 0, compact)
         self.assertEqual(compact["summary"]["plan_surface_filter"], ["hooks"])
         self.assertEqual(compact["summary"]["plan_scope"], "selected_surfaces")
-        self.assertTrue(
-            any(
-                card["id"] in {"action_hint_setup", "action_hint_cache"}
-                for card in compact["foreground_status_cards"]
-            )
-        )
+        self.assertNotIn("foreground_status_cards", compact)
+        surfaces = {action.get("surface") for action in compact["safe_next_actions"]}
+        self.assertIn("action_hints", surfaces)
+        self.assertIn("hooks", surfaces)
+        self.assertEqual(compact["ambient_recall"]["state"], "not_installed")
 
     def test_plugin_cache_recovery_splits_path_template_from_executable_command(self) -> None:
         fields = status_actions.executable_update_action_fields(

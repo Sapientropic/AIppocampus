@@ -14,6 +14,7 @@ from aippocampus_runtime.contracts import (
     command_value_needs_input,
     foreground_readiness_card,
     foreground_template_action,
+    normalize_foreground_action,
     shell_quote,
 )
 from aippocampus_runtime.first_recall_readiness import compact_health_first_recall_fields
@@ -491,7 +492,14 @@ def _canonical_agent_action(card: Any) -> dict[str, Any]:
     card_map = card if isinstance(card, dict) else {}
     action = card_map.get("canonical_action") if isinstance(card_map.get("canonical_action"), dict) else {}
     if action:
-        return _without_empty(action)
+        result = _without_empty(normalize_foreground_action(action))
+        result.setdefault("label", "Open selected recall route")
+        result.setdefault("mutation_risk", "read_only")
+        result.setdefault(
+            "why",
+            "Recall surfaced route-shaped context; deepen before using it for source-backed claims.",
+        )
+        return result
     return {
         "action_id": "continue_normally",
         "arguments": {},
@@ -606,6 +614,9 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
     metrics: dict[str, Any] = raw_metrics if isinstance(raw_metrics, dict) else {}
     labels_low_specificity = recall_choices.low_specificity_route_choices(
         metrics, len(memory_packets)
+    ) or recall_choices.distinctive_cue_anchor_gap(
+        recovery_cue,
+        memory_packets,
     )
     cache_available = bool(payload.get("last_recall_cache_available"))
     route_receipts: list[dict[str, Any]] = []
@@ -661,7 +672,7 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
                         route_count=len(memory_packets),
                         labels_low_specificity=labels_low_specificity,
                     )
-                    if len(memory_packets) > 1
+                    if len(memory_packets) > 1 or labels_low_specificity
                     else None,
                     "claim_permission": packet.get("claim_permission"),
                     "next_action_boundary": "reopen_required_before_claim",
@@ -691,16 +702,20 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
     if miss_recovery_card is not None:
         foreground_action = {
             "action_id": "recover_recall_miss",
+            "label": "Recover recall miss",
             "tool_name": "search_memory",
             "why": "No route surfaced; try exact source-backed search or check onboarding/index freshness.",
+            "mutation_risk": "read_only",
             "claim_boundary": "no_route_claim",
         } | search_fields
-    elif foreground_action.get("action_id") == "continue_normally":
+    elif foreground_action.get("action_id") == "continue_normally" or foreground_action.get("id") == "continue_normally":
         weak_route_recovery_card = _weak_route_recovery_card()
         foreground_action = {
             "action_id": "recover_weak_route",
+            "label": "Recover weak route",
             "tool_name": "search_memory",
             "why": "A route surfaced without a safe deepen action; refine or exact-search before relying on it.",
+            "mutation_risk": "read_only",
             "claim_boundary": "no_claim_before_reopen",
         } | search_fields
     elif labels_low_specificity and foreground_action.get("tool_name") == "agent_deepen":
@@ -722,17 +737,6 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "weak_route_recovery_card": weak_route_recovery_card,
         "routes": route_receipts,
         "route_count": len(memory_packets),
-        "metrics": _without_empty(
-            {
-                "requested_max_routes": metrics.get("requested_max_routes"),
-                "effective_max_routes": metrics.get("effective_max_routes"),
-                "memory_packet_count": metrics.get("memory_packet_count"),
-                "deepen_request_count": metrics.get("deepen_request_count"),
-                "route_label_specificity_floor": metrics.get("route_label_specificity_floor"),
-                "topic_label_present_count": metrics.get("topic_label_present_count"),
-            }
-        ),
-        "audit_available": bool(payload.get("audit_available")),
         "semantic_gate_diagnostics": semantic_compact,
         "provider_key_bridge": payload.get("provider_key_bridge"),
         "claim_boundary": _compact_claim_boundary(
@@ -740,13 +744,7 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
             must_reopen_for=["source_backed_claims", "exact_wording", "sensitive_or_stale_facts"],
             detail_command='aippocampus agent recall "old decision or handoff cue" --json --detail full',
         ),
-        "policy_boundary": payload.get("policy_boundary"),
-        "output_boundary": "compact_foreground_no_local_private_handles",
-        "action_boundary": {
-            "primary_action_field": "foreground_action",
-            "diagnostics_available_with_detail_full": True,
-            "source_reopen_required_for_claims": True,
-        },
+        "operator_detail_command": 'aippocampus agent recall "old decision or handoff cue" --json --detail full',
     }
     result.update(canonical_foreground_action_fields(foreground_action))
     return _without_empty(result)

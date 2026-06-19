@@ -169,6 +169,8 @@ class DocsHealthTests(unittest.TestCase):
     def test_start_here_and_examples_keep_packaged_recall_first(self) -> None:
         start_here = (REPO_ROOT / "docs" / "start-here.md").read_text(encoding="utf-8")
         readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+        start_here_flat = " ".join(start_here.split())
+        readme_flat = " ".join(readme.split())
 
         recall_command = 'aippocampus agent recall "old decision or handoff cue" --json'
         codex_write = "aippocampus onboard --provider codex --cwd . --json"
@@ -176,13 +178,15 @@ class DocsHealthTests(unittest.TestCase):
         self.assertLess(readme.index(recall_command), readme.index("## Quick Start"))
         self.assertLess(start_here.index("## First Recall"), start_here.index("## See And Add To Memory"))
         self.assertLess(start_here.index(recall_command), start_here.index("aippocampus vault sync --json"))
-        self.assertIn(codex_write, readme)
-        self.assertIn(claude_write, readme)
-        self.assertIn(codex_write, start_here)
-        self.assertIn(claude_write, start_here)
+        self.assertNotIn(codex_write, readme_flat)
+        self.assertNotIn(claude_write, readme_flat)
+        self.assertIn("First Recall Decision Card", readme)
+        self.assertIn(codex_write, start_here_flat)
+        self.assertIn(claude_write, start_here_flat)
         self.assertIn("aippocampus export --json", readme)
         self.assertIn("aippocampus sync --json", start_here)
-        self.assertLess(start_here.index(codex_write), start_here.index(recall_command))
+        self.assertLess(start_here_flat.index(recall_command), start_here_flat.index(codex_write))
+        self.assertLess(start_here_flat.index(recall_command), start_here_flat.index(claude_write))
 
         repo_issues = docs_health.foreground_continuity_doc_issues(REPO_ROOT)
         self.assertEqual([], repo_issues)

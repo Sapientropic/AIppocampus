@@ -1092,58 +1092,28 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertEqual(payload["kind"], "aippocampus_update_status_agent_json")
         self.assertTrue(payload["summary"]["agent_callable_host_ready"])
         self.assertFalse(payload["summary"]["agent_callable_current_thread_visible"])
-        self.assertIn(
-            "current_thread_tool_discovery",
-            payload["summary"]["foreground_actions"],
-        )
-        self.assertTrue(
-            any(
-                card["id"] == "current_thread_tool_discovery"
-                for card in payload["foreground_status_cards"]
-            )
-        )
+        self.assertNotIn("foreground_actions", payload["summary"])
+        self.assertNotIn("foreground_status_cards", payload)
+        self.assertNotIn("agent_callable", payload)
         current_thread_card = next(
-            card
-            for card in payload["foreground_status_cards"]
-            if card["id"] == "current_thread_tool_discovery"
+            action
+            for action in payload["safe_next_actions"]
+            if action.get("surface") == "agent_callable"
         )
         self.assertTrue(current_thread_card["command"].startswith("aippocampus "))
         self.assertIn("agent_recall", current_thread_card["manual_instruction"])
         self.assertNotIn("call agent_recall", current_thread_card["command"])
         self.assertNotIn("<summary>", json.dumps(current_thread_card, ensure_ascii=False))
         self.assertNotIn("agent_callable", payload["summary"]["needs_action"])
-        self.assertEqual(
-            payload["agent_callable"]["status"],
-            "host_live_probe_ok_foreground_probe_not_checked",
-        )
-        self.assertTrue(payload["agent_callable"]["host_live_probe_ok"])
-        self.assertFalse(payload["agent_callable"]["foreground_probe_requested"])
-        self.assertEqual(payload["agent_callable"]["foreground_probe_state"], "not_requested")
-        self.assertEqual(
-            payload["agent_callable"]["current_thread_tool_discovery"],
-            "foreground_probe_not_checked",
-        )
+        self.assertEqual(payload["summary"]["agent_callable_status"], "host_live_probe_ok_foreground_probe_not_checked")
         self.assertTrue(payload["summary"]["partial_readiness"])
         self.assertIn("hooks_status", payload["summary"]["deferred_components"])
-        self.assertIn(
-            "partial_readiness",
-            payload["summary"]["foreground_actions"],
-        )
-        self.assertNotIn(
-            "action_hint_setup",
-            payload["summary"]["foreground_actions"],
-        )
         self.assertEqual(
-            payload["partial_readiness"]["operator_detail_command"],
+            payload["setup_card"]["operator_detail_command"],
             "aippocampus update status --operator-json",
         )
-        self.assertIsInstance(payload["next_actions"], list)
-        self.assertEqual(payload["next_actions"][0]["surface"], "operator_detail")
-        agent_actions = [
-            action for action in payload["next_actions"] if action.get("surface") == "agent_callable"
-        ]
-        self.assertTrue(agent_actions)
-        self.assertTrue(agent_actions[0]["command"].startswith("aippocampus "))
+        self.assertNotIn("next_actions", payload)
+        self.assertTrue(current_thread_card["command"].startswith("aippocampus "))
         self.assertNotIn(str(codex_home), raw)
         self.assertNotIn(str(probe), raw)
 
@@ -1173,39 +1143,18 @@ class UpdateSyncTests(unittest.TestCase):
         raw = stdout.getvalue()
         payload = json.loads(raw)
         self.assertEqual(code, 0, payload)
-        self.assertFalse(payload["summary"]["action_hints_ready"])
-        self.assertTrue(payload["summary"]["action_hints_installed"])
-        self.assertFalse(payload["summary"]["action_hints_hot_path_active"])
-        self.assertEqual(payload["summary"]["action_hints_status"], "with_missing_cache_file")
-        self.assertEqual(payload["action_hints"]["status"], "with_missing_cache_file")
-        self.assertFalse(payload["action_hints"]["hot_path_active"])
-        self.assertEqual(payload["action_hints"]["setup_role"], "cleanup_or_prepare_required")
-        self.assertFalse(payload["action_hints"]["cache_exists"])
-        self.assertEqual(payload["action_hints"]["next_command"], "aippocampus hooks action status --json")
-        recommended_actions = {
-            action["id"]: action for action in payload["action_hints"]["recommended_next_actions"]
-        }
-        self.assertEqual(
-            recommended_actions["refresh_action_hints"]["mutation_risk"],
-            "explicit_local_cache_write",
-        )
-        self.assertEqual(
-            recommended_actions["install_action_hints"]["mutation_risk"],
-            "writes_local_hooks_config",
-        )
-        card = next(
-            item
-            for item in payload["foreground_status_cards"]
-            if item["id"] == "action_hint_cache"
-        )
-        self.assertEqual(card["command"], "aippocampus hooks action status --json")
-        self.assertEqual(card["mutation_risk"], "read_only")
-        self.assertIn("refresh_action_hints", {action["id"] for action in card["recommended_next_actions"]})
+        self.assertEqual(payload["summary"]["ambient_recall_state"], "degraded")
+        self.assertTrue(payload["ambient_recall"]["action_hints_installed"])
+        self.assertFalse(payload["ambient_recall"]["action_hints_ready"])
+        self.assertFalse(payload["ambient_recall"]["hot_path_active"])
+        self.assertIn("action_hints:with_missing_cache_file", payload["ambient_recall"]["issue_codes"])
         action_hint_next = next(
-            item for item in payload["next_actions"] if item["surface"] == "action_hints"
+            item for item in payload["safe_next_actions"] if item["surface"] == "action_hints"
         )
         self.assertEqual(action_hint_next["command"], "aippocampus hooks action status --json")
-        self.assertIn("action_hints", {action["surface"] for action in payload["next_actions"]})
+        self.assertNotIn("action_hints", payload)
+        self.assertNotIn("foreground_status_cards", payload)
+        self.assertNotIn("next_actions", payload)
         self.assertNotIn(str(codex_home), raw)
         self.assertNotIn(str(cache_path), raw)
 
@@ -1552,22 +1501,12 @@ class UpdateSyncTests(unittest.TestCase):
                 payload = json.loads(stdout.getvalue())
                 self.assertEqual(code, 0, payload)
                 self.assertIn("skill", payload["summary"]["dirty_worktree_guards"])
-                card = next(
-                    item
-                    for item in payload["foreground_status_cards"]
-                    if item["id"] == "core_repair"
+                self.assertEqual(
+                    payload["operator_detail_command"],
+                    "aippocampus update status --operator-json",
                 )
-                self.assertEqual(card["status"], "blocked_dirty_worktree")
-                self.assertTrue(card["dirty_worktree_detected"])
-                self.assertEqual(card["blocked_command"], "aippocampus update apply --surface skill")
-                self.assertIn("source_path", card["would_write"])
-                commands = {item["command"] for item in card["safe_next_actions"]}
-                self.assertIn("git status --short", commands)
-                self.assertIn("aippocampus update plan --json", commands)
-                self.assertNotIn(
-                    "aippocampus update apply --surface skill",
-                    {item.get("command") for item in card["safe_next_actions"]},
-                )
+                self.assertNotIn("foreground_status_cards", payload)
+                self.assertNotIn("next_actions", payload)
 
     def test_apply_allows_clean_git_source_worktree(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, provider_env():
@@ -2220,7 +2159,7 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertEqual(payload["kind"], "aippocampus_update_apply_agent_json")
         self.assertFalse(payload["ok"])
         self.assertIn("plugin_cache", payload["summary"]["needs_action"])
-        action = next(item for item in payload["next_actions"] if item["surface"] == "plugin_cache")
+        action = next(item for item in payload["safe_next_actions"] if item["surface"] == "plugin_cache")
         self.assertIn("multiple_candidates", action["reason"])
         self.assertIn("2 candidates", action["reason"])
         self.assertIn("plugin install --codex --verify --compact-json", action["command"])
@@ -2452,7 +2391,7 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertEqual(code, 0, payload)
         self.assertEqual(payload["kind"], "aippocampus_update_apply_agent_json")
         action = next(
-            item for item in payload["next_actions"] if item["surface"] == "agent_callable"
+            item for item in payload["safe_next_actions"] if item["surface"] == "agent_callable"
         )
         self.assertIn("Reload Codex Desktop", action["manual_instruction"])
         self.assertIn("--foreground-tools-visible --agent-json", action["command"])

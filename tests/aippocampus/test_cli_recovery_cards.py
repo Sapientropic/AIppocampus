@@ -352,9 +352,11 @@ class AippocampusCliRecoveryCardTests(unittest.TestCase):
         proc = self.run_cli("doctor", "config")
 
         self.assertEqual(proc.returncode, 0, proc.stderr)
-        self.assertIn("Configured env vars:", proc.stdout)
-        self.assertIn("Sensitive env vars present:", proc.stdout)
-        self.assertIn("Cannot claim:", proc.stdout)
+        self.assertNotIn("Configured env vars:", proc.stdout)
+        self.assertNotIn("Sensitive env vars present:", proc.stdout)
+        self.assertNotIn("Registered knobs:", proc.stdout)
+        self.assertIn("Boundary:", proc.stdout)
+        self.assertNotIn("Cannot claim:", proc.stdout)
         self.assertIn("provider connectivity", proc.stdout)
         self.assertIn("doctor provider", proc.stdout)
         self.assertIn("values are not printed", proc.stdout)
@@ -1033,7 +1035,11 @@ class AippocampusCliRecoveryCardTests(unittest.TestCase):
         self.assertEqual(payload["error"]["code"], "update_apply_surface_required")
         self.assertTrue(payload["safety"]["no_write_happened"])
         self.assertIn("skill", payload["valid_surfaces"])
-        self.assertIn("aippocampus update plan --json", payload["next_actions"][0]["command"])
+        self.assertNotIn("next_actions", payload)
+        self.assertIn(
+            "aippocampus update plan --json",
+            {action["command"] for action in payload["safe_next_actions"]},
+        )
 
     def test_object_sync_json_missing_config_returns_backend_chooser(self) -> None:
         env = {
@@ -1135,8 +1141,9 @@ class AippocampusCliRecoveryCardTests(unittest.TestCase):
         self.assertNotIn("cannot_claim", deepen_payload)
         self.assertNotIn("policy_boundary", deepen_payload)
         self.assertNotIn("result", deepen_payload)
-        self.assertIn("boundary_detail", deepen_payload)
-        self.assertIn("operator_detail", deepen_payload)
+        self.assertNotIn("boundary_detail", deepen_payload)
+        self.assertNotIn("operator_detail", deepen_payload)
+        self.assertIn("operator_detail_command", deepen_payload)
 
         self.assertEqual(provider.returncode, 0, provider.stderr)
         provider_payload = json.loads(provider.stdout)

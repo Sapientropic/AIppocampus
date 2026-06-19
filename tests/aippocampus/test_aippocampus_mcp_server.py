@@ -376,8 +376,10 @@ class AippocampusMcpServerTests(unittest.TestCase):
         self.assertFalse(payload["opt_in_required"])
         self.assertEqual(payload["schema_version"], "agent-continuity-path-v1")
         self.assertEqual(payload["detail"], "compact")
-        self.assertEqual(payload["output_boundary"], "compact_foreground_no_local_private_handles")
-        self.assertEqual(payload["action_boundary"]["primary_action_field"], "foreground_action")
+        self.assertNotIn("output_boundary", payload)
+        self.assertNotIn("action_boundary", payload)
+        self.assertNotIn("metrics", payload)
+        self.assertNotIn("audit_available", payload)
         self.assertNotIn("cannot_claim", payload)
         self.assertIn("source_backed_claims", payload["claim_boundary"]["must_reopen_for"])
         action = payload["foreground_action"]
@@ -393,10 +395,9 @@ class AippocampusMcpServerTests(unittest.TestCase):
         self.assertNotIn("machine_next_command", encoded)
         self.assertNotIn("aippo-nav:", encoded)
         self.assertLessEqual(len(encoded.encode("utf-8")), 5_000)
-        self.assertLessEqual(len(payload), 20)
+        self.assertLessEqual(len(payload), 18)
         self.assertLessEqual(field_path_count(payload), 120)
-        self.assertTrue(payload["audit_available"])
-        self.assertTrue(payload["policy_boundary"]["navigation_only_not_fact"])
+        self.assertNotIn("policy_boundary", payload)
         self.assertNotIn(str(self.cwd), encoded)
 
         deepen_response = mcp.handle_request(
@@ -529,7 +530,8 @@ class AippocampusMcpServerTests(unittest.TestCase):
             }
         )
         self.assertFalse(valid["result"].get("isError", False), self.tool_payload(valid))
-        self.assertEqual(self.tool_payload(valid)["metrics"]["requested_max_routes"], 1)
+        self.assertEqual(self.tool_payload(valid)["route_count"], 1)
+        self.assertNotIn("metrics", self.tool_payload(valid))
 
         for request_id, value, message in [
             (2032, 0, "max must be >= 1"),
@@ -1696,10 +1698,9 @@ class AippocampusMcpServerTests(unittest.TestCase):
         self.assertEqual(agent_payload["surface_class"], "foreground_recovery_card")
         self.assertEqual(agent_payload["foreground_action_contract"], "foreground-action-v1")
         self.assertEqual(agent_payload["error"]["code"], "missing_recall_handle")
-        self.assertEqual(
-            agent_payload["operator_detail"]["result"]["error"]["code"],
-            "missing_recall_handle",
-        )
+        self.assertNotIn("operator_detail", agent_payload)
+        self.assertNotIn("boundary_detail", agent_payload)
+        self.assertIn("operator_detail_command", agent_payload)
         assert_recall_template_action(self, agent_payload["foreground_action"])
         self.assertEqual(agent_payload["agent_next_action"], agent_payload["foreground_action"])
         self.assertIn(

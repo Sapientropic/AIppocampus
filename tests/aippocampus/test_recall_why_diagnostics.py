@@ -192,18 +192,37 @@ class RecallWhyDiagnosticsTests(unittest.TestCase):
         payload = json.loads(result.stdout)
         encoded = json.dumps(payload, ensure_ascii=False)
         self.assertEqual(payload["mode"], "why-not-recall")
-        self.assertEqual(payload["kind"], "aippocampus_recall_diagnostic")
-        self.assertIn("recall_context", payload["searched_surfaces"])
+        self.assertEqual(payload["kind"], "aippocampus_recall_diagnostic_compact")
+        self.assertNotIn("searched_surfaces", payload)
+        self.assertNotIn("surface_reports", payload)
+        self.assertNotIn("route_ids", payload)
+        self.assertIn("explanation_card", payload)
         action_ids = [item["id"] for item in payload["safe_next_actions"]]
         self.assertEqual(action_ids.count("recall_same_cue"), 1)
-        self.assertEqual(payload["next_safe_action"], payload["agent_next_action"]["id"])
-        self.assertEqual(payload["authority_next_safe_action"], "reopen_source")
+        self.assertEqual(payload["explanation_card"]["next"], payload["agent_next_action"]["id"])
         deepen_action = next(item for item in payload["safe_next_actions"] if item["id"] == "deepen_after_recall")
         self.assertEqual(deepen_action["depends_on"], "last_recall_cache")
         self.assertEqual(payload["agent_next_action"]["id"], "tighten_cue")
         self.assertEqual(payload["agent_next_action"]["requires"], ["more_specific_cue"])
         self.assertNotIn("SECRET_TOKEN", encoded)
         self.assertNotIn(str(self.cwd), encoded)
+
+        full = facade.run_command(
+            [
+                "why-not-recall",
+                "SECRET_TOKEN=abc123 clean source continuity",
+                "--cwd",
+                str(self.cwd),
+                "--clean-source-dir",
+                str(self.clean),
+                "--json",
+                "--detail",
+                "full",
+            ],
+            capture_output=True,
+        )
+        full_payload = json.loads(full.stdout)
+        self.assertIn("recall_context", full_payload["searched_surfaces"])
 
     def test_cli_help_and_human_output_are_frontstage_cards(self) -> None:
         help_result = facade.run_command(["why-recall", "--help"], capture_output=True)
@@ -267,13 +286,10 @@ class RecallWhyDiagnosticsTests(unittest.TestCase):
         self.assertTrue(result.ok, result.stderr)
         payload = json.loads(result.stdout)
         self.assertEqual(payload["agent_next_action"]["id"], "check_onboarding_status")
-        self.assertEqual(
-            payload["action_card"]["next_command"],
-            payload["agent_next_action"]["command"],
-        )
+        self.assertNotIn("action_card", payload)
+        self.assertEqual(payload["explanation_card"]["next"], "check_onboarding_status")
         encoded = json.dumps(payload, ensure_ascii=False)
         commands = [item["command"] for item in payload["safe_next_actions"]]
-        self.assertEqual(payload["next_safe_action"], "check_onboarding_status")
         self.assertIn(
             ["aippocampus", "agent", "recall", "old correction", "--json"],
             [shlex.split(command) for command in commands],

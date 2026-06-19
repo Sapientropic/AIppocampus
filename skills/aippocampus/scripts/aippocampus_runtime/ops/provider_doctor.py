@@ -486,7 +486,7 @@ def render_text(report: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def render_config_text(report: dict[str, Any]) -> str:
+def render_config_text(report: dict[str, Any], *, detail: str = "compact") -> str:
     data = _as_dict(report.get("data"))
     knobs = list(data.get("knobs") or [])
     configured = [
@@ -494,34 +494,42 @@ def render_config_text(report: dict[str, Any]) -> str:
     ]
     configured_sensitive = [item for item in configured if item.get("sensitive")]
     cannot_claim = list(report.get("cannot_claim") or [])
+    warnings = list(report.get("warnings") or [])
     lines = [
         "AIppocampus config doctor",
         f"- Status: {report.get('status')}",
-        f"- Registered knobs: {len(knobs)}",
-        f"- Configured env vars: {len(configured)}",
-        f"- Sensitive env vars present: {len(configured_sensitive)}",
-        f"- Unknown AIPPOCAMPUS_* env vars: {data.get('unknown_count', 0)}",
-        f"- Warnings: {len(report.get('warnings') or [])}",
-        "- Cannot claim: config presence does not validate secret values or provider connectivity",
         "- Privacy: values are not printed; configured values are presence-only",
-        "- Knob catalog:",
-    ]
-    for item in knobs:
-        if not isinstance(item, dict):
-            continue
-        note = str(item.get("notes") or "")
-        note_part = f" note={note}" if note else ""
-        lines.append(
-            f"  - {item.get('name')} surface={item.get('surface')} "
-            f"default={item.get('default')} source={item.get('source')}{note_part}"
-        )
-    lines.extend(
-        [
+        "- Boundary: config presence does not validate secret values or provider connectivity",
         "- Next: use `aippocampus doctor provider` when you need provider/key connectivity readiness.",
-        "",
-        ]
-    )
-    if cannot_claim:
+    ]
+    if warnings:
+        lines.insert(2, f"- Warnings: {len(warnings)}")
+    if int(data.get("unknown_count", 0) or 0):
+        lines.insert(2, f"- Unknown AIPPOCAMPUS_* env vars: {data.get('unknown_count', 0)}")
+    if detail == "full":
+        lines.extend(
+            [
+                f"- Registered knobs: {len(knobs)}",
+                f"- Configured env vars: {len(configured)}",
+                f"- Sensitive env vars present: {len(configured_sensitive)}",
+                f"- Unknown AIPPOCAMPUS_* env vars: {data.get('unknown_count', 0)}",
+                f"- Warnings: {len(warnings)}",
+                "- Knob catalog:",
+            ]
+        )
+        for item in knobs:
+            if not isinstance(item, dict):
+                continue
+            note = str(item.get("notes") or "")
+            note_part = f" note={note}" if note else ""
+            lines.append(
+                f"  - {item.get('name')} surface={item.get('surface')} "
+                f"default={item.get('default')} source={item.get('source')}{note_part}"
+            )
+    else:
+        lines.append("- Detail: use `aippocampus config --detail full` for the knob catalog.")
+    lines.append("")
+    if cannot_claim and detail == "full":
         lines.append("- Detail: " + ", ".join(str(item) for item in cannot_claim[:3]))
         lines.append("")
     return "\n".join(lines)
@@ -774,7 +782,7 @@ def main(argv: list[str] | None = None) -> int:
         elif args.json_output or args.operator_json:
             print(json.dumps(report, ensure_ascii=False, indent=2))
         else:
-            print(render_config_text(report))
+            print(render_config_text(report, detail=args.detail))
         return 0
 
     report = build_provider_doctor_report(

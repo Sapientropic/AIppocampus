@@ -66,6 +66,7 @@ def _template_action(
         "label": label,
         "command_template": command_template,
         "requires": list(requires),
+        "template_only": True,
         "why": why,
         "mutation_risk": mutation_risk,
         "claim_boundary": claim_boundary,

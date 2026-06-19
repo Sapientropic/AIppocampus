@@ -67,6 +67,7 @@ from aippocampus_runtime.recall.agent_continuity_cli_support import (
     handle_recovery_fields,
     last_recall_route_key,
     last_recall_route_wildcard_key,
+    last_recall_selector_recovery_fields,
     last_recall_unavailable_payload,
     macro_schema_help,
     macro_state_template,
@@ -1940,6 +1941,20 @@ def main(argv: list[str] | None = None) -> int:
             max_matches=args.max,
         )
         request_index = int(args.request or 1) if args.last_recall or args.request is not None else None
+        if request_index is not None and payload.get("status") == "cannot_verify":
+            recovery_cue = (
+                str(cached_context.get("query") or "").strip()
+                or query_from_last_recall_cache(args.last_recall_path)
+            )
+            payload.update(
+                last_recall_selector_recovery_fields(
+                    "deepen",
+                    request_index=request_index,
+                    cue=recovery_cue,
+                )
+            )
+            payload.pop("policy_boundary", None)
+            payload.pop("cannot_claim", None)
         if request_index is not None and payload.get("status") == "ok":
             try:
                 mark_last_recall_request_opened(
