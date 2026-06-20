@@ -221,7 +221,7 @@ def _compact_understanding_state(state: Mapping[str, Any]) -> dict[str, Any]:
 def _safe_next_actions(task: str) -> list[dict[str, Any]]:
     clean_task = str(redact_sensitive_values(redact_private_paths(str(task or "").strip())) or "")
     if clean_task and not command_value_needs_input(clean_task):
-        recall_action = {
+        recall_action: dict[str, Any] = {
             "id": "run_agent_recall_for_orientation",
             "label": "Run recall for this task",
             "tool_name": "agent_recall",
