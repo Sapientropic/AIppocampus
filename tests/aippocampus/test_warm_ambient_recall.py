@@ -27,6 +27,10 @@ from aippocampus_runtime.warm_ambient.hook_seen_threads import (  # noqa: E402
     load_hook_seen_rows,
 )
 from aippocampus_runtime.warm_ambient.scout_attribution import merge_scout_origins  # noqa: E402
+from tests.aippocampus.warm_ambient_fixtures import (  # noqa: E402
+    write_registry,
+    write_thread_registry,
+)
 
 
 class WarmAmbientRecallTests(unittest.TestCase):
@@ -40,25 +44,6 @@ class WarmAmbientRecallTests(unittest.TestCase):
 
     def tearDown(self) -> None:
         self.tmp.cleanup()
-
-    def _write_clean_thread(self, thread_key: str, rows: list[dict]) -> Path:
-        clean_dir = self.root / "clean" / thread_key.replace(":", "-")
-        clean_dir.mkdir(parents=True)
-        messages_path = clean_dir / "messages.jsonl"
-        messages_path.write_text(
-            "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows),
-            encoding="utf-8",
-        )
-        return messages_path
-
-    def _write_registry(self, entries: list[dict]) -> Path:
-        registry_path = self.root / "registry" / "threads.json"
-        registry_path.parent.mkdir(parents=True, exist_ok=True)
-        registry_path.write_text(
-            json.dumps({"schema_version": 1, "threads": entries}, ensure_ascii=False),
-            encoding="utf-8",
-        )
-        return registry_path
 
     def test_warm_card_ids_use_sha256_cache_fingerprints(self) -> None:
         raw = "\n".join(["prompt_trace_fallback", "ambient", "source"])
@@ -1104,7 +1089,8 @@ class WarmAmbientRecallTests(unittest.TestCase):
         self.assertEqual(result["scouts"][0]["error_kind"], "read_timeout")
 
     def test_evidence_guard_block_keeps_source_validated_prompt_trace_fallback(self) -> None:
-        messages = self._write_clean_thread(
+        registry_path = write_thread_registry(
+            self.root,
             "session:old",
             [
                 {
@@ -1116,15 +1102,7 @@ class WarmAmbientRecallTests(unittest.TestCase):
                     "text": "The booking system retry guardrail needs idempotent payment attempts.",
                 }
             ],
-        )
-        registry_path = self._write_registry(
-            [
-                {
-                    "thread_key": "session:old",
-                    "title": "Booking guardrail",
-                    "paths": {"clean_source_messages_jsonl": str(messages)},
-                }
-            ]
+            title="Booking guardrail",
         )
 
         def scout_fn(scout, payload, **kwargs):
@@ -1211,7 +1189,8 @@ class WarmAmbientRecallTests(unittest.TestCase):
         self.assertEqual(result["cards"][0]["theme"], "warm cache")
 
     def test_prompt_trace_fallback_can_surface_supported_prior_context(self) -> None:
-        messages = self._write_clean_thread(
+        registry_path = write_thread_registry(
+            self.root,
             "session:old",
             [
                 {
@@ -1229,15 +1208,7 @@ class WarmAmbientRecallTests(unittest.TestCase):
                     "text": "Please add logging without changing the compose file completely.",
                 },
             ],
-        )
-        registry_path = self._write_registry(
-            [
-                {
-                    "thread_key": "session:old",
-                    "title": "Docker logging",
-                    "paths": {"clean_source_messages_jsonl": str(messages)},
-                }
-            ]
+            title="Docker logging",
         )
 
         def scout_fn(scout, payload, **kwargs):
@@ -1285,7 +1256,8 @@ class WarmAmbientRecallTests(unittest.TestCase):
         self.assertNotIn("current_prompt", result["cards"][0]["key_line"])
 
     def test_prompt_trace_fallback_does_not_use_current_prompt_as_memory(self) -> None:
-        messages = self._write_clean_thread(
+        registry_path = write_thread_registry(
+            self.root,
             "session:old",
             [
                 {
@@ -1295,15 +1267,7 @@ class WarmAmbientRecallTests(unittest.TestCase):
                     "text": "What are some advanced use cases for Node.js?",
                 }
             ],
-        )
-        registry_path = self._write_registry(
-            [
-                {
-                    "thread_key": "session:old",
-                    "title": "Node prompt",
-                    "paths": {"clean_source_messages_jsonl": str(messages)},
-                }
-            ]
+            title="Node prompt",
         )
 
         def scout_fn(scout, payload, **kwargs):
@@ -1464,7 +1428,8 @@ class WarmAmbientRecallTests(unittest.TestCase):
         self.assertFalse(self.cache_path.exists())
 
     def test_source_validation_drops_unsupported_evidence_ref(self) -> None:
-        messages = self._write_clean_thread(
+        registry_path = write_thread_registry(
+            self.root,
             "session:old",
             [
                 {
@@ -1476,15 +1441,6 @@ class WarmAmbientRecallTests(unittest.TestCase):
                     "text": "This source discusses unrelated registry maintenance only.",
                 }
             ],
-        )
-        registry_path = self._write_registry(
-            [
-                {
-                    "thread_key": "session:old",
-                    "title": "Old ambient thread",
-                    "paths": {"clean_source_messages_jsonl": str(messages)},
-                }
-            ]
         )
 
         def scout_fn(scout, payload, **kwargs):
@@ -1528,7 +1484,8 @@ class WarmAmbientRecallTests(unittest.TestCase):
         self.assertEqual(result["suppression_diagnostics"]["source_validation_status_counts"], {"unsupported": 1})
 
     def test_source_validation_keeps_supported_evidence_ref(self) -> None:
-        messages = self._write_clean_thread(
+        registry_path = write_thread_registry(
+            self.root,
             "session:old",
             [
                 {
@@ -1540,15 +1497,6 @@ class WarmAmbientRecallTests(unittest.TestCase):
                     "text": "The design says: Card/cache first, then warm scouts. This validates ambient recall.",
                 }
             ],
-        )
-        registry_path = self._write_registry(
-            [
-                {
-                    "thread_key": "session:old",
-                    "title": "Old ambient thread",
-                    "paths": {"clean_source_messages_jsonl": str(messages)},
-                }
-            ]
         )
 
         def scout_fn(scout, payload, **kwargs):
@@ -1626,7 +1574,8 @@ class WarmAmbientRecallTests(unittest.TestCase):
         self.assertTrue(result["scouts"][1]["completed_after_quorum_cutoff"])
 
     def test_supported_deep_archival_visibility_survives_merge(self) -> None:
-        messages = self._write_clean_thread(
+        registry_path = write_thread_registry(
+            self.root,
             "session:old",
             [
                 {
@@ -1638,15 +1587,6 @@ class WarmAmbientRecallTests(unittest.TestCase):
                     "text": "The original wording was: continuity survives transformation.",
                 }
             ],
-        )
-        registry_path = self._write_registry(
-            [
-                {
-                    "thread_key": "session:old",
-                    "title": "Old ambient thread",
-                    "paths": {"clean_source_messages_jsonl": str(messages)},
-                }
-            ]
         )
 
         def scout_fn(scout, payload, **kwargs):
@@ -2393,7 +2333,7 @@ class WarmAmbientRecallTests(unittest.TestCase):
         self.assertNotIn("ambient.md", job["prompt"].casefold())
 
     def test_prompt_ambient_records_hook_seen_thread_for_registry_reconciliation(self) -> None:
-        registry_path = self._write_registry([])
+        registry_path = write_registry(self.root, [])
 
         result = prompt_recall_ambient.attach_ambient_recall(
             {
