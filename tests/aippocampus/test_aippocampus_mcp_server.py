@@ -201,10 +201,11 @@ class AippocampusMcpServerTests(unittest.TestCase):
         self.assertNotIn("handle", agent_deepen_schema.get("required") or [])
         self.assertIn("request_index", agent_deepen_schema["properties"])
         self.assertIn("last_recall", agent_deepen_schema["properties"])
+        self.assertIn("recall_selector", agent_deepen_schema["properties"])
         self.assertIn("detail", agent_deepen_schema["properties"])
         agent_explain_schema = by_name["agent_explain"]["inputSchema"]
         self.assertNotIn("handle", agent_explain_schema.get("required") or [])
-        for prop in ("request_index", "last_recall", "detail"):
+        for prop in ("request_index", "last_recall", "recall_selector", "detail"):
             self.assertIn(prop, agent_explain_schema["properties"])
         self.assertIn("Find source-backed continuity routes", by_name["agent_recall"]["description"])
         self.assertIn("Get low-risk working guidance", by_name["agent_aippo"]["description"])
@@ -386,7 +387,9 @@ class AippocampusMcpServerTests(unittest.TestCase):
         self.assertEqual(action["id"], "agent_deepen_selected_route")
         self.assertEqual(action["tool_name"], "agent_deepen")
         self.assertEqual(action["arguments"]["request_index"], 1)
-        self.assertTrue(action["arguments"]["last_recall"])
+        self.assertIn("recall_selector", action["arguments"])
+        self.assertNotIn("last_recall", action["arguments"])
+        self.assertIn("--recall-selector", action["command"])
         self.assertEqual(action["claim_boundary"], "no_claim_before_reopen")
         self.assertNotIn("foreground_action_card", payload)
         self.assertNotIn("memory_packets", payload)

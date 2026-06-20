@@ -176,6 +176,48 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
         self.assertNotIn("secondary_action", action)
         self.assertIn("topic_roadmap_closeout", public["routes"][0]["choice_reason"])
 
+    def test_recall_selector_replaces_mutable_last_recall_in_compact_actions(self) -> None:
+        public = agent_continuity.public_recall_projection(
+            {
+                "kind": "aippocampus_agent_continuity_path",
+                "schema_version": "agent-continuity-path-v1",
+                "mode": "recall",
+                "status": "ok",
+                "opt_in_required": False,
+                "last_recall_cache_available": True,
+                "recall_selector_id": "sel_0123456789abcdef",
+                "foreground_action_card": {
+                    "decision": "use_route_first",
+                    "canonical_action": {
+                        "action_id": "agent_deepen_selected_route",
+                        "tool_name": "agent_deepen",
+                        "arguments": {"request_index": 1, "last_recall": True},
+                        "claim_boundary": "no_claim_before_reopen",
+                    },
+                },
+                "memory_packets": [
+                    {
+                        "route_id": "route_selector",
+                        "route_topic": "selector stability",
+                        "route_kind": "clean_source_route",
+                        "output_mode": "reopenable_route",
+                        "claim_permission": "no_claim_before_reopen",
+                    }
+                ],
+            }
+        )
+
+        action = public["foreground_action"]
+        route_action = public["routes"][0]["action"]
+        self.assertEqual(action["arguments"]["recall_selector"], "sel_0123456789abcdef")
+        self.assertNotIn("last_recall", action["arguments"])
+        self.assertIn("--recall-selector sel_0123456789abcdef", action["command"])
+        self.assertEqual(route_action["arguments"]["recall_selector"], "sel_0123456789abcdef")
+        self.assertNotIn("last_recall", route_action["arguments"])
+        encoded = json.dumps(public, ensure_ascii=False)
+        self.assertNotIn('"handle":', encoded)
+        self.assertNotIn("last-recall.json", encoded)
+
     def test_single_generic_route_with_distinctive_cue_anchors_refines_before_deepen(
         self,
     ) -> None:

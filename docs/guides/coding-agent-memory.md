@@ -183,9 +183,15 @@ In a repository checkout, the public-safe smokes below exercise the coding-agent
 lane without private history or writes:
 
 ```powershell
+python -m aippocampus_runtime.cli.facade smoke recall-funnel "remembered phrase or project cue" --json
 python tools\aippocampus\smoke\smoke_recall_navigation_comparison.py --json
 python tools\aippocampus\smoke\smoke_repo_familiarity.py --json
 ```
+
+`smoke recall-funnel` is the live-agent/proxy gate for the ordinary
+`agent recall -> agent deepen` path. It separates route existence, route-label
+specificity, source reopen success, and task usefulness, so a fixture benchmark
+green light does not silently become a live foreground usefulness claim.
 
 ## Evidence Drawer
 

@@ -170,8 +170,9 @@ The CLI contract applies to documented operator commands, especially:
   selected local history is safe to register
 - `aippocampus doctor provider` as a no-model-call visibility diagnostic for
   optional external-model route key environment variables
-- `aippocampus smoke recall-funnel "<cue>"` as a no-write progressive recall
-  diagnostic over `recall_context` / first reopenable `recall_deepen` route
+- `aippocampus smoke recall-funnel "<cue>"` as a no persistent-write
+  progressive recall diagnostic over `recall_context` / first reopenable
+  `recall_deepen` plus the ordinary `agent recall -> agent deepen` path
 - `aippocampus why-recall "<cue>" --json` and `aippocampus why-not-recall
   "<cue>" --json` as public-safe recovery/explanation diagnostics over
   `recall_context`, active locks, ambient cache, and semantic-gate state

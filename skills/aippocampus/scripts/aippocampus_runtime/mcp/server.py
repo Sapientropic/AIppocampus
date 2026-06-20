@@ -18,6 +18,7 @@ from aippocampus_runtime.contracts import canonical_foreground_action_fields
 from aippocampus_runtime.mcp import memory_health_recovery
 from aippocampus_runtime.mcp.agent_deepen_projection import compact_agent_deepen_payload
 from aippocampus_runtime.mcp.agent_explain_projection import compact_agent_explain_payload
+from aippocampus_runtime.mcp.agent_recall_projection import compact_agent_recall_payload
 from aippocampus_runtime.mcp.foreground_recovery import (
     missing_input_recovery_card,
 )
@@ -32,7 +33,6 @@ from aippocampus_runtime.mcp.provider_key_bridge import (
     maybe_apply_provider_key_bridge_for_semantic_diagnostic,
 )
 from aippocampus_runtime.mcp.public_projection import (
-    compact_agent_recall_payload,
     compact_health_payload,
     compact_message,
     compact_recall_context_payload,
@@ -67,7 +67,10 @@ from aippocampus_runtime.recall.agent_continuity_cli_support import (
     missing_handle_payload,
     normalize_route_limit,
     opened_route_keys_from_last_recall_cache,
+    query_from_last_recall_cache,
+    recall_selector_cache_path,
     write_last_recall_cache,
+    write_recall_selector_snapshot,
 )
 from aippocampus_runtime.recall.background_findings import background_findings_card
 from aippocampus_runtime.recall.why_diagnostics import recall_diagnostic_report
@@ -477,6 +480,7 @@ def call_agent_recall(arguments: dict[str, Any]) -> dict[str, Any]:
         payload["provider_key_bridge"] = provider_bridge_report
     cache_written = write_last_recall_cache(
         payload.get("deepen_requests") or [],
+        query=query,
         cwd=arguments.get("cwd"),
         clean_source_dir=arguments.get("clean_source_dir"),
         registry_dir=arguments.get("registry_dir"),
@@ -486,7 +490,10 @@ def call_agent_recall(arguments: dict[str, Any]) -> dict[str, Any]:
         schema_version=str(getattr(agent, "SCHEMA_VERSION", "agent-continuity-path-v1")),
         path=arguments.get("last_recall_path"),
     )
+    selector_id = write_recall_selector_snapshot(arguments.get("last_recall_path")) if cache_written else None
     payload["last_recall_cache_available"] = cache_written
+    payload["recall_selector_available"] = bool(selector_id)
+    payload["recall_selector_id"] = selector_id
     if detail_arg(arguments) == "compact" and not arguments.get("include_private_paths"):
         payload["query"] = query
         payload = compact_agent_recall_payload(payload)
@@ -525,13 +532,21 @@ def call_agent_deepen(arguments: dict[str, Any]) -> dict[str, Any]:
     handle = arguments.get("handle")
     cached_context: dict[str, Any] = {}
     request_index_arg: int | None = None
-    if handle is None and (arguments.get("last_recall") or "request_index" in arguments):
+    selector_cache_path: str | Path | None = arguments.get("last_recall_path")
+    if handle is None and (
+        arguments.get("recall_selector") or arguments.get("last_recall") or "request_index" in arguments
+    ):
         request_index = int_range(arguments.get("request_index"), default=1, minimum=1, maximum=25)
         request_index_arg = request_index
         try:
+            if arguments.get("recall_selector"):
+                selector_cache_path = recall_selector_cache_path(
+                    str(arguments.get("recall_selector") or ""),
+                    last_recall_path_value=arguments.get("last_recall_path"),
+                )
             handle, cached_context = handle_from_last_recall_cache(
                 request_index=request_index,
-                path=arguments.get("last_recall_path"),
+                path=selector_cache_path,
             )
         except (OSError, ValueError, json.JSONDecodeError) as exc:
             payload = last_recall_unavailable_payload(
@@ -539,6 +554,7 @@ def call_agent_deepen(arguments: dict[str, Any]) -> dict[str, Any]:
                 exc=exc,
                 schema_version=str(getattr(agent_continuity_module(), "SCHEMA_VERSION", "agent-continuity-path-v1")),
                 kind="aippocampus_agent_continuity_path",
+                cue=query_from_last_recall_cache(selector_cache_path),
             )
             return text_result(public_payload(arguments, payload), is_error=True)
     if handle is None:
@@ -565,7 +581,7 @@ def call_agent_deepen(arguments: dict[str, Any]) -> dict[str, Any]:
         try:
             mark_last_recall_request_opened(
                 request_index_arg,
-                path=arguments.get("last_recall_path"),
+                path=selector_cache_path,
                 outcome="source_open",
             )
         except Exception:
@@ -575,6 +591,7 @@ def call_agent_deepen(arguments: dict[str, Any]) -> dict[str, Any]:
             payload,
             request_index=request_index_arg,
             last_recall=bool(arguments.get("last_recall") or request_index_arg is not None),
+            recall_selector=str(arguments.get("recall_selector") or ""),
             surface="mcp_agent_deepen_compact",
         )
     else:
@@ -587,13 +604,21 @@ def call_agent_explain(arguments: dict[str, Any]) -> dict[str, Any]:
     handle = arguments.get("handle")
     cached_context: dict[str, Any] = {}
     request_index_arg: int | None = None
-    if handle is None and (arguments.get("last_recall") or "request_index" in arguments):
+    selector_cache_path: str | Path | None = arguments.get("last_recall_path")
+    if handle is None and (
+        arguments.get("recall_selector") or arguments.get("last_recall") or "request_index" in arguments
+    ):
         request_index = int_range(arguments.get("request_index"), default=1, minimum=1, maximum=25)
         request_index_arg = request_index
         try:
+            if arguments.get("recall_selector"):
+                selector_cache_path = recall_selector_cache_path(
+                    str(arguments.get("recall_selector") or ""),
+                    last_recall_path_value=arguments.get("last_recall_path"),
+                )
             handle, cached_context = handle_from_last_recall_cache(
                 request_index=request_index,
-                path=arguments.get("last_recall_path"),
+                path=selector_cache_path,
             )
         except (OSError, ValueError, json.JSONDecodeError) as exc:
             payload = last_recall_unavailable_payload(
@@ -601,11 +626,13 @@ def call_agent_explain(arguments: dict[str, Any]) -> dict[str, Any]:
                 exc=exc,
                 schema_version=str(getattr(agent_continuity_module(), "SCHEMA_VERSION", "agent-continuity-path-v1")),
                 kind="aippocampus_agent_continuity_path",
+                cue=query_from_last_recall_cache(selector_cache_path),
             )
             payload = compact_agent_explain_payload(
                 payload,
                 request_index=request_index_arg,
                 last_recall=True,
+                recall_selector=str(arguments.get("recall_selector") or ""),
                 surface="mcp_agent_explain_compact",
             )
             return text_result(public_payload(arguments, payload), is_error=True)
@@ -628,6 +655,7 @@ def call_agent_explain(arguments: dict[str, Any]) -> dict[str, Any]:
             payload,
             request_index=request_index_arg,
             last_recall=bool(arguments.get("last_recall") or request_index_arg is not None),
+            recall_selector=str(arguments.get("recall_selector") or ""),
             surface="mcp_agent_explain_compact",
         )
     else:

@@ -312,10 +312,15 @@ class AgentDeepenCompactProjectionTests(unittest.TestCase):
         route_action = recall_payload["routes"][0]["action"]
         self.assertEqual(route_action["id"], "deepen_this_route")
         self.assertEqual(route_action["tool_name"], "agent_deepen")
-        self.assertEqual(route_action["arguments"], {"request_index": 1, "last_recall": True})
-        self.assertIn("--request 1 --last-recall --json", route_action["command"])
-        self.assertEqual(route["callable_selector"]["kind"], "last_recall_request_index")
+        self.assertEqual(route_action["arguments"]["request_index"], 1)
+        self.assertIn("recall_selector", route_action["arguments"])
+        self.assertIn("--request 1 --recall-selector", route_action["command"])
+        self.assertEqual(route["callable_selector"]["kind"], "recall_selector_request_index")
         self.assertEqual(route["callable_selector"]["request_index"], 1)
+        self.assertEqual(
+            route["callable_selector"]["recall_selector"],
+            route_action["arguments"]["recall_selector"],
+        )
         self.assertEqual(route["display_id"], route["route_id"])
         self.assertEqual(route["feedback_id"], route["route_id"])
         self.assertEqual(
@@ -335,7 +340,7 @@ class AgentDeepenCompactProjectionTests(unittest.TestCase):
         self.assertEqual(explain_payload["agent_next_action"], explain_payload["foreground_action"])
         self.assertEqual(explain_payload["safe_next_actions"][0], explain_payload["foreground_action"])
         self.assertEqual(explain_payload["foreground_action"]["tool_name"], "agent_deepen")
-        self.assertIn("agent deepen --request 1 --last-recall --json", explain_payload["foreground_action"]["command"])
+        self.assertIn("agent deepen --request 1 --recall-selector", explain_payload["foreground_action"]["command"])
         self.assertNotIn("macro_navigation_diagnostics", explain_payload)
         self.assertNotIn("cannot_claim", explain_encoded)
 

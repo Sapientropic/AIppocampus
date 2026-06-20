@@ -7,6 +7,7 @@ import unittest
 from contextlib import redirect_stdout
 from io import StringIO
 from pathlib import Path
+from unittest.mock import patch
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
@@ -31,6 +32,7 @@ class UpdateForegroundActionTests(unittest.TestCase):
             root = Path(tmp)
             repo = root / "repo"
             codex_home = root / "codex-home"
+            registry = root / "registry"
             write_minimal_repo(repo)
 
             code, payload = run_update(
@@ -52,20 +54,21 @@ class UpdateForegroundActionTests(unittest.TestCase):
         self.assertEqual(payload["summary"]["needs_action"], ["hooks"])
 
         stdout = StringIO()
-        with redirect_stdout(stdout):
-            compact_code = update_cli.main(
-                [
-                    "plan",
-                    "--surface",
-                    "hooks",
-                    "--repo-root",
-                    str(repo),
-                    "--codex-home",
-                    str(codex_home),
-                    "--no-child-check",
-                    "--agent-json",
-                ]
-            )
+        with patch.dict("os.environ", {"AIPPOCAMPUS_REGISTRY_DIR": str(registry)}):
+            with redirect_stdout(stdout):
+                compact_code = update_cli.main(
+                    [
+                        "plan",
+                        "--surface",
+                        "hooks",
+                        "--repo-root",
+                        str(repo),
+                        "--codex-home",
+                        str(codex_home),
+                        "--no-child-check",
+                        "--agent-json",
+                    ]
+                )
         compact = json.loads(stdout.getvalue())
         self.assertEqual(compact_code, 0, compact)
         self.assertEqual(compact["summary"]["plan_surface_filter"], ["hooks"])

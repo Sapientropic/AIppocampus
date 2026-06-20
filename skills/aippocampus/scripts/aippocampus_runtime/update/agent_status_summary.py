@@ -16,6 +16,13 @@ def agent_callable_host_probe_ok(item: dict[str, Any]) -> bool:
     )
 
 
+def _safe_int(value: Any) -> int:
+    try:
+        return max(0, int(value or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
 def _compact_update_action(
     *,
     surface: str,
@@ -85,6 +92,38 @@ def compact_agent_status_report(
     action_hints_installed = bool(action_hints.get("installed"))
     action_hints_hot_path_active = bool(action_hints.get("hot_path_active"))
     action_hint_primary_command = update_actions.action_hint_status_command()
+    hook_status = str(hooks.get("status") or "not_checked")
+    prompt_installed = bool(hooks.get("prompt_installed"))
+    lifecycle_installed = bool(hooks.get("lifecycle_installed"))
+    prompt_hook_status = hooks.get("prompt_hook_status") if isinstance(hooks, dict) else {}
+    if not isinstance(prompt_hook_status, dict):
+        prompt_hook_status = {}
+    warm_ambient_status = hooks.get("warm_ambient") if isinstance(hooks, dict) else {}
+    if not isinstance(warm_ambient_status, dict):
+        warm_ambient_status = {}
+    warm_activity = warm_ambient_status.get("job_activity")
+    if not isinstance(warm_activity, dict):
+        warm_activity = {}
+    prompt_latency_status = str(
+        prompt_hook_status.get("prompt_hook_latency_risk_status") or ""
+    )
+    foreground_latency_red_lines = _safe_int(
+        prompt_hook_status.get("foreground_latency_red_line_violation_count")
+    )
+    prompt_near_timeout_count = _safe_int(prompt_hook_status.get("near_timeout_event_count"))
+    prompt_latency_risk = (
+        prompt_latency_status == "near_host_timeout_risk"
+        or foreground_latency_red_lines > 0
+        or prompt_near_timeout_count > 0
+    )
+    warm_status = str(warm_ambient_status.get("status") or "")
+    warm_queue_state = str(warm_activity.get("queue_state") or "")
+    warm_stale_queue = bool(warm_activity.get("stale_queue_blocked")) or warm_status == "blocked"
+    provider_status = str(llm.get("status") or "")
+    provider_degraded = provider_status in {
+        "missing_provider_env_var",
+        "child_process_missing_provider_env_var",
+    }
     deferred_components = []
     for name, item in surfaces.items():
         if not isinstance(item, dict) or not item.get("operator_detail_available"):
@@ -127,6 +166,53 @@ def compact_agent_status_report(
                 command=str(action_hint_primary_command),
             )
         )
+    plan_surface_filter = summary.get("plan_surface_filter") or []
+    if plan_surface_filter:
+        for surface in [item for item in needs_action if item != "plugin_cache"][:4]:
+            item = surfaces.get(surface) or {}
+            command = item.get("next_command") or item.get("documented_install_command")
+            reason = f"{surface} status is {item.get('status') or 'attention_needed'}"
+            actions.append(_compact_update_action(surface=surface, reason=reason, command=command))
+    if prompt_latency_risk and not foreground_partial:
+        actions.append(
+            _compact_update_action(
+                surface="prompt_hook_latency",
+                reason=(
+                    "prompt hook near-timeout risk: "
+                    f"{foreground_latency_red_lines} red-line event(s), "
+                    f"{prompt_near_timeout_count} near-timeout event(s)"
+                ),
+                command="aippocampus hooks prompt status --last --json",
+            )
+        )
+    if warm_stale_queue and not foreground_partial:
+        actions.append(
+            _compact_update_action(
+                surface="warm_ambient",
+                reason=f"warm ambient queue is {warm_queue_state or warm_status}",
+                command=str(warm_ambient_status.get("next_command") or "aippocampus warm status --json"),
+            )
+        )
+    ambient_installed_for_provider = bool(
+        prompt_installed
+        or lifecycle_installed
+        or action_hints_installed
+        or warm_status in {"blocked", "pending"}
+    )
+    if provider_degraded and ambient_installed_for_provider and not foreground_partial:
+        actions.append(
+            _compact_update_action(
+                surface="provider",
+                reason=f"ambient/provider path status is {provider_status}",
+                command="aippocampus doctor provider --json",
+            )
+        )
+    if not plan_surface_filter:
+        for surface in [item for item in needs_action if item != "plugin_cache"][:4]:
+            item = surfaces.get(surface) or {}
+            command = item.get("next_command") or item.get("documented_install_command")
+            reason = f"{surface} status is {item.get('status') or 'attention_needed'}"
+            actions.append(_compact_update_action(surface=surface, reason=reason, command=command))
     agent_next_action = update_actions.agent_callable_foreground_action(agent)
     if agent.get("status") and (agent.get("next_command") or agent_next_action.get("command")) and not agent.get("ready"):
         actions.append(
@@ -137,11 +223,6 @@ def compact_agent_status_report(
                 manual_instruction=agent_next_action.get("manual_instruction"),
             )
         )
-    for surface in [item for item in needs_action if item != "plugin_cache"][:4]:
-        item = surfaces.get(surface) or {}
-        command = item.get("next_command") or item.get("documented_install_command")
-        reason = f"{surface} status is {item.get('status') or 'attention_needed'}"
-        actions.append(_compact_update_action(surface=surface, reason=reason, command=command))
     cache_refresh = plugin.get("cache_refresh") if isinstance(plugin, dict) else None
     if isinstance(cache_refresh, dict) and cache_refresh.get("ok") is False:
         reason = str(
@@ -202,36 +283,93 @@ def compact_agent_status_report(
         else bool(agent.get("ready"))
     )
     agent_status = agent.get("status") or summary.get("agent_callable_status")
-    hook_status = str(hooks.get("status") or "not_checked")
-    prompt_installed = bool(hooks.get("prompt_installed"))
-    lifecycle_installed = bool(hooks.get("lifecycle_installed"))
     ambient_issue_codes: list[str] = []
     if hook_status not in {"current", "not_checked"}:
         ambient_issue_codes.append(f"hooks:{hook_status}")
     if action_hints_installed and not action_hints_ready:
         ambient_issue_codes.append(f"action_hints:{action_hints.get('cache_status') or 'not_ready'}")
+    if prompt_latency_risk:
+        ambient_issue_codes.append("prompt_hook:latency_risk")
+    if warm_stale_queue:
+        ambient_issue_codes.append(f"warm_ambient:{warm_queue_state or warm_status}")
+    if provider_degraded and ambient_installed_for_provider:
+        ambient_issue_codes.append(f"provider:{provider_status}")
+    active_useful = bool(
+        prompt_installed
+        and not prompt_latency_risk
+        and (
+            _safe_int(prompt_hook_status.get("last_prompt_hook_useful_signal_count")) > 0
+            or action_hints_ready
+        )
+    )
     ambient_state = (
         "ready"
-        if hook_status == "current" and (not action_hints_installed or action_hints_ready)
+        if hook_status == "current"
+        and (not action_hints_installed or action_hints_ready)
+        and not prompt_latency_risk
+        and not warm_stale_queue
+        and not (provider_degraded and ambient_installed_for_provider)
         else "degraded"
-        if prompt_installed or lifecycle_installed or action_hints_installed
+        if prompt_installed
+        or lifecycle_installed
+        or action_hints_installed
+        or warm_status in {"blocked", "pending"}
         else "not_installed"
-        if hook_status in {"missing", "not_checked"} and not (prompt_installed or lifecycle_installed)
+        if hook_status in {"missing", "not_checked", "deferred"} and not (prompt_installed or lifecycle_installed)
         else "attention_needed"
     )
+    if action_hints_installed and not action_hints_ready:
+        ambient_next_command = action_hint_primary_command
+        ambient_next_action = "refresh_or_inspect_action_hints"
+    elif prompt_latency_risk:
+        ambient_next_command = "aippocampus hooks prompt status --last --json"
+        ambient_next_action = "inspect_prompt_hook_latency"
+    elif warm_stale_queue:
+        ambient_next_command = str(
+            warm_ambient_status.get("next_command") or "aippocampus warm status --json"
+        )
+        ambient_next_action = "inspect_warm_queue_or_provider"
+    elif provider_degraded and ambient_installed_for_provider:
+        ambient_next_command = "aippocampus doctor provider --json"
+        ambient_next_action = "inspect_provider"
+    elif ambient_state == "ready":
+        ambient_next_command = ""
+        ambient_next_action = "continue_with_ordinary_recall"
+    else:
+        ambient_next_command = "aippocampus update status --operator-json"
+        ambient_next_action = "inspect_operator_status"
     ambient_recall = {
         "state": ambient_state,
+        "active_useful": active_useful,
         "prompt_hook_installed": prompt_installed,
         "lifecycle_hook_installed": lifecycle_installed,
         "action_hints_installed": action_hints_installed,
         "action_hints_ready": action_hints_ready,
         "hot_path_active": action_hints_hot_path_active,
+        "latency_risk": {
+            "status": prompt_latency_status or "not_checked",
+            "foreground_latency_red_line_violation_count": foreground_latency_red_lines,
+            "near_timeout_event_count": prompt_near_timeout_count,
+            "diagnostic_command": "aippocampus hooks prompt status --last --json",
+        },
+        "warm_queue": {
+            "status": warm_status or "not_checked",
+            "queue_state": warm_queue_state or "not_checked",
+            "pending_recent_count": _safe_int(warm_activity.get("pending_recent_count")),
+            "pending_stale_count": _safe_int(warm_activity.get("pending_stale_count")),
+            "stale_queue_blocked": warm_stale_queue,
+            "ordinary_recall_usable": bool(
+                warm_ambient_status.get("ordinary_recall_usable", True)
+            ),
+        },
+        "provider": {
+            "status": provider_status or "not_checked",
+            "degraded": bool(provider_degraded and ambient_installed_for_provider),
+            "values_redacted": True,
+        },
         "issue_codes": ambient_issue_codes,
-        "next_command": (
-            action_hint_primary_command
-            if action_hints_installed and not action_hints_ready
-            else "aippocampus update status --operator-json"
-        ),
+        "next_action": ambient_next_action,
+        "next_command": ambient_next_command,
         "claim_boundary": "ambient readiness is operational status, not source evidence",
     }
     readiness_state = (

@@ -58,6 +58,7 @@ from aippocampus_runtime.update.status_readiness import (
     surface_summary_blocker,
     unready_surfaces,
 )
+from aippocampus_runtime.warm_ambient import scheduler as warm_scheduler
 
 SCHEMA_VERSION = 1
 PLUGIN_BUILD_SCRIPT = "build_plugin_package.py"
@@ -599,6 +600,15 @@ def status_hooks(codex_home_path: Path, hooks_json: Path | None = None) -> dict[
     data = install_prompt.load_hooks(path)
     rows = _hook_rows(data)
     action_hint_status = install_action_hint.status(path, include_private_paths=False)
+    prompt_hook_status = install_prompt.status(
+        path,
+        include_last=True,
+        include_private_paths=False,
+        include_operator_detail=False,
+    )
+    warm_status = warm_scheduler.warm_status_payload(
+        job_dir=warm_scheduler.default_warm_job_dir()
+    )
     provider_key_bridge_rows = [
         {"event": row["event"], "handler_index": row["handler_index"]}
         for row in rows
@@ -682,6 +692,55 @@ def status_hooks(codex_home_path: Path, hooks_json: Path | None = None) -> dict[
         "action_hints_installed": bool(action_hint_status.get("installed")),
         "action_hints_ready": action_hint_status.get("cache_status") == "with_fresh_records",
         "action_hints_status": action_hint_status.get("cache_status") or "not_installed",
+        "prompt_hook_status": {
+            "status": prompt_hook_status.get("status"),
+            "installed": bool(prompt_hook_status.get("installed")),
+            "last_prompt_hook_status": prompt_hook_status.get("last_prompt_hook_status"),
+            "last_prompt_hook_memory_surface": prompt_hook_status.get(
+                "last_prompt_hook_memory_surface"
+            ),
+            "last_prompt_hook_useful_signal_count": int(
+                prompt_hook_status.get("last_prompt_hook_useful_signal_count") or 0
+            ),
+            "prompt_hook_latency_risk_status": prompt_hook_status.get(
+                "prompt_hook_latency_risk_status"
+            ),
+            "foreground_latency_red_line_violation_count": int(
+                prompt_hook_status.get("foreground_latency_red_line_violation_count") or 0
+            ),
+            "near_timeout_event_count": int(
+                prompt_hook_status.get("prompt_hook_near_timeout_event_count") or 0
+            ),
+            "diagnostic_command": "aippocampus hooks prompt status --last --json",
+        },
+        "warm_ambient": {
+            "status": warm_status.get("status"),
+            "enabled": bool(warm_status.get("enabled")),
+            "ok": bool(warm_status.get("ok")),
+            "action_code": warm_status.get("action_code"),
+            "next_command": warm_status.get("next_command"),
+            "ordinary_recall_usable": bool(warm_status.get("ordinary_recall_usable")),
+            "job_activity": {
+                "queue_state": (warm_status.get("job_activity") or {}).get("queue_state")
+                if isinstance(warm_status.get("job_activity"), dict)
+                else None,
+                "pending_recent_count": int(
+                    ((warm_status.get("job_activity") or {}).get("pending_recent_count") or 0)
+                    if isinstance(warm_status.get("job_activity"), dict)
+                    else 0
+                ),
+                "pending_stale_count": int(
+                    ((warm_status.get("job_activity") or {}).get("pending_stale_count") or 0)
+                    if isinstance(warm_status.get("job_activity"), dict)
+                    else 0
+                ),
+                "stale_queue_blocked": bool(
+                    (warm_status.get("job_activity") or {}).get("stale_queue_blocked")
+                )
+                if isinstance(warm_status.get("job_activity"), dict)
+                else False,
+            },
+        },
         "provider_key_bridge_installed": bool(provider_key_bridge_rows),
         "provider_key_bridge_handlers": provider_key_bridge_rows,
         "duplicate_effective_hook_execution": duplicate_effective_hooks,

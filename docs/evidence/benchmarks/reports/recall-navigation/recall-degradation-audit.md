@@ -57,3 +57,9 @@ Important limits:
 - no live host behavior or private-history usefulness claim;
 - labels and summaries remain navigation, not source evidence;
 - this does not wire the full attention router into every live recall surface.
+
+For the live-agent/proxy gap in #2329, use
+`aippocampus smoke recall-funnel "<cue>" --json`. That diagnostic keeps this
+fixture boundary intact while separately reporting ordinary
+`agent recall -> agent deepen` route existence, specificity, source reopen, and
+task usefulness.

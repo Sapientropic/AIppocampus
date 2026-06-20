@@ -79,12 +79,14 @@ from aippocampus_runtime.recall.agent_continuity_cli_support import (
     policy_boundary,
     public_recall_projection,
     query_from_last_recall_cache,
+    recall_selector_cache_path,
     render_aippo_human,
     render_deepen_human,
     render_macro_human,
     render_macro_schema_human,
     render_recall_human,
     write_last_recall_cache,
+    write_recall_selector_snapshot,
 )
 
 SCHEMA_VERSION = "agent-continuity-path-v1"
@@ -1672,6 +1674,10 @@ def _parser() -> argparse.ArgumentParser:
     deepen_parser.add_argument("--request", type=int)
     deepen_parser.add_argument("--last-recall", action="store_true")
     deepen_parser.add_argument("--last-recall-path")
+    deepen_parser.add_argument(
+        "--recall-selector",
+        help="Opaque local selector id from compact agent recall output.",
+    )
     deepen_parser.add_argument("--cwd")
     deepen_parser.add_argument("--clean-source-dir")
     deepen_parser.add_argument("--registry-dir")
@@ -1701,6 +1707,10 @@ def _parser() -> argparse.ArgumentParser:
     explain_parser.add_argument("--request", type=int)
     explain_parser.add_argument("--last-recall", action="store_true")
     explain_parser.add_argument("--last-recall-path")
+    explain_parser.add_argument(
+        "--recall-selector",
+        help="Opaque local selector id from compact agent recall output.",
+    )
     explain_parser.add_argument("--macro-state-jsonl")
     explain_parser.add_argument("--project", default="AIppocampus")
     explain_parser.add_argument("--detail", choices=["compact", "full"], default="compact")
@@ -1811,7 +1821,13 @@ def main(argv: list[str] | None = None) -> int:
             schema_version=SCHEMA_VERSION,
             path=args.last_recall_path,
         )
-        payload = {**payload, "last_recall_cache_available": cache_written}
+        selector_id = write_recall_selector_snapshot(args.last_recall_path) if cache_written else None
+        payload = {
+            **payload,
+            "last_recall_cache_available": cache_written,
+            "recall_selector_available": bool(selector_id),
+            "recall_selector_id": selector_id,
+        }
         if args.json:
             if args.public_json or args.detail != "full":
                 payload = public_recall_projection(payload, query=query)
@@ -1912,11 +1928,18 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "deepen":
         handle = args.handle_option or args.handle
         cached_context: dict[str, Any] = {}
-        if args.last_recall or args.request is not None:
+        has_request_selector = bool(args.recall_selector or args.last_recall or args.request is not None)
+        selector_cache_path: str | Path | None = args.last_recall_path
+        if has_request_selector:
             try:
+                if args.recall_selector:
+                    selector_cache_path = recall_selector_cache_path(
+                        args.recall_selector,
+                        last_recall_path_value=args.last_recall_path,
+                    )
                 handle, cached_context = handle_from_last_recall_cache(
                     request_index=int(args.request or 1),
-                    path=args.last_recall_path,
+                    path=selector_cache_path,
                 )
             except (OSError, ValueError, json.JSONDecodeError) as exc:
                 payload = last_recall_unavailable_payload(
@@ -1924,7 +1947,7 @@ def main(argv: list[str] | None = None) -> int:
                     exc=exc,
                     schema_version=SCHEMA_VERSION,
                     kind=KIND,
-                    cue=query_from_last_recall_cache(args.last_recall_path),
+                    cue=query_from_last_recall_cache(selector_cache_path),
                 )
                 if args.json:
                     _json_out(payload)
@@ -1940,11 +1963,11 @@ def main(argv: list[str] | None = None) -> int:
             project=args.project or cached_context.get("project") or "AIppocampus",
             max_matches=args.max,
         )
-        request_index = int(args.request or 1) if args.last_recall or args.request is not None else None
+        request_index = int(args.request or 1) if has_request_selector else None
         if request_index is not None and payload.get("status") == "cannot_verify":
             recovery_cue = (
                 str(cached_context.get("query") or "").strip()
-                or query_from_last_recall_cache(args.last_recall_path)
+                or query_from_last_recall_cache(selector_cache_path)
             )
             payload.update(
                 last_recall_selector_recovery_fields(
@@ -1959,7 +1982,7 @@ def main(argv: list[str] | None = None) -> int:
             try:
                 mark_last_recall_request_opened(
                     request_index,
-                    path=args.last_recall_path,
+                    path=selector_cache_path,
                     outcome="source_open",
                 )
             except Exception:
@@ -1972,6 +1995,7 @@ def main(argv: list[str] | None = None) -> int:
                     payload,
                     request_index=request_index,
                     last_recall=request_index is not None,
+                    recall_selector=str(args.recall_selector or ""),
                     surface="agent_cli_source_court_compact",
                 )
             _json_out(payload)
@@ -1981,11 +2005,18 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "explain":
         handle = args.handle_option or args.handle
         explain_cached_context: dict[str, Any] = {}
-        if args.last_recall or args.request is not None:
+        has_request_selector = bool(args.recall_selector or args.last_recall or args.request is not None)
+        selector_cache_path = args.last_recall_path
+        if has_request_selector:
             try:
+                if args.recall_selector:
+                    selector_cache_path = recall_selector_cache_path(
+                        args.recall_selector,
+                        last_recall_path_value=args.last_recall_path,
+                    )
                 handle, explain_cached_context = handle_from_last_recall_cache(
                     request_index=int(args.request or 1),
-                    path=args.last_recall_path,
+                    path=selector_cache_path,
                 )
             except (OSError, ValueError, json.JSONDecodeError) as exc:
                 payload = last_recall_unavailable_payload(
@@ -1993,7 +2024,7 @@ def main(argv: list[str] | None = None) -> int:
                     exc=exc,
                     schema_version=SCHEMA_VERSION,
                     kind=KIND,
-                    cue=query_from_last_recall_cache(args.last_recall_path),
+                    cue=query_from_last_recall_cache(selector_cache_path),
                 )
                 if args.json:
                     _json_out(project_agent_explain_cli_payload(payload, args, surface="agent_cli_route_explain_compact"))
