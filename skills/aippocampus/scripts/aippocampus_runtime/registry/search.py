@@ -118,7 +118,10 @@ def deep_search_entry_result(
     clean_messages = paths.get("clean_source_messages_jsonl")
     if clean_messages:
         try:
-            from aippocampus_runtime.source.search import iter_clean_messages, score_message
+            from aippocampus_runtime.source.search_core import (
+                iter_clean_messages,
+                score_message,
+            )
             from aippocampus_runtime.source.semantic_scope_labels import (
                 load_semantic_scope_labels,
                 merged_scope_labels,

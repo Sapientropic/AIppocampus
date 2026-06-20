@@ -25,8 +25,13 @@ from aippocampus_runtime.privacy import (
     redact_private_paths,
     redact_sensitive_values,
 )
-from aippocampus_runtime.recall.query_policy import cjk_query_sidecar_terms, split_query_terms
 from aippocampus_runtime.source.clean_source import SCOPE_LABEL_ORDER
+from aippocampus_runtime.source.registry_search import (
+    add_registry_search_arguments,
+    run_registry_search_cli,
+)
+from aippocampus_runtime.source.search_core import iter_clean_messages, score_message
+from aippocampus_runtime.source.search_terms import search_query_terms
 from aippocampus_runtime.source.semantic_scope_labels import (
     load_semantic_scope_labels,
     merged_scope_labels,
@@ -54,72 +59,6 @@ def positive_int(value: str) -> int:
     if parsed < 1:
         raise argparse.ArgumentTypeError("must be >= 1")
     return parsed
-
-
-def iter_clean_messages(path: Path) -> list[dict[str, Any]]:
-    messages: list[dict[str, Any]] = []
-    if not path.exists():
-        return messages
-    with path.open("r", encoding="utf-8") as f:
-        for line in f:
-            try:
-                item = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if isinstance(item, dict) and item.get("text"):
-                messages.append(item)
-    return messages
-
-
-def score_message(message: dict[str, Any], terms: list[str]) -> float:
-    text = str(message.get("text") or "")
-    low = text.casefold()
-    score = 0.0
-    matched = False
-    for term in terms:
-        needle = term.casefold()
-        if not needle:
-            continue
-        count = low.count(needle)
-        if count:
-            matched = True
-            score += 8.0 + count * min(len(term), 20)
-    if not matched:
-        return 0.0
-    if message.get("is_final") or message.get("phase") == "final_answer":
-        score += 18.0
-    elif message.get("role") == "user":
-        score += 3.0
-    elif message.get("phase") == "commentary":
-        score -= 2.0
-    return score
-
-
-def search_query_terms(patterns: list[str]) -> list[str]:
-    """Return exact-search terms with the same CJK sidecar used by recall.
-
-    Search is the foreground "I remember the wording" fallback. For CJK text,
-    a user can be one character off and still clearly point at the same source
-    phrase, so keep search aligned with recall's measured ngram sidecar instead
-    of making Chinese exact search strictly weaker than the recall route.
-    """
-
-    seen: set[str] = set()
-    terms: list[str] = []
-    for term in [
-        *split_query_terms(patterns),
-        *[
-            sidecar
-            for pattern in patterns
-            for sidecar in cjk_query_sidecar_terms(str(pattern or ""))
-        ],
-    ]:
-        key = term.casefold()
-        if key in seen:
-            continue
-        seen.add(key)
-        terms.append(term)
-    return terms
 
 
 def as_float(value: Any, default: float = 0.0) -> float:
@@ -248,6 +187,11 @@ def search_clean_source(
         )
     return {
         "source": str(messages_path),
+        "search_scope": "current_thread_clean_source",
+        "scope_description": (
+            "current resolved thread clean-source directory only; this is not a "
+            "registry-wide memory search"
+        ),
         "query_terms": terms,
         "scope_labels": label_filter,
         "warnings": warnings,
@@ -256,11 +200,18 @@ def search_clean_source(
 
 
 def source_label_for_match(match: dict[str, Any]) -> str:
+    thread = match.get("thread")
+    if isinstance(thread, Mapping):
+        label = thread.get("title") or thread.get("thread_key")
+        line = match.get("source_line") or match.get("line")
+        if label:
+            suffix = f" line {line}" if line else ""
+            return compact_text(f"{label}{suffix}", 100)
     for key in ("source_ref", "source_id"):
         value = match.get(key)
         if value:
             return compact_text(str(value), 80)
-    source_line = match.get("source_line")
+    source_line = match.get("source_line") or match.get("line")
     return f"clean source line {source_line}" if source_line else "clean source"
 
 
@@ -274,7 +225,7 @@ def turn_for_match(match: dict[str, Any]) -> str:
         value = match.get(key)
         if value is not None and str(value).strip():
             return f"turn {value}"
-    source_line = match.get("source_line")
+    source_line = match.get("source_line") or match.get("line")
     return f"line {source_line}" if source_line else "unknown turn"
 
 
@@ -322,11 +273,16 @@ def render_human_search_result(result: dict[str, Any]) -> str:
         )
     else:
         lines.append(f"No source-backed snippet found for: {query}")
+        scope = str(
+            result.get("scope_description")
+            or "current resolved thread clean-source directory only"
+        )
+        lines.append(f"searched scope: {scope}")
         lines.append("Possible routes, not yet evidence:")
         lines.extend(first_recall_mode_lines())
         lines.append(
-            "Next: refine the cue, search an exact phrase, or run "
-            "`aippocampus onboard --status` to check whether local history is registered."
+            "Next: refine the current-thread cue, run `aippocampus search --all`, "
+            "or use `aippocampus agent recall` when the cue is vague."
         )
         lines.append(
             "Boundary: candidate routes are navigation only until a source-backed snippet appears."
@@ -384,18 +340,21 @@ def public_search_result(
     if not public.get("matches"):
         public["decision"] = "no_source_backed_snippet_found"
         public["agent_next_action"] = (
-            "Refine the cue with exact wording, a project/object name, or a time clue; "
-            "run `aippocampus onboard --status` if local history may not be registered."
+            "Refine the current-thread cue, run `aippocampus search --all` for "
+            "registered sources, or use `agent recall` for vague continuity cues."
         )
         public["recovery_actions"] = [
             'aippocampus search "distinctive exact phrase" --json',
+            'aippocampus search --all "distinctive exact phrase" --json',
             'aippocampus agent recall "vague old cue" --json',
             "aippocampus onboard --status --json",
         ]
+        public["searched_scope"] = public.get("scope_description")
         public["source_boundary"] = {
             "source_backed_claim_allowed": False,
             "candidate_routes_are_navigation_only": True,
             "reopen_required_before_quoting": True,
+            "search_miss_is_not_absence_of_memory": True,
         }
     capped_public_snippets_emitted = any(
         bool(match.get("snippet")) and not match.get("snippet_omitted")
@@ -623,14 +582,16 @@ vague and you need route help before choosing search terms.
 
 Workflows:
   exact phrase: aippocampus search "distinctive old wording"
+  all sources:   aippocampus search --all "distinctive old wording" --json
   fuzzy cue:    aippocampus search "repo feature last month"
   agent JSON:   aippocampus search "project cue" --json
   vague route:  aippocampus agent recall "old decision about setup" --json
 
-No match: refine the cue, try exact wording, or run
-`aippocampus onboard --provider auto --status` if local history may not be
-registered. Search snippets are source-backed receipts, not permission to quote
-or make strong claims beyond the reopened source boundary.""",
+No match: the default search only checked the current resolved thread clean
+source. Refine the cue, use `--all` for registered sources, or run
+`aippocampus agent recall` when the cue is vague. Search snippets are
+source-backed receipts, not permission to quote or make strong claims beyond
+the reopened source boundary.""",
         epilog=(
             "Advanced output controls: --public keeps capped snippets but omits local reopen refs; "
             "--include-paths is local diagnostic only."
@@ -641,8 +602,13 @@ or make strong claims beyond the reopened source boundary.""",
     parser.add_argument(
         "--clean-source-dir",
         default=None,
-        help="Defaults to global clean source, with project-local legacy fallback.",
+        help=(
+            "Search one explicit clean-source directory. By default search uses "
+            "the current resolved thread clean-source directory only; use --all "
+            "for registry-wide source search."
+        ),
     )
+    add_registry_search_arguments(parser)
     parser.add_argument("--max", type=positive_int, default=10)
     parser.add_argument("--snippet-chars", type=non_negative_int, default=700)
     parser.add_argument(
@@ -682,6 +648,11 @@ or make strong claims beyond the reopened source boundary.""",
         else:
             print(render_search_recovery_text(payload))
         return 2
+
+    if args.registry_search:
+        if args.clean_source_dir:
+            parser.error("--clean-source-dir searches one directory; use --all without it")
+        return run_registry_search_cli(args, render_human_search_result)
 
     result = search_clean_source(
         args.cwd,

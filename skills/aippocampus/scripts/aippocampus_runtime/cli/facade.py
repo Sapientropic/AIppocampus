@@ -828,6 +828,7 @@ COMMANDS = {
     "status": CommandSpec("aippocampus_health.py", "aippocampus_runtime.health"),
     "onboard": CommandSpec("onboard.py", "aippocampus_runtime.onboarding.facade"),
     "search": CommandSpec("search_clean_source.py", "aippocampus_runtime.source.search"),
+    "registry": CommandSpec("registry.py", "aippocampus_runtime.registry.api"),
     "agent": CommandSpec("agent_continuity.py", "aippocampus_runtime.recall.agent_continuity"),
     "export": CommandSpec("export_bundle.py", "aippocampus_runtime.artifacts.export_bundle"),
     "import": CommandSpec("import_bundle.py", "aippocampus_runtime.artifacts.import_bundle"),
@@ -1641,7 +1642,8 @@ def print_help(*, file: TextIO | None = None) -> None:
     print("  health              Run runtime health checks", file=target)
     print("  version             Show active runtime and release metadata version", file=target)
     print("  onboard             Check/register provider-backed clean source", file=target)
-    print("  search              Search clean-source memory", file=target)
+    print("  search              Search current clean source, or --all registered sources", file=target)
+    print("  registry            Inspect/search the local source registry", file=target)
     print("  agent recall        Agent continuity pull path: recall/AIppo/deepen/explain", file=target)
     print("  learning            Source-backed learning loop status/replay/guidance", file=target)
     print("  repro package       Public-safe command/output issue package", file=target)

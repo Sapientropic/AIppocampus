@@ -20,6 +20,7 @@ for _path in (
 ):
     sys.path.insert(0, str(_path))
 
+from aippocampus_runtime.cli import facade as cli_facade  # noqa: E402
 from aippocampus_runtime.contracts import foreground_action_contract_violations  # noqa: E402
 from aippocampus_runtime.registry import api as registry  # noqa: E402
 from aippocampus_runtime.source import search as search  # noqa: E402
@@ -275,6 +276,7 @@ class SearchCleanSourceTests(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("No source-backed snippet found", output)
         self.assertIn("Possible routes, not yet evidence", output)
+        self.assertIn("current resolved thread clean-source directory only", output)
         self.assertIn("exact phrase", output)
         self.assertIn("project cue", output)
         self.assertIn("time cue", output)
@@ -570,6 +572,11 @@ class SearchCleanSourceTests(unittest.TestCase):
         self.assertNotIn("action_id", payload["foreground_action"])
         self.assertEqual(payload["foreground_action"]["tool_name"], "agent_recall")
         self.assertEqual(foreground_action_contract_violations(payload), [])
+        self.assertIn("current resolved thread clean-source directory only", payload["searched_scope"])
+        self.assertIn(
+            'aippocampus search --all "distinctive exact phrase" --json',
+            payload["recovery_actions"],
+        )
 
     def test_empty_query_json_is_needs_input_not_no_match(self) -> None:
         stdout = io.StringIO()
@@ -649,6 +656,198 @@ class SearchCleanSourceTests(unittest.TestCase):
 
         self.assertEqual(code, 0)
         self.assertIs(captured["budget"], registry.REGISTRY_SEARCH_DEEP_BUDGET)
+
+    def test_search_help_names_current_thread_scope_not_global_memory(self) -> None:
+        stdout = io.StringIO()
+        with (
+            contextlib.redirect_stdout(stdout),
+            self.assertRaises(SystemExit) as raised,
+        ):
+            search.main(["--help"])
+
+        output = stdout.getvalue()
+        normalized_output = " ".join(output.split())
+        self.assertEqual(raised.exception.code, 0)
+        self.assertIn("current resolved thread clean-source directory only", normalized_output)
+        self.assertIn("aippocampus search --all", output)
+        self.assertNotIn("global clean source", output)
+
+    def test_facade_exposes_registry_command(self) -> None:
+        invocation = cli_facade.resolve_command(["registry", "search", "needle"])
+
+        self.assertIsNotNone(invocation)
+        assert invocation is not None
+        self.assertEqual(invocation.command, "registry")
+        self.assertEqual(invocation.module_name, "aippocampus_runtime.registry.api")
+
+    def test_registry_search_help_uses_supported_command_name(self) -> None:
+        stdout = io.StringIO()
+        with (
+            patch.object(sys, "argv", ["registry.py", "search", "--help"]),
+            contextlib.redirect_stdout(stdout),
+            self.assertRaises(SystemExit) as raised,
+        ):
+            registry.main()
+
+        self.assertEqual(raised.exception.code, 0)
+        self.assertIn("usage: aippocampus registry search", stdout.getvalue())
+
+    def test_search_all_registry_returns_cross_thread_snippets_without_paths_by_default(
+        self,
+    ) -> None:
+        second_clean = self.cwd / "thread-two" / "clean-source"
+        second_clean.mkdir(parents=True)
+        third_clean = self.cwd / "thread-three" / "clean-source"
+        third_clean.mkdir(parents=True)
+        for path, message_id, text in (
+            (
+                second_clean,
+                "msg_second",
+                "The cross-thread exact registry phrase lives in the second thread.",
+            ),
+            (
+                third_clean,
+                "msg_third",
+                "Another cross-thread exact registry phrase appears in a later thread.",
+            ),
+        ):
+            with (path / "messages.jsonl").open("w", encoding="utf-8", newline="\n") as f:
+                f.write(
+                    json.dumps(
+                        {
+                            "id": message_id,
+                            "message_id": message_id,
+                            "source_line": 7,
+                            "role": "assistant",
+                            "phase": "final_answer",
+                            "turn_index": 2,
+                            "is_final": True,
+                            "text": text,
+                        },
+                        ensure_ascii=False,
+                    )
+                    + "\n"
+                )
+        (self.cwd / "threads.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "threads": [
+                        {
+                            "thread_key": "session:two",
+                            "title": "Second thread",
+                            "paths": {
+                                "workspace": str(self.cwd / "project-two"),
+                                "clean_source_messages_jsonl": str(second_clean / "messages.jsonl"),
+                                "sqlite": str(self.cwd / "missing-two.sqlite"),
+                            },
+                        },
+                        {
+                            "thread_key": "session:three",
+                            "title": "Third thread",
+                            "paths": {
+                                "workspace": str(self.cwd / "project-three"),
+                                "clean_source_messages_jsonl": str(third_clean / "messages.jsonl"),
+                                "sqlite": str(self.cwd / "missing-three.sqlite"),
+                            },
+                        },
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            code = search.main(
+                [
+                    "--all",
+                    "cross-thread exact registry phrase",
+                    "--registry-dir",
+                    str(self.cwd),
+                    "--json",
+                ]
+            )
+        payload = json.loads(stdout.getvalue())
+
+        self.assertEqual(code, 0)
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["kind"], "aippocampus_registry_source_search")
+        self.assertEqual(payload["search_scope"], "registered_clean_source_and_indexes")
+        self.assertEqual(payload["match_count"], 2)
+        self.assertEqual(
+            {match["thread"]["thread_key"] for match in payload["matches"]},
+            {"session:two", "session:three"},
+        )
+        encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertNotIn(str(self.cwd), encoded)
+        self.assertEqual(payload["registry"], search.LOCAL_PATH_REDACTION)
+        self.assertFalse(payload["privacy"]["paths_included"])
+        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
+        self.assertEqual(payload["foreground_action"], payload["agent_next_action"])
+        self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
+        self.assertEqual(foreground_action_contract_violations(payload), [])
+
+    def test_search_all_registry_can_include_paths_as_local_diagnostic(self) -> None:
+        registry_clean = self.cwd / "registry-thread" / "clean-source"
+        registry_clean.mkdir(parents=True)
+        (registry_clean / "messages.jsonl").write_text(
+            json.dumps(
+                {
+                    "id": "msg_registry_path",
+                    "source_line": 4,
+                    "role": "user",
+                    "text": "diagnostic registry path opt in phrase",
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (self.cwd / "threads.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "threads": [
+                        {
+                            "thread_key": "session:path",
+                            "title": "Path opt-in",
+                            "paths": {
+                                "workspace": str(self.cwd / "project-path"),
+                                "clean_source_messages_jsonl": str(
+                                    registry_clean / "messages.jsonl"
+                                ),
+                                "sqlite": str(self.cwd / "missing.sqlite"),
+                            },
+                        }
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            code = search.main(
+                [
+                    "--all",
+                    "diagnostic registry path opt in phrase",
+                    "--registry-dir",
+                    str(self.cwd),
+                    "--include-paths",
+                    "--json",
+                ]
+            )
+        payload = json.loads(stdout.getvalue())
+
+        self.assertEqual(code, 0)
+        self.assertTrue(payload["privacy"]["paths_included"])
+        self.assertEqual(
+            payload["matches"][0]["local_diagnostic"]["clean_source_messages_jsonl"],
+            str(registry_clean / "messages.jsonl"),
+        )
 
 
 if __name__ == "__main__":
