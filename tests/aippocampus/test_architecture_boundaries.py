@@ -604,6 +604,10 @@ class ArchitectureBoundaryTests(unittest.TestCase):
         self.assertGreater(system_weight["total_tracked_lines"], 0)
         self.assertIn("fresh_agent_load", system_weight)
         self.assertIn("archive_or_split_targets", system_weight)
+        near_zero_queue = system_weight["near_zero_runtime_split_queue"]
+        self.assertTrue(near_zero_queue)
+        self.assertTrue(all(row["margin"] <= 2 for row in near_zero_queue))
+        self.assertTrue(all(row.get("next_split_boundary") for row in near_zero_queue))
         self.assertEqual(
             rows["tests/aippocampus/test_subconscious_jobs.py"]["current_count"],
             script_line_count(REPO_ROOT / "tests/aippocampus/test_subconscious_jobs.py"),

@@ -1085,7 +1085,7 @@ def available_requires_sync_dir_status() -> dict[str, Any]:
         "backend": "local_folder",
         "backends": ["local_folder", "http_object_store"],
         "commands": ["status", "push", "pull", "repair"],
-        "next_command_template": "aippocampus sync status --sync-dir {sync_dir} --json",
+        "next_command_template": 'aippocampus sync status --sync-dir "{sync_dir}" --json',
         "requires": ["sync_dir"],
         "agent_next_action": actions[0],
         "foreground_action": actions[0],

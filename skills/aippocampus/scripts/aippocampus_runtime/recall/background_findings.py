@@ -18,6 +18,7 @@ from aippocampus_runtime.contracts import (
     canonical_foreground_action_fields,
     foreground_recovery_card,
     foreground_shell_action,
+    foreground_template_action,
 )
 from aippocampus_runtime.dream import working_memory_publication
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
@@ -332,18 +333,20 @@ def background_recovery_card(command: str) -> dict[str, Any]:
             "not a broad operator command."
         ),
         safe_next_actions=[
-            foreground_shell_action(
+            foreground_template_action(
                 action_id="agent_background",
                 label="Find reviewed background guidance",
-                command='aippocampus agent background "task cue" --json',
+                command_template='aippocampus agent background "{task_cue}" --json',
+                requires=["task_cue"],
                 why="Shows bounded reviewed Dream/subconscious findings relevant to a task cue.",
                 mutation_risk="read_only",
                 claim_boundary="background_navigation_not_source_truth",
             ),
-            foreground_shell_action(
+            foreground_template_action(
                 action_id="ordinary_recall",
                 label="Use ordinary recall",
-                command='aippocampus agent recall "old decision or handoff cue" --json',
+                command_template='aippocampus agent recall "{cue}" --json',
+                requires=["cue"],
                 why="Use source-backed recall when factual continuity is needed.",
                 mutation_risk="read_only",
                 claim_boundary="no_claim_before_reopen",

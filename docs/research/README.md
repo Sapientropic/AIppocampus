@@ -2,6 +2,11 @@
 
 Role: speculative and product-facing research index.
 Status: research map, not runtime contract.
+Folder pressure owner: docs/research/README.md.
+Folder pressure next action: keep the 12 top-level Markdown files as the active
+reading path; put the next new research note into a subfolder, `docs/research/seeds/`,
+`docs/research/reports/`, or `docs/archive/research/` unless it replaces an
+existing top-level entry.
 
 Stable operational rules belong in `skills/aippocampus/SKILL.md` and focused
 references. Product north star stays in `docs/roadmap.md`. Clean source remains

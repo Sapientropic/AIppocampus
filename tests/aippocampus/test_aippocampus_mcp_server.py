@@ -2002,7 +2002,7 @@ class AippocampusMcpServerTests(unittest.TestCase):
         self.assertEqual(payload["status"], "available_requires_sync_dir")
         self.assertEqual(
             payload["command_template"],
-            "aippocampus sync status --sync-dir {sync_dir} --json",
+            'aippocampus sync status --sync-dir "{sync_dir}" --json',
         )
         self.assertEqual(payload["requires"], ["sync_dir_or_object_store_url"])
         self.assertIn("agent_next_action", payload)

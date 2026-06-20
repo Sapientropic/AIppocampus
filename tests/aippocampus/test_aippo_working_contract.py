@@ -155,6 +155,10 @@ class AIppoWorkingContractTests(unittest.TestCase):
         self.assertEqual(action["action_id"], "deepen_aippo_working_contract")
         self.assertEqual(action["tool_name"], "agent_deepen")
         self.assertEqual(action["arguments"]["handle"], packet["deepen_route_id"])
+        self.assertEqual(
+            action["command"],
+            f"aippocampus agent deepen --handle {packet['deepen_route_id']} --json",
+        )
         self.assertEqual(action["claim_boundary"], "source_reopen_required_before_claim")
         self.assertEqual(
             action["authority_after_running"],

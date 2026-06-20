@@ -14,6 +14,10 @@ from aippocampus_runtime.ops import observatory_boundary
 from aippocampus_runtime.ops.activation_authority_audit import (
     activation_surface_authority_audit,
 )
+from aippocampus_runtime.ops.cognitive_observatory_actions import (
+    empty_readout_next_actions,
+    foreground_action,
+)
 from aippocampus_runtime.ops.observatory_cognitive_load import (
     cognitive_load_calibration_summary,
 )
@@ -462,7 +466,12 @@ def cognitive_observatory_readout(
     readiness = observatory_boundary.with_boundary_detail(readiness)
     control_authority = observatory_boundary.with_boundary_detail(control_authority)
     readout_state = observatory_boundary.readout_state(readiness, metrics)
-    foreground_action = _foreground_action(no_rows=readout_state["status"] == "no_rows")
+    action = foreground_action(no_rows=readout_state["status"] == "no_rows")
+    safe_next_actions = (
+        empty_readout_next_actions()
+        if readout_state["status"] == "no_rows"
+        else [action]
+    )
     report = {
         "kind": OBSERVATORY_KIND,
         "schema_version": OBSERVATORY_SCHEMA_VERSION,
@@ -480,9 +489,9 @@ def cognitive_observatory_readout(
         "cognitive_load_calibration": cognitive_load,
         "metrics": metrics,
         "readout_state": readout_state,
-        "foreground_action": foreground_action,
-        "agent_next_action": foreground_action,
-        "safe_next_actions": [foreground_action],
+        "foreground_action": action,
+        "agent_next_action": action,
+        "safe_next_actions": safe_next_actions,
         "claim_boundary": _compact_claim_boundary(),
         "boundary_detail": observatory_boundary.boundary_detail(route_readiness=readiness, control_authority=control_authority),
         "contract": {
@@ -843,26 +852,6 @@ def _panel_previews(report: Mapping[str, Any], *, limit: int = 3) -> dict[str, l
     return previews
 
 
-def _foreground_action(*, no_rows: bool = False) -> dict[str, Any]:
-    if no_rows:
-        return {
-            "id": "no_observatory_rows_to_route",
-            "kind": "no_op",
-            "no_op": True, "continue_without_command": True,
-            "mutation_risk": "none",
-            "claim_boundary": "observatory_readout_not_source_truth_or_control_plane",
-            "why": "No ready/useful observatory rows are present in this compact readout.",
-        }
-    return {
-        "id": "use_observatory_as_read_only_navigation",
-        "kind": "shell_command",
-        "command": "aippocampus observatory --summary-json",
-        "mutation_risk": "read_only",
-        "claim_boundary": "observatory_readout_not_source_truth_or_control_plane",
-        "why": "Use ready/useful rows as navigation only; reopen source before claims and use owner tools for mutation.",
-    }
-
-
 def _compact_claim_boundary() -> dict[str, Any]:
     return {
         "can_use_for": ["route_readiness_triage", "observability_review"],
@@ -878,10 +867,11 @@ def summary_projection(report: Mapping[str, Any]) -> dict[str, Any]:
         isinstance(readout_state, Mapping)
         and str(readout_state.get("status") or "") == "no_rows"
     )
-    action = _foreground_action(no_rows=no_rows)
+    action = foreground_action(no_rows=no_rows)
+    safe_next_actions = empty_readout_next_actions() if no_rows else [action]
     return {
         "kind": "aippocampus_cognitive_observatory_summary",
-        **canonical_foreground_action_fields(action, safe_next_actions=[action]),
+        **canonical_foreground_action_fields(action, safe_next_actions=safe_next_actions),
         "ok": bool(report.get("ok")),
         "read_only": bool(report.get("no_write")),
         "not_control_plane": bool((report.get("contract") or {}).get("not_control_plane")),

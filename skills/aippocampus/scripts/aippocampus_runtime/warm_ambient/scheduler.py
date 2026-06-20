@@ -334,7 +334,8 @@ def warm_status_payload(
                 "id": "retire_stale_warm_queue_after_review",
                 "label": "Retire stale warm queue after review",
                 "requires": ["operator_review_of_warm_status"],
-                "template_only": True,
+                "manual_only": True,
+                "continue_without_command": True,
                 "manual_instruction": (
                     "After reviewing warm status, retire stale pending warm jobs from the configured "
                     "warm job directory or leave warm ambient disabled; ordinary recall remains usable."

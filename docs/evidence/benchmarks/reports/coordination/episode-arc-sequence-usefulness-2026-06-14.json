@@ -1,5 +1,6 @@
 {
-  "can_claim": [
+  "no_open_followup_reason": "Historical dated evidence; current claim posture is owned by docs/evidence/current-claims.md and the report-family README. Open a new scoped issue only if a future pass promotes or supersedes this artifact.",
+"can_claim": [
     "public_sequence_usefulness_workload_exists",
     "episode_arc_route_packet_reduces_manual_search_in_selected_cases",
     "episode_arc_route_packet_avoids_repeated_wrong_route_in_selected_cases",

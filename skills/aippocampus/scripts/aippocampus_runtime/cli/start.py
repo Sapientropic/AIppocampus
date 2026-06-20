@@ -173,7 +173,7 @@ def _source_registration_actions(providers: list[str]) -> list[dict[str, Any]]:
             label="Import generic JSONL source",
             command_template=(
                 "aippocampus import conversation --format generic-jsonl "
-                "--input {input_path} --json"
+                '--input "{input_path}" --json'
             ),
             requires=["input_path"],
             mutation_risk="writes_local_clean_source",

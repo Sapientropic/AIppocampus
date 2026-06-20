@@ -840,6 +840,8 @@ COMMANDS = {
     "logs": CommandSpec("log_retention.py", "aippocampus_runtime.ops.log_retention"),
     "maintenance": CommandSpec("maintenance.py", "aippocampus_runtime.ops.maintenance"),
     "warm": CommandSpec("warm_ambient_cli.py", "aippocampus_runtime.warm_ambient.cli"),
+    "dream": CommandSpec("dream_frontdoor.py", "aippocampus_runtime.dream.frontdoor"),
+    "subconscious": CommandSpec("dream_frontdoor.py", "aippocampus_runtime.dream.frontdoor"),
     "storage": CommandSpec(
         "storage_governance.py",
         "aippocampus_runtime.ops.storage_governance",
@@ -1248,12 +1250,11 @@ def dispatch(argv: list[str]) -> tuple[CommandInvocation | None, int]:
     if args[0] in {"dream", "subconscious"} and set(args[1:]) <= {"--json"}:
         payload = background_findings.background_recovery_card(args[0])
         if "--json" in args[1:]:
-            print(json.dumps(payload, ensure_ascii=False, indent=2))
+            emit_json(payload)
         else:
             print("AIppocampus background findings")
             print("decision: use the foreground agent background route")
-            print('next: aippocampus agent background "task cue" --json')
-            print("boundary: Dream/subconscious findings are navigation only until source is reopened.")
+            print('template: aippocampus agent background "{task_cue}" --json\nstatus: aippocampus dream status --json\nboundary: Dream/subconscious findings are navigation only until source is reopened.')
         return None, 2
     if args[0] == "warm" and set(args[1:]) <= {"--json"}:
         payload = warm_chooser_payload()
@@ -1673,7 +1674,7 @@ def print_help(*, file: TextIO | None = None) -> None:
     print("  telepathy           Opt-in local handoff card lifecycle", file=target)
     print("  logs status/rotate  Inspect or apply bounded local log retention", file=target)
     print("  maintenance         Run bounded local maintenance", file=target)
-    print("  warm status         Inspect warm ambient queue without model calls", file=target)
+    print("  warm status         Inspect warm ambient queue without model calls\n  dream status        Explain Dream output status without running workers", file=target)
     print("  storage gc          Plan storage cleanup from existing evidence", file=target)
     print("  why-recall          Explain why a recall route surfaced or degraded", file=target)
     print("  why-not             Alias for why-not-recall", file=target)

@@ -1,5 +1,6 @@
 {
-  "arm_metrics": {
+  "no_open_followup_reason": "Historical dated evidence; current claim posture is owned by docs/evidence/current-claims.md and the report-family README. Open a new scoped issue only if a future pass promotes or supersedes this artifact.",
+"arm_metrics": {
     "default_hook_foreground_candidate": {
       "activation_count": 8,
       "activation_rate": 0.727273,

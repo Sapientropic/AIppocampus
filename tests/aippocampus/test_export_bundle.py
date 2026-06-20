@@ -83,11 +83,11 @@ class ExportBundleTests(unittest.TestCase):
         self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
         commands = [item.get("command") or item.get("command_template") for item in payload["choices"]]
         self.assertIn(
-            "aippocampus export --redaction-profile raw-private --output {output_path} --json",
+            'aippocampus export --redaction-profile raw-private --output "{output_path}" --json',
             commands,
         )
         self.assertIn(
-            "aippocampus export --redaction-profile public-export --no-raw --output {output_path} --json",
+            'aippocampus export --redaction-profile public-export --no-raw --output "{output_path}" --json',
             commands,
         )
         self.assertNotIn("<bundle.zip>", json.dumps(payload, ensure_ascii=False))
@@ -112,7 +112,7 @@ class ExportBundleTests(unittest.TestCase):
                 self.assertTrue(payload["safety"]["no_write_happened"])
                 self.assertEqual(
                     payload["recommended_public_command_template"],
-                    "aippocampus export --redaction-profile public-export --no-raw --output {output_path} --json",
+                    'aippocampus export --redaction-profile public-export --no-raw --output "{output_path}" --json',
                 )
                 self.assertEqual(payload["recommended_public_requires"], ["output_path"])
                 self.assertEqual(executable_command_violations(payload), [])

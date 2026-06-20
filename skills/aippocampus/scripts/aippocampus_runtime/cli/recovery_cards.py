@@ -18,7 +18,7 @@ def import_recovery_payload() -> dict[str, Any]:
             label="Preview a generic conversation transcript",
             command_template=(
                 "aippocampus import conversation --format generic-jsonl "
-                "--input {input_path} --dry-run --json"
+                '--input "{input_path}" --dry-run --json'
             ),
             requires=["input_path"],
             why="Validate the transcript before any registry write.",
@@ -38,7 +38,7 @@ def import_recovery_payload() -> dict[str, Any]:
         foreground_template_action(
             action_id="import_private_bundle",
             label="Import a private AIppocampus bundle",
-            command_template="aippocampus import {bundle_zip} --dest {destination_folder}",
+            command_template='aippocampus import "{bundle_zip}" --dest "{destination_folder}"',
             requires=["bundle_zip", "destination_folder"],
             why="Use only for an explicit local AIppocampus bundle transfer.",
             mutation_risk="explicit_local_import_write",
@@ -47,7 +47,7 @@ def import_recovery_payload() -> dict[str, Any]:
         foreground_template_action(
             action_id="write_conversation_import_after_preview",
             label="Register the transcript after preview",
-            command_template="aippocampus import conversation --format generic-jsonl --input {input_path}",
+            command_template='aippocampus import conversation --format generic-jsonl --input "{input_path}"',
             requires=["input_path"],
             why="Write is explicit and should follow a reviewed dry-run preview.",
             mutation_risk="explicit_registry_write",
@@ -64,7 +64,7 @@ def import_recovery_payload() -> dict[str, Any]:
         "choices": {
             "bundle_import": {
                 "label": "private AIppocampus bundle import",
-                "command_template": "aippocampus import {bundle_zip} --dest {destination_folder}",
+                "command_template": 'aippocampus import "{bundle_zip}" --dest "{destination_folder}"',
                 "template_only": True,
                 "requires": ["bundle_zip", "destination_folder"],
                 "boundary": "imports an explicit local AIppocampus bundle; paths stay redacted by default",
@@ -72,10 +72,10 @@ def import_recovery_payload() -> dict[str, Any]:
             "conversation_import": {
                 "label": "generic conversation transcript import",
                 "preview_command_template": (
-                    "aippocampus import conversation --format generic-jsonl --input {input_path} --dry-run --json"
+                    'aippocampus import conversation --format generic-jsonl --input "{input_path}" --dry-run --json'
                 ),
                 "write_command_template": (
-                    "aippocampus import conversation --format generic-jsonl --input {input_path}"
+                    'aippocampus import conversation --format generic-jsonl --input "{input_path}"'
                 ),
                 "requires": ["input_path"],
                 "boundary": "preview first; the input transcript stays local operator material",

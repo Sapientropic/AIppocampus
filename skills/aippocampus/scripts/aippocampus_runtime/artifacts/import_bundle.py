@@ -458,7 +458,7 @@ def _transcript_intent_payload(format_guess: str) -> dict[str, Any]:
             ),
             "next_command": (
                 "aippocampus import conversation --format "
-                f"{canonical_format} --input {{input_path}} --dry-run --json"
+                f'{canonical_format} --input "{{input_path}}" --dry-run --json'
             ),
         },
         "safety": {

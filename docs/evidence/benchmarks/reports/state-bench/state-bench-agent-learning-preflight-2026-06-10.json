@@ -1,5 +1,6 @@
 {
-  "artifacts": {
+  "no_open_followup_reason": "Historical dated evidence; current claim posture is owned by docs/evidence/current-claims.md and the report-family README. Open a new scoped issue only if a future pass promotes or supersedes this artifact.",
+"artifacts": {
     "adapter_file": ".tmp/state-bench-upstream-lf/agents/aippocampus_state_bench_agent.py",
     "adapter_file_written": true,
     "learnings_file": ".tmp/state-bench-upstream-lf/agents/learnings.json",

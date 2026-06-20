@@ -20,18 +20,22 @@ def with_boundary_detail(
     payload: Mapping[str, Any],
     *,
     cannot_claim: list[str],
+    include_cannot_claim: bool = True,
 ) -> dict[str, Any]:
     """Keep compact foreground JSON useful while preserving inspectable bounds."""
 
     out = dict(payload)
     detail_raw = out.get("boundary_detail")
     detail: dict[str, Any] = dict(detail_raw) if isinstance(detail_raw, Mapping) else {}
-    if cannot_claim:
+    if include_cannot_claim and cannot_claim:
         detail["cannot_claim"] = list(dict.fromkeys(str(item) for item in cannot_claim if item))
     detail.setdefault(
         "frontstage_rule",
         "compact learning/repro surfaces summarize bounds here instead of top-level caveat walls",
     )
+    if cannot_claim and not include_cannot_claim:
+        detail.setdefault("full_detail_owns_cannot_claim", True)
+        detail.setdefault("detail_available_with", LEARNING_OPERATOR_DETAIL_COMMAND)
     out["boundary_detail"] = detail
     out.pop("cannot_claim", None)
     return out

@@ -317,6 +317,9 @@ class ProviderDoctorTests(unittest.TestCase):
         self.assertNotIn("provider_env", payload)
         self.assertNotIn("legacy_aliases", payload)
         self.assertNotIn("credential_validation", payload)
+        self.assertNotIn("boundary_detail", payload)
+        self.assertNotIn("cannot_claim", payload)
+        self.assertIn("boundary_summary", payload)
         self.assertNotIn(fixture_value, proc.stdout)
 
     def test_cli_compact_json_missing_key_returns_guidance_card_without_failure(self) -> None:
@@ -350,6 +353,8 @@ class ProviderDoctorTests(unittest.TestCase):
         self.assertEqual(payload["foreground_action"]["id"], "set_provider_env_in_hook_environment")
         self.assertNotIn("provider_env", payload)
         self.assertNotIn("legacy_aliases", payload)
+        self.assertNotIn("boundary_detail", payload)
+        self.assertNotIn("cannot_claim", payload)
 
     def test_cli_doctor_provider_full_detail_keeps_operator_report(self) -> None:
         fixture_value = fake_provider_doctor_value("CLI_FULL")
@@ -378,6 +383,7 @@ class ProviderDoctorTests(unittest.TestCase):
                 self.assertEqual(payload["kind"], "aippocampus_provider_doctor")
                 self.assertIn("provider_env", payload)
                 self.assertIn("legacy_aliases", payload)
+                self.assertIn("cannot_claim", payload["boundary_detail"])
                 self.assertNotIn(fixture_value, proc.stdout)
 
     def test_compact_provider_doctor_card_normalizes_guidance_actions(self) -> None:

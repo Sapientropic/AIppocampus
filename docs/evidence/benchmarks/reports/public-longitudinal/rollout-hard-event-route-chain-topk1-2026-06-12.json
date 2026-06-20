@@ -1,5 +1,6 @@
 {
-  "schema_version": 1,
+  "no_open_followup_reason": "Historical dated evidence; current claim posture is owned by docs/evidence/current-claims.md and the report-family README. Open a new scoped issue only if a future pass promotes or supersedes this artifact.",
+"schema_version": 1,
   "kind": "aippocampus_vcs_future_event_recall_benchmark",
   "generated_at": "2026-06-11T21:39:00Z",
   "status": "future_event_recall_scored",

@@ -30,7 +30,8 @@ def py_script(script: str, args: str = "") -> str:
 
 class ChangedSurfaceTestPlanTests(unittest.TestCase):
     def test_docs_only_change_recommends_docs_health_without_pr_reflex(self) -> None:
-        payload = test_plan.build_test_plan(["docs/guides/install-guide.md"])
+        with mock.patch.object(test_plan, "_debt_report_is_red", return_value=False):
+            payload = test_plan.build_test_plan(["docs/guides/install-guide.md"])
         commands = [command["command"] for command in payload["commands"]]
 
         self.assertIn("docs", payload["categories"])
@@ -38,6 +39,30 @@ class ChangedSurfaceTestPlanTests(unittest.TestCase):
             commands,
             [py_script("tools/aippocampus/docs/check_docs_health.py", "--json")],
         )
+
+    def test_architecture_debt_tracked_change_recommends_headroom_preflight(self) -> None:
+        payload = test_plan.build_test_plan(
+            ["skills/aippocampus/scripts/aippocampus_runtime/cli/facade.py"]
+        )
+        commands = [command["command"] for command in payload["commands"]]
+        reasons = [command["reason"] for command in payload["commands"]]
+
+        self.assertIn("architecture_debt", payload["categories"])
+        self.assertIn(py_script("tools/aippocampus/docs/debt_report.py", "--json"), commands)
+        self.assertTrue(any("headroom preflight" in reason for reason in reasons))
+        self.assertTrue(any("not a substitute for functional tests" in reason for reason in reasons))
+        self.assertIn(py_script("tools/aippocampus/run_tests.py", "--tier pr"), commands)
+
+    def test_red_debt_report_surfaces_even_for_untracked_changes(self) -> None:
+        with mock.patch.object(test_plan, "_debt_report_is_red", return_value=True):
+            payload = test_plan.build_test_plan(["docs/guides/install-guide.md"])
+        commands = [command["command"] for command in payload["commands"]]
+        reasons = [command["reason"] for command in payload["commands"]]
+
+        self.assertIn("architecture_debt", payload["categories"])
+        self.assertIn(py_script("tools/aippocampus/docs/debt_report.py", "--json"), commands)
+        self.assertTrue(any("already red" in reason for reason in reasons))
+        self.assertIn(py_script("tools/aippocampus/docs/check_docs_health.py", "--json"), commands)
 
     def test_benchmark_change_recommends_public_fast_benchmark_smoke(self) -> None:
         commands = commands_for(["benchmarks/aippocampus/benchmark_longmemeval.py"])

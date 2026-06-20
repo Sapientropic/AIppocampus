@@ -18,9 +18,11 @@ from aippocampus_runtime.contracts import (
     shell_quote,
 )
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
+from aippocampus_runtime.source.host_internal_filter import contains_host_internal_material
 from aippocampus_runtime.source.rollout import normalize_rollout
 
 LOCAL_PATH_REDACTION = "<local-path-redacted>"
+MAX_EXECUTABLE_RECOVERY_CUE_CHARS = 160
 
 
 def latest_reply(rollout: Path) -> dict:
@@ -106,8 +108,19 @@ def _latest_reply_full_action() -> dict[str, Any]:
 
 
 def _latest_reply_recall_action(cue: Any = None) -> dict[str, Any]:
-    clean_cue = str(redact_sensitive_values(redact_private_paths(str(cue or "").strip())) or "")
-    if clean_cue and not command_value_needs_input(clean_cue):
+    raw_cue = str(cue or "").strip()
+    clean_cue = str(redact_sensitive_values(redact_private_paths(raw_cue)) or "")
+    cue_reason = ""
+    if contains_host_internal_material(raw_cue):
+        cue_reason = "host_internal_cue_omitted"
+    elif "\n" in raw_cue or "\r" in raw_cue:
+        cue_reason = "multi_line_cue_omitted"
+    elif len(clean_cue) > MAX_EXECUTABLE_RECOVERY_CUE_CHARS:
+        cue_reason = "long_cue_omitted"
+    elif command_value_needs_input(clean_cue):
+        cue_reason = "cue_requires_caller_input"
+
+    if clean_cue and not cue_reason:
         return foreground_shell_action(
             action_id="recall_current_thread_context",
             label="Recall current-thread context",
@@ -116,7 +129,7 @@ def _latest_reply_recall_action(cue: Any = None) -> dict[str, Any]:
             mutation_risk="read_only",
             claim_boundary="no_claim_before_reopen",
         )
-    return foreground_template_action(
+    action = foreground_template_action(
         action_id="recall_current_thread_context",
         label="Recall current-thread context",
         command_template='aippocampus agent recall "{cue}" --json',
@@ -125,6 +138,11 @@ def _latest_reply_recall_action(cue: Any = None) -> dict[str, Any]:
         mutation_risk="read_only",
         claim_boundary="no_claim_before_reopen",
     )
+    if raw_cue:
+        action["cue_omitted_from_executable_command"] = True
+        action["cue_omission_reason"] = cue_reason or "cue_not_safe_as_primary_command"
+        action["safe_cue_strategy"] = "supply a short, current, human task cue before running recall"
+    return action
 
 
 def public_latest_reply_result(result: dict[str, Any], *, detail: str = "compact") -> dict[str, Any]:

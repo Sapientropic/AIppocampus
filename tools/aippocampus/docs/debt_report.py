@@ -49,6 +49,20 @@ def budget_entries() -> dict[str, int]:
     return dict(sorted(entries.items()))
 
 
+def split_boundary_entries() -> dict[str, str]:
+    boundaries: dict[str, str] = {}
+    for source in inventory_sources():
+        text = source.read_text(encoding="utf-8")
+        for line in text.splitlines():
+            cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+            if len(cells) < 5 or not cells[0].startswith("`") or not cells[0].endswith("`"):
+                continue
+            path = cells[0].strip("`")
+            if path.endswith(".py"):
+                boundaries.setdefault(path, cells[4])
+    return boundaries
+
+
 def layer_for_path(rel_path: str) -> str:
     if rel_path.startswith("skills/aippocampus/scripts/"):
         return "runtime"
@@ -63,7 +77,11 @@ def layer_for_path(rel_path: str) -> str:
     return "other"
 
 
-def build_system_weight(rows: list[dict[str, object]]) -> dict[str, object]:
+def build_system_weight(
+    rows: list[dict[str, object]],
+    *,
+    split_boundaries: dict[str, str],
+) -> dict[str, object]:
     layers: dict[str, dict[str, object]] = {
         name: {
             "tracked_file_count": 0,
@@ -75,6 +93,7 @@ def build_system_weight(rows: list[dict[str, object]]) -> dict[str, object]:
         for name in ("runtime", "tests", "benchmarks", "docs", "tools")
     }
     archive_or_split_targets: list[dict[str, object]] = []
+    near_zero_runtime_split_queue: list[dict[str, object]] = []
     for row in rows:
         rel_path = str(row["path"])
         layer = layer_for_path(rel_path)
@@ -89,6 +108,26 @@ def build_system_weight(rows: list[dict[str, object]]) -> dict[str, object]:
         bucket["guard_budget_total"] = int(bucket["guard_budget_total"]) + budget
         if bool(row["over_budget"]):
             bucket["over_budget_count"] = int(bucket["over_budget_count"]) + 1
+        if layer == "runtime" and margin <= 2:
+            near_zero_runtime_split_queue.append(
+                {
+                    "path": rel_path,
+                    "current_count": current,
+                    "guard_budget": budget,
+                    "margin": margin,
+                    "status": (
+                        "over_budget"
+                        if margin < 0
+                        else "exact_zero_guard"
+                        if margin == 0
+                        else "near_zero_margin"
+                    ),
+                    "next_split_boundary": split_boundaries.get(
+                        rel_path,
+                        "Add a focused split boundary to architecture-debt-register.md before growing this owner.",
+                    ),
+                }
+            )
         if margin <= max(25, int(budget * 0.08)):
             bucket["near_budget_count"] = int(bucket["near_budget_count"]) + 1
             archive_or_split_targets.append(
@@ -103,6 +142,7 @@ def build_system_weight(rows: list[dict[str, object]]) -> dict[str, object]:
             )
     total_lines = sum(int(layer["tracked_lines"]) for layer in layers.values())
     archive_or_split_targets.sort(key=lambda item: (int(item["margin"]), str(item["path"])))
+    near_zero_runtime_split_queue.sort(key=lambda item: (int(item["margin"]), str(item["path"])))
     return {
         "schema_version": "aippocampus-system-weight-v1",
         "total_tracked_lines": total_lines,
@@ -120,11 +160,13 @@ def build_system_weight(rows: list[dict[str, object]]) -> dict[str, object]:
             "tools": "operator_audit_or_maintenance",
         },
         "archive_or_split_targets": archive_or_split_targets[:20],
+        "near_zero_runtime_split_queue": near_zero_runtime_split_queue,
     }
 
 
 def build_report() -> dict[str, object]:
     entries = budget_entries()
+    split_boundaries = split_boundary_entries()
     rows: list[dict[str, object]] = []
     missing_files: list[str] = []
     for rel_path, budget in entries.items():
@@ -149,7 +191,7 @@ def build_report() -> dict[str, object]:
         "entry_count": len(entries),
         "missing_files": missing_files,
         "over_budget": over_budget,
-        "system_weight": build_system_weight(rows),
+        "system_weight": build_system_weight(rows, split_boundaries=split_boundaries),
         "rows": rows,
     }
 

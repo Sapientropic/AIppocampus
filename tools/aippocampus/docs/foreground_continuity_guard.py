@@ -178,11 +178,18 @@ def _owner_route_class(mapping: dict[str, Any]) -> str:
 def _report_has_actionable_followup(report: dict[str, Any]) -> bool:
     if report.get("no_open_followup_reason"):
         return True
+    owner_routes = report.get("owner_routes")
+    if isinstance(owner_routes, (dict, list)) and owner_routes:
+        return True
+    if isinstance(owner_routes, str) and owner_routes.strip():
+        return True
     for field in (
         "review_next_actions",
         "gap_next_actions",
         "issue_actions",
         "fidelity_gap_actions",
+        "recommended_next_actions",
+        "next_measurement_actions",
     ):
         actions = report.get(field)
         if isinstance(actions, dict):

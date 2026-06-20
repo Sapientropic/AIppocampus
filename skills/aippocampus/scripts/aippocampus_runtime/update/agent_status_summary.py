@@ -150,6 +150,23 @@ def compact_agent_status_report(
             }
         )
     actions: list[dict[str, Any]] = []
+    agent_next_action = update_actions.agent_callable_foreground_action(agent)
+    agent_action_needed = bool(
+        agent.get("status")
+        and (agent.get("next_command") or agent_next_action.get("command"))
+        and not agent.get("ready")
+    )
+    agent_action_added = False
+    if agent_action_needed:
+        actions.append(
+            _compact_update_action(
+                surface="agent_callable",
+                reason=str(agent.get("status") or "foreground tools not verified"),
+                command=str(agent_next_action.get("command") or agent.get("next_command")),
+                manual_instruction=agent_next_action.get("manual_instruction"),
+            )
+        )
+        agent_action_added = True
     if deferred_components:
         actions.append(
             _compact_update_action(
@@ -213,8 +230,7 @@ def compact_agent_status_report(
             command = item.get("next_command") or item.get("documented_install_command")
             reason = f"{surface} status is {item.get('status') or 'attention_needed'}"
             actions.append(_compact_update_action(surface=surface, reason=reason, command=command))
-    agent_next_action = update_actions.agent_callable_foreground_action(agent)
-    if agent.get("status") and (agent.get("next_command") or agent_next_action.get("command")) and not agent.get("ready"):
+    if agent_action_needed and not agent_action_added:
         actions.append(
             _compact_update_action(
                 surface="agent_callable",
