@@ -33,7 +33,10 @@ Primary foreground loop:
 2. Deepen the selected route before claims with `agent_deepen` /
    `recall_deepen`, or:
    `aippocampus agent deepen --request 1 --last-recall --json`.
-3. If no route appears and the user remembers wording, use
+3. If recall found plausible routes and the user then remembers exact wording,
+   search inside those candidates:
+   `aippocampus search --from-last-recall "a distinctive old phrase" --json`.
+4. If no route appears and the user remembers wording, use
    `search_memory` or `aippocampus search "a distinctive old phrase" --json`.
 
 Tool visibility fallback: MCP first when the tool is listed; CLI facade when

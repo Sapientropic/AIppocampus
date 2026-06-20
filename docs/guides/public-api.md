@@ -657,6 +657,10 @@ not the copy-pasteable recall handle. When available, prefer the emitted
 output, prefer the request-index path such as
 `aippocampus agent deepen --request 1 --last-recall` or the MCP
 `foreground_action` object.
+When recall has narrowed the candidate route set but the user then remembers
+exact wording, use `aippocampus search --from-last-recall "<exact phrase>"
+--json` before broad `search --all`; the search remains route selection, and
+the matching request still needs `agent deepen` before strong claims.
 The usefulness gate treats missing copy-pasteable deepen targets, display-handle
 misuse, broad search before recall, and safe route evidence demoted back to
 `scent` as foreground usefulness failures rather than harmless diagnostics.
