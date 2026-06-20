@@ -888,6 +888,20 @@ empty output. The PR-tier guard for this contract is
 - **Entrypoint:** `benchmarks/aippocampus/benchmark_attention_score_fusion_calibration.py`
 - **Reads / updates:** `docs/evidence/benchmarks/reports/recall-navigation/attention-score-fusion-calibration.md`, #1112
 
+### Associative Path Walker quality gate
+
+- **Entrypoint:** `benchmarks/aippocampus/benchmark_associative_path_walker.py`
+- **Reads / updates:** `docs/architecture/recall/source-backed-product-discipline.md`,
+  #2355, #2356; public-safe fixture gate for navigation lift, specificity,
+  source-reopenability, and wrong-hop drag without claiming live recall quality.
+
+### Conversation orientation usefulness gate
+
+- **Entrypoint:** `benchmarks/aippocampus/benchmark_conversation_orientation_usefulness.py`
+- **Reads / updates:** `docs/architecture/recall/source-backed-product-discipline.md`,
+  #2366, #2367, #2368; public-safe fixture gate for compact working
+  orientation versus safe-but-useless caveat output without source-truth overclaim.
+
 ### Agent continuity loop gate
 
 - **Entrypoint:** `benchmarks/aippocampus/benchmark_agent_continuity_loop.py`

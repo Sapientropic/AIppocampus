@@ -24,10 +24,15 @@ class AttentionScoreFusionCalibrationTests(unittest.TestCase):
         self.assertTrue(report["ok"], json.dumps(report, ensure_ascii=False, indent=2))
         self.assertTrue(report["contract_gate_ok"])
         self.assertFalse(report["quality_gate_ok"])
-        self.assertFalse(report["public_quality_gate_ok"])
+        self.assertTrue(report["public_quality_gate_ok"])
         self.assertTrue(report["runtime_policy_adoption_gate_ok"])
         self.assertEqual(report["adoption_scope"], "deterministic_fixture_guarded")
-        self.assertEqual(report["benchmark_maturity_level"], "contract_smoke")
+        self.assertEqual(report["benchmark_maturity_level"], "public_safe_quality_slice")
+        self.assertEqual(
+            report["live_score_fusion_quality"]["status"],
+            "public_safe_fixture_measured",
+        )
+        self.assertTrue(report["live_score_fusion_quality"]["quality_gate_ok"])
         self.assertEqual(report["feature_rows"]["row_count"], 12)
         self.assertFalse(report["privacy_boundary"]["raw_text_emitted"])
         self.assertFalse(report["privacy_boundary"]["private_text_emitted"])
@@ -60,11 +65,26 @@ class AttentionScoreFusionCalibrationTests(unittest.TestCase):
         )
         self.assertEqual(report["adoption_evidence"]["row_count"], 12)
         self.assertEqual(report["adoption_evidence"]["holdout_case_count"], 0)
-        self.assertFalse(report["adoption_evidence"]["public_quality_supported"])
+        self.assertEqual(report["adoption_evidence"]["external_or_public_cohort_case_count"], 4)
+        self.assertTrue(report["adoption_evidence"]["public_quality_supported"])
         self.assertTrue(report["rollback_or_guardrail"]["hard_masks_remain_policy_gates"])
         self.assertIn("calibration_affects_routing_only", report["cannot_claim"])
         self.assertIn("default_foreground_hook_adoption", report["cannot_claim"])
-        self.assertIn("public_quality_adoption_from_12_row_fixture", report["cannot_claim"])
+        self.assertIn("broad_public_quality_adoption_from_fixture_slice", report["cannot_claim"])
+        self.assertIn("production_or_private_history_score_fusion_lift", report["cannot_claim"])
+
+        quality = report["live_score_fusion_quality"]
+        self.assertEqual(quality["metrics"]["top_k_useful_route_rate"]["rate"], 1.0)
+        self.assertEqual(quality["metrics"]["hard_negative_false_positive_rate"]["rate"], 0.0)
+        self.assertEqual(quality["metrics"]["exact_source_hit_rate"]["rate"], 1.0)
+        self.assertEqual(
+            quality["metrics"]["low_specificity_refine_or_no_route_rate"]["rate"],
+            1.0,
+        )
+        self.assertEqual(
+            quality["comparison"]["lexical_baseline"],
+            "bm25_rank_proxy",
+        )
 
     def test_hard_masks_remain_non_negotiable_even_with_high_scores(self) -> None:
         rows = calibration.export_attention_feature_rows()

@@ -33,6 +33,45 @@ ACTION_REOPENABLE_ROUTE = "reopenable_route"
 ACTION_BOUNDED_EVIDENCE = "bounded_evidence"
 ACTION_SOURCE_OPEN = "source_open"
 
+CONVERSATION_WORKING_ORIENTATION = "working_orientation"
+CONVERSATION_SOURCE_REACHABLE = "source_reachable"
+CONVERSATION_BOUNDED_EVIDENCE = "bounded_evidence"
+CONVERSATION_SOURCE_OPEN = "source_open"
+CONVERSATION_BLOCKED_OR_RETIRED = "blocked_or_retired"
+
+CONVERSATION_AUTHORITY_LADDER: tuple[dict[str, Any], ...] = (
+    {
+        "level": CONVERSATION_WORKING_ORIENTATION,
+        "maps_to_action_grammar": ACTION_DIRECTION_ONLY,
+        "allowed_use": "orient_planning_without_source_truth",
+        "source_reopen_required_for_claims": True,
+    },
+    {
+        "level": CONVERSATION_SOURCE_REACHABLE,
+        "maps_to_action_grammar": ACTION_REOPENABLE_ROUTE,
+        "allowed_use": "reopen_small_route_before_load_bearing_claim",
+        "source_reopen_required_for_claims": True,
+    },
+    {
+        "level": CONVERSATION_BOUNDED_EVIDENCE,
+        "maps_to_action_grammar": ACTION_BOUNDED_EVIDENCE,
+        "allowed_use": "use_within_declared_scope",
+        "source_reopen_required_for_claims": False,
+    },
+    {
+        "level": CONVERSATION_SOURCE_OPEN,
+        "maps_to_action_grammar": ACTION_SOURCE_OPEN,
+        "allowed_use": "use_open_source_with_redaction_and_scope",
+        "source_reopen_required_for_claims": False,
+    },
+    {
+        "level": CONVERSATION_BLOCKED_OR_RETIRED,
+        "maps_to_action_grammar": ACTION_IGNORE_OR_BLOCKED,
+        "allowed_use": "do_not_use_except_boundary_warning",
+        "source_reopen_required_for_claims": False,
+    },
+)
+
 TRUST_TAXONOMY: tuple[dict[str, Any], ...] = (
     {
         "trust_level": TRUST_IGNORE,
@@ -142,6 +181,80 @@ def is_bounded_evidence(surface: Mapping[str, Any]) -> bool:
 
 def trust_taxonomy() -> list[dict[str, Any]]:
     return [dict(row) for row in TRUST_TAXONOMY]
+
+
+def conversation_authority_ladder() -> list[dict[str, Any]]:
+    return [dict(row) for row in CONVERSATION_AUTHORITY_LADDER]
+
+
+def conversation_authority_level(surface: Mapping[str, Any]) -> str:
+    """Map conversation continuity surfaces to the compact product ladder.
+
+    The ladder is intentionally an overlay on the existing source-backed trust
+    contract. It lets foreground orientation be useful without pretending that a
+    summary, sidecar, or task packet is source truth.
+    """
+
+    surface_map = _mapping(surface)
+    level = trust_level(surface_map)
+    support = str(surface_map.get("support_level") or "").casefold()
+    route = str(surface_map.get("route") or "").casefold()
+    visibility = str(surface_map.get("visibility") or "").casefold()
+    currentness = str(
+        surface_map.get("currentness") or surface_map.get("freshness") or ""
+    ).casefold()
+    risk_flags = {str(flag).casefold() for flag in surface_map.get("risk_flags") or []}
+    high_risk = bool(
+        risk_flags
+        & {
+            "exact_quote",
+            "public_claim",
+            "high_risk",
+            "sensitive",
+            "numeric_claim",
+            "code_change",
+            "issue_closeout",
+            "check_currentness",
+        }
+    )
+
+    if (
+        level == TRUST_IGNORE
+        or route == "ignore"
+        or support == "suppressed"
+        or visibility == "blocked"
+        or currentness in {"stale", "superseded", "retired"}
+        and not surface_map.get("allow_working_orientation")
+    ):
+        return CONVERSATION_BLOCKED_OR_RETIRED
+    if level == TRUST_RAW_SOURCE_REOPENED:
+        return CONVERSATION_SOURCE_OPEN
+    if level == TRUST_BOUNDED_EVIDENCE:
+        return CONVERSATION_BOUNDED_EVIDENCE
+    if (
+        level in {TRUST_SOURCE_REQUIRED, TRUST_CANDIDATE_BACKED}
+        or high_risk
+        or surface_map.get("source_reopen_required")
+    ):
+        return CONVERSATION_SOURCE_REACHABLE
+    return CONVERSATION_WORKING_ORIENTATION
+
+
+def conversation_authority_contract(surface: Mapping[str, Any]) -> dict[str, Any]:
+    level = conversation_authority_level(surface)
+    row = next(
+        item for item in CONVERSATION_AUTHORITY_LADDER if item["level"] == level
+    )
+    return {
+        "conversation_authority_level": level,
+        "action_grammar": row["maps_to_action_grammar"],
+        "allowed_use": row["allowed_use"],
+        "working_orientation_allowed": level == CONVERSATION_WORKING_ORIENTATION,
+        "source_reopen_required_for_claims": row["source_reopen_required_for_claims"],
+        "fact_claim_allowed": level
+        in {CONVERSATION_BOUNDED_EVIDENCE, CONVERSATION_SOURCE_OPEN},
+        "compact_foreground_should_dump_cannot_claim": False,
+    }
 
 
 def requires_reopen_before_claim(surface: Mapping[str, Any]) -> bool:

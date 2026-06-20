@@ -5,6 +5,9 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
+from aippocampus_runtime.recall.foreground_confidence import (
+    foreground_recall_confidence_decision,
+)
 from aippocampus_runtime.recall.prompt_cues import (
     current_checkout_live_fact_intent,
     is_decision_continuation,
@@ -289,20 +292,34 @@ def choose_decision_evidence(
     reasons: list[str],
 ) -> tuple[str, list[dict[str, Any]]]:
     evidence: list[dict[str, Any]] = []
-    if not (
-        not suppressed
-        and has_memory_cue
-        and (candidates or working_memory_matches)
-        and (
-            top_score >= scent_threshold
-            or working_score >= scent_threshold
-            or explicit
-            or associative
-            or cognitive_map_matches
-            or semantic_memory_cue
-            or positive_evidence_intent
+    confidence_decision = foreground_recall_confidence_decision(
+        prompt=prompt,
+        candidates=candidates,
+        working_memory_matches=working_memory_matches,
+        query_terms=query_terms,
+        explicit=explicit,
+        associative=associative,
+        cognitive_map_matches=cognitive_map_matches,
+        semantic_memory_cue=semantic_memory_cue,
+        positive_evidence_intent=positive_evidence_intent,
+        has_memory_cue=has_memory_cue,
+        suppressed=suppressed,
+        top_score=top_score,
+        working_score=working_score,
+        scent_threshold=scent_threshold,
+    )
+    if not confidence_decision["emit"]:
+        reasons.append(
+            "foreground recall withheld: "
+            + str(confidence_decision["decision"]).replace("_", " ")
         )
-    ):
+        for reason in confidence_decision.get("reason_codes") or []:
+            if reason in {
+                "cue_only_below_confidence_floor",
+                "fallback_only_below_confidence_floor",
+                "zero_score_below_confidence_floor",
+            }:
+                reasons.append(str(reason))
         return "skip", evidence
     evidence = source_intent_evidence(
         prompt=prompt,

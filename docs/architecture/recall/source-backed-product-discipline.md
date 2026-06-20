@@ -22,6 +22,22 @@ Every foreground continuity surface must answer four questions:
 If a surface cannot answer those, it should stay behind local diagnostics or
 return a recovery card instead of expanding the public foreground shape.
 
+Conversation-memory orientation uses a product ladder on top of the existing
+source-backed trust contract:
+
+- `working_orientation`: useful planning context, not source truth.
+- `source_reachable`: compact orientation plus the smallest route to reopen
+  before a load-bearing claim.
+- `bounded_evidence`: reopened clean source within a declared scope.
+- `source_open`: source is open to the host and still scope/redaction-bound.
+- `blocked_or_retired`: stale, private, conflicted, or superseded material.
+
+Compact/default foreground packets have an armor budget: no visible
+`cannot_claim` list, at most two visible boundary/reopen prompts, and at least
+two useful guidance signals such as situation, unknown, display hint, route
+label, or next action. Full, explain, deepen, diagnostics, and operator views
+may retain detailed source trails and boundary fields.
+
 ## Top Surfaces
 
 | Surface | Class | Current role | Source-backed boundary | First audit check |
@@ -36,6 +52,21 @@ return a recovery card instead of expanding the public foreground shape.
 | MCP `agent_recall` / `agent_deepen` | `progressive_disclosure` | Host tool projection. | Compact default redacts private handles and local paths. | `tests/aippocampus/test_aippocampus_mcp_server.py` |
 | Hook affordances | `overblocking` risk | Tiny prompt-time ignition. | No raw source, local paths, or source refs in hook output. | hook affordance tests |
 | Background findings / observatory | `progressive_disclosure` | Reviewed navigation readouts. | Findings stay navigation-only until source is reopened. | foreground/output audit tests |
+
+## Recall Quality Gates
+
+Two public-safe gates guard the foreground usability boundary:
+
+- `benchmark_associative_path_walker.py` checks that Associative Path Walker
+  navigation finds source-reopenable paths without generic wrong-hop drag.
+- `benchmark_conversation_orientation_usefulness.py` checks that compact
+  working orientation can beat safe-but-useless caveat output without source
+  truth overclaim.
+
+Score-fusion calibration also reports a public-safe retrieval quality slice in
+`live_score_fusion_quality`; that slice is measured, but it still cannot claim
+production, private-history, or broad live ranking lift without a separate
+dogfood/live run.
 
 ## Task Orientation Packet Boundary
 
