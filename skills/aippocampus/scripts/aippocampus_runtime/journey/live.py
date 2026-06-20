@@ -141,7 +141,6 @@ def create_journey_from_live_navigation_rows(
         },
     }
 
-
 def _route_handle(journey_row: Mapping[str, Any]) -> str:
     refs = journey_row.get("source_refs") or []
     return "journey_route:" + tracking.stable_digest(

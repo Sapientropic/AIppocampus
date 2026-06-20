@@ -25,6 +25,7 @@ from aippocampus_runtime.contracts import (
     foreground_shell_action,
     shell_quote,
 )
+from aippocampus_runtime.macro import orientation_producer
 from aippocampus_runtime.macro import state as macro_state
 from aippocampus_runtime.mcp.agent_deepen_projection import compact_agent_deepen_payload
 from aippocampus_runtime.mcp.agent_explain_projection import project_agent_explain_cli_payload
@@ -600,57 +601,6 @@ def _macro_state_from_projection(projection: Mapping[str, Any]) -> Mapping[str, 
     return macro_live_recall.state_from_projection(projection)
 
 
-def _macro_state_has_route_delta(entry: Mapping[str, Any]) -> bool:
-    movement = entry.get("movement")
-    if not isinstance(movement, Mapping):
-        return False
-    return str(movement.get("mode") or "") != "standing_state"
-
-
-def _macro_momentum_block(entry: Mapping[str, Any]) -> Mapping[str, Any]:
-    momentum = entry.get("momentum")
-    return momentum if isinstance(momentum, Mapping) else {}
-
-
-def _macro_momentum_foreground_text(entry: Mapping[str, Any]) -> str:
-    momentum = _macro_momentum_block(entry)
-    direction = str(momentum.get("direction") or "")
-    route_policy = str(momentum.get("route_policy") or "")
-    if not direction:
-        return ""
-    if route_policy == "closeout_with_overconfidence_watch":
-        return "derived momentum peak; recheck currentness and overconfidence before closeout"
-    if direction == "rising":
-        return "derived momentum rising"
-    if direction == "turning":
-        return "derived momentum turning; recheck currentness before pushing"
-    if direction == "declining":
-        return "derived momentum declining; reduce push and reopen currentness"
-    if direction == "hibernating":
-        return "derived momentum hibernating; stay quiet until new source changes"
-    return f"derived momentum {direction}"
-
-
-def _macro_foreground_text(entry: Mapping[str, Any]) -> str:
-    raw_hexagram = entry.get("hexagram")
-    hexagram: Mapping[str, Any] = raw_hexagram if isinstance(raw_hexagram, Mapping) else {}
-    raw_movement = entry.get("movement")
-    movement: Mapping[str, Any] = raw_movement if isinstance(raw_movement, Mapping) else {}
-    raw_relation = entry.get("relation_position")
-    relation: Mapping[str, Any] = raw_relation if isinstance(raw_relation, Mapping) else {}
-    current = str(hexagram.get("name") or "unknown")
-    toward = str(movement.get("toward") or current)
-    layer = str(relation.get("active_layer") or "unknown")
-    role = str(relation.get("current_agent_default_role") or "unknown")
-    momentum_text = _macro_momentum_foreground_text(entry)
-    momentum_clause = f"; {momentum_text}" if momentum_text else ""
-    return (
-        f"Macro orientation heuristic (initial calibration): {current} -> {toward}; "
-        f"human-action layer ({layer}){momentum_clause}; agent posture {role}. "
-        f"Use as navigation only; reopen before exact/public/disputed claims."
-    )
-
-
 def _macro_memory_packet(
     projection: Mapping[str, Any],
     *,
@@ -659,15 +609,15 @@ def _macro_memory_packet(
     entry = _macro_state_from_projection(projection)
     if projection.get("status") != "current" or entry is None:
         return None
-    if not _macro_state_has_route_delta(entry):
+    if not macro_foreground.state_has_route_signal(entry):
         return None
     route_id = _macro_route_id(project)
     raw_perturbation = entry.get("perturbation")
     perturbation: Mapping[str, Any] = (
         raw_perturbation if isinstance(raw_perturbation, Mapping) else {}
     )
-    momentum = _macro_momentum_block(entry)
-    foreground_text = _macro_foreground_text(entry)
+    momentum = macro_foreground.momentum_block(entry)
+    foreground_text = macro_foreground.foreground_text(entry)
     return {
         "kind": "aippocampus_memory_packet",
         "packet_kind": "macro_orientation_packet",
@@ -734,6 +684,17 @@ def macro_orientation(
         foreground_action = None
     elif projection.get("status") == "missing_macro_state_path":
         suggested_next = "agent_recall_or_macro_schema_setup"
+        producer_status = {
+            "state_producer": "available_as_staged_review_path",
+            "candidate_queue": orientation_producer.DEFAULT_CANDIDATE_QUEUE.as_posix(),
+            "state_ready": False,
+            "next_action": (
+                "stage source-backed router observations as macro candidates, "
+                "then review before writing durable project state"
+            ),
+            "hot_path_write_allowed": False,
+            "total_hexagram_status": "not_produced_by_minimal_producer",
+        }
         safe_next_actions = [
             {
                 "id": "recall_project_macro_orientation",
@@ -775,6 +736,7 @@ def macro_orientation(
                     suggested_next=suggested_next,
                     foreground_action=foreground_action,
                     safe_next_actions=safe_next_actions,
+                    producer_status=producer_status,
                 )
             )
     else:
@@ -794,6 +756,12 @@ def macro_orientation(
         "suggested_next": suggested_next,
         **action_fields,
         "warnings": projection.get("warnings", []),
+        "producer_status": {
+            "state_producer": "available_as_staged_review_path",
+            "candidate_queue": orientation_producer.DEFAULT_CANDIDATE_QUEUE.as_posix(),
+            "hot_path_write_allowed": False,
+            "total_hexagram_status": "not_produced_by_minimal_producer",
+        },
         "diagnostics": diagnostics,
         "metrics": {
             "macro_packet_shown_count": len(memory_packets),

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping
+from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime import core
@@ -22,6 +23,7 @@ from aippocampus_runtime.contracts import (
 from aippocampus_runtime.ops.issue_work_guard import build_issue_active_pull_packet
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 from aippocampus_runtime.recall.active_path_packet import build_active_path_packet
+from aippocampus_runtime.recall.orientation_sidecars import load_orientation_sidecars
 from aippocampus_runtime.recall.task_orientation_fixtures import (
     FOREGROUND_BYTE_BUDGET,
     build_external_source_anchors,
@@ -187,7 +189,7 @@ def _compact_understanding_state(state: Mapping[str, Any]) -> dict[str, Any]:
                 "status": item.get("status"),
                 "item_count": item.get("item_count", 0),
             }
-            for item in list(state.get("upstream_components") or [])[:8]
+            for item in list(state.get("upstream_components") or [])[:12]
             if isinstance(item, Mapping)
         ],
         "foreground_projection": {
@@ -257,6 +259,11 @@ def build_task_orientation_packet(
     project: str = "AIppocampus",
     max_paths: int = 3,
     detail: str = "compact",
+    cwd: str | Path | None = None,
+    sidecar_dir: str | Path | None = None,
+    registry_dir: str | Path | None = None,
+    working_memory_path: str | Path | None = None,
+    load_sidecars: bool = True,
 ) -> dict[str, Any]:
     clean_task = _task_value(task)
     if not clean_task:
@@ -277,6 +284,28 @@ def build_task_orientation_packet(
     compact_path = compact_active_path_packet(active_path)
     actions = _safe_next_actions(clean_task)
     route_plan = route_plan_from_active_path(compact_path)
+    sidecar_load: dict[str, Any] = (
+        load_orientation_sidecars(
+            clean_task,
+            project=project,
+            cwd=cwd,
+            sidecar_dir=sidecar_dir,
+            registry_dir=registry_dir,
+            working_memory_path=working_memory_path,
+            limit_per_component=max_paths,
+        )
+        if load_sidecars
+        else {
+            "kind": "aippocampus_orientation_sidecar_load",
+            "status": "disabled",
+            "components": [],
+            "journeys": [],
+            "episode_arcs": [],
+            "reflection_adjustments": [],
+            "reviewed_background_findings": [],
+            "metrics": {"projected_item_count": 0},
+        }
+    )
     understanding_state = build_understanding_state_read_model(
         clean_task,
         project=project,
@@ -285,6 +314,11 @@ def build_task_orientation_packet(
         suppressed_external_source_anchors=suppressed_anchors,
         learning_constraints=constraints,
         suppressed_constraints=suppressed_constraints,
+        journeys=sidecar_load.get("journeys") or [],
+        episode_arcs=sidecar_load.get("episode_arcs") or [],
+        reflection_adjustments=sidecar_load.get("reflection_adjustments") or [],
+        reviewed_background_findings=sidecar_load.get("reviewed_background_findings") or [],
+        sidecar_components=sidecar_load.get("components") or [],
         max_foreground_routes=max_paths,
     )
     detail_level = str(detail or "compact").strip().casefold()
@@ -320,6 +354,7 @@ def build_task_orientation_packet(
         packet: dict[str, Any] = {
             **base_packet,
             "understanding_state_read_model": _compact_understanding_state(understanding_state),
+            "orientation_sidecar_load": sidecar_load,
             "issue_work_guard": compact_issue_work_guard(issue_packet),
             "external_source_anchors": anchors,
             "suppressed_external_source_anchors": suppressed_anchors,
@@ -336,6 +371,7 @@ def build_task_orientation_packet(
                 "active_path_count": compact_path.get("path_count", 0),
                 "understanding_state_route_cue_count": understanding_state["metrics"]["route_cue_count"],
                 "understanding_state_foreground_too_heavy": understanding_state["metrics"]["foreground_too_heavy"],
+                "orientation_sidecar_projected_item_count": (sidecar_load.get("metrics") or {}).get("projected_item_count", 0),
                 "external_model_calls": 0,
                 "writes_performed": 0,
             },
@@ -361,16 +397,28 @@ def build_task_orientation_packet(
                 "issue_work_guard_should_pull": bool(issue_packet.get("should_pull")),
                 "learning_constraint_count": len(constraints),
                 "external_source_anchor_count": len(anchors),
+                "advanced_navigation_route_count": (sidecar_load.get("metrics") or {}).get("projected_item_count", 0),
+                "advanced_navigation_status": sidecar_load.get("status"),
             },
             "source_routes": list(route_plan.get("first_sources_to_reopen") or [])[:3],
             "route_plan": _compact_route_plan(route_plan),
             "detail_deferred": {
                 "active_path_packet": True,
                 "understanding_state_read_model": True,
+                "orientation_sidecar_load": True,
                 "external_source_anchors": len(anchors),
                 "suppressed_external_source_anchors": len(suppressed_anchors),
                 "learning_and_aippo_constraints": len(constraints),
                 "suppressed_constraints": len(suppressed_constraints),
+                "advanced_navigation_components": [
+                    {
+                        "component": item.get("component"),
+                        "status": item.get("status"),
+                        "item_count": item.get("item_count", 0),
+                    }
+                    for item in sidecar_load.get("components") or []
+                    if isinstance(item, Mapping)
+                ],
             },
         }
     if full_detail:
@@ -427,6 +475,11 @@ def add_agent_subparser(sub: Any) -> None:
     orient_parser.add_argument("task", nargs="*")
     orient_parser.add_argument("--task", dest="task_flag")
     orient_parser.add_argument("--project", default="AIppocampus")
+    orient_parser.add_argument("--cwd")
+    orient_parser.add_argument("--sidecar-dir")
+    orient_parser.add_argument("--registry-dir")
+    orient_parser.add_argument("--working-memory")
+    orient_parser.add_argument("--no-sidecars", action="store_true")
     orient_parser.add_argument("--max", type=int, default=3)
     orient_parser.add_argument("--eval", action="store_true")
     orient_parser.add_argument(
@@ -459,6 +512,11 @@ def run_agent_command(args: Any, json_out: Any) -> int:
             project=args.project,
             max_paths=args.max,
             detail=args.detail,
+            cwd=args.cwd,
+            sidecar_dir=args.sidecar_dir,
+            registry_dir=args.registry_dir,
+            working_memory_path=args.working_memory,
+            load_sidecars=not args.no_sidecars,
         )
     if args.json:
         json_out(payload)

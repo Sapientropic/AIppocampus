@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -9,10 +10,14 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-from aippocampus_runtime.macro import state as macro_state  # noqa: E402
+from aippocampus_runtime.macro import orientation_producer  # noqa: E402
+from aippocampus_runtime.macro import state as macro_state
 from aippocampus_runtime.navigation import macro_field_atlas  # noqa: E402
 from aippocampus_runtime.navigation import macro_router_interface as interface  # noqa: E402
-from aippocampus_runtime.recall import macro_live_recall  # noqa: E402
+from aippocampus_runtime.recall import (
+    agent_continuity,  # noqa: E402
+    macro_live_recall,  # noqa: E402
+)
 
 
 class MacroRouterInterfaceTests(unittest.TestCase):
@@ -77,6 +82,82 @@ class MacroRouterInterfaceTests(unittest.TestCase):
         self.assertEqual(observation["write_mode"], "observation_only_no_hot_path_write")
         self.assertFalse(no_source["candidate_macro_update"]["eligible_for_macro_update"])
         self.assertEqual(no_source["macro_state_mutation_count"], 0)
+
+    def test_router_observation_stages_reviewed_macro_state_without_hot_path_write(self) -> None:
+        observation = interface.build_router_macro_observation(
+            scope="project:AIppocampus",
+            router_packets=[
+                {
+                    "macro_layer": "heaven",
+                    "emitted": True,
+                    "source_handles": [{"source_id": "route-source"}],
+                    "router_diagnostics": {
+                        "reason_codes": ["repeated_route_failure"],
+                    },
+                },
+                {
+                    "macro_layer": "human",
+                    "emitted": True,
+                    "source_handles": [{"source_id": "route-source-2"}],
+                },
+                {
+                    "macro_layer": "heaven",
+                    "emitted": True,
+                    "source_handles": [{"source_id": "route-source-3"}],
+                },
+            ],
+            source_event_refs=("issue:#2365", "route:source-backed-router-event"),
+        )
+        no_source = interface.build_router_macro_observation(
+            scope="project:AIppocampus",
+            router_packets=[{"macro_layer": "earth", "emitted": True}],
+        )
+        candidate = orientation_producer.build_candidate_from_router_observation(observation)
+        suppressed = orientation_producer.build_candidate_from_router_observation(no_source)
+
+        self.assertEqual(observation["macro_state_mutation_count"], 0)
+        self.assertTrue(candidate["candidate_ready"], candidate)
+        self.assertEqual(candidate["status"], "candidate_ready")
+        self.assertEqual(candidate["active_layer"], "heaven")
+        self.assertGreater(candidate["momentum_basis"]["support_delta"], 0)
+        self.assertEqual(suppressed["status"], "suppressed_missing_source_refs")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            state_path = Path(tmp) / ".aippocampus" / "macro-orientation.jsonl"
+            with self.assertRaises(ValueError):
+                orientation_producer.promote_reviewed_candidate_to_state(
+                    candidate,
+                    output_path=state_path,
+                )
+            reviewed = orientation_producer.review_macro_orientation_candidate(
+                candidate,
+                reviewed_by="test",
+            )
+            promoted = orientation_producer.promote_reviewed_candidate_to_state(
+                reviewed,
+                output_path=state_path,
+            )
+            projection = macro_state.latest_project_macro_orientation(
+                macro_state.load_macro_orientation_states(state_path),
+                project="AIppocampus",
+            )
+            macro_card = agent_continuity.macro_orientation(
+                project="AIppocampus",
+                macro_state_path=state_path,
+            )
+
+        self.assertTrue(promoted["wrote_state"], promoted)
+        self.assertEqual(projection["status"], "current")
+        self.assertEqual(
+            projection["state"]["producer"]["total_hexagram_status"],
+            "not_produced",
+        )
+        self.assertEqual(macro_card["status"], "ok")
+        self.assertEqual(macro_card["memory_packets"][0]["packet_kind"], "macro_orientation_packet")
+        self.assertIn(
+            "active-layer/momentum only",
+            macro_card["memory_packets"][0]["foreground_text"],
+        )
 
     def test_macro_field_projection_adds_compact_legacy_attention_guidance(self) -> None:
         entry = macro_state.build_macro_orientation_state(

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -14,7 +15,17 @@ from aippocampus_runtime.contracts import (  # noqa: E402
     executable_command_violations,
     foreground_action_contract_violations,
 )
+from aippocampus_runtime.journey import live as journey_live  # noqa: E402
+from aippocampus_runtime.journey import sidecar_materializer  # noqa: E402
 from aippocampus_runtime.recall import task_orientation, understanding_state  # noqa: E402
+
+
+def write_jsonl(path: Path, rows: list[dict]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        "".join(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n" for row in rows),
+        encoding="utf-8",
+    )
 
 
 class TaskOrientationPacketTests(unittest.TestCase):
@@ -215,6 +226,162 @@ class TaskOrientationPacketTests(unittest.TestCase):
         self.assertNotIn("RAW_SOURCE_SENTINEL", encoded)
         self.assertNotIn("E:\\", encoded)
         self.assertFalse(state["source_boundary"]["raw_source_text_serialized"])
+
+    def test_agent_orient_loads_default_navigation_sidecars_without_raw_detail(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            sidecars = root / ".aippocampus"
+            source_ref = {"thread_key": "session:orientation", "message_id": "msg-1"}
+            write_jsonl(
+                sidecars / "journeys.jsonl",
+                [
+                    {
+                        "kind": "aippocampus_journey",
+                        "journey_id": "jr-continuity-review",
+                        "path_label": "continuity review route",
+                        "core_inquiry": "How should continuity review avoid repeating rejected routes?",
+                        "current_frontier": "Resume continuity review by reopening the source-backed route.",
+                        "status": "traveling",
+                        "source_refs": [source_ref],
+                    }
+                ],
+            )
+            write_jsonl(
+                sidecars / "episode_arcs.jsonl",
+                [
+                    {
+                        "kind": "aippocampus_episode_arc_read_model",
+                        "episode_id": "episode-continuity-review",
+                        "episode_kind": "rejected_route_arc",
+                        "event_order": ["attempted_route", "failed_check", "route_rejected"],
+                        "source_event_ids": ["attempt", "fail", "reject"],
+                        "source_refs": [source_ref],
+                        "source_ref_hashes": ["h1", "h2", "h3"],
+                        "current_validity": "needs_reopen",
+                        "affected_scope": {"modules": ["continuity review"]},
+                    }
+                ],
+            )
+            write_jsonl(
+                sidecars / "reflection_adjustments.jsonl",
+                [
+                    {
+                        "kind": "aippocampus_reflection_adjustment",
+                        "target_id": "continuity-review-route",
+                        "surface": "ranking",
+                        "delta": 0.25,
+                        "reason": "continuity review recall was helpful",
+                        "feedback_action": "recall_helpful",
+                        "source_refs": [source_ref],
+                    },
+                    {
+                        "kind": "aippocampus_reflection_adjustment",
+                        "target_id": "continuity-review-route",
+                        "surface": "confidence",
+                        "delta": -0.18,
+                        "reason": "continuity review route needs correction before reuse",
+                        "feedback_action": "user_correction",
+                        "source_refs": [source_ref],
+                    },
+                ],
+            )
+            write_jsonl(
+                sidecars / "working_memory.jsonl",
+                [
+                    {
+                        "kind": "aippocampus_working_memory",
+                        "status": "active",
+                        "route": "use_with_source",
+                        "candidate_type": "hook_trigger",
+                        "candidate_key": "wm_continuity_review",
+                        "title": "Background finding",
+                        "summary": "Continuity review should reuse the source-backed route before broad search.",
+                        "activation_cues": ["continuity review"],
+                        "trigger_terms": ["continuity review"],
+                        "source_finding_ids": ["finding-continuity-review"],
+                        "source_refs": [source_ref],
+                        "confidence": 0.76,
+                        "project_label": "AIppocampus",
+                        "review_state": "agent_adjudicated",
+                        "route_reason": "Reviewed background route matched continuity review.",
+                    }
+                ],
+            )
+
+            packet = task_orientation.build_task_orientation_packet(
+                "continue continuity review without repeating rejected routes",
+                cwd=root,
+                detail="full",
+            )
+            compact = task_orientation.build_task_orientation_packet(
+                "continue continuity review without repeating rejected routes",
+                cwd=root,
+            )
+
+        encoded = json.dumps(packet, ensure_ascii=False, sort_keys=True)
+        components = {
+            item["component"]: item
+            for item in packet["orientation_sidecar_load"]["components"]
+        }
+        upstream = {
+            item["component"]
+            for item in packet["understanding_state_read_model"]["upstream_components"]
+        }
+
+        self.assertEqual(packet["orientation_sidecar_load"]["status"], "projected")
+        self.assertGreaterEqual(packet["metrics"]["orientation_sidecar_projected_item_count"], 4)
+        self.assertEqual(components["journey_sidecar"]["status"], "projected")
+        self.assertEqual(components["episode_arc_sidecar"]["status"], "projected")
+        self.assertEqual(components["reflection_adjustment_sidecar"]["status"], "projected")
+        self.assertEqual(components["reviewed_background_findings"]["status"], "projected")
+        self.assertIn("reviewed_background_findings", upstream)
+        self.assertIn("reflection_adjustments", upstream)
+        self.assertGreater(compact["current_orientation"]["advanced_navigation_route_count"], 0)
+        self.assertNotIn(str(Path(tempfile.gettempdir())), encoded)
+        self.assertNotIn("raw_text", encoded)
+        self.assertNotIn("dream_findings", encoded)
+        self.assertFalse(packet["source_boundary"]["raw_source_text_serialized"])
+
+    def test_agent_orient_missing_sidecars_degrades_to_next_actions(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            packet = task_orientation.build_task_orientation_packet(
+                "fresh task with no advanced sidecars",
+                cwd=Path(tmp),
+                detail="full",
+            )
+
+        self.assertEqual(packet["orientation_sidecar_load"]["status"], "no_relevant_sidecars")
+        components = packet["orientation_sidecar_load"]["components"]
+        self.assertTrue(any(item.get("next_action") for item in components))
+        self.assertEqual(packet["metrics"]["orientation_sidecar_projected_item_count"], 0)
+
+    def test_live_journey_materializer_writes_compact_sidecar_and_orient_consumes_it(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            output = root / ".aippocampus" / "journeys.jsonl"
+            materialized = sidecar_materializer.materialize_live_journey_sidecar(
+                rows=journey_live.fixture_live_navigation_rows(),
+                output_path=output,
+                path_label="continuity after change",
+                core_inquiry="How can continuity survive compaction without becoming false memory?",
+                as_of="2026-06-03T23:59:00Z",
+            )
+            row = json.loads(output.read_text(encoding="utf-8").splitlines()[0])
+            packet = task_orientation.build_task_orientation_packet(
+                "resume continuity route after compaction",
+                cwd=root,
+                detail="full",
+            )
+
+        encoded_row = json.dumps(row, ensure_ascii=False, sort_keys=True)
+        encoded_packet = json.dumps(packet, ensure_ascii=False, sort_keys=True)
+
+        self.assertTrue(materialized["created"], materialized)
+        self.assertEqual(materialized["metrics"]["full_waypoint_rows_serialized"], 0)
+        self.assertNotIn("waypoints", row)
+        self.assertNotIn("FUTURE_LEAK_SENTINEL", encoded_row)
+        self.assertNotIn("FUTURE_LEAK_SENTINEL", encoded_packet)
+        self.assertEqual(packet["orientation_sidecar_load"]["components"][0]["status"], "projected")
 
     def test_public_fixture_eval_shows_less_blind_search_without_claiming_live_lift(self) -> None:
         report = task_orientation.build_task_orientation_eval_report()
