@@ -178,22 +178,21 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
         self.assertEqual(action["secondary_action"]["original_id"], "agent_deepen_selected_route")
         self.assertEqual(action["secondary_action"]["id"], "deepen_top_route_low_confidence")
         self.assertEqual(action["secondary_action"]["tool_name"], "agent_deepen")
-        for route in public["routes"]:
-            self.assertIn("choice_reason", route)
-            self.assertIn("thread_candidate", route["choice_reason"])
-            self.assertIn("labels_low_specificity", route["choice_reason"])
-            action = route["action"]
-            self.assertEqual(action["id"], "deepen_this_route")
-            self.assertEqual(action["tool_name"], "agent_deepen")
-            self.assertEqual(action["route_choice_posture"], "labels_low_specificity")
-            self.assertEqual(action["confidence"], "low_confidence_navigation")
-            self.assertEqual(action["arguments"]["request_index"], route["route_index"])
-            self.assertTrue(action["arguments"]["last_recall"])
-            self.assertIn(
-                f"--request {route['route_index']} --last-recall --json",
-                action["command"],
-            )
-            self.assertEqual(action["claim_boundary"], "no_claim_before_reopen")
+        self.assertEqual(public.get("routes", []), [])
+        self.assertEqual(public["displayed_route_count"], 0)
+        self.assertEqual(public["omitted_route_count"], 3)
+        self.assertEqual(public["hidden_low_confidence_route_count"], 3)
+        self.assertNotIn("route_selection", public["claim_boundary"]["can_use_for"])
+        summary = public["route_availability_summary"]
+        self.assertEqual(summary["posture"], "labels_low_specificity")
+        self.assertEqual(summary["displayed_as_choices"], 0)
+        self.assertEqual(summary["hidden_low_confidence_route_count"], 3)
+        self.assertEqual(summary["primary_action"], "refine_low_specificity_recall_cue")
+        self.assertEqual(
+            summary["deepen_escape_hatch"]["id"],
+            "deepen_top_route_low_confidence",
+        )
+        self.assertIn("--detail full", summary["full_detail_escape_hatch"]["command"])
         encoded = json.dumps(public, ensure_ascii=False, sort_keys=True)
         self.assertNotIn('"handle":', encoded)
         self.assertNotIn('"callable_handle":', encoded)
@@ -245,9 +244,21 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
         )
 
         self.assertEqual(public["route_count"], 5)
-        self.assertEqual(public["displayed_route_count"], 3)
-        self.assertEqual(public["omitted_route_count"], 2)
-        self.assertEqual(len(public["routes"]), 3)
+        self.assertEqual(public["displayed_route_count"], 0)
+        self.assertEqual(public["omitted_route_count"], 5)
+        self.assertEqual(public["hidden_low_confidence_route_count"], 5)
+        self.assertEqual(public["omitted_duplicate_route_label_count"], 4)
+        self.assertEqual(
+            public["omitted_duplicate_route_labels"],
+            [
+                {
+                    "route_label": "benchmark_claim_posture",
+                    "kept_route_index": 1,
+                    "omitted_count": 4,
+                }
+            ],
+        )
+        self.assertEqual(public.get("routes", []), [])
         action = public["foreground_action"]
         self.assertEqual(action["id"], "refine_low_specificity_recall_cue")
         self.assertEqual(action["route_choice_posture"], "labels_low_specificity")
@@ -261,9 +272,10 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
             "AIppocampus UX review foreground agent usability noisy cannot_claim",
         )
         self.assertEqual(action["secondary_action"]["id"], "deepen_top_route_low_confidence")
-        for route in public["routes"]:
-            self.assertIn("labels_low_specificity", route["choice_reason"])
-            self.assertIn("topic_benchmark_claim_posture", route["choice_reason"])
+        summary = public["route_availability_summary"]
+        self.assertEqual(summary["route_count"], 5)
+        self.assertEqual(summary["displayed_as_choices"], 0)
+        self.assertIn("too low-specificity", summary["summary"])
 
     def test_distinguishable_route_labels_keep_deepen_primary(self) -> None:
         public = agent_continuity.public_recall_projection(
@@ -404,7 +416,9 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
         self.assertEqual(action["tool_name"], "agent_recall")
         self.assertEqual(action["secondary_action"]["id"], "deepen_top_route_low_confidence")
         self.assertIn("distinctive cue anchors", action["why"])
-        self.assertIn("labels_low_specificity", public["routes"][0]["choice_reason"])
+        self.assertEqual(public.get("routes", []), [])
+        self.assertEqual(public["hidden_low_confidence_route_count"], 1)
+        self.assertEqual(public["route_availability_summary"]["displayed_as_choices"], 0)
 
     def test_already_opened_compact_without_source_receipt_reopens_read_only(
         self,

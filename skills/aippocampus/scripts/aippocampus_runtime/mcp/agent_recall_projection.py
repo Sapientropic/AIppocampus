@@ -203,6 +203,22 @@ def _with_recall_selector(action: Mapping[str, Any], recall_selector: str) -> di
     return payload
 
 
+def _public_route_label(packet: Mapping[str, Any]) -> str:
+    return core.compact_text(
+        str(
+            packet.get("route_topic")
+            or packet.get("route_label")
+            or packet.get("display_hint")
+            or "memory route"
+        ),
+        120,
+    )
+
+
+def _route_label_key(label: str) -> str:
+    return " ".join(str(label or "").casefold().split())
+
+
 def route_deepen_action(
     request_index: int,
     *,
@@ -276,8 +292,32 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
     )
     cache_available = bool(payload.get("last_recall_cache_available"))
     recall_selector = str(payload.get("recall_selector_id") or "").strip() if cache_available else ""
+    displayed_packets: list[tuple[int, dict[str, Any]]] = []
+    duplicate_label_omissions: dict[str, dict[str, Any]] = {}
+    if labels_low_specificity:
+        seen_labels: dict[str, dict[str, Any]] = {}
+        for index, packet in enumerate(memory_packets, start=1):
+            label = _public_route_label(packet)
+            label_key = _route_label_key(label)
+            if label_key and label_key in seen_labels:
+                summary = duplicate_label_omissions.setdefault(
+                    label_key,
+                    {
+                        "route_label": label,
+                        "kept_route_index": seen_labels[label_key]["route_index"],
+                        "omitted_count": 0,
+                    },
+                )
+                summary["omitted_count"] = int(summary["omitted_count"]) + 1
+                continue
+            if label_key:
+                seen_labels[label_key] = {"route_index": index, "route_label": label}
+            if len(displayed_packets) < 3:
+                displayed_packets.append((index, packet))
+    else:
+        displayed_packets = list(enumerate(memory_packets[:3], start=1))
     route_receipts: list[dict[str, Any]] = []
-    for index, packet in enumerate(memory_packets[:3], start=1):
+    for index, packet in displayed_packets:
         route_id = str(packet.get("route_id") or f"route:{index}").strip()
         already_opened = bool(packet.get("already_opened"))
         route_is_callable = (
@@ -315,15 +355,7 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
                     "private_handle_boundary": (
                         "compact_output_redacts_local_private_handle_use_callable_selector"
                     ),
-                    "route_label": core.compact_text(
-                        str(
-                            packet.get("route_topic")
-                            or packet.get("route_label")
-                            or packet.get("display_hint")
-                            or "memory route"
-                        ),
-                        120,
-                    ),
+                    "route_label": _public_route_label(packet),
                     "route_family": packet.get("route_kind") or packet.get("output_mode"),
                     "already_opened": already_opened or None,
                     "choice_reason": recall_choices.route_choice_reason(
@@ -346,6 +378,10 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
                 }
             )
         )
+    suppressed_low_confidence_route_count = 0
+    if labels_low_specificity and route_receipts:
+        suppressed_low_confidence_route_count = len(memory_packets)
+        route_receipts = []
     semantic = payload.get("semantic_gate_diagnostics")
     semantic_compact = None
     if isinstance(semantic, dict):
@@ -402,7 +438,7 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
     detail_fields = _recall_detail_command_fields(recovery_cue)
     detail_command = str(detail_fields.get("operator_detail_command") or "")
     detail_command_template = str(detail_fields.get("operator_detail_command_template") or "")
-    displayed_route_count = min(len(memory_packets), 3)
+    displayed_route_count = len(route_receipts)
     hidden_route_count_fields: dict[str, int] = {}
     omitted_route_count = max(0, len(memory_packets) - displayed_route_count)
     if omitted_route_count:
@@ -410,6 +446,35 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
             "displayed_route_count": displayed_route_count,
             "omitted_route_count": omitted_route_count,
         }
+    duplicate_omission_rows = sorted(
+        duplicate_label_omissions.values(),
+        key=lambda row: (int(row["kept_route_index"]), str(row["route_label"])),
+    )
+    route_availability_summary = None
+    if labels_low_specificity and memory_packets:
+        route_availability_summary = _without_empty(
+            {
+                "posture": "labels_low_specificity",
+                "summary": (
+                    "Compact route labels are too low-specificity for foreground route "
+                    "choice; refine the cue before selecting a route."
+                ),
+                "route_count": len(memory_packets),
+                "displayed_as_choices": 0,
+                "hidden_low_confidence_route_count": len(memory_packets),
+                "primary_action": "refine_low_specificity_recall_cue",
+                "full_detail_escape_hatch": {
+                    "command": detail_command or None,
+                    "command_template": detail_command_template or None,
+                    "requires": detail_fields.get("operator_detail_requires"),
+                },
+                "deepen_escape_hatch": foreground_action.get("secondary_action"),
+                "claim_boundary": "no_claim_before_reopen",
+            }
+        )
+    can_use_for = ["next_action_choice"]
+    if not labels_low_specificity:
+        can_use_for.append("route_selection")
     result = {
         "detail": "compact",
         "kind": payload.get("kind"),
@@ -426,10 +491,17 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "routes": route_receipts,
         "route_count": len(memory_packets),
         **hidden_route_count_fields,
+        "hidden_low_confidence_route_count": suppressed_low_confidence_route_count or None,
+        "route_availability_summary": route_availability_summary,
+        "omitted_duplicate_route_label_count": sum(
+            int(row["omitted_count"]) for row in duplicate_omission_rows
+        )
+        or None,
+        "omitted_duplicate_route_labels": duplicate_omission_rows[:3] or None,
         "semantic_gate_diagnostics": semantic_compact,
         "provider_key_bridge": payload.get("provider_key_bridge"),
         "claim_boundary": _compact_claim_boundary(
-            can_use_for=["route_selection", "next_action_choice"],
+            can_use_for=can_use_for,
             must_reopen_for=["source_backed_claims", "exact_wording", "sensitive_or_stale_facts"],
             detail_command=detail_command or None,
             detail_command_template=detail_command_template or None,

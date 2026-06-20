@@ -48,6 +48,10 @@ class ChangedSurfaceTestPlanTests(unittest.TestCase):
         reasons = [command["reason"] for command in payload["commands"]]
 
         self.assertIn("architecture_debt", payload["categories"])
+        self.assertIn("static_gates", payload["categories"])
+        self.assertIn("type_check", payload["categories"])
+        self.assertIn(test_plan.CI_RUFF_COMMAND, commands)
+        self.assertIn(test_plan.CI_MYPY_COMMAND, commands)
         self.assertIn(py_script("tools/aippocampus/docs/debt_report.py", "--json"), commands)
         self.assertTrue(any("headroom preflight" in reason for reason in reasons))
         self.assertTrue(any("not a substitute for functional tests" in reason for reason in reasons))
@@ -80,6 +84,8 @@ class ChangedSurfaceTestPlanTests(unittest.TestCase):
             ["skills/aippocampus/scripts/aippocampus_runtime/hooks/prompt.py"]
         )
 
+        self.assertIn(test_plan.CI_RUFF_COMMAND, commands)
+        self.assertIn(test_plan.CI_MYPY_COMMAND, commands)
         self.assertTrue(any("test_prompt_hook_hot_path" in command for command in commands))
         self.assertTrue(any("test_prompt_hook_anti_nag_behavior" in command for command in commands))
         self.assertIn(py_script("tools/aippocampus/run_tests.py", "--tier pr"), commands)
@@ -102,9 +108,91 @@ class ChangedSurfaceTestPlanTests(unittest.TestCase):
         commands = [str(command["command"]) for command in payload["commands"]]
 
         self.assertIn("ci_workflow", payload["categories"])
+        self.assertIn("static_gates", payload["categories"])
+        self.assertIn("type_check", payload["categories"])
+        self.assertIn(test_plan.CI_RUFF_COMMAND, commands)
+        self.assertIn(test_plan.CI_MYPY_COMMAND, commands)
         self.assertTrue(any("test_run_tests_tiers" in command for command in commands))
         self.assertTrue(any("test_test_plan" in command for command in commands))
         self.assertIn(py_script("tools/aippocampus/run_tests.py", "--report-json"), commands)
+
+    def test_test_only_change_frontloads_ruff_without_unneeded_mypy(self) -> None:
+        commands = commands_for(["tests/aippocampus/test_test_plan.py"])
+
+        self.assertEqual(commands[0], test_plan.CI_RUFF_COMMAND)
+        self.assertNotIn(test_plan.CI_MYPY_COMMAND, commands)
+        self.assertTrue(any("tests.aippocampus.test_test_plan" in command for command in commands))
+
+    def test_ci_workflow_change_frontloads_static_parity_gates(self) -> None:
+        payload = test_plan.build_test_plan([".github/workflows/aippocampus-ci.yml"])
+        commands = [str(command["command"]) for command in payload["commands"]]
+
+        self.assertIn("ci_workflow", payload["categories"])
+        self.assertIn(test_plan.CI_RUFF_COMMAND, commands)
+        self.assertIn(test_plan.CI_MYPY_COMMAND, commands)
+        self.assertLess(
+            commands.index(test_plan.CI_RUFF_COMMAND),
+            next(index for index, command in enumerate(commands) if "test_test_plan" in command),
+        )
+
+    def test_default_commands_are_portable_and_do_not_leak_user_home_python(self) -> None:
+        fake_home = chr(67) + ":" + "\\Users\\Example"
+        fake_python = fake_home + "\\AppData\\Local\\Programs\\Python\\Python313\\python.exe"
+        with (
+            mock.patch.object(
+                test_plan.sys,
+                "executable",
+                fake_python,
+            ),
+            mock.patch.object(test_plan, "_debt_report_is_red", return_value=False),
+        ):
+            payload = test_plan.build_test_plan(["tools/aippocampus/test_plan.py"])
+
+        commands = [str(command["command"]) for command in payload["commands"]]
+
+        self.assertEqual(payload["command_mode"], "portable")
+        self.assertTrue(any(command.startswith("python ") for command in commands))
+        self.assertFalse(any(fake_home in command for command in commands))
+
+    def test_local_executable_mode_is_explicit(self) -> None:
+        with (
+            mock.patch.object(test_plan.sys, "executable", r"C:\Python313\python.exe"),
+            mock.patch.object(test_plan, "_debt_report_is_red", return_value=False),
+        ):
+            payload = test_plan.build_test_plan(
+                ["tools/aippocampus/test_plan.py"],
+                local_executable=True,
+            )
+
+        commands = [str(command["command"]) for command in payload["commands"]]
+
+        self.assertEqual(payload["command_mode"], "local_executable")
+        self.assertTrue(any("python.exe" in command for command in commands))
+
+    def test_python_minor_match_has_no_warning(self) -> None:
+        with (
+            mock.patch.object(test_plan, "_local_python_version_parts", return_value=(3, 12, 9)),
+            mock.patch.object(test_plan, "canonical_ci_python_version", return_value="3.12"),
+        ):
+            payload = test_plan.build_test_plan(["tools/aippocampus/test_plan.py"])
+
+        self.assertTrue(payload["python_environment"]["minor_matches_ci"])
+        self.assertEqual(payload["warnings"], [])
+
+    def test_python_minor_mismatch_warns_without_adding_matrix_gate(self) -> None:
+        with (
+            mock.patch.object(test_plan, "_local_python_version_parts", return_value=(3, 13, 1)),
+            mock.patch.object(test_plan, "canonical_ci_python_version", return_value="3.12"),
+        ):
+            payload = test_plan.build_test_plan(["tools/aippocampus/test_plan.py"])
+
+        warnings = payload["warnings"]
+        commands = [str(command["command"]) for command in payload["commands"]]
+
+        self.assertFalse(payload["python_environment"]["minor_matches_ci"])
+        self.assertEqual(warnings[0]["kind"], "python_minor_mismatch")
+        self.assertIn("do not run a broad matrix", warnings[0]["next_action"])
+        self.assertFalse(any("3.12" in command and "broad-pr" in command for command in commands))
 
     def test_release_tool_change_recommends_release_contracts_and_boundary_scan(self) -> None:
         payload = test_plan.build_test_plan(["tools/aippocampus/release/check_public_boundary.py"])
@@ -126,8 +214,9 @@ class ChangedSurfaceTestPlanTests(unittest.TestCase):
             ]
         )
 
+        self.assertEqual(commands[0], test_plan.CI_RUFF_COMMAND)
         self.assertEqual(
-            commands[0],
+            commands[1],
             py_command(
                 "-m unittest "
                 "tests.aippocampus.test_benchmark_longmemeval "

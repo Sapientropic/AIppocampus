@@ -73,23 +73,27 @@ class LogRetentionTests(unittest.TestCase):
             log.parent.mkdir()
             log.write_bytes(b"oversized diagnostic bytes" * 8)
 
-            code = log_retention.main(
-                [
-                    "rotate",
-                    "--registry-dir",
-                    str(root),
-                    "--max-bytes",
-                    "20",
-                    "--dry-run",
-                    "--json",
-                ]
-            )
+            with mock.patch("sys.stdout", new=StringIO()) as stdout:
+                code = log_retention.main(
+                    [
+                        "rotate",
+                        "--registry-dir",
+                        str(root),
+                        "--max-bytes",
+                        "20",
+                        "--dry-run",
+                        "--json",
+                    ]
+                )
+            cli_payload = json.loads(stdout.getvalue())
 
             # Re-run the pure function for explicit shape assertions; the CLI
             # path above is what protects the no-write surface.
             plan = log_retention.rotation_plan(root, max_bytes=20)
 
             self.assertEqual(code, 0)
+            self.assertEqual(cli_payload["kind"], "aippocampus_logs_rotation_plan")
+            self.assertEqual(cli_payload["foreground_action_contract"], "foreground-action-v1")
             self.assertTrue(log.exists())
             self.assertEqual(plan["kind"], "aippocampus_logs_rotation_plan")
             self.assertTrue(plan["read_only"])

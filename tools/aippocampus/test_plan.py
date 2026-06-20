@@ -5,12 +5,33 @@ import json
 import re
 import subprocess
 import sys
+import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEBT_REPORT_SCRIPT = "tools/aippocampus/docs/debt_report.py"
+PORTABLE_PYTHON_COMMAND = "python"
+CI_RUFF_COMMAND = "ruff check skills plugins tests tools benchmarks benchmark_corpus"
+CI_MYPY_COMMAND = "mypy"
+FALLBACK_CANONICAL_CI_PYTHON = "3.12"
+STATIC_PYTHON_ROOTS = (
+    "skills/",
+    "plugins/",
+    "tests/",
+    "tools/",
+    "benchmarks/",
+    "benchmark_corpus/",
+)
+STATIC_CONFIG_PATHS = {
+    "pyproject.toml",
+}
+CHECK_TOOLING_PATHS = {
+    "tools/aippocampus/run_tests.py",
+    "tools/aippocampus/test_tier_manifest.py",
+    "tools/aippocampus/test_plan.py",
+}
 DEBT_REGISTER_SOURCES = (
     REPO_ROOT / "docs" / "architecture" / "architecture-debt-register.md",
     REPO_ROOT / "docs" / "evidence" / "reports" / "architecture-debt-snapshot-2026-06-04.md",
@@ -35,26 +56,32 @@ def _repo_relative(path: str) -> str:
     return normalized[2:] if normalized.startswith("./") else normalized
 
 
-def python_command() -> str:
-    """Return the interpreter that is running the planner, shell-quoted.
-
-    Release and PR verification often run inside a venv, Windows launcher,
-    pyenv/asdf shim, or a host where only ``python3`` exists. The planner should
-    point agents at the active interpreter instead of asking them to rediscover
-    it by rerunning the same gate after ``python`` fails.
-    """
-
+def local_python_command() -> str:
+    """Return the interpreter that is running the planner, shell-quoted."""
     executable = str(Path(sys.executable).resolve())
     return '"' + executable.replace('"', '\\"') + '"'
 
 
-def py_command(args: str) -> str:
-    return f"{python_command()} {args}"
+def python_command(*, local_executable: bool = False) -> str:
+    """Return a copy-pasteable Python command.
+
+    The default must stay portable because planner JSON is often pasted into PRs,
+    issues, and handoffs. Operators who need the exact interpreter can opt in with
+    ``--local-executable`` instead of leaking a host-specific path by accident.
+    """
+
+    if local_executable:
+        return local_python_command()
+    return PORTABLE_PYTHON_COMMAND
 
 
-def py_script(script: str, args: str = "") -> str:
+def py_command(args: str, *, local_executable: bool = False) -> str:
+    return f"{python_command(local_executable=local_executable)} {args}"
+
+
+def py_script(script: str, args: str = "", *, local_executable: bool = False) -> str:
     suffix = f" {args}" if args else ""
-    return f"{python_command()} {script}{suffix}"
+    return f"{python_command(local_executable=local_executable)} {script}{suffix}"
 
 
 def architecture_debt_tracked_paths() -> set[str]:
@@ -94,6 +121,82 @@ def architecture_debt_plan_reason(changed_files: Iterable[str]) -> str:
             "before late closeout; this is not a substitute for functional tests."
         )
     return ""
+
+
+def _load_pyproject() -> dict[str, object]:
+    path = REPO_ROOT / "pyproject.toml"
+    if not path.is_file():
+        return {}
+    with path.open("rb") as handle:
+        loaded = tomllib.load(handle)
+    return loaded if isinstance(loaded, dict) else {}
+
+
+def _mypy_config() -> dict[str, object]:
+    tool = _load_pyproject().get("tool", {})
+    if not isinstance(tool, dict):
+        return {}
+    mypy = tool.get("mypy", {})
+    return mypy if isinstance(mypy, dict) else {}
+
+
+def canonical_ci_python_version() -> str:
+    value = _mypy_config().get("python_version")
+    if isinstance(value, str) and value:
+        return value
+    return FALLBACK_CANONICAL_CI_PYTHON
+
+
+def _version_minor(version: str) -> str:
+    parts = version.split(".")
+    if len(parts) >= 2 and parts[0].isdigit() and parts[1].isdigit():
+        return f"{parts[0]}.{parts[1]}"
+    return version
+
+
+def _local_python_version_parts() -> tuple[int, int, int]:
+    info = sys.version_info
+    try:
+        return (int(info.major), int(info.minor), int(info.micro))
+    except AttributeError:
+        return (int(info[0]), int(info[1]), int(info[2]))
+
+
+def python_environment_summary() -> dict[str, object]:
+    major, minor, micro = _local_python_version_parts()
+    local_version = f"{major}.{minor}.{micro}"
+    canonical_version = canonical_ci_python_version()
+    local_minor = f"{major}.{minor}"
+    canonical_minor = _version_minor(canonical_version)
+    return {
+        "local_python_version": local_version,
+        "local_python_minor": local_minor,
+        "canonical_ci_python_version": canonical_version,
+        "canonical_ci_python_minor": canonical_minor,
+        "minor_matches_ci": local_minor == canonical_minor,
+    }
+
+
+def planner_warnings(environment: dict[str, object]) -> list[dict[str, str]]:
+    if environment.get("minor_matches_ci") is True:
+        return []
+    local_minor = str(environment.get("local_python_minor", "unknown"))
+    canonical_minor = str(environment.get("canonical_ci_python_minor", "unknown"))
+    return [
+        {
+            "kind": "python_minor_mismatch",
+            "severity": "warning",
+            "message": (
+                f"Local Python minor {local_minor} differs from canonical CI {canonical_minor}. "
+                "Keep CI-equivalent ruff/mypy and PR-gate results as the compatibility signal."
+            ),
+            "next_action": (
+                "Use Python "
+                f"{canonical_minor} for compatibility-sensitive failures; do not run a broad "
+                "matrix locally by default."
+            ),
+        }
+    ]
 
 
 def modules_with_tag(tag: str) -> list[str]:
@@ -195,12 +298,93 @@ def classify_changed_files(changed_files: Iterable[str]) -> set[str]:
     return categories
 
 
-def build_test_plan(changed_files: list[str]) -> dict[str, object]:
+def _is_static_python_surface(path: str) -> bool:
+    if path in STATIC_CONFIG_PATHS:
+        return True
+    return path.endswith(".py") and path.startswith(STATIC_PYTHON_ROOTS)
+
+
+def _mypy_tracked_paths() -> set[str]:
+    files = _mypy_config().get("files", [])
+    if not isinstance(files, list):
+        return set()
+    return {
+        _repo_relative(path)
+        for path in files
+        if isinstance(path, str) and path.endswith(".py")
+    }
+
+
+def _needs_static_gates(changed_files: Iterable[str], categories: set[str]) -> bool:
+    return (
+        any(_is_static_python_surface(path) for path in changed_files)
+        or bool(categories & {"ci_workflow", "test_runner"})
+    )
+
+
+def _needs_mypy_gate(changed_files: Iterable[str], categories: set[str]) -> bool:
+    tracked = _mypy_tracked_paths()
+    for path in changed_files:
+        if path in tracked:
+            return True
+        if path in CHECK_TOOLING_PATHS or path in STATIC_CONFIG_PATHS:
+            return True
+        if path.startswith("skills/aippocampus/scripts/aippocampus_runtime/") and path.endswith(
+            ".py"
+        ):
+            return True
+        if path.startswith("benchmarks/aippocampus/") and path.endswith(".py"):
+            return True
+        if path.startswith("plugins/aippocampus/") and path.endswith(".py"):
+            return True
+    return bool(categories & {"ci_workflow", "test_runner"})
+
+
+def _add_static_gates(
+    commands: list[PlannedCommand],
+    changed_files: Iterable[str],
+    categories: set[str],
+) -> None:
+    if not _needs_static_gates(changed_files, categories):
+        return
+    categories.add("static_gates")
+    _add_command(
+        commands,
+        PlannedCommand(
+            command=CI_RUFF_COMMAND,
+            reason=(
+                "CI runs this ruff gate before PR tests; run it early for Python-bearing "
+                "surfaces so import-order and unused-import failures are not discovered late."
+            ),
+            scope="static",
+        ),
+    )
+    if _needs_mypy_gate(changed_files, categories):
+        categories.add("type_check")
+        _add_command(
+            commands,
+            PlannedCommand(
+                command=CI_MYPY_COMMAND,
+                reason=(
+                    "CI runs this mypy gate on the canonical typed surface; this changed "
+                    "surface can affect that contract."
+                ),
+                scope="static",
+            ),
+        )
+
+
+def build_test_plan(
+    changed_files: list[str],
+    *,
+    local_executable: bool = False,
+) -> dict[str, object]:
     normalized_files = [_repo_relative(path) for path in changed_files]
     categories = classify_changed_files(normalized_files)
     commands: list[PlannedCommand] = []
     changed_test_modules = _changed_test_modules(normalized_files)
     debt_reason = architecture_debt_plan_reason(normalized_files)
+    environment = python_environment_summary()
     if debt_reason:
         categories.add("architecture_debt")
 
@@ -208,17 +392,26 @@ def build_test_plan(changed_files: list[str]) -> dict[str, object]:
         _add_command(
             commands,
             PlannedCommand(
-                command=py_script("tools/aippocampus/run_tests.py", "--tier quick"),
+                command=py_script(
+                    "tools/aippocampus/run_tests.py",
+                    "--tier quick",
+                    local_executable=local_executable,
+                ),
                 reason="No changed files were detected; quick is the lowest-cost sanity check.",
                 scope="sanity",
             ),
         )
 
+    _add_static_gates(commands, normalized_files, categories)
+
     if changed_test_modules:
         _add_command(
             commands,
             PlannedCommand(
-                command=py_command(f"-m unittest {' '.join(changed_test_modules)} -v"),
+                command=py_command(
+                    f"-m unittest {' '.join(changed_test_modules)} -v",
+                    local_executable=local_executable,
+                ),
                 reason="Run changed test modules first so failures point to the edited surface.",
                 scope="focused",
             ),
@@ -228,7 +421,11 @@ def build_test_plan(changed_files: list[str]) -> dict[str, object]:
         _add_command(
             commands,
             PlannedCommand(
-                command=py_script(DEBT_REPORT_SCRIPT, "--json"),
+                command=py_script(
+                    DEBT_REPORT_SCRIPT,
+                    "--json",
+                    local_executable=local_executable,
+                ),
                 reason=debt_reason,
                 scope="architecture-debt",
             ),
@@ -238,7 +435,11 @@ def build_test_plan(changed_files: list[str]) -> dict[str, object]:
         _add_command(
             commands,
             PlannedCommand(
-                command=py_script("tools/aippocampus/docs/check_docs_health.py", "--json"),
+                command=py_script(
+                    "tools/aippocampus/docs/check_docs_health.py",
+                    "--json",
+                    local_executable=local_executable,
+                ),
                 reason="Docs and skill-surface edits need the documentation health guard.",
                 scope="focused",
             ),
@@ -251,7 +452,8 @@ def build_test_plan(changed_files: list[str]) -> dict[str, object]:
                 command=py_command(
                     "-m unittest "
                     "tests.aippocampus.test_run_tests_tiers "
-                    "tests.aippocampus.test_test_plan -v"
+                    "tests.aippocampus.test_test_plan -v",
+                    local_executable=local_executable,
                 ),
                 reason="Test-runner and CI changes must prove the tier/planner contract directly.",
                 scope="focused",
@@ -260,7 +462,11 @@ def build_test_plan(changed_files: list[str]) -> dict[str, object]:
         _add_command(
             commands,
             PlannedCommand(
-                command=py_script("tools/aippocampus/run_tests.py", "--report-json"),
+                command=py_script(
+                    "tools/aippocampus/run_tests.py",
+                    "--report-json",
+                    local_executable=local_executable,
+                ),
                 reason="Tier membership/count drift should be visible before a broad run.",
                 scope="diagnostic",
             ),
@@ -273,7 +479,8 @@ def build_test_plan(changed_files: list[str]) -> dict[str, object]:
                 command=py_command(
                     "-m unittest "
                     "tests.aippocampus.test_agent_discovery_release_check "
-                    "tests.aippocampus.test_public_boundary_check -v"
+                    "tests.aippocampus.test_public_boundary_check -v",
+                    local_executable=local_executable,
                 ),
                 reason="Release tooling changes need focused checks for metadata readiness and public-boundary hygiene.",
                 scope="focused",
@@ -285,6 +492,7 @@ def build_test_plan(changed_files: list[str]) -> dict[str, object]:
                 command=py_script(
                     "tools/aippocampus/release/check_public_boundary.py",
                     "--json",
+                    local_executable=local_executable,
                 ),
                 reason="Public-boundary tooling changes should prove the source scan still runs cleanly.",
                 scope="public-boundary",
@@ -296,7 +504,10 @@ def build_test_plan(changed_files: list[str]) -> dict[str, object]:
         _add_command(
             commands,
             PlannedCommand(
-                command=py_command(f"-m unittest {hook_behavior_modules} -v"),
+                command=py_command(
+                    f"-m unittest {hook_behavior_modules} -v",
+                    local_executable=local_executable,
+                ),
                 reason="Hook edits can affect foreground behavior, anti-nag quietness, and latency.",
                 scope="focused",
             ),
@@ -307,7 +518,8 @@ def build_test_plan(changed_files: list[str]) -> dict[str, object]:
             commands,
             PlannedCommand(
                 command=py_command(
-                    "-m unittest tests.aippocampus.test_aippocampus_mcp_server -v"
+                    "-m unittest tests.aippocampus.test_aippocampus_mcp_server -v",
+                    local_executable=local_executable,
                 ),
                 reason="MCP edits need the host-facing tool contract test.",
                 scope="focused",
@@ -321,6 +533,7 @@ def build_test_plan(changed_files: list[str]) -> dict[str, object]:
                 command=py_script(
                     "tools/aippocampus/run_tests.py",
                     "--tier benchmark-smoke --benchmark-suite-profile public-fast",
+                    local_executable=local_executable,
                 ),
                 reason="Benchmark-adjacent edits need the public-fast benchmark smoke lane.",
                 scope="surface",
@@ -331,7 +544,11 @@ def build_test_plan(changed_files: list[str]) -> dict[str, object]:
         _add_command(
             commands,
             PlannedCommand(
-                command=py_script("tools/aippocampus/run_tests.py", "--tier pr"),
+                command=py_script(
+                    "tools/aippocampus/run_tests.py",
+                    "--tier pr",
+                    local_executable=local_executable,
+                ),
                 reason="Runtime, plugin, and skill edits should pass the fast local PR gate.",
                 scope="pre-push",
             ),
@@ -341,7 +558,11 @@ def build_test_plan(changed_files: list[str]) -> dict[str, object]:
         _add_command(
             commands,
             PlannedCommand(
-                command=py_script("tools/aippocampus/run_tests.py", "--tier quick"),
+                command=py_script(
+                    "tools/aippocampus/run_tests.py",
+                    "--tier quick",
+                    local_executable=local_executable,
+                ),
                 reason="No specific surface mapping matched; quick is the safe first check.",
                 scope="sanity",
             ),
@@ -349,11 +570,15 @@ def build_test_plan(changed_files: list[str]) -> dict[str, object]:
 
     return {
         "kind": "aippocampus_changed_surface_test_plan",
-        "schema_version": 1,
+        "schema_version": 2,
+        "command_mode": "local_executable" if local_executable else "portable",
+        "python_environment": environment,
+        "warnings": planner_warnings(environment),
         "changed_files": normalized_files,
         "categories": sorted(categories),
         "commands": [command.as_dict() for command in commands],
         "followup": [
+            "Run planner-named static gates (`ruff check ...` and `mypy` when listed) before PR closeout.",
             "Run the focused commands first; run `pr` once when the planner names it, CI is unavailable, or CI is stale.",
             "`pr` already includes `quick`; use quick for iteration, not as a mandatory closeout step before pr.",
             "Let CI own `broad-pr`, benchmark-smoke, platform, coverage, and CodeQL unless the changed surface specifically needs a local broad run.",
@@ -365,7 +590,7 @@ def build_test_plan(changed_files: list[str]) -> dict[str, object]:
     }
 
 
-def build_release_preflight_plan() -> dict[str, object]:
+def build_release_preflight_plan(*, local_executable: bool = False) -> dict[str, object]:
     """Describe the lean local gate before tagging a CI-green release.
 
     Release verification has two owners that should not be collapsed into a
@@ -378,7 +603,8 @@ def build_release_preflight_plan() -> dict[str, object]:
 
     return {
         "kind": "aippocampus_release_preflight_plan",
-        "schema_version": 1,
+        "schema_version": 2,
+        "command_mode": "local_executable" if local_executable else "portable",
         "assumption": "Use after the release PR CI is green and before pushing the tag.",
         "gate_policy": {
             "default_local_closeout": "focused_plan_then_pr_once",
@@ -388,15 +614,35 @@ def build_release_preflight_plan() -> dict[str, object]:
             "publish_workflow_owns_wheel_and_registry_checks": True,
         },
         "local_closeout_sequence": [
-            py_script("tools/aippocampus/test_plan.py", "--json"),
+            py_script(
+                "tools/aippocampus/test_plan.py",
+                "--json",
+                local_executable=local_executable,
+            ),
             "run focused commands named by the plan that have not already passed",
-            py_script("tools/aippocampus/run_tests.py", "--tier pr"),
-            py_script("tools/aippocampus/release/check_public_boundary.py", "--json"),
-            py_script("tools/aippocampus/docs/check_docs_health.py", "--json"),
+            py_script(
+                "tools/aippocampus/run_tests.py",
+                "--tier pr",
+                local_executable=local_executable,
+            ),
+            py_script(
+                "tools/aippocampus/release/check_public_boundary.py",
+                "--json",
+                local_executable=local_executable,
+            ),
+            py_script(
+                "tools/aippocampus/docs/check_docs_health.py",
+                "--json",
+                local_executable=local_executable,
+            ),
         ],
         "local_required": [
             {
-                "command": py_script("tools/aippocampus/test_plan.py", "--json"),
+                "command": py_script(
+                    "tools/aippocampus/test_plan.py",
+                    "--json",
+                    local_executable=local_executable,
+                ),
                 "reason": (
                     "Record the changed-surface plan and run only the focused commands it "
                     "names that have not already passed in CI."
@@ -404,7 +650,11 @@ def build_release_preflight_plan() -> dict[str, object]:
                 "scope": "decision",
             },
             {
-                "command": py_script("tools/aippocampus/docs/check_docs_health.py", "--json"),
+                "command": py_script(
+                    "tools/aippocampus/docs/check_docs_health.py",
+                    "--json",
+                    local_executable=local_executable,
+                ),
                 "reason": "Release notes, docs pointers, and public claims must still resolve.",
                 "scope": "release-preflight",
             },
@@ -412,6 +662,7 @@ def build_release_preflight_plan() -> dict[str, object]:
                 "command": py_script(
                     "tools/aippocampus/release/check_public_boundary.py",
                     "--json",
+                    local_executable=local_executable,
                 ),
                 "reason": "Scan release-facing tracked files for local paths, credentials, and private strings.",
                 "scope": "public-boundary",
@@ -420,6 +671,7 @@ def build_release_preflight_plan() -> dict[str, object]:
                 "command": py_script(
                     "tools/aippocampus/release/check_agent_discovery_release.py",
                     "--offline --json",
+                    local_executable=local_executable,
                 ),
                 "reason": (
                     "Before publication, verify local PyPI/MCP metadata without waiting on "
@@ -443,19 +695,21 @@ def build_release_preflight_plan() -> dict[str, object]:
         ],
         "local_if_ci_unavailable_or_changed_after_ci": [
             {
-                "command": py_command(
-                    "-m ruff check skills plugins tests tools benchmarks benchmark_corpus"
+                "command": CI_RUFF_COMMAND,
+                "reason": "CI already owns this for a green PR; rerun locally only if CI is unavailable or stale.",
+                "scope": "fallback",
+            },
+            {
+                "command": CI_MYPY_COMMAND,
+                "reason": "CI already owns this for a green PR; rerun locally only if CI is unavailable or stale.",
+                "scope": "fallback",
+            },
+            {
+                "command": py_script(
+                    "tools/aippocampus/run_tests.py",
+                    "--tier pr",
+                    local_executable=local_executable,
                 ),
-                "reason": "CI already owns this for a green PR; rerun locally only if CI is unavailable or stale.",
-                "scope": "fallback",
-            },
-            {
-                "command": py_command("-m mypy"),
-                "reason": "CI already owns this for a green PR; rerun locally only if CI is unavailable or stale.",
-                "scope": "fallback",
-            },
-            {
-                "command": py_script("tools/aippocampus/run_tests.py", "--tier pr"),
                 "reason": (
                     "`pr` includes `quick`; do not run both as a closeout ritual. CI "
                     "already owns this for a green PR."
@@ -464,25 +718,47 @@ def build_release_preflight_plan() -> dict[str, object]:
             },
         ],
         "ci_owned_do_not_repeat_locally_by_default": [
-            py_script("tools/aippocampus/run_tests.py", "--tier quick"),
-            py_script("tools/aippocampus/run_tests.py", "--tier broad-pr"),
+            py_script(
+                "tools/aippocampus/run_tests.py",
+                "--tier quick",
+                local_executable=local_executable,
+            ),
+            py_script(
+                "tools/aippocampus/run_tests.py",
+                "--tier broad-pr",
+                local_executable=local_executable,
+            ),
             py_script(
                 "tools/aippocampus/run_tests.py",
                 "--tier benchmark-smoke --benchmark-suite-profile public-fast",
+                local_executable=local_executable,
             ),
-            py_script("tools/aippocampus/run_coverage.py", "--tier pr"),
-            py_script("tools/aippocampus/run_tests.py", "--tier full"),
+            py_script(
+                "tools/aippocampus/run_coverage.py",
+                "--tier pr",
+                local_executable=local_executable,
+            ),
+            py_script(
+                "tools/aippocampus/run_tests.py",
+                "--tier full",
+                local_executable=local_executable,
+            ),
             "gh workflow run macos-install-smoke.yml -f runner-label=macos-latest -f python-version=3.12",
         ],
         "publish_workflow_owned": [
-            py_command('-m pip install -e ".[release]"'),
-            py_script("tools/aippocampus/run_tests.py", "--tier pr"),
+            py_command('-m pip install -e ".[release]"', local_executable=local_executable),
+            py_script(
+                "tools/aippocampus/run_tests.py",
+                "--tier pr",
+                local_executable=local_executable,
+            ),
             "check-jsonschema server.json",
-            py_command("-m build --sdist --wheel"),
-            py_command("-m twine check dist/*"),
+            py_command("-m build --sdist --wheel", local_executable=local_executable),
+            py_command("-m twine check dist/*", local_executable=local_executable),
             py_script(
                 "tools/aippocampus/release/check_wheel_contract.py",
                 "--wheel dist/*.whl --json",
+                local_executable=local_executable,
             ),
             "PyPI publish",
             "MCP Registry validate and publish",
@@ -498,18 +774,25 @@ def build_release_preflight_plan() -> dict[str, object]:
                 "command": py_script(
                     "tools/aippocampus/release/check_agent_discovery_release.py",
                     "--wait-ready --wait-seconds 300 --poll-interval 20 "
-                    "--fail-on-not-ready --json"
+                    "--fail-on-not-ready --json",
+                    local_executable=local_executable,
                 ),
                 "reason": "After PyPI and MCP Registry publication, remote agent discovery must be claim-ready.",
                 "scope": "post-publish",
             },
             {
-                "command": py_command("-m pip index versions aippocampus --no-cache-dir"),
+                "command": py_command(
+                    "-m pip index versions aippocampus --no-cache-dir",
+                    local_executable=local_executable,
+                ),
                 "reason": "Confirm PyPI's public simple/index view has caught up before saying latest is available.",
                 "scope": "post-publish",
             },
             {
-                "command": py_command("-m pip install aippocampus==<version>"),
+                "command": py_command(
+                    "-m pip install aippocampus==<version>",
+                    local_executable=local_executable,
+                ),
                 "reason": "Install the released wheel in a fresh environment, not the checkout.",
                 "scope": "post-publish",
             },
@@ -533,6 +816,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--json", action="store_true", help="Emit the plan as JSON.")
     parser.add_argument(
+        "--local-executable",
+        action="store_true",
+        help="Use the exact local Python executable in emitted commands instead of portable python.",
+    )
+    parser.add_argument(
         "--release-preflight",
         action="store_true",
         help="Emit the lean local gate for a CI-green release before tagging.",
@@ -543,7 +831,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.release_preflight:
-        plan = build_release_preflight_plan()
+        plan = build_release_preflight_plan(local_executable=args.local_executable)
         if args.json:
             json.dump(plan, sys.stdout, ensure_ascii=False, indent=2)
             print()
@@ -566,13 +854,22 @@ def main(argv: list[str] | None = None) -> int:
         if args.changed_file
         else collect_changed_files(base=args.base)
     )
-    plan = build_test_plan(changed_files)
+    plan = build_test_plan(changed_files, local_executable=args.local_executable)
     if args.json:
         json.dump(plan, sys.stdout, ensure_ascii=False, indent=2)
         print()
         return 0
 
     print("AIppocampus changed-surface verification plan")
+    environment = plan["python_environment"]
+    print(
+        "Python: "
+        f"local {environment['local_python_version']} / "
+        f"CI {environment['canonical_ci_python_version']}"
+    )
+    for warning in plan["warnings"]:
+        print(f"Warning: {warning['message']}")
+        print(f"Next: {warning['next_action']}")
     print(f"Changed files: {len(changed_files)}")
     for command in plan["commands"]:
         print(f"- {command['command']}")
