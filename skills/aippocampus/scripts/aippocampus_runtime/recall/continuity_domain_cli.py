@@ -156,8 +156,8 @@ def _print_payload(payload: MappingPayload, *, json_output: bool) -> None:
     raw_boundary = payload.get("preview_boundary")
     if isinstance(raw_boundary, dict) and raw_boundary.get("preview_is_not_source_truth"):
         print("boundary: preview is a route card; reopen source before claims")
-    if payload.get("agent_next_action"):
-        next_action = payload["agent_next_action"]
+    if payload.get("foreground_action"):
+        next_action = payload["foreground_action"]
         if isinstance(next_action, dict):
             label = next_action.get("label") or next_action.get("command")
             command = next_action.get("command")
@@ -395,6 +395,13 @@ def latest_command(args: argparse.Namespace) -> MappingPayload:
     if snapshot is None:
         return _no_snapshot_payload()
     report = continuity_domain_public_safety_report(snapshot)
+    action = {
+        "id": "use_continuity_domain_as_route",
+        "label": "Use these domains as reopenable routes only; deepen or reopen clean source before claims.",
+        "mutation_risk": "read_only",
+        "claim_boundary": "continuity_domain_snapshot_is_navigation_not_source_truth",
+        "continue_without_command": True,
+    }
     return {
         "ok": True,
         "status": "ok",
@@ -405,10 +412,7 @@ def latest_command(args: argparse.Namespace) -> MappingPayload:
         "report": report,
         "source_boundary": report.get("contract"),
         "privacy_boundary": report.get("privacy_boundary"),
-        "agent_next_action": {
-            "id": "use_continuity_domain_as_route",
-            "label": "Use these domains as reopenable routes only; deepen or reopen clean source before claims.",
-        },
+        **canonical_foreground_action_fields(action, safe_next_actions=[_ordinary_recall_path_action()]),
     }
 
 
@@ -424,6 +428,13 @@ def list_command(args: argparse.Namespace) -> MappingPayload:
                 summaries.append(_snapshot_summary(snapshot))
     if not summaries:
         return _no_snapshot_payload()
+    action = {
+        "id": "read_latest_continuity_domain_snapshot",
+        "label": "Read the current published route card",
+        "command": "aippocampus continuity-domain latest --json",
+        "mutation_risk": "read_only",
+        "claim_boundary": "continuity_domain_snapshot_is_navigation_not_source_truth",
+    }
     return {
         "ok": True,
         "status": "ok",
@@ -435,11 +446,7 @@ def list_command(args: argparse.Namespace) -> MappingPayload:
             "source_reopen_required_before_claim": True,
             "local_paths_serialized": False,
         },
-        "agent_next_action": {
-            "id": "read_latest_continuity_domain_snapshot",
-            "label": "Run `aippocampus continuity-domain latest --json` for the current published route card.",
-            "command": "aippocampus continuity-domain latest --json",
-        },
+        **canonical_foreground_action_fields(action, safe_next_actions=[_ordinary_recall_path_action()]),
     }
 
 
@@ -606,7 +613,7 @@ def _producer_agent_preview(payload: MappingPayload) -> MappingPayload:
         primary = actionable_previews[0].get("foreground_actions") or []
         primary_action = primary[0] if primary and isinstance(primary[0], dict) else None
         clean["foreground_candidate_quality"] = "actionable"
-        clean["agent_next_action"] = {
+        foreground_action = {
             "id": "use_candidate_preview_as_reopenable_route",
             "label": "Use candidate_previews as navigation only; run recall/deepen on the cue before any factual claim.",
             "command": (primary_action or {}).get("command")
@@ -627,7 +634,7 @@ def _producer_agent_preview(payload: MappingPayload) -> MappingPayload:
         }
     elif previews:
         clean["foreground_candidate_quality"] = "needs_broader_scan"
-        clean["agent_next_action"] = {
+        foreground_action = {
             "id": "needs_broader_scan_or_cue",
             "label": "Only low-information continuity-domain cues surfaced; broaden the scan or provide a user cue.",
             "command": "aippocampus continuity-domain preview --broad-scan --json",
@@ -639,7 +646,7 @@ def _producer_agent_preview(payload: MappingPayload) -> MappingPayload:
         clean["current_uncertainty"] = "low_information_candidates_need_broader_scan_or_user_cue"
     else:
         clean["foreground_candidate_quality"] = "needs_broader_scan"
-        clean["agent_next_action"] = {
+        foreground_action = {
             "id": "no_continuity_domain_candidates",
             "label": "No supported continuity-domain candidates were found; keep the public dry-run report as evidence.",
             "command": "aippocampus continuity-domain preview --broad-scan --json",
@@ -651,9 +658,9 @@ def _producer_agent_preview(payload: MappingPayload) -> MappingPayload:
         clean["current_uncertainty"] = "bounded_scan_found_no_supported_candidates"
     clean.update(
         canonical_foreground_action_fields(
-            clean["agent_next_action"],
+            foreground_action,
             safe_next_actions=[
-                clean["agent_next_action"],
+                foreground_action,
                 _ordinary_recall_path_action(),
                 _preview_domain_candidates_action(broad=True),
             ],

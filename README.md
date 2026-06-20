@@ -327,8 +327,8 @@ Common non-secret configuration:
 Optional provider secrets are separate. Basic source search, MCP/plugin setup,
 and local hooks do not require them. Set `AIPPOCAMPUS_DEEPSEEK_API_KEY` or an
 `AIPPOCAMPUS_OPENAI_COMPAT_*` route only when you explicitly want semantic or
-background model work; `DEEPSEEK_API_KEY` remains a legacy fallback for existing
-installs. Values must never be committed or printed.
+background model work. Provider-native env names are custom-route choices, not
+built-in defaults. Values must never be committed or printed.
 
 ## Roadmap
 

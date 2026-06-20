@@ -238,7 +238,7 @@ def public_uninstall_summary(result: dict[str, Any]) -> dict[str, Any]:
         "ok": bool(result.get("ok")),
         "removed_installed_cache": bool(result.get("removed_installed_cache")),
         "removed_marketplace_root": bool(result.get("removed_marketplace_root")),
-        "agent_next_action": "Plugin removed. Reinstall with `aippocampus plugin install --codex --verify` if needed.",
+        "foreground_guidance": "Plugin removed. Reinstall with `aippocampus plugin install --codex --verify` if needed.",
         "operator_json_available": True,
         "local_private_fields": ["codex_home", "marketplace_root"],
         "privacy_boundary": {

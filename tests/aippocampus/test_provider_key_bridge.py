@@ -78,15 +78,15 @@ class ProviderKeyBridgeTests(unittest.TestCase):
             report["recommended_actions"][0]["id"],
             "plan_with_private_credential_source",
         )
-        self.assertIsInstance(report["agent_next_action"], dict)
+        self.assertIsInstance(report["foreground_action"], dict)
         self.assertEqual(
-            report["agent_next_action"]["command_template"],
+            report["foreground_action"]["command_template"],
             (
                 "aippocampus onboard provider-key --plan --source explicit-dotenv "
                 '--credential-dotenv "{credential_dotenv_path}" --json'
             ),
         )
-        self.assertEqual(report["agent_next_action"]["requires"], ["credential_dotenv_path"])
+        self.assertEqual(report["foreground_action"]["requires"], ["credential_dotenv_path"])
         self.assertNotIn("<path>", json.dumps(report["recommended_actions"], ensure_ascii=False))
         self.assertIn("aippocampus search", report["recommended_actions"][1]["command"])
 
@@ -147,8 +147,8 @@ class ProviderKeyBridgeTests(unittest.TestCase):
             payload["recommended_actions"][0]["id"],
             "confirm_visible_env_key",
         )
-        self.assertIn("--source visible-env-key", payload["agent_next_action"]["command"])
-        self.assertNotIn("--credential-dotenv <path>", payload["agent_next_action"]["command"])
+        self.assertIn("--source visible-env-key", payload["foreground_action"]["command"])
+        self.assertNotIn("--credential-dotenv <path>", payload["foreground_action"]["command"])
         self.assertIn("explicit-dotenv", payload["alternate_paths"]["source_options"])
         self.assertFalse(payload["privacy"]["secret_values_printed"])
         self.assertNotIn(fixture_value, encoded)

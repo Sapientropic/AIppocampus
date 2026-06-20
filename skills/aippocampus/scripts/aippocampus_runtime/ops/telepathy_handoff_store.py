@@ -563,8 +563,10 @@ def list_handoffs_payload(
         empty_state = {
             "state": "no_matching_telepathy_handoffs",
             "meaning": "No active opt-in handoff card is waiting for this filter.",
-            "agent_next_action": safe_next_actions[0],
-            "safe_next_actions": safe_next_actions,
+            **canonical_foreground_action_fields(
+                safe_next_actions[0],
+                safe_next_actions=safe_next_actions,
+            ),
             "privacy_boundary": "Telepathy cards are navigation-only and not source-backed truth.",
         }
     return {
@@ -581,7 +583,7 @@ def list_handoffs_payload(
         "empty_state": empty_state,
         **(
             canonical_foreground_action_fields(
-                empty_state["agent_next_action"],
+                empty_state["foreground_action"],
                 safe_next_actions=empty_state["safe_next_actions"],
             )
             if empty_state
@@ -811,13 +813,13 @@ def _print_payload(payload: Mapping[str, Any], *, json_output: bool) -> None:
         return
     status = "ok" if payload.get("ok") else "blocked"
     print(f"{payload.get('kind', 'telepathy_handoff')}: {status}")
-    if not payload.get("ok") and payload.get("agent_next_action"):
-        print(f"next: {_render_action_text(payload.get('agent_next_action'))}")
+    if not payload.get("ok") and payload.get("foreground_action"):
+        print(f"next: {_render_action_text(payload.get('foreground_action'))}")
     if "count" in payload:
         print(f"count: {payload['count']}")
     empty_state = payload.get("empty_state")
     if isinstance(empty_state, Mapping):
-        action = empty_state.get("agent_next_action")
+        action = empty_state.get("foreground_action")
         print(f"next: {_render_action_text(action)}")
         actions = empty_state.get("safe_next_actions")
         if isinstance(actions, list):

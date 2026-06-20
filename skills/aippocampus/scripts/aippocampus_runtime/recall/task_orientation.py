@@ -218,10 +218,10 @@ def _compact_understanding_state(state: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
-def _safe_next_actions(task: str) -> list[dict[str, Any]]:
+def _recall_task_action(task: str) -> dict[str, Any]:
     clean_task = str(redact_sensitive_values(redact_private_paths(str(task or "").strip())) or "")
     if clean_task and not command_value_needs_input(clean_task):
-        recall_action: dict[str, Any] = {
+        return {
             "id": "run_agent_recall_for_orientation",
             "label": "Run recall for this task",
             "tool_name": "agent_recall",
@@ -231,18 +231,58 @@ def _safe_next_actions(task: str) -> list[dict[str, Any]]:
             "claim_boundary": "no_claim_before_reopen",
             "why": "Use the task as a continuity cue, then reopen/deepen a selected source route before claims.",
         }
+    return {
+        "id": "run_agent_recall_for_orientation",
+        "label": "Run recall for this task",
+        "command_template": 'aippocampus agent recall "{task}" --json',
+        "requires": ["task"],
+        "mutation_risk": "read_only",
+        "template_only": True,
+        "claim_boundary": "no_claim_before_reopen",
+        "why": "Use the task as a continuity cue, then reopen/deepen a selected source route before claims.",
+    }
+
+
+def _orientation_route_action(task: str, route: Mapping[str, Any]) -> dict[str, Any]:
+    clean_task = str(redact_sensitive_values(redact_private_paths(str(task or "").strip())) or "")
+    action: dict[str, Any] = {
+        "id": "inspect_first_orientation_source_route",
+        "label": "Inspect first orientation source route",
+        "target": {
+            key: value
+            for key, value in {
+                "path_id": route.get("path_id"),
+                "title": route.get("title"),
+            }.items()
+            if value not in (None, "", [], {})
+        },
+        "mutation_risk": "read_only",
+        "claim_boundary": "orientation_route_is_navigation_reopen_source_before_claims",
+        "why": (
+            "Task Orientation already found a first source route; inspect route detail "
+            "before broad recall or manual search."
+        ),
+    }
+    if clean_task and not command_value_needs_input(clean_task):
+        action["command"] = f"aippocampus agent orient {shell_quote(clean_task)} --json --detail full"
     else:
-        recall_action = {
-            "id": "run_agent_recall_for_orientation",
-            "label": "Run recall for this task",
-            "command_template": 'aippocampus agent recall "{task}" --json',
-            "requires": ["task"],
-            "mutation_risk": "read_only",
-            "template_only": True,
-            "claim_boundary": "no_claim_before_reopen",
-            "why": "Use the task as a continuity cue, then reopen/deepen a selected source route before claims.",
-        }
+        action["command_template"] = 'aippocampus agent orient "{task}" --json --detail full'
+        action["requires"] = ["task"]
+        action["template_only"] = True
+    return action
+
+
+def _safe_next_actions(
+    task: str,
+    *,
+    source_routes: list[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    recall_action = _recall_task_action(task)
+    route_actions = [
+        _orientation_route_action(task, source_routes[0])
+    ] if source_routes else []
     return [
+        *route_actions,
         recall_action,
         {
             "id": "deepen_selected_recall_route",
@@ -296,8 +336,9 @@ def build_task_orientation_packet(
         max_paths=max_paths,
     )
     compact_path = compact_active_path_packet(active_path)
-    actions = _safe_next_actions(clean_task)
     route_plan = route_plan_from_active_path(compact_path)
+    source_routes = list(route_plan.get("first_sources_to_reopen") or [])[:3]
+    actions = _safe_next_actions(clean_task, source_routes=source_routes)
     sidecar_load: dict[str, Any] = (
         load_orientation_sidecars(
             clean_task,
@@ -347,7 +388,11 @@ def build_task_orientation_packet(
         "ok": True,
         "project": project,
         "task": clean_task,
-        "frontier": "choose first source route; do not start broad manual search until recall/owners are checked",
+        "frontier": (
+            "inspect the first orientation source route before broad recall"
+            if source_routes
+            else "choose first source route; do not start broad manual search until recall/owners are checked"
+        ),
         "load_bearing_unknowns": [
             "which reopened source route is actually current",
             "whether issue comments changed acceptance criteria",
@@ -407,14 +452,14 @@ def build_task_orientation_packet(
             "current_orientation": {
                 "frontier": base_packet["frontier"],
                 "active_path_count": compact_path.get("path_count", 0),
-                "source_route_count": len(route_plan.get("first_sources_to_reopen") or []),
+                "source_route_count": len(source_routes),
                 "issue_work_guard_should_pull": bool(issue_packet.get("should_pull")),
                 "learning_constraint_count": len(constraints),
                 "external_source_anchor_count": len(anchors),
                 "advanced_navigation_route_count": (sidecar_load.get("metrics") or {}).get("projected_item_count", 0),
                 "advanced_navigation_status": sidecar_load.get("status"),
             },
-            "source_routes": list(route_plan.get("first_sources_to_reopen") or [])[:3],
+            "source_routes": source_routes,
             "route_plan": _compact_route_plan(route_plan),
             "detail_deferred": {
                 "active_path_packet": True,
@@ -450,7 +495,7 @@ def render_task_orientation_human(payload: Mapping[str, Any]) -> str:
         return "\n".join(
             [
                 "AIppocampus agent orient: task required",
-                "next: " + str(action.get("command_template") or "aippocampus agent orient \"{task}\" --json"),
+                "next: " + str(action.get("command") or action.get("command_template") or "aippocampus agent orient \"{task}\" --json"),
                 "boundary: orientation is task-scoped navigation, not source evidence.",
             ]
         )
@@ -465,7 +510,7 @@ def render_task_orientation_human(payload: Mapping[str, Any]) -> str:
             "AIppocampus agent orient: ok",
             "task: " + str(payload.get("task") or ""),
             "active_paths: " + str(paths),
-            "next: " + str(action.get("command_template") or action.get("id")),
+            "next: " + str(action.get("command") or action.get("command_template") or action.get("id")),
             "boundary: reopen source before claims or issue closeout.",
         ]
     )

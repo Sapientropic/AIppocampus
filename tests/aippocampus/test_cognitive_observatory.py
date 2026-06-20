@@ -529,7 +529,7 @@ class RouteReadinessObservatoryTests(unittest.TestCase):
             payload["foreground_action"]["claim_boundary"],
             "observatory_readout_not_source_truth_or_control_plane",
         )
-        self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
+        self.assertNotIn(payload["foreground_action"], payload["safe_next_actions"])
         self.assertIn("source_backed_claims", payload["claim_boundary"]["must_reopen_for"])
         self.assertNotIn("cannot_claim", payload)
         self.assertNotIn("cannot_claim", payload["route_readiness"])
@@ -544,10 +544,10 @@ class RouteReadinessObservatoryTests(unittest.TestCase):
         self.assertTrue(result.ok, result.stderr)
         payload = json.loads(result.stdout)
         self.assertEqual(payload["kind"], "aippocampus_cognitive_observatory_summary")
-        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
-        self.assertEqual(payload["agent_next_action"], payload["foreground_action"])
-        self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
-        self.assertGreaterEqual(len(payload["safe_next_actions"]), 4)
+        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v2")
+        self.assertNotIn("agent_next_action", payload)
+        self.assertNotIn(payload["foreground_action"], payload["safe_next_actions"])
+        self.assertGreaterEqual(len(payload["safe_next_actions"]), 3)
         self.assertEqual(payload["foreground_action"]["kind"], "no_op")
         self.assertEqual(payload["foreground_action"]["id"], "no_observatory_rows_to_route")
         self.assertTrue(payload["foreground_action"]["no_op"])
@@ -612,9 +612,9 @@ class RouteReadinessObservatoryTests(unittest.TestCase):
             payload["foreground_action"]["command"],
             "aippocampus observatory --summary-json",
         )
-        self.assertEqual(payload["agent_next_action"], payload["foreground_action"])
-        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
-        self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
+        self.assertNotIn("agent_next_action", payload)
+        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v2")
+        self.assertNotIn(payload["foreground_action"], payload["safe_next_actions"])
         self.assertIn("control_state_changes", payload["claim_boundary"]["must_reopen_for"])
         self.assertNotIn("route_readiness", payload)
         self.assertNotIn("activation_authority", payload)

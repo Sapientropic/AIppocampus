@@ -1170,7 +1170,6 @@ def _operator_aippo_payload_with_foreground_card(
             FOREGROUND_ACTION_CONTRACT_VERSION,
         ),
         "foreground_action": guidance_card.get("foreground_action"),
-        "agent_next_action": guidance_card.get("agent_next_action"),
         "safe_next_actions": guidance_card.get("safe_next_actions", []),
         "foreground_guidance_card": guidance_card,
     }
@@ -1805,7 +1804,7 @@ def main(argv: list[str] | None = None) -> int:
                 payload = {
                     "detail": "full",
                     "output_boundary": "local_private_diagnostic_full",
-                    "agent_next_action": (
+                    "foreground_guidance": (
                         "Use --detail full only for local diagnostics; foreground agents should "
                         "prefer compact JSON or the human request-index action."
                     ),
@@ -1853,7 +1852,7 @@ def main(argv: list[str] | None = None) -> int:
             _json_out(payload)
         else:
             print("AIppocampus agent background: " + str(payload.get("status") or "unknown") + "\nfindings: " + str(payload.get("finding_count") or 0))
-            action = payload.get("agent_next_action")
+            action = payload.get("foreground_action")
             if isinstance(action, Mapping):
                 print("next: " + str(action.get("command") or action.get("command_template") or action.get("id")))
             print("boundary: background findings are navigation only until source is reopened.")
@@ -2055,7 +2054,7 @@ def main(argv: list[str] | None = None) -> int:
                 _json_out(payload)
             else:
                 print("AIppocampus agent feedback: route_id required")
-                next_action = payload.get("agent_next_action")
+                next_action = payload.get("foreground_action")
                 command = (
                     next_action.get("command")
                     or next_action.get("command_template")
@@ -2116,7 +2115,7 @@ def main(argv: list[str] | None = None) -> int:
             )
             print("AIppocampus agent feedback: captured")
             print("storage: " + str(compact["write_boundary"]["storage"]))
-            print("next: " + str(compact["agent_next_action"]))
+            print("next: " + str(compact["foreground_action"]))
         return 0
     return 2
 

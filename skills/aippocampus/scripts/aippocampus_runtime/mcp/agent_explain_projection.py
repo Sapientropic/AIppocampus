@@ -130,12 +130,11 @@ def compact_agent_explain_payload(
             last_recall=last_recall,
             recall_selector=recall_selector,
         )
-        next_action = _as_dict(source.get("agent_next_action")) or primary
         safe_actions = [
             dict(item)
             for item in _as_list(source.get("safe_next_actions"))
             if isinstance(item, Mapping)
-        ] or [next_action]
+        ] or [primary]
         result = _as_dict(source.get("result"))
         error = (
             _as_dict(source.get("error"))
@@ -146,7 +145,6 @@ def compact_agent_explain_payload(
             primary,
             safe_next_actions=safe_actions,
         )
-        next_action = dict(action_fields["foreground_action"])
         return _without_empty(
             {
                 "detail": "compact",
@@ -158,8 +156,6 @@ def compact_agent_explain_payload(
                 "ok": source.get("ok", False),
                 "error": error,
                 **action_fields,
-                "next_safe_action": next_action,
-                "next_safe_action_id": next_action.get("id"),
                 "follow_up_action": source.get("follow_up_action"),
                 "claim_boundary": "navigation_only_until_source_reopened",
                 "detail_command": _detail_command(
@@ -187,7 +183,6 @@ def compact_agent_explain_payload(
         220,
     )
     action_fields = canonical_foreground_action_fields(primary, safe_next_actions=[primary])
-    next_action = dict(action_fields["foreground_action"])
     return _without_empty(
         {
             "detail": "compact",
@@ -201,8 +196,6 @@ def compact_agent_explain_payload(
             "route_id": explanation.get("route_id"),
             "route_reason": route_reason,
             **action_fields,
-            "next_safe_action": next_action,
-            "next_safe_action_id": next_action.get("id"),
             "claim_boundary": "navigation_only_until_source_reopened",
             "detail_command": _detail_command(
                 request_index,

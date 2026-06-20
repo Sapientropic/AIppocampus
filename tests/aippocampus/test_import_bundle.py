@@ -456,8 +456,8 @@ class ImportBundleTests(unittest.TestCase):
         self.assertFalse(dest.exists())
         self.assertEqual(payload["kind"], "aippocampus_bundle_import_preview")
         self.assertEqual(payload["mode"], "dry_run")
-        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
-        self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
+        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v2")
+        self.assertNotIn(payload["foreground_action"], payload["safe_next_actions"])
         self.assertEqual(payload["foreground_action"]["id"], "write_bundle_import_after_preview")
         self.assertTrue(payload["write_preview"]["would_extract_bundle"])
         self.assertTrue(payload["write_preview"]["would_append_anchor"])
@@ -473,9 +473,9 @@ class ImportBundleTests(unittest.TestCase):
         encoded = json.dumps(payload, ensure_ascii=False)
         self.assertEqual(code, 2)
         self.assertEqual(payload["error"]["code"], "bundle_not_found")
-        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
-        self.assertEqual(payload["agent_next_action"], payload["foreground_action"])
-        self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
+        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v2")
+        self.assertIn("foreground_action", payload)
+        self.assertNotIn(payload["foreground_action"], payload["safe_next_actions"])
         self.assertEqual(
             payload["foreground_action"]["id"],
             "choose_existing_bundle_and_preview_import",
@@ -496,9 +496,9 @@ class ImportBundleTests(unittest.TestCase):
         self.assertEqual(payload["kind"], "aippocampus_bundle_import_preview")
         self.assertEqual(payload["mode"], "dry_run")
         self.assertEqual(payload["error"]["code"], "bundle_not_found")
-        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
-        self.assertEqual(payload["agent_next_action"], payload["foreground_action"])
-        self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
+        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v2")
+        self.assertIn("foreground_action", payload)
+        self.assertNotIn(payload["foreground_action"], payload["safe_next_actions"])
         self.assertEqual(payload["foreground_action"]["mutation_risk"], "read_only")
         self.assertNotIn(str(missing.parent), encoded)
 

@@ -47,8 +47,9 @@ Optional external-model routes stay opt-in. Leaving
 `AIPPOCAMPUS_DEEPSEEK_API_KEY`, `AIPPOCAMPUS_OPENAI_COMPAT_*`,
 object-storage credentials, or GitHub planning tokens blank must not block
 local-first install, MCP listing, docs health, or the manifest-classified
-`quick` / `pr` test tiers. `DEEPSEEK_API_KEY` remains a legacy fallback for
-existing installs, but new setup should use the AIppocampus-prefixed name.
+`quick` / `pr` test tiers. Use the AIppocampus-prefixed DeepSeek variable for
+the built-in route; provider-native env names are explicit custom-route choices,
+not defaults.
 
 ## Plugin MCP Environment
 

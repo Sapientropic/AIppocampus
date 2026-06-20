@@ -424,7 +424,7 @@ def public_agent_self_note_surface(row: Mapping[str, Any]) -> dict[str, Any]:
         "source_refs_are_reopen_routes_not_proof_of_note": True,
         "source_reopen_required_before_claim": True,
     }
-    public["agent_next_action"] = (
+    public["source_reopen_guidance"] = (
         "Use this as direction-only atmosphere; reopen source before factual claims."
     )
     return public

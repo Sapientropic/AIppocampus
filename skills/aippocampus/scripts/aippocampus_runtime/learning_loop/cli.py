@@ -660,7 +660,7 @@ def replay_payload(args: argparse.Namespace) -> dict[str, Any]:
             "intervention_report": intervention_report_from_replay(report),
             "guidance_authority": report.get("guidance_authority") or {},
             "privacy_boundary": report.get("privacy_boundary") or _privacy_boundary(),
-            "agent_next_action": (
+            "next_step_hint": (
                 replay_next_actions[0]["command"]
                 if replay_next_actions
                 else "inspect replay metrics and append an effectiveness ledger only after review"
@@ -707,8 +707,8 @@ def render_human(payload: Mapping[str, Any]) -> str:
     actions = [row for row in payload.get("next_actions") or [] if isinstance(row, Mapping)]
     if actions:
         lines.append("next: " + str(actions[0].get("command") or "continue"))
-    elif payload.get("agent_next_action"):
-        lines.append("next: " + str(payload["agent_next_action"]))
+    elif payload.get("next_step_hint"):
+        lines.append("next: " + str(payload["next_step_hint"]))
     lines.append("boundary: learning guidance is navigation only; reopen source before claims.")
     return "\n".join(lines)
 

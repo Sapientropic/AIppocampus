@@ -275,11 +275,45 @@ class SearchCleanSourceTests(unittest.TestCase):
         output = stdout.getvalue()
         self.assertEqual(code, 1)
         self.assertIn("No source-backed snippet found", output)
-        self.assertIn("Possible routes, not yet evidence", output)
         self.assertIn("current resolved thread clean-source directory only", output)
-        self.assertIn("exact phrase", output)
-        self.assertIn("project cue", output)
-        self.assertIn("time cue", output)
+        self.assertIn("Next:", output)
+        self.assertIn("Boundary: a search miss is not proof", output)
+        self.assertNotIn("Possible routes, not yet evidence", output)
+        self.assertNotIn("- exact phrase:", output)
+        self.assertNotIn("- project cue:", output)
+        self.assertNotIn("- time cue:", output)
+
+    def test_registry_no_match_human_output_is_action_led_without_low_level_warning(self) -> None:
+        output = search.render_human_search_result(
+            {
+                "kind": "aippocampus_registry_source_search",
+                "status": "no_phrase_like_matches",
+                "search_scope": "registered_clean_source_and_indexes",
+                "scope_description": "registered clean-source/index entries across the local registry",
+                "query_text": "over conservative verbose cannot_claim navigation_only compact foreground payload",
+                "query_terms": [
+                    "over",
+                    "conservative",
+                    "verbose",
+                    "cannot_claim",
+                    "navigation_only",
+                    "compact",
+                    "foreground",
+                    "payload",
+                ],
+                "suppressed_low_coverage_match_count": 2044,
+                "matches": [],
+                "warnings": [{"code": None, "message": "unable to open database file"}],
+            }
+        )
+
+        self.assertIn("No exact or phrase-like source match found", output)
+        self.assertIn("Next: try a shorter source search", output)
+        self.assertIn("aippocampus search --all", output)
+        self.assertIn("conservative verbose cannot_claim", output)
+        self.assertIn("source index note:", output)
+        self.assertNotIn("warning: None", output)
+        self.assertNotIn("Possible routes, not yet evidence", output)
 
     def test_filters_by_scope_label(self) -> None:
         result = search.search_clean_source(
@@ -615,9 +649,9 @@ class SearchCleanSourceTests(unittest.TestCase):
         self.assertEqual(payload["claim_permission"], "bounded_search_receipt_requires_reopen")
         self.assertEqual(payload["source_boundary"]["authority"], "bounded_evidence")
         self.assertTrue(payload["source_boundary"]["source_reopen_required_before_claim"])
-        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
-        self.assertEqual(payload["foreground_action"], payload["agent_next_action"])
-        self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
+        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v2")
+        self.assertNotIn("agent_next_action", payload)
+        self.assertNotIn(payload["foreground_action"], payload.get("safe_next_actions", []))
         self.assertEqual(payload["foreground_action"]["id"], "reopen_search_match_source")
         self.assertNotIn("action_id", payload["foreground_action"])
         self.assertEqual(payload["foreground_action"]["tool_name"], "get_turn_context")
@@ -704,9 +738,9 @@ class SearchCleanSourceTests(unittest.TestCase):
         self.assertEqual(payload["status"], "no_matches")
         self.assertEqual(payload["claim_permission"], "no_claim_before_source_match")
         self.assertEqual(payload["source_boundary"]["authority"], "direction_only")
-        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
-        self.assertEqual(payload["foreground_action"], payload["agent_next_action"])
-        self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
+        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v2")
+        self.assertNotIn("agent_next_action", payload)
+        self.assertNotIn(payload["foreground_action"], payload.get("safe_next_actions", []))
         self.assertEqual(payload["foreground_action"]["id"], "refine_or_recall")
         self.assertNotIn("action_id", payload["foreground_action"])
         self.assertEqual(payload["foreground_action"]["tool_name"], "agent_recall")
@@ -737,9 +771,9 @@ class SearchCleanSourceTests(unittest.TestCase):
         self.assertFalse(payload["ok"])
         self.assertEqual(payload["status"], "needs_input")
         self.assertEqual(payload["error"]["code"], "search_cue_required")
-        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
-        self.assertEqual(payload["agent_next_action"], payload["foreground_action"])
-        self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
+        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v2")
+        self.assertNotIn("agent_next_action", payload)
+        self.assertNotIn(payload["foreground_action"], payload.get("safe_next_actions", []))
         self.assertTrue(
             set(payload["foreground_action"]["requires"]) & {"query", "cue", "exact_phrase"}
         )
@@ -923,12 +957,16 @@ class SearchCleanSourceTests(unittest.TestCase):
         self.assertNotIn(str(self.cwd), encoded)
         self.assertEqual(payload["registry"], search.LOCAL_PATH_REDACTION)
         self.assertFalse(payload["privacy"]["paths_included"])
-        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
-        self.assertEqual(payload["foreground_action"], payload["agent_next_action"])
-        self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
+        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v2")
+        self.assertNotIn("agent_next_action", payload)
+        self.assertNotIn(payload["foreground_action"], payload.get("safe_next_actions", []))
         self.assertEqual(payload["foreground_action"]["id"], "open_registry_search_source_window")
         self.assertEqual(payload["matches"][0]["hit_index"], 1)
         self.assertIn("hit_selector", payload["matches"][0])
+        self.assertNotIn("score", payload["matches"][0])
+        self.assertNotIn("query_match_profile", payload["matches"][0])
+        self.assertNotIn("query_match_gate", payload)
+        self.assertIn("diagnostic_detail_command", payload)
         self.assertEqual(
             payload["matches"][0]["reopen_command"],
             "aippocampus search --hit 1 --last-search --json",
@@ -1019,6 +1057,143 @@ class SearchCleanSourceTests(unittest.TestCase):
             payload["matches"][0]["local_diagnostic"]["clean_source_messages_jsonl"],
             str(registry_clean / "messages.jsonl"),
         )
+
+    def test_search_all_phrase_like_absent_query_suppresses_low_coverage_noise(self) -> None:
+        noisy_clean = self.cwd / "noisy-thread" / "clean-source"
+        noisy_clean.mkdir(parents=True)
+        (noisy_clean / "messages.jsonl").write_text(
+            "\n".join(
+                [
+                    json.dumps(
+                        {
+                            "id": "msg_noise_1",
+                            "message_id": "msg_noise_1",
+                            "source_line": 3,
+                            "role": "assistant",
+                            "text": "The agent memory source-backed route is safe, but unrelated.",
+                        },
+                        ensure_ascii=False,
+                    ),
+                    json.dumps(
+                        {
+                            "id": "msg_noise_2",
+                            "message_id": "msg_noise_2",
+                            "source_line": 4,
+                            "role": "assistant",
+                            "text": "A packet exists in another context without the remembered phrase.",
+                        },
+                        ensure_ascii=False,
+                    ),
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (self.cwd / "threads.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "threads": [
+                        {
+                            "thread_key": "session:noisy",
+                            "title": "Noisy phrase decoy",
+                            "paths": {
+                                "clean_source_messages_jsonl": str(noisy_clean / "messages.jsonl"),
+                                "sqlite": str(self.cwd / "missing-noisy.sqlite"),
+                            },
+                        }
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            code = search.main(
+                [
+                    "--all",
+                    "A safe packet that leaves the agent lost is not a success",
+                    "--registry-dir",
+                    str(self.cwd),
+                    "--json",
+                ]
+            )
+        payload = json.loads(stdout.getvalue())
+
+        self.assertEqual(code, 1)
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["status"], "no_phrase_like_matches")
+        self.assertEqual(payload["match_count"], 0)
+        self.assertEqual(payload["suppressed_low_coverage_match_count"], 2)
+        self.assertNotIn("suppressed_low_coverage_matches", payload)
+        self.assertNotIn("query_match_gate", payload)
+        self.assertTrue(payload["source_boundary"]["phrase_like_low_coverage_suppressed"])
+        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v2")
+        self.assertNotIn("agent_next_action", payload)
+
+    def test_search_all_phrase_like_present_query_ranks_exact_source_first(self) -> None:
+        exact_clean = self.cwd / "exact-thread" / "clean-source"
+        exact_clean.mkdir(parents=True)
+        exact_phrase = "A safe packet that leaves the agent lost is not a success"
+        (exact_clean / "messages.jsonl").write_text(
+            json.dumps(
+                {
+                    "id": "msg_exact",
+                    "message_id": "msg_exact",
+                    "source_line": 8,
+                    "role": "assistant",
+                    "phase": "final_answer",
+                    "is_final": True,
+                    "text": f"{exact_phrase}; it should reopen source, not lecture.",
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (self.cwd / "threads.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "threads": [
+                        {
+                            "thread_key": "session:exact",
+                            "title": "Exact phrase source",
+                            "paths": {
+                                "clean_source_messages_jsonl": str(exact_clean / "messages.jsonl"),
+                                "sqlite": str(self.cwd / "missing-exact.sqlite"),
+                            },
+                        }
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            code = search.main(
+                [
+                    "--all",
+                    exact_phrase,
+                    "--registry-dir",
+                    str(self.cwd),
+                    "--search-budget",
+                    "deep",
+                    "--json",
+                ]
+            )
+        payload = json.loads(stdout.getvalue())
+
+        self.assertEqual(code, 0)
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["status"], "ok")
+        self.assertEqual(payload["match_count"], 1)
+        self.assertTrue(payload["matches"][0]["query_match_profile"]["exact_phrase_match"])
+        self.assertEqual(payload["matches"][0]["message_id"], "msg_exact")
 
 
 if __name__ == "__main__":

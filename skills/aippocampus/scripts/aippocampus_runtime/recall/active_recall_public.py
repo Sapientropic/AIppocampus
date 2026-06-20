@@ -40,7 +40,7 @@ def index_lease_busy_payload(exc: ArtifactLeaseBusyError, *, prompt: str, cwd: P
         "search": None,
         "fallback_used": "none",
         "retry_after_ms": 500,
-        "agent_next_action": "Retry shortly, or continue without foreground recall if the task is not blocked.",
+        "next_step_hint": "Retry shortly, or continue without foreground recall if the task is not blocked.",
         "error": {
             "code": "index_lease_busy",
             "retryable": True,

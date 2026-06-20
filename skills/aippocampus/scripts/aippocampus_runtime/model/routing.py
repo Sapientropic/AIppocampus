@@ -22,7 +22,6 @@ DEFAULT_FLASH_MODEL = "deepseek-v4-flash"
 DEFAULT_PRO_MODEL = "deepseek-v4-pro"
 DEFAULT_DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 DEFAULT_DEEPSEEK_API_KEY_ENV = "AIPPOCAMPUS_DEEPSEEK_API_KEY"
-LEGACY_DEEPSEEK_API_KEY_ENV = "DEEPSEEK_API_KEY"
 DEFAULT_DEEPSEEK_THINKING = "enabled"
 DEFAULT_DEEPSEEK_REASONING_EFFORT = "high"
 DEEPSEEK_PREFIX_CACHE_CONTRACT = "deepseek_prefix_v1"
@@ -201,27 +200,15 @@ class ModelRoute:
 
 
 def deepseek_base_url() -> str:
-    return (
-        os.environ.get("AIPPOCAMPUS_DEEPSEEK_BASE_URL")
-        or os.environ.get("DEEPSEEK_BASE_URL")
-        or DEFAULT_DEEPSEEK_BASE_URL
-    )
+    return os.environ.get("AIPPOCAMPUS_DEEPSEEK_BASE_URL") or DEFAULT_DEEPSEEK_BASE_URL
 
 
 def flash_model() -> str:
-    return (
-        os.environ.get("AIPPOCAMPUS_DEEPSEEK_FLASH_MODEL")
-        or os.environ.get("DEEPSEEK_MODEL")
-        or DEFAULT_FLASH_MODEL
-    )
+    return os.environ.get("AIPPOCAMPUS_DEEPSEEK_FLASH_MODEL") or DEFAULT_FLASH_MODEL
 
 
 def pro_model() -> str:
-    return (
-        os.environ.get("AIPPOCAMPUS_DEEPSEEK_PRO_MODEL")
-        or os.environ.get("DEEPSEEK_PRO_MODEL")
-        or DEFAULT_PRO_MODEL
-    )
+    return os.environ.get("AIPPOCAMPUS_DEEPSEEK_PRO_MODEL") or DEFAULT_PRO_MODEL
 
 
 def deepseek_api_key_env(env: Mapping[str, str] | None = None) -> str:
@@ -229,31 +216,21 @@ def deepseek_api_key_env(env: Mapping[str, str] | None = None) -> str:
 
     The canonical AIppocampus-prefixed name must be the default so diagnostics
     and hook setup do not teach users to keep provider-specific globals around.
-    We keep the legacy DeepSeek name as a presence-only migration fallback for
-    existing installs; do not switch this to value checks, because provider
-    readiness surfaces intentionally avoid reading key material unless a model
-    call is explicitly being made.
     """
 
-    current_env = env if env is not None else os.environ
-    if DEFAULT_DEEPSEEK_API_KEY_ENV in current_env:
-        return DEFAULT_DEEPSEEK_API_KEY_ENV
-    if LEGACY_DEEPSEEK_API_KEY_ENV in current_env:
-        return LEGACY_DEEPSEEK_API_KEY_ENV
+    del env
     return DEFAULT_DEEPSEEK_API_KEY_ENV
 
 
 def is_default_deepseek_api_key_env(value: str | None) -> bool:
     """Return true when an api-key-env argument means "use the DeepSeek default".
 
-    Older call sites baked `DEEPSEEK_API_KEY` in their argparse defaults before
-    the public `AIPPOCAMPUS_*` prefix existed. Treat both spellings as the
-    route default so model-route configuration can still supply its own key env
-    and so legacy callers do not accidentally override custom routes.
+    Only the AIppocampus-prefixed name is the route default. A provider-native
+    env name passed by an operator is treated as an explicit custom choice.
     """
 
     raw = str(value or "").strip()
-    return raw in {"", DEFAULT_DEEPSEEK_API_KEY_ENV, LEGACY_DEEPSEEK_API_KEY_ENV}
+    return raw in {"", DEFAULT_DEEPSEEK_API_KEY_ENV}
 
 
 def deepseek_capabilities(tier: str) -> ModelCapabilities:

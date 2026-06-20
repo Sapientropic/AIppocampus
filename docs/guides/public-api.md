@@ -878,10 +878,10 @@ template may point here, but they should not mirror this whole list. "Public"
 means documented and stable enough to configure. It does not mean the variable
 value is safe to publish.
 
-Legacy env/path names that remain accepted for migration are classified in the
+Remaining host/path compatibility and retired migration-only names are tracked in the
 [legacy alias inventory](../architecture/ops/legacy-alias-inventory.md). New setup
-docs should prefer the canonical names below and link that inventory only when
-explaining compatibility fallback behavior.
+docs should use the canonical names below and link that inventory only when
+explaining a sunset or Codex-host fallback.
 
 ### Environment Configuration Matrix
 
@@ -889,7 +889,6 @@ explaining compatibility fallback behavior.
 | --- | --- | --- | --- | --- | --- |
 | `AIPPOCAMPUS_REGISTRY_DIR` | Storage and discovery | End users, agents, operators | Exact registry root; first registry lookup choice | Local private path | Public configuration |
 | `AIPPOCAMPUS_HOME` | Storage and discovery | End users, agents, operators | Uses `AIPPOCAMPUS_HOME/registry` after exact registry vars | Local private path | Public configuration |
-| `THREAD_MEMORY_REGISTRY_DIR` | Legacy storage | Existing installs and compatibility scripts | Legacy exact registry root after `AIPPOCAMPUS_REGISTRY_DIR` | Local private path | Compatibility fallback; avoid in new docs |
 | `CODEX_HOME` | Codex install and legacy storage | Codex users and hook installers | Skill/home discovery; generated registry fallback when no `AIPPOCAMPUS_*` storage var is set | Local private path | Compatibility fallback, not the preferred non-Codex storage API |
 | `AIPPOCAMPUS_GENERIC_IMPORT_DIR` | Generic JSONL onboarding | Integrators testing provider-neutral import | Optional default import file/dir when CLI args omit a source | Local private path | Public convenience configuration |
 | `AIPPOCAMPUS_VAULT`, `AIPPOCAMPUS_STYLE_SOURCE`, `AIPPOCAMPUS_SCRIPT_SOURCE`, `AIPPOCAMPUS_SITE_MARK`, `AIPPOCAMPUS_SITE_TITLE` | Vault projection | Local operators publishing their own memory view | Optional; CLI defaults apply when unset | Local path/content branding may be private | Public operator configuration |
@@ -899,7 +898,7 @@ explaining compatibility fallback behavior.
 | `AIPPOCAMPUS_PROMPT_HOOK_BUDGET_MS`, `AIPPOCAMPUS_PROMPT_SEMANTIC_TIMEOUT`, `AIPPOCAMPUS_PROMPT_SKIP_TELEMETRY`, `AIPPOCAMPUS_LIFECYCLE_HOOK_BUDGET_MS`, `AIPPOCAMPUS_SEMANTIC_GATE` | Hook budgets, aggregate skip telemetry, and semantic recall | Local operators tuning hook latency, false-negative calibration, and semantic gating | Built-in conservative budgets; aggregate skip telemetry enabled by default and disabled with `0` / `false` / `off` / `no` | Timing policy and aggregate skip counts may reveal local workflow shape; raw prompt text must not be logged | Public operator configuration |
 | `AIPPOCAMPUS_SEMANTIC_TIMEOUT`, `AIPPOCAMPUS_SEMANTIC_TEMPERATURE`, `AIPPOCAMPUS_SEMANTIC_CACHE_TTL`, `AIPPOCAMPUS_SEMANTIC_CATALOG_LIMIT`, `AIPPOCAMPUS_SEMANTIC_TRIGGER_LIMIT` | Semantic recall diagnostics | Trusted local operators and repo tests | Used by semantic recall helpers when explicit config is absent | May affect private prompt/model behavior | Diagnostic/operator configuration; prefer explicit config in new integrations |
 | `AIPPOCAMPUS_WARM_RECALL_TIMEOUT`, `AIPPOCAMPUS_WARM_RECALL_CATALOG_LIMIT`, `AIPPOCAMPUS_WARM_RECALL_MAX_WORKERS`, `AIPPOCAMPUS_WARM_RECALL_BACKGROUND`, `AIPPOCAMPUS_DETACHED_WARM_TIMEOUT`, `AIPPOCAMPUS_DETACHED_WARM_PREFIX_CACHE_WARMUP_SCOUTS`, `AIPPOCAMPUS_DETACHED_WARM_PREFIX_CACHE_WARMUP_DELAY` | Warm ambient recall limits | Local operators tuning background recall cost and latency | Built-in defaults; explicit CLI/config should own product tuning | Timing/concurrency policy may reveal local workflow shape | Public operator configuration for limits only |
-| `AIPPOCAMPUS_DEEPSEEK_API_KEY`, `AIPPOCAMPUS_DEEPSEEK_FLASH_MODEL`, `AIPPOCAMPUS_DEEPSEEK_PRO_MODEL`, `AIPPOCAMPUS_DEEPSEEK_BASE_URL` | Optional DeepSeek route | Operators enabling optional external-model work | DeepSeek defaults where unset; legacy `DEEPSEEK_API_KEY` and other `DEEPSEEK_*` vars remain fallback-only | API key is secret; base URL/model may reveal provider choice | Public optional route configuration; external-model features remain optional |
+| `AIPPOCAMPUS_DEEPSEEK_API_KEY`, `AIPPOCAMPUS_DEEPSEEK_FLASH_MODEL`, `AIPPOCAMPUS_DEEPSEEK_PRO_MODEL`, `AIPPOCAMPUS_DEEPSEEK_BASE_URL` | Optional DeepSeek route | Operators enabling optional external-model work | DeepSeek defaults where unset; provider-native env names are not built-in fallbacks | API key is secret; base URL/model may reveal provider choice | Public optional route configuration; external-model features remain optional |
 | `AIPPOCAMPUS_OPENAI_COMPAT_ROUTE`, `AIPPOCAMPUS_OPENAI_COMPAT_PROVIDER`, `AIPPOCAMPUS_OPENAI_COMPAT_MODEL`, `AIPPOCAMPUS_OPENAI_COMPAT_BASE_URL`, `AIPPOCAMPUS_OPENAI_COMPAT_API_KEY_ENV`, `AIPPOCAMPUS_OPENAI_COMPAT_CONCURRENCY`, `AIPPOCAMPUS_OPENAI_COMPAT_SUPPORTS_JSON`, `AIPPOCAMPUS_OPENAI_COMPAT_SUPPORTS_USER_ID`, `AIPPOCAMPUS_OPENAI_COMPAT_SUPPORTS_THINKING`, `AIPPOCAMPUS_OPENAI_COMPAT_SUPPORTS_REASONING_EFFORT`, `AIPPOCAMPUS_OPENAI_COMPAT_DEFAULT_THINKING`, `AIPPOCAMPUS_OPENAI_COMPAT_DEFAULT_REASONING_EFFORT`, `AIPPOCAMPUS_OPENAI_COMPAT_REASONING_CONTENT_HANDLING`, `AIPPOCAMPUS_OPENAI_COMPAT_CACHE_METRICS_KIND` | Optional OpenAI-compatible route | Operators testing provider portability | Only active when a complete compatible route is configured; DeepSeek-only extensions are omitted unless the route explicitly opts in | API-key variable name and base URL may reveal provider setup; referenced key value is secret | Public optional route configuration |
 | `AIPPOCAMPUS_SUBCONSCIOUS_HOOK`, `AIPPOCAMPUS_SUBCONSCIOUS_CONCURRENCY`, `AIPPOCAMPUS_SUBCONSCIOUS_JOB_CONCURRENCY`, `AIPPOCAMPUS_SUBCONSCIOUS_SAMPLES_PER_JOB`, `AIPPOCAMPUS_CONTINUITY_DOMAIN_PRODUCTION` | Subconscious/background jobs and opt-in continuity-domain production | Trusted local operators and repo-maintenance smokes | Conservative defaults; continuity-domain production defaults to `off` and accepts `report` or `write_when_enabled` only after the runner is configured | May reveal private background-work policy and local continuity-maintenance policy | Diagnostic/operator configuration, not a broad hosted-service API |
 | `AIPPOCAMPUS_DREAM_DELIVERY_MODE`, `AIPPOCAMPUS_DREAM_SHADOW_AB`, `AIPPOCAMPUS_DREAM_SHADOW_AB_SALT`, `AIPPOCAMPUS_DREAM_ROLLOUT_RATE` | Dream/research delivery policy | Trusted local operators evaluating research features | Defaults keep research surfaces conservative unless explicitly enabled | Salt/rollout policy may reveal experiment setup | Experimental diagnostic configuration |
@@ -949,18 +948,17 @@ Common installs should stay small:
   explicit locator flags and is outside normal provider doctor discovery. This
   prepares future/restarted Codex hook processes only, and they are ready only
   when launched from an environment with the same variable visible.
-- `aippocampus health --json`, `aippocampus doctor provider --json`, and
+- `aippocampus health --json` and
   `aippocampus onboard --status --json` expose path-free `legacy_aliases`
-  diagnostics for compatibility fallbacks. New setup examples should still use
+  diagnostics for remaining host/path compatibility. New setup examples should still use
   the canonical `AIPPOCAMPUS_*` names and link the legacy inventory only when
-  explaining migration behavior.
+  explaining sunset or Codex-host behavior.
 
 Registry storage precedence remains explicit:
 
 1. `AIPPOCAMPUS_REGISTRY_DIR`: exact registry root.
-2. `THREAD_MEMORY_REGISTRY_DIR`: legacy exact registry root.
-3. `AIPPOCAMPUS_HOME/registry`: provider-neutral AIppocampus home.
-4. `CODEX_HOME/aippocampus-registry`, or the default Codex home path if no
+2. `AIPPOCAMPUS_HOME/registry`: provider-neutral AIppocampus home.
+3. `CODEX_HOME/aippocampus-registry`, or the default Codex home path if no
    AIppocampus storage variable is set: legacy compatibility fallback.
 
 AIppocampus never migrates or deletes an existing registry automatically.

@@ -34,7 +34,7 @@ from aippocampus_runtime.mcp.provider_key_bridge import (
 )
 from aippocampus_runtime.mcp.public_projection import (
     compact_health_payload,
-    compact_message,
+    compact_latest_reply_message,
     compact_recall_context_payload,
     compact_register_thread_payload,
     compact_thread,
@@ -465,7 +465,7 @@ def call_recall_deepen(arguments: dict[str, Any]) -> dict[str, Any]:
             ],
             legacy_details={
                 "required": ["handle"],
-                "agent_next_action": (
+                "next_step_hint": (
                     "Call recall_context with intent/query, then pass a selected route handle "
                     "to recall_deepen."
                 ),
@@ -785,18 +785,20 @@ def call_latest_reply(arguments: dict[str, Any]) -> dict[str, Any]:
         and (item.get("is_final") or item.get("phase") == "final_answer")
     ]
     if final_messages and not arguments.get("rollout"):
-        message = final_messages[-1] if detail == "full" else compact_message(final_messages[-1])
         raw_message = final_messages[-1]
+        message = raw_message if detail == "full" else compact_latest_reply_message(raw_message)
         selector = {
             key: raw_message.get(key)
             for key in ("message_id", "turn_id", "turn_index")
             if raw_message.get(key) not in (None, "")
         }
+        full_latest_reply_action = latest_reply_module.latest_reply_tool_action()
         source_reopen_action = {
-            "action_id": "reopen_latest_final_answer_context",
+            "id": "reopen_latest_final_answer_context",
             "tool_name": "get_turn_context",
             "arguments": selector,
             "claim_boundary": "source_open_required_before_quoting",
+            "mutation_risk": "read_only",
             "authority_after_running": "source_open_within_clean_source_turn_scope",
             "why": "Use the clean-source selector before quoting exact wording from the compact latest-reply card.",
         }
@@ -809,9 +811,11 @@ def call_latest_reply(arguments: dict[str, Any]) -> dict[str, Any]:
                     "source": str(source_dir / "messages.jsonl"),
                     "message": message,
                     "message_count": len(messages),
-                    "agent_next_action": source_reopen_action,
                     "source_reopen_action": source_reopen_action,
-                    "safe_next_actions": [source_reopen_action],
+                    **canonical_foreground_action_fields(
+                        full_latest_reply_action,
+                        safe_next_actions=[full_latest_reply_action, source_reopen_action],
+                    ),
                 },
             )
         )

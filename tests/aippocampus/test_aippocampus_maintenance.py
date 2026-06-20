@@ -414,8 +414,8 @@ class AippocampusMaintenanceTests(unittest.TestCase):
         self.assertEqual(payload["maintenance_status"], "ok")
         self.assertEqual(payload["remaining_recommended_action_count"], 0)
         self.assertFalse(payload["read_only"])
-        self.assertEqual(payload["agent_next_action"]["id"], "inspect_maintenance_status")
-        self.assertFalse(payload["agent_next_action"]["mutates"])
+        self.assertEqual(payload["foreground_action"]["id"], "inspect_maintenance_status")
+        self.assertFalse(payload["foreground_action"]["mutates"])
         self.assertIn("build_index_final_catchup", payload["action_ids"])
         self.assertIn("prepare_graphify_corpus_final_catchup", payload["action_ids"])
         self.assertEqual(
@@ -467,8 +467,8 @@ class AippocampusMaintenanceTests(unittest.TestCase):
         self.assertEqual(payload["maintenance_status"], "ok")
         self.assertEqual(payload["mode"], "summary")
         self.assertTrue(payload["read_only"])
-        self.assertEqual(payload["agent_next_action"]["id"], "continue_without_maintenance")
-        self.assertFalse(payload["agent_next_action"]["mutates"])
+        self.assertEqual(payload["foreground_action"]["id"], "continue_without_maintenance")
+        self.assertFalse(payload["foreground_action"]["mutates"])
         apply_actions = [
             item for item in payload["safe_next_actions"] if item["id"] == "apply_after_user_consent"
         ]
@@ -511,9 +511,9 @@ class AippocampusMaintenanceTests(unittest.TestCase):
 
         self.assertEqual(code, 1)
         self.assertEqual(payload["kind"], "aippocampus_maintenance_summary")
-        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
-        self.assertEqual(payload["foreground_action"], payload["agent_next_action"])
-        self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
+        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v2")
+        self.assertNotIn("agent_next_action", payload)
+        self.assertNotIn(payload["foreground_action"], payload.get("safe_next_actions", []))
         self.assertEqual(payload["health_probe"]["status"], "failed")
         self.assertIn("health probe timeout", payload["health_probe"]["message"])
         self.assertNotIn("operator_detail", payload)
@@ -568,10 +568,10 @@ class AippocampusMaintenanceTests(unittest.TestCase):
         self.assertTrue(payload["command_ok"])
         self.assertTrue(payload["plan_generated"])
         self.assertEqual(payload["maintenance_status"], "attention_needed")
-        self.assertEqual(payload["agent_next_action"]["id"], "review_maintenance_plan")
-        self.assertFalse(payload["agent_next_action"]["mutates"])
+        self.assertEqual(payload["foreground_action"]["id"], "review_maintenance_plan")
+        self.assertFalse(payload["foreground_action"]["mutates"])
         self.assertEqual(
-            payload["agent_next_action"]["command"],
+            payload["foreground_action"]["command"],
             "aippocampus maintenance plan --summary-json",
         )
         apply_action = next(
@@ -695,10 +695,10 @@ class AippocampusMaintenanceTests(unittest.TestCase):
         self.assertFalse(payload["user_impact"]["cold_start_expected"])
         self.assertEqual(payload["would_run_action_ids"], ["build_index", "build_cognitive_map"])
         self.assertEqual(payload["apply_command"], "aippocampus maintenance apply --summary-json")
-        self.assertEqual(payload["agent_next_action"]["id"], "review_maintenance_plan")
-        self.assertFalse(payload["agent_next_action"]["mutates"])
-        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
-        self.assertEqual(payload["foreground_action"], payload["agent_next_action"])
+        self.assertEqual(payload["foreground_action"]["id"], "review_maintenance_plan")
+        self.assertFalse(payload["foreground_action"]["mutates"])
+        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v2")
+        self.assertNotIn("agent_next_action", payload)
 
     def test_storage_pressure_best_action_routes_to_bounded_audit(self) -> None:
         def fake_probe(cwd: Path) -> tuple[int, dict | None, str]:
@@ -738,8 +738,8 @@ class AippocampusMaintenanceTests(unittest.TestCase):
         payload = json.loads(stdout.getvalue())
 
         self.assertEqual(code, 0)
-        self.assertEqual(payload["agent_next_action"]["id"], "review_maintenance_plan")
-        self.assertFalse(payload["agent_next_action"]["mutates"])
+        self.assertEqual(payload["foreground_action"]["id"], "review_maintenance_plan")
+        self.assertFalse(payload["foreground_action"]["mutates"])
         action_ids = [action["id"] for action in payload["safe_next_actions"]]
         self.assertIn("storage_gc_audit", action_ids)
         storage_action = next(

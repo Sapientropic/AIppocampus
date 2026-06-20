@@ -359,7 +359,7 @@ class SubconsciousEventSalienceGateTests(unittest.TestCase):
             parser.add_argument("--model-route")
             parser.add_argument("--model", default="deepseek-v4-flash")
             parser.add_argument("--base-url", default="https://example.invalid")
-            parser.add_argument("--api-key-env", default="DEEPSEEK_API_KEY")
+            parser.add_argument("--api-key-env", default="AIPPOCAMPUS_DEEPSEEK_API_KEY")
             parser.add_argument("--max-tokens", type=int, default=None)
             parser.add_argument("--timeout", type=int, default=1)
             parser.add_argument("--temperature", type=float, default=0.2)

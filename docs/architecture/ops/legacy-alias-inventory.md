@@ -2,24 +2,27 @@
 
 Role: inventory.
 
-Last audited: 2026-06-04.
+Last audited: 2026-06-21.
 
-This is the canonical inventory for legacy environment names and path
-fallbacks that AIppocampus still accepts before the public API freezes. Public
-setup docs should prefer `AIPPOCAMPUS_*` names and package-owner/facade
-entrypoints. Legacy names stay visible here so migration behavior is honest,
-not so new integrations copy them.
+This is the canonical inventory for remaining host/path compatibility and
+retired migration-only aliases. Public setup docs must use `AIPPOCAMPUS_*`
+names and package-owner/facade entrypoints.
+
+Migration-only environment fallbacks were removed on 2026-06-21. The old names
+remain visible here only so docs-health can catch regressions and explain the
+sunset; normal runtime resolution no longer reads them.
 
 ## Runtime Diagnostics
 
-Runtime diagnostics must report alias names and active/shadowed status without
-printing values or local paths.
+Runtime diagnostics must report remaining path/host alias names and active
+status without printing values or local paths.
 
-- `aippocampus health --json` reports `legacy_aliases` for env fallbacks,
-  registry path fallback, and project-local `.aippocampus/` output when it is
-  part of the resolved diagnostic paths.
-- `aippocampus doctor provider --json` reports `legacy_aliases` for current
-  process env fallbacks alongside the provider env presence check.
+- `aippocampus health --json` reports `legacy_aliases` for remaining registry
+  path fallback and project-local `.aippocampus/` output when it is part of the
+  resolved diagnostic paths.
+- `aippocampus doctor provider --json` no longer reports migration-only
+  provider-native env fallbacks; use canonical `AIPPOCAMPUS_DEEPSEEK_*` names or
+  explicit custom route env configuration.
 - Registry storage resolution also keeps the narrower `source` and
   `legacy_fallback` fields for existing callers.
 
@@ -27,28 +30,28 @@ Command-local coverage is intentionally selective:
 
 | Surface | JSON legacy diagnostic | Scope | Reason |
 | --- | --- | --- | --- |
-| `aippocampus health --json` | `legacy_aliases` | Env fallbacks, registry path fallback, and project-local diagnostic paths | Aggregate readiness is the canonical broad diagnostic. |
-| `aippocampus doctor provider --json` | `legacy_aliases` | Current-process env fallbacks only | Provider visibility is already a process-env diagnostic and must not print credential values. |
-| `onboard.py --status --json` / `aippocampus onboard --status --json` | `data.legacy_aliases` | Onboarding storage resolution plus current-process env fallbacks | Onboarding is where users first discover storage, so legacy storage fallback should be visible without requiring a separate health run. |
+| `aippocampus health --json` | `legacy_aliases` | Registry path fallback and project-local diagnostic paths | Aggregate readiness is the canonical broad diagnostic. |
+| `aippocampus doctor provider --json` | None for retired env aliases | Provider env aliases were removed; canonical config is reported through `provider_env`. | Provider visibility must not teach deprecated names. |
+| `onboard.py --status --json` / `aippocampus onboard --status --json` | `data.legacy_aliases` | Onboarding storage resolution only | Onboarding is where users first discover storage, so remaining host path fallback should be visible without env alias support. |
 | Registry storage helpers | `source` and `legacy_fallback` | Storage resolution only | Existing callers depend on this compact shape; use aggregate diagnostics for full alias inventory context. |
-| Vault/dashboard commands | Aggregate-only through health / status diagnostics | `CODEX_MEMORY_*` vault and asset fallbacks | Values are local paths/content branding, and command outputs focus on generated vault artifacts rather than environment introspection. |
-| Scheduler / hook paths | Aggregate-only through health / provider doctor diagnostics | `AIIPPOCAMPUS_SUBCONSCIOUS_HOOK` typo fallback | Hooks should stay quiet and bounded; diagnostics belong in explicit operator commands. |
+| Vault/dashboard commands | None for retired env aliases | `CODEX_MEMORY_*` vault and asset fallbacks were removed | Use `AIPPOCAMPUS_VAULT` / `AIPPOCAMPUS_*_SOURCE` only. |
+| Scheduler / hook paths | None for retired typo alias | `AIIPPOCAMPUS_SUBCONSCIOUS_HOOK` typo fallback was removed | Use `AIPPOCAMPUS_SUBCONSCIOUS_HOOK` only. |
 
 ## Env Aliases
 
 | Alias | Canonical replacement | Why it exists | Classification | Diagnostic behavior | Removal stage |
 | --- | --- | --- | --- | --- | --- |
-| `THREAD_MEMORY_REGISTRY_DIR` | `AIPPOCAMPUS_REGISTRY_DIR` | Early registry builds used the thread-memory name before the project settled on AIppocampus storage naming. | Migration-only storage fallback | Active when set and `AIPPOCAMPUS_REGISTRY_DIR` is unset; diagnostics expose alias name only. | Remove only after a migration note and storage smoke prove canonical registry discovery for existing installs. |
-| `CODEX_MEMORY_VAULT` | `AIPPOCAMPUS_VAULT` | Old vault/dashboard tooling used the Codex Memory project name. | Migration-only vault projection fallback | Active when the canonical vault env is unset; values and paths are not printed. | Remove after vault docs and any remaining local scripts use `AIPPOCAMPUS_VAULT`. |
-| `CODEX_MEMORY_STYLE_SOURCE` | `AIPPOCAMPUS_STYLE_SOURCE` | Old dashboard asset env name. | Migration-only vault projection fallback | Active only when the canonical style source is unset. | Remove with the vault/dashboard alias cleanup. |
-| `CODEX_MEMORY_SCRIPT_SOURCE` | `AIPPOCAMPUS_SCRIPT_SOURCE` | Old dashboard asset env name. | Migration-only vault projection fallback | Active only when the canonical script source is unset. | Remove with the vault/dashboard alias cleanup. |
-| `CODEX_MEMORY_SITE_MARK` | `AIPPOCAMPUS_SITE_MARK` | Old dashboard branding env name. | Migration-only vault projection fallback | Active only when the canonical site mark is unset. | Remove with the vault/dashboard alias cleanup. |
-| `CODEX_MEMORY_SITE_TITLE` | `AIPPOCAMPUS_SITE_TITLE` | Old dashboard branding env name. | Migration-only vault projection fallback | Active only when the canonical site title is unset. | Remove with the vault/dashboard alias cleanup. |
-| `DEEPSEEK_BASE_URL` | `AIPPOCAMPUS_DEEPSEEK_BASE_URL` | Early DeepSeek route configuration used provider-native names directly. | Migration-only model-route fallback | Active only when the canonical DeepSeek base URL env is unset; diagnostics never print the URL value. | Remove after public docs and smokes use the canonical model-route env. |
-| `DEEPSEEK_MODEL` | `AIPPOCAMPUS_DEEPSEEK_FLASH_MODEL` | Early flash/default route configuration used a provider-native model env. | Migration-only model-route fallback | Active only when the canonical flash-model env is unset; diagnostics never print the model value. | Remove after route docs, tests, and smokes no longer depend on the fallback. |
-| `DEEPSEEK_PRO_MODEL` | `AIPPOCAMPUS_DEEPSEEK_PRO_MODEL` | Early pro-route configuration used a provider-native model env. | Migration-only model-route fallback | Active only when the canonical pro-model env is unset; diagnostics never print the model value. | Remove after route docs, tests, and smokes no longer depend on the fallback. |
-| `DEEPSEEK_API_KEY` | `AIPPOCAMPUS_DEEPSEEK_API_KEY` for the built-in DeepSeek route; `AIPPOCAMPUS_OPENAI_COMPAT_API_KEY_ENV` for custom routes | Early DeepSeek route configuration used the provider-native credential name directly. The AIppocampus-prefixed name is now canonical, with the provider-native name kept only for migration. | Migration-only model-route fallback; values are secret | Active only when `AIPPOCAMPUS_DEEPSEEK_API_KEY` is unset; provider doctor checks presence only and never reads or prints the value. | Remove after public docs, smokes, and install guides no longer depend on the fallback. |
-| `AIIPPOCAMPUS_SUBCONSCIOUS_HOOK` | `AIPPOCAMPUS_SUBCONSCIOUS_HOOK` | A misspelled early subconscious hook knob reached runtime compatibility before the public prefix was corrected. | Typo compatibility fallback | Active only when `AIPPOCAMPUS_SUBCONSCIOUS_HOOK` is unset; diagnostics expose alias name only. | Remove after a migration note and one scheduler smoke prove the canonical spelling works for existing installs. |
+| `THREAD_MEMORY_REGISTRY_DIR` | `AIPPOCAMPUS_REGISTRY_DIR` | Early registry builds used the thread-memory name before the project settled on AIppocampus storage naming. | Removed migration-only storage fallback | Not read by runtime. | Removed 2026-06-21; keep this row only as a regression guard. |
+| `CODEX_MEMORY_VAULT` | `AIPPOCAMPUS_VAULT` | Old vault/dashboard tooling used the Codex Memory project name. | Removed migration-only vault projection fallback | Not read by runtime. | Removed 2026-06-21; keep this row only as a regression guard. |
+| `CODEX_MEMORY_STYLE_SOURCE` | `AIPPOCAMPUS_STYLE_SOURCE` | Old dashboard asset env name. | Removed migration-only vault projection fallback | Not read by runtime. | Removed 2026-06-21; keep this row only as a regression guard. |
+| `CODEX_MEMORY_SCRIPT_SOURCE` | `AIPPOCAMPUS_SCRIPT_SOURCE` | Old dashboard asset env name. | Removed migration-only vault projection fallback | Not read by runtime. | Removed 2026-06-21; keep this row only as a regression guard. |
+| `CODEX_MEMORY_SITE_MARK` | `AIPPOCAMPUS_SITE_MARK` | Old dashboard branding env name. | Removed migration-only vault projection fallback | Not read by runtime. | Removed 2026-06-21; keep this row only as a regression guard. |
+| `CODEX_MEMORY_SITE_TITLE` | `AIPPOCAMPUS_SITE_TITLE` | Old dashboard branding env name. | Removed migration-only vault projection fallback | Not read by runtime. | Removed 2026-06-21; keep this row only as a regression guard. |
+| `DEEPSEEK_BASE_URL` | `AIPPOCAMPUS_DEEPSEEK_BASE_URL` | Early DeepSeek route configuration used provider-native names directly. | Removed migration-only model-route fallback | Not read by runtime. | Removed 2026-06-21; use explicit OpenAI-compatible route config for custom providers. |
+| `DEEPSEEK_MODEL` | `AIPPOCAMPUS_DEEPSEEK_FLASH_MODEL` | Early flash/default route configuration used a provider-native model env. | Removed migration-only model-route fallback | Not read by runtime. | Removed 2026-06-21; keep this row only as a regression guard. |
+| `DEEPSEEK_PRO_MODEL` | `AIPPOCAMPUS_DEEPSEEK_PRO_MODEL` | Early pro-route configuration used a provider-native model env. | Removed migration-only model-route fallback | Not read by runtime. | Removed 2026-06-21; keep this row only as a regression guard. |
+| `DEEPSEEK_API_KEY` | `AIPPOCAMPUS_DEEPSEEK_API_KEY` for the built-in DeepSeek route; `AIPPOCAMPUS_OPENAI_COMPAT_API_KEY_ENV` for custom routes | Early DeepSeek route configuration used the provider-native credential name directly. | Removed migration-only model-route fallback; values are secret | Not read by the built-in DeepSeek route. | Removed 2026-06-21; explicit custom routes may still name any env var through `AIPPOCAMPUS_OPENAI_COMPAT_API_KEY_ENV`. |
+| `AIIPPOCAMPUS_SUBCONSCIOUS_HOOK` | `AIPPOCAMPUS_SUBCONSCIOUS_HOOK` | A misspelled early subconscious hook knob reached runtime compatibility before the public prefix was corrected. | Removed typo compatibility fallback | Not read by runtime. | Removed 2026-06-21; keep this row only as a regression guard. |
 | `CODEX_HOME` | `AIPPOCAMPUS_REGISTRY_DIR` or `AIPPOCAMPUS_HOME/registry` for generated storage; Codex skill install still uses `CODEX_HOME` | Codex host installation and hook config still need the host home. Storage fallback keeps existing Codex users' registries discoverable. | Host install env and legacy storage base, not preferred non-Codex storage API | Storage diagnostics expose only the source label when the fallback is active. | Keep for Codex host install; sunset only the storage fallback after migration evidence. |
 
 ## Path Fallbacks

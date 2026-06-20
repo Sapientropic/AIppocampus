@@ -154,6 +154,8 @@ class BenchmarkEntrypointTests(unittest.TestCase):
             "benchmark_suite.py",
         ):
             self.assertEqual(by_name[script]["entrypoint_class"], "heavy_local_eval")
+            self.assertEqual(by_name[script]["execution_status"], "not_run")
+            self.assertEqual(by_name[script]["classification_basis"], "static_manifest_only")
             self.assertFalse(by_name[script]["public_fast_json_default"])
             self.assertIn("json_contract", by_name[script]["safe_sweep_modes"])
 

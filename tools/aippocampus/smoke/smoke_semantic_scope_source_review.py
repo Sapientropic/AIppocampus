@@ -811,7 +811,7 @@ def run_semantic_scope_source_review(
     registry_path: str | Path | None = None,
     public_shadow: bool = False,
     live: bool = False,
-    api_key_env: str = "DEEPSEEK_API_KEY",
+    api_key_env: str = "AIPPOCAMPUS_DEEPSEEK_API_KEY",
     max_cases: int = 16,
     min_cases: int = 8,
     min_pass_rate: float = 0.75,
@@ -1067,7 +1067,7 @@ def main() -> int:
         help="Use the checked-in public-safe source-review shadow cohort.",
     )
     parser.add_argument("--live", action="store_true")
-    parser.add_argument("--api-key-env", default="DEEPSEEK_API_KEY")
+    parser.add_argument("--api-key-env", default="AIPPOCAMPUS_DEEPSEEK_API_KEY")
     parser.add_argument("--max-cases", type=int, default=16)
     parser.add_argument("--min-cases", type=int, default=8)
     parser.add_argument("--min-pass-rate", type=float, default=0.75)

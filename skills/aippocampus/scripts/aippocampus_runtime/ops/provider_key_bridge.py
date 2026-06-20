@@ -121,7 +121,7 @@ def _privacy(
     }
 
 
-def _primary_agent_next_action(recommended_actions: list[dict[str, Any]]) -> Any:
+def _primary_foreground_action(recommended_actions: list[dict[str, Any]]) -> Any:
     if not recommended_actions:
         return None
     primary = dict(recommended_actions[0])
@@ -509,7 +509,7 @@ def build_provider_key_bridge_plan(
         },
         "recommended_actions": recommended_actions,
         **canonical_foreground_action_fields(
-            _primary_agent_next_action(recommended_actions) or {
+            _primary_foreground_action(recommended_actions) or {
                 "id": "continue_without_provider_key",
                 "message": "Provider-key bridge is optional; continue without LLM-backed setup.",
                 "mutation_risk": "read_only",
@@ -604,7 +604,7 @@ def build_provider_key_bridge_chooser(
         "privacy": _privacy(include_local_paths),
         "recommended_actions": recommended_actions,
         **canonical_foreground_action_fields(
-            _primary_agent_next_action(recommended_actions) or {
+            _primary_foreground_action(recommended_actions) or {
                 "id": "continue_without_provider_key",
                 "message": "Provider-key bridge is optional; continue without LLM-backed setup.",
                 "mutation_risk": "read_only",
@@ -707,7 +707,7 @@ def apply_provider_key_bridge(
                     ),
                 }
             ],
-            "agent_next_action": "aippocampus doctor provider --json",
+            "foreground_guidance": "Run `aippocampus doctor provider --json` after restarting the hook host.",
         }
     env_name = public_token(provider_env_var, fallback=DEFAULT_PROVIDER_ENV_VAR)
     codex_home_resolved = Path(codex_home_path or codex_home()).resolve()

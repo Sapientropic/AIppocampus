@@ -17,6 +17,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal
 
+from aippocampus_runtime.contracts import (
+    canonical_foreground_action_fields,
+    foreground_shell_action,
+)
 from aippocampus_runtime.core import compact_text, now_utc
 from aippocampus_runtime.journey.tracking import (
     source_ref_key,
@@ -653,8 +657,41 @@ def run_fixture_smoke() -> dict[str, Any]:
     )
 
 
+def default_reflection_space_card() -> dict[str, Any]:
+    inspect_fixture = foreground_shell_action(
+        action_id="run_reflection_fixture_smoke",
+        label="Run reflection fixture smoke",
+        command="python -m aippocampus_runtime.reflection.space --fixture-smoke --json",
+        mutation_risk="read_only",
+        claim_boundary="fixture_topology_is_navigation_only_not_source_truth",
+        why="Use the fixture smoke when validating Reflection Space topology contracts.",
+    )
+    return {
+        "ok": True,
+        "kind": "reflection_space",
+        "status": "operator_only_no_input",
+        "operator_only": True,
+        "fixture_only_default": True,
+        "input_requirements": [
+            "journey rows with source refs",
+            "optional source-backed feedback rows",
+            "optional adjudicated Dream hypotheses",
+        ],
+        "supported_entrypoints": {
+            "fixture_smoke": "python -m aippocampus_runtime.reflection.space --fixture-smoke --json",
+        },
+        "claim_boundary": "Reflection Space is topology/navigation analysis; reopen source before claims.",
+        **canonical_foreground_action_fields(inspect_fixture, safe_next_actions=[]),
+    }
+
+
 def build_arg_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Run reflection-space topology helpers.")
+    parser = argparse.ArgumentParser(
+        description=(
+            "Run reflection-space topology helpers. The default command is an "
+            "operator-only no-input card; use --fixture-smoke for the public fixture contract."
+        )
+    )
     parser.add_argument("--fixture-smoke", action="store_true")
     parser.add_argument("--json", action="store_true", help="Emit compact JSON.")
     parser.add_argument("--output", type=Path)
@@ -663,7 +700,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_arg_parser().parse_args(argv)
-    payload = run_fixture_smoke() if args.fixture_smoke else {"ok": True, "kind": "reflection_space"}
+    payload = run_fixture_smoke() if args.fixture_smoke else default_reflection_space_card()
     text = json.dumps(payload, ensure_ascii=False, indent=None if args.json else 2)
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)

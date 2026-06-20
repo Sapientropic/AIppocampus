@@ -12,7 +12,11 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from aippocampus_runtime.contracts import canonical_foreground_action_fields
+from aippocampus_runtime.contracts import (
+    canonical_foreground_action_fields,
+    foreground_shell_action,
+    foreground_template_action,
+)
 from aippocampus_runtime.registry.api import registry_paths
 from aippocampus_runtime.source.agent_self_note_actions import (
     append_error_payload as build_append_error_payload,
@@ -193,7 +197,7 @@ def _public_append_note(row: Mapping[str, Any]) -> dict[str, Any]:
         "source_refs_are_reopen_routes_not_proof_of_note": True,
         "source_reopen_required_before_claim": True,
     }
-    public["agent_next_action"] = (
+    public["recovery_guidance"] = (
         "Treat this as direction-only atmosphere; reopen attached source before any "
         "user, world, or source factual claim."
     )
@@ -392,6 +396,29 @@ def _append_error_payload(code: str, details: Mapping[str, Any] | None = None) -
 
 def _append_receipt_boundary(row: Mapping[str, Any]) -> dict[str, Any]:
     source_ref_count = int(row.get("source_ref_count") or 0)
+    note_id = str(row.get("note_id") or "").strip()
+    if source_ref_count:
+        primary = foreground_shell_action(
+            action_id="read_self_note_receipt",
+            label="Read the self-note receipt",
+            command=f"aippocampus self-note read {note_id} --json" if note_id else "aippocampus self-note list --json",
+            why="Reopen this direction-only note as a receipt, then reopen attached source before factual claims.",
+            mutation_risk="read_only",
+            claim_boundary="direction_only_note_not_source_truth",
+        )
+    else:
+        primary = foreground_template_action(
+            action_id="prefer_current_thread_self_note_route",
+            label="Attach a current-thread route for future self-notes",
+            command_template='aippocampus self-note append --current-thread "{note_text}" --json',
+            requires=["note_text"],
+            why=(
+                "This receipt is source-less scent; use --current-thread or source refs "
+                "when a future note should be reopenable."
+            ),
+            mutation_risk="explicit_self_note_write",
+            claim_boundary="direction_only_note_not_source_truth",
+        )
     return {
         "authority": str(row.get("authority") or "direction_only"),
         "support_level": str(row.get("support_level") or "scent"),
@@ -403,7 +430,7 @@ def _append_receipt_boundary(row: Mapping[str, Any]) -> dict[str, Any]:
             "source_ref_count": source_ref_count,
             "source_less_direction_only": source_ref_count == 0,
         },
-        "agent_next_action": (
+        "recovery_guidance": (
             "A source route was attached; reopen it before any factual claim."
             if source_ref_count
             else (
@@ -411,6 +438,7 @@ def _append_receipt_boundary(row: Mapping[str, Any]) -> dict[str, Any]:
                 "reopenable route exists; use search/agent recall for source-backed facts."
             )
         ),
+        **canonical_foreground_action_fields(primary),
     }
 
 
@@ -645,7 +673,7 @@ before quoting or deciding from memory.""",
                 print(json.dumps(payload, ensure_ascii=False, indent=2))
             else:
                 print("self-note read needs a note_id", file=sys.stderr)
-                formatted = format_action_for_human(payload.get("agent_next_action"))
+                formatted = format_action_for_human(payload.get("foreground_action"))
                 print("Next: " + (formatted[0] if formatted else ""), file=sys.stderr)
             return 2
         row = next(
@@ -664,10 +692,10 @@ before quoting or deciding from memory.""",
             print("agent self-note: " + str(note.get("note_id") or ""))
             print("authority: direction_only; reopen source before factual claims")
             print("note: " + str(note.get("note_text") or ""))
-            print("next: " + str(payload.get("agent_next_action") or ""))
+            print("next: " + str(payload.get("foreground_action") or ""))
         else:
             print("self-note not found", file=sys.stderr)
-            formatted = format_action_for_human(payload.get("agent_next_action"))
+            formatted = format_action_for_human(payload.get("foreground_action"))
             print("Next: " + (formatted[0] if formatted else ""), file=sys.stderr)
         return 0 if row is not None else 1
     if args.command == "search":
@@ -738,7 +766,7 @@ before quoting or deciding from memory.""",
         empty_state = payload.get("empty_state")
         if not payload_rows and isinstance(empty_state, dict):
             print(str(empty_state.get("message") or ""))
-            formatted = format_action_for_human(empty_state.get("agent_next_action"))
+            formatted = format_action_for_human(empty_state.get("foreground_action"))
             print("Next: " + (formatted[0] if formatted else ""))
     return 0
 
@@ -750,7 +778,7 @@ def _run_append(args: argparse.Namespace, *, text: str, notes_path: Path) -> int
             print(json.dumps(payload, ensure_ascii=False, indent=2))
         else:
             print("self-note append needs a short note.", file=sys.stderr)
-            formatted = format_action_for_human(payload.get("agent_next_action"))
+            formatted = format_action_for_human(payload.get("foreground_action"))
             if formatted:
                 print("Next: " + formatted[0], file=sys.stderr)
                 for line in formatted[1:]:

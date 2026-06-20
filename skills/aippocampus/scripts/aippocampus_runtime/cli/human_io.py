@@ -8,12 +8,15 @@ from collections.abc import Mapping
 from typing import Any, TextIO
 
 from aippocampus_runtime.cli.errors import cli_exit_code_for_error_code
+from aippocampus_runtime.contracts import strip_foreground_action_legacy_aliases
 from aippocampus_runtime.public_output import emit_public_text
 from aippocampus_runtime.safety import sanitize_external_model_payload
 
 
 def emit_json(payload: Mapping[str, Any], *, stream: TextIO | None = None) -> None:
-    safe_payload = sanitize_external_model_payload(dict(payload))
+    safe_payload = sanitize_external_model_payload(
+        strip_foreground_action_legacy_aliases(dict(payload))
+    )
     emit_public_text(json.dumps(safe_payload, ensure_ascii=False, indent=2), stream=stream or sys.stdout)
 
 

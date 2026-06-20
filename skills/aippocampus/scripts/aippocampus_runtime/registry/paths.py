@@ -24,9 +24,8 @@ def aippocampus_registry_resolution(home: Path | None = None) -> dict[str, Any]:
 
     `AIPPOCAMPUS_REGISTRY_DIR` is the exact provider-neutral registry root.
     `AIPPOCAMPUS_HOME` is an optional broader home concept whose registry lives
-    under `registry/`. Legacy Codex homes remain a fallback only, so existing
-    users keep their data while new non-Codex setups can avoid importing Codex
-    host helpers just to resolve AIppocampus storage.
+    under `registry/`. Codex homes remain a host fallback only; the old
+    `THREAD_MEMORY_REGISTRY_DIR` migration alias is intentionally not read.
     """
 
     env = os.environ.get("AIPPOCAMPUS_REGISTRY_DIR")
@@ -35,13 +34,6 @@ def aippocampus_registry_resolution(home: Path | None = None) -> dict[str, Any]:
             "path": str(Path(env)),
             "source": "AIPPOCAMPUS_REGISTRY_DIR",
             "legacy_fallback": False,
-        }
-    legacy_env = os.environ.get("THREAD_MEMORY_REGISTRY_DIR")
-    if legacy_env:
-        return {
-            "path": str(Path(legacy_env)),
-            "source": "THREAD_MEMORY_REGISTRY_DIR",
-            "legacy_fallback": True,
         }
     aippo_home = aippocampus_home()
     if aippo_home:

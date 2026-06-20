@@ -113,9 +113,9 @@ class InstallMemoryMaintenanceHookTests(unittest.TestCase):
         self.assertNotIn("command", payload)
         self.assertFalse(payload["privacy_boundary"]["local_path_serialized"])
         self.assertFalse(payload["privacy_boundary"]["hook_command_serialized"])
-        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
+        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v2")
         self.assertEqual(payload["status"], "installed_ready")
-        self.assertEqual(payload["agent_next_action"]["id"], "no_action_needed")
+        self.assertEqual(payload["foreground_action"]["id"], "no_action_needed")
         action_ids = [action["id"] for action in payload["safe_next_actions"]]
         self.assertIn("status", action_ids)
         self.assertIn("rollback", action_ids)
@@ -140,17 +140,19 @@ class InstallMemoryMaintenanceHookTests(unittest.TestCase):
     def test_public_status_has_foreground_action_card_for_missing_installed_and_partial(self) -> None:
         missing = installer.public_lifecycle_result(installer.status(self.hooks_json))
         self.assertEqual(missing["status"], "missing")
-        self.assertEqual(missing["agent_next_action"]["id"], "install_lifecycle_hooks")
+        self.assertEqual(missing["foreground_action"]["id"], "install_lifecycle_hooks")
         self.assertEqual(missing["claim_boundary"], "host_setup_not_memory_evidence")
-        self.assertTrue(
-            any(action["id"] == "install_lifecycle_hooks" for action in missing["safe_next_actions"])
+        self.assertNotIn(missing["foreground_action"], missing["safe_next_actions"])
+        self.assertNotIn(
+            "install_lifecycle_hooks",
+            {action["id"] for action in missing["safe_next_actions"]},
         )
 
         installer.install(self.hooks_json, timeout=12)
         installed = installer.public_lifecycle_result(installer.status(self.hooks_json))
         self.assertEqual(installed["status"], "installed")
-        self.assertEqual(installed["agent_next_action"]["id"], "try_first_recall_after_lifecycle_hooks")
-        self.assertEqual(installed["agent_next_action"]["mutation_risk"], "read_only")
+        self.assertEqual(installed["foreground_action"]["id"], "try_first_recall_after_lifecycle_hooks")
+        self.assertEqual(installed["foreground_action"]["mutation_risk"], "read_only")
         installed_action_ids = [action["id"] for action in installed["safe_next_actions"]]
         self.assertIn("check_lifecycle_hook_status", installed_action_ids)
         self.assertIn("rollback_lifecycle_hooks", installed_action_ids)
@@ -161,7 +163,7 @@ class InstallMemoryMaintenanceHookTests(unittest.TestCase):
         partial = installer.public_lifecycle_result(installer.status(self.hooks_json))
         encoded = json.dumps(partial, ensure_ascii=False)
         self.assertEqual(partial["status"], "partial")
-        self.assertEqual(partial["agent_next_action"]["id"], "refresh_lifecycle_hooks")
+        self.assertEqual(partial["foreground_action"]["id"], "refresh_lifecycle_hooks")
         self.assertIn("PostCompact", partial["missing_events"])
         self.assertNotIn(str(self.hooks_json), encoded)
         self.assertNotIn("aippocampus_runtime.hooks.lifecycle", encoded)

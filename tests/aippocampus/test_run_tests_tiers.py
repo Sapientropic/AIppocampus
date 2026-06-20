@@ -247,12 +247,32 @@ class RunTestsTierTests(unittest.TestCase):
         self.assertEqual(report["tiers"]["quick"]["budget"]["test_count_status"], "within_target")
         self.assertEqual(report["tiers"]["pr"]["budget"]["module_count_target"], 70)
         self.assertEqual(report["tiers"]["pr"]["budget"]["test_count_target"], 500)
+        self.assertEqual(report["tiers"]["pr"]["budget"]["budget_outcome"], "within_target")
+        self.assertIsNone(report["tiers"]["pr"]["budget"]["recommended_action"])
         self.assertTrue(
             any(
                 "broad-pr aliases" in limitation
                 for limitation in report["known_limitations"]
             ),
         )
+
+    def test_count_budget_surfaces_actionable_drift_without_hard_failing(self) -> None:
+        budget = run_tests.count_budget_for_tier(
+            "pr",
+            module_count=71,
+            test_count=501,
+        )
+
+        self.assertIsNotNone(budget)
+        assert budget is not None
+        self.assertEqual(budget["module_count_status"], "over_target")
+        self.assertEqual(budget["test_count_status"], "over_target")
+        self.assertEqual(budget["budget_outcome"], "over_target_action_recommended")
+        self.assertEqual(
+            budget["recommended_action"]["id"],
+            "review_pr_tier_budget_drift",
+        )
+        self.assertIn("soft drift", budget["recommended_action"]["why"])
 
     def test_report_json_cli_prints_report_without_running_tests(self) -> None:
         report = {

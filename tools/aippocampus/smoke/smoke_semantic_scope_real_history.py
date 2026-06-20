@@ -847,7 +847,7 @@ def run_semantic_scope_real_history_smoke(
     live: bool = False,
     write_sidecars: bool = False,
     require_labels: bool = False,
-    api_key_env: str = "DEEPSEEK_API_KEY",
+    api_key_env: str = "AIPPOCAMPUS_DEEPSEEK_API_KEY",
     project: str | None = None,
     max_turns: int = 24,
     max_steps: int = 2,
@@ -1192,7 +1192,7 @@ def main() -> int:
     parser.add_argument("--live", action="store_true")
     parser.add_argument("--write-sidecars", action="store_true")
     parser.add_argument("--require-labels", action="store_true")
-    parser.add_argument("--api-key-env", default="DEEPSEEK_API_KEY")
+    parser.add_argument("--api-key-env", default="AIPPOCAMPUS_DEEPSEEK_API_KEY")
     parser.add_argument("--project")
     parser.add_argument("--max-turns", type=int, default=24)
     parser.add_argument("--max-steps", type=int, default=2)

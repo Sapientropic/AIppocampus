@@ -16,7 +16,7 @@ sys.path.insert(0, str(SCRIPTS))
 
 from aippocampus_runtime.macro import state as macro_state  # noqa: E402
 from aippocampus_runtime.navigation import attention_route_projection  # noqa: E402
-from aippocampus_runtime.contracts import executable_command_violations  # noqa: E402
+from aippocampus_runtime.contracts import executable_command_violations, foreground_action_contract_violations  # noqa: E402
 from aippocampus_runtime.recall import agent_continuity, agent_continuity_cli_support, background_findings, feedback_events  # noqa: E402
 from aippocampus_runtime.registry import api as registry_api  # noqa: E402
 
@@ -72,8 +72,12 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.tmp.cleanup()
 
     def assertCanonicalForegroundAction(self, payload: dict[str, object]) -> None:
-        self.assertEqual((payload["foreground_action_contract"], payload["agent_next_action"], payload["safe_next_actions"][0]),
-                         ("foreground-action-v1", payload["foreground_action"], payload["foreground_action"]))
+        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v2")
+        self.assertIsInstance(payload["foreground_action"], dict)
+        self.assertNotIn("agent_next_action", payload)
+        self.assertNotIn("next_safe_action", payload)
+        self.assertNotIn(payload["foreground_action"], payload.get("safe_next_actions", []))
+        self.assertEqual(foreground_action_contract_violations(payload), [])
 
     def _append_clean_rows(self, rows: list[dict[str, object]]) -> None:
         with (self.clean / "messages.jsonl").open("a", encoding="utf-8", newline="\n") as f:
@@ -312,7 +316,7 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertNotIn("findings", payload)
         self.assertEqual(payload["best_finding"]["finding_id"], "wm_dream_continuity")
         self.assertEqual(payload["best_finding"]["surface"], "dream_working_memory")
-        self.assertEqual(payload["agent_next_action"], payload["safe_next_actions"][0])
+        self.assertCanonicalForegroundAction(payload)
         finding = full_payload["findings"][0]
         self.assertEqual(finding["finding_id"], "wm_dream_continuity")
         self.assertEqual(finding["surface"], "dream_working_memory")
@@ -321,12 +325,12 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertTrue(finding["source"]["source_reopen_required_before_claims"])
         self.assertFalse(finding["source"]["raw_source_refs_emitted"])
         self.assertEqual(
-            payload["agent_next_action"]["id"],
+            payload["foreground_action"]["id"],
             "reopen_background_finding_source_route",
         )
-        self.assertIn("dreamfinding_continuity", payload["agent_next_action"]["command"])
+        self.assertIn("dreamfinding_continuity", payload["foreground_action"]["command"])
         self.assertEqual(
-            payload["agent_next_action"]["target"]["finding_id"],
+            payload["foreground_action"]["target"]["finding_id"],
             "wm_dream_continuity",
         )
         self.assertNotIn(
@@ -1127,9 +1131,8 @@ class AgentOptInContinuityTests(unittest.TestCase):
         )
         encoded = json.dumps(payload, ensure_ascii=False)
 
-        self.assertEqual(payload["next_safe_action"]["id"], "recall_with_cue_full_detail")
-        self.assertEqual(payload["next_safe_action_id"], "recall_with_cue_full_detail")
-        self.assertEqual(payload["agent_next_action"]["id"], "recall_with_cue_full_detail")
+        self.assertEqual(payload["foreground_action"]["id"], "recall_with_cue_full_detail")
+        self.assertCanonicalForegroundAction(payload)
         self.assertNotIn("follow_up_action", payload)
         self.assertNotIn("--last-recall", encoded)
 
@@ -1975,7 +1978,7 @@ class AgentOptInContinuityTests(unittest.TestCase):
             semantic["semantic_sidecar"]["contribution"],
             "diagnostic_only_no_selected_route_change",
         )
-        self.assertEqual(semantic["agent_next_action"], "reopen_source")
+        self.assertEqual(semantic["next_step_hint"], "reopen_source")
 
     def test_agent_recall_semantic_timeout_is_degraded_no_contribution(self) -> None:
         with patch(
@@ -2078,7 +2081,11 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertEqual(payload["foreground_action"]["action_type"], "use_project_working_guidance")
         self.assertNotIn("tool_name", payload["foreground_action"])
         self.assertNotIn("arguments", payload["foreground_action"])
-        refresh_action = payload["safe_next_actions"][1]
+        refresh_action = next(
+            action
+            for action in payload["safe_next_actions"]
+            if action["id"] == "refresh_aippo_guidance_for_task"
+        )
         self.assertEqual(refresh_action["tool_name"], "agent_aippo")
         self.assertEqual(refresh_action["arguments"], {"task": "benchmark reporting issue closeout"})
         self.assertEqual(
@@ -2195,7 +2202,7 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertEqual(proc.returncode, 2, proc.stderr)
         payload = json.loads(proc.stdout)
         encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True)
-        action = payload["agent_next_action"]
+        action = payload["foreground_action"]
 
         self.assertEqual(payload["status"], "needs_input")
         self.assertEqual(payload["error"]["code"], "aippo_task_required")

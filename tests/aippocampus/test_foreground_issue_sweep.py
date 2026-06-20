@@ -78,8 +78,9 @@ class ForegroundIssueSweepTests(unittest.TestCase):
         for proc in (long_proc, internal_proc):
             self.assertNotEqual(proc.returncode, 0)
             payload = json.loads(proc.stdout)
-            action = payload["safe_next_actions"][0]
+            action = payload["foreground_action"]
             encoded = json.dumps(payload, ensure_ascii=False)
+            self.assertEqual(action["id"], "recall_current_thread_context")
             self.assertNotIn("command", action)
             self.assertEqual(action["command_template"], 'aippocampus agent recall "{cue}" --json')
             self.assertTrue(action["cue_omitted_from_executable_command"])
@@ -97,11 +98,11 @@ class ForegroundIssueSweepTests(unittest.TestCase):
         self.assertEqual(dream.exit_code, 2)
         dream_payload = json.loads(dream.stdout)
         self.assertEqual(
-            dream_payload["agent_next_action"]["command_template"],
+            dream_payload["foreground_action"]["command_template"],
             'aippocampus agent background "{task_cue}" --json',
         )
-        self.assertNotIn("command", dream_payload["agent_next_action"])
-        self.assertEqual(dream_payload["agent_next_action"]["requires"], ["task_cue"])
+        self.assertNotIn("command", dream_payload["foreground_action"])
+        self.assertEqual(dream_payload["foreground_action"]["requires"], ["task_cue"])
         with tempfile.TemporaryDirectory() as tmp:
             dream_status = facade.run_command(
                 ["dream", "status", "--registry-dir", tmp, "--json"],
@@ -234,10 +235,12 @@ class ForegroundIssueSweepTests(unittest.TestCase):
             payload["summary"]["agent_callable_status"],
             "host_live_probe_ok_foreground_probe_not_checked",
         )
-        self.assertEqual(payload["agent_next_action"]["surface"], "agent_callable")
-        self.assertIn("--foreground-tools-visible --agent-json", payload["agent_next_action"]["command"])
-        self.assertNotIn("--foreground-key-tools-callable", payload["agent_next_action"]["command"])
-        self.assertEqual(payload["safe_next_actions"][1]["surface"], "operator_detail")
+        self.assertEqual(payload["foreground_action"]["surface"], "agent_callable")
+        self.assertIn("--foreground-tools-visible --agent-json", payload["foreground_action"]["command"])
+        self.assertNotIn("--foreground-key-tools-callable", payload["foreground_action"]["command"])
+        self.assertTrue(
+            any(action.get("surface") == "operator_detail" for action in payload["safe_next_actions"])
+        )
 
 
 if __name__ == "__main__":

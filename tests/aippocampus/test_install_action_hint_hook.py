@@ -93,28 +93,27 @@ class InstallActionHintHookTests(unittest.TestCase):
         result = installer.status(self.hooks_json)
 
         self.assertFalse(result["installed"])
-        self.assertEqual(result["agent_next_action"]["id"], "review_action_hint_guidance")
+        self.assertEqual(result["foreground_action"]["id"], "review_action_hint_guidance")
         action_ids = [action["id"] for action in result["safe_next_actions"]]
         self.assertEqual(
-            action_ids[:4],
+            action_ids[:3],
             [
-                "review_action_hint_guidance",
                 "check_action_hint_status",
                 "install_action_hint_hook",
                 "refresh_action_hint_cache",
             ],
         )
         self.assertEqual(
-            result["safe_next_actions"][0]["follow_up_action"]["id"],
+            result["foreground_action"]["follow_up_action"]["id"],
             "install_action_hint_hook",
         )
         self.assertEqual(
-            result["safe_next_actions"][2]["follow_up_action"]["id"],
+            result["safe_next_actions"][1]["follow_up_action"]["id"],
             "refresh_action_hint_cache",
         )
         self.assertNotIn(
             "refresh-cache --write",
-            result["agent_next_action"].get("command", ""),
+            result["foreground_action"].get("command", ""),
         )
 
     def test_status_reports_cache_records_without_leaking_cache_path(self) -> None:
@@ -151,10 +150,10 @@ class InstallActionHintHookTests(unittest.TestCase):
         self.assertTrue(result["cache_path_redacted"])
         self.assertEqual(result["frontstage_card"]["status"], "ready")
         self.assertTrue(result["frontstage_card"]["ready"])
-        self.assertEqual(result["agent_next_action"]["id"], "check_action_hint_status")
-        self.assertEqual(result["agent_next_action"]["mutation_risk"], "read_only")
+        self.assertEqual(result["foreground_action"]["id"], "check_action_hint_status")
+        self.assertEqual(result["foreground_action"]["mutation_risk"], "read_only")
         self.assertIn("safe_next_actions", result)
-        self.assertIn("check_action_hint_status", [action["id"] for action in result["safe_next_actions"]])
+        self.assertNotIn("check_action_hint_status", [action["id"] for action in result["safe_next_actions"]])
         self.assertEqual(result["claim_boundary"], result["frontstage_card"]["claim_boundary"])
         self.assertNotIn(str(cache_path), encoded)
 
@@ -166,26 +165,30 @@ class InstallActionHintHookTests(unittest.TestCase):
         action_ids = [action["id"] for action in result["safe_next_actions"]]
 
         self.assertEqual(result["frontstage_card"]["status"], "with_missing_cache_file")
-        self.assertEqual(result["agent_next_action"]["id"], "refresh_action_hint_cache")
-        self.assertEqual(result["agent_next_action"]["mutation_risk"], "explicit_local_cache_write")
-        self.assertIn("refresh_action_hint_cache", action_ids)
+        self.assertEqual(result["foreground_action"]["id"], "refresh_action_hint_cache")
+        self.assertEqual(result["foreground_action"]["mutation_risk"], "explicit_local_cache_write")
+        self.assertNotIn("refresh_action_hint_cache", action_ids)
         self.assertIn("check_action_hint_status", action_ids)
         self.assertIn("rollback_action_hint_hook", action_ids)
         self.assertEqual(
-            next(action for action in result["safe_next_actions"] if action["id"] == "refresh_action_hint_cache")["mutation_risk"],
+            result["foreground_action"]["mutation_risk"],
             "explicit_local_cache_write",
         )
+        action_commands = {
+            result["foreground_action"]["command"],
+            *(
+                action["command"]
+                for action in result["safe_next_actions"]
+                if action.get("command") and action["id"] != "check_action_hint_status"
+            ),
+        }
         self.assertEqual(
             {
                 step["command"]
                 for step in card_steps
                 if step.get("command") and step.get("label") != "check"
             },
-            {
-                action["command"]
-                for action in result["safe_next_actions"]
-                if action.get("command") and action["id"] != "check_action_hint_status"
-            },
+            action_commands,
         )
 
     def test_status_distinguishes_missing_empty_expired_and_malformed_cache(self) -> None:
@@ -243,8 +246,8 @@ class InstallActionHintHookTests(unittest.TestCase):
         self.assertFalse(result["hot_path_active"])
         self.assertFalse(card["hot_path_active"])
         self.assertEqual(card["setup_role"], "cleanup_or_prepare_required")
-        self.assertEqual(result["agent_next_action"]["id"], "refresh_action_hint_cache")
-        self.assertEqual(result["agent_next_action"]["mutation_risk"], "explicit_local_cache_write")
+        self.assertEqual(result["foreground_action"]["id"], "refresh_action_hint_cache")
+        self.assertEqual(result["foreground_action"]["mutation_risk"], "explicit_local_cache_write")
         self.assertIn(
             "check_action_hint_status",
             [action["id"] for action in result["safe_next_actions"]],
@@ -288,9 +291,9 @@ class InstallActionHintHookTests(unittest.TestCase):
         self.assertEqual(payload["cache_path"], "<redacted:cache-jsonl>")
         self.assertFalse(payload["privacy_boundary"]["local_path_serialized"])
         self.assertFalse(payload["privacy_boundary"]["hook_command_serialized"])
-        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
+        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v2")
         self.assertEqual(payload["status"], "installed_but_not_ready")
-        self.assertEqual(payload["agent_next_action"]["id"], "refresh_action_hint_cache")
+        self.assertEqual(payload["foreground_action"]["id"], "refresh_action_hint_cache")
         action_ids = [action["id"] for action in payload["safe_next_actions"]]
         self.assertIn("status", action_ids)
         self.assertIn("rollback", action_ids)
@@ -323,7 +326,7 @@ class InstallActionHintHookTests(unittest.TestCase):
         self.assertTrue(payload["installed"])
         self.assertEqual(payload["cache_status"], "with_empty_cache")
         self.assertEqual(payload["status"], "installed_but_not_ready")
-        self.assertEqual(payload["agent_next_action"]["id"], "refresh_action_hint_cache")
+        self.assertEqual(payload["foreground_action"]["id"], "refresh_action_hint_cache")
         self.assertIn("aippocampus hooks action refresh-cache --write --json", encoded)
         self.assertIn("aippocampus hooks action status --json", encoded)
         self.assertIn("aippocampus hooks action uninstall --json", encoded)

@@ -354,7 +354,7 @@ def run_agent(
     if not api_key:
         raise RuntimeError(
             "missing DeepSeek API key; set AIPPOCAMPUS_DEEPSEEK_API_KEY "
-            "(legacy DEEPSEEK_API_KEY is still a fallback) or pass --api-key-env"
+            "or pass --api-key-env with an explicit canonical env var"
         )
 
     messages = [

@@ -426,9 +426,9 @@ class SpendDoctorTests(unittest.TestCase):
             }
         )
 
-        self.assertEqual(card["foreground_action_contract"], "foreground-action-v1")
-        self.assertEqual(card["foreground_action"], card["agent_next_action"])
-        self.assertEqual(card["safe_next_actions"][0], card["foreground_action"])
+        self.assertEqual(card["foreground_action_contract"], "foreground-action-v2")
+        self.assertIn("foreground_action", card)
+        self.assertNotIn(card["foreground_action"], card["safe_next_actions"])
         self.assertEqual(card["foreground_action"]["id"], "continue_with_spend_guardrails")
         self.assertTrue(card["foreground_action"]["continue_without_command"])
         self.assertNotIn("action_id", card["foreground_action"])
@@ -489,9 +489,9 @@ class SpendDoctorTests(unittest.TestCase):
             payload["decision"]["safe_next_command"],
             "aippocampus doctor spend --detail full --json",
         )
-        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
-        self.assertEqual(payload["foreground_action"], payload["agent_next_action"])
-        self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
+        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v2")
+        self.assertIn("foreground_action", payload)
+        self.assertNotIn(payload["foreground_action"], payload["safe_next_actions"])
         self.assertEqual(payload["foreground_action"]["id"], "continue_with_spend_guardrails")
         self.assertTrue(payload["foreground_action"]["continue_without_command"])
         self.assertNotIn("action_id", payload["foreground_action"])
@@ -567,9 +567,9 @@ class SpendDoctorTests(unittest.TestCase):
         self.assertIn("blocked stale queue", report["decision"]["reason"])
         self.assertIn("warm_ambient", report["decision"]["routes_to_pause_or_inspect"])
         self.assertEqual(report["decision"]["warm_queue_health"]["queue_state"], "blocked_stale_pending")
-        self.assertEqual(card["foreground_action_contract"], "foreground-action-v1")
-        self.assertEqual(card["foreground_action"], card["agent_next_action"])
-        self.assertEqual(card["safe_next_actions"][0], card["foreground_action"])
+        self.assertEqual(card["foreground_action_contract"], "foreground-action-v2")
+        self.assertIn("foreground_action", card)
+        self.assertNotIn(card["foreground_action"], card["safe_next_actions"])
         self.assertEqual(card["foreground_action"]["id"], "inspect_warm_ambient_queue")
         self.assertNotIn("action_id", card["foreground_action"])
         self.assertEqual(card["foreground_action"]["command"], "aippocampus warm status --json")

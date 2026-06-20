@@ -31,7 +31,6 @@ from aippocampus_runtime.contracts import (
     canonical_foreground_action_fields,
     foreground_shell_action,
 )
-from aippocampus_runtime.legacy_aliases import env_legacy_alias_diagnostics
 from aippocampus_runtime.model.routing import (
     DEFAULT_DEEPSEEK_API_KEY_ENV,
     ModelRoute,
@@ -344,7 +343,6 @@ def build_provider_doctor_report(
     resolved_provider_env_var = str(provider_env_var or _route_provider_env_var(route) or "").strip()
     public_env_name = _public_token(resolved_provider_env_var, fallback=DEFAULT_PROVIDER_ENV_VAR)
     current_visible = _env_var_is_visible(resolved_provider_env_var)
-    legacy_aliases = env_legacy_alias_diagnostics()
     cognitive_worker = resolve_cognitive_worker_mode(
         api_key_env=resolved_provider_env_var,
         provider_key_visible=current_visible,
@@ -385,7 +383,6 @@ def build_provider_doctor_report(
             "value_checked": False,
             "value_printed": False,
         },
-        "legacy_aliases": legacy_aliases,
         "cognitive_worker": cognitive_worker,
         "background_model_consent": {
             "required_env": BACKGROUND_MODEL_CONSENT_ENV,
@@ -417,7 +414,6 @@ def build_provider_doctor_report(
             "local_paths_included": False,
             "base_url_value_printed": False,
             "checked_env_var_names": [public_env_name],
-            "legacy_alias_values_printed": False,
             "credential_discovery_values_printed": False,
         },
         "recommended_actions": _recommended_actions(
@@ -439,7 +435,7 @@ def build_provider_doctor_report(
         report["credential_validation"] = {
             "status": "not_run",
             "reason": "validate_credentials_requires_explicit_discovery_source",
-            "agent_next_action": (
+            "operator_next_action": (
                 "Use --discover-credential-sources with --credential-dotenv <path> "
                 "when you want an explicit safe credential probe. Plain provider "
                 "doctor remains presence-only."

@@ -69,7 +69,7 @@ class SubconsciousJobsTests(unittest.TestCase):
                 model_route={
                     "provider": "deepseek",
                     "base_url": "https://api.deepseek.example/v1",
-                    "api_key_env": "DEEPSEEK_API_KEY",
+                    "api_key_env": "AIPPOCAMPUS_DEEPSEEK_API_KEY",
                 },
             )
 

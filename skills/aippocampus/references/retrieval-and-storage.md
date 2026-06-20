@@ -522,7 +522,7 @@ explicit `--frontier-project`, the command infers the current `--cwd` project
 and includes compact `sample_findings` in the frontier result so an agent can
 judge quality before writing. Use `--frontier-project *` only for a global
 whole-machine frontier pass. Explicit `smoke`/`write` modes are DeepSeek-backed
-quality checks: missing `DEEPSEEK_API_KEY`, model failures, partial failures, or
+quality checks: missing `AIPPOCAMPUS_DEEPSEEK_API_KEY`, model failures, partial failures, or
 zero accepted findings return a partial/blocking frontier status instead of
 quietly falling back to deterministic registry maintenance.
 
@@ -762,8 +762,8 @@ not as online learning.
 `AIPPOCAMPUS_VAULT` when set, otherwise `~/AIppocampus Memory`. Optional
 Publish-like shell assets can be supplied with `AIPPOCAMPUS_STYLE_SOURCE`,
 `AIPPOCAMPUS_SCRIPT_SOURCE`, `AIPPOCAMPUS_SITE_MARK`, and
-`AIPPOCAMPUS_SITE_TITLE`. The older `CODEX_MEMORY_*` names are accepted only as
-backward-compatible fallbacks. Generated content should stay inside `Threads/`,
+`AIPPOCAMPUS_SITE_TITLE`. The older `CODEX_MEMORY_*` names are retired and are
+not read by runtime paths. Generated content should stay inside `Threads/`,
 `_dashboards/`, and the named CSS snippet. Do not overwrite user-authored vault
 notes.
 

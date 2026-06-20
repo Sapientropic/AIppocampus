@@ -179,7 +179,7 @@ def provider_status_report(
     storage = aippocampus_registry_resolution()
     return {
         "ok": True,
-        "agent_next_action": primary_next_action["agent_next_action"],
+        "foreground_guidance": primary_next_action["foreground_guidance"],
         "primary_next_action": primary_next_action,
         "data": {
             "provider_scope": provider_scope,
@@ -218,7 +218,7 @@ def _with_provider_next_action(item: dict) -> dict:
             if detected and state != "blocked"
             else "generic_import_needs_input"
         )
-        public["agent_next_action"] = (
+        public["foreground_guidance"] = (
             "Generic JSONL is explicit file import. Use it when the user has an export "
             "file, preview the import path, and avoid no-input provider scans."
         )
@@ -230,7 +230,7 @@ def _with_provider_next_action(item: dict) -> dict:
         return public
     if detected and current_match:
         public["next_action_code"] = "try_search_existing_registry"
-        public["agent_next_action"] = (
+        public["foreground_guidance"] = (
             "Use `aippocampus search` or `aippocampus agent recall` for old/source-backed "
             "memory before previewing new registration."
         )
@@ -239,7 +239,7 @@ def _with_provider_next_action(item: dict) -> dict:
         return public
     if detected and not current_match and dry_run and state != "blocked":
         public["next_action_code"] = "preview_current_project_registration"
-        public["agent_next_action"] = (
+        public["foreground_guidance"] = (
             "History exists, but it does not appear to match the current project. Search old "
             "registered memory if the cue is global; otherwise preview current-project "
             "registration before writing."
@@ -253,13 +253,13 @@ def _with_provider_next_action(item: dict) -> dict:
         return public
     if not detected:
         public["next_action_code"] = "provider_not_detected"
-        public["agent_next_action"] = (
+        public["foreground_guidance"] = (
             "Use existing registered memory if available, configure this provider, or skip "
             "onboarding for this surface."
         )
         return public
     public["next_action_code"] = "preview_before_write"
-    public["agent_next_action"] = (
+    public["foreground_guidance"] = (
         "Preview registration with --dry-run before writing local clean-source history."
     )
     public["preview_command"] = f"aippocampus onboard --provider {provider} --dry-run --json"
@@ -272,7 +272,7 @@ def _provider_status_primary_decision(providers: list[dict], provider_scope: str
             "provider": "generic-jsonl",
             "code": "import_conversation_preview",
             "decision": "preview explicit generic JSONL import",
-            "agent_next_action": (
+            "foreground_guidance": (
                 "Use generic JSONL only when the user has an export file; preview "
                 "that file import before writing."
             ),
@@ -289,7 +289,7 @@ def _provider_status_primary_decision(providers: list[dict], provider_scope: str
                 "provider": item.get("provider"),
                 "code": "search_existing_registered_memory",
                 "decision": "search existing registered memory first",
-                "agent_next_action": (
+                "foreground_guidance": (
                     "Search existing source-backed memory for the cue before previewing "
                     "another registration write."
                 ),
@@ -306,7 +306,7 @@ def _provider_status_primary_decision(providers: list[dict], provider_scope: str
                 "provider": provider,
                 "code": "preview_current_project_registration",
                 "decision": f"preview current-project registration with {provider}",
-                "agent_next_action": (
+                "foreground_guidance": (
                     "Preview the best-fit local provider registration before writing "
                     "clean-source history."
                 ),
@@ -317,7 +317,7 @@ def _provider_status_primary_decision(providers: list[dict], provider_scope: str
         "provider": "registry",
         "code": "search_existing_registered_memory",
         "decision": "search existing registered memory first",
-        "agent_next_action": (
+        "foreground_guidance": (
             "Search existing registered memory first; configure or import a provider only "
             "if no source-backed result appears."
         ),
@@ -335,7 +335,7 @@ def _provider_status_next_actions(providers: list[dict]) -> list[dict]:
         action = {
             "provider": item.get("provider"),
             "code": code,
-            "agent_next_action": item.get("agent_next_action"),
+            "foreground_guidance": item.get("foreground_guidance"),
         }
         for key in (
             "search_command",
@@ -493,8 +493,8 @@ def render_status_text(report: dict) -> str:
         )
         if item.get("scan_status") == "partial_frontstage_sample":
             lines.append("  scan: partial frontstage sample; use --operator-json for operator inventory")
-        if item.get("agent_next_action"):
-            lines.append(f"  next: {item.get('agent_next_action')}")
+        if item.get("foreground_guidance"):
+            lines.append(f"  next: {item.get('foreground_guidance')}")
         if item.get("preview_command"):
             lines.append(f"  preview: {item.get('preview_command')}")
     auto = data.get("auto", {})

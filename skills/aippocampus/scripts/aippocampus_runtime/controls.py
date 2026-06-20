@@ -252,7 +252,7 @@ def _scoped_control_payload(args: argparse.Namespace) -> tuple[dict[str, Any], i
             "status": "scoped_control_captured"
             if payload.get("write_boundary", {}).get("wrote_event")
             else "not_quieted_yet",
-            "agent_next_action": (
+            "next_step_hint": (
                 "continue the task; this scoped local feedback can reduce future route pressure"
                 if payload.get("write_boundary", {}).get("wrote_event")
                 else "run aippocampus controls --json to choose a scoped retry path"
@@ -603,7 +603,7 @@ def main(argv: list[str] | None = None) -> int:
         print("surface: " + str(payload.get("surface") or "unknown"))
         boundary = payload.get("write_boundary") or {}
         print("storage: " + str(boundary.get("storage") or "receipt_only"))
-        print("next: " + str(payload.get("next_safe_action") or payload.get("agent_next_action") or "continue"))
+        print("next: " + str(payload.get("foreground_action") or payload.get("next_step_hint") or "continue"))
     return code
 
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from aippocampus_runtime.contracts import canonical_foreground_action_fields
 from aippocampus_runtime.mcp.public_projection import public_payload
 
 
@@ -33,7 +34,7 @@ def missing_input_recovery_card(
 ) -> dict[str, Any]:
     details: dict[str, Any] = {
         "required_any": required_any,
-        "agent_next_action": (
+        "next_step_hint": (
             f"Call {safe_next_actions[0]['tool_name']} with the suggested arguments."
             if safe_next_actions
             else None
@@ -42,12 +43,13 @@ def missing_input_recovery_card(
     }
     if legacy_details:
         details.update(legacy_details)
+    if safe_next_actions:
+        details["foreground_action"] = dict(safe_next_actions[0])
     payload: dict[str, Any] = {
         "kind": "aippocampus_mcp_missing_input_recovery",
         "ok": False,
         "status": "needs_input",
         "surface_class": "foreground_recovery_card",
-        "foreground_action_contract": "foreground-action-v1",
         "error": {
             "code": code,
             "message": message,
@@ -55,9 +57,10 @@ def missing_input_recovery_card(
             "required_any": required_any,
             "details": details,
         },
-        "agent_next_action": safe_next_actions[0] if safe_next_actions else None,
-        "foreground_action": safe_next_actions[0] if safe_next_actions else None,
-        "safe_next_actions": safe_next_actions,
+        **canonical_foreground_action_fields(
+            safe_next_actions[0] if safe_next_actions else {},
+            safe_next_actions=safe_next_actions,
+        ),
         "source_boundary": {
             "claim_authority": "none_until_source_reopened",
             "navigation_only": True,

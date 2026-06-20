@@ -277,7 +277,7 @@ class LongMemEvalBenchmarkTests(unittest.TestCase):
             write_oracle_fixture(path)
             with patched_oracle_split(path), patch.dict(
                 "os.environ",
-                {"DEEPSEEK_API_KEY": "test-key"},
+                {"AIPPOCAMPUS_DEEPSEEK_API_KEY": "test-key"},
             ), patch(
                 "source_evidence.standard_public.call_chat_json",
                 side_effect=AssertionError("provider should not be called"),
@@ -356,7 +356,7 @@ class LongMemEvalBenchmarkTests(unittest.TestCase):
             write_oracle_fixture(path)
             with patched_oracle_split(path), patch.dict(
                 "os.environ",
-                {"DEEPSEEK_API_KEY": "test-key"},
+                {"AIPPOCAMPUS_DEEPSEEK_API_KEY": "test-key"},
             ), patch("source_evidence.standard_public.call_chat_json", fake_call_chat_json):
                 payload = benchmark.run_longmemeval_benchmark(
                     split_name="longmemeval-v1-oracle",

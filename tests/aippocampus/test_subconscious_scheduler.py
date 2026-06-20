@@ -72,7 +72,7 @@ class SubconsciousSchedulerTests(unittest.TestCase):
             "min_new_turns": 5,
             "max_turns": 96,
             "max_findings": 220,
-            "api_key_env": "DEEPSEEK_API_KEY",
+            "api_key_env": "AIPPOCAMPUS_DEEPSEEK_API_KEY",
             "dry_run": False,
         }
         defaults.update(overrides)
@@ -82,7 +82,7 @@ class SubconsciousSchedulerTests(unittest.TestCase):
         return {
             "AIPPOCAMPUS_SUBCONSCIOUS_HOOK": "1",
             "AIPPOCAMPUS_BACKGROUND_MODEL_CONSENT": "1",
-            "DEEPSEEK_API_KEY": "x",
+            "AIPPOCAMPUS_DEEPSEEK_API_KEY": "x",
         }
 
     def test_project_for_cwd_uses_registered_workspace(self) -> None:
@@ -177,7 +177,7 @@ class SubconsciousSchedulerTests(unittest.TestCase):
     def test_maybe_start_respects_subconscious_hook_disable_env(self) -> None:
         with patch.dict(
             os.environ,
-            {"AIPPOCAMPUS_SUBCONSCIOUS_HOOK": "off", "DEEPSEEK_API_KEY": "x"},
+            {"AIPPOCAMPUS_SUBCONSCIOUS_HOOK": "off", "AIPPOCAMPUS_DEEPSEEK_API_KEY": "x"},
             clear=True,
         ):
             result = scheduler.maybe_start(self.args(dry_run=True))
@@ -188,7 +188,7 @@ class SubconsciousSchedulerTests(unittest.TestCase):
     def test_maybe_start_requires_background_model_consent_even_when_key_is_visible(self) -> None:
         with patch.dict(
             os.environ,
-            {"AIPPOCAMPUS_SUBCONSCIOUS_HOOK": "1", "DEEPSEEK_API_KEY": "x"},
+            {"AIPPOCAMPUS_SUBCONSCIOUS_HOOK": "1", "AIPPOCAMPUS_DEEPSEEK_API_KEY": "x"},
             clear=True,
         ):
             result = scheduler.maybe_start(self.args(dry_run=True))
@@ -203,7 +203,7 @@ class SubconsciousSchedulerTests(unittest.TestCase):
             {
                 "AIPPOCAMPUS_SUBCONSCIOUS_HOOK": "1",
                 "AIPPOCAMPUS_BACKGROUND_MODEL_CONSENT": "1",
-                "DEEPSEEK_API_KEY": "x",
+                "AIPPOCAMPUS_DEEPSEEK_API_KEY": "x",
             },
             clear=True,
         ):

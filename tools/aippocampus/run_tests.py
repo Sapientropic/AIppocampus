@@ -88,16 +88,36 @@ def count_budget_for_tier(
         )
     else:
         return None
+    module_status = _target_status(
+        module_count,
+        budget["module_count_target"],
+    )
+    test_status = _target_status(
+        test_count,
+        budget["test_count_target"],
+    )
+    over_target = module_status == "over_target" or test_status == "over_target"
     return {
         "module_count_target": budget["module_count_target"],
         "test_count_target": budget["test_count_target"],
-        "module_count_status": _target_status(
-            module_count,
-            budget["module_count_target"],
+        "module_count_status": module_status,
+        "test_count_status": test_status,
+        "budget_outcome": (
+            "over_target_action_recommended" if over_target else "within_target"
         ),
-        "test_count_status": _target_status(
-            test_count,
-            budget["test_count_target"],
+        "recommended_action": (
+            {
+                "id": f"review_{normalized_tier}_tier_budget_drift",
+                "label": f"Review {label} tier budget drift",
+                "mutation_risk": "planning_only",
+                "why": (
+                    "Split heavy modules, reclassify tier membership, or update "
+                    "targets with dated rationale; do not turn this soft drift into "
+                    "a hard gate without review."
+                ),
+            }
+            if over_target
+            else None
         ),
         "note": note,
         "tier_label": label,

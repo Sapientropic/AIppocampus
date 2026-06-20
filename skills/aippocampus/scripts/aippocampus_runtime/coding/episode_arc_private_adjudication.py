@@ -627,7 +627,10 @@ def summary_projection(report: Mapping[str, Any]) -> dict[str, Any]:
     }
     no_op = (not counts_deferred) and episode_arc_count == 0
     action = no_op_action if no_op else route_action
-    action_fields = canonical_foreground_action_fields(action, safe_next_actions=[action])
+    action_fields = canonical_foreground_action_fields(
+        action,
+        safe_next_actions=[] if no_op else [owner_route],
+    )
     return {
         "kind": "aippocampus_episode_arcs_summary",
         "ok": bool(report.get("ok")),

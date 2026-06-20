@@ -177,7 +177,7 @@ def timing_affordance_feedback_gate(
     if not triggered:
         budget["decision"] = "keep"
         budget["available"] = True
-        budget["budget"]["agent_next_action"] = "no_budget_change_needed"
+        budget["budget"]["next_step_hint"] = "no_budget_change_needed"
     return {
         "kind": "timing_affordance_feedback_gate",
         "scope": str(scope or "macro_timing")[:120],

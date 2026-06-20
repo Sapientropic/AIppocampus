@@ -313,14 +313,14 @@ class TelepathyHandoffStoreTests(unittest.TestCase):
                 "no_matching_telepathy_handoffs",
             )
             self.assertEqual(
-                payload["empty_state"]["agent_next_action"]["id"],
+                payload["empty_state"]["foreground_action"]["id"],
                 "continue_with_normal_recall",
             )
             action_ids = [
                 action["id"]
                 for action in payload["empty_state"]["safe_next_actions"]
             ]
-            self.assertIn("continue_with_normal_recall", action_ids)
+            self.assertNotIn("continue_with_normal_recall", action_ids)
             self.assertIn("create_explicit_handoff", action_ids)
             self.assertNotIn("create_examples", payload["empty_state"])
             self.assertIn("next:", text_proc.stdout)
@@ -475,9 +475,8 @@ class TelepathyHandoffStoreTests(unittest.TestCase):
         self.assertEqual(missing_json.returncode, 1)
         missing_payload = json.loads(missing_json.stdout)
         self.assertEqual(missing_payload["error"]["code"], "handoff_not_found")
-        self.assertEqual(missing_payload["foreground_action_contract"], "foreground-action-v1")
-        self.assertEqual(missing_payload["agent_next_action"], missing_payload["foreground_action"])
-        self.assertEqual(missing_payload["safe_next_actions"][0], missing_payload["foreground_action"])
+        self.assertEqual(missing_payload["foreground_action_contract"], "foreground-action-v2")
+        self.assertNotIn(missing_payload["foreground_action"], missing_payload["safe_next_actions"])
         self.assertEqual(missing_payload["foreground_action"]["id"], "list_telepathy_handoffs")
         self.assertIn("telepathy list --status all", missing_payload["foreground_action"]["command"])
         self.assertNotIn("follow_up_commands", missing_payload)

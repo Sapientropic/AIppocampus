@@ -407,9 +407,9 @@ class ActionHintCacheTests(unittest.TestCase):
         result = json.loads(stdout.getvalue())
 
         self.assertEqual(code, 0)
-        self.assertEqual(result["foreground_action_contract"], "foreground-action-v1")
-        self.assertEqual(result["agent_next_action"], result["foreground_action"])
-        self.assertEqual(result["safe_next_actions"][0], result["foreground_action"])
+        self.assertEqual(result["foreground_action_contract"], "foreground-action-v2")
+        self.assertNotIn("agent_next_action", result)
+        self.assertNotIn(result["foreground_action"], result["safe_next_actions"])
         self.assertEqual(result["foreground_action"]["id"], "review_semantic_guidance_before_cache")
         self.assertIn("readiness", result)
         self.assertNotIn("cache", result)
@@ -436,9 +436,9 @@ class ActionHintCacheTests(unittest.TestCase):
 
         self.assertEqual(code, 0)
         self.assertTrue(result["write_requested"])
-        self.assertEqual(result["foreground_action_contract"], "foreground-action-v1")
-        self.assertEqual(result["agent_next_action"], result["foreground_action"])
-        self.assertEqual(result["safe_next_actions"][0], result["foreground_action"])
+        self.assertEqual(result["foreground_action_contract"], "foreground-action-v2")
+        self.assertNotIn("agent_next_action", result)
+        self.assertNotIn(result["foreground_action"], result["safe_next_actions"])
         self.assertNotIn("cache", result)
         self.assertNotIn("effectiveness_ledger_intake", result)
 

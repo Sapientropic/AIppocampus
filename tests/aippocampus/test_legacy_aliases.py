@@ -14,20 +14,12 @@ from aippocampus_runtime.legacy_aliases import legacy_alias_diagnostics  # noqa:
 
 
 class LegacyAliasDiagnosticsTests(unittest.TestCase):
-    def test_diagnostics_report_aliases_without_values_or_paths(self) -> None:
+    def test_diagnostics_report_remaining_path_compat_without_retired_env_aliases(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             workspace = root / "workspace"
             workspace.mkdir()
             report = legacy_alias_diagnostics(
-                env={
-                    "CODEX_MEMORY_VAULT": str(root / "private-vault"),
-                    "AIPPOCAMPUS_STYLE_SOURCE": "canonical-style.css",
-                    "CODEX_MEMORY_STYLE_SOURCE": "legacy-style.css",
-                    "DEEPSEEK_API_KEY": "legacy-secret-key",
-                    "DEEPSEEK_MODEL": "legacy-flash-model",
-                    "AIIPPOCAMPUS_SUBCONSCIOUS_HOOK": "0",
-                },
                 registry_resolution={
                     "source": "CODEX_HOME/aippocampus-registry",
                     "legacy_fallback": True,
@@ -40,21 +32,15 @@ class LegacyAliasDiagnosticsTests(unittest.TestCase):
             )
 
         active = {entry["alias"] for entry in report["active"]}
-        shadowed = {entry["alias"] for entry in report["shadowed"]}
         encoded = json.dumps(report, ensure_ascii=False)
 
         self.assertEqual(
             active,
             {
-                "CODEX_MEMORY_VAULT",
-                "DEEPSEEK_API_KEY",
-                "DEEPSEEK_MODEL",
-                "AIIPPOCAMPUS_SUBCONSCIOUS_HOOK",
                 "CODEX_HOME/aippocampus-registry",
                 ".aippocampus/",
             },
         )
-        self.assertEqual(shadowed, {"CODEX_MEMORY_STYLE_SOURCE"})
         self.assertFalse(report["value_printed"])
         self.assertFalse(report["local_paths_included"])
         self.assertNotIn(str(root), encoded)

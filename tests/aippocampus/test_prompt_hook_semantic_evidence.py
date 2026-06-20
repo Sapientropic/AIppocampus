@@ -56,12 +56,12 @@ class PromptHookSemanticEvidenceTests(AmbientRecallHookCase):
         self.assertEqual(result["semantic_gate"]["budget"]["effective_timeout"], seen["timeout"])
         self.assertTrue(result["semantic_gate"]["budget"]["budget_clipped"])
         self.assertEqual(
-            result["semantic_gate"]["budget"]["agent_next_action"],
+            result["semantic_gate"]["budget"]["next_step_hint"],
             "increase_max_elapsed_ms_or_use_background_recall",
         )
         public = hook.public_hook_debug_payload(result)
         self.assertEqual(
-            public["semantic_gate"]["budget"]["agent_next_action"],
+            public["semantic_gate"]["budget"]["next_step_hint"],
             "increase_max_elapsed_ms_or_use_background_recall",
         )
         self.assertEqual(result["semantic_gate"]["model_route"]["provider"], "test-provider")

@@ -9,7 +9,7 @@ from typing import Any
 
 from aippocampus_runtime import core
 from aippocampus_runtime.contracts import (
-    FOREGROUND_ACTION_CONTRACT_VERSION,
+    canonical_foreground_action_fields,
     foreground_shell_action,
 )
 from aippocampus_runtime.first_recall_readiness import start_first_recall_readiness
@@ -312,11 +312,8 @@ def build_start_card(cwd: Path, *, clean_source_dir: str | None = None, detail: 
         "ok": True,
         "status": "ready" if decision.startswith(("continue", "try_read_only")) else "needs_setup",
         "surface_class": "foreground_chooser_card",
-        "foreground_action_contract": FOREGROUND_ACTION_CONTRACT_VERSION,
         "decision": decision,
-        "agent_next_action": primary,
-        "foreground_action": primary,
-        "safe_next_actions": actions,
+        **canonical_foreground_action_fields(primary, safe_next_actions=actions),
         "first_recall_readiness": first_recall_readiness,
         "performance_expectation": first_recall_readiness.get("performance_expectation"),
         "write_boundary": {
@@ -341,7 +338,7 @@ def _public_start_card(card: dict[str, Any]) -> dict[str, Any]:
 
 
 def render_text(card: dict[str, Any]) -> str:
-    action = card["agent_next_action"]
+    action = card["foreground_action"]
     readiness = card.get("first_recall_readiness") if isinstance(card, dict) else {}
     readiness_status = (
         str(readiness.get("status") or "")

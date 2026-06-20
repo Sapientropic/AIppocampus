@@ -12,6 +12,7 @@ SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 from aippocampus_runtime.cli import facade  # noqa: E402
+from aippocampus_runtime.contracts import foreground_action_contract_violations  # noqa: E402
 from aippocampus_runtime.mcp import server as mcp  # noqa: E402
 from aippocampus_runtime.recall import why_diagnostics as why  # noqa: E402
 from aippocampus_runtime.recall import why_reason_codes as reason_codes  # noqa: E402
@@ -199,11 +200,16 @@ class RecallWhyDiagnosticsTests(unittest.TestCase):
         self.assertIn("explanation_card", payload)
         action_ids = [item["id"] for item in payload["safe_next_actions"]]
         self.assertEqual(action_ids.count("recall_same_cue"), 1)
-        self.assertEqual(payload["explanation_card"]["next"], payload["agent_next_action"]["id"])
+        self.assertEqual(payload["explanation_card"]["next"], payload["foreground_action"]["id"])
         deepen_action = next(item for item in payload["safe_next_actions"] if item["id"] == "deepen_after_recall")
         self.assertEqual(deepen_action["depends_on"], "last_recall_cache")
-        self.assertEqual(payload["agent_next_action"]["id"], "tighten_cue")
-        self.assertEqual(payload["agent_next_action"]["requires"], ["more_specific_cue"])
+        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v2")
+        self.assertNotIn("agent_next_action", payload)
+        self.assertEqual(payload["foreground_action"]["id"], "search_same_cue")
+        self.assertIn("diagnostic_codes", payload)
+        self.assertIn("route_returned", payload["diagnostic_codes"])
+        self.assertNotIn("route_returned", payload["explanation_card"]["why"])
+        self.assertEqual(foreground_action_contract_violations(payload), [])
         self.assertNotIn("SECRET_TOKEN", encoded)
         self.assertNotIn(str(self.cwd), encoded)
 
@@ -248,8 +254,56 @@ class RecallWhyDiagnosticsTests(unittest.TestCase):
         self.assertIn("boundary:", human.stdout)
         self.assertNotIn("cue_hash", human.stdout)
         self.assertNotIn("route_ids", human.stdout)
+        self.assertNotIn("route_returned", human.stdout)
+        self.assertNotIn("source_reopen_required", human.stdout)
         self.assertNotIn('"<cue>"', human.stdout)
         self.assertIn("aippocampus agent deepen --request 1 --last-recall --json", human.stdout)
+
+    def test_human_low_specificity_uses_readable_why_and_original_cue(self) -> None:
+        human = facade.run_command(
+            [
+                "why-not-recall",
+                "vague context",
+                "--cwd",
+                str(self.cwd),
+                "--clean-source-dir",
+                str(self.clean),
+            ],
+            capture_output=True,
+        )
+
+        self.assertTrue(human.ok, human.stderr)
+        self.assertTrue(
+            "Recall did find routes" in human.stdout or "No usable recall route surfaced" in human.stdout,
+            human.stdout,
+        )
+        self.assertIn("aippocampus search", human.stdout)
+        self.assertIn("vague context", human.stdout)
+        self.assertNotIn("{more_specific_cue}", human.stdout)
+        self.assertNotIn("route_returned", human.stdout)
+        self.assertNotIn("source_reopen_required", human.stdout)
+
+    def test_human_no_route_uses_readable_why_not_reason_codes(self) -> None:
+        from aippocampus_runtime.recall import why_cli
+
+        human = why_cli.render_text(
+            {
+                "mode": "why-not-recall",
+                "decision": "missing",
+                "diagnostic_class": "actually_silent",
+                "route_specificity": "none",
+                "reasons": ["ambient_cache_miss", "active_lock_missing"],
+                "foreground_next_action": "search_same_cue",
+                "next_safe_action": "search_same_cue",
+                "_display_cue": "unmatched phrase",
+            }
+        )
+
+        self.assertIn("No usable recall route surfaced", human)
+        self.assertIn("aippocampus search", human)
+        self.assertIn("unmatched phrase", human)
+        self.assertNotIn("ambient_cache_miss", human)
+        self.assertNotIn("active_lock_missing", human)
 
     def test_human_missing_source_card_uses_the_provided_cue(self) -> None:
         human = facade.run_command(
@@ -285,7 +339,9 @@ class RecallWhyDiagnosticsTests(unittest.TestCase):
 
         self.assertTrue(result.ok, result.stderr)
         payload = json.loads(result.stdout)
-        self.assertEqual(payload["agent_next_action"]["id"], "check_onboarding_status")
+        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v2")
+        self.assertNotIn("agent_next_action", payload)
+        self.assertEqual(payload["foreground_action"]["id"], "check_onboarding_status")
         self.assertNotIn("action_card", payload)
         self.assertEqual(payload["explanation_card"]["next"], "check_onboarding_status")
         encoded = json.dumps(payload, ensure_ascii=False)
@@ -325,7 +381,7 @@ class RecallWhyDiagnosticsTests(unittest.TestCase):
                 )
                 self.assertEqual(deepen["depends_on"], "last_recall_cache")
 
-    def test_cli_projection_uses_tighten_cue_for_low_specificity_surface(self) -> None:
+    def test_cli_projection_uses_same_cue_search_for_low_specificity_surface(self) -> None:
         from aippocampus_runtime.recall import why_cli
 
         payload = why_cli._attach_foreground_actions(
@@ -341,13 +397,22 @@ class RecallWhyDiagnosticsTests(unittest.TestCase):
             cue="provider key visible env fallback",
         )
 
-        self.assertEqual(payload["agent_next_action"]["id"], "tighten_cue")
-        self.assertEqual(payload["next_safe_action"], "tighten_cue")
-        self.assertEqual(payload["foreground_next_action"], "tighten_cue")
-        self.assertIn("command_template", payload["agent_next_action"])
-        self.assertNotIn("command", payload["agent_next_action"])
-        self.assertEqual(payload["agent_next_action"]["requires"], ["more_specific_cue"])
+        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v2")
+        self.assertNotIn("agent_next_action", payload)
+        self.assertEqual(payload["foreground_action"]["id"], "search_same_cue")
+        self.assertEqual(payload["next_safe_action"], "search_same_cue")
+        self.assertEqual(payload["foreground_next_action"], "search_same_cue")
+        self.assertIn("command", payload["foreground_action"])
+        self.assertNotIn("command_template", payload["foreground_action"])
+        self.assertEqual(
+            shlex.split(payload["foreground_action"]["command"]),
+            ["aippocampus", "search", "provider key visible env fallback", "--json"],
+        )
+        action_ids = [action["id"] for action in payload["safe_next_actions"]]
+        self.assertIn("rerun_refined_recall", action_ids)
+        self.assertIn("tighten_cue", action_ids)
         self.assertEqual(payload["authority_next_safe_action"], "reopen_source")
+        self.assertEqual(foreground_action_contract_violations(payload), [])
 
     def test_cli_help_leads_with_use_case_before_diagnostic_flags(self) -> None:
         why_help = facade.run_command(["why-recall", "--help"], capture_output=True)
@@ -463,11 +528,13 @@ class RecallWhyDiagnosticsTests(unittest.TestCase):
         self.assertFalse(response["result"].get("isError", False))
         self.assertEqual(payload["kind"], "aippocampus_recall_diagnostic")
         self.assertIn("source_reopen_required", payload["reasons"])
-        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
-        self.assertEqual(payload["agent_next_action"], cli_payload["agent_next_action"])
+        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v2")
+        self.assertNotIn("agent_next_action", payload)
+        self.assertNotIn("agent_next_action", cli_payload)
         self.assertEqual(payload["foreground_action"], cli_payload["foreground_action"])
         self.assertEqual(payload["safe_next_actions"], cli_payload["safe_next_actions"])
-        self.assertEqual(payload["action_card"]["next_command"], payload["agent_next_action"]["command"])
+        self.assertEqual(payload["action_card"]["next_command"], payload["foreground_action"]["command"])
+        self.assertEqual(foreground_action_contract_violations(payload), [])
         self.assertNotIn('"<cue>"', encoded)
         self.assertNotIn(";", payload["action_card"]["next_command"])
         self.assertNotIn("SECRET_TOKEN", encoded)
@@ -510,11 +577,13 @@ class RecallWhyDiagnosticsTests(unittest.TestCase):
         encoded = json.dumps(payload, ensure_ascii=False)
         self.assertFalse(response["result"].get("isError", False))
         self.assertEqual(payload["decision"], "missing")
-        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
-        self.assertEqual(payload["agent_next_action"], cli_payload["agent_next_action"])
+        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v2")
+        self.assertNotIn("agent_next_action", payload)
+        self.assertNotIn("agent_next_action", cli_payload)
         self.assertEqual(payload["foreground_action"], cli_payload["foreground_action"])
         self.assertEqual(payload["safe_next_actions"], cli_payload["safe_next_actions"])
-        self.assertEqual(payload["agent_next_action"]["id"], "check_onboarding_status")
+        self.assertEqual(payload["foreground_action"]["id"], "check_onboarding_status")
+        self.assertEqual(foreground_action_contract_violations(payload), [])
         self.assertLessEqual(len(payload["cannot_claim"]), 4)
         self.assertNotIn('"<cue>"', encoded)
         self.assertNotIn(";", payload["action_card"]["next_command"])

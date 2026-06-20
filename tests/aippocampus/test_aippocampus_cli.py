@@ -17,6 +17,8 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
+from aippocampus_runtime.source import latest_reply as latest_reply_module  # noqa: E402
+
 
 class AippocampusCliTests(unittest.TestCase):
     def run_cli(self, *args: str) -> subprocess.CompletedProcess[str]:
@@ -184,8 +186,11 @@ class AippocampusCliTests(unittest.TestCase):
                 self.assertNotIn("route_to_", action["command"])
         self.assertNotIn("hooks --help", pause_encoded)
         self.assertIn("safe_next_actions", pause_payload)
-        self.assertEqual(pause_payload["agent_next_action"], pause_payload["safe_next_actions"][0])
-        self.assertEqual(pause_payload["foreground_action"], pause_payload["safe_next_actions"][0])
+        self.assertEqual(pause_payload["foreground_action"]["id"], "find_pause_target")
+        self.assertNotIn(pause_payload["foreground_action"], pause_payload["safe_next_actions"])
+        self.assertTrue(
+            any(action["id"] == "review_control_boundary" for action in pause_payload["safe_next_actions"])
+        )
         self.assertNotIn("cannot_claim", pause_payload)
         self.assertIn("claim_boundary", pause_payload)
         self.assertIn("boundary_detail", pause_payload)
@@ -194,19 +199,19 @@ class AippocampusCliTests(unittest.TestCase):
             pause_payload["boundary_detail"]["cannot_claim"],
         )
         self.assertEqual(
-            pause_payload["agent_next_action"]["command_template"],
+            pause_payload["foreground_action"]["command_template"],
             'aippocampus agent recall "{cue_for_route_to_pause}" --json',
         )
-        self.assertEqual(pause_payload["agent_next_action"]["requires"], ["cue_for_route_to_pause"])
+        self.assertEqual(pause_payload["foreground_action"]["requires"], ["cue_for_route_to_pause"])
         self.assertNotIn("route to pause", pause_encoded)
 
         self.assertEqual(forget_plan.returncode, 0, forget_plan.stderr)
         forget_plan_payload = json.loads(forget_plan.stdout)
         self.assertEqual(forget_plan_payload["mode"], "forget")
         self.assertEqual(forget_plan_payload["status"], "needs_scope")
-        self.assertEqual(
-            forget_plan_payload["agent_next_action"],
-            forget_plan_payload["safe_next_actions"][0],
+        self.assertEqual(forget_plan_payload["foreground_action"]["id"], "find_forget_target")
+        self.assertTrue(
+            any(action["id"] == "review_control_boundary" for action in forget_plan_payload["safe_next_actions"])
         )
         self.assertNotIn("cannot_claim", forget_plan_payload)
         self.assertIn(
@@ -214,7 +219,7 @@ class AippocampusCliTests(unittest.TestCase):
             forget_plan_payload["boundary_detail"]["cannot_claim"],
         )
         self.assertEqual(
-            forget_plan_payload["agent_next_action"]["command_template"],
+            forget_plan_payload["foreground_action"]["command_template"],
             'aippocampus agent recall "{cue_for_route_to_forget}" --json',
         )
         self.assertNotIn("route to forget here", forget_plan.stdout)
@@ -248,8 +253,8 @@ class AippocampusCliTests(unittest.TestCase):
         learning_payload = json.loads(learning.stdout)
         self.assertEqual(learning_payload["kind"], "aippocampus_learning_frontdoor")
         self.assertEqual(learning_payload["mode"], "status")
-        self.assertEqual(learning_payload["agent_next_action"]["id"], "review_semantic_guidance_candidate")
-        self.assertIn("learning guidance --json", learning_payload["agent_next_action"]["command"])
+        self.assertEqual(learning_payload["foreground_action"]["id"], "review_semantic_guidance_candidate")
+        self.assertIn("learning guidance --json", learning_payload["foreground_action"]["command"])
         self.assertTrue(learning_payload["privacy_boundary"]["raw_rollouts_serialized"] is False)
 
         self.assertEqual(learning_replay.returncode, 2, learning_replay.stderr)
@@ -257,7 +262,7 @@ class AippocampusCliTests(unittest.TestCase):
         replay_encoded = json.dumps(replay_payload, ensure_ascii=False)
         self.assertEqual(replay_payload["status"], "needs_source_selection")
         self.assertFalse(replay_payload["fixture_input"])
-        self.assertEqual(replay_payload["agent_next_action"]["id"], "discover_eligible_learning_sources")
+        self.assertEqual(replay_payload["foreground_action"]["id"], "discover_eligible_learning_sources")
         self.assertNotIn("<events.jsonl>", replay_encoded)
         self.assertNotIn("<sanitized-events.jsonl>", replay_encoded)
         self.assertNotIn("cannot_claim", replay_payload)
@@ -275,11 +280,10 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertEqual(status_payload["lanes"]["sanitized_replay"]["status"], "available_on_request")
         self.assertIn("effectiveness_ledger", status_payload["lanes"])
         self.assertEqual(status_payload["lanes"]["operator_diagnostics"]["status"], "operator_only")
-        self.assertEqual(status_payload["agent_next_action"]["id"], "review_semantic_guidance_candidate")
-        self.assertEqual(status_payload["foreground_action_contract"], "foreground-action-v1")
-        self.assertEqual(status_payload["foreground_action"], status_payload["agent_next_action"])
-        self.assertEqual(status_payload["safe_next_actions"][0], status_payload["foreground_action"])
-        self.assertEqual(status_payload["next_actions"][0], status_payload["foreground_action"])
+        self.assertEqual(status_payload["foreground_action"]["id"], "review_semantic_guidance_candidate")
+        self.assertEqual(status_payload["foreground_action_contract"], "foreground-action-v2")
+        self.assertNotIn(status_payload["foreground_action"], status_payload["safe_next_actions"])
+        self.assertEqual(status_payload["next_actions"], status_payload["safe_next_actions"][: len(status_payload["next_actions"])])
         self.assertEqual(
             len(status_payload["safe_next_actions"]),
             len(
@@ -340,7 +344,7 @@ class AippocampusCliTests(unittest.TestCase):
             "candidate_only_safety_is_not_sufficient",
             status_operator_payload["semantic_loop"]["closeout_gate"],
         )
-        self.assertNotIn("benchmark", status_payload["agent_next_action"]["command"])
+        self.assertNotIn("benchmark", status_payload["foreground_action"]["command"])
         self.assertTrue(
             status_payload["lanes"]["current_history_extraction"]["requires_explicit_source"]
         )
@@ -364,7 +368,7 @@ class AippocampusCliTests(unittest.TestCase):
         module_payload = json.loads(module_status.stdout)
         self.assertEqual(module_payload["kind"], "aippocampus_learning_frontdoor")
         self.assertEqual(module_payload["mode"], "status")
-        self.assertEqual(module_payload["foreground_action_contract"], "foreground-action-v1")
+        self.assertEqual(module_payload["foreground_action_contract"], "foreground-action-v2")
 
         self.assertEqual(learning_guidance.returncode, 0, learning_guidance.stderr)
         guidance_payload = json.loads(learning_guidance.stdout)
@@ -421,15 +425,15 @@ class AippocampusCliTests(unittest.TestCase):
             "requires_review_before_cache",
         )
         self.assertEqual(
-            guidance_payload["agent_next_action"]["id"],
+            guidance_payload["foreground_action"]["id"],
             "preview_action_hint_cache_bridge",
         )
         self.assertNotEqual(
-            guidance_payload["agent_next_action"]["command"],
+            guidance_payload["foreground_action"]["command"],
             "aippocampus learning guidance --json",
         )
         self.assertNotEqual(
-            guidance_payload["agent_next_action"],
+            guidance_payload["foreground_action"],
             "produce or provide sanitized learning findings before expecting action-time hints",
         )
         foreground_commands = " ".join(
@@ -553,10 +557,11 @@ class AippocampusCliTests(unittest.TestCase):
         payload = json.loads(proc.stdout)
         encoded = json.dumps(payload, ensure_ascii=False)
         self.assertEqual(payload["status"], "needs_target")
-        self.assertEqual({item["surface"] for item in payload["safe_next_actions"]}, {"recall-route", "control-boundary"})
+        self.assertEqual({item["surface"] for item in payload["safe_next_actions"]}, {"control-boundary"})
+        self.assertEqual(payload["foreground_action"]["surface"], "recall-route")
         self.assertEqual({item["surface"] for item in payload["convenience_write_actions"]}, {"recall-route", "coding-ticket"})
-        self.assertIn("agent recall", payload["agent_next_action"]["command_template"])
-        self.assertEqual(payload["agent_next_action"]["requires"], ["cue_for_route_to_quiet"])
+        self.assertIn("agent recall", payload["foreground_action"]["command_template"])
+        self.assertEqual(payload["foreground_action"]["requires"], ["cue_for_route_to_quiet"])
         self.assertEqual([action["requires"] for action in payload["convenience_write_actions"][:2]], [["route_id"], ["ticket_id"]])
         self.assertTrue(all(action.get("requires_explicit_user_confirmation") for action in payload["convenience_write_actions"]))
         self.assertNotIn("<route_id>", encoded)
@@ -575,8 +580,8 @@ class AippocampusCliTests(unittest.TestCase):
         for proc in (pause, forget, quiet):
             self.assertIn(proc.returncode, {0, 2}, proc.stderr)
             payload = json.loads(proc.stdout)
-            self.assertEqual(payload["agent_next_action"]["mutation_risk"], "read_only")
-            self.assertIn("command_template", payload["agent_next_action"])
+            self.assertEqual(payload["foreground_action"]["mutation_risk"], "read_only")
+            self.assertIn("command_template", payload["foreground_action"])
             cached_actions = [
                 action
                 for action in payload["convenience_write_actions"]
@@ -585,7 +590,7 @@ class AippocampusCliTests(unittest.TestCase):
             self.assertTrue(cached_actions)
             self.assertEqual(cached_actions[0]["request_index"], 1)
             self.assertIn("route_cached_one", cached_actions[0]["command"])
-            self.assertNotEqual(payload["agent_next_action"], cached_actions[0])
+            self.assertNotEqual(payload["foreground_action"], cached_actions[0])
             self.assertNotIn("route to quiet", json.dumps(payload, ensure_ascii=False))
 
     def test_hooks_help_shows_family_not_raw_installer_parser(self) -> None:
@@ -797,6 +802,7 @@ class AippocampusCliTests(unittest.TestCase):
                 encoding="utf-8",
             )
             final_proc = self.run_cli("latest-reply", "--rollout", str(final_rollout), "--json")
+            human_proc = self.run_cli("latest-reply", "--rollout", str(final_rollout))
             commentary_proc = self.run_cli(
                 "latest-reply",
                 "--rollout",
@@ -813,30 +819,36 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertEqual(final_proc.returncode, 0, final_proc.stderr)
         final_payload = json.loads(final_proc.stdout)
         self.assertTrue(final_payload["closeout_available"])
-        self.assertEqual(final_payload["foreground_action_contract"], "foreground-action-v1")
-        self.assertEqual(final_payload["foreground_action"], final_payload["agent_next_action"])
-        self.assertEqual(final_payload["safe_next_actions"][0], final_payload["foreground_action"])
-        self.assertNotIn("text", final_payload["message"])
-        self.assertIn("settled final closeout", final_payload["message"]["preview"])
-        self.assertEqual(
-            final_payload["safe_next_actions"][0]["command"],
-            "aippocampus latest-reply --detail full --operator-json",
+        self.assertEqual(final_payload["foreground_action_contract"], "foreground-action-v2")
+        self.assertNotIn("agent_next_action", final_payload)
+        self.assertEqual(final_payload["safe_next_actions"], [])
+        self.assertEqual(final_payload["message"]["text"], "settled final closeout")
+        self.assertLessEqual(
+            final_payload["message"]["text_char_limit"],
+            latest_reply_module.MAX_COMPACT_FINAL_ANSWER_CHARS,
         )
+        self.assertEqual(human_proc.returncode, 0, human_proc.stderr)
+        self.assertIn("settled final closeout", human_proc.stdout)
+        self.assertNotIn("next: use recall/search", human_proc.stdout)
         self.assertEqual(
-            final_payload["safe_next_actions"][0]["authority_after_running"],
-            "source_open_within_local_rollout_scope",
+            final_payload["foreground_action"]["command"],
+            "aippocampus latest-reply --detail full",
+        )
+        self.assertEqual(final_payload["foreground_action"]["id"], "open_full_latest_reply")
+        self.assertEqual(
+            final_payload["foreground_action"]["authority_after_running"],
+            "source_open_within_latest_final_answer_scope",
         )
         self.assertNotEqual(commentary_proc.returncode, 0)
         commentary_payload = json.loads(commentary_proc.stdout)
         encoded_commentary = json.dumps(commentary_payload, ensure_ascii=False)
-        self.assertEqual(commentary_payload["foreground_action_contract"], "foreground-action-v1")
-        self.assertEqual(commentary_payload["foreground_action"], commentary_payload["agent_next_action"])
-        self.assertEqual(commentary_payload["safe_next_actions"][0], commentary_payload["foreground_action"])
+        self.assertEqual(commentary_payload["foreground_action_contract"], "foreground-action-v2")
+        self.assertNotIn("agent_next_action", commentary_payload)
         self.assertTrue(commentary_payload["not_final_closeout"])
         self.assertTrue(commentary_payload["diagnostic_only"])
         self.assertNotIn(commentary_text, encoded_commentary)
         self.assertNotIn("preview", commentary_payload["message"])
-        commentary_action = commentary_payload["safe_next_actions"][0]
+        commentary_action = commentary_payload["foreground_action"]
         self.assertEqual(
             shlex.split(commentary_action["command"]),
             [
@@ -869,15 +881,14 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertEqual(proc.returncode, 2, raw)
         payload = json.loads(proc.stdout)
         self.assertEqual(payload["status"], "no_latest_reply_source_found")
-        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
-        self.assertEqual(payload["foreground_action"], payload["agent_next_action"])
-        self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
+        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v2")
+        self.assertNotIn("agent_next_action", payload)
         self.assertEqual(payload["error"]["code"], "no_rollout_for_cwd")
         self.assertTrue(payload["error"]["path_redacted"])
-        self.assertIn("agent recall", payload["agent_next_action"]["command_template"])
-        self.assertEqual(payload["agent_next_action"]["requires"], ["cue"])
-        self.assertTrue(payload["agent_next_action"]["template_only"])
-        self.assertNotIn("command", payload["agent_next_action"])
+        self.assertIn("agent recall", payload["foreground_action"]["command_template"])
+        self.assertEqual(payload["foreground_action"]["requires"], ["cue"])
+        self.assertTrue(payload["foreground_action"]["template_only"])
+        self.assertNotIn("command", payload["foreground_action"])
         self.assertIn("source_backed_claim", payload["cannot_claim"])
         self.assertNotIn(str(missing_cwd), raw)
         self.assertNotIn("Traceback", raw)
@@ -1493,7 +1504,7 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertLessEqual(len(payload["note"]["note_text"]), 280)
         self.assertTrue(payload["note"]["note_body_private_available"])
         self.assertEqual(payload["note"]["action_grammar"], "direction_only")
-        self.assertIn("reopen attached source", payload["note"]["agent_next_action"])
+        self.assertIn("source-less scent", payload["foreground_action"]["why"])
         self.assertNotIn("note_body_private\":", raw)
         self.assertNotIn("hidden plain append tail should stay private", raw)
 
@@ -1575,9 +1586,9 @@ class AippocampusCliTests(unittest.TestCase):
         search_payload = json.loads(empty_search.stdout)
         self.assertEqual(search_payload["count"], 0)
         self.assertEqual(search_payload["empty_state"]["decision"], "empty")
-        self.assertEqual(search_payload["empty_state"]["agent_next_action"]["id"], "search_notes")
+        self.assertEqual(search_payload["empty_state"]["foreground_action"]["id"], "search_notes")
         self.assertEqual(
-            search_payload["empty_state"]["agent_next_action"]["requires"],
+            search_payload["empty_state"]["foreground_action"]["requires"],
             ["cue"],
         )
         self.assertTrue(
@@ -1623,15 +1634,15 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertEqual(payload["kind"], "aippocampus_agent_self_note_read")
         self.assertEqual(payload["note"]["note_id"], note_id)
         self.assertEqual(payload["note"]["action_grammar"], "direction_only")
-        self.assertEqual(payload["foreground_action"], payload["agent_next_action"])
-        self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
-        self.assertEqual(payload["agent_next_action"]["claim_boundary"], "direction_only_not_source_truth")
-        self.assertTrue(payload["agent_next_action"]["continue_without_command"])
+        self.assertNotIn(payload["foreground_action"], payload["safe_next_actions"])
+        self.assertTrue(any(action["id"] == "list_notes" for action in payload["safe_next_actions"]))
+        self.assertEqual(payload["foreground_action"]["claim_boundary"], "direction_only_not_source_truth")
+        self.assertTrue(payload["foreground_action"]["continue_without_command"])
         self.assertTrue(payload["source_boundary"]["source_reopen_required_before_claim"])
         self.assertNotEqual(missing.returncode, 0)
         missing_payload = json.loads(missing.stdout)
         self.assertEqual(missing_payload["error"]["code"], "agent_self_note_not_found")
-        self.assertEqual(missing_payload["agent_next_action"]["id"], "list_notes")
+        self.assertEqual(missing_payload["foreground_action"]["id"], "list_notes")
         self.assertTrue(any(action["id"] == "search_notes" for action in missing_payload["safe_next_actions"]))
         self.assertEqual(help_proc.returncode, 0)
         self.assertIn("usage: aippocampus self-note read", help_proc.stdout)
@@ -1877,11 +1888,11 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertTrue(bounded_payload["scan_policy"]["partial"])
         self.assertIn("--broad-scan", bounded_payload["scan_policy"]["broad_scan_command"])
         self.assertIn(
-            bounded_payload["agent_next_action"]["id"],
+            bounded_payload["foreground_action"]["id"],
             {"use_candidate_preview_as_reopenable_route", "needs_broader_scan_or_cue"},
         )
-        self.assertNotIn("--append", bounded_payload["agent_next_action"]["command"])
-        if bounded_payload["agent_next_action"]["id"] == "use_candidate_preview_as_reopenable_route":
+        self.assertNotIn("--append", bounded_payload["foreground_action"]["command"])
+        if bounded_payload["foreground_action"]["id"] == "use_candidate_preview_as_reopenable_route":
             self.assertIn("--append", bounded_payload["operator_next_action"]["command"])
         else:
             self.assertEqual(bounded_payload["foreground_candidate_quality"], "needs_broader_scan")
@@ -1980,7 +1991,7 @@ class AippocampusCliTests(unittest.TestCase):
 
         self.assertEqual(proc.returncode, 0, proc.stderr)
         payload = json.loads(proc.stdout)
-        encoded_action = json.dumps(payload["agent_next_action"], ensure_ascii=False).casefold()
+        encoded_action = json.dumps(payload["foreground_action"], ensure_ascii=False).casefold()
         self.assertNotIn('"recall"', encoded_action)
         self.assertNotIn('"append"', encoded_action)
         self.assertNotIn('"maintenance"', encoded_action)
@@ -2012,9 +2023,9 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stderr)
         payload = json.loads(proc.stdout)
         self.assertEqual(payload["foreground_candidate_quality"], "needs_broader_scan")
-        self.assertEqual(payload["agent_next_action"]["id"], "needs_broader_scan_or_cue")
-        self.assertIn("--broad-scan", payload["agent_next_action"]["command"])
-        self.assertNotIn("agent recall", payload["agent_next_action"]["command"])
+        self.assertEqual(payload["foreground_action"]["id"], "needs_broader_scan_or_cue")
+        self.assertIn("--broad-scan", payload["foreground_action"]["command"])
+        self.assertNotIn("agent recall", payload["foreground_action"]["command"])
 
     def test_onboard_status_text_points_to_first_recall_modes(self) -> None:
         from aippocampus_runtime.onboarding import facade as onboard_facade
@@ -2261,7 +2272,7 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertEqual(data["status"], "available_requires_sync_dir")
         self.assertEqual(data["backend"], "local_folder")
         self.assertIn("push", data["commands"])
-        self.assertEqual(data["agent_next_action"]["command_template"], 'aippocampus sync status --sync-dir "{sync_dir}" --json')
+        self.assertEqual(data["foreground_action"]["command_template"], 'aippocampus sync status --sync-dir "{sync_dir}" --json')
         self.assertTrue(all("command" not in action for action in data["safe_next_actions"]))
 
     def test_sync_status_without_sync_dir_human_output_is_not_configured_ok(self) -> None:

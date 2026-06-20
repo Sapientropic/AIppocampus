@@ -241,14 +241,14 @@ class EpisodeArcPrivateAdjudicationTests(unittest.TestCase):
         detail_payload = json.loads(detail.stdout)
         summary_payload = json.loads(summary.stdout)
         self.assertEqual(payload["kind"], "aippocampus_episode_arcs_summary")
-        self.assertEqual(payload["foreground_action"], payload["agent_next_action"])
-        self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
+        self.assertIn("foreground_action", payload)
+        self.assertNotIn(payload["foreground_action"], payload["safe_next_actions"])
         self.assertEqual(detail_payload["kind"], private_arcs.REPORT_KIND)
         self.assertEqual(detail_payload["metrics"]["complete_rejected_route_arc_count"], 1)
         self.assertEqual(summary_payload["kind"], "aippocampus_episode_arcs_summary")
-        self.assertEqual(summary_payload["foreground_action_contract"], "foreground-action-v1")
-        self.assertEqual(summary_payload["foreground_action"], summary_payload["agent_next_action"])
-        self.assertEqual(summary_payload["safe_next_actions"][0], summary_payload["foreground_action"])
+        self.assertEqual(summary_payload["foreground_action_contract"], "foreground-action-v2")
+        self.assertIn("foreground_action", summary_payload)
+        self.assertNotIn(summary_payload["foreground_action"], summary_payload["safe_next_actions"])
         self.assertEqual(summary_payload["foreground_action"]["id"], "retrieve_actionable_arc_handles")
         self.assertEqual(
             summary_payload["route_value"],
@@ -270,6 +270,7 @@ class EpisodeArcPrivateAdjudicationTests(unittest.TestCase):
             summary_payload["safe_next_actions"][0]["command"],
             "aippocampus episode-arcs --json --detail full --top 5",
         )
+        self.assertEqual(summary_payload["safe_next_actions"][0]["id"], "current_owner_route")
         self.assertEqual(summary_payload["what_to_do"], "retrieve_actionable_arc_handles")
         self.assertFalse(summary_payload["no_op"])
         self.assertEqual(
@@ -366,11 +367,11 @@ class EpisodeArcPrivateAdjudicationTests(unittest.TestCase):
 
         self.assertTrue(summary_payload["no_op"])
         self.assertEqual(summary_payload["what_to_do"], "no_episode_arcs_to_route")
-        self.assertEqual(summary_payload["agent_next_action"]["kind"], "no_episode_arcs_to_route")
-        self.assertTrue(summary_payload["agent_next_action"]["no_op"])
-        self.assertTrue(summary_payload["agent_next_action"]["continue_without_command"])
-        self.assertNotIn("command", summary_payload["agent_next_action"])
-        self.assertEqual(summary_payload["safe_next_actions"], [summary_payload["agent_next_action"]])
+        self.assertEqual(summary_payload["foreground_action"]["kind"], "no_episode_arcs_to_route")
+        self.assertTrue(summary_payload["foreground_action"]["no_op"])
+        self.assertTrue(summary_payload["foreground_action"]["continue_without_command"])
+        self.assertNotIn("command", summary_payload["foreground_action"])
+        self.assertEqual(summary_payload["safe_next_actions"], [])
         self.assertNotIn("cannot_claim", summary_payload)
         self.assertIn("current_validity", summary_payload["claim_boundary"]["must_reopen_for"])
 

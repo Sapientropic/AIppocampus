@@ -889,9 +889,9 @@ class PluginInstallerTests(unittest.TestCase):
             payload["kind"],
             "aippocampus_plugin_uninstall_preview_public_summary",
         )
-        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
-        self.assertEqual(payload["agent_next_action"], payload["foreground_action"])
-        self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
+        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v2")
+        self.assertIn("foreground_action", payload)
+        self.assertNotIn(payload["foreground_action"], payload["safe_next_actions"])
         self.assertEqual(payload["foreground_action"]["id"], "review_plugin_uninstall_preview")
         self.assertTrue(payload["foreground_action"]["continue_without_command"])
         uninstall_action = next(

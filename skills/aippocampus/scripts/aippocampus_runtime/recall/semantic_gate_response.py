@@ -328,9 +328,9 @@ def public_semantic_budget(value: Any) -> dict[str, Any] | None:
     reason = str(value.get("budget_clip_reason") or "")
     if reason in allowed_reasons:
         result["budget_clip_reason"] = reason
-    action = str(value.get("agent_next_action") or "")
+    action = str(value.get("next_step_hint") or "")
     if action in allowed_actions:
-        result["agent_next_action"] = action
+        result["next_step_hint"] = action
     return {key: item for key, item in result.items() if item is not None}
 
 

@@ -335,6 +335,8 @@ def _actions_for_last_recall_search(
     query_text: str,
     has_matches: bool,
     first_match: Mapping[str, Any] | None,
+    partial_unavailable_no_matches: bool = False,
+    recall_cue: str | None = None,
 ) -> list[dict[str, Any]]:
     if has_matches and first_match:
         return [
@@ -359,7 +361,7 @@ def _actions_for_last_recall_search(
                 claim_boundary="source_reopen_required_before_claim",
             ),
         ]
-    return [
+    no_match_actions = [
         foreground_template_action(
             action_id="refine_last_recall_exact_search",
             label="Refine search inside last recall routes",
@@ -378,6 +380,9 @@ def _actions_for_last_recall_search(
             claim_boundary="source_reopen_required_before_claim",
         ),
     ]
+    if partial_unavailable_no_matches:
+        return [_rerun_recall_action(recall_cue), *no_match_actions]
+    return no_match_actions
 
 
 def search_last_recall_sources(
@@ -547,6 +552,12 @@ def search_last_recall_sources(
     )
     matches = matches[: max(1, int(limit or 1))]
     all_unavailable = bool(indices) and not matches and searched_source_count == 0
+    partial_unavailable_no_matches = (
+        bool(indices)
+        and not matches
+        and searched_source_count > 0
+        and bool(unavailable_request_indices)
+    )
     actions = (
         [_rerun_recall_action(query_from_last_recall_cache(cache_path))]
         if all_unavailable
@@ -554,12 +565,24 @@ def search_last_recall_sources(
             query_text=query_text,
             has_matches=bool(matches),
             first_match=matches[0] if matches else None,
+            partial_unavailable_no_matches=partial_unavailable_no_matches,
+            recall_cue=query_from_last_recall_cache(cache_path),
         )
+    )
+    status = (
+        "ok"
+        if matches
+        else "cannot_verify"
+        if all_unavailable
+        else "partial_unavailable_no_matches"
+        if partial_unavailable_no_matches
+        else "no_matches"
     )
     payload: dict[str, Any] = {
         "kind": "aippocampus_last_recall_source_search",
         "ok": bool(matches),
-        "status": "ok" if matches else "cannot_verify" if all_unavailable else "no_matches",
+        "status": status,
+        "route_state": status,
         "search_scope": "last_recall_candidate_sources",
         "scope_description": (
             "exact search over the source candidates selected by the same-machine "
@@ -572,6 +595,7 @@ def search_last_recall_sources(
         "searched_route_count": searched_route_count,
         "searched_source_count": searched_source_count,
         "unavailable_request_count": len(unavailable_request_indices),
+        "partial_unavailable": partial_unavailable_no_matches,
         "warnings": warnings,
         "output_boundary": (
             "local_private_last_recall_source_routes_with_paths"
@@ -618,7 +642,7 @@ def run_last_recall_search_cli(args: Any) -> int:
         print(json.dumps(result, ensure_ascii=False, indent=2))
     else:
         print(render_last_recall_search_result(result))
-    if result.get("status") == "cannot_verify":
+    if result.get("status") in {"cannot_verify", "partial_unavailable_no_matches"}:
         return 2
     return 0 if result.get("matches") else 1
 

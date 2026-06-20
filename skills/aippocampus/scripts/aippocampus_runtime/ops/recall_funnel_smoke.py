@@ -57,7 +57,7 @@ def cue_required_recovery_card() -> dict[str, Any]:
             "code": "cue_required",
             "message": "Provide a cue before running the recall funnel smoke diagnostic.",
         },
-        **canonical_foreground_action_fields(primary, safe_next_actions=[primary, ordinary]),
+        **canonical_foreground_action_fields(primary, safe_next_actions=[ordinary]),
         "source_boundary": {
             "claim_boundary": "smoke output is diagnostic, not source evidence",
             "source_backed_claim_allowed": False,
@@ -300,12 +300,14 @@ def render_text(report: dict[str, Any]) -> str:
 
 
 def render_cue_required_text(card: dict[str, Any]) -> str:
-    actions = card["safe_next_actions"]
+    primary = card["foreground_action"]
+    alternatives = card["safe_next_actions"]
+    ordinary = alternatives[0] if alternatives else primary
     return "\n".join(
         [
             "AIppocampus recall funnel smoke: cue required.",
-            f"next: {actions[0]['command_template']}",
-            f"ordinary path: {actions[1]['command_template']}",
+            f"next: {primary['command_template']}",
+            f"ordinary path: {ordinary['command_template']}",
             "boundary: smoke output is diagnostic, not source evidence.",
             "",
         ]

@@ -180,7 +180,7 @@ move the operational contract into one reference doc.
   not prompt hooks. They may perform multi-minute registration and index repair
   because the caller chose setup.
 - The subconscious scheduler is hook-safe only in `--maybe-start` mode. It
-  checks cooldowns, locks, new-turn thresholds, and `DEEPSEEK_API_KEY`, then
+  checks cooldowns, locks, new-turn thresholds, and `AIPPOCAMPUS_DEEPSEEK_API_KEY`, then
   starts detached work when due.
 - Global generated memory artifacts default to
   `$CODEX_HOME/aippocampus-registry/threads/<thread>/`. Project-local

@@ -53,7 +53,7 @@ class PublicOutputTests(unittest.TestCase):
         payload = {
             "target_path": r"C:\Users\Name\aippocampus-plugin",
             "rollback_command": r"aippocampus update rollback --path C:\Users\Name\backup",
-            "api_key_env": "DEEPSEEK_API_KEY",
+            "api_key_env": "AIPPOCAMPUS_DEEPSEEK_API_KEY",
             "password": "hunter2",
             "nested": {
                 "message": "provider failed with token=abc123 and keep path C:\\Users\\Name\\x",
@@ -67,7 +67,7 @@ class PublicOutputTests(unittest.TestCase):
         emitted = json.loads(stream.getvalue())
         encoded = json.dumps(emitted, ensure_ascii=False)
         self.assertEqual(emitted["password"], "<redacted:sensitive-json-field>")
-        self.assertEqual(emitted["api_key_env"], "DEEPSEEK_API_KEY")
+        self.assertEqual(emitted["api_key_env"], "AIPPOCAMPUS_DEEPSEEK_API_KEY")
         self.assertEqual(emitted["nested"]["total_tokens"], 42)
         self.assertIn(r"C:\Users\Name\aippocampus-plugin", emitted["target_path"])
         self.assertIn(r"C:\Users\Name\backup", emitted["rollback_command"])

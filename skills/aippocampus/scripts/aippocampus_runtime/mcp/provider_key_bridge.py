@@ -36,7 +36,7 @@ def maybe_apply_provider_key_bridge_for_semantic_diagnostic(
             "reason": type(exc).__name__,
             "secret_values_printed": False,
             "local_paths_printed": False,
-            "agent_next_action": "Restart the MCP/plugin host after refreshing the AIppocampus plugin if semantic auth still fails.",
+            "operator_next_action": "Restart the MCP/plugin host after refreshing the AIppocampus plugin if semantic auth still fails.",
         }
 
     manifest_path = provider_key_bridge.bridge_manifest_path()
@@ -45,7 +45,7 @@ def maybe_apply_provider_key_bridge_for_semantic_diagnostic(
             "status": "not_installed",
             "secret_values_printed": False,
             "local_paths_printed": False,
-            "agent_next_action": "Run doctor provider or install the provider-key bridge, then restart the MCP/plugin host if live semantic diagnostics still report missing auth.",
+            "operator_next_action": "Run doctor provider or install the provider-key bridge, then restart the MCP/plugin host if live semantic diagnostics still report missing auth.",
         }
     updates = hook_provider_bridge.environment_update_from_manifest(manifest_path)
     if not updates:
@@ -54,7 +54,7 @@ def maybe_apply_provider_key_bridge_for_semantic_diagnostic(
             "provider_env_vars": [],
             "secret_values_printed": False,
             "local_paths_printed": False,
-            "agent_next_action": "Recheck the bridge source, then restart the MCP/plugin host after the provider-key bridge can resolve a value.",
+            "operator_next_action": "Recheck the bridge source, then restart the MCP/plugin host after the provider-key bridge can resolve a value.",
         }
     applied: list[str] = []
     already_visible: list[str] = []
@@ -73,5 +73,5 @@ def maybe_apply_provider_key_bridge_for_semantic_diagnostic(
         "provider_env_vars": sorted({*applied, *already_visible}),
         "secret_values_printed": False,
         "local_paths_printed": False,
-        "agent_next_action": "Run recall_diagnostic again only if the current semantic gate result still reports missing auth.",
+        "operator_next_action": "Run recall_diagnostic again only if the current semantic gate result still reports missing auth.",
     }

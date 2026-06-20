@@ -110,11 +110,11 @@ class InstallAmbientRecallHookTests(unittest.TestCase):
         self.assertNotIn("command", payload)
         self.assertFalse(payload["privacy_boundary"]["local_path_serialized"])
         self.assertFalse(payload["privacy_boundary"]["hook_command_serialized"])
-        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
+        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v2")
         self.assertEqual(payload["status"], "installed_ready")
-        self.assertEqual(payload["foreground_action"], payload["agent_next_action"])
-        self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
-        self.assertEqual(payload["agent_next_action"]["id"], "no_action_needed")
+        self.assertIn("foreground_action", payload)
+        self.assertNotIn(payload["foreground_action"], payload["safe_next_actions"])
+        self.assertEqual(payload["foreground_action"]["id"], "no_action_needed")
         action_ids = [action["id"] for action in payload["safe_next_actions"]]
         self.assertIn("status", action_ids)
         self.assertIn("rollback", action_ids)
@@ -137,8 +137,8 @@ class InstallAmbientRecallHookTests(unittest.TestCase):
         self.assertTrue(payload["installed"])
         self.assertFalse(payload["changed"])
         self.assertEqual(payload["status"], "installed_ready")
-        self.assertEqual(payload["foreground_action"], payload["agent_next_action"])
-        self.assertEqual(payload["agent_next_action"]["id"], "no_action_needed")
+        self.assertIn("foreground_action", payload)
+        self.assertEqual(payload["foreground_action"]["id"], "no_action_needed")
         self.assertNotIn("path", payload)
         self.assertNotIn("command", payload)
         self.assertNotIn(str(self.codex_home), encoded)
@@ -227,21 +227,22 @@ class InstallAmbientRecallHookTests(unittest.TestCase):
     def test_status_has_foreground_action_card_for_installed_missing_and_stale(self) -> None:
         missing = installer.status(self.hooks_json)
         self.assertEqual(missing["status"], "missing")
-        self.assertEqual(missing["foreground_action"], missing["agent_next_action"])
-        self.assertEqual(missing["safe_next_actions"][0], missing["foreground_action"])
-        self.assertEqual(missing["agent_next_action"]["id"], "install_prompt_hook")
-        self.assertTrue(
-            any(action["id"] == "install_prompt_hook" for action in missing["safe_next_actions"])
+        self.assertIn("foreground_action", missing)
+        self.assertNotIn(missing["foreground_action"], missing["safe_next_actions"])
+        self.assertEqual(missing["foreground_action"]["id"], "install_prompt_hook")
+        self.assertNotIn(
+            "install_prompt_hook",
+            {action["id"] for action in missing["safe_next_actions"]},
         )
         self.assertEqual(missing["claim_boundary"], "host_setup_not_memory_evidence")
 
         installer.install(self.hooks_json, timeout=5)
         installed = installer.status(self.hooks_json)
         self.assertEqual(installed["status"], "installed")
-        self.assertEqual(installed["foreground_action"], installed["agent_next_action"])
-        self.assertEqual(installed["safe_next_actions"][0], installed["foreground_action"])
-        self.assertEqual(installed["agent_next_action"]["id"], "inspect_prompt_hook_output")
-        self.assertEqual(installed["agent_next_action"]["mutation_risk"], "read_only")
+        self.assertIn("foreground_action", installed)
+        self.assertNotIn(installed["foreground_action"], installed["safe_next_actions"])
+        self.assertEqual(installed["foreground_action"]["id"], "inspect_prompt_hook_output")
+        self.assertEqual(installed["foreground_action"]["mutation_risk"], "read_only")
         installed_action_ids = [action["id"] for action in installed["safe_next_actions"]]
         self.assertIn("try_first_recall_after_prompt_hook", installed_action_ids)
         self.assertIn("rollback_prompt_hook", installed_action_ids)
@@ -269,9 +270,13 @@ class InstallAmbientRecallHookTests(unittest.TestCase):
         stale = installer.status(self.hooks_json)
         encoded = json.dumps(stale, ensure_ascii=False)
         self.assertEqual(stale["status"], "stale")
-        self.assertEqual(stale["foreground_action"], stale["agent_next_action"])
-        self.assertEqual(stale["agent_next_action"]["id"], "refresh_prompt_hook")
-        self.assertIn("refresh_prompt_hook", [action["id"] for action in stale["safe_next_actions"]])
+        self.assertIn("foreground_action", stale)
+        self.assertEqual(stale["foreground_action"]["id"], "refresh_prompt_hook")
+        self.assertNotIn(stale["foreground_action"], stale["safe_next_actions"])
+        self.assertNotIn(
+            "refresh_prompt_hook",
+            {action["id"] for action in stale["safe_next_actions"]},
+        )
         self.assertNotIn("ambient_recall_hook.py", encoded)
 
     def test_uninstall_removes_only_ambient_hook(self) -> None:
@@ -343,8 +348,8 @@ class InstallAmbientRecallHookTests(unittest.TestCase):
             result["last_prompt_hook_memory_surface"],
             "candidate",
         )
-        self.assertEqual(result["agent_next_action"]["id"], "review_last_prompt_hook_recall")
-        self.assertEqual(result["foreground_action"], result["agent_next_action"])
+        self.assertEqual(result["foreground_action"]["id"], "review_last_prompt_hook_recall")
+        self.assertIn("foreground_action", result)
         self.assertGreater(result["last_prompt_hook_useful_signal_count"], 0)
         public_status = json.dumps(result, ensure_ascii=False)
         self.assertNotIn("last_prompt_hook", result)
@@ -411,9 +416,9 @@ class InstallAmbientRecallHookTests(unittest.TestCase):
         encoded = json.dumps(result, ensure_ascii=False)
 
         self.assertNotIn("prompt_hook_latency_risk", result)
-        self.assertEqual(result["agent_next_action"]["id"], "inspect_prompt_hook_output")
-        self.assertEqual(result["agent_next_action"]["mutation_risk"], "read_only")
-        self.assertEqual(result["foreground_action"], result["agent_next_action"])
+        self.assertEqual(result["foreground_action"]["id"], "inspect_prompt_hook_output")
+        self.assertEqual(result["foreground_action"]["mutation_risk"], "read_only")
+        self.assertIn("foreground_action", result)
         self.assertEqual(result["prompt_hook_latency_risk_status"], "near_host_timeout_risk")
         self.assertGreaterEqual(result["foreground_latency_red_line_violation_count"], 1)
         action_ids = [action["id"] for action in result["safe_next_actions"]]
@@ -539,8 +544,8 @@ class InstallAmbientRecallHookTests(unittest.TestCase):
         payload = json.loads(stdout.getvalue())
         self.assertNotIn("last_prompt_hook", payload)
         self.assertNotIn("prompt_hook_latency_risk", payload)
-        self.assertEqual(payload["agent_next_action"]["id"], "review_last_prompt_hook_recall")
-        self.assertEqual(payload["foreground_action"], payload["agent_next_action"])
+        self.assertEqual(payload["foreground_action"]["id"], "review_last_prompt_hook_recall")
+        self.assertIn("foreground_action", payload)
         self.assertEqual(payload["last_prompt_hook_memory_surface"], "candidate")
         self.assertGreater(payload["last_prompt_hook_useful_signal_count"], 0)
         encoded = json.dumps(payload, ensure_ascii=False)

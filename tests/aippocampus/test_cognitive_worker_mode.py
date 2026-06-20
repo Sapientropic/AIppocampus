@@ -75,7 +75,7 @@ class CognitiveWorkerModeTests(unittest.TestCase):
         self.assertEqual(report["resolved_mode"], "off")
         self.assertEqual(report["status"], "disabled_by_env")
 
-    def test_legacy_deepseek_key_is_fallback_only(self) -> None:
+    def test_retired_deepseek_key_does_not_activate_external_model(self) -> None:
         with mode_env({"DEEPSEEK_API_KEY": "legacy-secret"}):
             legacy = cognitive_worker_mode.resolve_cognitive_worker_mode()
         with mode_env(
@@ -86,8 +86,8 @@ class CognitiveWorkerModeTests(unittest.TestCase):
         ):
             canonical = cognitive_worker_mode.resolve_cognitive_worker_mode()
 
-        self.assertEqual(legacy["resolved_mode"], "external_model")
-        self.assertTrue(legacy["provider_key_visible"])
+        self.assertEqual(legacy["resolved_mode"], "deterministic_only")
+        self.assertFalse(legacy["provider_key_visible"])
         self.assertEqual(canonical["resolved_mode"], "external_model")
         self.assertTrue(canonical["provider_key_visible"])
 

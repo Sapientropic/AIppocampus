@@ -577,10 +577,6 @@ def maybe_start(args: argparse.Namespace) -> dict[str, Any]:
     root = registry_dir(Path(args.registry_dir).resolve() if args.registry_dir else None)
     state_file = state_path(root, Path(args.state_file).resolve() if args.state_file else None)
     hook_env = os.environ.get("AIPPOCAMPUS_SUBCONSCIOUS_HOOK")
-    if hook_env is None:
-        # Keep the old misspelled knob as a compatibility fallback only; the
-        # public prefix is AIPPOCAMPUS_* and should be the one documented/used.
-        hook_env = os.environ.get("AIIPPOCAMPUS_SUBCONSCIOUS_HOOK")
     hook_token = str(hook_env or "").strip().lower()
     if hook_token in {"0", "false", "off", "no", "disabled"}:
         return {"started": False, "skipped": "disabled_by_env", "projects": []}
@@ -591,7 +587,6 @@ def maybe_start(args: argparse.Namespace) -> dict[str, Any]:
             "projects": [],
             "consent": {
                 "required_env": "AIPPOCAMPUS_SUBCONSCIOUS_HOOK",
-                "legacy_env": "AIIPPOCAMPUS_SUBCONSCIOUS_HOOK",
                 "accepted_values": ["1", "true", "on", "yes", "enabled"],
             },
         }

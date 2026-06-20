@@ -23,6 +23,7 @@ from aippocampus_runtime.source.rollout import normalize_rollout
 
 LOCAL_PATH_REDACTION = "<local-path-redacted>"
 MAX_EXECUTABLE_RECOVERY_CUE_CHARS = 160
+MAX_COMPACT_FINAL_ANSWER_CHARS = 1600
 
 
 def latest_reply(rollout: Path) -> dict:
@@ -75,6 +76,7 @@ def _message_card(
     *,
     include_text: bool,
     include_preview: bool = True,
+    include_bounded_final_text: bool = False,
 ) -> dict[str, Any] | None:
     if not message:
         return None
@@ -87,6 +89,10 @@ def _message_card(
     }
     if include_text:
         card["text"] = message.get("text") or ""
+    elif include_bounded_final_text:
+        card["text"] = core.compact_text(str(message.get("text") or ""), MAX_COMPACT_FINAL_ANSWER_CHARS)
+        card["text_char_limit"] = MAX_COMPACT_FINAL_ANSWER_CHARS
+        card["text_bounded"] = len(str(message.get("text") or "")) > MAX_COMPACT_FINAL_ANSWER_CHARS
     else:
         card["text_omitted"] = True
         if include_preview:
@@ -96,15 +102,27 @@ def _message_card(
 
 def _latest_reply_full_action() -> dict[str, Any]:
     action = foreground_shell_action(
-        action_id="open_latest_reply_operator_source",
-        label="Open latest-reply source locally",
-        command="aippocampus latest-reply --detail full --operator-json",
-        why="Use this local operator view before quoting exact wording from the latest final answer.",
-        mutation_risk="read_only_local_operator_source_open",
-        claim_boundary="source_open_required_before_quoting",
+        action_id="open_full_latest_reply",
+        label="Open full latest reply",
+        command="aippocampus latest-reply --detail full",
+        why="Use this when the compact closeout is truncated or exact full wording is needed.",
+        mutation_risk="read_only",
+        claim_boundary="source_open_within_latest_final_answer_scope",
     )
-    action["authority_after_running"] = "source_open_within_local_rollout_scope"
+    action["authority_after_running"] = "source_open_within_latest_final_answer_scope"
     return action
+
+
+def latest_reply_tool_action() -> dict[str, Any]:
+    return {
+        "id": "open_full_latest_reply",
+        "tool_name": "latest_reply",
+        "arguments": {"detail": "full"},
+        "claim_boundary": "source_open_within_latest_final_answer_scope",
+        "mutation_risk": "read_only",
+        "authority_after_running": "source_open_within_latest_final_answer_scope",
+        "why": "Use this when the compact closeout is truncated or exact full wording is needed.",
+    }
 
 
 def _latest_reply_recall_action(cue: Any = None) -> dict[str, Any]:
@@ -156,15 +174,22 @@ def public_latest_reply_result(result: dict[str, Any], *, detail: str = "compact
         "status": status,
         "detail": detail,
         "closeout_available": closeout_available,
-        "message": _message_card(message, include_text=full and closeout_available),
+        "message": _message_card(
+            message,
+            include_text=full and closeout_available,
+            include_bounded_final_text=closeout_available and not full,
+        ),
         "message_count": result.get("message_count", 0),
         "turn_count": result.get("turn_count", 0),
         "rollout": LOCAL_PATH_REDACTION,
-        "local_private_fields": ["rollout", "message.text"],
+        "local_private_fields": ["rollout"] if closeout_available else ["rollout", "message.text"],
         "privacy_boundary": {
             "local_path_serialized": False,
             "commentary_text_serialized": bool(full and not closeout_available),
-            "final_answer_text_serialized": bool(full and closeout_available),
+            "final_answer_text_serialized": bool(closeout_available),
+            "final_answer_text_char_limit": (
+                MAX_COMPACT_FINAL_ANSWER_CHARS if closeout_available and not full else None
+            ),
         },
     }
     if closeout_available:
@@ -251,7 +276,7 @@ def render_latest_reply_text(payload: dict[str, Any]) -> str:
             f"commentary line {message.get('line')} | turn={message.get('turn_index')} "
             "(text omitted)"
         )
-    action = payload.get("agent_next_action")
+    action = payload.get("foreground_action")
     if isinstance(action, dict):
         lines.append("next: " + str(action.get("command") or action.get("label") or "use recall/search"))
     else:

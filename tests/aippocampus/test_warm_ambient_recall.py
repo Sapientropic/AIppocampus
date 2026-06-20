@@ -533,10 +533,10 @@ class WarmAmbientRecallTests(unittest.TestCase):
         self.assertEqual(payload["action_code"], "wait_or_run_worker_when_ready")
         self.assertTrue(payload["ordinary_recall_usable"])
         self.assertEqual(payload["next_command"], "aippocampus warm status --json")
-        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
-        self.assertEqual(payload["foreground_action"], payload["agent_next_action"])
-        self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
-        self.assertEqual(payload["agent_next_action"]["id"], "check_warm_status")
+        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v2")
+        self.assertNotIn("agent_next_action", payload)
+        self.assertNotIn(payload["foreground_action"], payload.get("safe_next_actions", []))
+        self.assertEqual(payload["foreground_action"]["id"], "check_warm_status")
 
     def test_warm_status_accepts_cwd_as_machine_wide_noop(self) -> None:
         job_dir = self.root / "warm-jobs"
@@ -579,15 +579,14 @@ class WarmAmbientRecallTests(unittest.TestCase):
         self.assertEqual(payload["action_code"], "provider_or_worker_unavailable_optional")
         self.assertTrue(payload["ordinary_recall_usable"])
         self.assertEqual(payload["next_command"], "aippocampus doctor provider --json")
-        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
-        self.assertEqual(payload["agent_next_action"]["id"], "inspect_provider_status")
-        self.assertEqual(payload["agent_next_action"]["command"], "aippocampus doctor provider --json")
-        self.assertEqual(payload["foreground_action"], payload["agent_next_action"])
-        self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
+        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v2")
+        self.assertNotIn("agent_next_action", payload)
+        self.assertEqual(payload["foreground_action"]["id"], "inspect_provider_status")
+        self.assertEqual(payload["foreground_action"]["command"], "aippocampus doctor provider --json")
+        self.assertNotIn(payload["foreground_action"], payload.get("safe_next_actions", []))
         action_ids = [action["id"] for action in payload["safe_next_actions"]]
-        self.assertEqual(action_ids[0], "inspect_provider_status")
         self.assertIn("recheck_warm_status", action_ids)
-        self.assertIn("inspect_provider_status", action_ids)
+        self.assertNotIn("inspect_provider_status", action_ids)
         self.assertIn("plan_warm_repair", action_ids)
         self.assertIn("snooze_optional_warm_ambient", action_ids)
         self.assertIn("retire_stale_warm_queue_after_review", action_ids)
@@ -2296,7 +2295,7 @@ class WarmAmbientRecallTests(unittest.TestCase):
             job_dir=self.root / "warm-jobs",
             spawn=False,
             enabled=True,
-            api_key_env="DEEPSEEK_API_KEY",
+            api_key_env="AIPPOCAMPUS_DEEPSEEK_API_KEY",
             scouts=("intent_mode_classifier:direct",),
         )
         job = json.loads(Path(result["job_path"]).read_text(encoding="utf-8"))
@@ -2385,7 +2384,7 @@ class WarmAmbientRecallTests(unittest.TestCase):
             job_dir=self.root / "warm-jobs",
             spawn=False,
             enabled=True,
-            api_key_env="DEEPSEEK_API_KEY",
+            api_key_env="AIPPOCAMPUS_DEEPSEEK_API_KEY",
             scouts=("deep_theme_matcher:direct", "key_line_hunter:direct"),
             quorum=1,
         )

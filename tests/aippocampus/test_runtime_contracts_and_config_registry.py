@@ -98,7 +98,7 @@ class RuntimeContractsAndConfigRegistryTests(unittest.TestCase):
         self.assertFalse(envelope["ok"])
         self.assertEqual(envelope["status"], "error")
 
-    def test_canonical_foreground_action_fields_keep_compat_aliases_identical(self) -> None:
+    def test_canonical_foreground_action_fields_omits_legacy_primary_aliases(self) -> None:
         primary = {
             "id": "inspect_detail",
             "label": "Inspect provider detail",
@@ -121,10 +121,10 @@ class RuntimeContractsAndConfigRegistryTests(unittest.TestCase):
             safe_next_actions=[primary, secondary],
         )
 
-        self.assertEqual(fields["foreground_action_contract"], "foreground-action-v1")
+        self.assertEqual(fields["foreground_action_contract"], "foreground-action-v2")
         self.assertEqual(fields["foreground_action"], primary)
-        self.assertEqual(fields["agent_next_action"], primary)
-        self.assertEqual(fields["safe_next_actions"][0], primary)
+        self.assertNotIn("agent_next_action", fields)
+        self.assertEqual(fields["safe_next_actions"], [secondary])
         self.assertEqual(foreground_action_contract_violations(fields), [])
 
     def test_shell_quote_keeps_recall_cues_single_argument(self) -> None:
@@ -149,26 +149,15 @@ class RuntimeContractsAndConfigRegistryTests(unittest.TestCase):
         self.assertIn(
             {
                 "field": "agent_next_action",
-                "reason": "alias_must_match_foreground_action",
-            },
-            violations,
-        )
-        self.assertIn(
-            {
-                "field": "safe_next_actions.0",
-                "reason": "primary_safe_action_must_match_foreground_action",
+                "reason": "legacy_alias_removed_from_foreground_action_v2",
             },
             violations,
         )
 
     def test_foreground_action_contract_lint_rejects_skeletal_cards(self) -> None:
         payload = {
-            "foreground_action_contract": "foreground-action-v1",
+            "foreground_action_contract": "foreground-action-v2",
             "foreground_action": {
-                "id": "continue_with_nonblocking_maintenance",
-                "continue_without_command": True,
-            },
-            "agent_next_action": {
                 "id": "continue_with_nonblocking_maintenance",
                 "continue_without_command": True,
             },
@@ -296,14 +285,14 @@ class RuntimeContractsAndConfigRegistryTests(unittest.TestCase):
             choices=[primary, secondary],
         )
 
-        self.assertEqual(card["foreground_action_contract"], "foreground-action-v1")
+        self.assertEqual(card["foreground_action_contract"], "foreground-action-v2")
         self.assertEqual(card["foreground_action"], primary)
-        self.assertEqual(card["agent_next_action"], primary)
-        self.assertEqual(card["safe_next_actions"][0], primary)
-        self.assertEqual(card["safe_next_actions"], card["choices"])
+        self.assertNotIn("agent_next_action", card)
+        self.assertEqual(card["safe_next_actions"], [secondary])
+        self.assertEqual(card["choices"], [primary, secondary])
         self.assertEqual(foreground_action_contract_violations(card), [])
 
-    def test_compact_health_payload_keeps_safe_next_action_mirror(self) -> None:
+    def test_compact_health_payload_uses_v2_primary_action_shape(self) -> None:
         card = compact_health_payload(
             {
                 "ok": False,
@@ -323,9 +312,9 @@ class RuntimeContractsAndConfigRegistryTests(unittest.TestCase):
             }
         )
 
-        self.assertEqual(card["foreground_action_contract"], "foreground-action-v1")
-        self.assertEqual(card["agent_next_action"], card["foreground_action"])
-        self.assertEqual(card["safe_next_actions"][0], card["foreground_action"])
+        self.assertEqual(card["foreground_action_contract"], "foreground-action-v2")
+        self.assertNotIn("agent_next_action", card)
+        self.assertNotIn(card["foreground_action"], card.get("safe_next_actions", []))
         self.assertEqual(
             card["foreground_action"]["id"],
             "open_current_thread_or_run_registry_wide_health",
@@ -422,9 +411,9 @@ class RuntimeContractsAndConfigRegistryTests(unittest.TestCase):
         self.assertEqual(summary["configured_sensitive_count"], 1)
         self.assertEqual(summary["detail"], "compact")
         self.assertEqual(summary["surface"], "foreground_decision_card")
-        self.assertEqual(summary["foreground_action_contract"], "foreground-action-v1")
-        self.assertEqual(summary["foreground_action"], summary["agent_next_action"])
-        self.assertEqual(summary["safe_next_actions"][0], summary["foreground_action"])
+        self.assertEqual(summary["foreground_action_contract"], "foreground-action-v2")
+        self.assertNotIn("agent_next_action", summary)
+        self.assertNotIn(summary["foreground_action"], summary.get("safe_next_actions", []))
         self.assertEqual(summary["foreground_action"]["id"], "review_unknown_config_env")
         self.assertNotIn("action_id", summary["foreground_action"])
         self.assertEqual(summary["safe_next_actions"][0]["command"], "aippocampus doctor config --detail full --json")
@@ -472,17 +461,17 @@ class RuntimeContractsAndConfigRegistryTests(unittest.TestCase):
         self.assertEqual(payload["kind"], "aippocampus_config_doctor_summary")
         self.assertEqual(payload["detail"], "compact")
         self.assertEqual(payload["surface"], "foreground_decision_card")
-        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
-        self.assertEqual(payload["foreground_action"], payload["agent_next_action"])
-        self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
+        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v2")
+        self.assertNotIn("agent_next_action", payload)
+        self.assertNotIn(payload["foreground_action"], payload.get("safe_next_actions", []))
         self.assertEqual(payload["foreground_action"]["id"], "no_action_needed")
         self.assertNotIn("action_id", payload["foreground_action"])
         self.assertNotIn("command", payload["foreground_action"])
         self.assertTrue(payload["foreground_action"]["continue_without_command"])
         self.assertEqual(foreground_action_contract_violations(payload), [])
-        self.assertEqual(payload["agent_next_action"]["id"], "no_action_needed")
+        self.assertEqual(payload["foreground_action"]["id"], "no_action_needed")
         self.assertEqual(
-            payload["safe_next_actions"][1]["command"],
+            payload["safe_next_actions"][0]["command"],
             "aippocampus doctor config --detail full --json",
         )
         self.assertNotIn("data", payload)

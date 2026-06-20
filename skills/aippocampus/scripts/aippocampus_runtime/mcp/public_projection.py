@@ -13,15 +13,16 @@ from aippocampus_runtime.contracts import (
     canonical_foreground_action_fields,
     command_value_needs_input,
     foreground_readiness_card,
+    strip_foreground_action_legacy_aliases,
 )
 from aippocampus_runtime.first_recall_readiness import compact_health_first_recall_fields
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
+from aippocampus_runtime.source.latest_reply import MAX_COMPACT_FINAL_ANSWER_CHARS
 
 
 def public_payload(arguments: dict[str, Any], payload: Any) -> Any:
-    if arguments.get("include_private_paths"):
-        return payload
-    return redact_sensitive_values(redact_private_paths(payload))
+    projected = payload if arguments.get("include_private_paths") else redact_sensitive_values(redact_private_paths(payload))
+    return strip_foreground_action_legacy_aliases(projected)
 
 
 def detail_arg(arguments: dict[str, Any]) -> str:
@@ -44,6 +45,15 @@ def compact_message(item: dict[str, Any]) -> dict[str, Any]:
         "text_preview": preview,
     }
     return {key: value for key, value in pairs.items() if value not in (None, "")}
+
+
+def compact_latest_reply_message(item: dict[str, Any]) -> dict[str, Any]:
+    message = compact_message(item)
+    raw_text = str(item.get("text") or "")
+    message["text"] = core.compact_text(raw_text, MAX_COMPACT_FINAL_ANSWER_CHARS)
+    message["text_char_limit"] = MAX_COMPACT_FINAL_ANSWER_CHARS
+    message["text_bounded"] = len(raw_text) > MAX_COMPACT_FINAL_ANSWER_CHARS
+    return message
 
 
 def compact_thread(
@@ -352,23 +362,23 @@ def compact_health_payload(payload: dict[str, Any]) -> dict[str, Any]:
         }
     )
     if ordinary_usable and all_recommended:
-        agent_next_action: dict[str, Any] = {
+        primary_action: dict[str, Any] = {
             "id": "continue_with_nonblocking_maintenance",
             "label": "Continue recall", "why": "Recall is usable; maintenance is advisory.",
             "mutation_risk": "read_only", "claim_boundary": "health_not_source", "continue_without_command": True,
             "primary": {"ordinary_first_recall_usable": True},
         }
         if freshness_degraded and exact_latest_action:
-            agent_next_action["before_exact_latest_claims"] = _action_command_projection(
+            primary_action["before_exact_latest_claims"] = _action_command_projection(
                 exact_latest_action
             )
         if storage_cleanup_action:
-            agent_next_action["when_idle"] = _storage_summary_projection(
+            primary_action["when_idle"] = _storage_summary_projection(
                 storage_cleanup_action,
                 storage_pressure,
             ) | {"id": "review_storage_gc_summary", "mutation_risk": "read_only"}
     else:
-        agent_next_action = (
+        primary_action = (
             promotable_blocking[0]
             if not ordinary_usable and promotable_blocking
             else all_recommended[0]
@@ -380,7 +390,7 @@ def compact_health_payload(payload: dict[str, Any]) -> dict[str, Any]:
                 "reason": "Memory health is ready; advisory actions can wait unless you are doing local diagnostics.",
             }
         )
-    foreground_action = dict(agent_next_action)
+    foreground_action = dict(primary_action)
     readiness_card = foreground_readiness_card(
         subject="memory_health",
         scope="current_workspace",
@@ -429,6 +439,28 @@ def compact_register_thread_payload(payload: dict[str, Any]) -> dict[str, Any]:
         length=12,
         prefix="thread",
     )
+    foreground_action = {
+        "id": "recall_from_registered_thread",
+        "label": "Recall from registered thread",
+        "tool_name": "recall_context",
+        "arguments_template": {"intent": "{task_or_memory_cue}"},
+        "requires": ["task_or_memory_cue"],
+        "template_only": True,
+        "mutation_risk": "read_only",
+        "claim_boundary": "registered_thread_status_is_not_memory_evidence",
+        "why": "Registration only makes source reachable; recall or search with a concrete cue before using it as continuity.",
+    }
+    search_action = {
+        "id": "search_registered_thread",
+        "label": "Search registered source",
+        "tool_name": "search_memory",
+        "arguments_template": {"query": "{exact_phrase}"},
+        "requires": ["exact_phrase"],
+        "template_only": True,
+        "mutation_risk": "read_only",
+        "claim_boundary": "source_reopen_required_before_claim",
+        "why": "Use when you have distinctive wording to find the registered clean source.",
+    }
     result = {
         "detail": "compact",
         "status": status,
@@ -442,8 +474,12 @@ def compact_register_thread_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "message_count": entry.get("message_count"),
         "has_clean_source": bool(paths.get("clean_source_messages_jsonl") or paths.get("clean_source_dir")),
         "index_built": bool(payload.get("index_report") or payload.get("index_built")),
-        "agent_next_action": (
+        "next_step_hint": (
             "Use recall_context or search_memory for task-specific routes; request diagnostic output only for local audit."
+        ),
+        **canonical_foreground_action_fields(
+            foreground_action,
+            safe_next_actions=[foreground_action, search_action],
         ),
     }
     if not entry and "status" in payload:
@@ -551,7 +587,7 @@ def compact_recall_context_payload(payload: dict[str, Any]) -> dict[str, Any]:
             "route_count": len(routes),
         },
         "output_boundary": "compact_foreground_no_local_private_handles",
-        "agent_next_action": (
+        "next_step_hint": (
             "Use routes[].foreground_action; request detail=full only for opaque handle diagnostics."
         ),
         "warnings": payload.get("warnings"),

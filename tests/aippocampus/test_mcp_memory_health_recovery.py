@@ -139,10 +139,11 @@ class McpMemoryHealthRecoveryTests(unittest.TestCase):
         self.assertGreaterEqual(payload["recall_capability"]["route_count"], 1)
         self.assertTrue(payload["recall_capability"]["deepen_tool_available"])
         self.assertTrue(payload["recall_capability"]["source_reopen_success"])
-        self.assertEqual(payload["agent_next_action"]["id"], "try_agent_recall_with_cue")
-        self.assertEqual(payload["agent_next_action"]["tool_name"], "agent_recall")
-        self.assertEqual(payload["safe_next_actions"][0]["tool_name"], "agent_recall")
-        self.assertNotEqual(payload["agent_next_action"]["id"], "recover_or_continue_without_memory")
+        self.assertNotIn("agent_next_action", payload)
+        self.assertEqual(payload["foreground_action"]["id"], "try_agent_recall_with_cue")
+        self.assertEqual(payload["foreground_action"]["tool_name"], "agent_recall")
+        self.assertNotIn(payload["foreground_action"], payload["safe_next_actions"])
+        self.assertNotEqual(payload["foreground_action"]["id"], "recover_or_continue_without_memory")
         self.assertNotIn(
             "onboard --provider auto --status --json",
             json.dumps(payload["safe_next_actions"][0]),
@@ -203,8 +204,9 @@ class McpMemoryHealthRecoveryTests(unittest.TestCase):
         self.assertEqual(payload["recall_capability"]["route_probe_status"], "routes_available")
         self.assertGreaterEqual(payload["recall_capability"]["route_count"], 1)
         self.assertTrue(payload["recall_capability"]["source_reopen_success"])
-        self.assertEqual(payload["agent_next_action"]["id"], "try_agent_recall_with_cue")
-        self.assertEqual(payload["agent_next_action"]["tool_name"], "agent_recall")
+        self.assertNotIn("agent_next_action", payload)
+        self.assertEqual(payload["foreground_action"]["id"], "try_agent_recall_with_cue")
+        self.assertEqual(payload["foreground_action"]["tool_name"], "agent_recall")
         self.assertEqual(payload["foreground_action"]["tool_name"], "agent_recall")
         self.assertFalse(payload["blocks_first_recall"])
         self.assertIn("maintenance_next_action", payload)
@@ -252,10 +254,9 @@ class McpMemoryHealthRecoveryTests(unittest.TestCase):
         self.assertFalse(payload["ok"])
         self.assertEqual(payload["status"], "unavailable")
         self.assertEqual(payload["error"]["code"], "health_unavailable")
-        self.assertIn("agent_next_action", payload)
+        self.assertNotIn("agent_next_action", payload)
         self.assertIn("safe_next_actions", payload)
-        self.assertEqual(payload["safe_next_actions"][0]["command"], payload["agent_next_action"]["command"])
-        self.assertIn("onboard --provider auto --status --json", payload["safe_next_actions"][0]["command"])
+        self.assertIn("onboard --provider auto --status --json", payload["foreground_action"]["command"])
         self.assertEqual(
             payload["safe_next_actions"][2]["command_template"],
             'aippocampus search "{exact_phrase}" --json',

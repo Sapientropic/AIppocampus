@@ -84,7 +84,7 @@ def semantic_budget_result(
             "budget_clip_reason": (
                 SEMANTIC_BUDGET_CLIP_REASON if budget_clipped else SEMANTIC_SOCKET_TIMEOUT_REASON
             ),
-            "agent_next_action": SEMANTIC_BUDGET_AGENT_NEXT_ACTION
+            "next_step_hint": SEMANTIC_BUDGET_AGENT_NEXT_ACTION
             if budget_clipped
             else "no_budget_change_needed",
         },

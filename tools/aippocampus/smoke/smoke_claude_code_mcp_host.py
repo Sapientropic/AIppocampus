@@ -149,7 +149,7 @@ def redacted_config_shape(config: dict[str, Any]) -> dict[str, Any]:
         "aippocampus_environment_key_count": sum(
             1
             for key in env
-            if str(key).startswith(("AIPPOCAMPUS_", "CODEX_MEMORY_"))
+            if str(key).startswith("AIPPOCAMPUS_")
         ),
     }
 

@@ -918,11 +918,8 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertNotIn("foreground_actions", payload["summary"])
         self.assertNotIn("foreground_status_cards", payload)
         self.assertNotIn("agent_callable", payload)
-        current_thread_card = next(
-            action
-            for action in payload["safe_next_actions"]
-            if action.get("surface") == "agent_callable"
-        )
+        current_thread_card = payload["foreground_action"]
+        self.assertEqual(current_thread_card.get("surface"), "agent_callable")
         self.assertTrue(current_thread_card["command"].startswith("aippocampus "))
         self.assertIn("agent_recall", current_thread_card["manual_instruction"])
         self.assertNotIn("call agent_recall", current_thread_card["command"])
@@ -1094,7 +1091,7 @@ class UpdateSyncTests(unittest.TestCase):
     def test_status_does_not_claim_hook_provider_visibility_when_child_check_skipped(
         self,
     ) -> None:
-        with tempfile.TemporaryDirectory() as tmp, provider_env({"DEEPSEEK_API_KEY": "test"}):
+        with tempfile.TemporaryDirectory() as tmp, provider_env({"AIPPOCAMPUS_DEEPSEEK_API_KEY": "test"}):
             root = Path(tmp)
             codex_home = root / "codex-home"
             hooks_json = codex_home / "hooks.json"
@@ -1125,7 +1122,7 @@ class UpdateSyncTests(unittest.TestCase):
     def test_status_marks_hook_provider_ready_when_child_process_inherits_key(
         self,
     ) -> None:
-        with tempfile.TemporaryDirectory() as tmp, provider_env({"DEEPSEEK_API_KEY": "test"}):
+        with tempfile.TemporaryDirectory() as tmp, provider_env({"AIPPOCAMPUS_DEEPSEEK_API_KEY": "test"}):
             root = Path(tmp)
             codex_home = root / "codex-home"
             hooks_json = codex_home / "hooks.json"

@@ -28,7 +28,6 @@ def foreground_action(*, no_rows: bool = False) -> dict[str, Any]:
 
 def empty_readout_next_actions() -> list[dict[str, Any]]:
     return [
-        foreground_action(no_rows=True),
         {
             "id": "check_warm_ambient_status",
             "kind": "shell_command",
@@ -58,3 +57,38 @@ def empty_readout_next_actions() -> list[dict[str, Any]]:
             "why": "Attach a known local sleep-cycle JSON summary when one already exists.",
         },
     ]
+
+
+def populated_readout_next_actions() -> list[dict[str, Any]]:
+    """Return true alternatives to the populated-readout primary action.
+
+    Foreground-action v2 keeps the primary route in ``foreground_action`` only.
+    These follow-ups deliberately do not repeat ``aippocampus observatory
+    --summary-json`` so callers can expose useful adjacent paths without
+    recreating the old ``safe_next_actions[0]`` alias contract.
+    """
+
+    return [
+        {
+            "id": "inspect_observatory_operator_json",
+            "kind": "shell_command",
+            "command": "aippocampus observatory --operator-json",
+            "mutation_risk": "read_only",
+            "claim_boundary": "observatory_readout_not_source_truth_or_control_plane",
+            "why": "Open the fuller sanitized audit when the compact readout is not enough.",
+        },
+        {
+            "id": "render_observatory_html",
+            "kind": "shell_command",
+            "command": "aippocampus observatory --html",
+            "mutation_risk": "read_only",
+            "claim_boundary": "observatory_readout_not_source_truth_or_control_plane",
+            "why": "Render the same read-only diagnostics as an HTML overview for scan-heavy review.",
+        },
+    ]
+
+
+def readout_next_actions(*, no_rows: bool = False) -> list[dict[str, Any]]:
+    if no_rows:
+        return empty_readout_next_actions()
+    return populated_readout_next_actions()

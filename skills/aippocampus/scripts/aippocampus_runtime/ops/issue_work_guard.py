@@ -490,7 +490,7 @@ def _issue_error_payload(message: str) -> dict[str, Any]:
             "code": "issue_context_unavailable",
             "message": message,
         },
-        "agent_next_action": (
+        "foreground_guidance": (
             "Retry from a GitHub checkout with `gh auth status`, pass --title/--body "
             "directly, or inspect the issue/comments manually before continuing."
         ),
@@ -607,7 +607,7 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 print("AIppocampus work guard")
                 print("decision: issue context unavailable")
-                print("next: " + payload["agent_next_action"])
+                print("next: " + payload["foreground_guidance"])
             return 2
     elif args.issue_ref:
         parser.error("positional input must be a GitHub issue number or issue URL")
