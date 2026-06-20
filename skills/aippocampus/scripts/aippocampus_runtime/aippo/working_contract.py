@@ -13,6 +13,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from aippocampus_runtime.aippo import usefulness
+from aippocampus_runtime.contracts import shell_quote
 from aippocampus_runtime.core import compact_text
 from aippocampus_runtime.recall import authority
 
@@ -108,6 +109,7 @@ def contract_deepen_action(deepen_route_id: str) -> dict[str, Any]:
         "action_id": "deepen_aippo_working_contract",
         "tool_name": "agent_deepen",
         "arguments": {"handle": deepen_route_id},
+        "command": f"aippocampus agent deepen --handle {shell_quote(deepen_route_id)} --json",
         "claim_boundary": "source_reopen_required_before_claim",
         "authority_after_running": "source_open_within_aippo_contract_scope",
     }
@@ -340,11 +342,7 @@ def activation_packet_from_working_contract(
     selected_count = len(selected)
     contract_active_count = len(active)
     active_not_foreground_available_count = max(0, contract_active_count - selected_count)
-    display_hint = (
-        f"AIppo {families[0]} guidance."
-        if families
-        else "AIppo no active contract."
-    )
+    display_hint = f"AIppo {families[0]} guidance." if families else "AIppo no active contract."
     packet = {
         "kind": "aippocampus_aippo_activation_packet",
         "schema_version": SCHEMA_VERSION,
@@ -405,6 +403,22 @@ def activation_packet_from_working_contract(
     if _json_bytes(compact) <= max_packet_bytes:
         return compact
     compact.pop("requires_reopen_for", None)
+    if _json_bytes(compact) <= max_packet_bytes:
+        return compact
+    if families:
+        # In the tight foreground packet, keep the actionable deepen route and
+        # the active-clause counts before decorative display/availability prose.
+        compact.pop("display_hint", None)
+        compact.pop("availability_basis", None)
+    else:
+        # A no-match packet is primarily a stop signal; preserving no-active
+        # state and counts is more useful than carrying a deepen action.
+        compact.pop("contract_action", None)
+    if _json_bytes(compact) <= max_packet_bytes:
+        return compact
+    contract_action = compact.get("contract_action")
+    if isinstance(contract_action, dict):
+        contract_action.pop("authority_after_running", None)
     if _json_bytes(compact) <= max_packet_bytes:
         return compact
     compact.pop("contract_active_clause_count", None)

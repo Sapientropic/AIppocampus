@@ -64,7 +64,7 @@ FRONTSTAGE_PROVIDER_SAMPLE_LIMIT = 3
 FRONTSTAGE_PROVIDER_SCAN_BUDGET_SECONDS = 0.75
 SEARCH_EXISTING_MEMORY_COMMAND_TEMPLATE = 'aippocampus search "{exact_phrase}" --json'
 GENERIC_JSONL_IMPORT_PREVIEW_COMMAND_TEMPLATE = (
-    "aippocampus import conversation --format generic-jsonl --input {input_path} --dry-run --json"
+    'aippocampus import conversation --format generic-jsonl --input "{input_path}" --dry-run --json'
 )
 
 
@@ -73,7 +73,7 @@ def _provider_write_command(provider: str) -> str | None:
     if clean_provider in {"codex", "claude-code"}:
         return f"aippocampus onboard --provider {clean_provider} --cwd . --json"
     if clean_provider == "generic-jsonl":
-        return "aippocampus import conversation --format generic-jsonl --input {input_path} --json"
+        return 'aippocampus import conversation --format generic-jsonl --input "{input_path}" --json'
     return None
 
 

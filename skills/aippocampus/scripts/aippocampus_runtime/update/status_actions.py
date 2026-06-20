@@ -276,19 +276,18 @@ def foreground_status_cards(report: dict[str, Any]) -> list[dict[str, Any]]:
         summary.get("partial_readiness") or summary.get("plan_scope") == "foreground_partial"
     )
     cards: list[dict[str, Any]] = []
+    partial_readiness_card: dict[str, Any] | None = None
     if foreground_partial:
-        cards.append(
-            {
-                "id": "partial_readiness",
-                "label": "Open full update readiness",
-                "status": "slow_checks_deferred",
-                "why": "Foreground status skipped operator freshness sweeps and should not be treated as release-grade readiness.",
-                "command": "aippocampus update status --operator-json",
-                "deferred_components": summary.get("deferred_components") or [],
-                "mutation_risk": "read_only",
-                "claim_boundary": "update_status_not_source_evidence",
-            }
-        )
+        partial_readiness_card = {
+            "id": "partial_readiness",
+            "label": "Open full update readiness",
+            "status": "slow_checks_deferred",
+            "why": "Foreground status skipped operator freshness sweeps and should not be treated as release-grade readiness.",
+            "command": "aippocampus update status --operator-json",
+            "deferred_components": summary.get("deferred_components") or [],
+            "mutation_risk": "read_only",
+            "claim_boundary": "update_status_not_source_evidence",
+        }
     if bool(summary.get("agent_callable_host_ready")) and not bool(
         summary.get("agent_callable_ready")
     ):
@@ -321,6 +320,8 @@ def foreground_status_cards(report: dict[str, Any]) -> list[dict[str, Any]]:
                 ),
             }
         )
+    if partial_readiness_card:
+        cards.append(partial_readiness_card)
     cache_refresh = plugin.get("cache_refresh") if isinstance(plugin, dict) else None
     if isinstance(cache_refresh, dict) and cache_refresh.get("auto_refresh_blocked"):
         reason = str(cache_refresh.get("blocked_reason") or "plugin_cache_auto_resolution_blocked")

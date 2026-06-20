@@ -283,14 +283,12 @@ def _thread_entries(registry: Mapping[str, Any], max_threads: int) -> list[Mappi
     return entries[: max(0, max_threads)]
 
 
-def build_private_history_episode_arc_adjudication_report(
+def _episode_arc_scan(
     registry: Mapping[str, Any],
     *,
-    max_threads: int = DEFAULT_MAX_THREADS,
-    max_line_gap: int = DEFAULT_MAX_LINE_GAP,
+    max_threads: int,
+    max_line_gap: int,
 ) -> dict[str, Any]:
-    """Build a public-safe aggregate readout over local private history."""
-
     all_episode_rows: list[dict[str, Any]] = []
     metrics: Counter[str] = Counter()
     bad_json_rows = 0
@@ -299,20 +297,23 @@ def build_private_history_episode_arc_adjudication_report(
         if not thread_key:
             continue
         metrics["thread_count_scanned"] += 1
-        messages_path = _path_from_entry(entry, "clean_source_messages_jsonl")
-        events_path = _path_from_entry(entry, "clean_source_events_jsonl")
         message_rows: list[dict[str, Any]] = []
         behavior_rows: list[dict[str, Any]] = []
-        if messages_path and messages_path.is_file():
-            message_rows, bad_rows = _read_jsonl(messages_path)
+        for path_key, thread_metric, row_metric, target in (
+            ("clean_source_messages_jsonl", "threads_with_clean_messages", "message_rows_scanned", "messages"),
+            ("clean_source_events_jsonl", "threads_with_clean_events", "behavior_event_rows_scanned", "events"),
+        ):
+            path = _path_from_entry(entry, path_key)
+            if not (path and path.is_file()):
+                continue
+            rows, bad_rows = _read_jsonl(path)
             bad_json_rows += bad_rows
-            metrics["threads_with_clean_messages"] += 1
-            metrics["message_rows_scanned"] += len(message_rows)
-        if events_path and events_path.is_file():
-            behavior_rows, bad_rows = _read_jsonl(events_path)
-            bad_json_rows += bad_rows
-            metrics["threads_with_clean_events"] += 1
-            metrics["behavior_event_rows_scanned"] += len(behavior_rows)
+            metrics[thread_metric] += 1
+            metrics[row_metric] += len(rows)
+            if target == "messages":
+                message_rows = rows
+            else:
+                behavior_rows = rows
 
         decisions = decision_events.extract_decision_candidates(
             message_rows,
@@ -337,11 +338,34 @@ def build_private_history_episode_arc_adjudication_report(
                 requested=requested,
                 max_line_gap=max_line_gap,
             )
-            if len(rows) > 1:
-                metrics["rejected_decision_with_failed_behavior_chain_count"] += 1
+            metrics["rejected_decision_with_failed_behavior_chain_count"] += int(len(rows) > 1)
             all_episode_rows.extend(rows)
 
-    arcs = episode_arcs.build_episode_arcs(all_episode_rows)
+    status = (
+        "measured_public_safe_aggregate"
+        if metrics["thread_count_scanned"] and metrics["message_rows_scanned"]
+        else "insufficient_real_history"
+    )
+    return {
+        "arcs": episode_arcs.build_episode_arcs(all_episode_rows),
+        "bad_json_row_count": bad_json_rows,
+        "metrics": metrics,
+        "status": status,
+    }
+
+
+def build_private_history_episode_arc_adjudication_report(
+    registry: Mapping[str, Any],
+    *,
+    max_threads: int = DEFAULT_MAX_THREADS,
+    max_line_gap: int = DEFAULT_MAX_LINE_GAP,
+) -> dict[str, Any]:
+    """Build a public-safe aggregate readout over local private history."""
+
+    scan = _episode_arc_scan(registry, max_threads=max_threads, max_line_gap=max_line_gap)
+    arcs = list(scan["arcs"])
+    metrics: Counter[str] = scan["metrics"]
+    status = str(scan["status"])
     complete_arcs = [arc for arc in arcs if not arc.get("sequence_gaps")]
     rejected_route_arcs = [
         arc for arc in arcs if str(arc.get("episode_kind") or "") == "rejected_route_arc"
@@ -349,11 +373,6 @@ def build_private_history_episode_arc_adjudication_report(
     complete_rejected_route_arcs = [
         arc for arc in rejected_route_arcs if not arc.get("sequence_gaps")
     ]
-    status = (
-        "measured_public_safe_aggregate"
-        if metrics["thread_count_scanned"] and metrics["message_rows_scanned"]
-        else "insufficient_real_history"
-    )
     source_ref_count = sum(len(_as_list(arc.get("source_refs"))) for arc in arcs)
     sequence_resolution_counts = _sequence_resolution_counts(arcs)
     safe_use_counts = _safe_use_counts(arcs)
@@ -370,7 +389,7 @@ def build_private_history_episode_arc_adjudication_report(
             "threads_with_clean_events": int(metrics["threads_with_clean_events"]),
             "message_rows_scanned": int(metrics["message_rows_scanned"]),
             "behavior_event_rows_scanned": int(metrics["behavior_event_rows_scanned"]),
-            "bad_json_row_count": bad_json_rows,
+            "bad_json_row_count": int(scan["bad_json_row_count"]),
             "max_threads": max(0, max_threads),
             "max_line_gap": max(0, max_line_gap),
         },
@@ -443,44 +462,56 @@ def build_compact_episode_arc_summary_report(
     registry: Mapping[str, Any],
     *,
     max_threads: int = DEFAULT_MAX_THREADS,
+    max_line_gap: int = DEFAULT_MAX_LINE_GAP,
 ) -> dict[str, Any]:
-    """Build the default foreground card without private-history aggregation.
+    """Build the default foreground card with aggregate-safe navigation counts.
 
-    Full Episode/Arc adjudication reads clean messages/events and computes
-    per-arc resolution/safe-use counts. That is valuable operator detail, but
-    the first foreground card only needs to route the agent toward the explicit
-    detail command. Keep the default path honest: counts are deferred, not
-    guessed from a partial private-history scan.
+    The compact path now measures bounded aggregate counts so a foreground
+    agent can decide whether detail is worth opening. It still keeps exact
+    handles, source refs, local paths, and raw text behind the full detail route.
     """
 
     entries = list(_thread_entries(registry, max_threads))
-    has_scope = bool(entries)
+    scan = _episode_arc_scan(registry, max_threads=max_threads, max_line_gap=max_line_gap)
+    arcs = list(scan["arcs"])
+    metrics: Counter[str] = scan["metrics"]
+    complete_arc_count = sum(1 for arc in arcs if not arc.get("sequence_gaps"))
+    input_surface = {
+        "thread_count_scanned": int(metrics["thread_count_scanned"]),
+        "threads_with_clean_messages": int(metrics["threads_with_clean_messages"]),
+        "threads_with_clean_events": int(metrics["threads_with_clean_events"]),
+        "message_rows_scanned": int(metrics["message_rows_scanned"]),
+        "behavior_event_rows_scanned": int(metrics["behavior_event_rows_scanned"]),
+        "bad_json_row_count": int(scan["bad_json_row_count"]),
+    }
+    current_validity_counts = _count_values(arcs, "current_validity")
+    safe_use_counts = _safe_use_counts(arcs)
     return {
         "ok": True,
         "kind": REPORT_KIND,
         "schema_version": SCHEMA_VERSION,
         "created_at": now_utc(),
-        "status": (
-            "compact_foreground_counts_deferred"
-            if has_scope
-            else "insufficient_real_history"
-        ),
-        "counts_deferred": has_scope,
+        "status": scan["status"],
+        "counts_deferred": False,
+        "compact_aggregate_scan": True,
         "input_surface": {
             "thread_count_seen": len(entries),
+            **input_surface,
             "max_threads": max(0, max_threads),
-            "clean_message_rows_scanned": 0,
-            "clean_event_rows_scanned": 0,
-            "full_history_aggregation_deferred": True,
+            "max_line_gap": max(0, max_line_gap),
+            "full_history_aggregation_deferred": False,
+            "handles_and_source_refs_deferred_to_detail": True,
         },
         "metrics": {
-            "episode_arc_count": None if has_scope else 0,
-            "complete_arc_count": None if has_scope else 0,
-            "gappy_arc_count": None if has_scope else 0,
-            "source_ref_count": None if has_scope else 0,
+            "episode_arc_count": len(arcs),
+            "complete_arc_count": complete_arc_count,
+            "gappy_arc_count": len(arcs) - complete_arc_count,
+            "needs_reopen_count": current_validity_counts.get("needs_reopen", 0),
+            "message_rows_scanned": input_surface["message_rows_scanned"],
+            "thread_count_scanned": input_surface["thread_count_scanned"],
         },
-        "current_validity_counts": {},
-        "safe_use_counts": {},
+        "current_validity_counts": current_validity_counts,
+        "safe_use_counts": safe_use_counts,
         "privacy_boundary": {
             "aggregate_only": True,
             "raw_source_text_emitted": False,
@@ -547,6 +578,7 @@ def render_text(report: dict[str, Any]) -> str:
 
 def summary_projection(report: Mapping[str, Any]) -> dict[str, Any]:
     metrics = _as_mapping(report.get("metrics"))
+    input_surface = _as_mapping(report.get("input_surface"))
     counts_deferred = bool(report.get("counts_deferred"))
     episode_arc_count = None if counts_deferred else int(metrics.get("episode_arc_count") or 0)
     complete_arc_count = None if counts_deferred else metrics.get("complete_arc_count", 0)
@@ -559,6 +591,12 @@ def summary_projection(report: Mapping[str, Any]) -> dict[str, Any]:
         "gappy_arc_count": gappy_arc_count,
         "needs_reopen_count": (
             None if counts_deferred else current_validity_counts.get("needs_reopen", 0)
+        ),
+        "thread_count_scanned": (
+            None if counts_deferred else input_surface.get("thread_count_scanned", 0)
+        ),
+        "message_rows_scanned": (
+            None if counts_deferred else input_surface.get("message_rows_scanned", 0)
         ),
         "counts_status": "deferred_to_detail" if counts_deferred else "measured",
     }
@@ -610,6 +648,8 @@ def summary_projection(report: Mapping[str, Any]) -> dict[str, Any]:
         "summary_source": (
             "bounded_registry_scan_no_private_history_aggregation"
             if counts_deferred
+            else "bounded_aggregate_scan_without_handles"
+            if report.get("compact_aggregate_scan")
             else "private_history_aggregate"
         ),
         "episode_arc_count": episode_arc_count,
@@ -649,6 +689,7 @@ def main(argv: list[str] | None = None) -> int:
         report = build_compact_episode_arc_summary_report(
             registry,
             max_threads=args.max_threads,
+            max_line_gap=args.max_line_gap,
         )
         print(json.dumps(summary_projection(report), ensure_ascii=False, indent=2))
         return 0

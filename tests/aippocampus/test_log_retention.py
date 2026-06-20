@@ -122,16 +122,17 @@ class LogRetentionTests(unittest.TestCase):
             self.assertEqual(status["safe_next_actions"][0], status["foreground_action"])
             self.assertEqual(status["agent_next_action"]["id"], "no_cleanup_needed")
             self.assertEqual(status["agent_next_action"]["mutation_risk"], "read_only")
-            self.assertEqual(
-                status["agent_next_action"]["command"],
-                "aippocampus logs status --json",
-            )
+            self.assertTrue(status["agent_next_action"]["continue_without_command"])
+            self.assertTrue(status["agent_next_action"]["no_op"])
+            self.assertNotIn("command", status["agent_next_action"])
             self.assertEqual(plan["would_rotate_count"], 0)
             self.assertEqual(plan["foreground_action_contract"], "foreground-action-v1")
             self.assertEqual(plan["agent_next_action"], plan["foreground_action"])
             self.assertEqual(plan["safe_next_actions"][0], plan["foreground_action"])
             self.assertEqual(plan["agent_next_action"]["id"], "no_cleanup_needed")
             self.assertEqual(plan["agent_next_action"]["mutation_risk"], "read_only")
+            self.assertTrue(plan["agent_next_action"]["continue_without_command"])
+            self.assertNotIn("command", plan["agent_next_action"])
             self.assertNotIn("apply_command", plan)
 
     def test_rotate_json_defaults_to_plan_and_requires_explicit_apply(self) -> None:

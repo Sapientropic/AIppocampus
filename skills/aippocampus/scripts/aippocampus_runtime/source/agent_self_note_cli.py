@@ -18,7 +18,13 @@ from aippocampus_runtime.source.agent_self_note_actions import (
     append_error_payload as build_append_error_payload,
 )
 from aippocampus_runtime.source.agent_self_note_actions import (
+    empty_notes_state as _empty_notes_state,
+)
+from aippocampus_runtime.source.agent_self_note_actions import (
     format_action_for_human,
+)
+from aippocampus_runtime.source.agent_self_note_actions import (
+    self_note_lookup_actions as _self_note_lookup_actions,
 )
 from aippocampus_runtime.source.agent_self_notes import (
     VALID_TRIGGERS,
@@ -461,65 +467,6 @@ def _read_success_payload(row: Mapping[str, Any]) -> dict[str, Any]:
         },
         "privacy_boundary": _privacy_boundary(),
     }
-
-
-def _empty_notes_state(command: str, query: str = "") -> dict[str, Any]:
-    actions = _self_note_lookup_actions()
-    if command == "search":
-        return {
-            "decision": "empty",
-            "message": "No agent self-note matched this cue.",
-            "query": query,
-            "agent_next_action": actions[1],
-            "safe_next_actions": actions,
-            "authority": "direction_only_empty_state",
-        }
-    return {
-        "decision": "empty",
-        "message": "No agent self-notes have been recorded yet.",
-        "agent_next_action": actions[0],
-        "safe_next_actions": actions,
-        "authority": "direction_only_empty_state",
-    }
-
-
-def _self_note_lookup_actions() -> list[dict[str, Any]]:
-    return [
-        {
-            "id": "list_notes",
-            "label": "List scoped self-notes",
-            "command": "aippocampus self-note list --json",
-            "mutation_risk": "read_only",
-            "claim_boundary": "direction_only_not_source_truth",
-            "why": "Use this to pick a concrete note_id without broadening scope.",
-        },
-        {
-            "id": "search_notes",
-            "label": "Search scoped self-notes",
-            "command_template": 'aippocampus self-note search "{cue}" --json',
-            "template_only": True,
-            "requires": ["cue"],
-            "mutation_risk": "read_only",
-            "claim_boundary": "direction_only_not_source_truth",
-            "why": "Use when you have a cue for weak direction-only atmosphere.",
-        },
-        {
-            "id": "source_backed_recall",
-            "label": "Use source-backed recall instead",
-            "command_template": 'aippocampus agent recall "{cue}" --json',
-            "template_only": True,
-            "requires": ["cue"],
-            "mutation_risk": "read_only",
-            "claim_boundary": "no_claim_before_reopen",
-            "why": "Use for facts, continuity claims, or exact source-backed context.",
-        },
-    ]
-
-
-def _self_note_lookup_action_fields(*, command: str) -> dict[str, Any]:
-    actions = _self_note_lookup_actions()
-    primary_index = 1 if command == "search" else 0
-    return canonical_foreground_action_fields(actions[primary_index], safe_next_actions=actions)
 
 
 def _append_success_payload(

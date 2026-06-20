@@ -108,6 +108,82 @@ def append_error_payload(
     return payload
 
 
+def self_note_lookup_actions() -> list[dict[str, Any]]:
+    return [
+        {
+            "id": "list_notes",
+            "label": "List scoped self-notes",
+            "command": "aippocampus self-note list --json",
+            "mutation_risk": "read_only",
+            "claim_boundary": "direction_only_not_source_truth",
+            "why": "Use this to pick a concrete note_id without broadening scope.",
+        },
+        {
+            "id": "search_notes",
+            "label": "Search scoped self-notes",
+            "command_template": 'aippocampus self-note search "{cue}" --json',
+            "template_only": True,
+            "requires": ["cue"],
+            "mutation_risk": "read_only",
+            "claim_boundary": "direction_only_not_source_truth",
+            "why": "Use when you have a cue for weak direction-only atmosphere.",
+        },
+        {
+            "id": "source_backed_recall",
+            "label": "Use source-backed recall instead",
+            "command_template": 'aippocampus agent recall "{cue}" --json',
+            "template_only": True,
+            "requires": ["cue"],
+            "mutation_risk": "read_only",
+            "claim_boundary": "no_claim_before_reopen",
+            "why": "Use for facts, continuity claims, or exact source-backed context.",
+        },
+    ]
+
+
+def self_note_empty_list_actions() -> list[dict[str, Any]]:
+    continue_action = {
+        "id": "continue_without_self_notes",
+        "label": "Continue without self-notes",
+        "continue_without_command": True,
+        "mutation_risk": "none",
+        "claim_boundary": "direction_only_empty_state_not_source_truth",
+        "why": (
+            "No scoped self-notes exist; continue, or use source-backed recall when "
+            "facts or continuity matter."
+        ),
+    }
+    lookup_actions = self_note_lookup_actions()
+    return [continue_action, lookup_actions[2], lookup_actions[1]]
+
+
+def empty_notes_state(command: str, query: str = "") -> dict[str, Any]:
+    actions = self_note_lookup_actions()
+    if command == "search":
+        return {
+            "decision": "empty",
+            "message": "No agent self-note matched this cue.",
+            "query": query,
+            "agent_next_action": actions[1],
+            "safe_next_actions": actions,
+            "authority": "direction_only_empty_state",
+        }
+    actions = self_note_empty_list_actions()
+    return {
+        "decision": "empty",
+        "message": "No agent self-notes have been recorded yet.",
+        "agent_next_action": actions[0],
+        "safe_next_actions": actions,
+        "authority": "direction_only_empty_state",
+    }
+
+
+def self_note_lookup_action_fields(*, command: str) -> dict[str, Any]:
+    actions = self_note_lookup_actions()
+    primary_index = 1 if command == "search" else 0
+    return canonical_foreground_action_fields(actions[primary_index], safe_next_actions=actions)
+
+
 def format_action_for_human(action: Any) -> list[str]:
     if not isinstance(action, Mapping):
         return [str(action)]

@@ -18,7 +18,7 @@ def backend_selection_payload(cwd: Path, *, diagnostic: bool = False) -> dict[st
         "backend": "local_folder",
         "backends": ["local_folder", "http_object_store"],
         "commands": ["status", "push", "pull", "repair"],
-        "command_template": "aippocampus sync status --sync-dir {sync_dir} --json",
+        "command_template": 'aippocampus sync status --sync-dir "{sync_dir}" --json',
         "object_storage_command_template": (
             "aippocampus sync status --object-store-url {object_store_url} --json"
         ),
@@ -31,7 +31,7 @@ def backend_selection_payload(cwd: Path, *, diagnostic: bool = False) -> dict[st
             {
                 "id": "check_object_sync_status",
                 "label": "Check object sync status",
-                "command_template": "aippocampus sync status --object-store-url {object_store_url} --json",
+                "command_template": 'aippocampus sync status --object-store-url "{object_store_url}" --json',
                 "requires": ["object_store_url"],
                 "template_only": True,
                 "mutation_risk": "read_only",

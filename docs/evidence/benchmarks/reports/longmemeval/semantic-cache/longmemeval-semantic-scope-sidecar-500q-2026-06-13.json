@@ -1,5 +1,6 @@
 {
-  "schema_version": 1,
+  "no_open_followup_reason": "Historical dated evidence; current claim posture is owned by docs/evidence/current-claims.md and the report-family README. Open a new scoped issue only if a future pass promotes or supersedes this artifact.",
+"schema_version": 1,
   "kind": "longmemeval_semantic_scope_sidecar_500q_diagnostic",
   "generated_at_local": "2026-06-13",
   "issue": "#1323",

@@ -1,5 +1,6 @@
 {
-  "authority": "diagnostic_only",
+  "no_open_followup_reason": "Historical dated evidence; current claim posture is owned by docs/evidence/current-claims.md and the report-family README. Open a new scoped issue only if a future pass promotes or supersedes this artifact.",
+"authority": "diagnostic_only",
   "can_claim": [
     "public_safe_default_path_cognitive_load_replay_recorded",
     "cognitive_load_maturity_recommendation_recorded"

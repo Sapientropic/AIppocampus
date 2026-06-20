@@ -449,7 +449,7 @@ def build_provider_key_bridge_plan(
                 ),
                 "command_template": (
                     "aippocampus onboard provider-key --apply --source explicit-dotenv "
-                    "--credential-dotenv {credential_dotenv_path} --json"
+                    '--credential-dotenv "{credential_dotenv_path}" --json'
                 ),
                 "requires": ["credential_dotenv_path"],
             }
@@ -502,7 +502,7 @@ def build_provider_key_bridge_plan(
             "source_options": ["explicit-dotenv", "no-key"],
             "explicit_dotenv_command_template": (
                 "aippocampus onboard provider-key --plan --source explicit-dotenv "
-                "--credential-dotenv {credential_dotenv_path} --json"
+                '--credential-dotenv "{credential_dotenv_path}" --json'
             ),
             "requires": ["credential_dotenv_path"],
             "no_key_source_backed_recall_still_works": True,
@@ -535,7 +535,7 @@ def _blocked_plan_recommended_actions() -> list[dict[str, Any]]:
             ),
             "command_template": (
                 "aippocampus onboard provider-key --plan --source explicit-dotenv "
-                "--credential-dotenv {credential_dotenv_path} --json"
+                '--credential-dotenv "{credential_dotenv_path}" --json'
             ),
             "requires": ["credential_dotenv_path"],
             "mutation_risk": "read_only_preview",

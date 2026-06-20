@@ -23,10 +23,10 @@ PUBLIC_METADATA_PROFILES = {"public-export", "public-metadata"}
 ALLOWED_REDACTION_PROFILES = ["raw-private", "redacted-local", "public-export", "public-metadata"]
 BUNDLE_INTEGRITY_NAME = "bundle_integrity.json"
 PRIVATE_EXPORT_COMMAND = (
-    "aippocampus export --redaction-profile raw-private --output {output_path} --json"
+    'aippocampus export --redaction-profile raw-private --output "{output_path}" --json'
 )
 PUBLIC_EXPORT_COMMAND = (
-    "aippocampus export --redaction-profile public-export --no-raw --output {output_path} --json"
+    'aippocampus export --redaction-profile public-export --no-raw --output "{output_path}" --json'
 )
 
 
@@ -594,7 +594,7 @@ def _export_recovery_actions(*, provided: str | None = None) -> list[dict[str, o
             "id": "public_metadata_export",
             "command_template": (
                 f"aippocampus export --redaction-profile {public_profile} "
-                "--no-raw --output {output_path} --json"
+                '--no-raw --output "{output_path}" --json'
             ),
             "requires": ["output_path"],
             "template_only": True,
@@ -603,7 +603,7 @@ def _export_recovery_actions(*, provided: str | None = None) -> list[dict[str, o
             "id": "public_export",
             "command_template": (
                 "aippocampus export --redaction-profile public-export "
-                "--no-raw --output {output_path} --json"
+                '--no-raw --output "{output_path}" --json'
             ),
             "requires": ["output_path"],
             "template_only": True,
@@ -689,7 +689,7 @@ def main(argv: list[str] | None = None) -> int:
             message=message,
             next_command_template=(
                 "aippocampus export --no-raw --redaction-profile {profile} "
-                "--output {output_path}"
+                '--output "{output_path}"'
             ),
         )
         print(json.dumps(payload, ensure_ascii=False, indent=2))
@@ -702,8 +702,8 @@ def main(argv: list[str] | None = None) -> int:
                 "No traceback is shown; rerun after closing the writer or choose a fresh --work-dir."
             ),
             next_command_template=(
-                "aippocampus export --redaction-profile raw-private --output {output_path} "
-                "--work-dir {fresh_work_dir}"
+                'aippocampus export --redaction-profile raw-private --output "{output_path}" '
+                '--work-dir "{fresh_work_dir}"'
             ),
         )
         print(json.dumps(payload, ensure_ascii=False, indent=2))

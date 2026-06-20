@@ -1,5 +1,6 @@
 {
-  "schema_version": 1,
+  "no_open_followup_reason": "Historical dated evidence; current claim posture is owned by docs/evidence/current-claims.md and the report-family README. Open a new scoped issue only if a future pass promotes or supersedes this artifact.",
+"schema_version": 1,
   "kind": "aippocampus_longmemeval_rerank_analysis",
   "generated_at": "2026-06-10T10:00:08Z",
   "source_issue": "https://github.com/Sapientropic/AIppocampus/issues/1092",

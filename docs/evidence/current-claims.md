@@ -9,7 +9,9 @@ This is the current-claims snapshot for benchmark and readiness numbers that
 are easy to over-read when old dated ledgers still say "current" in their local
 context. It is not a command ledger and it does not replace source reports.
 
-Snapshot date: 2026-06-15.
+Snapshot review date: 2026-06-15.
+Row-level `run_date`, metric IDs, and source-report dates are authoritative for
+promoted rows added after that full-file review date.
 
 ## Claim Reviewer Card
 

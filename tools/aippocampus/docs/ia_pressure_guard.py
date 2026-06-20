@@ -26,6 +26,10 @@ ARCHIVE_POINTER_MARKERS = (
     "current claims",
     "readiness",
 )
+FOLDER_PRESSURE_OWNER_MARKERS = (
+    "folder pressure owner:",
+    "folder pressure next action:",
+)
 
 
 @dataclass(frozen=True)
@@ -71,6 +75,14 @@ def _is_dated_report(path: Path) -> bool:
 def _archive_has_current_pointer(text: str) -> bool:
     early = "\n".join(text.splitlines()[:40]).casefold()
     return any(marker.casefold() in early for marker in ARCHIVE_POINTER_MARKERS)
+
+
+def _folder_pressure_is_owned(folder: Path) -> bool:
+    readme = folder / "README.md"
+    if not readme.exists():
+        return False
+    early = "\n".join(readme.read_text(encoding="utf-8").splitlines()[:40]).casefold()
+    return all(marker in early for marker in FOLDER_PRESSURE_OWNER_MARKERS)
 
 
 def information_architecture_diagnostics(
@@ -162,7 +174,10 @@ def information_architecture_diagnostics(
                     ),
                 )
             )
-        if len(markdown_files) >= FOLDER_PRESSURE_MARKDOWN_THRESHOLD:
+        if (
+            len(markdown_files) >= FOLDER_PRESSURE_MARKDOWN_THRESHOLD
+            and not _folder_pressure_is_owned(folder)
+        ):
             diagnostics.append(
                 IADiagnostic(
                     severity="warning",

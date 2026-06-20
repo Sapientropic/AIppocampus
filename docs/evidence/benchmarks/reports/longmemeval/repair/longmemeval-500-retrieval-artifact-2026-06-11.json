@@ -1,5 +1,6 @@
 {
-  "schema_version": 1,
+  "no_open_followup_reason": "Historical dated evidence; current claim posture is owned by docs/evidence/current-claims.md and the report-family README. Open a new scoped issue only if a future pass promotes or supersedes this artifact.",
+"schema_version": 1,
   "artifact_id": "longmemeval_s.retrieval_only_500_artifact_2026_06_11",
   "role": "public reopenable artifact trail for the LongMemEval-S 500-question retrieval-only result",
   "generated_from_run": {

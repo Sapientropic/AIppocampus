@@ -547,11 +547,22 @@ class RouteReadinessObservatoryTests(unittest.TestCase):
         self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
         self.assertEqual(payload["agent_next_action"], payload["foreground_action"])
         self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
+        self.assertGreaterEqual(len(payload["safe_next_actions"]), 4)
         self.assertEqual(payload["foreground_action"]["kind"], "no_op")
         self.assertEqual(payload["foreground_action"]["id"], "no_observatory_rows_to_route")
         self.assertTrue(payload["foreground_action"]["no_op"])
         self.assertTrue(payload["foreground_action"]["continue_without_command"])
         self.assertNotIn("command", payload["foreground_action"])
+        action_ids = {action["id"] for action in payload["safe_next_actions"]}
+        self.assertIn("check_warm_ambient_status", action_ids)
+        self.assertIn("inspect_background_guidance_for_task", action_ids)
+        self.assertIn("attach_sleep_cycle_summary", action_ids)
+        self.assertTrue(
+            all(
+                action.get("mutation_risk") in {"none", "read_only"}
+                for action in payload["safe_next_actions"]
+            )
+        )
         self.assertEqual(payload["useful_now_count"], 0)
         self.assertEqual(payload["activation_surface_count"], 0)
         self.assertEqual(

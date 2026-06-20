@@ -32,18 +32,19 @@ KNOWN_LOG_RELATIVE_PATHS = (
 LOG_DIR_SUFFIXES = {".log", ".jsonl"}
 
 
-def _log_status_action(*, why: str) -> dict[str, str]:
+def _log_status_action(*, why: str) -> dict[str, object]:
     return {
         "id": "no_cleanup_needed",
         "label": "No log cleanup needed",
-        "command": "aippocampus logs status --json",
+        "continue_without_command": True,
+        "no_op": True,
         "mutation_risk": "read_only",
         "claim_boundary": "log_status_emits_artifact_names_and_sizes_not_log_contents",
         "why": why,
     }
 
 
-def _log_rotation_action(*, count: int) -> dict[str, str]:
+def _log_rotation_action(*, count: int) -> dict[str, object]:
     return {
         "id": "plan_log_rotation",
         "label": "Review log rotation plan",
@@ -54,7 +55,7 @@ def _log_rotation_action(*, count: int) -> dict[str, str]:
     }
 
 
-def _log_apply_action(*, count: int) -> dict[str, str]:
+def _log_apply_action(*, count: int) -> dict[str, object]:
     return {
         "id": "apply_log_rotation",
         "label": "Apply log rotation",

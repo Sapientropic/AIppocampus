@@ -97,10 +97,22 @@ class UpdateAgentStatusTests(unittest.TestCase):
             payload["setup_card"]["operator_detail_command"],
             "aippocampus update status --operator-json",
         )
-        self.assertEqual(payload["foreground_action"]["surface"], "operator_detail")
+        self.assertEqual(payload["foreground_action"]["surface"], "agent_callable")
+        self.assertIn(
+            "--foreground-tools-visible --agent-json",
+            payload["foreground_action"]["command"],
+        )
+        self.assertNotIn(
+            "--foreground-key-tools-callable",
+            payload["foreground_action"]["command"],
+        )
         surfaces = {item.get("surface") for item in payload["safe_next_actions"]}
         self.assertIn("operator_detail", surfaces)
         self.assertIn("agent_callable", surfaces)
+        operator_detail = next(
+            item for item in payload["safe_next_actions"] if item.get("surface") == "operator_detail"
+        )
+        self.assertEqual(operator_detail["command"], "aippocampus update status --operator-json")
         self.assertNotIn("action_hints", surfaces)
         violations = executable_command_violations(payload["safe_next_actions"])
         self.assertEqual(violations, [])

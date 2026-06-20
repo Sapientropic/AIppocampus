@@ -1,5 +1,6 @@
 {
-  "can_claim": [
+  "no_open_followup_reason": "Historical dated evidence; current claim posture is owned by docs/evidence/current-claims.md and the report-family README. Open a new scoped issue only if a future pass promotes or supersedes this artifact.",
+"can_claim": [
     "current_observatory_completeness_projection_exists",
     "expected_surfaces_are_explicitly_included_or_missing",
     "surface_supported_present_and_validated_states_are_separate",

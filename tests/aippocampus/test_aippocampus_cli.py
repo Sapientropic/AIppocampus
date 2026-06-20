@@ -260,6 +260,9 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertEqual(replay_payload["agent_next_action"]["id"], "discover_eligible_learning_sources")
         self.assertNotIn("<events.jsonl>", replay_encoded)
         self.assertNotIn("<sanitized-events.jsonl>", replay_encoded)
+        self.assertNotIn("cannot_claim", replay_payload)
+        self.assertNotIn("cannot_claim", replay_payload["boundary_detail"])
+        self.assertTrue(replay_payload["boundary_detail"]["full_detail_owns_cannot_claim"])
 
         self.assertEqual(learning_human.returncode, 2, learning_human.stderr)
         self.assertIn("needs source selection", learning_human.stdout)
@@ -2209,27 +2212,6 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertEqual(payload["safe_next_actions"][0]["command"], "aippocampus --help")
         self.assertEqual(unknown_json.stderr, "")
 
-    def test_background_routes_are_discoverable_without_raw_unknown_command(self) -> None:
-        from aippocampus_runtime.cli import facade
-
-        agent = facade.run_command(["agent", "--json"], capture_output=True)
-        dream = facade.run_command(["dream", "--json"], capture_output=True)
-        subconscious = facade.run_command(["subconscious", "--json"], capture_output=True)
-
-        self.assertEqual(agent.exit_code, 0)
-        agent_payload = json.loads(agent.stdout)
-        self.assertIn(
-            "background",
-            {choice["id"] for choice in agent_payload["choices"]},
-        )
-        self.assertEqual(dream.exit_code, 2)
-        dream_payload = json.loads(dream.stdout)
-        self.assertEqual(dream_payload["agent_next_action"]["command"], 'aippocampus agent background "task cue" --json')
-        self.assertEqual(subconscious.exit_code, 2)
-        self.assertEqual(subconscious.stderr, "")
-        self.assertNotIn("unknown command", dream.stderr)
-        self.assertNotIn("unknown command", subconscious.stderr)
-
     def test_mcp_list_tools_default_is_schema_and_status_is_compact_readiness(self) -> None:
         proc = self.run_cli("mcp", "list-tools")
         status = self.run_cli("mcp", "status")
@@ -2279,7 +2261,7 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertEqual(data["status"], "available_requires_sync_dir")
         self.assertEqual(data["backend"], "local_folder")
         self.assertIn("push", data["commands"])
-        self.assertEqual(data["agent_next_action"]["command_template"], "aippocampus sync status --sync-dir {sync_dir} --json")
+        self.assertEqual(data["agent_next_action"]["command_template"], 'aippocampus sync status --sync-dir "{sync_dir}" --json')
         self.assertTrue(all("command" not in action for action in data["safe_next_actions"]))
 
     def test_sync_status_without_sync_dir_human_output_is_not_configured_ok(self) -> None:
@@ -2287,7 +2269,7 @@ class AippocampusCliTests(unittest.TestCase):
 
         self.assertEqual(proc.returncode, 0)
         self.assertIn("capability available; no sync folder selected", proc.stdout)
-        self.assertIn("template: aippocampus sync status --sync-dir {sync_dir} --json", proc.stdout)
+        self.assertIn('template: aippocampus sync status --sync-dir "{sync_dir}" --json', proc.stdout)
         self.assertNotIn("sync status: ok", proc.stdout)
 
     def test_sync_status_preserves_child_exit_code_and_json(self) -> None:

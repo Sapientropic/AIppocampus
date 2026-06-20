@@ -83,7 +83,7 @@ class ProviderKeyBridgeTests(unittest.TestCase):
             report["agent_next_action"]["command_template"],
             (
                 "aippocampus onboard provider-key --plan --source explicit-dotenv "
-                "--credential-dotenv {credential_dotenv_path} --json"
+                '--credential-dotenv "{credential_dotenv_path}" --json'
             ),
         )
         self.assertEqual(report["agent_next_action"]["requires"], ["credential_dotenv_path"])
@@ -115,7 +115,7 @@ class ProviderKeyBridgeTests(unittest.TestCase):
         self.assertIn(
             (
                 "aippocampus onboard provider-key --plan --source explicit-dotenv "
-                "--credential-dotenv {credential_dotenv_path} --json"
+                '--credential-dotenv "{credential_dotenv_path}" --json'
             ),
             command_templates,
         )

@@ -48,6 +48,13 @@ from aippocampus_runtime.warm_ambient.scheduler import warm_background_enabled
 
 SCHEMA_VERSION = 1
 DEFAULT_PROVIDER_ENV_VAR = DEFAULT_DEEPSEEK_API_KEY_ENV
+
+
+def provider_doctor_boundary_detail() -> dict[str, Any]:
+    return {
+        "cannot_claim": ["running_hook_process_visibility", "provider_credential_validity_without_explicit_probe", "source_backed_memory_claim"],
+        "frontstage_rule": "compact provider doctor leads with readiness and next check; full detail owns diagnostics",
+    }
 ROUTE_PROVIDER_ENV_ATTR = "api" + "_key_env"
 
 
@@ -275,13 +282,10 @@ def compact_provider_doctor_card(report: dict[str, Any]) -> dict[str, Any]:
             "base_url_value_printed": False,
             "operator_env_objects_omitted": True,
         },
-        "boundary_detail": {
-            "cannot_claim": [
-                "running_hook_process_visibility",
-                "provider_credential_validity_without_explicit_probe",
-                "source_backed_memory_claim",
-            ],
-            "frontstage_rule": "compact provider doctor leads with readiness and next check; full detail owns diagnostics",
+        "boundary_summary": {
+            "full_detail_owns_diagnostics": True,
+            "detail_available_with": "aippocampus doctor provider --detail full --json",
+            "frontstage_rule": "readiness and next check first; diagnostics stay in full detail",
         },
     }
     return {
@@ -328,6 +332,7 @@ def build_provider_doctor_report(
                 "base_url_value_printed": False,
                 "checked_env_var_names": [],
             },
+            "boundary_detail": provider_doctor_boundary_detail(),
             "recommended_actions": [
                 {
                     "id": "complete_model_route_configuration",
@@ -390,6 +395,7 @@ def build_provider_doctor_report(
             "status": background_worker.get("status"),
             "reason": background_worker.get("reason"),
         },
+        "boundary_detail": provider_doctor_boundary_detail(),
         "hook_relevance": {
             "prompt_hook_reads_process_env": True,
             "does_not_read_dotenv_or_credential_store": True,

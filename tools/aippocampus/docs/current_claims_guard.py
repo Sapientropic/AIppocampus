@@ -111,6 +111,9 @@ STALE_CURRENT_EVIDENCE_PHRASES = {
     },
 }
 
+SNAPSHOT_DATE_RE = re.compile(r"Snapshot(?: review)? date:\s*(\d{4}-\d{2}-\d{2})")
+ISO_DATE_RE = re.compile(r"\b20\d{2}-\d{2}-\d{2}\b")
+
 
 def current_claims_snapshot_issues(repo_root: Path) -> list[str]:
     issues: list[str] = []
@@ -122,6 +125,7 @@ def current_claims_snapshot_issues(repo_root: Path) -> list[str]:
         for term, issue in REQUIRED_CURRENT_CLAIMS_TERMS.items():
             if term not in text:
                 issues.append(issue)
+        issues.extend(current_claims_snapshot_date_semantics_issues(text))
         issues.extend(cannot_claim_retirement_issues(text))
         issues.extend(current_claims_foreground_issues(repo_root))
 
@@ -141,6 +145,23 @@ def current_claims_snapshot_issues(repo_root: Path) -> list[str]:
                 issues.append(issue)
 
     return issues
+
+
+def current_claims_snapshot_date_semantics_issues(text: str) -> list[str]:
+    match = SNAPSHOT_DATE_RE.search(text)
+    if not match:
+        return ["current claims snapshot missing snapshot review date metadata"]
+    snapshot_date = match.group(1)
+    newer_dates = sorted({date for date in ISO_DATE_RE.findall(text) if date > snapshot_date})
+    if not newer_dates:
+        return []
+    foreground = text[:CURRENT_CLAIMS_FOREGROUND_BUDGET_CHARS].casefold()
+    if "row-level" in foreground and "authoritative" in foreground:
+        return []
+    return [
+        "current claims snapshot date is ambiguous: newer row-level dates exist "
+        "without foreground text saying row-level dates are authoritative"
+    ]
 
 
 def current_claims_foreground_issues(repo_root: Path) -> list[str]:

@@ -556,6 +556,7 @@ def replay_needs_source_payload() -> dict[str, Any]:
                 "private_history_scanned_by_default",
                 "guidance_as_source_truth",
             ],
+            include_cannot_claim=False,
         )
     )
 

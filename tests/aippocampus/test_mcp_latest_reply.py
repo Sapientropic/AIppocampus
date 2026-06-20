@@ -144,6 +144,45 @@ class McpLatestReplyTests(unittest.TestCase):
         self.assertNotIn("command_template", payload["safe_next_actions"][0])
         self.assertNotIn("latest closeout or current handoff", encoded)
 
+    def test_latest_reply_mcp_omits_host_internal_recovery_cue_from_command(self) -> None:
+        rollout = self.cwd / "host-internal-commentary.jsonl"
+        cue = "<subagent_notification>internal handoff should stay out of commands</subagent_notification>"
+        rollout.write_text(
+            "\n".join(
+                [
+                    json.dumps(
+                        {
+                            "timestamp": "2026-06-16T00:00:00Z",
+                            "type": "event_msg",
+                            "payload": {"type": "user_message", "message": cue},
+                        }
+                    ),
+                    json.dumps(
+                        {
+                            "timestamp": "2026-06-16T00:00:01Z",
+                            "type": "event_msg",
+                            "payload": {
+                                "type": "agent_message",
+                                "phase": "commentary",
+                                "message": "still working; not final",
+                            },
+                        }
+                    ),
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        payload = self.call_latest_reply(cwd=str(self.cwd), rollout=str(rollout))
+        encoded = json.dumps(payload, ensure_ascii=False)
+        action = payload["safe_next_actions"][0]
+
+        self.assertNotIn("command", action)
+        self.assertEqual(action["command_template"], 'aippocampus agent recall "{cue}" --json')
+        self.assertEqual(action["cue_omission_reason"], "host_internal_cue_omitted")
+        self.assertNotIn("subagent_notification", encoded)
+
     def test_latest_reply_mcp_no_rollout_returns_recovery_card(self) -> None:
         missing = self.cwd / "missing-project"
         missing.mkdir()

@@ -286,11 +286,14 @@ class AippocampusCliRecoveryCardTests(unittest.TestCase):
         self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
         self.assertIsInstance(empty_state["agent_next_action"], dict)
         self.assertEqual(empty_state["agent_next_action"], empty_state["safe_next_actions"][0])
-        self.assertEqual(empty_state["agent_next_action"]["id"], "list_notes")
+        self.assertEqual(empty_state["agent_next_action"]["id"], "continue_without_self_notes")
+        self.assertTrue(empty_state["agent_next_action"]["continue_without_command"])
+        self.assertNotIn("command", empty_state["agent_next_action"])
         self.assertEqual(
-            empty_state["safe_next_actions"][2]["command_template"],
+            empty_state["safe_next_actions"][1]["command_template"],
             'aippocampus agent recall "{cue}" --json',
         )
+        self.assertNotEqual(empty_state["safe_next_actions"][0].get("id"), "list_notes")
         self.assertNotIn("Append a short direction-only note", json.dumps(empty_state))
 
     def test_self_note_read_missing_id_is_not_not_found(self) -> None:
@@ -795,7 +798,7 @@ class AippocampusCliRecoveryCardTests(unittest.TestCase):
                 self.assertEqual(payload["error"]["code"], "transcript_import_intent_detected")
                 self.assertTrue(payload["safety"]["no_write_happened"])
                 self.assertIn(
-                    "aippocampus import conversation --format generic-jsonl --input {input_path} --dry-run --json",
+                    'aippocampus import conversation --format generic-jsonl --input "{input_path}" --dry-run --json',
                     payload["error"]["next_command"],
                 )
                 self.assertIn("private", payload["privacy_boundary"]["operator_input"])
@@ -1030,7 +1033,7 @@ class AippocampusCliRecoveryCardTests(unittest.TestCase):
         self.assertEqual(proc.stdout, "")
         self.assertNotIn(str(sync_dir), raw)
         self.assertIn("<local-path-redacted>", raw)
-        self.assertIn("Try: aippocampus sync repair --plan --sync-dir {sync_dir} --json", proc.stderr)
+        self.assertIn('Try: aippocampus sync repair --plan --sync-dir "{sync_dir}" --json', proc.stderr)
 
     def test_update_apply_without_surface_returns_no_write_recovery_json(self) -> None:
         human = self.run_cli("update", "apply")
@@ -1161,7 +1164,9 @@ class AippocampusCliRecoveryCardTests(unittest.TestCase):
         provider_payload = json.loads(provider.stdout)
         self.assertEqual(provider_payload["foreground_action_contract"], "foreground-action-v1")
         self.assertNotIn("cannot_claim", provider_payload)
-        self.assertIn("boundary_detail", provider_payload)
+        self.assertNotIn("boundary_detail", provider_payload)
+        self.assertIn("boundary_summary", provider_payload)
+        self.assertTrue(provider_payload["boundary_summary"]["full_detail_owns_diagnostics"])
 
         self.assertEqual(aippo.returncode, 2, aippo.stderr)
         aippo_payload = json.loads(aippo.stdout)

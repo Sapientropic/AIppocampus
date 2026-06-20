@@ -624,7 +624,16 @@ class WarmAmbientRecallTests(unittest.TestCase):
             if action["id"] == "retire_stale_warm_queue_after_review"
         )
         self.assertNotIn("command", retire_action)
+        self.assertTrue(retire_action["manual_only"])
+        self.assertTrue(retire_action["continue_without_command"])
+        self.assertNotIn("template_only", retire_action)
         self.assertIn("manual_instruction", retire_action)
+        self.assertTrue(
+            all(
+                "command_template" in action or not action.get("template_only")
+                for action in payload["safe_next_actions"]
+            )
+        )
         recall_action = next(
             action
             for action in payload["safe_next_actions"]

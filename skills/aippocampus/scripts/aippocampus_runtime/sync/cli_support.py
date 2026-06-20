@@ -63,7 +63,7 @@ def sync_dir_required_actions() -> list[dict[str, Any]]:
         {
             "id": "check_local_sync_status",
             "label": "Check local sync status",
-            "command_template": "aippocampus sync status --sync-dir {sync_dir} --json",
+            "command_template": 'aippocampus sync status --sync-dir "{sync_dir}" --json',
             "requires": ["sync_dir"],
             "template_only": True,
             "mutation_risk": "read_only",
@@ -73,7 +73,7 @@ def sync_dir_required_actions() -> list[dict[str, Any]]:
         {
             "id": "preview_local_sync_push",
             "label": "Preview local sync push",
-            "command_template": "aippocampus sync push --plan --sync-dir {sync_dir} --json",
+            "command_template": 'aippocampus sync push --plan --sync-dir "{sync_dir}" --json',
             "requires": ["sync_dir"],
             "template_only": True,
             "mutation_risk": "read_only",
@@ -83,7 +83,7 @@ def sync_dir_required_actions() -> list[dict[str, Any]]:
         {
             "id": "preview_local_sync_pull",
             "label": "Preview local sync pull",
-            "command_template": "aippocampus sync pull --plan --sync-dir {sync_dir} --json",
+            "command_template": 'aippocampus sync pull --plan --sync-dir "{sync_dir}" --json',
             "requires": ["sync_dir"],
             "template_only": True,
             "mutation_risk": "read_only",
@@ -93,7 +93,7 @@ def sync_dir_required_actions() -> list[dict[str, Any]]:
         {
             "id": "preview_local_sync_repair",
             "label": "Preview local sync repair",
-            "command_template": "aippocampus sync repair --plan --sync-dir {sync_dir} --json",
+            "command_template": 'aippocampus sync repair --plan --sync-dir "{sync_dir}" --json',
             "requires": ["sync_dir"],
             "template_only": True,
             "mutation_risk": "read_only",
@@ -169,9 +169,9 @@ def sync_direction_plan(
     file_count_breakdown: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     command = str(args.command)
-    command_preview = f"aippocampus sync {command} --sync-dir {{sync_dir}}"
+    command_preview = f'aippocampus sync {command} --sync-dir "{{sync_dir}}"'
     if command == "status":
-        command_preview = "aippocampus sync status --sync-dir {sync_dir} --json"
+        command_preview = 'aippocampus sync status --sync-dir "{sync_dir}" --json'
     breakdown = file_count_breakdown or []
     next_safe_action = command_preview
     if estimated_file_count is not None and estimated_file_count >= HUGE_PLAN_FILE_COUNT:
@@ -251,6 +251,6 @@ def print_sync_human_result(command: str, result: dict[str, Any]) -> None:
             write(f"- {issue.get('code')}{suffix}")
     if result.get("ok") is False:
         if command == "status":
-            write("Try: aippocampus sync repair --plan --sync-dir {sync_dir} --json")
+            write('Try: aippocampus sync repair --plan --sync-dir "{sync_dir}" --json')
         else:
-            write(f"Try: aippocampus sync {command} --plan --sync-dir {{sync_dir}} --json")
+            write(f'Try: aippocampus sync {command} --plan --sync-dir "{{sync_dir}}" --json')

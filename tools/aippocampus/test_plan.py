@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -9,6 +10,12 @@ from pathlib import Path
 from typing import Iterable
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+DEBT_REPORT_SCRIPT = "tools/aippocampus/docs/debt_report.py"
+DEBT_REGISTER_SOURCES = (
+    REPO_ROOT / "docs" / "architecture" / "architecture-debt-register.md",
+    REPO_ROOT / "docs" / "evidence" / "reports" / "architecture-debt-snapshot-2026-06-04.md",
+)
+BUDGET_ROW_RE = re.compile(r"^\|\s*`(?P<path>[^`]+\.py)`\s*\|", re.MULTILINE)
 
 from test_tier_manifest import TEST_MODULE_CLASSIFICATIONS
 
@@ -48,6 +55,45 @@ def py_command(args: str) -> str:
 def py_script(script: str, args: str = "") -> str:
     suffix = f" {args}" if args else ""
     return f"{python_command()} {script}{suffix}"
+
+
+def architecture_debt_tracked_paths() -> set[str]:
+    paths: set[str] = set()
+    for source in DEBT_REGISTER_SOURCES:
+        if not source.is_file():
+            continue
+        text = source.read_text(encoding="utf-8")
+        paths.update(match.group("path") for match in BUDGET_ROW_RE.finditer(text))
+    return paths
+
+
+def _debt_report_is_red() -> bool:
+    completed = subprocess.run(
+        [sys.executable, str(REPO_ROOT / DEBT_REPORT_SCRIPT), "--json"],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    return completed.returncode != 0
+
+
+def architecture_debt_plan_reason(changed_files: Iterable[str]) -> str:
+    tracked = architecture_debt_tracked_paths()
+    changed_tracked = sorted(path for path in changed_files if path in tracked)
+    if changed_tracked:
+        preview = ", ".join(changed_tracked[:3])
+        suffix = "" if len(changed_tracked) <= 3 else f", +{len(changed_tracked) - 3} more"
+        return (
+            f"Architecture-debt tracked file(s) changed: {preview}{suffix}. "
+            "Run the headroom preflight early; this is not a substitute for functional tests."
+        )
+    if _debt_report_is_red():
+        return (
+            "Architecture debt report is already red. Run the headroom preflight "
+            "before late closeout; this is not a substitute for functional tests."
+        )
+    return ""
 
 
 def modules_with_tag(tag: str) -> list[str]:
@@ -154,6 +200,9 @@ def build_test_plan(changed_files: list[str]) -> dict[str, object]:
     categories = classify_changed_files(normalized_files)
     commands: list[PlannedCommand] = []
     changed_test_modules = _changed_test_modules(normalized_files)
+    debt_reason = architecture_debt_plan_reason(normalized_files)
+    if debt_reason:
+        categories.add("architecture_debt")
 
     if not normalized_files:
         _add_command(
@@ -172,6 +221,16 @@ def build_test_plan(changed_files: list[str]) -> dict[str, object]:
                 command=py_command(f"-m unittest {' '.join(changed_test_modules)} -v"),
                 reason="Run changed test modules first so failures point to the edited surface.",
                 scope="focused",
+            ),
+        )
+
+    if debt_reason:
+        _add_command(
+            commands,
+            PlannedCommand(
+                command=py_script(DEBT_REPORT_SCRIPT, "--json"),
+                reason=debt_reason,
+                scope="architecture-debt",
             ),
         )
 
