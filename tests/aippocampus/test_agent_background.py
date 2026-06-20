@@ -40,6 +40,32 @@ def write_background_working_memory(path: Path) -> None:
     )
 
 
+def write_generic_issue_working_memory(path: Path) -> None:
+    path.write_text(
+        json.dumps(
+            {
+                "kind": "aippocampus_working_memory",
+                "status": "active",
+                "route": "use_with_source",
+                "candidate_type": "preference_review",
+                "candidate_key": "wm_generic_issue",
+                "title": "Preference review",
+                "summary": "Generic issue review should not look task-specific.",
+                "activation_cues": ["issue"],
+                "trigger_terms": ["issue"],
+                "source_finding_ids": ["finding_generic_issue"],
+                "confidence": 0.9,
+                "project_label": "AIppocampus",
+                "review_state": "agent_adjudicated",
+                "route_reason": "Only a generic issue term matched.",
+            },
+            ensure_ascii=False,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+
 class AgentBackgroundTests(unittest.TestCase):
     def tool_payload(self, response: dict) -> dict:
         text = response["result"]["content"][0]["text"]
@@ -75,9 +101,28 @@ class AgentBackgroundTests(unittest.TestCase):
         self.assertNotIn("materialize_action_hint_from_finding", encoded)
         self.assertEqual(finding["shape_label"], "action_hint_candidate")
         self.assertEqual(finding["finding_title"], "Action hint candidate")
+        self.assertEqual(finding["match_strength"], "distinctive")
+        self.assertGreaterEqual(finding["distinctive_match_count"], 1)
         self.assertIn("Action-time learning", finding["match_reason"])
         self.assertNotEqual(finding["matched_terms"], ["action"])
         self.assertIn("action-time learning", finding["matched_terms"])
+
+    def test_agent_background_downgrades_generic_issue_only_match(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            working_memory = Path(tmp) / "working_memory.jsonl"
+            write_generic_issue_working_memory(working_memory)
+
+            payload = background_findings.background_findings_card(
+                "AIppocampus UX issue review source-backed continuity",
+                working_memory_path=working_memory,
+            )
+
+        self.assertEqual(payload["status"], "no_relevant_background_findings")
+        self.assertEqual(payload["finding_count"], 0)
+        self.assertIsNone(payload["best_finding"])
+        self.assertEqual(payload["foreground_action"]["id"], "ordinary_recall")
+        self.assertIn("agent recall", payload["foreground_action"]["command"])
+        self.assertNotIn("Preference review", json.dumps(payload, ensure_ascii=False))
 
     def test_agent_background_actions_target_the_selected_finding(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

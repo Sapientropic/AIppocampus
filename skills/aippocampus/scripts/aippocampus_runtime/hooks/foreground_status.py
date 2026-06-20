@@ -520,6 +520,8 @@ def action_hint_status_contract(frontstage_card: Mapping[str, Any]) -> dict[str,
         )
     elif not installed and isinstance(review_action, dict):
         primary = review_action
+    elif installed and isinstance(refresh_action, dict):
+        primary = refresh_action
     else:
         primary = next(
             (

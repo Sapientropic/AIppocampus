@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Read-only Cognitive Observatory report over existing diagnostic surfaces."""
 
 from __future__ import annotations
@@ -506,7 +505,6 @@ def cognitive_observatory_readout(
     }
 
     return redact_sensitive_values(redact_private_paths(report))
-
 def _html(value: Any) -> str:
     if value is True:
         text = "true"
@@ -850,7 +848,7 @@ def _foreground_action(*, no_rows: bool = False) -> dict[str, Any]:
         return {
             "id": "no_observatory_rows_to_route",
             "kind": "no_op",
-            "command": "no-op",
+            "no_op": True, "continue_without_command": True,
             "mutation_risk": "none",
             "claim_boundary": "observatory_readout_not_source_truth_or_control_plane",
             "why": "No ready/useful observatory rows are present in this compact readout.",

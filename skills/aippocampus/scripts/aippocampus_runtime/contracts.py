@@ -94,6 +94,10 @@ _SAMPLE_COMMAND_PHRASES = (
     "issue title",
     "issue body",
 )
+_NON_RUNNABLE_COMMAND_MARKERS = {
+    "no-op",
+    "continue-without-cleanup",
+}
 
 
 def command_value_needs_input(value: object) -> bool:
@@ -118,6 +122,21 @@ def command_value_needs_input(value: object) -> bool:
     if lowered.startswith("run `") or "`" in text:
         return True
     return any(phrase in lowered for phrase in _SAMPLE_COMMAND_PHRASES)
+
+
+def command_value_is_non_runnable_marker(value: object) -> bool:
+    """Return whether a command-like field is a semantic marker, not a command.
+
+    No-work choices are valid foreground actions, but they must be encoded with
+    explicit `continue_without_command` / `no_op` markers. Putting prose sentinels
+    such as `no-op` into `command` trains agents to copy-paste strings that can
+    never succeed, and it hides the product distinction between "run this" and
+    "continue without a command".
+    """
+
+    if not isinstance(value, str):
+        return False
+    return value.strip().casefold() in _NON_RUNNABLE_COMMAND_MARKERS
 
 
 def shell_quote(value: object) -> str:
@@ -174,7 +193,21 @@ def executable_command_violations(payload: object) -> list[dict[str, str]]:
                 key_text = str(key)
                 next_path = (*path, key_text)
                 if key_text in EXECUTABLE_COMMAND_FIELDS and not allowed_context(next_path):
-                    if command_value_needs_input(item):
+                    marker_reason = (
+                        "executable_field_is_non_runnable_marker"
+                        if command_value_is_non_runnable_marker(item)
+                        else ""
+                    )
+                    if marker_reason:
+                        violations.append(
+                            {
+                                "path": ".".join(next_path),
+                                "field": key_text,
+                                "reason": marker_reason,
+                                "value": str(item),
+                            }
+                        )
+                    elif command_value_needs_input(item):
                         violations.append(
                             {
                                 "path": ".".join(next_path),
@@ -473,6 +506,13 @@ def _command_template_marker_violations(
     field: str,
 ) -> list[dict[str, str]]:
     violations: list[dict[str, str]] = []
+    if command_value_is_non_runnable_marker(action.get("command")):
+        violations.append(
+            {
+                "field": f"{field}.command",
+                "reason": "executable_field_is_non_runnable_marker",
+            }
+        )
     if isinstance(action.get("command_template"), str) and action.get("template_only") is not True:
         violations.append(
             {

@@ -349,9 +349,12 @@ class StorageGovernanceTests(unittest.TestCase):
         self.assertTrue(payload["safe_next_actions"][2]["requires_prior_audit"])
         self.assertIn("deterministic_checks", payload["safe_next_actions"][2])
         self.assertIn("rollback_or_rebuild_boundary", payload["safe_next_actions"][2])
+        self.assertTrue(payload["foreground_action"]["continue_without_command"])
+        self.assertNotIn("command", payload["foreground_action"])
+        self.assertTrue(payload["safe_next_action"]["continue_without_command"])
         self.assertEqual(
-            payload["safe_next_action"]["command"],
-            "continue-without-cleanup",
+            payload["safe_next_action"]["instruction"],
+            "Continue the user's foreground work without running storage cleanup.",
         )
         self.assertEqual(
             payload["comparable_metrics_command"],
@@ -384,10 +387,8 @@ class StorageGovernanceTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertEqual(payload["mode"], "dry_run")
         self.assertTrue(payload["read_only"])
-        self.assertEqual(
-            payload["safe_next_action"]["command"],
-            "continue-without-cleanup",
-        )
+        self.assertTrue(payload["safe_next_action"]["continue_without_command"])
+        self.assertNotIn("command", payload["safe_next_action"])
         self.assertEqual(payload["pressure_interpretation"], "pressure_present")
 
     def test_summary_json_without_existing_reports_defers_full_scan_instead_of_building_capacity(
@@ -429,16 +430,47 @@ class StorageGovernanceTests(unittest.TestCase):
             "apply_rebuildable_after_audit",
             [action["id"] for action in payload["safe_next_actions"]],
         )
-        self.assertEqual(
-            payload["safe_next_action"]["command"],
-            "continue-without-cleanup",
-        )
+        self.assertTrue(payload["safe_next_action"]["continue_without_command"])
+        self.assertNotIn("command", payload["safe_next_action"])
         self.assertEqual(
             payload["comparable_metrics_command"],
             "aippocampus storage gc --dry-run --json --top 1 --cwd .",
         )
         self.assertEqual(
             payload["operator_audit_command"],
+            "aippocampus storage gc --dry-run --json --full --cwd .",
+        )
+
+    def test_default_json_without_existing_reports_is_bounded_foreground_card(self) -> None:
+        with (
+            patch.object(
+                storage_governance.storage_capacity_report,
+                "build_report",
+                side_effect=AssertionError("default foreground json should not run a full capacity scan"),
+            ),
+            patch("sys.stdout", new=StringIO()) as stdout,
+        ):
+            code = storage_governance.main(
+                [
+                    "gc",
+                    "--dry-run",
+                    "--cwd",
+                    str(self.root),
+                    "--registry-dir",
+                    str(self.registry),
+                    "--json",
+                ]
+            )
+
+        payload = json.loads(stdout.getvalue())
+
+        self.assertEqual(code, 0)
+        self.assertEqual(payload["kind"], "aippocampus_storage_gc_summary")
+        self.assertEqual(payload["status"], "needs_full_scan")
+        self.assertTrue(payload["foreground_action"]["continue_without_command"])
+        self.assertEqual(payload["safe_next_actions"][1]["id"], "bounded_storage_audit")
+        self.assertNotEqual(
+            payload["foreground_action"].get("command"),
             "aippocampus storage gc --dry-run --json --full --cwd .",
         )
 
@@ -470,6 +502,15 @@ class StorageGovernanceTests(unittest.TestCase):
         self.assertNotIn("rebuild_command", plan["candidates"][0])
         self.assertEqual(
             plan["agent_next_action"]["command"],
+            "aippocampus storage gc --dry-run --summary-json --cwd .",
+        )
+        self.assertEqual(
+            plan["safe_next_actions"][1]["command"],
+            "aippocampus storage gc --dry-run --json --top 1 --cwd .",
+        )
+        self.assertTrue(plan["safe_next_actions"][2]["operator_only"])
+        self.assertEqual(
+            plan["safe_next_actions"][2]["command"],
             "aippocampus storage gc --dry-run --json --full --cwd .",
         )
         self.assertTrue(

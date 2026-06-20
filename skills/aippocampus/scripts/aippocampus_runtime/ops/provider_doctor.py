@@ -731,12 +731,13 @@ def main(argv: list[str] | None = None) -> int:
             kwargs["warn_effective_tokens"] = args.warning_effective_tokens
         if args.warning_min_foreground_value_rate is not None:
             kwargs["warn_min_foreground_value_rate"] = args.warning_min_foreground_value_rate
-        report = spend_doctor.build_spend_doctor_report(
-            registry_dir=args.registry_dir,
-            days=args.days,
-            **kwargs,
-        )
         full_detail_json = bool(args.operator_json or args.detail == "full")
+        builder = (
+            spend_doctor.build_compact_spend_doctor_report
+            if args.json_output and not full_detail_json
+            else spend_doctor.build_spend_doctor_report
+        )
+        report = builder(registry_dir=args.registry_dir, days=args.days, **kwargs)
         if args.json_output and not full_detail_json:
             print(
                 json.dumps(

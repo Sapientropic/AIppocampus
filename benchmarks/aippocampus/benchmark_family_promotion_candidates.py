@@ -40,14 +40,26 @@ REQUIRED_USEFULNESS_NEGATIVE_CONTROLS = (
 FAMILY_MEASUREMENT_RUNNERS: dict[str, dict[str, str]] = {
     "agent_continuity_loop": {
         "runner": "benchmarks/aippocampus/benchmark_agent_continuity_loop.py",
-        "owner_issue": "#1969",
+        "command": (
+            "python benchmarks/aippocampus/benchmark_agent_continuity_loop.py "
+            "--public-cohort --json"
+        ),
+        "historical_owner_issue": "#1969",
+        "historical_owner_issue_state": "closed_historical",
+        "current_issue": "#2396",
         "output_artifact": (
             "docs/evidence/benchmarks/reports/agent_continuity_loop_public_cohort.json"
         ),
     },
     "map_rot_lifecycle_debt": {
         "runner": "benchmarks/aippocampus/benchmark_map_rot_lifecycle_debt.py",
-        "owner_issue": "#1948",
+        "command": (
+            "python benchmarks/aippocampus/benchmark_map_rot_lifecycle_debt.py "
+            "--public-cohort --json"
+        ),
+        "historical_owner_issue": "#1948",
+        "historical_owner_issue_state": "closed_historical",
+        "current_issue": "#2396",
         "output_artifact": (
             "docs/evidence/benchmarks/reports/map_rot_lifecycle_debt_public_cohort.json"
         ),
@@ -183,6 +195,148 @@ def _contract_snapshot(report: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def _rate(numerator: int, denominator: int) -> float:
+    return round(numerator / denominator, 6) if denominator else 0.0
+
+
+def _rate_metric(numerator: int, denominator: int, *, unit: str) -> dict[str, Any]:
+    return {
+        "numerator": int(numerator),
+        "denominator": int(denominator),
+        "rate": _rate(int(numerator), int(denominator)),
+        "unit": unit,
+    }
+
+
+def _metric_count(metrics: Mapping[str, Any], key: str) -> int:
+    return int(metrics.get(key) or 0)
+
+
+def _observed_usefulness_blockers(report: Mapping[str, Any]) -> list[dict[str, Any]]:
+    metrics = report.get("metrics")
+    metrics = metrics if isinstance(metrics, Mapping) else {}
+    case_count = int(
+        metrics.get("public_cohort_case_count")
+        or metrics.get("case_count")
+        or report.get("case_count")
+        or 0
+    )
+    metric_by_control = {
+        "generic_hints": "generic_hint_count",
+        "route_label_collisions": "route_label_collision_count",
+        "wrong_route_drag": "wrong_route_drag_count",
+        "unnecessary_reopen": "unnecessary_reopen_count",
+        "manual_search_fallback": "manual_search_fallback_count",
+    }
+    return [
+        {
+            "control_id": control_id,
+            "observed_count": _metric_count(metrics, metric_key),
+            "observed_rate": _rate(_metric_count(metrics, metric_key), case_count),
+            "promotion_threshold": 0,
+            "gate_ok": _metric_count(metrics, metric_key) == 0,
+            "blocks_usefulness_gate": _metric_count(metrics, metric_key) > 0,
+        }
+        for control_id, metric_key in metric_by_control.items()
+    ]
+
+
+def _hard_red_lines_zero(report: Mapping[str, Any]) -> bool:
+    hard_red_lines = report.get("hard_red_lines")
+    if isinstance(hard_red_lines, Mapping):
+        return all(int(value or 0) == 0 for value in hard_red_lines.values())
+    metrics = report.get("metrics")
+    metrics = metrics if isinstance(metrics, Mapping) else {}
+    red_line_keys = (
+        "anti_nag_violation_count",
+        "privacy_bypass_count",
+        "source_backed_claim_without_reopen_count",
+        "raw_private_text_leak_count",
+    )
+    return all(_metric_count(metrics, key) == 0 for key in red_line_keys)
+
+
+def _public_cohort_measurement_snapshot(
+    *,
+    family_id: str,
+    public_report: Mapping[str, Any],
+) -> dict[str, Any]:
+    metrics = public_report.get("metrics")
+    metrics = metrics if isinstance(metrics, Mapping) else {}
+    maturity = public_report.get("benchmark_maturity")
+    maturity = maturity if isinstance(maturity, Mapping) else {}
+    quality_gate = public_report.get("quality_gate")
+    quality_gate = quality_gate if isinstance(quality_gate, Mapping) else {}
+    runner = FAMILY_MEASUREMENT_RUNNERS.get(family_id, {})
+    case_count = int(
+        metrics.get("public_cohort_case_count")
+        or maturity.get("external_or_public_cohort_case_count")
+        or 0
+    )
+    holdout_count = int(
+        metrics.get("heldout_case_count")
+        or metrics.get("holdout_case_count")
+        or maturity.get("holdout_case_count")
+        or 0
+    )
+    attention_overrun_count = _metric_count(metrics, "attention_cost_overrun_count")
+    foreground_noise_count = _metric_count(metrics, "foreground_noise_added_count")
+    quality_gate_ok = bool(
+        public_report.get("quality_gate_ok")
+        or metrics.get("quality_gate_ok")
+        or maturity.get("quality_gate_ok")
+    )
+    public_quality_gate_ok = bool(
+        public_report.get("public_quality_gate_ok")
+        or metrics.get("public_quality_gate_ok")
+        or maturity.get("public_quality_gate_ok")
+        or quality_gate_ok
+    )
+    return {
+        "kind": str(public_report.get("kind") or ""),
+        "status": str(public_report.get("status") or ""),
+        "measurement_origin": "public_safe_generated_cohort",
+        "observed_result_interpretation": "observed_score_not_target_metadata",
+        "command": runner.get("command", ""),
+        "output_artifact": runner.get("output_artifact", ""),
+        "historical_owner_issue": runner.get("historical_owner_issue", ""),
+        "historical_owner_issue_state": runner.get(
+            "historical_owner_issue_state",
+            "",
+        ),
+        "current_issue": runner.get("current_issue", ""),
+        "no_open_followup_reason": (
+            "Public/holdout measurement is embedded in this report; no unresolved "
+            "measurement action remains for the closed historical owner."
+        ),
+        "public_cohort_case_count": case_count,
+        "holdout_case_count": holdout_count,
+        "holdout_used_for_tuning_count": int(
+            metrics.get("holdout_used_for_tuning_count")
+            or maturity.get("holdout_used_for_tuning_count")
+            or 0
+        ),
+        "sample_floor_met": bool(
+            maturity.get("sample_floor_met") or quality_gate.get("sample_floor_ok")
+        ),
+        "usefulness_gate_ok": bool(metrics.get("usefulness_gate_ok")),
+        "attention_cost_ok": bool(metrics.get("attention_cost_ok")),
+        "public_quality_gate_ok": public_quality_gate_ok,
+        "quality_gate_ok": quality_gate_ok,
+        "hard_red_lines_zero": _hard_red_lines_zero(public_report),
+        "observed_usefulness_blockers": _observed_usefulness_blockers(public_report),
+        "attention_cost": {
+            "attention_cost_avg_units": float(metrics.get("attention_cost_avg_units") or 0.0),
+            "attention_cost_overrun_count": attention_overrun_count,
+            "attention_cost_gate_ok": bool(metrics.get("attention_cost_ok")),
+        },
+        "foreground_noise": {
+            "foreground_noise_added_count": foreground_noise_count,
+            "foreground_noise_gate_ok": foreground_noise_count == 0,
+        },
+    }
+
+
 def _family_entry(
     *,
     family_id: str,
@@ -207,14 +361,76 @@ def _family_entry(
         "public_cohort_candidate": candidate,
         "cohort_source_plan": cohort_source_plan,
         "usefulness_promotion_blockers": blockers,
-        "negative_control_families": [
-            blocker["control_id"] for blocker in blockers
-        ],
+        "negative_control_families": [blocker["control_id"] for blocker in blockers],
         "gate_status": {
             "contract_gate_ok": bool(current["contract_gate_ok"]),
             "usefulness_gate_ok": False,
             "quality_gate_ok": False,
             "status": "contract_passed_candidate_not_promoted",
+        },
+        "sanitization_check": _sanitization_check(),
+        "non_goals": list(candidate_non_goals),
+    }
+
+
+def _measured_family_entry(
+    *,
+    family_id: str,
+    display_name: str,
+    priority_reason: str,
+    current_report: Mapping[str, Any],
+    public_report: Mapping[str, Any],
+    candidate_distribution: Mapping[str, int],
+    cohort_source_plan: str,
+    candidate_non_goals: Sequence[str],
+) -> dict[str, Any]:
+    current = _contract_snapshot(current_report)
+    candidate = _candidate_maturity_metadata(
+        current_contract_ok=bool(current["contract_gate_ok"]),
+        distribution=candidate_distribution,
+    )
+    measurement = _public_cohort_measurement_snapshot(
+        family_id=family_id,
+        public_report=public_report,
+    )
+    candidate.update(
+        {
+            "metadata_interpretation": (
+                "target_design_superseded_by_observed_public_cohort_measurement"
+            ),
+            "usefulness_gate_ok": measurement["usefulness_gate_ok"],
+            "attention_cost_ok": measurement["attention_cost_ok"],
+            "quality_gate_ok": measurement["quality_gate_ok"],
+            "quality_gate_blockers": [],
+            "cannot_claim_due_to_sample_size": not measurement["sample_floor_met"],
+            "cannot_claim": [
+                "live_user_visible_lift",
+                "private_history_quality",
+                "competitor_superiority",
+            ],
+            "holdout_not_run": False,
+            "observed_measurement_ref": "public_cohort_measurement",
+        }
+    )
+    return {
+        "family_id": family_id,
+        "display_name": display_name,
+        "promotion_state": "public_cohort_measured",
+        "priority_reason": priority_reason,
+        "current_contract_maturity": current,
+        "public_cohort_candidate": candidate,
+        "public_cohort_measurement": measurement,
+        "cohort_source_plan": cohort_source_plan,
+        "usefulness_promotion_blockers": measurement["observed_usefulness_blockers"],
+        "negative_control_families": [
+            blocker["control_id"] for blocker in measurement["observed_usefulness_blockers"]
+        ],
+        "gate_status": {
+            "contract_gate_ok": bool(current["contract_gate_ok"]),
+            "usefulness_gate_ok": measurement["usefulness_gate_ok"],
+            "public_quality_gate_ok": measurement["public_quality_gate_ok"],
+            "quality_gate_ok": measurement["quality_gate_ok"],
+            "status": "public_holdout_cohort_measured",
         },
         "sanitization_check": _sanitization_check(),
         "non_goals": list(candidate_non_goals),
@@ -239,15 +455,19 @@ def _promoted_family_entry(
         "current_public_maturity": current,
         "public_cohort_completed": {
             "benchmark_maturity_level": str(maturity.get("benchmark_maturity_level") or ""),
-            "case_count": int(maturity.get("case_count") or current_report.get("metrics", {}).get("case_count") or 0),
+            "case_count": int(
+                maturity.get("case_count")
+                or current_report.get("metrics", {}).get("case_count")
+                or 0
+            ),
             "failure_family_count": int(maturity.get("failure_family_count") or 0),
             "minimum_family_case_floor": int(maturity.get("minimum_family_case_floor") or 0),
             "sample_floor_met": bool(maturity.get("sample_floor_met")),
             "holdout_case_count": int(maturity.get("holdout_case_count") or 0),
-            "holdout_used_for_tuning_count": int(maturity.get("holdout_used_for_tuning_count") or 0),
-            "wilson_or_uncertainty_reported": bool(
-                maturity.get("wilson_or_uncertainty_reported")
+            "holdout_used_for_tuning_count": int(
+                maturity.get("holdout_used_for_tuning_count") or 0
             ),
+            "wilson_or_uncertainty_reported": bool(maturity.get("wilson_or_uncertainty_reported")),
             "public_quality_gate_ok": bool(current_report.get("public_quality_gate_ok")),
             "explicit_agent_recall_auto_gate_ok": bool(
                 current_report.get("explicit_agent_recall_auto_gate_ok")
@@ -264,6 +484,140 @@ def _promoted_family_entry(
         },
         "sanitization_check": _sanitization_check(),
         "non_goals": list(remaining_non_goals),
+    }
+
+
+def _aggregate_public_quality_metrics(
+    *,
+    selected: Sequence[Mapping[str, Any]],
+    promoted: Sequence[Mapping[str, Any]],
+    deferred: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    """Expose reusable denominator math for the top-level public-quality claim.
+
+    The family report aggregates several narrower public-cohort surfaces. Keep
+    the family-count rates separate from underlying row counts so a later agent
+    does not silently quote "all gates passed" without knowing what "all"
+    covered, or confuse selected public-safe rows with live/private quality.
+    """
+
+    evaluated = [*selected, *promoted]
+    selected_measurements = [
+        measurement
+        for family in selected
+        if isinstance((measurement := family.get("public_cohort_measurement")), Mapping)
+    ]
+    promoted_measurements = [
+        measurement
+        for family in promoted
+        if isinstance((measurement := family.get("public_cohort_completed")), Mapping)
+    ]
+    selected_public_cases = sum(
+        int(measurement.get("public_cohort_case_count") or 0)
+        for measurement in selected_measurements
+    )
+    promoted_public_cases = sum(
+        int(measurement.get("case_count") or 0) for measurement in promoted_measurements
+    )
+    selected_holdout_cases = sum(
+        int(measurement.get("holdout_case_count") or 0)
+        for measurement in selected_measurements
+    )
+    promoted_holdout_cases = sum(
+        int(measurement.get("holdout_case_count") or 0)
+        for measurement in promoted_measurements
+    )
+    selected_blockers = [
+        blocker
+        for measurement in selected_measurements
+        for blocker in measurement.get("observed_usefulness_blockers", [])
+        if isinstance(blocker, Mapping)
+    ]
+    evaluated_count = len(evaluated)
+    selected_count = len(selected)
+    gate_pass_count = sum(
+        1 for family in evaluated if bool(family.get("gate_status", {}).get("quality_gate_ok"))
+    )
+    sample_floor_pass_count = sum(
+        1 for measurement in [*selected_measurements, *promoted_measurements]
+        if bool(measurement.get("sample_floor_met"))
+    )
+    no_tuning_leak_count = sum(
+        1
+        for measurement in [*selected_measurements, *promoted_measurements]
+        if int(measurement.get("holdout_used_for_tuning_count") or 0) == 0
+    )
+    usefulness_pass_count = sum(
+        1 for measurement in selected_measurements if bool(measurement.get("usefulness_gate_ok"))
+    )
+    attention_pass_count = sum(
+        1 for measurement in selected_measurements if bool(measurement.get("attention_cost_ok"))
+    )
+    foreground_silent_count = sum(
+        1
+        for measurement in selected_measurements
+        if int((measurement.get("foreground_noise") or {}).get("foreground_noise_added_count") or 0)
+        == 0
+    )
+    hard_red_zero_count = sum(
+        1 for measurement in selected_measurements if bool(measurement.get("hard_red_lines_zero"))
+    )
+    blocker_zero_count = sum(
+        1 for blocker in selected_blockers if int(blocker.get("observed_count") or 0) == 0
+    )
+    return {
+        "case_count": evaluated_count,
+        "case_count_scope": "selected_and_promoted_public_quality_family_surfaces",
+        "selected_family_count": selected_count,
+        "promoted_family_count": len(promoted),
+        "deferred_family_count": len(deferred),
+        "evaluated_public_quality_family_count": evaluated_count,
+        "selected_public_cohort_case_count": selected_public_cases,
+        "promoted_public_cohort_case_count": promoted_public_cases,
+        "public_cohort_case_count": selected_public_cases + promoted_public_cases,
+        "selected_holdout_case_count": selected_holdout_cases,
+        "promoted_holdout_case_count": promoted_holdout_cases,
+        "holdout_case_count": selected_holdout_cases + promoted_holdout_cases,
+        "public_quality_gate_rate": _rate_metric(
+            gate_pass_count,
+            evaluated_count,
+            unit="evaluated_public_quality_family",
+        ),
+        "sample_floor_rate": _rate_metric(
+            sample_floor_pass_count,
+            evaluated_count,
+            unit="evaluated_public_quality_family",
+        ),
+        "holdout_no_tuning_leak_rate": _rate_metric(
+            no_tuning_leak_count,
+            evaluated_count,
+            unit="evaluated_public_quality_family",
+        ),
+        "selected_usefulness_gate_rate": _rate_metric(
+            usefulness_pass_count,
+            selected_count,
+            unit="selected_family",
+        ),
+        "selected_attention_cost_gate_rate": _rate_metric(
+            attention_pass_count,
+            selected_count,
+            unit="selected_family",
+        ),
+        "selected_foreground_silent_rate": _rate_metric(
+            foreground_silent_count,
+            selected_count,
+            unit="selected_family",
+        ),
+        "selected_hard_red_line_zero_rate": _rate_metric(
+            hard_red_zero_count,
+            selected_count,
+            unit="selected_family",
+        ),
+        "selected_usefulness_blocker_zero_rate": _rate_metric(
+            blocker_zero_count,
+            len(selected_blockers),
+            unit="required_usefulness_control_observation",
+        ),
     }
 
 
@@ -296,12 +650,11 @@ def _next_measurement_action(family: Mapping[str, Any]) -> dict[str, Any]:
         }
     )
     if runner:
-        runner_path = runner["runner"]
         return {
             "family_id": family_id,
             "runner_status": "existing_runner",
-            "owner_issue": runner["owner_issue"],
-            "command": f"python {runner_path} --json",
+            "current_issue": runner.get("current_issue", "#2396"),
+            "command": runner.get("command", f"python {runner['runner']} --json"),
             "output_artifact": runner["output_artifact"],
             "blockers": quality_blockers,
             "usefulness_blockers": usefulness_blockers,
@@ -327,7 +680,7 @@ def build_family_promotion_candidate_report() -> dict[str, Any]:
     """Build the #1195 public-safe candidate-family decision report."""
 
     selected = [
-        _family_entry(
+        _measured_family_entry(
             family_id="agent_continuity_loop",
             display_name="Agent continuity loop / recall degradation",
             priority_reason=(
@@ -335,6 +688,7 @@ def build_family_promotion_candidate_report() -> dict[str, Any]:
                 "guidance, stale/conflict boundaries, and anti-nag behavior must work together."
             ),
             current_report=agent_loop.run_agent_continuity_loop(),
+            public_report=agent_loop.build_agent_continuity_public_cohort_report(),
             candidate_distribution={
                 "positive_reopenable_route": 30,
                 "blocked_or_private_route": 30,
@@ -355,7 +709,7 @@ def build_family_promotion_candidate_report() -> dict[str, Any]:
                 "default_foreground_adoption",
             ],
         ),
-        _family_entry(
+        _measured_family_entry(
             family_id="map_rot_lifecycle_debt",
             display_name="Map-rot lifecycle debt",
             priority_reason=(
@@ -364,6 +718,7 @@ def build_family_promotion_candidate_report() -> dict[str, Any]:
                 "source-backed currentness boundary before cleanup automation."
             ),
             current_report=map_rot.build_report(),
+            public_report=map_rot.build_map_rot_public_cohort_report(),
             candidate_distribution={
                 "current": 30,
                 "stale": 30,
@@ -419,63 +774,85 @@ def build_family_promotion_candidate_report() -> dict[str, Any]:
             ),
         },
     ]
+    all_public_quality_ok = all(
+        bool(family["gate_status"]["quality_gate_ok"]) for family in selected
+    ) and all(bool(family["gate_status"]["quality_gate_ok"]) for family in promoted)
+    public_quality_metrics = _aggregate_public_quality_metrics(
+        selected=selected,
+        promoted=promoted,
+        deferred=deferred,
+    )
+    unresolved_actions = [
+        _next_measurement_action(family)
+        for family in selected
+        if not bool(family["gate_status"]["quality_gate_ok"])
+    ]
     return {
         "kind": "aippocampus_benchmark_family_promotion_candidates",
         "schema_version": SCHEMA_VERSION,
         "issue": ISSUE_NUMBER,
         "run_at": now_utc(),
         "ok": True,
-        "benchmark_maturity_level": "planning_contract",
+        "benchmark_maturity_level": "public_cohort",
         "measurement_origin": "deterministic_contract",
         "observed_agent_behavior": False,
         "contract_gate_ok": True,
-        "quality_gate_ok": False,
-        "public_quality_gate_ok": False,
+        "quality_gate_ok": all_public_quality_ok,
+        "public_quality_gate_ok": all_public_quality_ok,
         "decision_impact": "diagnostic_only",
         "decision_impact_not_applicable": True,
         "case_count": len(selected) + len(deferred),
+        "case_count_meaning": "selected candidate families plus deferred candidate families",
         "promoted_family_count": len(promoted),
         "selected_family_count": len(selected),
+        "metrics": public_quality_metrics,
         "promoted_families": promoted,
         "selected_families": selected,
-        "next_measurement_actions": [
-            _next_measurement_action(family) for family in selected
+        "completed_measurements": [
+            {
+                "family_id": family["family_id"],
+                **family["public_cohort_measurement"],
+            }
+            for family in selected
         ],
+        "next_measurement_actions": unresolved_actions,
         "deferred_families": deferred,
         "gate_separation": {
             "contract_gate_ok": "current deterministic contract still passes",
             "usefulness_gate_ok": (
-                "candidate cohort must prove user or agent usefulness blockers are zero"
+                "observed public/holdout cohort usefulness blockers must be zero"
             ),
             "public_quality_gate_ok": (
-                "true only for a named public/holdout surface, such as attention explicit-pull"
+                "true only for named public/holdout surfaces with sample floor and no tuning leak"
             ),
             "quality_gate_ok": "alias for the surface-specific public_quality_gate_ok",
         },
         "sanitization_check": _sanitization_check(),
-        "measured_result": "deterministic candidate-family selection report emitted",
+        "measured_result": (
+            "selected agent-continuity and map-rot families now include observed "
+            "public/holdout cohort measurements"
+        ),
         "supports": [
             "first #1195 family-promotion decision",
-            "reusable candidate metadata for public-safe cohort construction",
+            "observed public-safe cohort measurements for selected candidate families",
         ],
         "useful_now": [
-            "separates candidate-family planning from public cohort quality claims",
-            "points future benchmark work at held-out usefulness and quality gates",
+            "separates target cohort design from observed blocker counts and rates",
+            "keeps closed historical owner issues out of unresolved measurement actions",
         ],
-        "agent_action": "use_as_family_promotion_planning_input_not_quality_evidence",
+        "agent_action": ("use_as_family_promotion_public_cohort_evidence_not_runtime_adoption"),
         "can_support_after_action": [
-            "candidate cohort implementation after held-out measurement and human review"
+            "runtime or private-history adoption only after separate live/dogfood evidence"
         ],
         "material_limits": [
             "Attention navigation is promoted only for the narrow explicit-pull public cohort.",
-            "Agent-continuity loop and map-rot lifecycle debt remain selected candidate work.",
-            "Candidate case counts are targets, not observed pass/fail results.",
+            "Agent-continuity loop and map-rot public cohorts are synthetic/public-safe evidence.",
             "Private history, live host behavior, and answer generation remain out of scope.",
         ],
         "cannot_claim": [
-            "public_cohort_quality",
             "selected_family_runtime_lift",
             "live_private_history_family_promotion",
+            "cleanup_write_runtime_adoption",
         ],
         "privacy_boundary": {
             "raw_private_text_emitted": False,
@@ -484,12 +861,11 @@ def build_family_promotion_candidate_report() -> dict[str, Any]:
         },
         "claim_boundary": {
             "supports": (
-                "First #1195 family-promotion decision and reusable candidate metadata for "
-                "public-safe cohort construction."
+                "First #1195 family-promotion decision with observed public/holdout cohort "
+                "measurements for selected public-safe families."
             ),
             "material_limits": [
-                "No selected family is promoted to public cohort quality by this report.",
-                "Candidate case counts are targets, not observed pass/fail results.",
+                "Selected family measurements are public-safe synthetic cohorts, not live-host proof.",
                 "Private history, live host behavior, and answer generation remain out of scope.",
             ],
         },

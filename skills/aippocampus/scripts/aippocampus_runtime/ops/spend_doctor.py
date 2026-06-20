@@ -11,11 +11,13 @@ from typing import Any, Iterable, Mapping
 
 from aippocampus_runtime import core as runtime_core
 from aippocampus_runtime.ops.spend_doctor_card import compact_spend_doctor_card
+from aippocampus_runtime.ops.spend_doctor_compact import build_compact_spend_doctor_report
 from aippocampus_runtime.recall.semantic_recall_gate import semantic_gate_mode
 from aippocampus_runtime.warm_ambient.scheduler import warm_background_enabled, warm_status_payload
 
 __all__ = [
     "build_spend_doctor_report",
+    "build_compact_spend_doctor_report",
     "compact_spend_doctor_card",
     "render_text",
 ]
@@ -862,6 +864,15 @@ def _spend_decision(
     }
 
 
+def _reporting_boundary() -> dict[str, Any]:
+    return {
+        "registry_location_printed": False,
+        "price_table_configured": False,
+        "estimated_cost_supported": False,
+        "cost_basis": "tokens_only_no_provider_billing_scrape",
+    }
+
+
 def build_spend_doctor_report(
     *,
     registry_dir: Path | str | None = None,
@@ -891,12 +902,7 @@ def build_spend_doctor_report(
     warning_codes = [str(item["code"]) for item in warnings]
     if warm_queue_blocked:
         warning_codes.append("blocked_warm_queue:warm_ambient")
-    reporting_boundary = {
-        "registry_location_printed": False,
-        "price_table_configured": False,
-        "estimated_cost_supported": False,
-        "cost_basis": "tokens_only_no_provider_billing_scrape",
-    }
+    reporting_boundary = _reporting_boundary()
     report = {
         "schema_version": SCHEMA_VERSION,
         "kind": "aippocampus_spend_doctor",

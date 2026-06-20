@@ -174,6 +174,10 @@ class RouteReadinessObservatoryTests(unittest.TestCase):
         self.assertIn("campus_usefulness_panels", report["surfaces"])
         self.assertIn("recall_diagnostic", report["surfaces"])
         self.assertIn("sleep_cycle", report["surfaces"])
+        self.assertEqual(
+            report["sleep_cycle"]["dream_output_status_card"]["primary_next_action"],
+            "inspect_retention_and_review_horizon",
+        )
         panels = report["campus_usefulness_panels"]["panels"]
         self.assertGreater(report["metrics"]["campus_useful_now_count"], 0)
         self.assertGreater(report["metrics"]["campus_wasted_motion_count"], 0)
@@ -545,6 +549,9 @@ class RouteReadinessObservatoryTests(unittest.TestCase):
         self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
         self.assertEqual(payload["foreground_action"]["kind"], "no_op")
         self.assertEqual(payload["foreground_action"]["id"], "no_observatory_rows_to_route")
+        self.assertTrue(payload["foreground_action"]["no_op"])
+        self.assertTrue(payload["foreground_action"]["continue_without_command"])
+        self.assertNotIn("command", payload["foreground_action"])
         self.assertEqual(payload["useful_now_count"], 0)
         self.assertEqual(payload["activation_surface_count"], 0)
         self.assertEqual(

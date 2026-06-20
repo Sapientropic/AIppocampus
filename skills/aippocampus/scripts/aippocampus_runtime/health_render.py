@@ -6,6 +6,22 @@ from __future__ import annotations
 from typing import Any
 
 
+def _action_command(item: dict[str, Any]) -> str:
+    return str(item.get("facade_command") or item.get("command") or "").strip()
+
+
+def _command_kind(command: str) -> str:
+    lowered = str(command or "").casefold()
+    if (
+        " plan" in lowered
+        or "--summary-json" in lowered
+        or "--dry-run" in lowered
+        or " --status" in lowered
+    ):
+        return "inspect"
+    return "repair"
+
+
 def render_health_text(result: dict[str, Any]) -> None:
     status = "OK" if result["ok"] else "needs maintenance"
     rollout = result["rollout"]
@@ -26,12 +42,28 @@ def render_health_text(result: dict[str, Any]) -> None:
     if readiness:
         usable = "yes" if readiness.get("ready") else "partial"
         first_action = next((item for item in actions if item.get("severity") in {"critical", "warning"}), None)
+        can_continue = bool(
+            readiness.get(
+                "ordinary_first_recall_usable",
+                readiness.get("ready") and not readiness.get("maintenance_required_before_recall"),
+            )
+        )
+        blocks_exact_latest = bool(
+            readiness.get("blocks_exact_latest_claims")
+            or readiness.get("blocks_exact_latest")
+            or readiness.get("freshness_degraded")
+            or readiness.get("latest_current_thread_may_be_missing")
+            or str(readiness.get("status") or "") == "ready_with_freshness_degraded"
+        )
         print("AIppocampus health")
         print(f"readiness: {usable} ({readiness.get('status') or status})")
+        print(f"can_continue_recall_now: {'yes' if can_continue else 'partial'}")
+        print(f"blocks_exact_latest_claims: {'yes' if blocks_exact_latest else 'no'}")
         if first_action:
             print(f"best next action: {first_action.get('id')}")
-            if first_action.get("facade_command") or first_action.get("command"):
-                print(f"fix: {first_action.get('facade_command') or first_action.get('command')}")
+            command = _action_command(first_action)
+            if command:
+                print(f"{_command_kind(command)}: {command}")
         else:
             print("best next action: continue; run maintenance only when a specific check asks for it")
         works: list[str] = []
@@ -148,9 +180,11 @@ def render_health_text(result: dict[str, Any]) -> None:
             print(f"- {item['id']} [{item['severity']}]: {item['reason']}")
         runnable = [item for item in actions if item.get("command")]
         if runnable:
-            print("\nNext:" if not result["ok"] else "\nOptional maintenance:")
+            print("\nNext actions:" if not result["ok"] else "\nMaintenance to inspect when idle:")
             for index, item in enumerate(runnable[:3], start=1):
-                print(f"{index}. {item['id']}: {item.get('facade_command') or item['command']}")
+                command = _action_command(item)
+                command_kind = "inspect" if result["ok"] else _command_kind(command)
+                print(f"{index}. {item['id']} [{command_kind}]: {command}")
 
 
 def render_registry_health_text(result: dict[str, Any]) -> None:

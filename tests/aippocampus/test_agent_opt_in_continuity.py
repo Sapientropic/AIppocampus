@@ -1038,38 +1038,6 @@ class AgentOptInContinuityTests(unittest.TestCase):
             "use_opened_route_context",
         )
 
-    def test_last_recall_cache_keeps_public_safe_query_for_recovery(self) -> None:
-        cache_path = self.cwd / "last-recall-query.json"
-        wrote = agent_continuity_cli_support.write_last_recall_cache(
-            [{"request_index": 1, "route_id": "route_query", "handle": "handle_query"}],
-            query="agent-native recall opt-in SECRET_TOKEN=abc123",
-            cwd=self.cwd,
-            clean_source_dir=self.clean,
-            registry_dir=None,
-            macro_state_path=None,
-            project="AIppocampus",
-            max_matches=1,
-            schema_version=agent_continuity.SCHEMA_VERSION,
-            path=cache_path,
-        )
-
-        cue = agent_continuity_cli_support.query_from_last_recall_cache(cache_path)
-        recovery = agent_continuity_cli_support.last_recall_unavailable_payload(
-            mode="deepen",
-            exc=ValueError("same-machine last recall cache does not match"),
-            schema_version=agent_continuity.SCHEMA_VERSION,
-            kind="aippocampus_agent_continuity_path",
-            cue=cue,
-        )
-        encoded = json.dumps(recovery, ensure_ascii=False)
-
-        self.assertTrue(wrote)
-        self.assertIn("agent-native recall opt-in", cue or "")
-        self.assertNotIn("abc123", cue or "")
-        self.assertIn("agent-native recall opt-in", recovery["foreground_action"]["command"])
-        self.assertNotIn("{cue}", recovery["foreground_action"].get("command", ""))
-        self.assertNotIn("abc123", encoded)
-
     def test_agent_deepen_accepts_json_thread_candidate_handle(self) -> None:
         registry_dir = self.cwd / "registry"
         thread_key = "session:thread-candidate"
@@ -2113,13 +2081,27 @@ class AgentOptInContinuityTests(unittest.TestCase):
         refresh_action = payload["safe_next_actions"][1]
         self.assertEqual(refresh_action["tool_name"], "agent_aippo")
         self.assertEqual(refresh_action["arguments"], {"task": "benchmark reporting issue closeout"})
+        self.assertEqual(
+            refresh_action["command"],
+            "aippocampus agent aippo --task 'benchmark reporting issue closeout' --json",
+        )
         self.assertCanonicalForegroundAction(payload)
         self.assertNotIn("cannot_claim", payload)
         self.assertIn("source_backed_facts", payload["claim_boundary"]["must_reopen_for"])
         self.assertNotIn("operator_detail", payload)
-        self.assertIn("operator_json_command_template", payload)
-        self.assertNotIn("operator_json_command", payload)
-        self.assertEqual(payload["operator_json_requires"], ["task_cue"])
+        self.assertNotIn("operator_json_command_template", payload)
+        self.assertEqual(
+            payload["operator_json_command"],
+            (
+                "aippocampus agent aippo --task "
+                "'benchmark reporting issue closeout' --json --operator-json"
+            ),
+        )
+        self.assertEqual(
+            payload["claim_boundary"]["detail_available_with_command"],
+            payload["operator_json_command"],
+        )
+        self.assertNotIn("operator_json_requires", payload)
         self.assertNotIn("activation_packet", payload)
         self.assertNotIn("metrics", payload)
         self.assertNotIn("red_lines", payload)
@@ -2289,7 +2271,11 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertCanonicalForegroundAction(payload)
         self.assertIn("product_workflow", payload["activation_packet"]["task_families"])
         self.assertIn("foreground_guidance_card", payload)
-        self.assertNotIn("operator_json_command", payload["foreground_guidance_card"])
+        self.assertIn("operator_json_command", payload["foreground_guidance_card"])
+        self.assertNotIn(
+            "operator_json_command_template",
+            payload["foreground_guidance_card"],
+        )
         self.assertNotIn("<task_cue>", encoded)
         self.assertEqual(executable_command_violations(payload), [])
 

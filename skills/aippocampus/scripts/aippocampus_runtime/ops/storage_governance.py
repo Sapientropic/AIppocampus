@@ -668,14 +668,9 @@ def _error_payload(code: str, message: str, *, error_class: str = "usage_error")
 
 
 def deferred_summary_payload(*, class_filter: str, limit: int) -> dict[str, Any]:
-    comparable_metrics = (
-        f"aippocampus storage gc --dry-run --json --top {max(1, int(limit))} --cwd ."
-    )
+    comparable_metrics = f"aippocampus storage gc --dry-run --json --top {max(1, int(limit))} --cwd ."
     summary_actions = gc_actions.storage_gc_summary_actions(limit=limit, include_apply=False)
-    action_fields = canonical_foreground_action_fields(
-        summary_actions[0],
-        safe_next_actions=summary_actions,
-    )
+    action_fields = canonical_foreground_action_fields(summary_actions[0], safe_next_actions=summary_actions)
     return {
         "kind": "aippocampus_storage_gc_summary",
         "schema_version": SCHEMA_VERSION,
@@ -708,7 +703,9 @@ def deferred_summary_payload(*, class_filter: str, limit: int) -> dict[str, Any]
         **action_fields,
         "safe_next_action": {
             "decision": "continue without cleanup unless the user explicitly wants storage detail",
-            "command": str(summary_actions[0].get("command") or "continue-without-cleanup"),
+            "continue_without_command": True,
+            "no_command_needed": True,
+            "instruction": "Continue the user's foreground work without running storage cleanup.",
         },
         "comparable_metrics_command": comparable_metrics,
         "full_audit_available": True,
@@ -851,12 +848,13 @@ High-risk/private flags:
     explicit_top = "--top" in raw_args or any(item.startswith("--top=") for item in raw_args)
     plan_top = max(1, int(args.top))
     plan_fanout_budget = max(1, int(args.fanout_budget))
-    if args.summary_json:
+    foreground_json = args.summary_json or (args.json_output and not args.full)
+    if foreground_json:
         plan_top = plan_top if explicit_top else 1
         plan_fanout_budget = min(plan_fanout_budget, 16)
         if args.capacity_report is None and args.retention_report is None:
             retention_path, _attempted = _default_retention_report_path(Path(args.cwd).resolve())
-            if retention_path is None:
+            if retention_path is None and (args.summary_json or not explicit_top):
                 print(
                     json.dumps(
                         deferred_summary_payload(
@@ -868,7 +866,8 @@ High-risk/private flags:
                     )
                 )
                 return 0
-            args.retention_report = str(retention_path)
+            if retention_path is not None:
+                args.retention_report = str(retention_path)
     try:
         plan = build_plan(
             args.cwd,
@@ -920,7 +919,7 @@ High-risk/private flags:
     elif args.json_output:
         payload = plan if args.full else bounded_cli_projection(
             plan,
-            limit=args.top,
+            limit=plan_top,
             summary_only=False,
             schema_version=SCHEMA_VERSION,
         )

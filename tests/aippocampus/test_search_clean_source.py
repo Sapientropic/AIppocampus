@@ -622,9 +622,66 @@ class SearchCleanSourceTests(unittest.TestCase):
         self.assertNotIn("action_id", payload["foreground_action"])
         self.assertEqual(payload["foreground_action"]["tool_name"], "get_turn_context")
         self.assertEqual(payload["foreground_action"]["arguments"]["message_id"], "msg_final")
+        self.assertEqual(
+            payload["foreground_action"]["command"],
+            "aippocampus search --open-current-source --message-id msg_final --json",
+        )
+        self.assertTrue(payload["foreground_action"]["cli_equivalent_for_tool_action"])
+        self.assertEqual(
+            payload["matches"][0]["reopen_command"],
+            payload["foreground_action"]["command"],
+        )
+        self.assertIn("source_window_command", payload["matches"][0])
         self.assertEqual(payload["foreground_action"]["claim_boundary"], "source_reopen_required_before_claim")
         self.assertEqual(foreground_action_contract_violations(payload), [])
         self.assertIn("matches", payload)
+
+    def test_current_thread_search_reopen_command_opens_bounded_source_window(self) -> None:
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            code = search.main(
+                [
+                    "--open-current-source",
+                    "--message-id",
+                    "msg_final",
+                    "--cwd",
+                    str(self.cwd),
+                    "--clean-source-dir",
+                    str(self.source),
+                    "--json",
+                ]
+            )
+
+        payload = json.loads(stdout.getvalue())
+        encoded = json.dumps(payload, ensure_ascii=False)
+
+        self.assertEqual(code, 0)
+        self.assertEqual(payload["kind"], "aippocampus_current_thread_source_window")
+        self.assertEqual(payload["status"], "source_open")
+        self.assertEqual(payload["source_boundary"]["authority"], "source_open")
+        self.assertEqual(payload["metrics"]["source_reopen_success"], True)
+        self.assertGreaterEqual(payload["metrics"]["window_message_count"], 1)
+        self.assertIn("AIppocampus 是清洗后的原文记忆库", encoded)
+        self.assertNotIn(str(self.cwd), encoded)
+
+    def test_human_search_result_prints_current_thread_reopen_command(self) -> None:
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            code = search.main(
+                [
+                    "AIppocampus",
+                    "--cwd",
+                    str(self.cwd),
+                    "--clean-source-dir",
+                    str(self.source),
+                ]
+            )
+
+        self.assertEqual(code, 0)
+        self.assertIn(
+            "reopen: aippocampus search --open-current-source --message-id msg_final --json",
+            stdout.getvalue(),
+        )
 
     def test_empty_cli_json_includes_no_route_authority_envelope(self) -> None:
         stdout = io.StringIO()

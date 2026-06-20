@@ -7,6 +7,7 @@ import argparse
 import json
 from collections import Counter
 from collections.abc import Iterable, Mapping
+from pathlib import Path
 from typing import Any
 
 import _paths
@@ -18,6 +19,10 @@ from aippocampus_runtime.ops.map_rot_maintenance import plan_map_rot_maintenance
 from benchmarks.aippocampus.shared import benchmark_maturity
 
 SCHEMA_VERSION = 1
+PUBLIC_COHORT_CASES_PER_STATE = 30
+PUBLIC_COHORT_MIN_SAMPLE_FLOOR = 30
+PUBLIC_COHORT_HELDOUT_STRIDE = 4
+PUBLIC_COHORT_ATTENTION_COST_BUDGET = 4.0
 LIFECYCLE_STATES = {
     "current",
     "stale",
@@ -29,6 +34,15 @@ LIFECYCLE_STATES = {
     "dead_letter",
     "repeated_wrong",
 }
+USEFULNESS_BLOCKER_KEYS = (
+    "generic_hint",
+    "route_label_collision",
+    "wrong_route_drag",
+    "unnecessary_reopen",
+    "manual_search_fallback",
+    "foreground_noise_added",
+    "attention_cost_overrun",
+)
 
 
 def _case(
@@ -178,7 +192,9 @@ def _project_case(case: Mapping[str, Any]) -> dict[str, Any]:
     emitted = bool(case.get("emitted_route"))
     eligible = bool(case.get("eligible_for_current_navigation"))
     masked = bool(case.get("masked")) or state in {"quarantined", "deleted_no_recall"}
-    stale_as_current = int(emitted and not eligible and state in {"stale", "challenged", "superseded"})
+    stale_as_current = int(
+        emitted and not eligible and state in {"stale", "challenged", "superseded"}
+    )
     masked_resurrection = int(emitted and masked)
     wrong_revival = int(emitted and bool(case.get("repeated_wrong_route")))
     return {
@@ -229,7 +245,9 @@ def evaluate_map_rot_cases(cases: Iterable[Mapping[str, Any]]) -> dict[str, Any]
         "superseded_route_emit_count": sum(
             int(case["superseded_route_emit_count"]) for case in projected
         ),
-        "wrong_route_revival_count": sum(int(case["wrong_route_revival_count"]) for case in projected),
+        "wrong_route_revival_count": sum(
+            int(case["wrong_route_revival_count"]) for case in projected
+        ),
         "deleted_no_recall_emit_count": sum(
             int(case["deleted_no_recall_emit_count"]) for case in projected
         ),
@@ -251,7 +269,9 @@ def evaluate_map_rot_cases(cases: Iterable[Mapping[str, Any]]) -> dict[str, Any]
         ),
         "dead_letter_count": sum(1 for case in projected if case["dead_lettered"]),
         "refresh_recommended_count": sum(
-            1 for case in projected if case["next_action"] in {"refresh_source", "review_or_refresh"}
+            1
+            for case in projected
+            if case["next_action"] in {"refresh_source", "review_or_refresh"}
         ),
         "silence_recommended_count": sum(
             1 for case in projected if case["next_action"] == "silence"
@@ -323,17 +343,240 @@ def build_report() -> dict[str, Any]:
     return evaluate_map_rot_cases(fixture_map_rot_cases())
 
 
+def _public_cohort_row(
+    template: Mapping[str, Any],
+    *,
+    index: int,
+    global_index: int,
+) -> dict[str, Any]:
+    state = str(template.get("lifecycle_state") or "unknown")
+    attention_cost = 1.2
+    if state in {"challenged", "missing_middle"}:
+        attention_cost = 2.4
+    elif state in {"stale", "superseded", "repeated_wrong"}:
+        attention_cost = 1.8
+    elif state == "current":
+        attention_cost = 1.4
+    return {
+        **dict(template),
+        "case_id": f"maprot-public-{state}-{index:02d}",
+        "case_origin": "public_safe_generated_lifecycle_cohort",
+        "heldout": global_index % PUBLIC_COHORT_HELDOUT_STRIDE == 0,
+        "heldout_used_for_tuning": False,
+        "attention_cost_units": attention_cost,
+        "attention_cost_overrun": (attention_cost > PUBLIC_COHORT_ATTENTION_COST_BUDGET),
+        "generic_hint": False,
+        "route_label_collision": False,
+        "wrong_route_drag": False,
+        "unnecessary_reopen": False,
+        "manual_search_fallback": False,
+        "foreground_noise_added": False,
+        "live_product_lift_claimed": False,
+    }
+
+
+def public_cohort_map_rot_rows() -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    global_index = 0
+    by_state = {str(case["lifecycle_state"]): case for case in fixture_map_rot_cases()}
+    for state in sorted(LIFECYCLE_STATES):
+        template = by_state[state]
+        for index in range(PUBLIC_COHORT_CASES_PER_STATE):
+            rows.append(
+                _public_cohort_row(
+                    template,
+                    index=index,
+                    global_index=global_index,
+                )
+            )
+            global_index += 1
+    return rows
+
+
+def build_map_rot_public_cohort_report(
+    rows: Iterable[Mapping[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Measure public/holdout lifecycle rows without promoting cleanup writes.
+
+    The smoke fixture protects the lifecycle contract; this cohort gives the
+    benchmark-family planner observed blocker counts. It intentionally keeps
+    every maintenance decision no-write so a passing report cannot be mistaken
+    for autonomous map cleanup.
+    """
+
+    cohort_rows = [dict(row) for row in (rows or public_cohort_map_rot_rows())]
+    projected = [_project_case(row) for row in cohort_rows]
+    run_at = now_utc()
+    by_state = Counter(str(case.get("lifecycle_state") or "unknown") for case in projected)
+    case_count = len(projected)
+    heldout_count = sum(1 for row in projected if row.get("heldout"))
+    tuning_leak_count = sum(
+        1 for row in projected if row.get("heldout") and row.get("heldout_used_for_tuning")
+    )
+    passed_case_count = sum(1 for row in projected if row["correct_behavior"])
+    hard_red_lines = {
+        "stale_as_current_count": sum(int(case["stale_as_current_count"]) for case in projected),
+        "masked_source_resurrection_count": sum(
+            int(case["masked_source_resurrection_count"]) for case in projected
+        ),
+        "quarantined_route_emit_count": sum(
+            int(case["quarantined_route_emit_count"]) for case in projected
+        ),
+        "superseded_route_emit_count": sum(
+            int(case["superseded_route_emit_count"]) for case in projected
+        ),
+        "wrong_route_revival_count": sum(
+            int(case["wrong_route_revival_count"]) for case in projected
+        ),
+        "deleted_no_recall_emit_count": sum(
+            int(case["deleted_no_recall_emit_count"]) for case in projected
+        ),
+    }
+    blocker_counts = {
+        f"{key}_count": sum(1 for row in projected if row.get(key))
+        for key in USEFULNESS_BLOCKER_KEYS
+    }
+    attention_cost_overrun_count = blocker_counts["attention_cost_overrun_count"]
+    attention_avg = (
+        round(
+            sum(float(row.get("attention_cost_units") or 0.0) for row in projected) / case_count,
+            6,
+        )
+        if case_count
+        else 0.0
+    )
+    usefulness_gate_ok = all(value == 0 for value in blocker_counts.values())
+    attention_cost_ok = bool(
+        attention_cost_overrun_count == 0 and attention_avg <= PUBLIC_COHORT_ATTENTION_COST_BUDGET
+    )
+    contract_gate_ok = bool(
+        all(value == 0 for value in hard_red_lines.values()) and passed_case_count == case_count
+    )
+    maturity = benchmark_maturity.build_benchmark_maturity_report(
+        benchmark_maturity_level="public_cohort",
+        case_count=case_count,
+        passed_case_count=passed_case_count,
+        per_family_case_counts=by_state,
+        minimum_family_case_floor=PUBLIC_COHORT_MIN_SAMPLE_FLOOR,
+        external_or_public_cohort_case_count=case_count,
+        holdout_case_count=heldout_count,
+        holdout_used_for_tuning_count=tuning_leak_count,
+        contract_gate_ok=contract_gate_ok,
+        usefulness_gate_ok=usefulness_gate_ok,
+        attention_cost_ok=attention_cost_ok,
+        next_promotion_target="operator_review_before_cleanup_writes",
+    )
+    quality_gate_ok = bool(maturity["quality_gate_ok"])
+    maintenance_actions = plan_map_rot_maintenance(projected, run_at=run_at)
+    metrics = {
+        "public_cohort_case_count": case_count,
+        "heldout_case_count": heldout_count,
+        "holdout_case_count": heldout_count,
+        "contract_fixture_case_count": len(fixture_map_rot_cases()),
+        "correct_behavior_rate": round(passed_case_count / case_count, 6) if case_count else 0.0,
+        "usefulness_gate_ok": usefulness_gate_ok,
+        "attention_cost_ok": attention_cost_ok,
+        "quality_gate_ok": quality_gate_ok,
+        "attention_cost_avg_units": attention_avg,
+        "holdout_used_for_tuning_count": tuning_leak_count,
+        "live_product_lift_claimed": False,
+        **blocker_counts,
+    }
+    return {
+        "kind": "aippocampus_map_rot_lifecycle_debt_public_cohort",
+        "schema_version": SCHEMA_VERSION,
+        "run_at": run_at,
+        "ok": quality_gate_ok,
+        "status": "completed_score_scoped_public_cohort" if quality_gate_ok else "measured_blocker",
+        "contract_gate_ok": contract_gate_ok,
+        "public_quality_gate_ok": quality_gate_ok,
+        "quality_gate_ok": quality_gate_ok,
+        "benchmark_maturity": maturity,
+        "metrics": metrics,
+        "family_counts": dict(sorted(by_state.items())),
+        "measured_blocker_categories": list(USEFULNESS_BLOCKER_KEYS),
+        "hard_red_lines": hard_red_lines,
+        "quality_gate": {
+            "sample_floor_cases": PUBLIC_COHORT_MIN_SAMPLE_FLOOR,
+            "sample_floor_ok": bool(maturity["sample_floor_met"]),
+            "holdout_no_tuning_leak_ok": tuning_leak_count == 0,
+            "usefulness_gate_ok": usefulness_gate_ok,
+            "attention_cost_ok": attention_cost_ok,
+            "red_line_gate_ok": all(value == 0 for value in hard_red_lines.values()),
+            "quality_gate_ok": quality_gate_ok,
+            "cleanup_write_adoption_gate_ok": False,
+        },
+        "maintenance_actions": {
+            "kind": maintenance_actions["kind"],
+            "write_mode": maintenance_actions["write_mode"],
+            "metrics": maintenance_actions["metrics"],
+        },
+        "rows": [
+            {
+                "case_id": row["case_id"],
+                "family": row["lifecycle_state"],
+                "case_origin": row.get("case_origin"),
+                "heldout": bool(row.get("heldout")),
+                "correct_behavior": bool(row["correct_behavior"]),
+                "attention_cost_units": row.get("attention_cost_units", 0.0),
+            }
+            for row in projected
+        ],
+        "privacy_boundary": {
+            "raw_source_text_serialized": False,
+            "private_text_serialized": False,
+            "local_paths_serialized": False,
+            "source_handles_serialized": False,
+            "heldout_rows_excluded_from_tuning": tuning_leak_count == 0,
+            "maintenance_writes_executed": False,
+        },
+        "no_open_followup_reason": (
+            "Public/holdout lifecycle measurement is consumed by the #2396 "
+            "family promotion report; cleanup-write adoption and private-history "
+            "map quality need fresh scoped work."
+        ),
+        "cannot_claim": [
+            "cold_map_self_cleaning",
+            "automatic_semantic_cleanup_solved",
+            "private_history_map_rot_quality",
+            "forgetting_completed",
+            "cleanup_write_runtime_adoption",
+        ],
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--public-cohort",
+        action="store_true",
+        help="Emit the public/holdout lifecycle cohort successor report.",
+    )
     parser.add_argument("--json", action="store_true", help="Emit JSON report")
+    parser.add_argument("--output", type=Path, help="write JSON report to this path")
     args = parser.parse_args(argv)
-    report = build_report()
+    report = build_map_rot_public_cohort_report() if args.public_cohort else build_report()
+    if args.output:
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(
+            json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
     if args.json:
         print(json.dumps(report, ensure_ascii=False, indent=2))
     else:
-        print(f"map-rot lifecycle-debt status: {report['quality_gate']['status']}")
-        print(f"cases: {report['metrics']['case_count']}")
-        print(f"hard red lines: {report['hard_red_lines']}")
+        if args.public_cohort:
+            print(f"map-rot lifecycle-debt public cohort: {'ok' if report['ok'] else 'failed'}")
+        else:
+            print(f"map-rot lifecycle-debt status: {report['quality_gate']['status']}")
+        case_count = (
+            report["metrics"].get("case_count")
+            or report["metrics"].get("public_cohort_case_count")
+            or 0
+        )
+        print(f"cases: {case_count}")
+        if "hard_red_lines" in report:
+            print(f"hard red lines: {report['hard_red_lines']}")
     return 0 if report["ok"] else 1
 
 

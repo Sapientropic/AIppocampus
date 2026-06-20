@@ -581,7 +581,8 @@ def summary_projection(report: Mapping[str, Any]) -> dict[str, Any]:
     no_op_action = {
         "id": "no_episode_arcs_to_route",
         "kind": "no_episode_arcs_to_route",
-        "command": "no-op",
+        "no_op": True,
+        "continue_without_command": True,
         "mutation_risk": "none",
         "claim_boundary": "sequence_hint_not_source_truth",
         "why": "No episode arcs are currently present in the scoped aggregate readout.",

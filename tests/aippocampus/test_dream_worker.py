@@ -54,6 +54,27 @@ def ready_pack() -> dict[str, object]:
     }
 
 
+def single_thread_dense_pack() -> dict[str, object]:
+    refs = [
+        source_ref("session:long", "msg-a", 10),
+        source_ref("session:long", "msg-b", 20),
+        source_ref("session:long", "msg-c", 30),
+    ]
+    pack = dict(ready_pack())
+    pack.update(
+        {
+            "pack_id": "dream_pack_single_thread",
+            "source_refs": refs,
+            "source_ref_audit": {
+                "status": "clean_source_refs_present",
+                "source_ref_count": 3,
+                "source_thread_count": 1,
+            },
+        }
+    )
+    return pack
+
+
 def config() -> ChatClientConfig:
     return ChatClientConfig(
         api_key="test",
@@ -1005,6 +1026,60 @@ class DreamWorkerTests(unittest.TestCase):
             "sensitive_or_profile_claim_requires_human_review",
             finding["worker_validation"]["failed_checks"],
         )
+
+    def test_active_imagination_single_thread_dense_output_becomes_optional_probe(self) -> None:
+        def fake_model_call(messages: list[dict[str, str]], call_config: ChatClientConfig) -> dict[str, object]:
+            del messages, call_config
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "content": json.dumps(
+                                {
+                                    "findings": [
+                                        {
+                                            "candidate_kind": "bridge_concept",
+                                            "title": "Single long thread probe",
+                                            "summary": "A source-dense single thread can hold a sandbox continuity probe.",
+                                            "why_this_is_not_fact": "It is one-thread synthesis, not independent corroboration.",
+                                            "counter_evidence": ["another thread may frame the issue differently"],
+                                            "activation_cues": ["single thread continuity probe"],
+                                            "confidence": 0.6,
+                                            "source_ref_ids": ["sr0", "sr1", "sr2"],
+                                            "bridge_claims": [
+                                                {
+                                                    "claim": "The probe is anchored to several turns in one long thread.",
+                                                    "source_ref_ids": ["sr0", "sr1"],
+                                                }
+                                            ],
+                                        }
+                                    ]
+                                }
+                            )
+                        }
+                    }
+                ],
+                "usage": {},
+            }
+
+        payload = dream_worker.run_model_backed_dream_worker(
+            single_thread_dense_pack(),
+            dream_function="active_imagination",
+            config=config(),
+            model_call=fake_model_call,
+            no_write=False,
+        )
+
+        finding = payload["findings"][0]
+        row = payload["dream_working_memory_rows"][0]
+
+        self.assertEqual(payload["status"], "candidate_emitted")
+        self.assertEqual(finding["worker_validation"]["status"], "passed")
+        self.assertEqual(finding["probe_authority"]["state"], "single_thread_source_dense_probe")
+        self.assertEqual(finding["source_authority"], "source_reopen_required_probe")
+        self.assertEqual(row["foreground_use"]["default_action"], "source_reopen_required_probe")
+        self.assertEqual(row["foreground_use"]["single_thread_probe_action"], "optional_probe")
+        self.assertTrue(row["source_authority"]["requires_source_reopen_before_claim"])
 
     def test_active_imagination_parks_unsourced_single_source_claimless_and_sensitive_outputs(self) -> None:
         def fake_model_call(messages: list[dict[str, str]], call_config: ChatClientConfig) -> dict[str, object]:

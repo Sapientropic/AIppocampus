@@ -25,6 +25,11 @@ GENERIC_MATCH_TERMS = {
     "memory",
     "project",
     "source",
+    "issue",
+    "issues",
+    "message",
+    "messages",
+    "candidate",
     "finding",
     "background",
 }

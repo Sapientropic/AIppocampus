@@ -957,7 +957,17 @@ class BenchmarkSuiteTests(unittest.TestCase):
         self.assertIn("supports", lint["positive_support_fields"])
         self.assertIn("material_limits", lint["positive_support_fields"])
         self.assertEqual(report["decision_impact"], "diagnostic_only")
-        self.assertFalse(report["quality_gate_ok"])
+        self.assertTrue(report["quality_gate_ok"])
+        self.assertTrue(report["public_quality_gate_ok"])
+        self.assertEqual(
+            report["metrics"]["public_quality_gate_rate"],
+            {
+                "numerator": 3,
+                "denominator": 3,
+                "rate": 1.0,
+                "unit": "evaluated_public_quality_family",
+            },
+        )
 
     def test_suite_report_warns_when_profile_surface_is_narrowed(self) -> None:
         with (

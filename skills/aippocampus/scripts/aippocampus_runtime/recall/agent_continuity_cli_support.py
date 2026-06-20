@@ -247,9 +247,9 @@ def _safe_recall_cue(cue: str | None) -> str:
     return str(redact_sensitive_values(redact_private_paths(str(cue or "").strip())) or "")
 
 
-def _recall_detail_command(cue: str | None) -> str:
+def _recall_detail_command(cue: str | None, *, allow_executable: bool = False) -> str:
     clean_cue = _safe_recall_cue(cue)
-    if clean_cue and not command_value_needs_input(clean_cue):
+    if allow_executable and clean_cue and not command_value_needs_input(clean_cue):
         return f"aippocampus agent recall {shell_quote(clean_cue)} --json --detail full"
     return 'aippocampus agent recall "{cue}" --json --detail full'
 
@@ -273,11 +273,17 @@ def handle_recovery_fields(mode: str) -> dict[str, Any]:
     }
 
 
-def last_recall_cache_recovery_fields(mode: str, *, cue: str | None = None) -> dict[str, Any]:
+def last_recall_cache_recovery_fields(
+    mode: str,
+    *,
+    cue: str | None = None,
+    cue_role: str = "previous_cached_cue",
+) -> dict[str, Any]:
     del mode
     clean_cue = _safe_recall_cue(cue)
-    detail_command = _recall_detail_command(cue)
-    if clean_cue and not command_value_needs_input(clean_cue):
+    cue_is_current = str(cue_role or "").strip().casefold() == "current"
+    detail_command = _recall_detail_command(cue, allow_executable=cue_is_current)
+    if cue_is_current and clean_cue and not command_value_needs_input(clean_cue):
         action = foreground_shell_action(
             action_id="recall_with_cue_full_detail",
             label="Rerun agent recall with full detail",
@@ -294,6 +300,13 @@ def last_recall_cache_recovery_fields(mode: str, *, cue: str | None = None) -> d
             "id": "recall_with_cue_full_detail",
             "command_template": 'aippocampus agent recall "{cue}" --json --detail full',
         }
+        if clean_cue and not cue_is_current:
+            action["previous_cached_cue"] = clean_cue
+            action["previous_cue_role"] = "advisory_only_not_executable"
+            action["previous_cue_reason"] = (
+                "The cached cue may belong to an earlier task or stale selector; use it only "
+                "as context when writing a fresh current cue."
+            )
     return {
         "foreground_action_contract": FOREGROUND_ACTION_CONTRACT_VERSION,
         "foreground_action": action,
@@ -309,20 +322,27 @@ def last_recall_selector_recovery_fields(
     *,
     request_index: int,
     cue: str | None = None,
+    cue_role: str = "previous_cached_cue",
 ) -> dict[str, Any]:
-    fields = last_recall_cache_recovery_fields(mode, cue=cue)
+    fields = last_recall_cache_recovery_fields(mode, cue=cue, cue_role=cue_role)
     fields.update(
         {
             "selector_recovery": {
                 "status": "stale_or_unavailable",
                 "request_index": request_index,
-                "cue_preserved": bool(str(cue or "").strip()),
+                "previous_cached_cue_preserved": bool(
+                    str(cue or "").strip()
+                    and str(cue_role or "").strip().casefold() != "current"
+                ),
                 "reason": "rerun recall before using this mutable last-recall selector",
             },
             "claim_boundary": (
                 "last-recall selector could not reopen current source; rerun recall before claims."
             ),
-            "operator_detail_command": _recall_detail_command(cue),
+            "operator_detail_command": _recall_detail_command(
+                cue,
+                allow_executable=str(cue_role or "").strip().casefold() == "current",
+            ),
         }
     )
     return fields
@@ -369,6 +389,7 @@ def last_recall_unavailable_payload(
     schema_version: str,
     kind: str,
     cue: str | None = None,
+    cue_role: str = "previous_cached_cue",
 ) -> dict[str, Any]:
     return _public_payload(
         {
@@ -384,9 +405,12 @@ def last_recall_unavailable_payload(
                     "message": str(exc),
                 }
             },
-            **last_recall_cache_recovery_fields(mode, cue=cue),
+            **last_recall_cache_recovery_fields(mode, cue=cue, cue_role=cue_role),
             "claim_boundary": "last-recall cache unavailable; rerun recall before selecting a route.",
-            "operator_detail_command": _recall_detail_command(cue),
+            "operator_detail_command": _recall_detail_command(
+                cue,
+                allow_executable=str(cue_role or "").strip().casefold() == "current",
+            ),
         }
     )
 
@@ -776,6 +800,11 @@ def compact_aippo_guidance_card(payload: Mapping[str, Any], *, task: str = "") -
         else None
     )
     task_text = str(task or "").strip()
+    operator_json_command = (
+        f"aippocampus agent aippo --task {shell_quote(task_text)} --json --operator-json"
+        if task_text and not command_value_needs_input(task_text)
+        else ""
+    )
     card_status = "needs_input" if not task_text else status
     foreground_action: dict[str, Any]
     if use_hint_available or (status == "ok" and direct_guidance_available):
@@ -829,6 +858,7 @@ def compact_aippo_guidance_card(payload: Mapping[str, Any], *, task: str = "") -
                 "label": "Refresh AIppo guidance for this task",
                 "tool_name": "agent_aippo",
                 "arguments": {"task": task_text},
+                "command": f"aippocampus agent aippo --task {shell_quote(task_text)} --json",
                 "mutation_risk": "read_only",
                 "claim_boundary": "working_guidance_not_source_truth",
                 "why": "Re-run AIppo only if the task wording has changed or the card needs refreshing.",
@@ -925,16 +955,28 @@ def compact_aippo_guidance_card(payload: Mapping[str, Any], *, task: str = "") -
                     "public_product_readiness",
                     "exact_user_history_claims",
                 ],
-                "detail_available_with_template": (
-                    'aippocampus agent aippo --task "{task_cue}" --json --operator-json'
+                **(
+                    {"detail_available_with_command": operator_json_command}
+                    if operator_json_command
+                    else {
+                        "detail_available_with_template": (
+                            'aippocampus agent aippo --task "{task_cue}" --json --operator-json'
+                        ),
+                        "detail_requires": ["task_cue"],
+                    }
                 ),
-                "detail_requires": ["task_cue"],
             },
             "operator_json_available": True,
-            "operator_json_command_template": (
-                'aippocampus agent aippo --task "{task_cue}" --json --operator-json'
+            **(
+                {"operator_json_command": operator_json_command}
+                if operator_json_command
+                else {
+                    "operator_json_command_template": (
+                        'aippocampus agent aippo --task "{task_cue}" --json --operator-json'
+                    ),
+                    "operator_json_requires": ["task_cue"],
+                }
             ),
-            "operator_json_requires": ["task_cue"],
         }
     )
 

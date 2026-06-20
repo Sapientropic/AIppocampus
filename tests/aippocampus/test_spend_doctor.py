@@ -13,6 +13,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
+from aippocampus_runtime.cli import facade  # noqa: E402
 from aippocampus_runtime.ops import spend_doctor  # noqa: E402
 from aippocampus_runtime.ops.spend_doctor_card import compact_spend_doctor_card  # noqa: E402
 from aippocampus_runtime.warm_ambient import recall as warm_recall  # noqa: E402
@@ -395,9 +396,13 @@ class SpendDoctorTests(unittest.TestCase):
         self.assertEqual(payload["kind"], "aippocampus_spend_doctor_card")
         self.assertEqual(payload["detail"], "compact")
         self.assertEqual(payload["surface"], "foreground_decision_card")
+        self.assertEqual(payload["status"], "partial")
         self.assertNotIn("routes", payload)
         self.assertNotIn("budget_guardrails", payload)
         self.assertNotIn("cannot_claim", payload)
+        self.assertEqual(payload["summary"]["scan_status"], "deferred")
+        self.assertFalse(payload["summary"]["effective_tokens_known"])
+        self.assertEqual(payload["route_artifact_scan"]["status"], "deferred")
         self.assertEqual(
             payload["claim_boundary"]["can_use_for"],
             "foreground spend/navigation decision",
@@ -425,6 +430,7 @@ class SpendDoctorTests(unittest.TestCase):
         self.assertEqual(card["foreground_action"], card["agent_next_action"])
         self.assertEqual(card["safe_next_actions"][0], card["foreground_action"])
         self.assertEqual(card["foreground_action"]["id"], "continue_with_spend_guardrails")
+        self.assertTrue(card["foreground_action"]["continue_without_command"])
         self.assertNotIn("action_id", card["foreground_action"])
         self.assertNotIn("--detail full", card["foreground_action"].get("command", ""))
         self.assertEqual(
@@ -432,7 +438,7 @@ class SpendDoctorTests(unittest.TestCase):
             "aippocampus doctor spend --detail full --json",
         )
 
-    def test_default_compact_json_warns_with_inspect_action_without_self_looping(self) -> None:
+    def test_default_compact_json_defers_route_scan_without_self_looping(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             warm_dir = root / "ambient_warm_jobs"
@@ -475,8 +481,10 @@ class SpendDoctorTests(unittest.TestCase):
 
         self.assertEqual(proc.returncode, 0, proc.stderr)
         payload = json.loads(proc.stdout)
-        self.assertEqual(payload["status"], "warning")
-        self.assertEqual(payload["decision"]["action"], "inspect")
+        self.assertEqual(payload["status"], "partial")
+        self.assertEqual(payload["decision"]["action"], "continue")
+        self.assertEqual(payload["route_artifact_scan"]["status"], "deferred")
+        self.assertFalse(payload["summary"]["effective_tokens_known"])
         self.assertEqual(
             payload["decision"]["safe_next_command"],
             "aippocampus doctor spend --detail full --json",
@@ -484,12 +492,35 @@ class SpendDoctorTests(unittest.TestCase):
         self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
         self.assertEqual(payload["foreground_action"], payload["agent_next_action"])
         self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
-        self.assertEqual(payload["foreground_action"]["id"], "inspect_spend_route")
+        self.assertEqual(payload["foreground_action"]["id"], "continue_with_spend_guardrails")
+        self.assertTrue(payload["foreground_action"]["continue_without_command"])
         self.assertNotIn("action_id", payload["foreground_action"])
-        self.assertEqual(payload["foreground_action"]["route"], "warm_ambient")
-        self.assertIn("warm_ambient", payload["routes_to_pause_or_inspect"])
+        self.assertEqual(payload["routes_to_pause_or_inspect"], [])
         self.assertNotEqual(payload["decision"]["safe_next_command"], "aippocampus doctor spend --json")
         self.assertLess(len(proc.stdout.encode("utf-8")), 5000)
+
+    def test_default_compact_json_does_not_call_full_spend_builder(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(
+            spend_doctor,
+            "build_spend_doctor_report",
+            side_effect=AssertionError("compact foreground path must not build full report"),
+        ):
+            result = facade.run_command(
+                [
+                    "doctor",
+                    "spend",
+                    "--registry-dir",
+                    tmp,
+                    "--json",
+                ],
+                capture_output=True,
+            )
+
+        self.assertTrue(result.ok, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["kind"], "aippocampus_spend_doctor_card")
+        self.assertEqual(payload["summary"]["scan_status"], "deferred")
+        self.assertFalse(payload["summary"]["effective_tokens_known"])
 
     def test_blocked_warm_queue_becomes_spend_inspect_action_even_below_threshold(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -524,6 +555,11 @@ class SpendDoctorTests(unittest.TestCase):
                 warn_min_foreground_value_rate=0.0,
             )
             card = spend_doctor.compact_spend_doctor_card(report)
+            compact_report = spend_doctor.build_compact_spend_doctor_report(
+                registry_dir=root,
+                now="2026-06-07T12:00:00Z",
+            )
+            compact_card = spend_doctor.compact_spend_doctor_card(compact_report)
 
         self.assertEqual(report["status"], "warning")
         self.assertIn("blocked_warm_queue:warm_ambient", report["warning_codes"])
@@ -538,6 +574,10 @@ class SpendDoctorTests(unittest.TestCase):
         self.assertNotIn("action_id", card["foreground_action"])
         self.assertEqual(card["foreground_action"]["command"], "aippocampus warm status --json")
         self.assertEqual(card["decision"]["warm_queue_health"]["pending_stale_count"], 1)
+        self.assertEqual(compact_report["status"], "warning")
+        self.assertEqual(compact_report["route_artifact_scan"]["status"], "deferred")
+        self.assertEqual(compact_card["foreground_action"]["id"], "inspect_warm_ambient_queue")
+        self.assertEqual(compact_card["foreground_action"]["command"], "aippocampus warm status --json")
 
     def test_explicit_full_spend_json_keeps_operator_telemetry(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

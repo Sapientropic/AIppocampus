@@ -14,7 +14,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import time
 from collections import Counter
 from collections.abc import Iterable, Mapping
 from pathlib import Path
@@ -29,8 +28,10 @@ from aippocampus_runtime.core import (
 from aippocampus_runtime.dream import input_pack as dream_input_pack
 from aippocampus_runtime.dream import precision_policy as dream_precision_policy
 from aippocampus_runtime.dream import queue as dream_queue
+from aippocampus_runtime.dream import status as dream_status
 from aippocampus_runtime.dream import worker as dream_worker
 from aippocampus_runtime.dream import working_memory_publication
+from aippocampus_runtime.dream.local_lock import FileLock
 from aippocampus_runtime.model.client import ChatClientConfig
 from aippocampus_runtime.model.routing import (
     DEFAULT_DEEPSEEK_API_KEY_ENV,
@@ -61,41 +62,6 @@ REGISTRY_SEED_FILES = (
     "coding_decision_events.jsonl",
     "subconscious_edges.jsonl",
 )
-
-
-class FileLock:
-    def __init__(self, path: Path, *, stale_seconds: int = DEFAULT_WRITE_LOCK_STALE_SECONDS) -> None:
-        self.path = path
-        self.stale_seconds = stale_seconds
-        self.fd: int | None = None
-
-    def __enter__(self) -> "FileLock":
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        try:
-            self.fd = os.open(str(self.path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-        except FileExistsError as exc:
-            try:
-                age = time.time() - self.path.stat().st_mtime
-            except OSError:
-                age = 0
-            if age <= self.stale_seconds:
-                raise RuntimeError("dream sleep-cycle writes already locked") from exc
-            try:
-                self.path.unlink()
-            except OSError:
-                pass
-            self.fd = os.open(str(self.path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-        os.write(self.fd, json.dumps({"pid": os.getpid(), "created_at": now_utc()}).encode("utf-8"))
-        return self
-
-    def __exit__(self, exc_type: object, exc: object, tb: object) -> None:
-        if self.fd is not None:
-            os.close(self.fd)
-            self.fd = None
-        try:
-            self.path.unlink()
-        except OSError:
-            pass
 
 
 def iter_jsonl(path: Path | None) -> list[dict[str, Any]]:
@@ -466,6 +432,7 @@ def run_sleep_cycle(
         )
 
     written = {"queue": 0, "findings": 0, "working_memory": 0}
+    write_lock_diagnostic: dict[str, Any] = {"used": False, "foreground_readers_wait": False}
     working_memory_publication_status: dict[str, Any] = {"status": "disabled", "reader_safe": False}
     if not no_write:
         active_working_memory_output = working_memory_output_path if write_working_memory else None
@@ -477,7 +444,8 @@ def run_sleep_cycle(
         # Windows, where append-only JSONL writes from separate processes can
         # otherwise interleave without a shared flock primitive.
         if lock_path:
-            with FileLock(lock_path):
+            lock = FileLock(lock_path, stale_seconds=DEFAULT_WRITE_LOCK_STALE_SECONDS)
+            with lock:
                 written["queue"] = append_jsonl(queue_output_path, lifecycle_rows)
                 written["findings"] = append_jsonl(findings_output_path, adjudicated_findings)
                 written["working_memory"], working_memory_publication_status = (
@@ -487,6 +455,7 @@ def run_sleep_cycle(
                         publish=publish_working_memory,
                     )
                 )
+            write_lock_diagnostic = {"used": True, **lock.diagnostic()}
         else:
             written["queue"] = append_jsonl(queue_output_path, lifecycle_rows)
             written["findings"] = append_jsonl(findings_output_path, adjudicated_findings)
@@ -514,7 +483,7 @@ def run_sleep_cycle(
             "written_working_memory": written["working_memory"],
         }
     )
-    return {
+    payload = {
         "schema_version": 1,
         "kind": SLEEP_CYCLE_KIND,
         "created_at": format_utc(normalize_now(now)),
@@ -539,6 +508,8 @@ def run_sleep_cycle(
         "failure_buckets": failure_buckets(worker_runs),
         "cache": aggregate_cache(worker_runs),
         "working_memory_publication": working_memory_publication_status,
+        "retention_decision_counts": dream_status.retention_decision_counts(adjudicated_findings),
+        "write_lock": write_lock_diagnostic,
         "policy": {
             "foreground_model_calls_allowed": False,
             "clean_source_mutation_allowed": False,
@@ -549,10 +520,13 @@ def run_sleep_cycle(
             "queue_state_is_not_clean_source": True,
         },
     }
+    payload["dream_output_status_card"] = dream_status.dream_output_status_card(payload)
+    return payload
 
 
 def public_sleep_cycle_summary(payload: Mapping[str, Any]) -> dict[str, Any]:
     counts = payload.get("counts") or {}
+    status_card = dream_status.dream_output_status_card(payload)
     return {
         "kind": SUMMARY_KIND,
         "execution_mode": payload.get("execution_mode"),
@@ -574,8 +548,15 @@ def public_sleep_cycle_summary(payload: Mapping[str, Any]) -> dict[str, Any]:
         },
         "worker_statuses": dict(payload.get("worker_statuses") or {}),
         "failure_buckets": dict(payload.get("failure_buckets") or {}),
+        "retention_decision_counts": dict(payload.get("retention_decision_counts") or {}),
+        "dream_output_status_card": status_card,
         "cache": dict(payload.get("cache") or {}),
         "working_memory_publication": dict(payload.get("working_memory_publication") or {}),
+        "write_lock": {
+            "used": bool((payload.get("write_lock") or {}).get("used")),
+            "recovered_stale_lock": bool((payload.get("write_lock") or {}).get("recovered_stale_lock")),
+            "foreground_readers_wait": False,
+        },
         "policy": {
             "public_output_omits_private_handles": True,
             "queue_state_is_not_clean_source": True,
