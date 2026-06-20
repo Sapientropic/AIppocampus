@@ -12,7 +12,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-from aippocampus_runtime.ops import recall_funnel_smoke  # noqa: E402
+from aippocampus_runtime.ops import recall_funnel_live_agent_gate, recall_funnel_smoke  # noqa: E402
 
 
 class RecallFunnelSmokeTests(unittest.TestCase):
@@ -190,6 +190,110 @@ class RecallFunnelSmokeTests(unittest.TestCase):
         self.assertNotIn("thread-private", encoded)
         deepen.assert_not_called()
 
+    def test_live_agent_gate_warns_on_low_specificity_even_when_source_reopens(self) -> None:
+        agent_recall = {
+            "status": "ok",
+            "route_count": 2,
+            "last_recall_cache_available": True,
+            "recall_selector_available": True,
+            "foreground_action": {
+                "id": "refine_low_specificity_recall_cue",
+                "route_choice_posture": "labels_low_specificity",
+                "secondary_action": {
+                    "id": "deepen_top_route_low_confidence",
+                    "arguments": {"request_index": 1, "recall_selector": "sel_1234567890abcdef"},
+                    "route_choice_posture": "labels_low_specificity",
+                },
+            },
+            "routes": [
+                {
+                    "action": {
+                        "id": "deepen_this_route",
+                        "arguments": {"request_index": 1, "recall_selector": "sel_1234567890abcdef"},
+                    }
+                }
+            ],
+        }
+        agent_deepen = {
+            "status": "ok",
+            "source_window_summary": {
+                "has_exact_source": True,
+                "message_count": 1,
+                "source_ref_count": 1,
+            },
+        }
+
+        with mock.patch.object(
+            recall_funnel_live_agent_gate,
+            "_agent_json",
+            side_effect=[(0, agent_recall, None), (0, agent_deepen, None)],
+        ), mock.patch.object(
+            recall_funnel_live_agent_gate,
+            "_ambient_hook_readiness",
+            return_value={"status": "not_installed", "counts_toward_task_usefulness": False},
+        ):
+            report = recall_funnel_smoke.build_recall_funnel_smoke(
+                "progressive recall evidence",
+                cwd=self.cwd,
+            )
+
+        gate = report["live_agent_usefulness_gate"]
+        self.assertTrue(report["ok"])
+        self.assertEqual(gate["route_existence"]["status"], "pass")
+        self.assertEqual(gate["route_specificity"]["status"], "warn")
+        self.assertEqual(gate["source_reopen"]["status"], "pass")
+        self.assertEqual(gate["task_usefulness"]["status"], "warn")
+        self.assertEqual(gate["status"], "warn")
+        self.assertEqual(gate["source_reopen"]["selected_selector_kind"], "recall_selector")
+
+    def test_live_agent_gate_fails_when_selector_deepen_cannot_reopen_source(self) -> None:
+        agent_recall = {
+            "status": "ok",
+            "route_count": 1,
+            "last_recall_cache_available": True,
+            "recall_selector_available": True,
+            "foreground_action": {
+                "id": "agent_deepen_selected_route",
+                "arguments": {"request_index": 1, "recall_selector": "sel_1234567890abcdef"},
+            },
+            "routes": [
+                {
+                    "action": {
+                        "id": "deepen_this_route",
+                        "arguments": {"request_index": 1, "recall_selector": "sel_1234567890abcdef"},
+                    }
+                }
+            ],
+        }
+        agent_deepen = {
+            "status": "cannot_verify",
+            "error": {"code": "stale_recall_handle"},
+        }
+
+        with mock.patch.object(
+            recall_funnel_live_agent_gate,
+            "_agent_json",
+            side_effect=[(0, agent_recall, None), (2, agent_deepen, None)],
+        ), mock.patch.object(
+            recall_funnel_live_agent_gate,
+            "_ambient_hook_readiness",
+            return_value={"status": "not_installed", "counts_toward_task_usefulness": False},
+        ):
+            report = recall_funnel_smoke.build_recall_funnel_smoke(
+                "progressive recall evidence",
+                cwd=self.cwd,
+            )
+
+        gate = report["live_agent_usefulness_gate"]
+        encoded = json.dumps(report, ensure_ascii=False)
+        self.assertFalse(report["ok"])
+        self.assertEqual(gate["route_existence"]["status"], "pass")
+        self.assertEqual(gate["route_specificity"]["status"], "pass")
+        self.assertEqual(gate["source_reopen"]["status"], "fail")
+        self.assertEqual(gate["source_reopen"]["error"]["code"], "stale_recall_handle")
+        self.assertEqual(gate["task_usefulness"]["status"], "fail")
+        self.assertNotIn("aippo-nav:", encoded)
+
     def test_cli_smoke_recall_funnel_runs_via_public_facade(self) -> None:
         proc = subprocess.run(
             [
@@ -236,7 +340,8 @@ class RecallFunnelSmokeTests(unittest.TestCase):
 
         self.assertEqual(proc.returncode, 0, proc.stderr)
         self.assertIn("Recall funnel smoke task card", proc.stdout)
-        self.assertIn("No-write diagnostic", proc.stdout)
+        self.assertIn("No persistent-write diagnostic", proc.stdout)
+        self.assertIn("agent recall -> selector-backed agent deepen", proc.stdout)
         self.assertIn("Cue text, source text, and local/private paths are redacted", proc.stdout)
         self.assertIn("not source-backed evidence", proc.stdout)
         self.assertIn("agent recall -> agent deepen", proc.stdout)

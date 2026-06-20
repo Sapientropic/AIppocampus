@@ -87,9 +87,20 @@ def _primary_source_snippet(messages: list[dict[str, Any]]) -> dict[str, Any]:
     return {}
 
 
-def _operator_detail_command(request_index: int | None, *, last_recall: bool) -> str | None:
-    if request_index is None or not last_recall:
+def _operator_detail_command(
+    request_index: int | None,
+    *,
+    last_recall: bool,
+    recall_selector: str = "",
+) -> str | None:
+    if request_index is None or not (last_recall or recall_selector):
         return None
+    selector = str(recall_selector or "").strip()
+    if selector:
+        return (
+            f"aippocampus agent deepen --request {request_index} "
+            f"--recall-selector {shell_quote(selector)} --json --detail full"
+        )
     return (
         f"aippocampus agent deepen --request {request_index} "
         "--last-recall --json --detail full"
@@ -158,6 +169,7 @@ def compact_agent_deepen_payload(
     *,
     request_index: int | None = None,
     last_recall: bool = False,
+    recall_selector: str = "",
     surface: str = "agent_deepen_compact",
 ) -> dict[str, Any]:
     """Return a compact source-court card with one capped opened-source snippet.
@@ -271,6 +283,7 @@ def compact_agent_deepen_payload(
             "operator_detail_command": _operator_detail_command(
                 request_index,
                 last_recall=last_recall,
+                recall_selector=recall_selector,
             ),
             "output_boundary": "compact_source_court_primary_snippet_no_operator_diagnostics",
             "policy_boundary": source.get("policy_boundary"),

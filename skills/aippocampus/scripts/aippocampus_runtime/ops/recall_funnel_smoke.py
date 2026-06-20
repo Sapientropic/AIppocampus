@@ -2,8 +2,10 @@
 """Human-facing progressive recall funnel smoke.
 
 This command is intentionally diagnostic-only. It runs the same MCP call path a
-client would use (`recall_context` followed by `recall_deepen`), then reports
-counts, field names, and boundary status without echoing the cue or source text.
+client would use (`recall_context` followed by `recall_deepen`) and the ordinary
+agent path (`agent recall` followed by selector-backed `agent deepen`), then
+reports counts, gate status, and boundary status without echoing the cue or
+source text.
 """
 
 from __future__ import annotations
@@ -19,6 +21,9 @@ from aippocampus_runtime.contracts import (
 )
 from aippocampus_runtime.mcp import server as mcp_server
 from aippocampus_runtime.mcp.recall_navigation import NAVIGATION_SCHEMA_VERSION
+from aippocampus_runtime.ops.recall_funnel_live_agent_gate import (
+    build_live_agent_usefulness_gate,
+)
 
 SCHEMA_VERSION = 1
 
@@ -189,7 +194,15 @@ def build_recall_funnel_smoke(
         metrics.get("wrong_or_stale_handle")
         or (deepen_error or {}).get("code") in {"stale_recall_handle", "source_ref_not_found"}
     )
-    ok = context_error is None and deepen_error is None
+    live_agent_gate = build_live_agent_usefulness_gate(
+        cue,
+        cwd=cwd_path,
+        clean_source_dir=clean_source_dir,
+        registry_dir=registry_dir,
+        max_routes=max_routes,
+        max_deepen_matches=max_deepen_matches,
+    )
+    ok = context_error is None and deepen_error is None and bool(live_agent_gate.get("ok"))
 
     return {
         "schema_version": SCHEMA_VERSION,
@@ -241,6 +254,7 @@ def build_recall_funnel_smoke(
             ),
             "wrong_or_stale_handle": wrong_or_stale,
         },
+        "live_agent_usefulness_gate": live_agent_gate,
         "source_boundary": (
             deepen_payload.get("source_boundary")
             if isinstance(deepen_payload.get("source_boundary"), dict)
@@ -250,6 +264,7 @@ def build_recall_funnel_smoke(
         ),
         "notes": [
             "This smoke chooses the first reopenable recall_context route whose next tool is recall_deepen.",
+            "It also runs agent recall -> selector-backed agent deepen through a temporary same-machine cache.",
             "Counts and field names are diagnostic only; source-backed claims still require inspecting reopened clean source.",
         ],
     }
@@ -259,6 +274,7 @@ def render_text(report: dict[str, Any]) -> str:
     context = report["context"]
     selected = report["selected_route"]
     deepen = report["deepen"]
+    live_gate = _as_dict(report.get("live_agent_usefulness_gate"))
     lines = [
         "AIppocampus recall funnel smoke",
         f"- OK: {str(report['ok']).lower()}",
@@ -266,6 +282,12 @@ def render_text(report: dict[str, Any]) -> str:
         f"- Selected route: {selected['kind'] or 'none'}; reopenable {str(selected['reopenable']).lower()}",
         f"- Deepen status: {deepen['status']}; source refs {deepen['source_ref_count']}; source-window messages {deepen['source_window_message_count']}",
         f"- Wrong/stale handle: {str(deepen['wrong_or_stale_handle']).lower()}",
+        (
+            f"- Live agent usefulness: {live_gate.get('status')}; "
+            f"route {_as_dict(live_gate.get('route_existence')).get('status')}, "
+            f"specificity {_as_dict(live_gate.get('route_specificity')).get('status')}, "
+            f"reopen {_as_dict(live_gate.get('source_reopen')).get('status')}"
+        ),
         f"- Evidence fields: {', '.join(deepen['field_names']) or 'none'}",
         "- Privacy: cue not echoed; source text not printed; local paths redacted unless requested",
     ]
@@ -298,8 +320,8 @@ def main(argv: list[str] | None = None) -> int:
         usage="aippocampus smoke recall-funnel \"cue\" [--json] [options]",
         description=(
             "Recall funnel smoke task card:\n"
-            "  No-write diagnostic for progressive recall wiring.\n"
-            "  Calls recall_context, then the first reopenable recall_deepen route when one exists.\n"
+            "  No persistent-write diagnostic for progressive recall wiring.\n"
+            "  Calls recall_context -> recall_deepen and agent recall -> selector-backed agent deepen.\n"
             "  Cue text, source text, and local/private paths are redacted by default.\n"
             "  Counts and statuses are diagnostics, not source-backed evidence for an answer.\n"
             "  For ordinary continuity work, use agent recall -> agent deepen."

@@ -502,6 +502,15 @@ the live clean-source path. It counts generic reopen hints, triage collisions,
 blind deepen, `ask_light_question` despite reopenable candidates, manual-search
 fallback, and source-thin `CannotVerify` results without a next safe action.
 
+`aippocampus smoke recall-funnel "<cue>" --json` is the adjacent
+live-agent/proxy diagnostic for #2329. It keeps the older
+`recall_context -> recall_deepen` funnel, then separately runs the ordinary
+compact `agent recall -> selector-backed agent deepen` path through a temporary
+same-machine selector cache. Its `live_agent_usefulness_gate` reports route
+existence, route specificity, source reopen, and task usefulness separately,
+and also points to ambient hook/readiness degradation without treating a tiny
+live sample as representative memory quality.
+
 `build_agent_pull_gesture_fixture_report()` covers the named default gesture
 and reports `agent_pull_follow_through_rate`,
 `deepen_required_follow_through_rate`, `aippo_activation_success_rate`,

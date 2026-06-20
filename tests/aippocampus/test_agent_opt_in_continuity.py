@@ -857,7 +857,25 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertEqual(recall_proc.returncode, 0, recall_proc.stderr)
         recall_payload = json.loads(recall_proc.stdout)
         self.assertTrue(recall_payload["last_recall_cache_available"])
-        self.assertIn("--last-recall", recall_payload["foreground_action"]["command"])
+        recall_action = recall_payload["foreground_action"]
+        self.assertIn("--recall-selector", recall_action["command"])
+        self.assertNotIn(str(registry), recall_proc.stdout)
+        selector_id = recall_action["arguments"]["recall_selector"]
+
+        overwrite_proc = subprocess.run(
+            [
+                *base,
+                "recall",
+                "different intervening recall",
+                "--cwd",
+                str(self.cwd),
+                "--clean-source-dir",
+                str(self.clean),
+                "--json",
+            ],
+            **run_kwargs,
+        )
+        self.assertEqual(overwrite_proc.returncode, 0, overwrite_proc.stderr)
 
         deepen_proc = subprocess.run(
             [
@@ -865,7 +883,8 @@ class AgentOptInContinuityTests(unittest.TestCase):
                 "deepen",
                 "--request",
                 "1",
-                "--last-recall",
+                "--recall-selector",
+                selector_id,
                 "--json",
             ],
             **run_kwargs,
@@ -1860,7 +1879,10 @@ class AgentOptInContinuityTests(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stderr)
         self.assertEqual(deepen_proc.returncode, 0, deepen_proc.stderr)
         self.assertIn("AIppocampus agent recall: ok", proc.stdout)
-        self.assertIn("Next: aippocampus agent deepen --request 1 --last-recall --json.", proc.stdout)
+        self.assertRegex(
+            proc.stdout,
+            r"Next: aippocampus agent deepen --request 1 --recall-selector sel_[0-9a-f]{16}\.",
+        )
         self.assertIn("AIppocampus agent deepen: ok", deepen_proc.stdout)
         self.assertIn("Boundary: route only", proc.stdout)
         self.assertNotIn('"memory_packets"', proc.stdout)

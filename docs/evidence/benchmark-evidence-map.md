@@ -905,6 +905,12 @@ empty output. The PR-tier guard for this contract is
 - **Entrypoint:** `benchmarks/aippocampus/benchmark_recall_degradation_audit.py`
 - **Reads / updates:** `docs/evidence/benchmarks/reports/recall-navigation/recall-degradation-audit.md`, #1184
 
+### Recall funnel live-agent smoke
+
+- **Entrypoint:** `aippocampus smoke recall-funnel "<cue>" --json`
+- **Reads / updates:** `docs/architecture/recall/agent-native-recall-facade.md`,
+  #2329
+
 ### Benchmark maturity helper
 
 - **Entrypoint:** `benchmarks/aippocampus/shared/benchmark_maturity.py`
@@ -1423,6 +1429,15 @@ pasting raw JSON into multiple docs.
 
 - **Entrypoint:** `tools/aippocampus/smoke/smoke_recall_navigation_comparison.py`
 - **Primary evidence owner:** `docs/evidence/benchmarks/reports/recall-navigation/recall-navigation-comparison-2026-06-03.md`, #201, #281, #309, #248, #465
+
+### Recall funnel live-agent smoke
+
+- **Entrypoint:** `aippocampus smoke recall-funnel "<cue>" --json` via
+  `aippocampus_runtime.ops.recall_funnel_smoke`
+- **Primary evidence owner:** `docs/architecture/recall/agent-native-recall-facade.md`,
+  #2329; separates route existence, route specificity, source reopen, and task
+  usefulness for the ordinary `agent recall -> agent deepen` path without
+  claiming broad live/private-history recall quality.
 
 ### Recall navigation promotion harness
 

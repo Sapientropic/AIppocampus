@@ -322,7 +322,10 @@ def smoke_chooser_payload() -> dict[str, Any]:
                 label="Run progressive recall funnel smoke",
                 command_template='aippocampus smoke recall-funnel "{cue}" --json',
                 requires="cue",
-                why="Use for a bounded diagnostic of recall_context -> deepen flow.",
+                why=(
+                    "Use for a bounded diagnostic of recall_context -> deepen and "
+                    "ordinary agent recall -> deepen usefulness."
+                ),
                 mutation_risk="read_only",
                 claim_boundary="smoke_diagnostic_not_source_evidence",
             ),

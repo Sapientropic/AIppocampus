@@ -101,6 +101,10 @@ OPS_DIRECT_RECALL_HOOK_IMPORT_ALLOWLIST = {
     "aippocampus_runtime.ops.recall_navigation_promotion": {
         "aippocampus_runtime.recall.continuity_usefulness",
     },
+    "aippocampus_runtime.ops.recall_funnel_live_agent_gate": {
+        "aippocampus_runtime.recall",
+        "aippocampus_runtime.recall.agent_continuity",
+    },
     "aippocampus_runtime.ops.source_joined_routing_decision": {
         "aippocampus_runtime.recall",
         "aippocampus_runtime.recall.score_fusion",

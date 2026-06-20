@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from aippocampus_runtime import core
-from aippocampus_runtime.contracts import canonical_foreground_action_fields
+from aippocampus_runtime.contracts import canonical_foreground_action_fields, shell_quote
 
 
 def _as_dict(value: Any) -> dict[str, Any]:
@@ -29,24 +29,49 @@ def _without_empty(value: Any) -> Any:
     return value
 
 
-def _detail_command(request_index: int | None, *, last_recall: bool) -> str | None:
-    if request_index is None or not last_recall:
+def _detail_command(
+    request_index: int | None,
+    *,
+    last_recall: bool,
+    recall_selector: str = "",
+) -> str | None:
+    if request_index is None or not (last_recall or recall_selector):
         return None
+    selector = str(recall_selector or "").strip()
+    if selector:
+        return (
+            f"aippocampus agent explain --request {request_index} "
+            f"--recall-selector {shell_quote(selector)} --json --detail full"
+        )
     return (
         f"aippocampus agent explain --request {request_index} "
         "--last-recall --json --detail full"
     )
 
 
-def _deepen_action(request_index: int | None, *, last_recall: bool) -> dict[str, Any]:
-    if request_index is not None and last_recall:
+def _deepen_action(
+    request_index: int | None,
+    *,
+    last_recall: bool,
+    recall_selector: str = "",
+) -> dict[str, Any]:
+    selector = str(recall_selector or "").strip()
+    if request_index is not None and (last_recall or selector):
+        arguments: dict[str, Any] = {"request_index": request_index}
+        if selector:
+            arguments["recall_selector"] = selector
+            command = (
+                f"aippocampus agent deepen --request {request_index} "
+                f"--recall-selector {shell_quote(selector)} --json"
+            )
+        else:
+            arguments["last_recall"] = True
+            command = f"aippocampus agent deepen --request {request_index} --last-recall --json"
         return {
             "id": "deepen_selected_route",
             "tool_name": "agent_deepen",
-            "arguments": {"request_index": request_index, "last_recall": True},
-            "command": (
-                f"aippocampus agent deepen --request {request_index} --last-recall --json"
-            ),
+            "arguments": arguments,
+            "command": command,
             "mutation_risk": "read_only",
             "claim_boundary": "no_claim_before_reopen",
         }
@@ -84,6 +109,7 @@ def compact_agent_explain_payload(
     *,
     request_index: int | None = None,
     last_recall: bool = False,
+    recall_selector: str = "",
     surface: str = "agent_explain_compact",
 ) -> dict[str, Any]:
     """Return a compact route explanation before macro/operator diagnostics.
@@ -99,7 +125,11 @@ def compact_agent_explain_payload(
     explanation = _as_dict(source.get("explanation"))
     action = _as_dict(source.get("foreground_action"))
     if source.get("status") != "ok":
-        primary = action or _deepen_action(request_index, last_recall=last_recall)
+        primary = action or _deepen_action(
+            request_index,
+            last_recall=last_recall,
+            recall_selector=recall_selector,
+        )
         next_action = _as_dict(source.get("agent_next_action")) or primary
         safe_actions = [
             dict(item)
@@ -132,13 +162,21 @@ def compact_agent_explain_payload(
                 "next_safe_action_id": next_action.get("id"),
                 "follow_up_action": source.get("follow_up_action"),
                 "claim_boundary": "navigation_only_until_source_reopened",
-                "detail_command": _detail_command(request_index, last_recall=last_recall),
+                "detail_command": _detail_command(
+                    request_index,
+                    last_recall=last_recall,
+                    recall_selector=recall_selector,
+                ),
                 "output_boundary": "compact_explain_no_macro_diagnostics",
                 "policy_boundary": source.get("policy_boundary"),
             }
         )
     reason_codes = _as_list(explanation.get("reason_codes"))
-    primary = _deepen_action(request_index, last_recall=last_recall)
+    primary = _deepen_action(
+        request_index,
+        last_recall=last_recall,
+        recall_selector=recall_selector,
+    )
     decision = _primary_decision(reason_codes, explanation)
     foreground_reasons = [
         str(code).strip() for code in reason_codes if _foreground_reason_code(str(code).strip())
@@ -166,7 +204,11 @@ def compact_agent_explain_payload(
             "next_safe_action": next_action,
             "next_safe_action_id": next_action.get("id"),
             "claim_boundary": "navigation_only_until_source_reopened",
-            "detail_command": _detail_command(request_index, last_recall=last_recall),
+            "detail_command": _detail_command(
+                request_index,
+                last_recall=last_recall,
+                recall_selector=recall_selector,
+            ),
             "output_boundary": "compact_explain_no_macro_diagnostics",
             "policy_boundary": source.get("policy_boundary"),
         }
@@ -178,6 +220,7 @@ def project_agent_explain_payload(
     *,
     request_index: int | None = None,
     last_recall: bool = False,
+    recall_selector: str = "",
     detail: str = "compact",
     surface: str = "agent_explain_compact",
 ) -> dict[str, Any]:
@@ -187,6 +230,7 @@ def project_agent_explain_payload(
         payload,
         request_index=request_index,
         last_recall=last_recall,
+        recall_selector=recall_selector,
         surface=surface,
     )
 
@@ -197,12 +241,17 @@ def project_agent_explain_cli_payload(
     *,
     surface: str,
 ) -> dict[str, Any]:
-    has_request_selector = bool(getattr(args, "last_recall", False) or getattr(args, "request", None) is not None)
+    has_request_selector = bool(
+        getattr(args, "recall_selector", None)
+        or getattr(args, "last_recall", False)
+        or getattr(args, "request", None) is not None
+    )
     request_index = int(getattr(args, "request", None) or 1) if has_request_selector else None
     return project_agent_explain_payload(
         payload,
         request_index=request_index,
         last_recall=request_index is not None,
+        recall_selector=str(getattr(args, "recall_selector", "") or ""),
         detail=str(getattr(args, "detail", "compact") or "compact"),
         surface=surface,
     )

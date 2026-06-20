@@ -1158,6 +1158,82 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertNotIn(str(codex_home), raw)
         self.assertNotIn(str(cache_path), raw)
 
+    def test_status_agent_json_gates_live_ambient_degraded_signals(self) -> None:
+        from aippocampus_runtime.hooks.skip_telemetry import write_skip_telemetry
+
+        with tempfile.TemporaryDirectory() as tmp, provider_env():
+            root = Path(tmp)
+            codex_home = root / "codex-home"
+            registry = root / "registry"
+            hooks_json = codex_home / "hooks.json"
+            cache_path = codex_home / "empty-action-hints.jsonl"
+            telemetry_path = registry / "aippocampus_prompt_hook_skip_telemetry.json"
+            warm_job_dir = registry / "ambient_warm_jobs"
+            warm_job_dir.mkdir(parents=True)
+            (warm_job_dir / "stale-job.json").write_text(
+                json.dumps({"created_at": "2000-01-01T00:00:00Z"}),
+                encoding="utf-8",
+            )
+            os.utime(warm_job_dir / "stale-job.json", (946684800, 946684800))
+            write_skip_telemetry(
+                {
+                    "decision": "skip",
+                    "reasons": ["no ambient recall cue"],
+                    "semantic_gate": {"availability_reason": "foreground_budget_skipped"},
+                    "ambient_recall": {"cache_status": {"status": "miss"}},
+                    "elapsed_ms": 4310.0,
+                },
+                telemetry_path=telemetry_path,
+                hook_budget_ms=4300,
+                semantic_timeout=2.5,
+                runtime_load_ms=100.0,
+                hook_total_ms=4625.0,
+            )
+            update_cli.install_prompt.install(hooks_json, timeout=5)
+            update_cli.install_action_hint.install(hooks_json, cache_jsonl=cache_path)
+            stdout = StringIO()
+
+            with patch.dict(os.environ, {"AIPPOCAMPUS_REGISTRY_DIR": str(registry)}):
+                with redirect_stdout(stdout):
+                    code = update_cli.main(
+                        [
+                            "status",
+                            "--repo-root",
+                            str(REPO_ROOT),
+                            "--codex-home",
+                            str(codex_home),
+                            "--no-child-check",
+                            "--agent-json",
+                            "--operator-json",
+                        ]
+                    )
+
+        raw = stdout.getvalue()
+        payload = json.loads(raw)
+        ambient = payload["ambient_recall"]
+        self.assertEqual(code, 0, payload)
+        self.assertEqual(payload["summary"]["ambient_recall_state"], "degraded")
+        self.assertFalse(ambient["active_useful"])
+        self.assertIn("action_hints:with_missing_cache_file", ambient["issue_codes"])
+        self.assertIn("prompt_hook:latency_risk", ambient["issue_codes"])
+        self.assertIn("warm_ambient:blocked_stale_pending", ambient["issue_codes"])
+        self.assertIn("provider:missing_provider_env_var", ambient["issue_codes"])
+        self.assertGreaterEqual(
+            ambient["latency_risk"]["foreground_latency_red_line_violation_count"],
+            1,
+        )
+        self.assertTrue(ambient["warm_queue"]["stale_queue_blocked"])
+        self.assertTrue(ambient["warm_queue"]["ordinary_recall_usable"])
+        self.assertTrue(ambient["provider"]["degraded"])
+        surfaces = {item.get("surface") for item in payload["safe_next_actions"]}
+        self.assertIn("action_hints", surfaces)
+        self.assertIn("prompt_hook_latency", surfaces)
+        self.assertIn("warm_ambient", surfaces)
+        self.assertEqual(ambient["next_command"], "aippocampus hooks action status --json")
+        self.assertNotIn(str(codex_home), raw)
+        self.assertNotIn(str(registry), raw)
+        self.assertNotIn(str(cache_path), raw)
+
     def test_status_reports_staging_only_agent_fallback_when_host_capability_exists(
         self,
     ) -> None:
