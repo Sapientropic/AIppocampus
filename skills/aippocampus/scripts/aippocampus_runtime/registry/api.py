@@ -511,7 +511,9 @@ def main(argv: list[str] | None = None) -> int:
     if usage_exit is not None:
         return usage_exit
     parser = argparse.ArgumentParser(
-        prog="aippocampus import conversation" if public_import_conversation else None
+        prog="aippocampus import conversation"
+        if public_import_conversation
+        else "aippocampus registry"
     )
     parser.add_argument(
         "--registry-dir",
