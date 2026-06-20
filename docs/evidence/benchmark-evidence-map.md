@@ -892,8 +892,10 @@ empty output. The PR-tier guard for this contract is
 
 - **Entrypoint:** `benchmarks/aippocampus/benchmark_associative_path_walker.py`
 - **Reads / updates:** `docs/architecture/recall/source-backed-product-discipline.md`,
-  #2355, #2356; public-safe fixture gate for navigation lift, specificity,
-  source-reopenability, and wrong-hop drag without claiming live recall quality.
+  #2355, #2356, #2392, #2393, #2394; public-safe opt-in/proxy gate for
+  navigation lift, specificity, source-reopenability, cross-scope feedback
+  suppression, Chinese dogfood cues, and wrong-hop drag without claiming live
+  recall quality or default ranking influence.
 
 ### Conversation orientation usefulness gate
 
@@ -918,6 +920,14 @@ empty output. The PR-tier guard for this contract is
 
 - **Entrypoint:** `benchmarks/aippocampus/benchmark_recall_degradation_audit.py`
 - **Reads / updates:** `docs/evidence/benchmarks/reports/recall-navigation/recall-degradation-audit.md`, #1184
+
+### Exact source search flow gate
+
+- **Entrypoint:** `benchmarks/aippocampus/benchmark_exact_source_search_flows.py`
+- **Reads / updates:** source search CLI/MCP fixtures, #2388, #2389, #2391;
+  public-safe synthetic probes for registry-wide exact search, last-recall
+  candidate search, source-window reopenability, no-match boundaries, and
+  privacy red-lines without claiming private-history or live recall quality.
 
 ### Recall funnel live-agent smoke
 

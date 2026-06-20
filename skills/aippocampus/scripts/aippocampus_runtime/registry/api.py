@@ -504,6 +504,99 @@ def print_entries(entries: list[dict], *, receipt_mode: bool = False) -> None:
                 print("  next: reopen/deepen source before quoting or making claims.")
 
 
+def safe_registry_search_payload(
+    *,
+    registry_path: Path,
+    query_terms: list[str],
+    matches: list[dict],
+    warnings: list[dict],
+) -> dict[str, Any]:
+    safe_matches: list[dict[str, Any]] = []
+    for entry in matches:
+        index_hits = [
+            hit for hit in entry.get("index_hits") or [] if isinstance(hit, dict)
+        ][:3]
+        safe_matches.append(
+            {
+                "thread": {
+                    key: value
+                    for key, value in {
+                        "thread_key": entry.get("thread_key"),
+                        "title": compact_text(str(entry.get("title") or ""), 120),
+                        "workspace_name": compact_text(str(entry.get("workspace_name") or ""), 90),
+                        "source_provider": entry.get("source_provider"),
+                    }.items()
+                    if value not in (None, "", [])
+                },
+                "score": entry.get("score"),
+                "index_hit_count": len(index_hits),
+                "index_hits": [
+                    {
+                        key: value
+                        for key, value in {
+                            "source": hit.get("source"),
+                            "message_id": hit.get("message_id") or hit.get("id"),
+                            "line": hit.get("line"),
+                            "role": hit.get("role"),
+                            "phase": hit.get("phase") or "",
+                            "score": hit.get("rank_score") or hit.get("score"),
+                            "snippet": compact_text(str(hit.get("snippet") or ""), 220),
+                            "source_route": {
+                                "kind": "registry_search_diagnostic_hit",
+                                "thread_key": entry.get("thread_key"),
+                                "message_id": hit.get("message_id") or hit.get("id"),
+                                "line": hit.get("line"),
+                                "boundary": "use_aippocampus_search_all_for_foreground_reopen_action",
+                            },
+                        }.items()
+                        if value not in (None, "", [], {})
+                    }
+                    for hit in index_hits
+                ],
+            }
+        )
+    return redact_private_paths(
+        {
+            "kind": "aippocampus_registry_search_diagnostic",
+            "ok": bool(safe_matches),
+            "status": "ok" if safe_matches else "no_matches",
+            "registry": str(registry_path),
+            "search_scope": "registry_metadata_and_index_diagnostic",
+            "query_terms": query_terms,
+            "matches": safe_matches,
+            "match_count": len(safe_matches),
+            "warnings": warnings,
+            "safe_alternative_command": (
+                'aippocampus search --all "' + " ".join(query_terms) + '" --json'
+                if query_terms
+                else 'aippocampus search --all "{distinctive_phrase}" --json'
+            ),
+            "diagnostic_entries_command": (
+                'aippocampus registry search "'
+                + " ".join(query_terms)
+                + '" --json --redact-paths --diagnostic-entries'
+                if query_terms
+                else 'aippocampus registry search "{distinctive_phrase}" --json --redact-paths --diagnostic-entries'
+            ),
+            "output_boundary": "diagnostic_summary_not_foreground_recall",
+            "source_boundary": {
+                "authority": "direction_only",
+                "registry_search_is_diagnostic": True,
+                "source_reopen_required_before_claim": True,
+                "use_search_all_for_foreground_reopen": True,
+                "search_miss_is_not_absence_of_memory": not bool(safe_matches),
+            },
+            "privacy": {
+                "raw_registry_entries_emitted": False,
+                "paths_included": False,
+                "session_meta_emitted": False,
+                "raw_source_snippets_emitted": False,
+                "capped_source_snippets_emitted": bool(safe_matches),
+            },
+        }
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     raw_args = list(sys.argv[1:] if argv is None else argv)
     public_import_conversation = _subcommand_index(raw_args, "register-source") is not None
@@ -659,6 +752,11 @@ def main(argv: list[str] | None = None) -> int:
     search.add_argument(
         "--search-budget", choices=("default", "deep"), default="default",
         help="Use the bounded default search budget or the larger diagnostic budget.",
+    )
+    search.add_argument(
+        "--diagnostic-entries",
+        action="store_true",
+        help="Local diagnostic: emit raw registry-entry shaped matches. Default JSON is a compact safe summary.",
     )
     search.add_argument("--json", action="store_true", dest="json_output")
     search.add_argument("--redact-paths", action="store_true")
@@ -862,8 +960,28 @@ def main(argv: list[str] | None = None) -> int:
         scored.sort(key=lambda item: (-item["score"], item.get("updated_at") or ""))
         scored = scored[: args.max]
         if args.json_output:
-            payload = {"registry": str(json_path), "matches": scored, "warnings": warnings}
-            if args.redact_paths:
+            if args.diagnostic_entries:
+                payload = {
+                    "kind": "aippocampus_registry_search_diagnostic_entries",
+                    "output_boundary": "local_operator_diagnostic_raw_registry_entries",
+                    "safe_alternative_command": 'aippocampus search --all "' + " ".join(query_terms) + '" --json',
+                    "privacy": {
+                        "raw_registry_entries_emitted": True,
+                        "paths_included": not args.redact_paths,
+                        "session_meta_emitted": True,
+                    },
+                    "registry": str(json_path),
+                    "matches": scored,
+                    "warnings": warnings,
+                }
+            else:
+                payload = safe_registry_search_payload(
+                    registry_path=json_path,
+                    query_terms=query_terms,
+                    matches=scored,
+                    warnings=warnings,
+                )
+            if args.redact_paths or not args.diagnostic_entries:
                 payload = redact_private_paths(payload)
             print(json.dumps(payload, ensure_ascii=False, indent=2))
         else:

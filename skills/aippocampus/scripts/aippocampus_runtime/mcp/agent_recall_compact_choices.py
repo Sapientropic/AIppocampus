@@ -38,7 +38,57 @@ def _metric_int(metrics: dict[str, Any], key: str) -> int | None:
 def low_specificity_route_choices(metrics: dict[str, Any], route_count: int) -> bool:
     floor = _metric_float(metrics, "route_label_specificity_floor")
     topic_count = _metric_int(metrics, "topic_label_present_count")
-    return route_count > 1 and floor is not None and floor <= 0.0 and (topic_count or 0) <= 0
+    distinctiveness = _metric_float(metrics, "packet_triage_distinctiveness")
+    missing_topics = (topic_count or 0) <= 0
+    repeated_topic_shape = (topic_count or 0) >= route_count and (
+        distinctiveness is not None and distinctiveness <= 0.5
+    )
+    return (
+        route_count > 1
+        and floor is not None
+        and floor <= 0.0
+        and (missing_topics or repeated_topic_shape)
+    )
+
+
+def repeated_low_distinctiveness_label(
+    metrics: dict[str, Any],
+    packets: list[dict[str, Any]],
+) -> str:
+    """Return the repeated public label that makes compact choices indistinct.
+
+    The route ranker may have valid private/source distinctions, but compact
+    foreground JSON redacts those internals. When the public labels collapse to
+    the same topic and the triage distinctiveness is low, defaulting to the top
+    route turns the card into blind deepen. Keep the signal public-safe and use
+    it only to choose the foreground action posture.
+    """
+
+    if len(packets) <= 1:
+        return ""
+    distinctiveness = _metric_float(metrics, "packet_triage_distinctiveness")
+    if distinctiveness is None or distinctiveness > 0.5:
+        return ""
+    counts: dict[str, int] = {}
+    labels: dict[str, str] = {}
+    for packet in packets:
+        raw_label = (
+            packet.get("route_topic")
+            or packet.get("route_label")
+            or packet.get("display_hint")
+            or ""
+        )
+        token = _safe_choice_token(raw_label)
+        if not token:
+            continue
+        counts[token] = counts.get(token, 0) + 1
+        labels[token] = str(redact_sensitive_values(redact_private_paths(str(raw_label).strip())) or "")
+    if not counts:
+        return ""
+    token, count = max(counts.items(), key=lambda item: item[1])
+    if count <= 1:
+        return ""
+    return core.compact_text(labels.get(token) or token, 80)
 
 
 _CUE_TOKEN_RE = re.compile(r"[\u4e00-\u9fff]{2,}|[A-Za-z0-9][A-Za-z0-9_-]{3,}")
@@ -136,6 +186,7 @@ def with_low_specificity_foreground_action(
     *,
     metrics: dict[str, Any],
     cue: str | None = None,
+    repeated_route_label: str | None = None,
 ) -> dict[str, Any]:
     secondary = dict(action)
     secondary["original_id"] = secondary.get("id") or secondary.get("action_id")
@@ -166,6 +217,10 @@ def with_low_specificity_foreground_action(
             "route_label_specificity_floor",
         ),
         "topic_label_present_count": _metric_int(metrics, "topic_label_present_count"),
+        "packet_triage_distinctiveness": _metric_float(
+            metrics,
+            "packet_triage_distinctiveness",
+        ),
         "mutation_risk": "read_only",
         "why": (
             "Route labels are not meaningfully distinguishable, or they fail to carry "
@@ -175,6 +230,8 @@ def with_low_specificity_foreground_action(
         ),
         "claim_boundary": "no_claim_before_reopen",
     }
+    if repeated_route_label:
+        next_action["repeated_route_label"] = repeated_route_label
     clean_cue = str(redact_sensitive_values(redact_private_paths(str(cue or "").strip())) or "")
     if clean_cue and not command_value_needs_input(clean_cue):
         next_action["arguments"] = {"query": clean_cue, "max": 3}

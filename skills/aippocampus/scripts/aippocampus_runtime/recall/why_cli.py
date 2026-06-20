@@ -117,6 +117,16 @@ def build_parser(prog: str = "aippocampus why-recall") -> argparse.ArgumentParse
     parser.add_argument("--run-semantic-gate", action="store_true")
     parser.add_argument("--semantic-gate-mode", choices=["off", "auto", "on"], default="off")
     parser.add_argument("--semantic-timeout", type=int, default=12)
+    parser.add_argument(
+        "--apw-diagnostics",
+        action="store_true",
+        help="Opt in to Associative Path Walker diagnostics. Does not affect default recall ranking.",
+    )
+    parser.add_argument("--apw-sidecar-dir")
+    parser.add_argument("--apw-semantic-bridge-path")
+    parser.add_argument("--apw-navigation-path")
+    parser.add_argument("--apw-active-lock-path")
+    parser.add_argument("--apw-feedback-path")
     parser.add_argument("--json", action="store_true")
     parser.add_argument(
         "--detail",
@@ -355,6 +365,9 @@ def _compact_json_payload(payload: Mapping[str, Any], *, cue: str) -> dict[str, 
         "claim_boundary": "Diagnostic output is route guidance, not source evidence; reopen/deepen before claims.",
         "operator_detail_command": f"aippocampus {mode} {_quoted(_cue_for_command(cue))} --json --detail full",
     }
+    apw_diagnostics = payload.get("associative_path_diagnostics")
+    if isinstance(apw_diagnostics, Mapping):
+        compact["associative_path_diagnostics"] = apw_diagnostics
     return redact_sensitive_values(
         redact_private_paths({key: value for key, value in compact.items() if value not in (None, "", [])})
     )
@@ -418,6 +431,12 @@ def main(argv: list[str] | None = None) -> int:
         run_live_semantic_gate=args.run_semantic_gate,
         semantic_gate_mode=args.semantic_gate_mode,
         semantic_timeout=args.semantic_timeout,
+        include_associative_path_diagnostics=args.apw_diagnostics,
+        associative_path_sidecar_dir=args.apw_sidecar_dir,
+        associative_path_bridge_path=args.apw_semantic_bridge_path,
+        associative_path_navigation_path=args.apw_navigation_path,
+        associative_path_active_lock_path=args.apw_active_lock_path,
+        associative_path_feedback_path=args.apw_feedback_path,
     )
     payload = _attach_foreground_actions(payload, cue=args.cue)
     if args.json or args.operator_json:

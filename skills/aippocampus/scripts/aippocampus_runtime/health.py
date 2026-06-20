@@ -11,6 +11,7 @@ import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path, PureWindowsPath
+from time import perf_counter
 from typing import Any, Mapping
 
 from aippocampus_runtime.artifacts.publish import (
@@ -64,6 +65,9 @@ DEFAULT_JOBS_OUTPUT_NAME = "subconscious_jobs.jsonl"
 STORAGE_PRESSURE_RECLAIMABLE_BYTES = 512 * 1024 * 1024
 STORAGE_PRESSURE_AMPLIFICATION_RATIO = 10.0
 STORAGE_PRESSURE_CANDIDATE_COUNT = 100
+DEFAULT_OPERATOR_DIAGNOSTIC_TIMEOUT_MS = 5000
+EXPENSIVE_OPERATOR_DIAGNOSTIC_TIMEOUT_MS = 30000
+DEFAULT_SLOW_HEALTH_SECTION_MS = 250
 
 
 @dataclass(frozen=True)
@@ -90,6 +94,9 @@ class HealthOptions:
     deep_graph_bytes: int = 100 * 1024 * 1024
     segment_threshold_bytes: int = 100 * 1024 * 1024
     include_operator_diagnostics: bool = False
+    include_expensive_diagnostics: bool = False
+    operator_timeout_ms: int = DEFAULT_OPERATOR_DIAGNOSTIC_TIMEOUT_MS
+    slow_section_threshold_ms: int = DEFAULT_SLOW_HEALTH_SECTION_MS
 
 
 def load_json(path: Path) -> dict:
@@ -120,6 +127,57 @@ def safe_stat_size(path: Path | None, default: int = 0) -> int:
         return path.stat().st_size if path.exists() else default
     except OSError:
         return default
+
+
+def elapsed_ms_since(start: float) -> float:
+    return round((perf_counter() - start) * 1000.0, 3)
+
+
+def record_health_section(
+    sections: list[dict[str, Any]],
+    *,
+    name: str,
+    started_at: float,
+    operator_diagnostic: bool = False,
+    partial: bool = False,
+) -> None:
+    sections.append(
+        {
+            "name": name,
+            "elapsed_ms": elapsed_ms_since(started_at),
+            "operator_diagnostic": operator_diagnostic,
+            "partial": partial,
+        }
+    )
+
+
+def health_performance_diagnostics(
+    sections: list[dict[str, Any]],
+    *,
+    slow_section_threshold_ms: int,
+) -> dict[str, Any]:
+    threshold = max(0, int(slow_section_threshold_ms))
+    slow_sections = [
+        {
+            "name": str(section.get("name") or ""),
+            "elapsed_ms": section.get("elapsed_ms"),
+            "operator_diagnostic": bool(section.get("operator_diagnostic")),
+            "partial": True if section.get("partial") else None,
+        }
+        for section in sections
+        if float(section.get("elapsed_ms") or 0.0) >= threshold
+    ]
+    slow_sections.sort(key=lambda item: float(item.get("elapsed_ms") or 0.0), reverse=True)
+    return {
+        "sections": sections,
+        "slow_section_threshold_ms": threshold,
+        "slow_sections": slow_sections[:8],
+        "privacy_boundary": {
+            "paths_included": False,
+            "raw_prompts_included": False,
+            "raw_source_text_included": False,
+        },
+    }
 
 
 def parse_timestamp(value: Any) -> datetime | None:
@@ -349,6 +407,33 @@ def registry_cache_pressure_report(cwd: Path, registry_dir: Path) -> dict[str, A
     }
 
 
+def deferred_storage_pressure_report() -> dict[str, Any]:
+    return {
+        "available": False,
+        "status": "deferred",
+        "partial": True,
+        "pressure": None,
+        "reason": "expensive_storage_pressure_diagnostic_requires_opt_in",
+        "next_operator_action": (
+            "aippocampus health --detail full --json "
+            f"--include-expensive-diagnostics --operator-timeout-ms {EXPENSIVE_OPERATOR_DIAGNOSTIC_TIMEOUT_MS}"
+        ),
+        "summary_command": "aippocampus storage gc --dry-run --summary-json --cwd .",
+        "source_history_protected": True,
+        "foreground_blocking": False,
+        "privacy_boundary": {
+            "paths_included": False,
+            "raw_rollout_bodies_read": False,
+            "clean_source_bodies_read": False,
+            "rebuildable_cache_only": True,
+        },
+        "claim_boundary": (
+            "Storage pressure was not assessed in the bounded full-detail pass; "
+            "use next_operator_action for the explicit expensive diagnostic."
+        ),
+    }
+
+
 
 def health_report(cwd: str | Path | None = None, **overrides: Any) -> dict[str, Any]:
     """Return the runtime health payload without shelling out to the CLI."""
@@ -396,6 +481,8 @@ def _rewrite_redacted_action_commands(payload: dict[str, Any]) -> None:
 
 
 def build_health_report(options: HealthOptions) -> dict[str, Any]:
+    section_timings: list[dict[str, Any]] = []
+    core_started_at = perf_counter()
     cwd = Path(options.cwd).resolve()
     host_home = codex_home()
     rollout = locate_rollout(cwd, host_home)
@@ -702,10 +789,20 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
         actions.append(
             action("consider_graphify", "info", "thread size crossed the deep graph threshold", f'Use $graphify on "{graphify_corpus}" when conceptual navigation is worth the cost.')
         )
-    storage_pressure = (
-        registry_cache_pressure_report(cwd, registry_path.resolve().parent)
-        if options.include_operator_diagnostics
-        else operator_detail_placeholder(pressure=True)
+    record_health_section(section_timings, name="core_readiness", started_at=core_started_at)
+    section_started_at = perf_counter()
+    if options.include_operator_diagnostics and options.include_expensive_diagnostics:
+        storage_pressure = registry_cache_pressure_report(cwd, registry_path.resolve().parent)
+    elif options.include_operator_diagnostics:
+        storage_pressure = deferred_storage_pressure_report()
+    else:
+        storage_pressure = operator_detail_placeholder(pressure=True)
+    record_health_section(
+        section_timings,
+        name="storage_pressure",
+        started_at=section_started_at,
+        operator_diagnostic=options.include_operator_diagnostics,
+        partial=bool(storage_pressure.get("partial")),
     )
     if storage_pressure.get("pressure"):
         metrics = storage_pressure.get("metrics") or {}
@@ -725,6 +822,7 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
     actions = dependency_ordered_actions(actions)
     logs = log_retention.add_health_action(actions, registry_path.resolve().parent, max_bytes=options.max_log_bytes)
     actions = dependency_ordered_actions(actions)
+    section_started_at = perf_counter()
     question_stats = (
         {"available": False, "reason": "not_requested"}
         if not options.include_question_stats
@@ -735,6 +833,13 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
             resolve_registry_refs=True,
             include_details=options.question_stats_details,
         )
+    )
+    record_health_section(
+        section_timings,
+        name="question_stats",
+        started_at=section_started_at,
+        operator_diagnostic=options.include_question_stats or options.question_stats_details,
+        partial=bool(question_stats.get("partial")) if isinstance(question_stats, dict) else False,
     )
     raw_newer_than_index = bool(manifest and message_delta > 0)
     raw_newer_than_clean_source = bool(clean_manifest and clean_source_message_delta > 0)
@@ -799,6 +904,41 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
     checkpoint_status = str(product_readiness["checkpoint_status"])
     product_readiness["latest_current_thread_may_be_missing"] = bool(freshness["latest_visible_gap"])
     product_readiness["live_delta_tolerated"] = live_delta_tolerated
+    section_started_at = perf_counter()
+    background_cognition = (
+        background_cognition_health(
+            root=registry_path.resolve().parent,
+            registry_path=registry_path,
+            jobs_path=jobs_path,
+            cwd=cwd,
+            now=now,
+        )
+        if options.include_operator_diagnostics
+        else operator_detail_placeholder()
+    )
+    record_health_section(
+        section_timings,
+        name="background_cognition",
+        started_at=section_started_at,
+        operator_diagnostic=options.include_operator_diagnostics,
+        partial=bool(background_cognition.get("partial")),
+    )
+    section_started_at = perf_counter()
+    host_state_confounds = (
+        codex_host_state_confounds(
+            host_home,
+            max_elapsed_ms=options.operator_timeout_ms,
+        )
+        if options.include_operator_diagnostics
+        else operator_detail_placeholder(include_command=False)
+    )
+    record_health_section(
+        section_timings,
+        name="host_state_confounds",
+        started_at=section_started_at,
+        operator_diagnostic=options.include_operator_diagnostics,
+        partial=bool(host_state_confounds.get("partial")),
+    )
 
     result: dict[str, Any] = {
         "ok": ordinary_first_recall_usable,
@@ -914,26 +1054,18 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
             "activity_class": segments_activity_class,
         },
         "question_stats": question_stats,
-        "background_cognition": (
-            background_cognition_health(
-                root=registry_path.resolve().parent,
-                registry_path=registry_path,
-                jobs_path=jobs_path,
-                cwd=cwd,
-                now=now,
-            )
-            if options.include_operator_diagnostics
-            else operator_detail_placeholder()
-        ),
+        "background_cognition": background_cognition,
         "storage_pressure": storage_pressure,
-        "host_state_confounds": (
-            codex_host_state_confounds(host_home)
-            if options.include_operator_diagnostics
-            else operator_detail_placeholder(include_command=False)
-        ),
+        "host_state_confounds": host_state_confounds,
         "logs": logs,
         "product_readiness": product_readiness,
         "recommended_actions": actions,
+        "diagnostics": {
+            "performance": health_performance_diagnostics(
+                section_timings,
+                slow_section_threshold_ms=options.slow_section_threshold_ms,
+            )
+        },
     }
     attach_health_trajectory(result)
 
@@ -1112,6 +1244,23 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Emit the full local operator audit JSON; implies JSON output.",
     )
     parser.add_argument(
+        "--operator-timeout-ms",
+        type=int,
+        default=DEFAULT_OPERATOR_DIAGNOSTIC_TIMEOUT_MS,
+        help=(
+            "Time budget for expensive operator diagnostics such as host-state scans; "
+            "timed-out lanes return partial summaries with next commands."
+        ),
+    )
+    parser.add_argument(
+        "--include-expensive-diagnostics",
+        action="store_true",
+        help=(
+            "Opt into expensive full-detail lanes such as rebuildable-cache "
+            "storage pressure scans."
+        ),
+    )
+    parser.add_argument(
         "--full",
         action="store_true",
         help="Alias for --operator-json on the thread health surface; implies JSON output.",
@@ -1147,6 +1296,8 @@ def options_from_args(args: argparse.Namespace) -> HealthOptions:
         deep_graph_messages=args.deep_graph_messages,
         deep_graph_bytes=args.deep_graph_bytes,
         segment_threshold_bytes=args.segment_threshold_bytes,
+        include_expensive_diagnostics=args.include_expensive_diagnostics,
+        operator_timeout_ms=args.operator_timeout_ms,
         include_operator_diagnostics=bool(
             args.operator_json
             or args.full

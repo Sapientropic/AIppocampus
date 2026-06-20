@@ -98,12 +98,12 @@ class FirstUsefulRecallDemoSmokeTests(unittest.TestCase):
             self.assertEqual(second_recall.returncode, 0, second_recall.stderr)
             self.assertEqual(
                 second_payload["foreground_action"]["id"],
-                "use_opened_route_context",
+                "reopen_already_opened_route_context",
             )
-            self.assertNotEqual(
-                second_payload["foreground_action"].get("id"),
-                "deepen_this_route",
-            )
+            self.assertEqual(second_payload["foreground_action"]["tool_name"], "agent_deepen")
+            self.assertEqual(second_payload["foreground_action"]["arguments"]["request_index"], 1)
+            self.assertIn("--request 1", second_payload["foreground_action"]["command"])
+            self.assertIn("--json", second_payload["foreground_action"]["command"])
 
 
 if __name__ == "__main__":

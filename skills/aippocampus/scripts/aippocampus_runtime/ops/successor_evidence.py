@@ -241,6 +241,85 @@ def _parse_parent(body: str) -> int | None:
     return int(match.group(1)) if match else None
 
 
+def _declared_successor_issue_numbers() -> list[int]:
+    numbers: set[int] = set()
+    for path in [
+        *HARD_BLOCKER_EXECUTION_PATHS.values(),
+        *BOUNDED_VALIDATION_DEFERRED_PATHS.values(),
+    ]:
+        number = int(path.get("successor_issue") or 0)
+        if number:
+            numbers.add(number)
+    return sorted(numbers)
+
+
+def _closeout_pointer_kind(text: str) -> str:
+    lowered = text.casefold()
+    if re.search(r"\bpr\s+#\d+", lowered) or re.search(r"#\d+", lowered):
+        if any(
+            term in lowered
+            for term in (
+                "artifact",
+                "receipt",
+                "trace",
+                "validation",
+                "covered",
+                "report",
+                "evidence",
+            )
+        ):
+            return "artifact_pointer"
+    if any(
+        term in lowered
+        for term in (
+            "artifact",
+            "receipt",
+            "trace artifact",
+            "benchmark smoke",
+            "provider artifact",
+            "validation was extended",
+        )
+    ):
+        return "artifact_pointer"
+    if re.search(r"\b(successor|follow[- ]?up|child)\s+#\d+", lowered):
+        return "explicit_deferral_pointer"
+    if any(term in lowered for term in ("defer", "deferred", "current blocker", "remains open")):
+        return "explicit_deferral_pointer"
+    return "none"
+
+
+def _github_issue_row(item: Mapping[str, Any]) -> dict[str, Any]:
+    number = int(item.get("number") or 0)
+    labels = [
+        str(label.get("name") or "")
+        for label in item.get("labels") or []
+        if isinstance(label, Mapping)
+    ]
+    body = str(item.get("body") or "")
+    body_parent = _parse_parent(body)
+    comment_bodies = [
+        str(comment.get("body") or "")
+        for comment in item.get("comments") or []
+        if isinstance(comment, Mapping)
+    ]
+    closeout_text = "\n".join([body, *comment_bodies])
+    pointer_kind = _closeout_pointer_kind(closeout_text)
+    return {
+        "state": str(item.get("state") or "").casefold(),
+        "title": str(item.get("title") or f"issue {number}"),
+        "parent": body_parent,
+        "body_parent": body_parent,
+        "native_parent": None,
+        "parent_relationship_source": "body_parent_fallback" if body_parent else "none",
+        "native_sub_issue_numbers": [],
+        "labels": labels,
+        "closedAt": item.get("closedAt"),
+        "closeout_pointer_kind": pointer_kind,
+        "closeout_pointer_present": pointer_kind != "none",
+        "source": "github_live",
+    }
+
+
 def _repo_owner_name(repo: str | None) -> tuple[str, str]:
     if repo and "/" in repo:
         owner, name = repo.split("/", 1)
@@ -342,7 +421,7 @@ def load_github_successor_issue_state(
         "--limit",
         str(limit),
         "--json",
-        "number,title,state,body,labels",
+        "number,title,state,closedAt,body,labels",
     ]
     if repo:
         command[2:2] = ["-R", repo]
@@ -353,24 +432,28 @@ def load_github_successor_issue_state(
         number = int(item.get("number") or 0)
         if number < min_issue_number:
             continue
-        labels = [
-            str(label.get("name") or "")
-            for label in item.get("labels") or []
-            if isinstance(label, Mapping)
+        result[number] = _github_issue_row(item)
+    for number in _declared_successor_issue_numbers():
+        if number in result:
+            continue
+        view_command = [
+            "gh",
+            "issue",
+            "view",
+            str(number),
+            "--json",
+            "number,title,state,closedAt,body,comments,labels",
         ]
-        body = str(item.get("body") or "")
-        body_parent = _parse_parent(body)
-        result[number] = {
-            "state": str(item.get("state") or "").casefold(),
-            "title": str(item.get("title") or f"issue {number}"),
-            "parent": body_parent,
-            "body_parent": body_parent,
-            "native_parent": None,
-            "parent_relationship_source": "body_parent_fallback" if body_parent else "none",
-            "native_sub_issue_numbers": [],
-            "labels": labels,
-            "source": "github_live",
-        }
+        if repo:
+            view_command[2:2] = ["-R", repo]
+        try:
+            item = json.loads(
+                subprocess.check_output(view_command, text=True, encoding="utf-8")
+            )
+        except (subprocess.CalledProcessError, json.JSONDecodeError):
+            continue
+        if isinstance(item, Mapping):
+            result[number] = _github_issue_row(item)
     try:
         native = _load_native_issue_relationships_via_gh(sorted(result), repo=repo)
     except (subprocess.CalledProcessError, json.JSONDecodeError):
@@ -435,9 +518,27 @@ def _execution_path_status(
         result["successor_issue"] = successor_issue
         live_row = live_state.get(successor_issue)
         if live_row:
-            successor_open = str(live_row.get("state") or "").casefold() == "open"
-            result["status"] = "open_successor" if successor_open else "successor_not_open"
-            result["ok"] = successor_open
+            successor_state = str(live_row.get("state") or "").casefold()
+            pointer_kind = str(live_row.get("closeout_pointer_kind") or "none")
+            result["successor_state"] = successor_state
+            if live_row.get("closedAt"):
+                result["successor_closed_at"] = live_row.get("closedAt")
+            result["successor_closeout_pointer_kind"] = pointer_kind
+            result["successor_closeout_pointer_present"] = bool(
+                live_row.get("closeout_pointer_present")
+            )
+            if successor_state == "open":
+                result["status"] = "open_successor"
+                result["ok"] = True
+            elif pointer_kind == "artifact_pointer":
+                result["status"] = "closed_successor_artifact_pointer"
+                result["ok"] = True
+            elif pointer_kind == "explicit_deferral_pointer":
+                result["status"] = "closed_successor_deferred_pointer"
+                result["ok"] = True
+            else:
+                result["status"] = "closed_successor_without_artifact_pointer"
+                result["ok"] = False
         elif github_state_checked and live_state and successor_issue <= max(live_state):
             result["status"] = "successor_not_seen_in_live_github_state"
             result["ok"] = False
@@ -1813,6 +1914,12 @@ def build_successor_evidence_sweep_report(
         "native_parent_link_verified_count": native_parent_count,
         "hard_coded_inventory_only": False,
         "github_state_checked": github_state_checked,
+        "declared_successor_issue_numbers": _declared_successor_issue_numbers(),
+        "closed_declared_successor_issue_numbers": [
+            number
+            for number in _declared_successor_issue_numbers()
+            if str(live_state.get(number, {}).get("state") or "").casefold().startswith("closed")
+        ],
     }
 
     rows: list[dict[str, Any]] = []
@@ -1937,6 +2044,8 @@ def build_successor_evidence_sweep_report(
                 "out_of_scope_high_number_issue_count",
                 "body_parent_fallback_count",
                 "native_parent_link_verified_count",
+                "declared_successor_issue_numbers",
+                "closed_declared_successor_issue_numbers",
             ):
                 metrics[key] = coverage.get(key)
     ok = (

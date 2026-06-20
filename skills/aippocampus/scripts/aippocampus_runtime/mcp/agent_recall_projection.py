@@ -33,12 +33,35 @@ def _compact_claim_boundary(
     *,
     can_use_for: list[str],
     must_reopen_for: list[str],
-    detail_command: str,
+    detail_command: str | None = None,
+    detail_command_template: str | None = None,
 ) -> dict[str, Any]:
-    return {
+    boundary: dict[str, Any] = {
         "can_use_for": can_use_for,
         "must_reopen_for": must_reopen_for,
-        "detail_available_with": detail_command,
+    }
+    if detail_command:
+        boundary["detail_available_with"] = detail_command
+    elif detail_command_template:
+        boundary["detail_available_with_template"] = detail_command_template
+        boundary["detail_requires"] = ["cue"]
+    return boundary
+
+
+_RECALL_DETAIL_COMMAND_TEMPLATE = 'aippocampus agent recall "{cue}" --json --detail full'
+
+
+def _recall_detail_command_fields(cue: str) -> dict[str, Any]:
+    if cue and not command_value_needs_input(cue):
+        return {
+            "operator_detail_command": (
+                f"aippocampus agent recall {shell_quote(cue)} --json --detail full"
+            )
+        }
+    return {
+        "operator_detail_command_template": _RECALL_DETAIL_COMMAND_TEMPLATE,
+        "operator_detail_requires": ["cue"],
+        "operator_detail_template_only": True,
     }
 
 
@@ -59,6 +82,43 @@ def _canonical_agent_action(card: Any) -> dict[str, Any]:
         "arguments": {},
         "claim_boundary": "no_route_claim",
     }
+
+
+def _has_current_source_window_receipt(
+    payload: Mapping[str, Any],
+    packets: list[dict[str, Any]],
+) -> bool:
+    receipt_keys = {
+        "source_window_receipt",
+        "opened_source_window_receipt",
+        "source_window_summary",
+        "source_window_scope",
+        "primary_source_snippet",
+        "source_snippet_summary",
+    }
+    for key in receipt_keys:
+        if payload.get(key):
+            return True
+    for packet in packets[:3]:
+        for key in receipt_keys:
+            if packet.get(key):
+                return True
+    return False
+
+
+def _opened_route_reopen_action(
+    request_index: int,
+    *,
+    recall_selector: str = "",
+) -> dict[str, Any]:
+    action = route_deepen_action(request_index, recall_selector=recall_selector)
+    action["id"] = "reopen_already_opened_route_context"
+    action["why"] = (
+        "The route was opened earlier, but the current compact payload has no "
+        "source-window receipt; reopen read-only before making source-backed claims."
+    )
+    action["claim_boundary"] = "no_claim_before_reopen"
+    return action
 
 
 def _recall_miss_recovery_card(status: Any) -> dict[str, Any]:
@@ -205,7 +265,12 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
     metrics: dict[str, Any] = raw_metrics if isinstance(raw_metrics, dict) else {}
     labels_low_specificity = recall_choices.low_specificity_route_choices(
         metrics, len(memory_packets)
-    ) or recall_choices.distinctive_cue_anchor_gap(
+    )
+    repeated_route_label = recall_choices.repeated_low_distinctiveness_label(
+        metrics,
+        memory_packets,
+    )
+    labels_low_specificity = labels_low_specificity or bool(repeated_route_label) or recall_choices.distinctive_cue_anchor_gap(
         recovery_cue,
         memory_packets,
     )
@@ -217,7 +282,6 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
         already_opened = bool(packet.get("already_opened"))
         route_is_callable = (
             cache_available
-            and not already_opened
             and str(packet.get("output_mode") or "") == "reopenable_route"
         )
         callable_selector = (
@@ -324,9 +388,28 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
             foreground_action,
             metrics=metrics,
             cue=recovery_cue,
+            repeated_route_label=repeated_route_label,
         )
     else:
         foreground_action = _with_recall_selector(foreground_action, recall_selector)
+    if (
+        (foreground_action.get("id") or foreground_action.get("action_id"))
+        == "use_opened_route_context"
+        and not _has_current_source_window_receipt(payload, memory_packets)
+        and memory_packets
+    ):
+        foreground_action = _opened_route_reopen_action(1, recall_selector=recall_selector)
+    detail_fields = _recall_detail_command_fields(recovery_cue)
+    detail_command = str(detail_fields.get("operator_detail_command") or "")
+    detail_command_template = str(detail_fields.get("operator_detail_command_template") or "")
+    displayed_route_count = min(len(memory_packets), 3)
+    hidden_route_count_fields: dict[str, int] = {}
+    omitted_route_count = max(0, len(memory_packets) - displayed_route_count)
+    if omitted_route_count:
+        hidden_route_count_fields = {
+            "displayed_route_count": displayed_route_count,
+            "omitted_route_count": omitted_route_count,
+        }
     result = {
         "detail": "compact",
         "kind": payload.get("kind"),
@@ -342,14 +425,16 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "weak_route_recovery_card": weak_route_recovery_card,
         "routes": route_receipts,
         "route_count": len(memory_packets),
+        **hidden_route_count_fields,
         "semantic_gate_diagnostics": semantic_compact,
         "provider_key_bridge": payload.get("provider_key_bridge"),
         "claim_boundary": _compact_claim_boundary(
             can_use_for=["route_selection", "next_action_choice"],
             must_reopen_for=["source_backed_claims", "exact_wording", "sensitive_or_stale_facts"],
-            detail_command='aippocampus agent recall "old decision or handoff cue" --json --detail full',
+            detail_command=detail_command or None,
+            detail_command_template=detail_command_template or None,
         ),
-        "operator_detail_command": 'aippocampus agent recall "old decision or handoff cue" --json --detail full',
+        **detail_fields,
     }
     result.update(canonical_foreground_action_fields(foreground_action))
     return _without_empty(result)

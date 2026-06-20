@@ -42,6 +42,7 @@ PRIVATE_BUCKETS = {"private", "restricted", "personal", "user_private", "machine
 STALE_STATUSES = {"stale", "superseded", "refuted", "retired", "archived", "expired"}
 NEGATIVE_OUTCOMES = {"wrong_route_drag", "wrong_route", "ignored", "blocked", "superseded", "expired"}
 POSITIVE_OUTCOMES = {"source_reopen_success", "reopened_deepened", "user_confirmed"}
+DEFAULT_SAFE_SCOPE = "public_default"
 
 
 def walk_associative_paths(
@@ -93,6 +94,7 @@ def walk_associative_paths(
     scored: list[dict[str, Any]] = []
     evaporated_count = 0
     feedback_counts = _feedback_counts(feedback)
+    feedback_by_id = _feedback_by_id(feedback)
     for row in candidate_rows:
         if _private_or_stale(row):
             blocked_count += 1
@@ -127,7 +129,9 @@ def walk_associative_paths(
             evaporated_count += 1
             reason_codes.append("source_free_path_evaporated")
             continue
-        positive = _positive_feedback(route_id, row, feedback_counts)
+        positive, ignored_positive = _positive_feedback(route_id, row, feedback_by_id)
+        if ignored_positive:
+            reason_codes.append("cross_scope_positive_feedback_ignored")
         score = len(direct) * 2.0 + len(bridge_hits) * 2.5 + (1.0 if refs or event_refs else 0.5)
         if positive:
             score += 1.0
@@ -239,7 +243,14 @@ def _terms(values: Iterable[Any], *, limit: int = 16) -> list[str]:
 
 def _generic(term: str) -> bool:
     folded = normalize_term(term).casefold()
-    return not folded or folded in GENERIC_TERMS or len(folded) <= 2
+    if not folded or folded in GENERIC_TERMS:
+        return True
+    # English one- and two-character tokens are usually noise, but Chinese
+    # two-character project cues can be highly distinctive ("黏菌" is the APW
+    # dogfood example). Keep one-character CJK tokens filtered.
+    if re.fullmatch(r"[\u4e00-\u9fff]{2,}", folded):
+        return False
+    return len(folded) <= 2
 
 
 def _candidate_terms(row: Mapping[str, Any]) -> list[str]:
@@ -360,25 +371,87 @@ def _private_or_stale(row: Mapping[str, Any]) -> bool:
     return bucket in PRIVATE_BUCKETS or status in STALE_STATUSES or visibility == "blocked"
 
 
+def _scope_bucket(row: Mapping[str, Any]) -> str:
+    for key in ("scope_bucket", "privacy_partition", "privacy_domain", "scope"):
+        value = str(row.get(key) or "").strip().casefold()
+        if value:
+            return value[:80]
+    return DEFAULT_SAFE_SCOPE
+
+
+def _scope_allows_positive_feedback(candidate: Mapping[str, Any], feedback: Mapping[str, Any]) -> bool:
+    # Positive feedback amplifies a navigation route. It must not cross privacy or
+    # project boundaries, otherwise a successful private/source-local reopen can
+    # silently drag an unrelated foreground agent toward the wrong route.
+    candidate_scope = _scope_bucket(candidate)
+    feedback_scope = _scope_bucket(feedback)
+    if candidate_scope != feedback_scope:
+        return False
+    if candidate_scope in PRIVATE_BUCKETS or feedback_scope in PRIVATE_BUCKETS:
+        return False
+    return not _private_or_stale(candidate) and not _private_or_stale(feedback)
+
+
+def _feedback_signal(row: Mapping[str, Any]) -> str:
+    signal = str(row.get("signal") or row.get("outcome") or "").strip()
+    if signal == "wrong_route":
+        return "wrong_route_drag"
+    return signal
+
+
+def _feedback_keys(row: Mapping[str, Any]) -> set[str]:
+    return {
+        str(row.get(key) or "").strip()
+        for key in ("route_id", "candidate_id", "bridge_id", "id")
+        if str(row.get(key) or "").strip()
+    }
+
+
+def _candidate_feedback_keys(route_id: str, row: Mapping[str, Any]) -> set[str]:
+    return {
+        key
+        for key in {route_id, str(row.get("candidate_id") or ""), str(row.get("bridge_id") or "")}
+        if key
+    }
+
+
 def _feedback_counts(rows: Iterable[Mapping[str, Any]]) -> dict[str, Counter[str]]:
     counts: dict[str, Counter[str]] = {}
     for row in rows:
-        route_id = str(row.get("route_id") or row.get("candidate_id") or "")
-        if not route_id:
-            continue
-        signal = str(row.get("signal") or row.get("outcome") or "").strip()
-        if signal == "wrong_route":
-            signal = "wrong_route_drag"
+        signal = _feedback_signal(row)
         if signal:
-            counts.setdefault(route_id, Counter())[signal] += 1
+            for route_id in _feedback_keys(row):
+                counts.setdefault(route_id, Counter())[signal] += 1
     return counts
 
 
+def _feedback_by_id(rows: Iterable[Mapping[str, Any]]) -> dict[str, list[Mapping[str, Any]]]:
+    by_id: dict[str, list[Mapping[str, Any]]] = {}
+    for row in rows:
+        if not _feedback_signal(row):
+            continue
+        for route_id in _feedback_keys(row):
+            by_id.setdefault(route_id, []).append(row)
+    return by_id
+
+
 def _negative_feedback(route_id: str, row: Mapping[str, Any], counts: Mapping[str, Counter[str]]) -> bool:
-    keys = {route_id, str(row.get("candidate_id") or ""), str(row.get("bridge_id") or "")}
+    keys = _candidate_feedback_keys(route_id, row)
     return any(counts.get(key, Counter()).get(signal, 0) for key in keys for signal in NEGATIVE_OUTCOMES)
 
 
-def _positive_feedback(route_id: str, row: Mapping[str, Any], counts: Mapping[str, Counter[str]]) -> bool:
-    keys = {route_id, str(row.get("candidate_id") or ""), str(row.get("bridge_id") or "")}
-    return any(counts.get(key, Counter()).get(signal, 0) for key in keys for signal in POSITIVE_OUTCOMES)
+def _positive_feedback(
+    route_id: str,
+    row: Mapping[str, Any],
+    by_id: Mapping[str, Sequence[Mapping[str, Any]]],
+) -> tuple[bool, bool]:
+    matched_positive = [
+        feedback
+        for key in _candidate_feedback_keys(route_id, row)
+        for feedback in by_id.get(key, [])
+        if _feedback_signal(feedback) in POSITIVE_OUTCOMES
+    ]
+    if not matched_positive:
+        return False, False
+    same_scope = any(_scope_allows_positive_feedback(row, feedback) for feedback in matched_positive)
+    return same_scope, not same_scope

@@ -221,6 +221,8 @@ def public_compact_route_receipts(routes: Any) -> list[dict[str, Any]]:
                     "route_index": route.get("route_index"),
                     "route_id": route.get("route_id"),
                     "route_label": route.get("route_label"),
+                    "route_family": route.get("route_family"),
+                    "already_opened": route.get("already_opened"),
                     "choice_reason": route.get("choice_reason"),
                     "action": {
                         key: value

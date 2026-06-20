@@ -151,6 +151,125 @@ class SuccessorEvidenceTests(unittest.TestCase):
         self.assertEqual(state[1981]["parent_relationship_source"], "body_parent_fallback")
         self.assertIsNone(state[1981]["native_parent"])
 
+    def test_live_github_state_fetches_declared_closed_successor_issues(self) -> None:
+        def fake_check_output(command, **kwargs):
+            if command[:3] == ["gh", "api", "graphql"]:
+                raise subprocess.CalledProcessError(1, command, output="transient")
+            if "list" in command:
+                return "[]"
+            if "view" in command:
+                number = int(command[command.index("view") + 1])
+                return json.dumps(
+                    {
+                        "number": number,
+                        "state": "CLOSED",
+                        "closedAt": "2026-06-18T02:19:12Z",
+                        "title": f"closed declared successor {number}",
+                        "body": "Parent: #1918",
+                        "labels": [],
+                        "comments": [
+                            {
+                                "body": (
+                                    "Closed via PR #2201. Provider artifact receipt "
+                                    "and validation evidence are recorded."
+                                )
+                            }
+                        ],
+                    }
+                )
+            raise AssertionError(f"unexpected command: {command}")
+
+        with patch(
+            "aippocampus_runtime.ops.successor_evidence.subprocess.check_output",
+            side_effect=fake_check_output,
+        ):
+            state = load_github_successor_issue_state(limit=1)
+
+        for number in (2043, 2044, 2045):
+            self.assertEqual(state[number]["state"], "closed")
+            self.assertEqual(state[number]["closedAt"], "2026-06-18T02:19:12Z")
+            self.assertEqual(state[number]["closeout_pointer_kind"], "artifact_pointer")
+            self.assertTrue(state[number]["closeout_pointer_present"])
+            self.assertNotIn("body", state[number])
+            self.assertNotIn("comments", state[number])
+
+    def test_live_closed_successor_without_artifact_pointer_blocks_hard_blockers(self) -> None:
+        issue_state = {
+            2043: {
+                "state": "closed",
+                "closedAt": "2026-06-18T02:19:12Z",
+                "closeout_pointer_kind": "none",
+                "closeout_pointer_present": False,
+            },
+            2044: {
+                "state": "closed",
+                "closedAt": "2026-06-18T02:19:09Z",
+                "closeout_pointer_kind": "none",
+                "closeout_pointer_present": False,
+            },
+            2045: {
+                "state": "closed",
+                "closedAt": "2026-06-18T02:19:06Z",
+                "closeout_pointer_kind": "none",
+                "closeout_pointer_present": False,
+            },
+        }
+
+        report = build_successor_evidence_sweep_report(
+            issue_state=issue_state,
+            github_state_checked=True,
+        )
+        by_issue = {row["issue"]: row for row in report["issues"]}
+
+        self.assertFalse(report["ok"])
+        self.assertEqual(report["coverage"]["closed_hard_blocker_without_successor_count"], 5)
+        self.assertEqual(
+            by_issue[1929]["hard_blocker_execution_path"]["status"],
+            "closed_successor_without_artifact_pointer",
+        )
+        self.assertFalse(by_issue[1929]["closeout_allowed"])
+        self.assertEqual(
+            by_issue[1981]["bounded_validation_deferred_path"]["status"],
+            "closed_successor_without_artifact_pointer",
+        )
+
+    def test_live_closed_successor_with_artifact_pointer_satisfies_path(self) -> None:
+        issue_state = {
+            number: {
+                "state": "closed",
+                "closedAt": "2026-06-18T02:19:12Z",
+                "closeout_pointer_kind": "artifact_pointer",
+                "closeout_pointer_present": True,
+            }
+            for number in (2043, 2044, 2045)
+        }
+
+        report = build_successor_evidence_sweep_report(
+            issue_state=issue_state,
+            github_state_checked=True,
+        )
+        by_issue = {row["issue"]: row for row in report["issues"]}
+
+        self.assertTrue(report["ok"])
+        self.assertEqual(report["coverage"]["closed_hard_blocker_without_successor_count"], 0)
+        self.assertEqual(
+            report["coverage"]["closed_declared_successor_issue_numbers"],
+            [2043, 2044, 2045],
+        )
+        self.assertEqual(
+            by_issue[1929]["hard_blocker_execution_path"]["status"],
+            "closed_successor_artifact_pointer",
+        )
+        self.assertEqual(
+            by_issue[1929]["hard_blocker_execution_path"]["successor_state"],
+            "closed",
+        )
+        self.assertTrue(by_issue[1929]["closeout_allowed"])
+        self.assertEqual(
+            by_issue[1981]["bounded_validation_deferred_path"]["status"],
+            "closed_successor_artifact_pointer",
+        )
+
     def test_closed_duplicate_rows_are_redirected_not_active_coverage(self) -> None:
         report = build_successor_evidence_sweep_report()
 
