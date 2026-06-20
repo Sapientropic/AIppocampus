@@ -51,20 +51,13 @@ source reopen.
 
 ## Decide The First Move
 
-1. Choose the setup branch before running recall commands:
+1. Start with the read-only readiness card only when source readiness is
+   unknown:
 
    ```sh
-   # Trusted Codex/local setup.
-   aippocampus plugin install --codex --verify
+   aippocampus start --json
    aippocampus update status --json
-
-   # No-clone/read-only probe.
-   uvx aippocampus --help
-   uvx aippocampus onboard --provider auto --status
    ```
-
-   If local source is already registered, skip setup/probe and start with the
-   recall or exact-search branch below.
 
    `aippocampus start --json` reports `first_recall_readiness`. Treat
    `phase=steady_state_available` as the ordinary recall path. Treat
@@ -86,15 +79,15 @@ source reopen.
    aippocampus search "distinctive old phrase"
    ```
 
-3. If no source is registered, or the first route is stale or blocked, use
-   read-only recovery cards:
+3. If no source is registered, or the first route is stale or blocked, use a
+   read-only recovery card:
 
    ```sh
    aippocampus health
    aippocampus onboard --provider auto --status
    ```
 
-4. If no local source is registered yet, preview before writing:
+4. Register source only on an explicit setup/import branch:
 
    ```sh
    aippocampus onboard --provider codex --dry-run --json
@@ -110,8 +103,8 @@ source reopen.
    read-only; the `--cwd .` provider commands and explicit import are the
    source-registration writes.
 
-5. After a successful deepen, carry the reopened context only when the user is
-   moving to another thread, device, or project:
+5. Carry reopened context only when the user explicitly wants a transfer,
+   another thread/device, or project handoff:
 
    ```sh
    aippocampus export --json

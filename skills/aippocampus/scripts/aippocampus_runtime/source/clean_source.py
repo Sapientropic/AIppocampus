@@ -32,6 +32,10 @@ from aippocampus_runtime.source.material_sanitizer import (
     classify_source_material,
     clean_source_material_contract,
 )
+from aippocampus_runtime.source.normalization_loss import (
+    empty_provider_normalization_loss,
+    finalize_provider_normalization_loss,
+)
 from aippocampus_runtime.source.redaction_profiles import write_clean_source_redaction_profiles
 from aippocampus_runtime.source.scope_labels import (
     SCOPE_LABEL_ORDER,
@@ -48,6 +52,35 @@ LEGACY_OUTPUT_DIR = ".aippocampus/clean-source"
 CLEAN_SOURCE_SCHEMA_VERSION = 2
 SIGNATURE_CONTRACT_VERSION = "aippocampus-signature-sidecar-v1"
 SCOPE_LABEL_POLICY_VERSION = "aippocampus-scope-labels-v1"
+LOSS_ACCOUNTING_REASON_KEYS = (
+    "no_final_answer",
+    "assistant_missing",
+    "tool_only_turn",
+    "empty_after_filter",
+    "host_internal_empty_after_filter",
+    "user_empty_after_filter",
+    "assistant_empty_after_filter",
+    "fallback_empty",
+    "assistant_commentary_shadowed_by_final",
+    "tool_payload_not_clean_source",
+    "unselected_assistant_message",
+    "user_missing",
+)
+
+
+def _provider_normalization_loss(provider: ConversationProvider) -> dict[str, Any]:
+    loss = getattr(provider, "last_normalization_loss", None)
+    if isinstance(loss, dict):
+        return dict(loss)
+    report = finalize_provider_normalization_loss(empty_provider_normalization_loss(provider.name))
+    report["status"] = "unreported_by_provider"
+    report["source_boundary"] = (
+        "This provider did not expose parser/policy loss diagnostics; absence of counts "
+        "is not proof that every raw transcript row was normalized."
+    )
+    report.setdefault("warning_codes", []).append("provider_normalization_loss_unreported")
+    return report
+
 
 def _stable_id(prefix: str, *parts: object, length: int = 16) -> str:
     # Clean-source ids are persisted join keys across messages, turns, sidecars,
@@ -144,9 +177,64 @@ def _clean_behavior_events(
     return clean_events
 
 
+def _empty_loss_accounting(messages: list[dict], turns: list[dict]) -> dict[str, Any]:
+    return {
+        "scope": "post_provider_normalization",
+        "source_boundary": (
+            "Counts describe clean-source filtering after the provider has already parsed "
+            "the transcript. Raw JSONL/parser losses need provider diagnostics."
+        ),
+        "normalized_message_count": len(messages),
+        "normalized_turn_count": len(turns),
+        "clean_message_count": 0,
+        "clean_turn_count": 0,
+        "filtered_or_dropped_message_count": 0,
+        "user_only_turn_count": 0,
+        "empty_clean_turn_count": 0,
+        "turns_with_no_clean_assistant_count": 0,
+        "reason_counts": {key: 0 for key in LOSS_ACCOUNTING_REASON_KEYS},
+        "warning_codes": [],
+    }
+
+
+def _count_loss(loss: dict[str, Any], reason: str, amount: int = 1) -> None:
+    reason_counts = loss.setdefault("reason_counts", {})
+    reason_counts[reason] = int(reason_counts.get(reason) or 0) + amount
+
+
+def _finalize_loss_accounting(
+    loss: dict[str, Any],
+    clean_messages: list[dict],
+    clean_turns: list[dict],
+) -> dict[str, Any]:
+    loss["clean_message_count"] = len(clean_messages)
+    loss["clean_turn_count"] = len(clean_turns)
+    loss["filtered_or_dropped_message_count"] = max(
+        0,
+        int(loss.get("normalized_message_count") or 0) - len(clean_messages),
+    )
+    for turn in clean_turns:
+        has_user = bool(turn.get("user_message_id"))
+        has_assistant = bool(turn.get("assistant_message_id"))
+        if has_user and not has_assistant:
+            loss["user_only_turn_count"] += 1
+        if not has_assistant:
+            loss["turns_with_no_clean_assistant_count"] += 1
+        if not turn.get("message_ids"):
+            loss["empty_clean_turn_count"] += 1
+
+    turn_count = max(1, len(clean_turns))
+    user_only_ratio = float(loss["user_only_turn_count"]) / float(turn_count)
+    if loss["user_only_turn_count"] >= 3 and user_only_ratio >= 0.25:
+        loss["warning_codes"].append("user_only_turn_spike")
+    if loss["empty_clean_turn_count"]:
+        loss["warning_codes"].append("empty_clean_turns")
+    return loss
+
+
 def _clean_messages(
     messages: list[dict], turns: list[dict], source_id: str, *, source_provider: str
-) -> tuple[list[dict], list[dict]]:
+) -> tuple[list[dict], list[dict], dict[str, Any]]:
     by_turn: dict[int, list[dict]] = {}
     for message in messages:
         turn_index = message.get("turn_index")
@@ -155,6 +243,7 @@ def _clean_messages(
 
     clean_messages: list[dict] = []
     clean_turns: list[dict] = []
+    loss_accounting = _empty_loss_accounting(messages, turns)
 
     for turn in turns:
         turn_id = int(turn["id"])
@@ -163,21 +252,39 @@ def _clean_messages(
         final = next((item for item in items if item.get("is_final")), None)
         assistant = final
         assistant_phase = "final_answer"
+        if turn.get("final_line") is None:
+            _count_loss(loss_accounting, "no_final_answer")
         if assistant is None:
             fallback_line = turn.get("fallback_assistant_line")
             assistant = next((item for item in items if item.get("line") == fallback_line), None)
             assistant_phase = "commentary_fallback" if assistant else ""
+        if user is None:
+            _count_loss(loss_accounting, "user_missing")
+        if assistant is None:
+            _count_loss(loss_accounting, "assistant_missing")
+            if (int(turn.get("tool_call_count") or 0) + int(turn.get("tool_output_count") or 0)) > 0:
+                _count_loss(loss_accounting, "tool_only_turn")
 
         turn_uid = _stable_id(
             "turn", source_id, turn_id, turn.get("user_line"), turn.get("start_line"), length=20
         )
         kept: list[dict] = []
+        selected_ids = {id(item) for item in (user, assistant) if item}
         for item in (user, assistant):
             if not item:
                 continue
             phase = item.get("phase") or ""
             text, host_internal_filtered = filter_host_internal_clean_text(item.get("text") or "")
             if not text.strip():
+                _count_loss(loss_accounting, "empty_after_filter")
+                if host_internal_filtered:
+                    _count_loss(loss_accounting, "host_internal_empty_after_filter")
+                if item.get("role") == "user":
+                    _count_loss(loss_accounting, "user_empty_after_filter")
+                elif assistant_phase == "commentary_fallback":
+                    _count_loss(loss_accounting, "fallback_empty")
+                else:
+                    _count_loss(loss_accounting, "assistant_empty_after_filter")
                 continue
             material = classify_source_material(
                 text,
@@ -224,6 +331,17 @@ def _clean_messages(
             kept.append(kept_item)
             clean_messages.append(kept_item)
 
+        for item in items:
+            if id(item) in selected_ids:
+                continue
+            role = str(item.get("role") or "")
+            if role in {"tool", "event"}:
+                _count_loss(loss_accounting, "tool_payload_not_clean_source")
+            elif role == "assistant" and final is not None and item.get("phase") == "commentary":
+                _count_loss(loss_accounting, "assistant_commentary_shadowed_by_final")
+            elif role == "assistant":
+                _count_loss(loss_accounting, "unselected_assistant_message")
+
         user_message = next((item for item in kept if item.get("role") == "user"), None)
         assistant_message = next((item for item in kept if item.get("role") == "assistant"), None)
         clean_ordinals = [len(clean_messages) - len(kept) + idx for idx in range(len(kept))]
@@ -251,7 +369,11 @@ def _clean_messages(
             }
         )
 
-    return clean_messages, clean_turns
+    return clean_messages, clean_turns, _finalize_loss_accounting(
+        loss_accounting,
+        clean_messages,
+        clean_turns,
+    )
 
 
 def build_clean_source(
@@ -283,11 +405,12 @@ def build_clean_source(
 
     meta = active_provider.read_metadata(source_path) or {}
     messages, turns = active_provider.read_normalized_messages(source_path, include_tools=False)
+    provider_normalization_loss = _provider_normalization_loss(active_provider)
 
     source_thread_key = active_provider.thread_key(source_path, meta)
     source_key = source_thread_key or meta.get("id") or str(source_path.resolve())
     source_id = _stable_id("src", source_key, length=20)
-    clean_messages, clean_turns = _clean_messages(
+    clean_messages, clean_turns, loss_accounting = _clean_messages(
         messages,
         turns,
         source_id,
@@ -403,6 +526,8 @@ def build_clean_source(
             "source_texture_jsonl": source_texture["path"],
             "redaction_profiles": profile_outputs,
         },
+        "provider_normalization_loss": provider_normalization_loss,
+        "loss_accounting": loss_accounting,
         "redaction_profiles": profile_summary,
         "identity_policy": {
             "stable_join_keys": [

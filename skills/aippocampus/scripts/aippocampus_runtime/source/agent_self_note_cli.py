@@ -441,12 +441,11 @@ def _read_missing_id_payload() -> dict[str, Any]:
 def _read_success_payload(row: Mapping[str, Any]) -> dict[str, Any]:
     action = {
         "id": "use_direction_only_note",
-        "message": (
-            "Use this self-note only as direction-only atmosphere; reopen clean "
-            "source before source-backed facts, user-profile claims, or public wording."
-        ),
+        "label": "Use direction-only note carefully",
+        "why": "A self-note can orient attention but is not source evidence.",
         "mutation_risk": "read_only",
         "claim_boundary": "direction_only_not_source_truth",
+        "continue_without_command": True,
     }
     return {
         "kind": "aippocampus_agent_self_note_read",
@@ -498,6 +497,7 @@ def _self_note_lookup_actions() -> list[dict[str, Any]]:
             "id": "search_notes",
             "label": "Search scoped self-notes",
             "command_template": 'aippocampus self-note search "{cue}" --json',
+            "template_only": True,
             "requires": ["cue"],
             "mutation_risk": "read_only",
             "claim_boundary": "direction_only_not_source_truth",
@@ -507,6 +507,7 @@ def _self_note_lookup_actions() -> list[dict[str, Any]]:
             "id": "source_backed_recall",
             "label": "Use source-backed recall instead",
             "command_template": 'aippocampus agent recall "{cue}" --json',
+            "template_only": True,
             "requires": ["cue"],
             "mutation_risk": "read_only",
             "claim_boundary": "no_claim_before_reopen",

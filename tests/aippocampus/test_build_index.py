@@ -182,7 +182,27 @@ class BuildIndexTests(unittest.TestCase):
                     [],
                     [TURN],
                     rag_cache=False,
+                    publish_wait_timeout_seconds=0.0,
                 )
+
+    def test_make_sqlite_busy_lease_respects_retry_timeout(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / ".index-publish.lock").write_text("held", encoding="utf-8")
+
+            started = time.monotonic()
+            with self.assertRaises(artifact_publish.ArtifactLeaseBusyError) as ctx:
+                build_index.make_sqlite(
+                    root / "source_index.sqlite",
+                    [message(sha1="new", text="new visible text")],
+                    [],
+                    [TURN],
+                    rag_cache=False,
+                    publish_wait_timeout_seconds=0.05,
+                )
+
+            self.assertGreaterEqual(time.monotonic() - started, 0.04)
+            self.assertEqual(ctx.exception.wait_timeout_seconds, 0.05)
 
     def test_artifact_lease_recovers_stale_lease_file(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -202,6 +222,38 @@ class BuildIndexTests(unittest.TestCase):
                 self.assertEqual(payload["kind"], "aippocampus_artifact_writer_lease")
 
             self.assertFalse(lease.exists())
+
+    def test_generation_diagnostics_report_active_and_stale_writer_leases(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            index_lease = root / ".index-publish.lock"
+            index_lease.write_text("active writer\n", encoding="utf-8")
+
+            index_diagnostics = artifact_publish.index_generation_diagnostics(
+                root / "source_index.sqlite"
+            )
+            self.assertEqual(index_diagnostics["writer_lease_status"], "active")
+            self.assertTrue(index_diagnostics["active_writer_lease"])
+            self.assertFalse(index_diagnostics["stale_writer_lease"])
+
+            stale_time = time.time() - (artifact_publish.DEFAULT_ARTIFACT_LEASE_STALE_SECONDS + 5)
+            os.utime(index_lease, (stale_time, stale_time))
+            stale_index = artifact_publish.index_generation_diagnostics(
+                root / "source_index.sqlite"
+            )
+            self.assertEqual(stale_index["writer_lease_status"], "stale")
+            self.assertFalse(stale_index["active_writer_lease"])
+            self.assertTrue(stale_index["stale_writer_lease"])
+
+            segments = root / "segments"
+            segments.mkdir()
+            segment_lease = segments / ".rebuild.lock"
+            segment_lease.write_text("segment writer\n", encoding="utf-8")
+            segment_diagnostics = artifact_publish.segment_generation_diagnostics(
+                segments / "manifest.json"
+            )
+            self.assertEqual(segment_diagnostics["writer_lease_status"], "active")
+            self.assertEqual(segment_diagnostics["writer_lease_name"], ".rebuild.lock")
 
     def test_locked_legacy_destination_publishes_versioned_current(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

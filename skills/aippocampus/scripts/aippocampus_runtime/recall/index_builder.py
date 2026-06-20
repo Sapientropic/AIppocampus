@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.artifacts.publish import (
+    DEFAULT_ARTIFACT_LEASE_WAIT_SECONDS,
     DEFAULT_SQLITE_BUSY_TIMEOUT_MS,
     artifact_lease,
     publish_sqlite_with_pointer,
@@ -132,6 +133,7 @@ def make_sqlite(
     rag_cache: bool = True,
     rag_chunk_chars: int = 2800,
     publish_lock: bool = True,
+    publish_wait_timeout_seconds: float = DEFAULT_ARTIFACT_LEASE_WAIT_SECONDS,
     sqlite_busy_timeout_ms: int = DEFAULT_SQLITE_BUSY_TIMEOUT_MS,
     source_created_at: str | None = None,
     source_updated_at: str | None = None,
@@ -321,7 +323,11 @@ def make_sqlite(
 
     try:
         if publish_lock:
-            with artifact_lease(index_path.parent, ".index-publish.lock"):
+            with artifact_lease(
+                index_path.parent,
+                ".index-publish.lock",
+                wait_timeout_seconds=publish_wait_timeout_seconds,
+            ):
                 publish_status = publish_sqlite_with_pointer(
                     tmp_path,
                     index_path,
@@ -399,7 +405,11 @@ def main(argv: list[str] | None = None) -> int:
         for message in messages
     ]
 
-    with artifact_lease(output_dir, ".index-publish.lock"):
+    with artifact_lease(
+        output_dir,
+        ".index-publish.lock",
+        wait_timeout_seconds=DEFAULT_ARTIFACT_LEASE_WAIT_SECONDS,
+    ):
         messages_path = output_dir / "messages.jsonl"
         atomic_write_jsonl(messages_path, messages)
 

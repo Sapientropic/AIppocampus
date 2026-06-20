@@ -15,7 +15,6 @@ from typing import Any
 
 from aippocampus_runtime import core
 from aippocampus_runtime.contracts import (
-    FOREGROUND_ACTION_CONTRACT_VERSION,
     canonical_foreground_action_fields,
     foreground_template_action,
     shell_quote,
@@ -221,14 +220,17 @@ def _safe_next_actions(task: str) -> list[dict[str, Any]]:
     return [
         {
             "id": "run_agent_recall_for_orientation",
+            "label": "Run recall for this task",
             "command_template": 'aippocampus agent recall "{task}" --json',
             "requires": ["task"],
             "mutation_risk": "read_only",
             "template_only": True,
             "claim_boundary": "no_claim_before_reopen",
+            "why": "Use the task as a continuity cue, then reopen/deepen a selected source route before claims.",
         },
         {
             "id": "deepen_selected_recall_route",
+            "label": "Deepen a selected recall route",
             "command_template": (
                 "aippocampus agent deepen --request {request_index} --last-recall --json"
             ),
@@ -236,8 +238,17 @@ def _safe_next_actions(task: str) -> list[dict[str, Any]]:
             "mutation_risk": "read_only",
             "template_only": True,
             "claim_boundary": "source_reopen_required_before_claims",
+            "why": "Use after recall selects a route that needs source context.",
         },
     ]
+
+
+def _compact_route_plan(plan: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        "first_sources_to_reopen": list(plan.get("first_sources_to_reopen") or [])[:3],
+        "stop_conditions": list(plan.get("stop_conditions") or [])[:3],
+        "source_reopen_required_before_claims": True,
+    }
 
 
 def build_task_orientation_packet(
@@ -265,6 +276,7 @@ def build_task_orientation_packet(
     )
     compact_path = compact_active_path_packet(active_path)
     actions = _safe_next_actions(clean_task)
+    route_plan = route_plan_from_active_path(compact_path)
     understanding_state = build_understanding_state_read_model(
         clean_task,
         project=project,
@@ -277,7 +289,8 @@ def build_task_orientation_packet(
     )
     detail_level = str(detail or "compact").strip().casefold()
     full_detail = detail_level in {"full", "detail", "operator"}
-    packet: dict[str, Any] = {
+    action_fields = canonical_foreground_action_fields(actions[0], safe_next_actions=actions)
+    base_packet: dict[str, Any] = {
         "kind": KIND,
         "schema_version": SCHEMA_VERSION,
         "mode": "orient",
@@ -286,24 +299,13 @@ def build_task_orientation_packet(
         "ok": True,
         "project": project,
         "task": clean_task,
-        "understanding_state_read_model": _compact_understanding_state(understanding_state),
         "frontier": "choose first source route; do not start broad manual search until recall/owners are checked",
         "load_bearing_unknowns": [
             "which reopened source route is actually current",
             "whether issue comments changed acceptance criteria",
             "whether private replay aggregate is opted in for evaluation",
         ],
-        "issue_work_guard": compact_issue_work_guard(issue_packet),
-        "external_source_anchors": anchors,
-        "suppressed_external_source_anchors": suppressed_anchors,
-        "learning_and_aippo_constraints": constraints,
-        "suppressed_constraints": suppressed_constraints,
-        "route_plan": route_plan_from_active_path(compact_path),
-        "active_path_packet": compact_path,
-        "foreground_action_contract": FOREGROUND_ACTION_CONTRACT_VERSION,
-        "foreground_action": actions[0],
-        "agent_next_action": actions[0],
-        "safe_next_actions": actions,
+        **action_fields,
         "source_boundary": _source_boundary(),
         "product_boundary": (
             "Orientation is navigation for choosing the next source route; reopen recall/deepen "
@@ -313,43 +315,63 @@ def build_task_orientation_packet(
             "aippocampus agent orient "
             f"{shell_quote(clean_task)} --json --detail full"
         ),
-        "metrics": {
-            "route_readiness_row_count": len(route_rows),
-            "external_source_anchor_count": len(anchors),
-            "suppressed_external_source_anchor_count": len(suppressed_anchors),
-            "learning_constraint_count": len(constraints),
-            "suppressed_unripe_constraint_count": len(suppressed_constraints),
-            "active_path_count": compact_path.get("path_count", 0),
-            "understanding_state_route_cue_count": understanding_state["metrics"]["route_cue_count"],
-            "understanding_state_foreground_too_heavy": understanding_state["metrics"]["foreground_too_heavy"],
-            "external_model_calls": 0,
-            "writes_performed": 0,
-        },
     }
     if full_detail:
-        packet.update(
-            {
-                "suppressed_external_source_anchors": suppressed_anchors,
-                "suppressed_constraints": suppressed_constraints,
-                "red_lines": {
-                    "source_truth_overclaim_count": 0,
-                    "learning_constraint_promoted_to_fact": 0,
-                    "unripe_constraint_ranked_as_current": 0,
-                    "raw_private_text_serialized": 0,
-                },
-                "cannot_claim": [
-                    "task_orientation_packet_proves_memory_fact",
-                    "external_anchor_is_current_fact_without_reopen",
-                    "private_replay_quality_lift_without_opt_in_aggregate_eval",
-                ],
-            }
-        )
+        packet: dict[str, Any] = {
+            **base_packet,
+            "understanding_state_read_model": _compact_understanding_state(understanding_state),
+            "issue_work_guard": compact_issue_work_guard(issue_packet),
+            "external_source_anchors": anchors,
+            "suppressed_external_source_anchors": suppressed_anchors,
+            "learning_and_aippo_constraints": constraints,
+            "suppressed_constraints": suppressed_constraints,
+            "route_plan": route_plan,
+            "active_path_packet": compact_path,
+            "metrics": {
+                "route_readiness_row_count": len(route_rows),
+                "external_source_anchor_count": len(anchors),
+                "suppressed_external_source_anchor_count": len(suppressed_anchors),
+                "learning_constraint_count": len(constraints),
+                "suppressed_unripe_constraint_count": len(suppressed_constraints),
+                "active_path_count": compact_path.get("path_count", 0),
+                "understanding_state_route_cue_count": understanding_state["metrics"]["route_cue_count"],
+                "understanding_state_foreground_too_heavy": understanding_state["metrics"]["foreground_too_heavy"],
+                "external_model_calls": 0,
+                "writes_performed": 0,
+            },
+            "red_lines": {
+                "source_truth_overclaim_count": 0,
+                "learning_constraint_promoted_to_fact": 0,
+                "unripe_constraint_ranked_as_current": 0,
+                "raw_private_text_serialized": 0,
+            },
+            "cannot_claim": [
+                "task_orientation_packet_proves_memory_fact",
+                "external_anchor_is_current_fact_without_reopen",
+                "private_replay_quality_lift_without_opt_in_aggregate_eval",
+            ],
+        }
     else:
-        packet["suppressed_detail"] = {
-            "suppressed_external_source_anchor_count": len(suppressed_anchors),
-            "suppressed_unripe_constraint_count": len(suppressed_constraints),
-            "red_line_ledger_deferred": True,
-            "cannot_claim_deferred": True,
+        packet = {
+            **base_packet,
+            "current_orientation": {
+                "frontier": base_packet["frontier"],
+                "active_path_count": compact_path.get("path_count", 0),
+                "source_route_count": len(route_plan.get("first_sources_to_reopen") or []),
+                "issue_work_guard_should_pull": bool(issue_packet.get("should_pull")),
+                "learning_constraint_count": len(constraints),
+                "external_source_anchor_count": len(anchors),
+            },
+            "source_routes": list(route_plan.get("first_sources_to_reopen") or [])[:3],
+            "route_plan": _compact_route_plan(route_plan),
+            "detail_deferred": {
+                "active_path_packet": True,
+                "understanding_state_read_model": True,
+                "external_source_anchors": len(anchors),
+                "suppressed_external_source_anchors": len(suppressed_anchors),
+                "learning_and_aippo_constraints": len(constraints),
+                "suppressed_constraints": len(suppressed_constraints),
+            },
         }
     if full_detail:
         foreground_bytes = len(json.dumps(packet, ensure_ascii=False, sort_keys=True).encode("utf-8"))
@@ -370,7 +392,11 @@ def render_task_orientation_human(payload: Mapping[str, Any]) -> str:
                 "boundary: orientation is task-scoped navigation, not source evidence.",
             ]
         )
-    paths = payload.get("active_path_packet", {}).get("path_count", 0)
+    orientation_value = payload.get("current_orientation")
+    orientation = orientation_value if isinstance(orientation_value, Mapping) else {}
+    active_path_packet = payload.get("active_path_packet")
+    active_path_packet = active_path_packet if isinstance(active_path_packet, Mapping) else {}
+    paths = orientation.get("active_path_count") or active_path_packet.get("path_count", 0)
     action = payload.get("foreground_action") or {}
     return "\n".join(
         [

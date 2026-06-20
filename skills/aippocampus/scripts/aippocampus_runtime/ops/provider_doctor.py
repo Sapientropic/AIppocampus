@@ -259,7 +259,14 @@ def compact_provider_doctor_card(report: dict[str, Any]) -> dict[str, Any]:
             "provider_env_var": route.get("provider_env_var"),
             "base_url_configured": route.get("base_url_configured"),
         },
-        "recommended_actions": normalized_actions,
+        "recommended_action_count": len(normalized_actions),
+        "recommended_action_ids": [
+            str(action.get("id") or "")
+            for action in normalized_actions
+            if str(action.get("id") or "")
+        ][:5],
+        "recommended_actions_deferred_to_operator_detail": bool(normalized_actions),
+        "operator_detail_command": "aippocampus doctor provider --detail full --json",
         "full_audit_command": "aippocampus doctor provider --detail full --json",
         "audit_json_available": True,
         "privacy": {

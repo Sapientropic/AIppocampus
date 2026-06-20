@@ -12,7 +12,7 @@ from aippocampus_runtime.contracts import (
 
 
 def import_recovery_payload() -> dict[str, Any]:
-    actions = [
+    safe_actions = [
         foreground_template_action(
             action_id="preview_conversation_import",
             label="Preview a generic conversation transcript",
@@ -25,6 +25,16 @@ def import_recovery_payload() -> dict[str, Any]:
             mutation_risk="read_only_preview",
             claim_boundary="import_preview_not_source_truth",
         ),
+        foreground_shell_action(
+            action_id="open_import_help",
+            label="Open import help",
+            command="aippocampus import --help",
+            why="Use help when choosing between bundle transfer and conversation transcript intake.",
+            mutation_risk="read_only",
+            claim_boundary="operator_import_not_source_claim",
+        ),
+    ]
+    write_actions = [
         foreground_template_action(
             action_id="import_private_bundle",
             label="Import a private AIppocampus bundle",
@@ -46,18 +56,16 @@ def import_recovery_payload() -> dict[str, Any]:
     ]
     return {
         "kind": "aippocampus_import_recovery",
-        "ok": False,
-        "status": "needs_input",
+        "ok": True,
+        "status": "choose_action",
         "surface_class": "foreground_chooser_card",
         "foreground_action_contract": "foreground-action-v1",
-        "error": {
-            "code": "import_choice_required",
-            "message": "Choose a private AIppocampus bundle import or a preview-first conversation import.",
-        },
+        "decision": "preview conversation import first, or explicitly choose a write path",
         "choices": {
             "bundle_import": {
                 "label": "private AIppocampus bundle import",
                 "command_template": "aippocampus import {bundle_zip} --dest {destination_folder}",
+                "template_only": True,
                 "requires": ["bundle_zip", "destination_folder"],
                 "boundary": "imports an explicit local AIppocampus bundle; paths stay redacted by default",
             },
@@ -73,9 +81,10 @@ def import_recovery_payload() -> dict[str, Any]:
                 "boundary": "preview first; the input transcript stays local operator material",
             },
         },
-        "agent_next_action": actions[0],
-        "foreground_action": actions[0],
-        "safe_next_actions": actions,
+        "write_actions": write_actions,
+        "agent_next_action": safe_actions[0],
+        "foreground_action": safe_actions[0],
+        "safe_next_actions": safe_actions,
         "safety": {
             "no_write_happened": True,
             "preview_before_write": True,
@@ -84,6 +93,7 @@ def import_recovery_payload() -> dict[str, Any]:
         "write_boundary": {
             "written": False,
             "no_write_happened": True,
+            "explicit_write_required": True,
         },
         "privacy_boundary": {
             "raw_local_paths_emitted": False,

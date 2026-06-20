@@ -294,6 +294,11 @@ def compact_agent_status_report(
         ambient_issue_codes.append(f"warm_ambient:{warm_queue_state or warm_status}")
     if provider_degraded and ambient_installed_for_provider:
         ambient_issue_codes.append(f"provider:{provider_status}")
+    hooks_deferred = hook_status in {"not_checked", "deferred"} and any(
+        item.get("id") == "hooks_status" for item in deferred_components
+    )
+    if hooks_deferred and "hooks:deferred" not in ambient_issue_codes:
+        ambient_issue_codes.append("hooks:deferred")
     active_useful = bool(
         prompt_installed
         and not prompt_latency_risk
@@ -314,6 +319,8 @@ def compact_agent_status_report(
         or lifecycle_installed
         or action_hints_installed
         or warm_status in {"blocked", "pending"}
+        else "deferred"
+        if hooks_deferred and not (prompt_installed or lifecycle_installed)
         else "not_installed"
         if hook_status in {"missing", "not_checked", "deferred"} and not (prompt_installed or lifecycle_installed)
         else "attention_needed"

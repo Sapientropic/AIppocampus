@@ -1140,6 +1140,10 @@ class DocsHealthTests(unittest.TestCase):
         self.assertIn("Benchmark / readiness / public-claim work", benchmark)
         self.assertIn("Evidence Level / Verification Profile", benchmark)
         self.assertIn("Optional Benchmark / Readiness Closeout", pr)
+        source_discipline = (repo_root / "docs/architecture/recall/source-backed-product-discipline.md").read_text(encoding="utf-8")
+        guard_text = "\n".join([pr, product, source_discipline])
+        guard_terms = ("Foreground Usefulness / De-Armor Check", "Foreground usefulness delta", "Foreground Usefulness Delta", "Load-bearing unknown", "load-bearing unknown", "Compact/default output remains action-shaped", "foreground usefulness", "smallest useful next action or reopen route")
+        self.assertEqual([], [term for term in guard_terms if term not in guard_text])
         self.assertLess(pr.index("## Verification"), pr.index("## Optional Benchmark"))
         self.assertNotIn("feature_or_benchmark_proposal", "\n".join(path.name for path in issue_dir.glob("*.md")))
 

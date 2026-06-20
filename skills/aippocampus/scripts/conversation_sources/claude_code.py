@@ -9,6 +9,12 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any, Iterable
 
+from aippocampus_runtime.source.normalization_loss import (
+    count_provider_loss,
+    empty_provider_normalization_loss,
+    finalize_provider_normalization_loss,
+)
+
 from .base import ConversationSourceRef
 from .normalized import (
     load_jsonl_dicts,
@@ -106,6 +112,7 @@ class ClaudeCodeConversationProvider:
 
     def __init__(self, home: str | Path | None = None) -> None:
         self.home = Path(home) if home is not None else claude_home()
+        self.last_normalization_loss: dict[str, Any] | None = None
 
     def iter_transcripts(self) -> Iterable[Path]:
         root = self.home / "projects"
@@ -191,27 +198,33 @@ class ClaudeCodeConversationProvider:
         messages: list[dict[str, Any]] = []
         current_turn = 0
         seen: set[tuple[str, str, str, str]] = set()
+        normalization_loss = empty_provider_normalization_loss(self.name)
 
-        for line_no, item in load_jsonl_dicts(path):
+        for line_no, item in load_jsonl_dicts(path, normalization_loss=normalization_loss):
             row_type = str(item.get("type") or "").casefold()
             if row_type not in {"user", "assistant"}:
+                count_provider_loss(normalization_loss, "unsupported_event_count")
                 continue
             raw_payload = item.get("message")
             payload: dict[str, Any] = raw_payload if isinstance(raw_payload, dict) else {}
             role = str(payload.get("role") or row_type).casefold()
             if role not in {"user", "assistant"}:
+                count_provider_loss(normalization_loss, "role_policy_drop_count")
                 continue
             text = visible_text_from_content(payload.get("content"))
             if not text:
+                count_provider_loss(normalization_loss, "empty_text_policy_drop_count")
                 continue
             phase = "final_answer" if role == "assistant" else ""
             digest_key = (role, phase, text, str(item.get("uuid") or line_no))
             if digest_key in seen:
+                count_provider_loss(normalization_loss, "duplicate_message_drop_count")
                 continue
             seen.add(digest_key)
             if role == "user":
                 current_turn += 1
             elif not current_turn:
+                count_provider_loss(normalization_loss, "orphan_assistant_drop_count")
                 continue
             messages.append(
                 normalized_message(
@@ -234,4 +247,5 @@ class ClaudeCodeConversationProvider:
                 )
             )
 
+        self.last_normalization_loss = finalize_provider_normalization_loss(normalization_loss)
         return messages, turn_summaries(messages)

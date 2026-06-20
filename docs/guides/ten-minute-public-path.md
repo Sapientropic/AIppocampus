@@ -78,12 +78,11 @@ After registration, ask for one route again:
 ```sh
 uvx aippocampus agent recall "old decision or handoff cue" --json
 uvx aippocampus agent deepen --request 1 --last-recall --json
-uvx aippocampus export --json
-uvx aippocampus sync --json
 ```
 
-Use `export` or `sync` only after a source-backed route has been reopened and
-the next goal is carrying that context into another thread, device, or project.
+Do not add export or sync to the first-use path. Use those only after a
+source-backed route has been reopened and the user explicitly wants to carry
+that context into another thread, device, or project.
 
 ## 5. Optional Host Checks
 

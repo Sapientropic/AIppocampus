@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -21,6 +22,11 @@ for _path in (
 
 import benchmark_family_promotion_candidates as family_promotion  # noqa: E402
 import benchmark_suite as suite  # noqa: E402
+from shared.benchmark_outcome_router import (  # noqa: E402
+    benchmark_outcome_digest,
+    build_benchmark_issue_drafts,
+    build_benchmark_outcome_card,
+)
 from shared.benchmark_report_contract import benchmark_report_contract_lint  # noqa: E402
 from shared.benchmark_suite_quality import track_quality_state  # noqa: E402
 
@@ -245,6 +251,181 @@ class BenchmarkSuiteTests(unittest.TestCase):
         self.assertEqual(summary["cannot_claim_count"], 1)
         self.assertIn("release-evidence", summary["best_next_benchmark"])
 
+    def test_benchmark_outcome_card_routes_claim_issue_adoption_and_no_action(self) -> None:
+        public_quality_report = {
+            "kind": "aippocampus_public_quality_report",
+            "ok": True,
+            "status": "quality_gate_passed",
+            "benchmark_maturity_level": "behavior_run",
+            "measurement_origin": "live_agent_observed",
+            "observed_agent_behavior": True,
+            "contract_gate_ok": True,
+            "quality_gate_ok": True,
+            "public_quality_gate_ok": True,
+            "runtime_policy_adoption_gate_ok": True,
+            "decision_impact": "default_adoption",
+            "privacy_boundary": {"raw_text_emitted": False},
+            "case_count": 3,
+            "metrics": {
+                "case_count": 3,
+                "accuracy": {"numerator": 3, "denominator": 3, "rate": 1.0},
+            },
+            "cannot_claim": ["unbounded_default_quality"],
+            "no_action_reason": "public quality gate has no owner follow-up",
+            "supports": ["bounded public quality claim"],
+        }
+        diagnostic_report = {
+            **public_quality_report,
+            "kind": "aippocampus_diagnostic_report",
+            "public_quality_gate_ok": False,
+            "runtime_policy_adoption_gate_ok": None,
+            "decision_impact": "diagnostic_only",
+            "quality_gate_kind": "diagnostic_curve",
+            "cannot_claim": ["default_adoption"],
+        }
+        issue_report = {
+            **diagnostic_report,
+            "kind": "aippocampus_issue_action_report",
+            "review_next_actions": [
+                {
+                    "id": "open_owner_gap",
+                    "label": "Open owner gap",
+                    "reason": "Default adoption is blocked by missing owner route.",
+                    "owner_path": "benchmarks/aippocampus/benchmark_suite.py",
+                    "issue_url": "https://github.com/Sapientropic/AIppocampus/issues/2100",
+                    "issue_state": "open",
+                    "command": "gh issue view 2100 --comments",
+                }
+            ],
+        }
+        no_action_report = {
+            **diagnostic_report,
+            "kind": "aippocampus_no_action_report",
+            "no_open_followup_reason": "dated diagnostic report only",
+        }
+
+        promoted = build_benchmark_outcome_card(public_quality_report, report_path="reports/public.json")
+        diagnostic = build_benchmark_outcome_card(diagnostic_report, report_path="reports/diag.json")
+        issue_card = build_benchmark_outcome_card(issue_report, report_path="reports/issue.json")
+        no_action = build_benchmark_outcome_card(no_action_report, report_path="reports/noop.json")
+        digest = benchmark_outcome_digest([promoted, diagnostic, issue_card, no_action])
+
+        self.assertEqual(promoted["claim_action"]["decision"], "update_current_claims")
+        self.assertEqual(promoted["adoption_action"]["decision"], "allow_default_adoption")
+        self.assertEqual(diagnostic["claim_action"]["decision"], "dated_report_only")
+        self.assertEqual(diagnostic["adoption_action"]["decision"], "diagnostic_only")
+        self.assertEqual(issue_card["owner_action"]["decision"], "open_or_update_issue")
+        self.assertEqual(no_action["owner_action"]["decision"], "explicit_no_action")
+        self.assertEqual(digest["counts"]["public_quality_promoted"], 1)
+        self.assertEqual(digest["counts"]["diagnostic_only"], 3)
+        self.assertEqual(digest["counts"]["owner_action"], 1)
+
+    def test_benchmark_issue_drafts_skip_no_action_and_group_duplicate_owner_routes(
+        self,
+    ) -> None:
+        action = {
+            "id": "review_default_adoption_blocker",
+            "label": "Review default adoption blocker",
+            "reason": "Default adoption is blocked until the owner route is verified.",
+            "owner_path": "benchmarks/aippocampus/benchmark_suite.py",
+            "doc_path": str(Path("C:/private/operator-note.md")),
+            "issue_url": "https://github.com/Sapientropic/AIppocampus/issues/2100",
+            "issue_state": "open",
+            "command": "gh issue view 2100 --comments",
+        }
+        report = {
+            "kind": "aippocampus_issue_action_report",
+            "ok": True,
+            "status": "diagnostic_only",
+            "benchmark_maturity_level": "diagnostic_suite",
+            "measurement_origin": "scripted_proxy",
+            "observed_agent_behavior": False,
+            "contract_gate_ok": True,
+            "quality_gate_ok": False,
+            "public_quality_gate_ok": False,
+            "default_adoption_gate_ok": False,
+            "decision_impact": "diagnostic_only",
+            "privacy_boundary": {"raw_text_emitted": False},
+            "case_count": 2,
+            "cannot_claim": ["default_adoption"],
+            "supports": ["owner action routing"],
+            "review_next_actions": [action],
+        }
+        no_action_report = {
+            **report,
+            "review_next_actions": [],
+            "no_open_followup_reason": "diagnostic-only report already archived",
+        }
+
+        drafts = build_benchmark_issue_drafts(
+            [
+                ("reports/one.json", report),
+                ("reports/two.json", {**report, "measured_result": "same owner"}),
+                ("reports/noop.json", no_action_report),
+            ]
+        )
+
+        self.assertEqual(len(drafts), 1)
+        self.assertEqual(drafts[0]["title"], "Review default adoption blocker")
+        self.assertEqual(
+            drafts[0]["source_report_paths"],
+            ["reports/one.json", "reports/two.json"],
+        )
+        self.assertEqual(drafts[0]["action"]["doc_path"], "operator-note.md")
+        self.assertNotIn("command", drafts[0]["action"])
+        self.assertIn("Source report", drafts[0]["body"])
+        self.assertIn("Do not use diagnostic-only evidence", drafts[0]["body"])
+
+    def test_benchmark_outcome_tool_emits_issue_drafts_json(self) -> None:
+        report = {
+            "kind": "aippocampus_issue_action_report",
+            "ok": True,
+            "status": "diagnostic_only",
+            "benchmark_maturity_level": "diagnostic_suite",
+            "measurement_origin": "scripted_proxy",
+            "observed_agent_behavior": False,
+            "contract_gate_ok": True,
+            "quality_gate_ok": False,
+            "public_quality_gate_ok": False,
+            "default_adoption_gate_ok": False,
+            "decision_impact": "diagnostic_only",
+            "privacy_boundary": {"raw_text_emitted": False},
+            "case_count": 1,
+            "cannot_claim": ["default_adoption"],
+            "supports": ["owner action routing"],
+            "issue_actions": [
+                {
+                    "label": "Open benchmark blocker",
+                    "reason": "Owner route exists and needs implementation.",
+                    "owner_path": "benchmarks/aippocampus/benchmark_suite.py",
+                    "issue_url": "https://github.com/Sapientropic/AIppocampus/issues/2100",
+                    "issue_state": "open",
+                    "command": "gh issue view 2100 --comments",
+                }
+            ],
+        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "report.json"
+            path.write_text(json.dumps(report), encoding="utf-8")
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    str(REPO_ROOT / "tools" / "aippocampus" / "benchmark_outcomes.py"),
+                    "--report",
+                    str(path),
+                    "--issue-drafts",
+                    "--json",
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        payload = json.loads(completed.stdout)
+        self.assertEqual(payload["draft_count"], 1)
+        self.assertEqual(payload["drafts"][0]["title"], "Open benchmark blocker")
+
     def test_summary_json_with_output_does_not_duplicate_full_report_stdout(self) -> None:
         payload = {
             "kind": "aippocampus_benchmark_suite",
@@ -302,6 +483,10 @@ class BenchmarkSuiteTests(unittest.TestCase):
         self.assertEqual(summary["followup_action_count"], 1)
         self.assertEqual(summary["owner_route_count"], 1)
         self.assertEqual(summary["no_action_reason_count"], 0)
+        self.assertEqual(
+            summary["outcome_digest"]["kind"],
+            "aippocampus_benchmark_outcome_digest",
+        )
         self.assertNotIn("tracks", summary)
         self.assertIn("tracks", full_report)
 

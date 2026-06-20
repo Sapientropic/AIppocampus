@@ -14,11 +14,12 @@ SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 from aippocampus_runtime.contracts import executable_command_violations  # noqa: E402
-from aippocampus_runtime.update import cli as update_cli  # noqa: E402
 from aippocampus_runtime.update import (
+    agent_status_summary,  # noqa: E402
     plugin_cache,  # noqa: E402
     status_actions,  # noqa: E402
 )
+from aippocampus_runtime.update import cli as update_cli  # noqa: E402
 from tests.aippocampus.test_update_sync import (  # noqa: E402
     provider_env,
     run_update,
@@ -78,6 +79,45 @@ class UpdateForegroundActionTests(unittest.TestCase):
         self.assertIn("action_hints", surfaces)
         self.assertIn("hooks", surfaces)
         self.assertEqual(compact["ambient_recall"]["state"], "not_installed")
+
+    def test_agent_status_projection_distinguishes_deferred_hooks_from_missing_hooks(self) -> None:
+        common = {
+            "ok": True,
+            "mode": "status",
+            "summary": {"core_ready": True, "needs_action": [], "plan_scope": "all_surfaces"},
+            "surfaces": {
+                "agent_callable": {},
+                "llm": {"visible_in_current_process": False, "status": "ready"},
+            },
+        }
+        deferred = agent_status_summary.compact_agent_status_report(
+            {
+                **common,
+                "surfaces": {
+                    **common["surfaces"],
+                    "hooks": {
+                        "status": "deferred",
+                        "operator_detail_available": True,
+                        "deferred_component": "hooks_status",
+                    },
+                },
+            },
+            schema_version=1,
+        )
+        missing = agent_status_summary.compact_agent_status_report(
+            {
+                **common,
+                "surfaces": {**common["surfaces"], "hooks": {"status": "missing"}},
+            },
+            schema_version=1,
+        )
+
+        self.assertEqual(deferred["ambient_recall"]["state"], "deferred")
+        self.assertIn("hooks:deferred", deferred["ambient_recall"]["issue_codes"])
+        self.assertIn("hooks_status", deferred["summary"]["deferred_components"])
+        self.assertEqual(missing["ambient_recall"]["state"], "not_installed")
+        self.assertIn("hooks:missing", missing["ambient_recall"]["issue_codes"])
+        self.assertNotIn("hooks_status", missing["summary"]["deferred_components"])
 
     def test_plugin_cache_recovery_splits_path_template_from_executable_command(self) -> None:
         fields = status_actions.executable_update_action_fields(

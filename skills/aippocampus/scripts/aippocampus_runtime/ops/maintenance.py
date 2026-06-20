@@ -295,10 +295,13 @@ def public_recommended_action(item: dict) -> dict:
 def _read_only_plan_action() -> dict[str, Any]:
     return {
         "id": "review_maintenance_plan",
+        "label": "Review maintenance plan",
         "kind": "shell_command",
         "command": PLAN_SUMMARY_COMMAND,
         "mutates": False,
         "mutation_risk": "read_only",
+        "claim_boundary": "maintenance_plan_not_memory_evidence",
+        "why": "Review generated-artifact maintenance before any write-capable apply.",
         "reason": "review generated-artifact maintenance before any write-capable apply",
     }
 
@@ -306,10 +309,13 @@ def _read_only_plan_action() -> dict[str, Any]:
 def _apply_with_consent_action() -> dict[str, Any]:
     return {
         "id": "apply_after_user_consent",
+        "label": "Apply after user consent",
         "kind": "shell_command",
         "command": APPLY_SUMMARY_COMMAND,
         "mutates": True,
         "mutation_risk": "explicit_generated_artifact_write",
+        "claim_boundary": "maintenance_action_not_memory_evidence",
+        "why": "Apply only after reviewing the plan and confirming local generated-artifact writes are intended.",
         "requires_user_consent": True,
         "requires_clean_or_intentionally_dirty_worktree": True,
         "preflight_commands": ["git status --short"],
@@ -320,9 +326,16 @@ def _apply_with_consent_action() -> dict[str, Any]:
 def _continue_without_maintenance_action(best: dict) -> dict[str, Any]:
     return {
         "id": "continue_without_maintenance",
+        "label": "Continue without maintenance",
         "decision": "continue",
         "mutates": False,
-        "mutation_risk": "none",
+        "mutation_risk": "read_only",
+        "claim_boundary": "maintenance_status_not_memory_evidence",
+        "continue_without_command": True,
+        "why": str(
+            best.get("reason")
+            or "No blocking maintenance action is currently recommended."
+        ),
         "reason": str(
             best.get("reason")
             or "No blocking maintenance action is currently recommended."
@@ -340,10 +353,13 @@ def maintenance_safe_next_actions(best: dict, *, read_only: bool) -> list[dict[s
             actions.append(
                 {
                     "id": "inspect_maintenance_status",
+                    "label": "Inspect maintenance status",
                     "kind": "shell_command",
                     "command": STATUS_SUMMARY_COMMAND,
                     "mutates": False,
                     "mutation_risk": "read_only",
+                    "claim_boundary": "maintenance_status_not_memory_evidence",
+                    "why": "Inspect the post-apply maintenance state without writing.",
                     "reason": "inspect the post-apply maintenance state without writing",
                 }
             )
@@ -355,10 +371,13 @@ def maintenance_safe_next_actions(best: dict, *, read_only: bool) -> list[dict[s
         actions.append(
             {
                 "id": "inspect_maintenance_status",
+                "label": "Inspect maintenance status",
                 "kind": "shell_command",
                 "command": STATUS_SUMMARY_COMMAND,
                 "mutates": False,
                 "mutation_risk": "read_only",
+                "claim_boundary": "maintenance_status_not_memory_evidence",
+                "why": "Inspect the post-apply maintenance state without writing.",
                 "reason": "inspect the post-apply maintenance state without writing",
             }
         )
@@ -366,10 +385,13 @@ def maintenance_safe_next_actions(best: dict, *, read_only: bool) -> list[dict[s
         actions.append(
             {
                 "id": "storage_gc_audit",
+                "label": "Audit storage cleanup",
                 "kind": "shell_command",
                 "command": str(best["command"]),
                 "mutates": False,
                 "mutation_risk": "read_only",
+                "claim_boundary": "storage_pressure_not_memory_evidence",
+                "why": "Audit generated-cache pressure before any storage cleanup apply.",
                 "reason": "audit generated-cache pressure before any storage cleanup apply",
             }
         )
@@ -391,10 +413,13 @@ def maintenance_agent_next_action(best: dict, *, read_only: bool) -> dict[str, A
         return _read_only_plan_action()
     return {
         "id": "inspect_maintenance_status",
+        "label": "Inspect maintenance status",
         "kind": "shell_command",
         "command": STATUS_SUMMARY_COMMAND,
         "mutates": False,
         "mutation_risk": "read_only",
+        "claim_boundary": "maintenance_status_not_memory_evidence",
+        "why": "Use maintenance status/summary for a no-write card.",
         "reason": "use maintenance status/summary for a no-write card",
     }
 
@@ -541,13 +566,10 @@ def summary_payload(result: dict) -> dict:
         ),
         "full_audit_available": True,
         "full_audit_flag": "--json",
+        "operator_detail_available": True,
+        "operator_detail_command": "aippocampus maintenance apply --json",
         "plan_first_command": STATUS_COMMAND,
         **canonical_foreground_action_fields(agent_action, safe_next_actions=safe_actions),
-        "operator_detail": {
-            "best_next_action": best,
-            "apply_actions": [action for action in safe_actions if action.get("mutates")],
-            "claim_boundary": "maintenance actions are operational state, not memory evidence",
-        },
     }
 
 
@@ -598,6 +620,8 @@ def plan_payload(
         "apply_command": APPLY_SUMMARY_COMMAND,
         "full_audit_available": True,
         "full_audit_flag": "--json",
+        "operator_detail_available": True,
+        "operator_detail_command": "aippocampus maintenance plan --json",
         "health_probe": {
             "status": "compact_readiness_probe",
             "full_diagnostics_deferred": True,
@@ -610,11 +634,6 @@ def plan_payload(
             "source_text_included": False,
         },
         **canonical_foreground_action_fields(agent_action, safe_next_actions=safe_actions),
-        "operator_detail": {
-            "best_next_action": best,
-            "apply_actions": [action for action in safe_actions if action.get("mutates")],
-            "claim_boundary": "maintenance actions are operational state, not memory evidence",
-        },
     }
     if not command_ok and health_error:
         payload["health_probe"] = {

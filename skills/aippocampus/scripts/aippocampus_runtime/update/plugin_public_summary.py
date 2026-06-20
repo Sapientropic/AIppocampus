@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from aippocampus_runtime.contracts import canonical_foreground_action_fields
 from aippocampus_runtime.update.host_probe_warnings import (
     BUCKETS as WARNING_BUCKETS,
 )
@@ -181,10 +182,32 @@ def public_uninstall_summary(result: dict[str, Any]) -> dict[str, Any]:
             will_remove.append("installed_plugin_cache")
         if result.get("would_remove_marketplace_root"):
             will_remove.append("owned_marketplace_copy")
+        preview_action = {
+            "id": "review_plugin_uninstall_preview",
+            "label": "Review plugin uninstall preview",
+            "message": "Review dry-run booleans before choosing whether to remove the Codex plugin.",
+            "why": "Dry-run output is a decision card; no uninstall has happened yet.",
+            "mutation_risk": "read_only_preview_of_delete",
+            "claim_boundary": "host_setup_not_memory_evidence",
+            "continue_without_command": True,
+        }
+        execute_action = {
+            "id": "uninstall_codex_plugin_after_consent",
+            "label": "Uninstall Codex plugin after consent",
+            "command": str(result.get("execute_command") or "aippocampus plugin uninstall --codex"),
+            "why": "Run only after the dry-run removal set is acceptable to the user.",
+            "mutation_risk": "explicit_local_plugin_delete",
+            "requires_user_consent": True,
+            "claim_boundary": "host_setup_not_memory_evidence",
+        }
         return {
             "kind": "aippocampus_plugin_uninstall_preview_public_summary",
             "ok": bool(result.get("ok")),
             "dry_run": True,
+            **canonical_foreground_action_fields(
+                preview_action,
+                safe_next_actions=[preview_action, execute_action],
+            ),
             "will_remove": will_remove,
             "would_remove_installed_cache": bool(result.get("would_remove_installed_cache")),
             "would_remove_marketplace_root": bool(result.get("would_remove_marketplace_root")),
@@ -199,9 +222,8 @@ def public_uninstall_summary(result: dict[str, Any]) -> dict[str, Any]:
                 "codex_plugin_manager_check_error"
             ),
             "execute_command": result.get("execute_command"),
-            "agent_next_action": (
-                "Review the dry-run booleans, then run the execute_command to remove the "
-                "plugin; reinstall with `aippocampus plugin install --codex --verify`."
+            "agent_guidance": (
+                "Review the dry-run booleans; run the uninstall action only after explicit consent."
             ),
             "operator_json_available": True,
             "local_private_fields": result.get("local_private_fields")

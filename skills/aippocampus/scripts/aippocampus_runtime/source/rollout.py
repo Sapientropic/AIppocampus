@@ -8,6 +8,11 @@ import re
 from pathlib import Path
 from typing import Any, Iterable
 
+from aippocampus_runtime.source.normalization_loss import (
+    count_provider_loss,
+    empty_provider_normalization_loss,
+    finalize_provider_normalization_loss,
+)
 from aippocampus_runtime.source.turns import empty_turn, message_digest
 
 INJECTED_INSTRUCTION_PREFIXES = (
@@ -25,15 +30,23 @@ INJECTED_INSTRUCTION_PREFIXES = (
 )
 
 
-def iter_jsonl(path: Path) -> Iterable[tuple[int, dict[str, Any]]]:
+def iter_jsonl(
+    path: Path,
+    *,
+    normalization_loss: dict[str, Any] | None = None,
+) -> Iterable[tuple[int, dict[str, Any]]]:
     with path.open("r", encoding="utf-8") as f:
         for line_no, line in enumerate(f, start=1):
             try:
                 item = json.loads(line)
             except json.JSONDecodeError:
+                if normalization_loss is not None:
+                    count_provider_loss(normalization_loss, "invalid_json_line_count")
                 continue
             if isinstance(item, dict):
                 yield line_no, item
+            elif normalization_loss is not None:
+                count_provider_loss(normalization_loss, "non_object_line_count")
 
 
 def message_phase(payload: dict[str, Any]) -> str:
@@ -104,6 +117,29 @@ def tool_payload_kind(item: dict[str, Any]) -> str | None:
     return None
 
 
+def _row_drop_reason(item: dict[str, Any], *, include_tools: bool) -> str | None:
+    typ = item.get("type")
+    payload = item.get("payload") or {}
+    if typ == "session_meta":
+        return None
+    if typ == "event_msg":
+        ptype = payload.get("type")
+        if ptype in {"user_message", "agent_message"}:
+            return "empty_text_policy_drop_count"
+        return "unsupported_event_count"
+    if typ == "response_item":
+        ptype = payload.get("type")
+        if ptype == "message":
+            role = payload.get("role") or "message"
+            if role not in {"user", "assistant"}:
+                return "role_policy_drop_count"
+            return "empty_text_policy_drop_count"
+        if ptype in {"function_call", "function_call_output", "web_search_call"}:
+            return None if include_tools else "tool_payload_policy_drop_count"
+        return "unsupported_event_count"
+    return "unsupported_event_count"
+
+
 def is_injected_instruction_text(text: str) -> bool:
     """Return True for known runtime carrier blocks, not topical user prose.
 
@@ -122,7 +158,10 @@ def is_injected_instruction_text(text: str) -> bool:
     return False
 
 
-def normalize_rollout(rollout: Path, include_tools: bool = False) -> tuple[list[dict], list[dict]]:
+def normalize_rollout_with_loss(
+    rollout: Path,
+    include_tools: bool = False,
+) -> tuple[list[dict], list[dict], dict[str, Any]]:
     """Return deduped visible messages plus turn summaries.
 
     Codex Desktop writes a user request as a stream of raw events: commentary,
@@ -137,8 +176,9 @@ def normalize_rollout(rollout: Path, include_tools: bool = False) -> tuple[list[
     messages: list[dict] = []
     turns: dict[int, dict] = {}
     current_turn = 0
+    normalization_loss = empty_provider_normalization_loss("codex")
 
-    for line_no, item in iter_jsonl(rollout):
+    for line_no, item in iter_jsonl(rollout, normalization_loss=normalization_loss):
         timestamp = item.get("timestamp")
         tool_kind = tool_payload_kind(item)
         if current_turn and current_turn in turns:
@@ -149,15 +189,23 @@ def normalize_rollout(rollout: Path, include_tools: bool = False) -> tuple[list[
                 turns[current_turn]["tool_output_count"] += 1
 
         msg = extract_message(item, include_tools=include_tools)
-        if not msg or not msg.get("text"):
+        if not msg:
+            reason = _row_drop_reason(item, include_tools=include_tools)
+            if reason:
+                count_provider_loss(normalization_loss, reason)
+            continue
+        if not msg.get("text"):
+            count_provider_loss(normalization_loss, "empty_text_policy_drop_count")
             continue
         text = msg["text"].lstrip()
         if msg["role"] == "user" and is_injected_instruction_text(text):
+            count_provider_loss(normalization_loss, "injected_instruction_policy_drop_count")
             continue
 
         phase = str(msg.get("phase") or "")
         digest = message_digest(msg["role"], phase, msg["text"])
         if digest in seen:
+            count_provider_loss(normalization_loss, "duplicate_message_drop_count")
             continue
         seen.add(digest)
 
@@ -193,7 +241,15 @@ def normalize_rollout(rollout: Path, include_tools: bool = False) -> tuple[list[
             }
         )
 
-    return messages, list(turns.values())
+    return messages, list(turns.values()), finalize_provider_normalization_loss(normalization_loss)
+
+
+def normalize_rollout(rollout: Path, include_tools: bool = False) -> tuple[list[dict], list[dict]]:
+    messages, turns, _normalization_loss = normalize_rollout_with_loss(
+        rollout,
+        include_tools=include_tools,
+    )
+    return messages, turns
 
 
 def iter_messages(rollout: Path, include_tools: bool = False) -> Iterable[dict]:
@@ -210,5 +266,6 @@ __all__ = [
     "iter_messages",
     "message_phase",
     "normalize_rollout",
+    "normalize_rollout_with_loss",
     "tool_payload_kind",
 ]

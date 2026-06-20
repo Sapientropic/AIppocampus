@@ -20,6 +20,7 @@ for _path in (
 ):
     sys.path.insert(0, str(_path))
 
+from aippocampus_runtime.contracts import foreground_action_contract_violations  # noqa: E402
 from aippocampus_runtime.registry import api as registry  # noqa: E402
 from aippocampus_runtime.source import search as search  # noqa: E402
 
@@ -538,6 +539,7 @@ class SearchCleanSourceTests(unittest.TestCase):
         self.assertEqual(payload["foreground_action"]["tool_name"], "get_turn_context")
         self.assertEqual(payload["foreground_action"]["arguments"]["message_id"], "msg_final")
         self.assertEqual(payload["foreground_action"]["claim_boundary"], "source_reopen_required_before_claim")
+        self.assertEqual(foreground_action_contract_violations(payload), [])
         self.assertIn("matches", payload)
 
     def test_empty_cli_json_includes_no_route_authority_envelope(self) -> None:
@@ -567,6 +569,7 @@ class SearchCleanSourceTests(unittest.TestCase):
         self.assertEqual(payload["foreground_action"]["id"], "refine_or_recall")
         self.assertNotIn("action_id", payload["foreground_action"])
         self.assertEqual(payload["foreground_action"]["tool_name"], "agent_recall")
+        self.assertEqual(foreground_action_contract_violations(payload), [])
 
     def test_empty_query_json_is_needs_input_not_no_match(self) -> None:
         stdout = io.StringIO()

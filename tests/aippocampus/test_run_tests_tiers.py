@@ -425,7 +425,11 @@ class RunTestsTierTests(unittest.TestCase):
         completed = run_tests.subprocess.CompletedProcess(
             args=["python"],
             returncode=0,
-            stdout='{"ok": true, "status": "quality_gate_passed", "elapsed_ms": 12.5}',
+            stdout=(
+                '{"ok": true, "status": "quality_gate_passed", "elapsed_ms": 12.5, '
+                '"outcome_digest": {"counts": {"public_quality_promoted": 1, '
+                '"diagnostic_only": 0, "adoption_blocked": 0, "owner_action": 2}}}'
+            ),
             stderr="",
         )
 
@@ -435,8 +439,12 @@ class RunTestsTierTests(unittest.TestCase):
             mock.patch.object(run_tests.subprocess, "run", return_value=completed) as run,
         ):
             ok = run_tests.run_benchmark_suite_profile("public-fast")
+            output = stdout.getvalue()
 
         self.assertTrue(ok)
+        self.assertIn("benchmark outcome digest", output)
+        self.assertIn("promoted=1", output)
+        self.assertIn("owner_action=2", output)
         command = run.call_args.args[0]
         self.assertEqual(command[0], sys.executable)
         self.assertIn("benchmark_suite.py", command[1])

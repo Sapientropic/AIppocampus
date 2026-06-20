@@ -35,6 +35,7 @@ def _mcp_background_for_task_action() -> dict[str, Any]:
     return {
         "id": "background_for_task_cue",
         "tool_name": "agent_background",
+        "command_template": 'aippocampus agent background "{task_cue}" --json',
         "arguments_template": {"task": "{task_cue}"},
         "requires": ["task_cue"],
         "template_only": True,
@@ -45,6 +46,7 @@ def _mcp_background_for_task_action() -> dict[str, Any]:
         "cli_fallback": {
             "id": "background_for_task_cue_cli_fallback",
             "command_template": 'aippocampus agent background "{task_cue}" --json',
+            "template_only": True,
             "requires": ["task_cue"],
             "mutation_risk": "read_only",
             "claim_boundary": "background_navigation_not_source_truth",
@@ -56,6 +58,7 @@ def _mcp_ordinary_recall_action() -> dict[str, Any]:
     return {
         "id": "ordinary_recall",
         "tool_name": "agent_recall",
+        "command_template": 'aippocampus agent recall "{old_decision_or_handoff_cue}" --json',
         "arguments_template": {"query": "{old_decision_or_handoff_cue}"},
         "requires": ["old_decision_or_handoff_cue"],
         "template_only": True,
@@ -66,6 +69,7 @@ def _mcp_ordinary_recall_action() -> dict[str, Any]:
         "cli_fallback": {
             "id": "ordinary_recall_cli_fallback",
             "command_template": 'aippocampus agent recall "{old_decision_or_handoff_cue}" --json',
+            "template_only": True,
             "requires": ["old_decision_or_handoff_cue"],
             "mutation_risk": "read_only",
             "claim_boundary": "no_claim_before_reopen",

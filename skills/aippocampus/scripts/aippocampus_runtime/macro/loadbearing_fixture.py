@@ -41,7 +41,7 @@ def _public_line_signal(line: int, value: int, name: str) -> dict[str, object]:
         "line": line,
         "value": value,
         "source_refs": [_ref(name)],
-        "producer": "public_replay_line_signal_reducer",
+        "producer": "fixture_replay_line_signal_reducer",
         "privacy_scope": "public",
     }
 
@@ -186,14 +186,14 @@ def build_macro_routing_replay_report() -> dict[str, Any]:
             case_origin="public_replay",
             encoding=complete,
             requested_limit=requested_limit,
-            usefulness="real_producer_total_state_changed_route_fanout_and_recheck",
+            usefulness="fixture_replay_total_state_changed_route_fanout_and_recheck",
         ),
         _macro_case_record(
             case_id="derived_partial_quiet",
             case_origin="public_replay",
             encoding=partial,
             requested_limit=requested_limit,
-            usefulness="partial_real_signal_did_not_change_routing",
+            usefulness="partial_fixture_signal_did_not_change_routing",
         ),
         _macro_case_record(
             case_id="ambiguous_conflict_quiet",
@@ -227,14 +227,18 @@ def build_macro_routing_replay_report() -> dict[str, Any]:
     metrics = {
         "macro_replay_case_count": len(public_cases),
         "macro_fixture_only_case_count": len(cases) - len(public_cases),
-        "real_producer_complete_count": sum(
+        "fixture_replay_complete_count": sum(
             1
             for case in public_cases
             if case["status"] == "derived_complete" and case["automatic_derivation"]
         ),
-        "real_producer_partial_count": sum(
+        "fixture_replay_partial_count": sum(
             1 for case in public_cases if case["status"] == "derived_partial"
         ),
+        "real_producer_complete_count": 0,
+        "real_producer_partial_count": 0,
+        "runtime_line_signal_producer_present": False,
+        "runtime_macro_state_write_count": 0,
         "macro_helpful_route_change_count": sum(
             1 for case in public_cases if case["route_changed"]
         ),
@@ -259,7 +263,7 @@ def build_macro_routing_replay_report() -> dict[str, Any]:
     return {
         "kind": "aippocampus_macro_routing_replay_report",
         "schema_version": 1,
-        "ok": metrics["real_producer_complete_count"] >= 1
+        "ok": metrics["fixture_replay_complete_count"] >= 1
         and metrics["macro_helpful_route_change_count"] >= 1
         and metrics["macro_no_help_correctly_ignored_count"] >= 3
         and metrics["default_fixture_hexagram_rejected_count"] >= 1
@@ -267,15 +271,17 @@ def build_macro_routing_replay_report() -> dict[str, Any]:
         and metrics["authority_upgrade_violation_count"] == 0,
         "metrics": metrics,
         "cases": cases,
-        "closeout_state": "bounded_review_only_load_bearing",
+        "closeout_state": "fixture_replay_review_only_total_hexagram",
         "boundary": {
             "navigation_only": True,
             "source_reopen_required_before_claim": True,
-            "fixture_default_hexagram_not_counted_as_real_producer": True,
+            "fixture_replay_not_counted_as_runtime_producer": True,
+            "fixture_default_hexagram_not_counted_as_runtime_producer": True,
             "default_adoption_allowed": False,
         },
         "cannot_claim": [
             "live_product_lift",
+            "runtime_line_signal_producer",
             "symbolic_advice",
             "fixture_hexagram_as_automatic_derivation",
         ],
@@ -547,8 +553,14 @@ def build_macro_topology_loadbearing_fixture_report() -> dict[str, object]:
         "useful_route_change_count": useful_macro_change + useful_topology_change,
         "macro_replay_case_count": replay_macro_metrics["macro_replay_case_count"],
         "macro_fixture_only_case_count": replay_macro_metrics["macro_fixture_only_case_count"],
+        "fixture_replay_complete_count": replay_macro_metrics["fixture_replay_complete_count"],
+        "fixture_replay_partial_count": replay_macro_metrics["fixture_replay_partial_count"],
         "real_producer_complete_count": replay_macro_metrics["real_producer_complete_count"],
         "real_producer_partial_count": replay_macro_metrics["real_producer_partial_count"],
+        "runtime_line_signal_producer_present": replay_macro_metrics[
+            "runtime_line_signal_producer_present"
+        ],
+        "runtime_macro_state_write_count": replay_macro_metrics["runtime_macro_state_write_count"],
         "macro_helpful_route_change_count": replay_macro_metrics["macro_helpful_route_change_count"],
         "macro_helpful_deepen_or_recheck_change_count": replay_macro_metrics[
             "macro_helpful_deepen_or_recheck_change_count"
