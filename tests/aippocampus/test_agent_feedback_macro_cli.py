@@ -249,6 +249,12 @@ class AgentFeedbackMacroCliTests(unittest.TestCase):
         encoded = json.dumps(payload, ensure_ascii=False)
         self.assertTrue(payload["ok"])
         self.assertTrue(payload["fallback_available"])
+        self.assertEqual(payload["producer_status"]["state_producer"], "available_as_staged_review_path")
+        self.assertFalse(payload["producer_status"]["hot_path_write_allowed"])
+        self.assertEqual(
+            payload["producer_status"]["total_hexagram_status"],
+            "not_produced_by_minimal_producer",
+        )
         self.assertIsInstance(payload["agent_next_action"], dict)
         self.assertEqual(payload["detail"], "compact")
         self.assertNotIn("cannot_claim", payload)

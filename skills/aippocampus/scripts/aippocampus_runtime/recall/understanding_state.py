@@ -311,6 +311,104 @@ def _repo_routes(task: str, manifest: Mapping[str, Any] | None) -> tuple[list[di
     return cues, component
 
 
+def _reviewed_background_routes(
+    findings: Iterable[Mapping[str, Any]] | None,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    cues: list[dict[str, Any]] = []
+    rows = _iter_mappings(findings)
+    for finding in rows[:3]:
+        source_summary = finding.get("source_summary")
+        source_map = source_summary if isinstance(source_summary, Mapping) else {}
+        source_ids = [
+            str(item)
+            for item in source_map.get("source_finding_ids") or []
+            if str(item).strip()
+        ]
+        finding_id = str(finding.get("finding_id") or "").strip()
+        if not source_ids and not int(source_map.get("source_ref_count") or 0):
+            continue
+        source_refs = [{"source_id": value} for value in (source_ids or [f"reviewed_background:{finding_id}"])]
+        cues.append(
+            _route_cue(
+                route_id=f"reviewed_background:{finding_id or len(cues) + 1}",
+                title=str(finding.get("finding_title") or finding.get("shape_label") or "reviewed background finding"),
+                origin="reviewed_background",
+                why=str(
+                    finding.get("why_it_may_matter_now")
+                    or finding.get("match_reason")
+                    or "Reviewed background finding matched this task."
+                ),
+                source_refs=source_refs,
+                action="reopen_reviewed_background_route",
+                lifecycle_status="reviewed_navigation",
+            )
+        )
+    return cues, _component(
+        "reviewed_background_findings",
+        status="projected" if cues else ("no_input" if not rows else "no_source_backed_route"),
+        foreground_projection="compact_reviewed_background_route",
+        item_count=len(cues),
+        boundary="reviewed_background_navigation_not_source_truth",
+    )
+
+
+def _reflection_adjustment_routes(
+    adjustments: Iterable[Mapping[str, Any]] | None,
+) -> tuple[list[dict[str, Any]], dict[str, Any], list[dict[str, Any]]]:
+    cues: list[dict[str, Any]] = []
+    cautions: list[dict[str, Any]] = []
+    rows = _iter_mappings(adjustments)
+    for row in rows[:6]:
+        refs = safe_source_refs(row.get("source_refs"))[:3]
+        if not refs:
+            continue
+        action = str(row.get("feedback_action") or "").strip()
+        surface = str(row.get("surface") or "navigation").strip()
+        delta = row.get("delta")
+        target_id = str(row.get("target_id") or "").strip()
+        reason = str(row.get("reason") or action or "reviewed Reflection feedback")
+        if delta is None:
+            numeric_delta = 0.0
+        else:
+            try:
+                numeric_delta = float(delta)
+            except (TypeError, ValueError):
+                numeric_delta = 0.0
+        if action in {"recall_helpful", "revive", "turning_point"} or numeric_delta > 0:
+            cues.append(
+                _route_cue(
+                    route_id=f"reflection_adjustment:{target_id or len(cues) + 1}",
+                    title=f"Reflection feedback: {action or surface}",
+                    origin="reflection_adjustment",
+                    why=reason,
+                    source_refs=refs,
+                    action="prefer_or_recheck_route",
+                    lifecycle_status="reviewed_navigation",
+                )
+            )
+        if action in {"recall_ignored", "user_correction", "abandon"} or numeric_delta < 0:
+            cautions.append(
+                {
+                    "kind": "reflection_adjustment",
+                    "status": "review_before_reusing_route",
+                    "surface": _text(surface, 60),
+                    "feedback_action": _text(action, 60),
+                    "target_id": _text(target_id, 120),
+                    "reason": _text(reason, 220),
+                    "claim_boundary": "reflection_feedback_is_navigation_not_source_truth",
+                    "clean_source_mutation": False,
+                    "source_reopen_required": True,
+                }
+            )
+    return cues, _component(
+        "reflection_adjustments",
+        status="projected" if (cues or cautions) else ("no_input" if not rows else "no_source_backed_adjustment"),
+        foreground_projection="route_visibility_and_caution",
+        item_count=len(cues) + len(cautions),
+        boundary="low_authority_feedback_not_truth",
+    ), cautions
+
+
 def build_understanding_state_read_model(
     task: str,
     *,
@@ -325,6 +423,9 @@ def build_understanding_state_read_model(
     journeys: Iterable[Mapping[str, Any]] | None = None,
     episode_arc_rows: Iterable[Mapping[str, Any]] | None = None,
     episode_arcs: Iterable[Mapping[str, Any]] | None = None,
+    reflection_adjustments: Iterable[Mapping[str, Any]] | None = None,
+    reviewed_background_findings: Iterable[Mapping[str, Any]] | None = None,
+    sidecar_components: Iterable[Mapping[str, Any]] | None = None,
     repo_familiarity_manifest: Mapping[str, Any] | None = None,
     max_foreground_routes: int = 3,
 ) -> dict[str, Any]:
@@ -369,6 +470,30 @@ def build_understanding_state_read_model(
     repo_cues, repo_component = _repo_routes(clean_task, repo_familiarity_manifest)
     route_cues.extend(repo_cues)
     components.append(repo_component)
+
+    background_cues, background_component = _reviewed_background_routes(
+        reviewed_background_findings
+    )
+    route_cues.extend(background_cues)
+    components.append(background_component)
+
+    reflection_cues, reflection_component, reflection_cautions = _reflection_adjustment_routes(
+        reflection_adjustments
+    )
+    route_cues.extend(reflection_cues)
+    caution_packets.extend(reflection_cautions)
+    components.append(reflection_component)
+
+    for item in _iter_mappings(sidecar_components):
+        components.append(
+            _component(
+                f"sidecar_loader:{item.get('component') or 'unknown'}",
+                status=str(item.get("status") or "unknown"),
+                foreground_projection="loader_status",
+                item_count=int(item.get("item_count") or 0),
+                gap=str(item.get("next_action") or ""),
+            )
+        )
 
     learning_refs = [_constraint_item(row) for row in constraints]
     components.append(
