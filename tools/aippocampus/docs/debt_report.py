@@ -49,6 +49,22 @@ def budget_entries() -> dict[str, int]:
     return dict(sorted(entries.items()))
 
 
+def registered_current_counts() -> dict[str, int]:
+    """Return human-written current counts from the action register only.
+
+    Budgets are contractual. The current-count column is just a convenience
+    for readers, so this report warns on drift instead of letting stale copied
+    numbers become another source of truth.
+    """
+
+    counts: dict[str, int] = {}
+    text = ARCHITECTURE_DEBT_REGISTER.read_text(encoding="utf-8")
+    for match in BUDGET_ROW.finditer(text):
+        if match.group("second"):
+            counts[match.group("path")] = int(match.group("first"))
+    return counts
+
+
 def split_boundary_entries() -> dict[str, str]:
     boundaries: dict[str, str] = {}
     for source in inventory_sources():
@@ -143,6 +159,21 @@ def build_system_weight(
     total_lines = sum(int(layer["tracked_lines"]) for layer in layers.values())
     archive_or_split_targets.sort(key=lambda item: (int(item["margin"]), str(item["path"])))
     near_zero_runtime_split_queue.sort(key=lambda item: (int(item["margin"]), str(item["path"])))
+    exact_zero_runtime_count = sum(
+        1
+        for row in near_zero_runtime_split_queue
+        if int(row["margin"]) == 0
+    )
+    near_zero_runtime_count = sum(
+        1
+        for row in near_zero_runtime_split_queue
+        if 0 < int(row["margin"]) <= 2
+    )
+    over_budget_runtime_count = sum(
+        1
+        for row in near_zero_runtime_split_queue
+        if int(row["margin"]) < 0
+    )
     return {
         "schema_version": "aippocampus-system-weight-v1",
         "total_tracked_lines": total_lines,
@@ -160,8 +191,73 @@ def build_system_weight(
             "tools": "operator_audit_or_maintenance",
         },
         "archive_or_split_targets": archive_or_split_targets[:20],
+        "guard_headroom_summary": {
+            "runtime_exact_zero_count": exact_zero_runtime_count,
+            "runtime_near_zero_count": near_zero_runtime_count,
+            "runtime_over_budget_count": over_budget_runtime_count,
+            "runtime_split_queue_count": len(near_zero_runtime_split_queue),
+        },
         "near_zero_runtime_split_queue": near_zero_runtime_split_queue,
     }
+
+
+def count_drift_entries(rows: list[dict[str, object]]) -> list[dict[str, object]]:
+    current_by_path = {str(row["path"]): int(row["current_count"]) for row in rows}
+    drifts: list[dict[str, object]] = []
+    for rel_path, registered_count in registered_current_counts().items():
+        current_count = current_by_path.get(rel_path)
+        if current_count is None or current_count == registered_count:
+            continue
+        drifts.append(
+            {
+                "path": rel_path,
+                "registered_current_count": registered_count,
+                "current_count": current_count,
+                "drift": current_count - registered_count,
+            }
+        )
+    return sorted(drifts, key=lambda row: (str(row["path"])))
+
+
+def report_warnings(
+    *,
+    headroom_summary: dict[str, object],
+    count_drifts: list[dict[str, object]],
+) -> list[dict[str, object]]:
+    warnings: list[dict[str, object]] = []
+    exact_zero = int(headroom_summary.get("runtime_exact_zero_count") or 0)
+    near_zero = int(headroom_summary.get("runtime_near_zero_count") or 0)
+    if exact_zero:
+        warnings.append(
+            {
+                "code": "runtime_exact_zero_headroom",
+                "message": (
+                    f"{exact_zero} runtime guard(s) have exact-zero headroom; split an owner before growing them."
+                ),
+                "count": exact_zero,
+            }
+        )
+    if near_zero:
+        warnings.append(
+            {
+                "code": "runtime_near_zero_headroom",
+                "message": (
+                    f"{near_zero} runtime guard(s) have only 1-2 lines of headroom; treat them as split-first."
+                ),
+                "count": near_zero,
+            }
+        )
+    if count_drifts:
+        warnings.append(
+            {
+                "code": "architecture_debt_register_count_drift",
+                "message": (
+                    f"{len(count_drifts)} architecture debt register current-count row(s) drift from script_line_count()."
+                ),
+                "count": len(count_drifts),
+            }
+        )
+    return warnings
 
 
 def build_report() -> dict[str, object]:
@@ -185,13 +281,22 @@ def build_report() -> dict[str, object]:
             }
         )
     over_budget = [row for row in rows if row["over_budget"]]
+    system_weight = build_system_weight(rows, split_boundaries=split_boundaries)
+    headroom_summary = dict(system_weight["guard_headroom_summary"])
+    count_drifts = count_drift_entries(rows)
     return {
         "ok": not missing_files and not over_budget,
         "sources": [source.relative_to(REPO_ROOT).as_posix() for source in inventory_sources()],
         "entry_count": len(entries),
         "missing_files": missing_files,
         "over_budget": over_budget,
-        "system_weight": build_system_weight(rows, split_boundaries=split_boundaries),
+        "headroom_summary": headroom_summary,
+        "count_drift": count_drifts,
+        "warnings": report_warnings(
+            headroom_summary=headroom_summary,
+            count_drifts=count_drifts,
+        ),
+        "system_weight": system_weight,
         "rows": rows,
     }
 
@@ -210,6 +315,15 @@ def main() -> int:
                 f"{row['path']}: {row['current_count']}/{row['guard_budget']} "
                 f"(margin {row['margin']})"
             )
+        summary = report["headroom_summary"]
+        print(
+            "runtime guard headroom: "
+            f"exact_zero={summary['runtime_exact_zero_count']} "
+            f"near_zero={summary['runtime_near_zero_count']} "
+            f"over_budget={summary['runtime_over_budget_count']}"
+        )
+        for warning in report["warnings"]:
+            print(f"! {warning['code']}: {warning['message']}")
     return 0 if report["ok"] else 1
 
 

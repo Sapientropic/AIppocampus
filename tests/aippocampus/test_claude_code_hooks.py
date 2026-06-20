@@ -251,13 +251,13 @@ class ClaudeCodeHooksTests(unittest.TestCase):
         self.assertNotIn(str(settings), encoded)
 
     def test_dry_run_uses_module_fallback_when_console_script_is_not_on_path(self) -> None:
-        from aippocampus_runtime.hooks import claude_code
+        from aippocampus_runtime.hooks import claude_code, claude_code_handler
 
         def fake_which(command: str) -> str | None:
             return "/redacted/python3" if command == "python3" else None
 
         with tempfile.TemporaryDirectory() as tmp, mock.patch.object(
-            claude_code.shutil,
+            claude_code_handler.shutil,
             "which",
             side_effect=fake_which,
         ):
@@ -278,10 +278,10 @@ class ClaudeCodeHooksTests(unittest.TestCase):
         self.assertNotIn("/redacted/python3", encoded)
 
     def test_dry_run_reports_operator_path_blocker_when_no_command_is_resolvable(self) -> None:
-        from aippocampus_runtime.hooks import claude_code
+        from aippocampus_runtime.hooks import claude_code, claude_code_handler
 
         with tempfile.TemporaryDirectory() as tmp, mock.patch.object(
-            claude_code.shutil,
+            claude_code_handler.shutil,
             "which",
             return_value=None,
         ):

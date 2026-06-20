@@ -601,6 +601,16 @@ class ArchitectureBoundaryTests(unittest.TestCase):
             set(system_weight["layers"]),
             {"runtime", "tests", "benchmarks", "docs", "tools"},
         )
+        self.assertEqual(report["headroom_summary"], system_weight["guard_headroom_summary"])
+        for key in (
+            "runtime_exact_zero_count",
+            "runtime_near_zero_count",
+            "runtime_over_budget_count",
+            "runtime_split_queue_count",
+        ):
+            self.assertIsInstance(report["headroom_summary"][key], int)
+            self.assertGreaterEqual(report["headroom_summary"][key], 0)
+        self.assertIsInstance(report["warnings"], list)
         self.assertGreater(system_weight["total_tracked_lines"], 0)
         self.assertIn("fresh_agent_load", system_weight)
         self.assertIn("archive_or_split_targets", system_weight)

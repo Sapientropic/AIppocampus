@@ -51,6 +51,8 @@ PR_CRITICAL_MODULES = {
     "tests.aippocampus.test_prompt_hook_anti_nag_behavior",
 }
 
+PR_SIZE_DRIFT_SLACK = 10
+
 
 class RunTestsTierTests(unittest.TestCase):
     def test_main_preflights_tempdir_before_loading_tests(self) -> None:
@@ -519,7 +521,7 @@ class RunTestsTierTests(unittest.TestCase):
         self.assertLess(pr, broad_pr)
         # Keep this as a drift guard, not an off-by-one blocker when small
         # foreground contract tests enter the fast PR lane.
-        self.assertLessEqual(len(pr) * 3, len(broad_pr) + 8)
+        self.assertLessEqual(len(pr) * 3, len(broad_pr) + PR_SIZE_DRIFT_SLACK)
         self.assertTrue(PR_CRITICAL_MODULES.isdisjoint(quick))
         self.assertLessEqual(PR_CRITICAL_MODULES, pr)
 

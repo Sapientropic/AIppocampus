@@ -9,6 +9,7 @@
 ## Verification
 
 - [ ] `python tools\aippocampus\test_plan.py --json`
+- [ ] Planner-named static gates (`ruff check ...` and `mypy` when listed)
 - [ ] Focused tests from the changed-surface planner
 - [ ] `python tools\aippocampus\run_tests.py --tier pr` when the planner names it, CI is unavailable/stale, or runtime/plugin/skill surfaces changed
 - [ ] Other:
