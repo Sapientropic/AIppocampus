@@ -583,6 +583,7 @@ vague and you need route help before choosing search terms.
 Workflows:
   exact phrase: aippocampus search "distinctive old wording"
   all sources:   aippocampus search --all "distinctive old wording" --json
+  last recall:   aippocampus search --from-last-recall "distinctive old wording" --json
   fuzzy cue:    aippocampus search "repo feature last month"
   agent JSON:   aippocampus search "project cue" --json
   vague route:  aippocampus agent recall "old decision about setup" --json
@@ -609,6 +610,18 @@ the reopened source boundary.""",
         ),
     )
     add_registry_search_arguments(parser)
+    parser.add_argument("--from-last-recall", action="store_true", help=(
+        "Search only the source candidates from the same-machine last agent recall."
+    ))
+    parser.add_argument("--request", type=positive_int, default=None, help=(
+        "With --from-last-recall, search one numbered recall route."
+    ))
+    parser.add_argument("--recall-selector", default=None, help=(
+        "With --from-last-recall, use an isolated recall selector snapshot."
+    ))
+    parser.add_argument("--last-recall-path", default=None, help=(
+        "Local diagnostic override for the same-machine last-recall cache path."
+    ))
     parser.add_argument("--max", type=positive_int, default=10)
     parser.add_argument("--snippet-chars", type=non_negative_int, default=700)
     parser.add_argument(
@@ -652,7 +665,20 @@ the reopened source boundary.""",
     if args.registry_search:
         if args.clean_source_dir:
             parser.error("--clean-source-dir searches one directory; use --all without it")
+        if args.from_last_recall:
+            parser.error("--from-last-recall searches recall candidates; use it without --all")
+        if args.request or args.recall_selector:
+            parser.error("--request and --recall-selector require --from-last-recall")
         return run_registry_search_cli(args, render_human_search_result)
+    if args.from_last_recall:
+        if args.clean_source_dir:
+            parser.error("--clean-source-dir searches one directory; use --from-last-recall without it")
+        from importlib import import_module
+
+        module = import_module("aippocampus_runtime.source.last_recall_search")
+        return int(module.run_last_recall_search_cli(args))
+    if args.request or args.recall_selector:
+        parser.error("--request and --recall-selector require --from-last-recall")
 
     result = search_clean_source(
         args.cwd,

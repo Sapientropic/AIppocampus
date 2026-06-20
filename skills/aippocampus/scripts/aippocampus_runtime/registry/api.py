@@ -663,6 +663,10 @@ def main(argv: list[str] | None = None) -> int:
     search.add_argument("--json", action="store_true", dest="json_output")
     search.add_argument("--redact-paths", action="store_true")
 
+    audit = sub.add_parser("audit")
+    audit.add_argument("--json", action="store_true", dest="json_output")
+    audit.add_argument("--include-paths", action="store_true")
+
     show = sub.add_parser("show")
     show.add_argument("thread_key")
     show.add_argument("--json", action="store_true", dest="json_output")
@@ -873,6 +877,22 @@ def main(argv: list[str] | None = None) -> int:
                         f"{warning.get('stage')} | {warning.get('error_type')}: {warning.get('message')}"
                     )
         return 0 if scored else 1
+
+    if args.command == "audit":
+        from aippocampus_runtime.registry.reachability_audit import (
+            registry_source_reachability_audit,
+            render_reachability_audit,
+        )
+
+        report = registry_source_reachability_audit(
+            registry_dir=registry_dir,
+            include_paths=bool(args.include_paths),
+        )
+        if args.json_output:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            print(render_reachability_audit(report))
+        return 0
 
     if args.command == "show":
         match = next(
