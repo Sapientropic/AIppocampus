@@ -12,6 +12,7 @@ from aippocampus_runtime import core
 from aippocampus_runtime.mcp.recall_navigation import RecallNavigationError, recall_context_packet
 from aippocampus_runtime.privacy import redact_private_paths
 from aippocampus_runtime.recall import active_recall_lock, ambient_cache
+from aippocampus_runtime.recall.associative_path_inputs import build_associative_path_diagnostic
 from aippocampus_runtime.recall.semantic_recall_gate import run_semantic_gate
 from aippocampus_runtime.recall.why_reason_codes import (
     CANNOT_CLAIM,
@@ -322,6 +323,13 @@ def recall_diagnostic_report(
     active_lock_payload: Mapping[str, Any] | None = None,
     ambient_cache_payload: Mapping[str, Any] | None = None,
     semantic_gate_payload: Mapping[str, Any] | None = None,
+    include_associative_path_diagnostics: bool = False,
+    associative_path_sidecar_dir: str | Path | None = None,
+    associative_path_bridge_path: str | Path | None = None,
+    associative_path_navigation_path: str | Path | None = None,
+    associative_path_active_lock_path: str | Path | None = None,
+    associative_path_feedback_path: str | Path | None = None,
+    associative_path_input_pack: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     normalized_mode = str(mode or "why-recall").replace("_", "-")
     normalized_mode = normalized_mode if normalized_mode in {"why-recall", "why-not-recall"} else "why-recall"
@@ -375,6 +383,33 @@ def recall_diagnostic_report(
     reports.append(
         semantic_gate_surface_report(semantic_payload, semantic_gate_mode=semantic_gate_mode)
     )
+    associative_path_diagnostics: dict[str, Any] | None = None
+    if include_associative_path_diagnostics:
+        raw_recall_context_payload = recall_context_payload
+        if raw_recall_context_payload is None and (clean_dir / "messages.jsonl").exists():
+            try:
+                raw_recall_context_payload = recall_context_packet(
+                    intent=cue,
+                    cwd=cwd_path,
+                    clean_source_dir=clean_dir,
+                    registry_dir=registry_dir_path,
+                    max_routes=limit,
+                )
+            except RecallNavigationError:
+                raw_recall_context_payload = None
+        associative_path_diagnostics = build_associative_path_diagnostic(
+            query=cue,
+            cwd=cwd_path,
+            sidecar_dir=associative_path_sidecar_dir,
+            recall_context_payload=raw_recall_context_payload,
+            active_lock_rows=[lock_payload] if isinstance(lock_payload, Mapping) else None,
+            input_pack=associative_path_input_pack,
+            semantic_bridge_path=associative_path_bridge_path,
+            navigation_path=associative_path_navigation_path,
+            active_lock_path=associative_path_active_lock_path,
+            feedback_path=associative_path_feedback_path,
+            max_routes=min(3, limit),
+        )
     reasons = unique(
         [
             code
@@ -407,15 +442,20 @@ def recall_diagnostic_report(
         route_ids=route_ids,
         reasons=reasons,
     )
-    return redact_private_paths(
-        {
+    payload = {
             "kind": DIAGNOSTIC_KIND,
             "schema_version": SCHEMA_VERSION,
             "mode": normalized_mode,
             "cue_hash": cue_hash(cue),
             "decision": decision,
             **projection,
-            "searched_surfaces": ["recall_context", "active_lock", "ambient_cache", "semantic_gate"],
+            "searched_surfaces": [
+                "recall_context",
+                "active_lock",
+                "ambient_cache",
+                "semantic_gate",
+                *(["associative_path_walker"] if associative_path_diagnostics else []),
+            ],
             "surface_reports": reports,
             "reasons": reasons,
             "route_ids": route_ids,
@@ -429,10 +469,13 @@ def recall_diagnostic_report(
                 "raw_source_text_emitted": False,
                 "local_paths_emitted": False,
                 "diagnostic_is_not_truth_source": True,
+                "associative_path_walker_changed_default_ranking": False,
             },
             "observatory": {
                 "issue": 576,
                 "role": "low_level_why_this_route_drilldown_not_control_plane",
             },
         }
-    )
+    if associative_path_diagnostics is not None:
+        payload["associative_path_diagnostics"] = associative_path_diagnostics
+    return redact_private_paths(payload)

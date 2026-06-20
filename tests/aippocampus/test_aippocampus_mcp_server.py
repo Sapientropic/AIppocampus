@@ -26,6 +26,7 @@ from aippocampus_runtime.contracts import executable_command_violations  # noqa:
 from aippocampus_runtime.mcp import server as mcp  # noqa: E402
 from aippocampus_runtime.mcp import tool_readiness  # noqa: E402
 from aippocampus_runtime.ops import provider_key_bridge, telepathy_handoff_store  # noqa: E402
+from aippocampus_runtime.recall.agent_recall_cache import write_last_recall_cache  # noqa: E402
 from aippocampus_runtime.registry import store as registry_store  # noqa: E402
 from aippocampus_runtime.sync import bundle as sync_bundle  # noqa: E402
 from conversation_sources import ConversationSourceRef  # noqa: E402
@@ -1080,6 +1081,166 @@ class AippocampusMcpServerTests(unittest.TestCase):
         self.assertFalse(response["result"].get("isError", False))
         self.assertEqual(payload["matches"][0]["message_id"], "msg_final")
         self.assertIn("不是摘要替代事实", payload["matches"][0]["snippet"])
+
+    def test_search_memory_all_registered_sources_scope_matches_cli_projection(self) -> None:
+        registry_clean = self.cwd / "registry-thread" / "clean-source"
+        registry_clean.mkdir(parents=True)
+        (registry_clean / "messages.jsonl").write_text(
+            json.dumps(
+                {
+                    "id": "msg_registry",
+                    "message_id": "msg_registry",
+                    "source_line": 7,
+                    "role": "assistant",
+                    "phase": "final_answer",
+                    "turn_index": 2,
+                    "is_final": True,
+                    "text": "The MCP registry-wide exact phrase lives outside the current thread.",
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (self.cwd / "threads.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "threads": [
+                        {
+                            "thread_key": "session:registry",
+                            "title": "Registry route",
+                            "paths": {
+                                "workspace": str(self.cwd / "private-workspace"),
+                                "clean_source_messages_jsonl": str(registry_clean / "messages.jsonl"),
+                                "sqlite": str(self.cwd / "missing.sqlite"),
+                            },
+                        }
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        response = mcp.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 3101,
+                "method": "tools/call",
+                "params": {
+                    "name": "search_memory",
+                    "arguments": {
+                        "query": "registry-wide exact phrase",
+                        "cwd": str(self.cwd),
+                        "registry_dir": str(self.cwd),
+                        "scope": "all_registered_sources",
+                    },
+                },
+            }
+        )
+        payload = self.tool_payload(response)
+        encoded = json.dumps(payload, ensure_ascii=False)
+
+        self.assertFalse(response["result"].get("isError", False))
+        self.assertEqual(payload["kind"], "aippocampus_registry_source_search")
+        self.assertEqual(payload["mcp_search_scope"], "all_registered_sources")
+        self.assertEqual(payload["match_count"], 1)
+        self.assertEqual(payload["matches"][0]["thread"]["thread_key"], "session:registry")
+        self.assertIn("aippocampus search --hit 1 --last-search --json", encoded)
+        self.assertNotIn(str(self.cwd), encoded)
+        self.assertFalse(payload["privacy"]["paths_included"])
+
+    def test_search_memory_last_recall_scope_searches_cached_route_set(self) -> None:
+        route_clean = self.cwd / "route-thread" / "clean-source"
+        route_clean.mkdir(parents=True)
+        (route_clean / "messages.jsonl").write_text(
+            json.dumps(
+                {
+                    "id": "msg_route",
+                    "message_id": "msg_route",
+                    "source_line": 5,
+                    "role": "assistant",
+                    "phase": "final_answer",
+                    "turn_index": 3,
+                    "is_final": True,
+                    "text": "The MCP last recall exact phrase lives in the remembered route.",
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (self.cwd / "threads.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "threads": [
+                        {
+                            "thread_key": "session:last-recall",
+                            "title": "Last recall route",
+                            "paths": {
+                                "clean_source_messages_jsonl": str(route_clean / "messages.jsonl")
+                            },
+                        }
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        cache_path = self.cwd / "last-recall.json"
+        self.assertTrue(
+            write_last_recall_cache(
+                [
+                    {
+                        "request_index": 1,
+                        "route_id": "route_last",
+                        "handle": {
+                            "kind": "thread_candidate",
+                            "thread_key": "session:last-recall",
+                            "route_id": "route_last",
+                        },
+                    }
+                ],
+                query="last recall route",
+                cwd=self.cwd,
+                clean_source_dir=self.clean,
+                registry_dir=self.cwd,
+                macro_state_path=None,
+                project="fixture",
+                max_matches=5,
+                schema_version="agent-continuity-path-v1",
+                path=cache_path,
+            )
+        )
+
+        response = mcp.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 3102,
+                "method": "tools/call",
+                "params": {
+                    "name": "search_memory",
+                    "arguments": {
+                        "query": "last recall exact phrase",
+                        "cwd": str(self.cwd),
+                        "last_recall_path": str(cache_path),
+                        "scope": "last_recall_candidates",
+                    },
+                },
+            }
+        )
+        payload = self.tool_payload(response)
+        encoded = json.dumps(payload, ensure_ascii=False)
+
+        self.assertFalse(response["result"].get("isError", False))
+        self.assertEqual(payload["kind"], "aippocampus_last_recall_source_search")
+        self.assertEqual(payload["mcp_search_scope"], "last_recall_candidates")
+        self.assertEqual(payload["match_count"], 1)
+        self.assertEqual(payload["matches"][0]["request_index"], 1)
+        self.assertIn("aippocampus agent deepen --request 1 --last-recall --json", encoded)
+        self.assertNotIn(str(self.cwd), encoded)
 
     def test_recall_context_default_is_compact_without_opaque_handles(self) -> None:
         response = mcp.handle_request(

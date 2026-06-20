@@ -467,6 +467,88 @@ class SearchCleanSourceTests(unittest.TestCase):
         self.assertEqual(payload["warnings"][0]["thread_key"], "session:bad-clean")
         self.assertEqual(payload["warnings"][0]["stage"], "clean_source")
 
+    def test_registry_search_json_defaults_to_safe_diagnostic_summary(self) -> None:
+        registry_file = self.cwd / "threads.json"
+        registry_file.write_text(
+            json.dumps(
+                {
+                    "threads": [
+                        {
+                            "thread_key": "session:rawish",
+                            "title": "Raw-ish registry entry",
+                            "keywords": ["needle"],
+                            "session_meta": {"base_instructions": "do not emit this blob"},
+                            "paths": {
+                                "workspace": str(self.cwd / "private-workspace"),
+                                "sqlite": str(self.cwd / "missing.sqlite"),
+                            },
+                        }
+                    ]
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        stdout = io.StringIO()
+        with (
+            patch.object(
+                sys,
+                "argv",
+                [
+                    "registry.py",
+                    "--registry-dir",
+                    str(self.cwd),
+                    "search",
+                    "needle",
+                    "--json",
+                    "--redact-paths",
+                ],
+            ),
+            contextlib.redirect_stdout(stdout),
+        ):
+            code = registry.main()
+        payload = json.loads(stdout.getvalue())
+        encoded = json.dumps(payload, ensure_ascii=False)
+
+        self.assertEqual(code, 0)
+        self.assertEqual(payload["kind"], "aippocampus_registry_search_diagnostic")
+        self.assertEqual(payload["output_boundary"], "diagnostic_summary_not_foreground_recall")
+        self.assertFalse(payload["privacy"]["raw_registry_entries_emitted"])
+        self.assertFalse(payload["privacy"]["paths_included"])
+        self.assertFalse(payload["privacy"]["session_meta_emitted"])
+        self.assertIn("aippocampus search --all", payload["safe_alternative_command"])
+        self.assertNotIn('"session_meta":', encoded)
+        self.assertNotIn('"paths":', encoded)
+        self.assertNotIn("private-workspace", encoded)
+        self.assertNotIn("base_instructions", encoded)
+
+        diagnostic_stdout = io.StringIO()
+        with (
+            patch.object(
+                sys,
+                "argv",
+                [
+                    "registry.py",
+                    "--registry-dir",
+                    str(self.cwd),
+                    "search",
+                    "needle",
+                    "--json",
+                    "--redact-paths",
+                    "--diagnostic-entries",
+                ],
+            ),
+            contextlib.redirect_stdout(diagnostic_stdout),
+        ):
+            diagnostic_code = registry.main()
+        diagnostic = json.loads(diagnostic_stdout.getvalue())
+
+        self.assertEqual(diagnostic_code, 0)
+        self.assertEqual(diagnostic["kind"], "aippocampus_registry_search_diagnostic_entries")
+        self.assertTrue(diagnostic["privacy"]["raw_registry_entries_emitted"])
+        self.assertIn("session_meta", json.dumps(diagnostic, ensure_ascii=False))
+
     def test_cli_json_redacts_source_path_by_default_and_can_opt_in(self) -> None:
         stdout = io.StringIO()
         with contextlib.redirect_stdout(stdout):
@@ -787,7 +869,39 @@ class SearchCleanSourceTests(unittest.TestCase):
         self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
         self.assertEqual(payload["foreground_action"], payload["agent_next_action"])
         self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
+        self.assertEqual(payload["foreground_action"]["id"], "open_registry_search_source_window")
+        self.assertEqual(payload["matches"][0]["hit_index"], 1)
+        self.assertIn("hit_selector", payload["matches"][0])
+        self.assertEqual(
+            payload["matches"][0]["reopen_command"],
+            "aippocampus search --hit 1 --last-search --json",
+        )
+        self.assertIn("source_window_command", payload["matches"][0])
         self.assertEqual(foreground_action_contract_violations(payload), [])
+
+        reopen_stdout = io.StringIO()
+        with contextlib.redirect_stdout(reopen_stdout):
+            reopen_code = search.main(
+                [
+                    "--hit",
+                    "1",
+                    "--last-search",
+                    "--registry-dir",
+                    str(self.cwd),
+                    "--json",
+                ]
+            )
+        reopened = json.loads(reopen_stdout.getvalue())
+
+        self.assertEqual(reopen_code, 0)
+        self.assertEqual(reopened["kind"], "aippocampus_registry_source_window")
+        self.assertTrue(reopened["metrics"]["source_reopen_success"])
+        self.assertEqual(reopened["source_boundary"]["authority"], "source_open")
+        self.assertIn(
+            "cross-thread exact registry phrase",
+            json.dumps(reopened["source_window"], ensure_ascii=False),
+        )
+        self.assertNotIn(str(self.cwd), json.dumps(reopened, ensure_ascii=False))
 
     def test_search_all_registry_can_include_paths_as_local_diagnostic(self) -> None:
         registry_clean = self.cwd / "registry-thread" / "clean-source"

@@ -644,6 +644,14 @@ the reopened source boundary.""",
         help="Emit public-safe compact output: capped snippets, no source refs, message ids, or local reopen ids.",
     )
     args = parser.parse_args(argv)
+    if args.open_source or args.hit:
+        if args.hit and not args.last_search:
+            parser.error("--hit requires --last-search")
+        if args.last_search and not args.hit:
+            parser.error("--last-search requires --hit")
+        if args.patterns:
+            parser.error("source-window reopen does not take search patterns")
+        return run_registry_search_cli(args, render_human_search_result)
     if not args.patterns:
         payload = search_recovery_payload()
         if args.json_output:

@@ -110,6 +110,72 @@ class AssociativePathWalkerTests(unittest.TestCase):
         self.assertEqual(negative["candidate_count"], 0)
         self.assertIn("negative_feedback_evaporated", negative["reason_codes"])
 
+    def test_positive_feedback_only_lifts_same_safe_scope_routes(self) -> None:
+        def report_with(feedback_rows: list[dict[str, str]]) -> dict[str, object]:
+            return walk_associative_paths(
+                query="slime mold exploratory recall",
+                candidates=[
+                    {
+                        "route_id": "route:apw",
+                        "candidate_id": "bridge:apw",
+                        "route_terms": ["associative path walker", "routing exploration"],
+                        "thread_key": "thread:apw",
+                        "scope_bucket": "project",
+                    }
+                ],
+                bridge_rows=[
+                    {
+                        "candidate_id": "bridge:apw",
+                        "from_terms": ["slime mold", "exploratory recall"],
+                        "to_terms": ["associative path walker", "routing exploration"],
+                        "source_refs": [{"thread_key": "thread:apw", "source_id": "src"}],
+                        "scope_bucket": "project",
+                    }
+                ],
+                feedback_rows=feedback_rows,
+            )
+
+        no_feedback = report_with([])
+        private_feedback = report_with(
+            [
+                {
+                    "candidate_id": "bridge:apw",
+                    "signal": "source_reopen_success",
+                    "scope_bucket": "user_private",
+                }
+            ]
+        )
+        project_feedback = report_with(
+            [
+                {
+                    "candidate_id": "bridge:apw",
+                    "signal": "source_reopen_success",
+                    "scope_bucket": "project",
+                }
+            ]
+        )
+
+        self.assertEqual(no_feedback["decision"], "route_candidates")
+        self.assertEqual(private_feedback["decision"], "route_candidates")
+        self.assertEqual(project_feedback["decision"], "route_candidates")
+        self.assertEqual(
+            private_feedback["candidates"][0]["score"],
+            no_feedback["candidates"][0]["score"],
+        )
+        self.assertNotIn(
+            "positive_feedback_same_scope",
+            private_feedback["candidates"][0]["reason_codes"],
+        )
+        self.assertIn("cross_scope_positive_feedback_ignored", private_feedback["reason_codes"])
+        self.assertGreater(
+            project_feedback["candidates"][0]["score"],
+            no_feedback["candidates"][0]["score"],
+        )
+        self.assertIn(
+            "positive_feedback_same_scope",
+            project_feedback["candidates"][0]["reason_codes"],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

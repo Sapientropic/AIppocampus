@@ -20,9 +20,13 @@ class AssociativePathWalkerBenchmarkTests(unittest.TestCase):
 
         self.assertTrue(report["ok"], report)
         self.assertTrue(report["quality_gate_ok"])
-        self.assertEqual(report["metrics"]["case_count"], 3)
+        self.assertEqual(report["metrics"]["case_count"], 5)
         self.assertEqual(report["red_lines"]["wrong_hop_drag_count"], 0)
+        self.assertEqual(report["red_lines"]["scope_violation_count"], 0)
+        self.assertEqual(report["red_lines"]["default_ranking_influence_count"], 0)
+        self.assertGreaterEqual(report["metrics"]["top_action_specificity_ok_count"], 5)
         self.assertTrue(report["boundary"]["navigation_lift_is_not_source_evidence"])
+        self.assertFalse(report["boundary"]["default_recall_influence_allowed"])
         self.assertIn("broad_live_recall_quality", report["cannot_claim"])
 
     def test_gate_warns_when_route_count_lift_creates_wrong_hop_drag(self) -> None:

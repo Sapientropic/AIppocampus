@@ -50,6 +50,7 @@ may retain detailed source trails and boundary fields.
 | Issue work guard | `useful_guard` | Prevents broad manual scaffolding before owner-route checks. | Navigation-only owner refs. | `tests/aippocampus/test_issue_work_guard.py` |
 | Foreground action cards | `useful_guard` | Copyable next action for agents. | Commands must be executable or explicit templates. | `executable_command_violations` checks |
 | MCP `agent_recall` / `agent_deepen` | `progressive_disclosure` | Host tool projection. | Compact default redacts private handles and local paths. | `tests/aippocampus/test_aippocampus_mcp_server.py` |
+| Associative Path Walker diagnostics | `progressive_disclosure` | Explicit `why-recall --apw-diagnostics` sidecar for associative route investigation. | Opt-in only; input packs are read-only navigation, positive feedback lifts only inside the same safe scope, and default recall ranking is unchanged. | `tests/aippocampus/test_associative_path_inputs.py` |
 | Hook affordances | `overblocking` risk | Tiny prompt-time ignition. | No raw source, local paths, or source refs in hook output. | hook affordance tests |
 | Background findings / observatory | `progressive_disclosure` | Reviewed navigation readouts. | Findings stay navigation-only until source is reopened. | foreground/output audit tests |
 
@@ -57,8 +58,10 @@ may retain detailed source trails and boundary fields.
 
 Two public-safe gates guard the foreground usability boundary:
 
-- `benchmark_associative_path_walker.py` checks that Associative Path Walker
-  navigation finds source-reopenable paths without generic wrong-hop drag.
+- `benchmark_associative_path_walker.py` checks the Associative Path Walker
+  opt-in proxy gate: source-reopenable bridge rescue, no generic wrong-hop
+  drag, no cross-scope positive-feedback lift, Chinese dogfood cue coverage,
+  and no default recall-ranking influence.
 - `benchmark_conversation_orientation_usefulness.py` checks that compact
   working orientation can beat safe-but-useless caveat output without source
   truth overclaim.

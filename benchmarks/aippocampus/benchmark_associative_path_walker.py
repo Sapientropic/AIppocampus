@@ -92,6 +92,68 @@ def fixture_path_walker_cases() -> list[dict[str, Any]]:
                 "wrong_hop_drag_allowed": False,
             },
         },
+        {
+            "case_id": "cross_scope_positive_feedback_does_not_lift",
+            "query": "slime mold exploratory recall",
+            "candidates": [
+                {
+                    "route_id": "route:associative-path-walker",
+                    "candidate_id": "bridge:apw",
+                    "route_terms": ["associative path walker", "routing exploration"],
+                    "thread_key": "thread:apw",
+                    "scope_bucket": "project",
+                }
+            ],
+            "bridge_rows": [
+                {
+                    "candidate_id": "bridge:apw",
+                    "from_terms": ["slime mold", "exploratory recall"],
+                    "to_terms": ["associative path walker", "routing exploration"],
+                    "source_refs": [source_ref],
+                    "scope_bucket": "project",
+                }
+            ],
+            "feedback_rows": [
+                {
+                    "candidate_id": "bridge:apw",
+                    "signal": "source_reopen_success",
+                    "scope_bucket": "user_private",
+                },
+            ],
+            "expectation": {
+                "useful_route": True,
+                "expected_decision": "route_candidates",
+                "wrong_hop_drag_allowed": False,
+                "cross_scope_positive_must_not_lift": True,
+            },
+        },
+        {
+            "case_id": "chinese_dogfood_cue_bridge_rescue",
+            "query": "黏菌 联想回忆 探索算法",
+            "candidates": [
+                {
+                    "route_id": "route:associative-path-walker",
+                    "candidate_id": "bridge:apw-cn",
+                    "route_terms": ["associative path walker", "routing exploration"],
+                    "thread_key": "thread:apw",
+                    "scope_bucket": "project",
+                }
+            ],
+            "bridge_rows": [
+                {
+                    "candidate_id": "bridge:apw-cn",
+                    "from_terms": ["黏菌", "联想回忆", "探索算法"],
+                    "to_terms": ["associative path walker", "routing exploration"],
+                    "source_refs": [source_ref],
+                    "scope_bucket": "project",
+                }
+            ],
+            "expectation": {
+                "useful_route": True,
+                "expected_decision": "route_candidates",
+                "wrong_hop_drag_allowed": False,
+            },
+        },
     ]
 
 
@@ -100,6 +162,12 @@ def evaluate_path_walker_gate(
 ) -> dict[str, Any]:
     rows = []
     for case in cases or fixture_path_walker_cases():
+        baseline = walk_associative_paths(
+            query=str(case.get("query") or ""),
+            candidates=list(case.get("candidates") or []),
+            bridge_rows=[],
+            feedback_rows=[],
+        )
         report = walk_associative_paths(
             query=str(case.get("query") or ""),
             candidates=list(case.get("candidates") or []),
@@ -107,7 +175,10 @@ def evaluate_path_walker_gate(
             feedback_rows=case.get("feedback_rows") or [],
         )
         expectation = dict(case.get("expectation") or {})
+        first_candidate = report["candidates"][0] if report.get("candidates") else {}
+        candidate_reasons = first_candidate.get("reason_codes") if isinstance(first_candidate, Mapping) else []
         route_count = int(report.get("candidate_count") or 0)
+        baseline_route_count = int(baseline.get("candidate_count") or 0)
         specificity_ok = "generic_only_path_evaporated" in report.get("reason_codes", []) or route_count > 0
         useful = bool(route_count) == bool(expectation.get("useful_route"))
         wrong_hop_drag = bool(
@@ -115,28 +186,46 @@ def evaluate_path_walker_gate(
             and not expectation.get("useful_route")
             and "path_found_reopenable" in report.get("reason_codes", [])
         )
+        cross_scope_lift = bool(
+            expectation.get("cross_scope_positive_must_not_lift")
+            and "positive_feedback_same_scope" in candidate_reasons
+        )
+        top_action_specificity_ok = bool(
+            not route_count
+            or "source_backed_semantic_bridge" in candidate_reasons
+            or baseline_route_count == route_count
+        )
         rows.append(
             {
                 "case_id": str(case.get("case_id") or ""),
+                "baseline_route_count": baseline_route_count,
                 "decision": report["decision"],
                 "route_count": route_count,
                 "path_specificity_ok": specificity_ok,
+                "top_action_specificity_ok": top_action_specificity_ok,
                 "task_usefulness_ok": useful,
                 "wrong_hop_drag": wrong_hop_drag,
+                "scope_violation": cross_scope_lift,
                 "source_reopen_success": bool(route_count and report["candidates"][0].get("source_refs")),
                 "navigation_only": report["claim_permission"] == "no_claim_before_reopen",
                 "reason_codes": report["reason_codes"],
+                "candidate_reason_codes": list(candidate_reasons or []),
             }
         )
     red_lines = {
         "wrong_hop_drag_count": sum(1 for row in rows if row["wrong_hop_drag"]),
         "source_truth_claim_count": sum(1 for row in rows if not row["navigation_only"]),
+        "scope_violation_count": sum(1 for row in rows if row["scope_violation"]),
+        "default_ranking_influence_count": 0,
     }
     warnings = {
         "route_count_lift_without_usefulness_count": sum(
             1 for row in rows if row["route_count"] and not row["task_usefulness_ok"]
         ),
         "specificity_failure_count": sum(1 for row in rows if not row["path_specificity_ok"]),
+        "top_action_specificity_failure_count": sum(
+            1 for row in rows if not row["top_action_specificity_ok"]
+        ),
     }
     ok = all(value == 0 for value in red_lines.values()) and all(
         row["task_usefulness_ok"] for row in rows
@@ -151,15 +240,20 @@ def evaluate_path_walker_gate(
         "metrics": {
             "case_count": len(rows),
             "route_existence_count": sum(1 for row in rows if row["route_count"] > 0),
+            "baseline_route_existence_count": sum(1 for row in rows if row["baseline_route_count"] > 0),
+            "top_action_specificity_ok_count": sum(1 for row in rows if row["top_action_specificity_ok"]),
             "source_reopen_success_count": sum(1 for row in rows if row["source_reopen_success"]),
             "task_usefulness_ok_count": sum(1 for row in rows if row["task_usefulness_ok"]),
             "wrong_hop_drag_count": red_lines["wrong_hop_drag_count"],
+            "scope_violation_count": red_lines["scope_violation_count"],
         },
         "warnings": warnings,
         "red_lines": red_lines,
         "boundary": {
             "navigation_lift_is_not_source_evidence": True,
             "ambient_readiness_not_claimed": True,
+            "default_recall_influence_allowed": False,
+            "proxy_gate_not_live_quality_claim": True,
             "live_model_calls": 0,
         },
         "cannot_claim": [

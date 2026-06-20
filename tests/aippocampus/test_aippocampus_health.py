@@ -840,7 +840,13 @@ class AippocampusHealthTests(unittest.TestCase):
                 ),
             ):
                 payload = health.build_health_report(
-                    health.HealthOptions(cwd=workspace, registry_dir=registry_dir, include_operator_diagnostics=True, **paths)
+                    health.HealthOptions(
+                        cwd=workspace,
+                        registry_dir=registry_dir,
+                        include_operator_diagnostics=True,
+                        include_expensive_diagnostics=True,
+                        **paths,
+                    )
                 )
 
         action_ids = [item["id"] for item in payload["recommended_actions"]]

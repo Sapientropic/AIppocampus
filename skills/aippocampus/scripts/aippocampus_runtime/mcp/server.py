@@ -294,6 +294,61 @@ def call_search_memory(arguments: dict[str, Any]) -> dict[str, Any]:
             ],
         )
     limit = int_range(arguments.get("max"), default=10, minimum=1, maximum=25)
+    scope = str(arguments.get("scope") or "current").strip()
+    if arguments.get("all") or arguments.get("all_registered_sources"):
+        scope = "all_registered_sources"
+    if arguments.get("from_last_recall"):
+        scope = "last_recall_candidates"
+    include_paths = bool(arguments.get("include_private_paths"))
+    if scope == "all_registered_sources":
+        from aippocampus_runtime.source.registry_search import search_registry_sources
+
+        payload = search_registry_sources(
+            [query],
+            registry_dir=arguments.get("registry_dir"),
+            limit=limit,
+            include_paths=include_paths,
+            search_budget=str(arguments.get("search_budget") or "default"),
+            record_last_search=False,
+        )
+        payload["limit"] = limit
+        payload["mcp_search_scope"] = scope
+        return text_result(public_payload(arguments, payload))
+    if scope == "last_recall_candidates":
+        from aippocampus_runtime.source.last_recall_search import search_last_recall_sources
+
+        request_index = (
+            int_range(arguments.get("request_index"), default=0, minimum=0, maximum=25)
+            if arguments.get("request_index") is not None
+            else None
+        )
+        payload = search_last_recall_sources(
+            [query],
+            cwd=cwd_arg(arguments),
+            last_recall_path=arguments.get("last_recall_path"),
+            recall_selector=arguments.get("recall_selector"),
+            request_index=request_index or None,
+            limit=limit,
+            include_paths=include_paths,
+        )
+        payload["limit"] = limit
+        payload["mcp_search_scope"] = scope
+        return text_result(public_payload(arguments, payload), is_error=not bool(payload.get("ok")))
+    if scope != "current":
+        return missing_input_recovery_card(
+            code="unsupported_search_scope",
+            message="search_memory scope must be current, all_registered_sources, or last_recall_candidates.",
+            tool_name="search_memory",
+            arguments=arguments,
+            required_any=["scope"],
+            safe_next_actions=[
+                _template_tool_action(
+                    "search_memory",
+                    {"query": "{specific_cue_or_phrase}", "scope": "current"},
+                    ["query"],
+                )
+            ],
+        )
     source_dir = clean_source_dir_for(arguments)
     required = ["messages.jsonl"]
     if missing_files(source_dir, required):
@@ -310,10 +365,11 @@ def call_search_memory(arguments: dict[str, Any]) -> dict[str, Any]:
     )
     payload = public_search_result(
         result,
-        include_paths=bool(arguments.get("include_private_paths")),
+        include_paths=include_paths,
         metadata_only=not include_source_snippets,
         query_text=query,
     )
+    payload["mcp_search_scope"] = "current"
     return text_result(public_payload(arguments, payload))
 
 
@@ -701,6 +757,15 @@ def call_recall_diagnostic(arguments: dict[str, Any]) -> dict[str, Any]:
         semantic_timeout=int_range(
             arguments.get("semantic_timeout"), default=12, minimum=1, maximum=60
         ),
+        include_associative_path_diagnostics=bool(
+            arguments.get("include_associative_path_diagnostics")
+            or arguments.get("apw_diagnostics")
+        ),
+        associative_path_sidecar_dir=arguments.get("apw_sidecar_dir"),
+        associative_path_bridge_path=arguments.get("apw_semantic_bridge_path"),
+        associative_path_navigation_path=arguments.get("apw_navigation_path"),
+        associative_path_active_lock_path=arguments.get("apw_active_lock_path"),
+        associative_path_feedback_path=arguments.get("apw_feedback_path"),
     )
     if provider_bridge_report is not None:
         payload["provider_key_bridge"] = provider_bridge_report

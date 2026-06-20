@@ -409,7 +409,7 @@ def compact_health_payload(payload: dict[str, Any]) -> dict[str, Any]:
         **first_recall_fields,
         "readiness_card": readiness_card,
         "maintenance_summary": maintenance_summary,
-        "operator_detail_command": "aippocampus health --detail full --json",
+        "operator_detail_command": "aippocampus health --detail full --json --operator-timeout-ms 5000",
     }
     foreground_fields = canonical_foreground_action_fields(foreground_action)
     card.update(foreground_fields)

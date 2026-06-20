@@ -19,6 +19,83 @@ def assert_command_args(test: unittest.TestCase, command: str, expected: list[st
 
 
 class AgentRecallCompactProjectionTests(unittest.TestCase):
+    def test_compact_detail_command_uses_safe_recall_cue_or_template(self) -> None:
+        safe = agent_continuity.public_recall_projection(
+            {
+                "kind": "aippocampus_agent_continuity_path",
+                "schema_version": "agent-continuity-path-v1",
+                "mode": "recall",
+                "status": "ok",
+                "opt_in_required": False,
+                "last_recall_cache_available": True,
+                "foreground_action_card": {
+                    "decision": "use_route_first",
+                    "canonical_action": {
+                        "action_id": "agent_deepen_selected_route",
+                        "tool_name": "agent_deepen",
+                        "arguments": {"request_index": 1, "last_recall": True},
+                        "claim_boundary": "no_claim_before_reopen",
+                    },
+                },
+                "memory_packets": [
+                    {
+                        "route_id": "route_safe_cue",
+                        "route_topic": "compact detail cue",
+                        "route_kind": "clean_source_route",
+                        "output_mode": "reopenable_route",
+                        "claim_permission": "no_claim_before_reopen",
+                    }
+                ],
+            },
+            query="AIppocampus compact recall detail cue",
+        )
+
+        assert_command_args(
+            self,
+            safe["operator_detail_command"],
+            [
+                "aippocampus",
+                "agent",
+                "recall",
+                "AIppocampus compact recall detail cue",
+                "--json",
+                "--detail",
+                "full",
+            ],
+        )
+        self.assertEqual(
+            safe["claim_boundary"]["detail_available_with"],
+            safe["operator_detail_command"],
+        )
+        self.assertNotIn("old decision or handoff cue", json.dumps(safe, ensure_ascii=False))
+
+        template_only = agent_continuity.public_recall_projection(
+            {
+                "kind": "aippocampus_agent_continuity_path",
+                "schema_version": "agent-continuity-path-v1",
+                "mode": "recall",
+                "status": "no_routes",
+                "opt_in_required": False,
+                "foreground_action_card": {},
+                "memory_packets": [],
+            },
+            query="old decision or handoff cue",
+        )
+
+        self.assertNotIn("operator_detail_command", template_only)
+        self.assertEqual(
+            template_only["operator_detail_command_template"],
+            'aippocampus agent recall "{cue}" --json --detail full',
+        )
+        self.assertEqual(template_only["operator_detail_requires"], ["cue"])
+        self.assertNotIn("detail_available_with", template_only["claim_boundary"])
+        self.assertEqual(
+            template_only["claim_boundary"]["detail_available_with_template"],
+            'aippocampus agent recall "{cue}" --json --detail full',
+        )
+        self.assertEqual(template_only["claim_boundary"]["detail_requires"], ["cue"])
+        self.assertEqual(executable_command_violations(template_only), [])
+
     def test_low_specificity_thread_candidate_choices_get_public_safe_differentiators(
         self,
     ) -> None:
@@ -122,6 +199,63 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
         self.assertNotIn("source_handles", encoded)
         self.assertNotIn("source_refs", encoded)
         self.assertNotIn("C:\\", encoded)
+
+    def test_repeated_same_topic_low_distinctiveness_routes_refine_before_deepen(
+        self,
+    ) -> None:
+        packets = [
+            {
+                "route_id": f"route_same_topic_{index}",
+                "route_topic": "benchmark_claim_posture",
+                "route_kind": "clean_source_route",
+                "output_mode": "reopenable_route",
+                "claim_permission": "no_claim_before_reopen",
+            }
+            for index in range(1, 6)
+        ]
+        public = agent_continuity.public_recall_projection(
+            {
+                "kind": "aippocampus_agent_continuity_path",
+                "schema_version": "agent-continuity-path-v1",
+                "mode": "recall",
+                "status": "ok",
+                "query": "AIppocampus UX review foreground agent usability noisy cannot_claim",
+                "opt_in_required": False,
+                "last_recall_cache_available": True,
+                "foreground_action_card": {
+                    "decision": "use_route_first",
+                    "canonical_action": {
+                        "action_id": "agent_deepen_selected_route",
+                        "tool_name": "agent_deepen",
+                        "arguments": {"request_index": 1, "last_recall": True},
+                        "claim_boundary": "no_claim_before_reopen",
+                    },
+                },
+                "memory_packets": packets,
+                "metrics": {
+                    "memory_packet_count": 5,
+                    "deepen_request_count": 5,
+                    "packet_triage_distinctiveness": 0.4,
+                    "route_label_specificity_floor": 0.0,
+                    "topic_label_present_count": 5,
+                },
+            }
+        )
+
+        self.assertEqual(public["route_count"], 5)
+        self.assertEqual(public["displayed_route_count"], 3)
+        self.assertEqual(public["omitted_route_count"], 2)
+        self.assertEqual(len(public["routes"]), 3)
+        action = public["foreground_action"]
+        self.assertEqual(action["id"], "refine_low_specificity_recall_cue")
+        self.assertEqual(action["route_choice_posture"], "labels_low_specificity")
+        self.assertEqual(action["topic_label_present_count"], 5)
+        self.assertEqual(action["packet_triage_distinctiveness"], 0.4)
+        self.assertEqual(action["repeated_route_label"], "benchmark_claim_posture")
+        self.assertEqual(action["secondary_action"]["id"], "deepen_top_route_low_confidence")
+        for route in public["routes"]:
+            self.assertIn("labels_low_specificity", route["choice_reason"])
+            self.assertIn("topic_benchmark_claim_posture", route["choice_reason"])
 
     def test_distinguishable_route_labels_keep_deepen_primary(self) -> None:
         public = agent_continuity.public_recall_projection(
@@ -263,6 +397,61 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
         self.assertEqual(action["secondary_action"]["id"], "deepen_top_route_low_confidence")
         self.assertIn("distinctive cue anchors", action["why"])
         self.assertIn("labels_low_specificity", public["routes"][0]["choice_reason"])
+
+    def test_already_opened_compact_without_source_receipt_reopens_read_only(
+        self,
+    ) -> None:
+        public = agent_continuity.public_recall_projection(
+            {
+                "kind": "aippocampus_agent_continuity_path",
+                "schema_version": "agent-continuity-path-v1",
+                "mode": "recall",
+                "status": "ok",
+                "opt_in_required": False,
+                "last_recall_cache_available": True,
+                "foreground_action_card": {
+                    "decision": "use_opened_context",
+                    "canonical_action": {
+                        "action_id": "use_opened_route_context",
+                        "tool_name": None,
+                        "arguments": {},
+                        "why": "same route and handle were already reopened in this local session",
+                        "claim_boundary": "source_open_within_opened_context",
+                    },
+                },
+                "memory_packets": [
+                    {
+                        "route_id": "route_already_opened",
+                        "route_topic": "opened compact route",
+                        "route_kind": "clean_source_route",
+                        "output_mode": "reopenable_route",
+                        "claim_permission": "no_claim_before_reopen",
+                        "already_opened": True,
+                        "opened_route_context": {
+                            "status": "opened_in_this_local_session",
+                            "same_route_and_handle_digest": True,
+                        },
+                    }
+                ],
+            },
+            query="opened compact route cue",
+        )
+
+        action = public["foreground_action"]
+        self.assertNotEqual(action["id"], "use_opened_route_context")
+        self.assertEqual(action["id"], "reopen_already_opened_route_context")
+        self.assertEqual(action["tool_name"], "agent_deepen")
+        self.assertEqual(action["arguments"], {"request_index": 1, "last_recall": True})
+        assert_command_args(
+            self,
+            action["command"],
+            ["aippocampus", "agent", "deepen", "--request", "1", "--last-recall", "--json"],
+        )
+        self.assertIn("current compact payload has no source-window receipt", action["why"])
+        self.assertEqual(action["claim_boundary"], "no_claim_before_reopen")
+        self.assertEqual(public["routes"][0]["already_opened"], True)
+        self.assertEqual(public["routes"][0]["action"]["tool_name"], "agent_deepen")
+        self.assertEqual(executable_command_violations(public), [])
 
     def test_recovery_actions_fill_known_recall_query_commands(self) -> None:
         no_route = agent_continuity.public_recall_projection(
