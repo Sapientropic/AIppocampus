@@ -15,6 +15,7 @@ from typing import Any, Iterator
 from aippocampus_runtime.artifacts.generation_pins import generation_cleanup_contract
 
 DEFAULT_ARTIFACT_LEASE_STALE_SECONDS = 6 * 60 * 60
+DEFAULT_ARTIFACT_LEASE_WAIT_SECONDS = 1.0
 DEFAULT_SQLITE_BUSY_TIMEOUT_MS = 30_000
 INDEX_POINTER_NAME = "source_index.pointer.json"
 INDEX_SQLITE_NAME = "source_index.sqlite"
@@ -175,6 +176,45 @@ def _safe_dir_size(path: Path) -> int:
     return total
 
 
+def writer_lease_diagnostics(
+    output_dir: Path,
+    lease_name: str,
+    *,
+    stale_after_seconds: int = DEFAULT_ARTIFACT_LEASE_STALE_SECONDS,
+) -> dict[str, Any]:
+    """Return redacted writer-lease state for foreground recovery cards.
+
+    Publishing leases are operational state, not source evidence. Diagnostics
+    deliberately expose only the lease file name, age, and active/stale status
+    so a foreground agent can retry or ask for operator cleanup without seeing
+    local paths.
+    """
+
+    lease_path = Path(output_dir) / lease_name
+    if not lease_path.exists():
+        return {
+            "writer_lease_name": lease_name,
+            "writer_lease_status": "absent",
+            "active_writer_lease": False,
+            "stale_writer_lease": False,
+            "writer_lease_age_seconds": None,
+            "writer_lease_stale_after_seconds": int(stale_after_seconds),
+        }
+    try:
+        age_seconds = max(0, int(time.time() - lease_path.stat().st_mtime))
+    except OSError:
+        age_seconds = None
+    stale = age_seconds is not None and age_seconds > int(stale_after_seconds)
+    return {
+        "writer_lease_name": lease_name,
+        "writer_lease_status": "stale" if stale else "active",
+        "active_writer_lease": not stale,
+        "stale_writer_lease": stale,
+        "writer_lease_age_seconds": age_seconds,
+        "writer_lease_stale_after_seconds": int(stale_after_seconds),
+    }
+
+
 def _diagnostic_relative_path(path: Path, *, root: Path | None) -> str:
     if root is not None:
         try:
@@ -309,6 +349,8 @@ def index_generation_diagnostics(
         else 0
     )
     old_generation_bytes = sum(int(item["bytes"]) for item in gc_candidates)
+    active_reader_pin_count = sum(int(item["active_reader_pin_count"]) for item in generation_rows)
+    expired_reader_pin_count = sum(int(item["expired_reader_pin_count"]) for item in generation_rows)
     publish_latency = pointer.get("publish_latency_ms")
     try:
         publish_latency_ms = float(publish_latency) if publish_latency is not None else None
@@ -334,9 +376,12 @@ def index_generation_diagnostics(
         "generation_gc_candidate_count": len(gc_candidates),
         "generation_gc_candidate_bytes": old_generation_bytes,
         "generation_gc_candidates": gc_candidates,
+        "active_reader_pin_count": active_reader_pin_count,
+        "expired_reader_pin_count": expired_reader_pin_count,
         "pointer_load_ms": pointer_load_ms,
         "publish_latency_ms": publish_latency_ms,
         "cleanup_policy": "reader_pin_ttl_contract",
+        **writer_lease_diagnostics(index_dir, ".index-publish.lock"),
     }
 
 
@@ -454,6 +499,8 @@ def segment_generation_diagnostics(
         else 0
     )
     old_generation_bytes = sum(int(item["bytes"]) for item in gc_candidates)
+    active_reader_pin_count = sum(int(item["active_reader_pin_count"]) for item in generation_rows)
+    expired_reader_pin_count = sum(int(item["expired_reader_pin_count"]) for item in generation_rows)
     publish_latency = pointer.get("publish_latency_ms")
     try:
         publish_latency_ms = float(publish_latency) if publish_latency is not None else None
@@ -479,9 +526,12 @@ def segment_generation_diagnostics(
         "generation_gc_candidate_count": len(gc_candidates),
         "generation_gc_candidate_bytes": old_generation_bytes,
         "generation_gc_candidates": gc_candidates,
+        "active_reader_pin_count": active_reader_pin_count,
+        "expired_reader_pin_count": expired_reader_pin_count,
         "pointer_load_ms": pointer_load_ms,
         "publish_latency_ms": publish_latency_ms,
         "cleanup_policy": "reader_pin_ttl_contract",
+        **writer_lease_diagnostics(segments_dir, ".rebuild.lock"),
     }
 
 

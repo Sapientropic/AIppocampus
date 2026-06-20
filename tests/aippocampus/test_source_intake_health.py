@@ -133,6 +133,104 @@ class SourceIntakeHealthTests(unittest.TestCase):
         self.assertEqual(report["metrics"]["generic_import_fallback_available"], True)
         self.assertEqual(report["cannot_claim"], [])
 
+    def test_loss_accounting_warning_surfaces_as_redacted_readiness_metric(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            clean = Path(tmp) / "clean-source"
+            clean.mkdir()
+            (clean / "messages.jsonl").write_text(
+                json.dumps({"message_id": "m1", "role": "user"}) + "\n",
+                encoding="utf-8",
+            )
+            (clean / "turns.jsonl").write_text(
+                json.dumps({"turn_id": "t1", "message_ids": ["m1"]}) + "\n",
+                encoding="utf-8",
+            )
+            manifest = {
+                "message_count": 1,
+                "turn_count": 1,
+                "loss_accounting": {
+                    "filtered_or_dropped_message_count": 3,
+                    "user_only_turn_count": 3,
+                    "empty_clean_turn_count": 1,
+                    "turns_with_no_clean_assistant_count": 3,
+                    "warning_codes": ["user_only_turn_spike", "empty_clean_turns"],
+                    "reason_counts": {
+                        "no_final_answer": 3,
+                        "tool_only_turn": 1,
+                        "empty_after_filter": 2,
+                    },
+                },
+            }
+
+            report = intake.source_intake_health_summary(clean, manifest)
+
+        metrics = report["metrics"]
+        self.assertEqual(report["source_quality_status"], "degraded")
+        self.assertIn("clean_source_user_only_turn_spike", report["degraded_reasons"])
+        self.assertIn("clean_source_empty_clean_turns", report["degraded_reasons"])
+        self.assertEqual(metrics["clean_source_filtered_or_dropped_message_count"], 3)
+        self.assertEqual(metrics["clean_source_tool_only_turn_count"], 1)
+        self.assertEqual(metrics["clean_source_empty_after_filter_count"], 2)
+        encoded = json.dumps(report, ensure_ascii=False)
+        self.assertNotIn("messages.jsonl", encoded)
+        self.assertNotIn("turns.jsonl", encoded)
+
+    def test_provider_normalization_loss_surfaces_as_redacted_readiness_metric(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            clean = Path(tmp) / "clean-source"
+            clean.mkdir()
+            (clean / "messages.jsonl").write_text(
+                json.dumps({"message_id": "m1", "role": "user"}) + "\n",
+                encoding="utf-8",
+            )
+            (clean / "turns.jsonl").write_text(
+                json.dumps({"turn_id": "t1", "message_ids": ["m1"]}) + "\n",
+                encoding="utf-8",
+            )
+            manifest = {
+                "message_count": 1,
+                "turn_count": 1,
+                "provider_normalization_loss": {
+                    "scope": "provider_normalization",
+                    "provider": "codex",
+                    "raw_private_text_emitted": False,
+                    "counts": {
+                        "invalid_json_line_count": 2,
+                        "non_object_line_count": 1,
+                        "unsupported_event_count": 3,
+                    },
+                    "policy_drop_count": 4,
+                    "total_loss_count": 10,
+                    "warning_codes": [
+                        "provider_parser_rows_dropped",
+                        "provider_unsupported_events_dropped",
+                        "provider_policy_rows_dropped",
+                    ],
+                    "operator_next_step": {
+                        "inspect": "aippocampus health --detail full --json",
+                        "plan_rebuild": "aippocampus maintenance plan --json",
+                    },
+                },
+            }
+
+            report = intake.source_intake_health_summary(clean, manifest)
+
+        metrics = report["metrics"]
+        self.assertEqual(report["source_quality_status"], "degraded")
+        self.assertIn("provider_parser_rows_dropped", report["degraded_reasons"])
+        self.assertIn("provider_unsupported_events_dropped", report["degraded_reasons"])
+        self.assertIn("provider_policy_rows_dropped", report["degraded_reasons"])
+        self.assertEqual(metrics["provider_invalid_json_line_count"], 2)
+        self.assertEqual(metrics["provider_non_object_line_count"], 1)
+        self.assertEqual(metrics["provider_unsupported_event_count"], 3)
+        self.assertEqual(metrics["provider_policy_drop_count"], 4)
+        self.assertEqual(metrics["provider_normalization_loss_count"], 10)
+        self.assertIn("aippocampus health --detail full --json", report["operator_next_steps"])
+        self.assertIn("aippocampus maintenance plan --json", report["operator_next_steps"])
+        encoded = json.dumps(report, ensure_ascii=False)
+        self.assertNotIn("C:\\", encoded)
+        self.assertNotIn("messages.jsonl", encoded)
+
 
 if __name__ == "__main__":
     unittest.main()

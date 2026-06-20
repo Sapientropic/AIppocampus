@@ -480,8 +480,10 @@ def search_foreground_authority(
             },
             "foreground_action": {
                 "action_id": "recall_context_from_search",
+                "label": "Recall context from search match",
                 "tool_name": "recall_context",
                 "arguments": {"intent": query, "max": min(max(len(matches), 1), 5)},
+                "mutation_risk": "read_only",
                 "claim_boundary": "source_reopen_required_before_claim",
                 "why": "Capped search snippet found matching clean-source wording; reopen context before quoting or relying on exact wording.",
             },
@@ -509,8 +511,10 @@ def search_foreground_authority(
             },
             "foreground_action": {
                 "action_id": "reopen_search_match_source",
+                "label": "Reopen the first search match",
                 "tool_name": "get_turn_context",
                 "arguments": _first_match_selector(matches),
+                "mutation_risk": "read_only",
                 "claim_boundary": "source_reopen_required_before_claim",
                 "why": "Use the selected clean-source match as a route, then reopen the surrounding turn before quoting or making strong claims.",
             },
@@ -536,8 +540,10 @@ def search_foreground_authority(
         },
         "foreground_action": {
             "action_id": "refine_or_recall",
+            "label": "Refine the cue or use recall",
             "tool_name": "agent_recall",
             "arguments": {"query": query or "old decision or handoff cue"},
+            "mutation_risk": "read_only",
             "claim_boundary": "no_claim_before_reopen",
             "why": "Search found no source-backed snippet; use a richer continuity cue or exact wording before claiming from memory.",
         },

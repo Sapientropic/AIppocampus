@@ -491,6 +491,16 @@ def run_benchmark_suite_profile(profile: str) -> bool:
     elapsed_ms = payload.get("elapsed_ms")
     elapsed_text = f" in {elapsed_ms:.2f} ms" if isinstance(elapsed_ms, (int, float)) else ""
     print(f"benchmark suite profile {profile!r}: {payload.get('status', 'ok')}{elapsed_text}")
+    digest = payload.get("outcome_digest")
+    counts = digest.get("counts") if isinstance(digest, dict) else None
+    if isinstance(counts, dict):
+        print(
+            "benchmark outcome digest: "
+            f"promoted={counts.get('public_quality_promoted', 0)} "
+            f"diagnostic_only={counts.get('diagnostic_only', 0)} "
+            f"adoption_blocked={counts.get('adoption_blocked', 0)} "
+            f"owner_action={counts.get('owner_action', 0)}"
+        )
     return True
 
 

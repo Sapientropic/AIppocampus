@@ -497,8 +497,12 @@ def _macro_routing_replay_metrics() -> dict[str, Any]:
     return {
         "macro_replay_case_count": metrics["macro_replay_case_count"],
         "macro_fixture_only_case_count": metrics["macro_fixture_only_case_count"],
+        "fixture_replay_complete_count": metrics["fixture_replay_complete_count"],
+        "fixture_replay_partial_count": metrics["fixture_replay_partial_count"],
         "real_producer_complete_count": metrics["real_producer_complete_count"],
         "real_producer_partial_count": metrics["real_producer_partial_count"],
+        "runtime_line_signal_producer_present": metrics["runtime_line_signal_producer_present"],
+        "runtime_macro_state_write_count": metrics["runtime_macro_state_write_count"],
         "macro_helpful_route_change_count": metrics["macro_helpful_route_change_count"],
         "macro_helpful_deepen_or_recheck_change_count": metrics[
             "macro_helpful_deepen_or_recheck_change_count"

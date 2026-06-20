@@ -20,7 +20,11 @@ for _path in (
 
 from aippocampus_runtime.source import clean_source as clean_source  # noqa: E402
 from aippocampus_runtime.source import material_sanitizer  # noqa: E402
-from conversation_sources import ConversationSourceRef, GenericConversationProvider  # noqa: E402
+from conversation_sources import (  # noqa: E402
+    ClaudeCodeConversationProvider,
+    ConversationSourceRef,
+    GenericConversationProvider,
+)
 from tests.aippocampus.redaction_fixtures import (  # noqa: E402
     fake_test_database_dsn,
     fake_test_email,
@@ -240,6 +244,21 @@ class BuildCleanSourceTests(unittest.TestCase):
         self.assertEqual(result["legacy_field_aliases"]["source_rollout"], "source_transcript")
         self.assertEqual(result["message_count"], 4)
         self.assertEqual(result["turn_count"], 2)
+        loss = result["loss_accounting"]
+        self.assertEqual(loss["scope"], "post_provider_normalization")
+        self.assertEqual(loss["normalized_message_count"], 5)
+        self.assertEqual(loss["clean_message_count"], 4)
+        self.assertEqual(loss["filtered_or_dropped_message_count"], 1)
+        self.assertEqual(loss["reason_counts"]["assistant_commentary_shadowed_by_final"], 1)
+        self.assertEqual(loss["reason_counts"]["no_final_answer"], 1)
+        self.assertEqual(loss["warning_codes"], [])
+        provider_loss = result["provider_normalization_loss"]
+        provider_counts = provider_loss["counts"]
+        self.assertEqual(provider_loss["scope"], "provider_normalization")
+        self.assertEqual(provider_loss["provider"], "codex")
+        self.assertEqual(provider_counts["tool_payload_policy_drop_count"], 1)
+        self.assertEqual(provider_counts["injected_instruction_policy_drop_count"], 1)
+        self.assertEqual(provider_loss["total_loss_count"], 2)
         messages_path = Path(result["outputs"]["messages_jsonl"])
         turns_path = Path(result["outputs"]["turns_jsonl"])
         events_path = Path(result["outputs"]["events_jsonl"])
@@ -308,6 +327,103 @@ class BuildCleanSourceTests(unittest.TestCase):
         self.assertEqual(turns[0]["clean_end_ordinal"], 1)
         self.assertEqual(turns[0]["scope_labels"], ["technical_work", "open_question"])
 
+    def test_codex_provider_loss_reports_malformed_jsonl_and_unsupported_events(self) -> None:
+        with self.rollout.open("a", encoding="utf-8", newline="\n") as f:
+            f.write("{not json\n")
+            f.write(json.dumps(["not", "an", "object"]) + "\n")
+            f.write(
+                json.dumps(
+                    {
+                        "type": "event_msg",
+                        "timestamp": "2026-05-26T01:05:00Z",
+                        "payload": {"type": "unknown_host_event", "detail": "redacted"},
+                    }
+                )
+                + "\n"
+            )
+            f.write(
+                json.dumps(
+                    {
+                        "type": "response_item",
+                        "timestamp": "2026-05-26T01:05:01Z",
+                        "payload": {"type": "message", "role": "system", "content": []},
+                    }
+                )
+                + "\n"
+            )
+
+        result = clean_source.build_clean_source(self.cwd, rollout=self.rollout)
+        provider_loss = result["provider_normalization_loss"]
+        counts = provider_loss["counts"]
+
+        self.assertEqual(counts["invalid_json_line_count"], 1)
+        self.assertEqual(counts["non_object_line_count"], 1)
+        self.assertEqual(counts["unsupported_event_count"], 1)
+        self.assertEqual(counts["role_policy_drop_count"], 1)
+        self.assertIn("provider_parser_rows_dropped", provider_loss["warning_codes"])
+        self.assertIn("provider_unsupported_events_dropped", provider_loss["warning_codes"])
+        encoded = json.dumps(provider_loss, ensure_ascii=False)
+        self.assertNotIn("unknown_host_event", encoded)
+        self.assertNotIn(str(self.cwd), encoded)
+
+    def test_claude_provider_loss_reports_mixed_valid_and_invalid_transcript(self) -> None:
+        transcript = self.cwd / "claude-session.jsonl"
+        rows = [
+            {
+                "type": "user",
+                "sessionId": "claude-loss",
+                "timestamp": "2026-05-30T05:00:00Z",
+                "cwd": str(self.cwd),
+                "uuid": "u1",
+                "message": {
+                    "role": "user",
+                    "content": [{"type": "text", "text": "Claude valid user message"}],
+                },
+            },
+            {
+                "type": "assistant",
+                "sessionId": "claude-loss",
+                "timestamp": "2026-05-30T05:00:01Z",
+                "uuid": "a1",
+                "parentUuid": "u1",
+                "message": {
+                    "role": "assistant",
+                    "content": [{"type": "text", "text": "Claude valid assistant answer"}],
+                },
+            },
+            {"type": "summary", "summary": "not visible conversation"},
+            {
+                "type": "assistant",
+                "sessionId": "claude-loss",
+                "timestamp": "2026-05-30T05:00:02Z",
+                "uuid": "a2",
+                "message": {"role": "assistant", "content": []},
+            },
+        ]
+        with transcript.open("w", encoding="utf-8", newline="\n") as f:
+            f.write("{bad claude json\n")
+            f.write(json.dumps(["non-object"]) + "\n")
+            for row in rows:
+                f.write(json.dumps(row, ensure_ascii=False) + "\n")
+
+        result = clean_source.build_clean_source(
+            self.cwd,
+            rollout=transcript,
+            output_dir=self.cwd / "claude-clean-source",
+            provider_name="claude-code",
+            provider=ClaudeCodeConversationProvider(self.cwd / "claude-home"),
+        )
+        provider_loss = result["provider_normalization_loss"]
+        counts = provider_loss["counts"]
+
+        self.assertEqual(result["source_provider"], "claude-code")
+        self.assertEqual(result["message_count"], 2)
+        self.assertEqual(counts["invalid_json_line_count"], 1)
+        self.assertEqual(counts["non_object_line_count"], 1)
+        self.assertEqual(counts["unsupported_event_count"], 1)
+        self.assertEqual(counts["empty_text_policy_drop_count"], 1)
+        self.assertIn("provider_normalization_loss_detected", provider_loss["warning_codes"])
+
     def test_clean_source_filters_host_internal_wrappers_before_reopen_surface(self) -> None:
         self._append(
             {
@@ -362,6 +478,74 @@ class BuildCleanSourceTests(unittest.TestCase):
         filtered = [item for item in messages if item.get("host_internal_filtered")]
         self.assertEqual(filtered[0]["text"], "Visible user correction survives.")
         self.assertEqual(filtered[0]["material_class"], "clean_source_text")
+        loss = result["loss_accounting"]
+        self.assertEqual(loss["reason_counts"]["host_internal_empty_after_filter"], 1)
+        self.assertEqual(loss["reason_counts"]["user_empty_after_filter"], 1)
+        self.assertIn("empty_clean_turns", loss["warning_codes"])
+
+    def test_clean_source_loss_accounting_reports_fallback_empty_and_tool_only_turns(
+        self,
+    ) -> None:
+        self.rollout.write_text("", encoding="utf-8")
+        self._append(
+            {"type": "session_meta", "payload": {"id": "session-loss", "cwd": str(self.cwd)}}
+        )
+        self._append(
+            {
+                "type": "event_msg",
+                "timestamp": "2026-05-26T03:00:00Z",
+                "payload": {"type": "user_message", "message": "保留这一轮用户问题。"},
+            }
+        )
+        self._append(
+            {
+                "type": "event_msg",
+                "timestamp": "2026-05-26T03:00:01Z",
+                "payload": {
+                    "type": "agent_message",
+                    "phase": "commentary",
+                    "message": (
+                        "<subagent_notification>{\"path\":\"C:\\\\private\\\\workspace\"}"
+                        "</subagent_notification>"
+                    ),
+                },
+            }
+        )
+        self._append(
+            {
+                "type": "event_msg",
+                "timestamp": "2026-05-26T03:01:00Z",
+                "payload": {"type": "user_message", "message": "这一轮只有工具调用。"},
+            }
+        )
+        self._append(
+            {
+                "type": "response_item",
+                "timestamp": "2026-05-26T03:01:01Z",
+                "payload": {
+                    "type": "function_call",
+                    "name": "functions.shell_command",
+                    "call_id": "call-tool-only",
+                    "arguments": "{\"command\":\"date\"}",
+                },
+            }
+        )
+
+        result = clean_source.build_clean_source(self.cwd, rollout=self.rollout)
+        loss = result["loss_accounting"]
+
+        self.assertEqual(result["message_count"], 2)
+        self.assertEqual(result["turn_count"], 2)
+        self.assertEqual(loss["normalized_message_count"], 3)
+        self.assertEqual(loss["filtered_or_dropped_message_count"], 1)
+        self.assertEqual(loss["user_only_turn_count"], 2)
+        self.assertEqual(loss["turns_with_no_clean_assistant_count"], 2)
+        self.assertEqual(loss["reason_counts"]["no_final_answer"], 2)
+        self.assertEqual(loss["reason_counts"]["fallback_empty"], 1)
+        self.assertEqual(loss["reason_counts"]["host_internal_empty_after_filter"], 1)
+        self.assertEqual(loss["reason_counts"]["tool_only_turn"], 1)
+        self.assertEqual(loss["reason_counts"]["assistant_missing"], 1)
+        self.assertNotIn("C:\\private\\workspace", json.dumps(loss, ensure_ascii=False))
 
     def test_material_sanitizer_classifies_host_control_as_audit_only(self) -> None:
         result = material_sanitizer.classify_source_material(

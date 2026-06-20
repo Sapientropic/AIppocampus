@@ -114,6 +114,82 @@ def _hook_status(clean_manifest: Mapping[str, Any]) -> tuple[bool | None, str]:
     return bool(hook.get("available")), str(hook.get("version_status") or "unknown")
 
 
+def _loss_accounting_projection(
+    clean_manifest: Mapping[str, Any],
+) -> tuple[dict[str, int], list[str]]:
+    loss = _mapping(clean_manifest.get("loss_accounting"))
+    reason_counts = _mapping(loss.get("reason_counts"))
+    warning_codes = [
+        str(item)
+        for item in loss.get("warning_codes") or []
+        if isinstance(item, str) and item
+    ]
+    metrics = {
+        "clean_source_filtered_or_dropped_message_count": _safe_int(
+            loss.get("filtered_or_dropped_message_count")
+        ),
+        "clean_source_user_only_turn_count": _safe_int(loss.get("user_only_turn_count")),
+        "clean_source_empty_clean_turn_count": _safe_int(loss.get("empty_clean_turn_count")),
+        "clean_source_no_clean_assistant_turn_count": _safe_int(
+            loss.get("turns_with_no_clean_assistant_count")
+        ),
+        "clean_source_no_final_answer_count": _safe_int(reason_counts.get("no_final_answer")),
+        "clean_source_tool_only_turn_count": _safe_int(reason_counts.get("tool_only_turn")),
+        "clean_source_empty_after_filter_count": _safe_int(
+            reason_counts.get("empty_after_filter")
+        ),
+        "clean_source_loss_warning_count": len(warning_codes),
+    }
+    degraded_reasons = []
+    if "user_only_turn_spike" in warning_codes:
+        degraded_reasons.append("clean_source_user_only_turn_spike")
+    if "empty_clean_turns" in warning_codes:
+        degraded_reasons.append("clean_source_empty_clean_turns")
+    return metrics, degraded_reasons
+
+
+def _provider_normalization_loss_projection(
+    clean_manifest: Mapping[str, Any],
+) -> tuple[dict[str, Any], list[str], list[str]]:
+    loss = _mapping(clean_manifest.get("provider_normalization_loss"))
+    counts = _mapping(loss.get("counts"))
+    warning_codes = [
+        str(item)
+        for item in loss.get("warning_codes") or []
+        if isinstance(item, str) and item
+    ]
+    invalid_json = _safe_int(counts.get("invalid_json_line_count"))
+    non_object = _safe_int(counts.get("non_object_line_count"))
+    unsupported = _safe_int(counts.get("unsupported_event_count"))
+    policy_drop = _safe_int(loss.get("policy_drop_count"))
+    total_loss = _safe_int(loss.get("total_loss_count"))
+    metrics: dict[str, Any] = {
+        "provider_normalization_loss_reported": bool(loss),
+        "provider_invalid_json_line_count": invalid_json,
+        "provider_non_object_line_count": non_object,
+        "provider_unsupported_event_count": unsupported,
+        "provider_policy_drop_count": policy_drop,
+        "provider_normalization_loss_count": total_loss,
+        "provider_normalization_warning_count": len(warning_codes),
+    }
+    degraded_reasons = []
+    if invalid_json or non_object:
+        degraded_reasons.append("provider_parser_rows_dropped")
+    if unsupported:
+        degraded_reasons.append("provider_unsupported_events_dropped")
+    if policy_drop:
+        degraded_reasons.append("provider_policy_rows_dropped")
+    if "provider_normalization_loss_unreported" in warning_codes:
+        degraded_reasons.append("provider_normalization_loss_unreported")
+    next_steps = []
+    next_step = _mapping(loss.get("operator_next_step"))
+    for key in ("inspect", "plan_rebuild", "rebuild"):
+        value = next_step.get(key)
+        if isinstance(value, str) and value:
+            next_steps.append(value)
+    return metrics, degraded_reasons, next_steps
+
+
 def source_intake_health_summary(
     clean_source_dir: Path,
     clean_manifest: Mapping[str, Any],
@@ -173,6 +249,12 @@ def source_intake_health_summary(
         "user_turn_count",
         "expected_user_turn_count",
     )
+    loss_metrics, loss_degraded_reasons = _loss_accounting_projection(clean_manifest)
+    (
+        provider_loss_metrics,
+        provider_loss_degraded_reasons,
+        provider_loss_next_steps,
+    ) = _provider_normalization_loss_projection(clean_manifest)
 
     metrics = {
         "hook_available": hook_available,
@@ -192,6 +274,8 @@ def source_intake_health_summary(
         "restart_durability_status": restart_durability_status,
         "generic_import_fallback_available": True,
         "registry_path_configured": registry_path is not None,
+        **provider_loss_metrics,
+        **loss_metrics,
     }
     degraded_keys = (
         "stale_hook_path_count",
@@ -208,6 +292,8 @@ def source_intake_health_summary(
         "derived_summary_mismatch_count",
     )
     degraded_reasons = [key for key in degraded_keys if metrics[key]]
+    degraded_reasons.extend(provider_loss_degraded_reasons)
+    degraded_reasons.extend(loss_degraded_reasons)
     if hook_available is False:
         degraded_reasons.append("hook_missing_or_disabled")
     if restart_durability_status == "degraded":
@@ -235,6 +321,7 @@ def source_intake_health_summary(
             "generic_import_fallback",
             "manual_reopen_or_audit",
         ],
+        "operator_next_steps": provider_loss_next_steps,
         "privacy_boundary": {
             "raw_private_text_emitted": False,
             "raw_tool_payload_emitted": False,

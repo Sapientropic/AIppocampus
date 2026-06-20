@@ -889,7 +889,18 @@ class PluginInstallerTests(unittest.TestCase):
             payload["kind"],
             "aippocampus_plugin_uninstall_preview_public_summary",
         )
-        self.assertIn("agent_next_action", payload)
+        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
+        self.assertEqual(payload["agent_next_action"], payload["foreground_action"])
+        self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
+        self.assertEqual(payload["foreground_action"]["id"], "review_plugin_uninstall_preview")
+        self.assertTrue(payload["foreground_action"]["continue_without_command"])
+        uninstall_action = next(
+            action
+            for action in payload["safe_next_actions"]
+            if action["id"] == "uninstall_codex_plugin_after_consent"
+        )
+        self.assertTrue(uninstall_action["requires_user_consent"])
+        self.assertEqual(uninstall_action["mutation_risk"], "explicit_local_plugin_delete")
         self.assertFalse(payload["privacy_boundary"]["local_paths_serialized"])
         self.assertNotIn(str(codex_home), encoded)
         self.assertEqual(operator.returncode, 0, operator.stderr)

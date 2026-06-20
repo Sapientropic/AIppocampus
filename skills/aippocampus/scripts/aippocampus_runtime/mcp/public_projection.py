@@ -144,19 +144,31 @@ def _compact_command_fields(command: Any, *, action_id: str = "") -> dict[str, A
 
 def compact_action(item: Any) -> dict[str, Any]:
     if isinstance(item, dict):
-        action_id = str(item.get("id") or item.get("name") or item.get("action") or "")
+        action_id = str(
+            item.get("id") or item.get("kind") or item.get("name") or item.get("action") or ""
+        )
+        reason = core.compact_text(str(item.get("reason") or item.get("message") or ""), 220)
         command_fields = _compact_command_fields(
             item.get("facade_command") or item.get("command"),
             action_id=action_id,
         )
+        mutates = action_id in _MAINTENANCE_ACTION_IDS and bool(command_fields)
         pairs = {
             "id": action_id,
+            "label": item.get("label")
+            or (action_id.replace("_", " ").strip().capitalize() if action_id else "Recommended action"),
             "severity": item.get("severity") or item.get("level"),
-            "reason": core.compact_text(str(item.get("reason") or item.get("message") or ""), 220),
+            "reason": reason,
+            "why": item.get("why") or reason or "Follow this compact health recommendation before relying on readiness.",
+            "mutation_risk": item.get("mutation_risk")
+            or ("explicit_generated_artifact_write" if mutates else "read_only"),
+            "claim_boundary": item.get("claim_boundary") or "health_readiness_not_source_evidence",
             **command_fields,
             "scope": item.get("scope"),
             "retryable": item.get("retryable"),
         }
+        if not command_fields:
+            pairs["no_command_needed"] = True
         return {key: value for key, value in pairs.items() if value not in (None, "", [])}
     text = core.compact_text(str(item or ""), 220)
     return {"id": "recommended_action", "reason": text} if text else {}
@@ -164,7 +176,7 @@ def compact_action(item: Any) -> dict[str, Any]:
 
 def _action_command_projection(action: dict[str, Any]) -> dict[str, Any]:
     if action.get("command"):
-        return {"kind": "shell_command", "command": action["command"]}
+        return {"command": action["command"]}
     if action.get("command_template"):
         result = {
             "kind": "shell_command_template",
@@ -183,7 +195,7 @@ def _storage_summary_projection(
 ) -> dict[str, Any]:
     summary_command = str(storage_pressure.get("summary_command") or "").strip()
     if summary_command:
-        return {"kind": "shell_command", "command": summary_command}
+        return {"command": summary_command}
     raw_command = ""
     command_field = "command"
     if storage_cleanup_action:
@@ -210,7 +222,7 @@ def _storage_summary_projection(
         if storage_cleanup_action and storage_cleanup_action.get("requires"):
             result["requires"] = storage_cleanup_action["requires"]
         return result
-    return {"kind": "shell_command", "command": summary}
+    return {"command": summary}
 
 
 def compact_health_payload(payload: dict[str, Any]) -> dict[str, Any]:
@@ -344,10 +356,7 @@ def compact_health_payload(payload: dict[str, Any]) -> dict[str, Any]:
             "id": "continue_with_nonblocking_maintenance",
             "label": "Continue recall", "why": "Recall is usable; maintenance is advisory.",
             "mutation_risk": "read_only", "claim_boundary": "health_not_source", "continue_without_command": True,
-            "primary": {
-                "ordinary_first_recall_usable": True,
-                "message": "ordinary source-backed recall/search can continue",
-            },
+            "primary": {"ordinary_first_recall_usable": True},
         }
         if freshness_degraded and exact_latest_action:
             agent_next_action["before_exact_latest_claims"] = _action_command_projection(
@@ -379,7 +388,7 @@ def compact_health_payload(payload: dict[str, Any]) -> dict[str, Any]:
         usable_now=ordinary_usable,
         blocks_first_recall=not ordinary_usable,
         blocks_exact_latest=freshness_degraded,
-        recommended=recommended_action_ids,
+        recommended=[],
         claim_boundary="health_readiness_not_source_evidence",
     )
     workspace_maintenance = None
@@ -401,15 +410,8 @@ def compact_health_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "readiness_card": readiness_card,
         "maintenance_summary": maintenance_summary,
         "operator_detail_command": "aippocampus health --detail full --json",
-        "output_boundary": "compact_foreground_no_operator_diagnostic_objects",
     }
     foreground_fields = canonical_foreground_action_fields(foreground_action)
-    # Health compact JSON already carries the canonical foreground action and
-    # the legacy agent_next_action alias. A one-item safe_next_actions list is a
-    # byte-for-byte mirror, not an alternate path, and it is the easiest way for
-    # operator health diagnostics to crowd out the foreground budget.
-    if foreground_fields.get("safe_next_actions") == [foreground_fields.get("foreground_action")]:
-        foreground_fields.pop("safe_next_actions", None)
     card.update(foreground_fields)
     return _without_empty(card)
 

@@ -14,6 +14,12 @@ What feels confusing, noisy, brittle, or harder than it should be?
 
 What should the user or foreground agent be able to do next?
 
+## Foreground Usefulness Delta
+
+For recall, orient, aippo, ambient, MCP compact, hook, or foreground-action
+surfaces: what becomes clearer, less noisy, or easier to act on? Name the
+load-bearing unknown and the smallest useful next action or reopen route.
+
 ## Current Evidence
 
 Commands, screenshots, docs, or short public-safe snippets:

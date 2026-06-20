@@ -17,7 +17,10 @@ import shutil
 import time
 from pathlib import Path
 
-from aippocampus_runtime.artifacts.publish import artifact_lease
+from aippocampus_runtime.artifacts.publish import (
+    DEFAULT_ARTIFACT_LEASE_WAIT_SECONDS,
+    artifact_lease,
+)
 from aippocampus_runtime.core import (
     codex_home,
     default_thread_segments_dir,
@@ -36,6 +39,7 @@ from aippocampus_runtime.source.rollout import normalize_rollout
 DEFAULT_SEGMENT_BYTES = 64 * 1024 * 1024
 DEFAULT_MAX_MESSAGES = 1200
 DEFAULT_REBUILD_LEASE_STALE_SECONDS = 6 * 60 * 60
+DEFAULT_REBUILD_LEASE_WAIT_SECONDS = DEFAULT_ARTIFACT_LEASE_WAIT_SECONDS
 REBUILD_LEASE_NAME = ".rebuild.lock"
 SEGMENTS_POINTER_NAME = "segments.pointer.json"
 SEGMENTS_GENERATIONS_DIR = "generations"
@@ -282,7 +286,10 @@ def _generation_id_for_manifest(pointer_path: Path, manifest_path: Path | None) 
 
 @contextlib.contextmanager
 def rebuild_lease(
-    output_dir: Path, *, stale_after_seconds: int = DEFAULT_REBUILD_LEASE_STALE_SECONDS
+    output_dir: Path,
+    *,
+    stale_after_seconds: int = DEFAULT_REBUILD_LEASE_STALE_SECONDS,
+    wait_timeout_seconds: float = DEFAULT_REBUILD_LEASE_WAIT_SECONDS,
 ):
     """Allow only one segment rebuild publisher per output directory.
 
@@ -296,6 +303,7 @@ def rebuild_lease(
         output_dir,
         REBUILD_LEASE_NAME,
         stale_after_seconds=stale_after_seconds,
+        wait_timeout_seconds=wait_timeout_seconds,
     ) as lease_path:
         yield lease_path
 

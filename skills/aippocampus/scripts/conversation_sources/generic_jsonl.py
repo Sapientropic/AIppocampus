@@ -7,6 +7,12 @@ import os
 from pathlib import Path
 from typing import Any, Iterable
 
+from aippocampus_runtime.source.normalization_loss import (
+    count_provider_loss,
+    empty_provider_normalization_loss,
+    finalize_provider_normalization_loss,
+)
+
 from .base import ConversationSourceRef
 from .normalized import (
     load_jsonl_dicts,
@@ -60,6 +66,7 @@ class GenericConversationProvider:
 
     def __init__(self, home: str | Path | None = None) -> None:
         self.home = Path(home) if home is not None else generic_import_home()
+        self.last_normalization_loss: dict[str, Any] | None = None
 
     def iter_transcripts(self) -> Iterable[Path]:
         if self.home.is_file():
@@ -172,8 +179,9 @@ class GenericConversationProvider:
         turn_ids: dict[str, int] = {}
         current_turn = 0
         session_id: str | None = None
+        normalization_loss = empty_provider_normalization_loss(self.name)
 
-        for line_no, item in load_jsonl_dicts(path):
+        for line_no, item in load_jsonl_dicts(path, normalization_loss=normalization_loss):
             missing = [field for field in REQUIRED_ROW_FIELDS if not _string(item.get(field))]
             if missing:
                 raise GenericJsonlValidationError(
@@ -195,6 +203,7 @@ class GenericConversationProvider:
                 )
             role = _string(item.get("role")).casefold()
             if role == "system":
+                count_provider_loss(normalization_loss, "system_role_policy_drop_count")
                 continue
             if role not in {"user", "assistant"}:
                 raise GenericJsonlValidationError(
@@ -251,6 +260,7 @@ class GenericConversationProvider:
                 )
             )
 
+        self.last_normalization_loss = finalize_provider_normalization_loss(normalization_loss)
         return messages, turn_summaries(messages)
 
 

@@ -1108,6 +1108,9 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertEqual(payload["summary"]["agent_callable_status"], "host_live_probe_ok_foreground_probe_not_checked")
         self.assertTrue(payload["summary"]["partial_readiness"])
         self.assertIn("hooks_status", payload["summary"]["deferred_components"])
+        self.assertEqual(payload["summary"]["ambient_recall_state"], "deferred")
+        self.assertEqual(payload["ambient_recall"]["state"], "deferred")
+        self.assertIn("hooks:deferred", payload["ambient_recall"]["issue_codes"])
         self.assertEqual(
             payload["setup_card"]["operator_detail_command"],
             "aippocampus update status --operator-json",

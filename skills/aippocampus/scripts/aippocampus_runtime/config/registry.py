@@ -417,6 +417,7 @@ def config_summary_report(report: Mapping[str, object]) -> dict[str, object]:
             "why": "All observed AIPPOCAMPUS_* environment names are registered; open the full inventory only for operator audit.",
             "mutation_risk": "read_only",
             "claim_boundary": "operator_diagnostic_not_source_evidence",
+            "continue_without_command": True,
         }
         recommended_actions = []
     action_fields = canonical_foreground_action_fields(

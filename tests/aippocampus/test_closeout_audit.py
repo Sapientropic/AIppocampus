@@ -197,6 +197,84 @@ class CloseoutAuditTests(unittest.TestCase):
         self.assertEqual(report["evidence_level"], "contract_fixture")
         self.assertIn("behavior_run", report["required_evidence_levels"])
 
+    def test_runtime_default_change_requires_benchmark_outcome_or_rationale(self) -> None:
+        report = closeout_audit.audit_pr_body(
+            """
+            ## Summary
+            Runtime/default policy change: make the new route ranking default.
+
+            Closes #2379.
+            """
+        )
+
+        self.assertFalse(report["ok"], report)
+        self.assertEqual(
+            report["findings"][0]["kind"],
+            "missing_benchmark_adoption_outcome",
+        )
+        self.assertTrue(report["default_runtime_change_signal"])
+
+    def test_runtime_default_change_accepts_passing_adoption_outcome(self) -> None:
+        report = closeout_audit.audit_pr_body(
+            """
+            ## Summary
+            Runtime/default policy change: make the new route ranking default.
+            Benchmark outcome card: runtime_policy_adoption_gate_ok: true.
+
+            Closes #2379.
+            """
+        )
+
+        self.assertTrue(report["ok"], report)
+        self.assertTrue(report["has_benchmark_adoption_outcome"])
+
+    def test_diagnostic_only_outcome_cannot_authorize_default_change(self) -> None:
+        report = closeout_audit.audit_pr_body(
+            """
+            ## Summary
+            Runtime/default policy change: make the new route ranking default.
+            Benchmark outcome card: diagnostic-only result approves default adoption.
+
+            Closes #2379.
+            """
+        )
+
+        self.assertFalse(report["ok"], report)
+        kinds = [finding["kind"] for finding in report["findings"]]
+        self.assertIn("diagnostic_outcome_authorizes_default", kinds)
+
+    def test_runtime_default_change_accepts_explicit_non_benchmark_override(self) -> None:
+        report = closeout_audit.audit_pr_body(
+            """
+            ## Summary
+            Runtime/default policy change: keep the CLI status wording default.
+            Non-benchmark rationale: small internal refactor; no routing,
+            hook, ranking, or policy gate behavior changed.
+
+            Closes #2379.
+            """
+        )
+
+        self.assertTrue(report["ok"], report)
+        self.assertTrue(report["has_non_benchmark_adoption_rationale"])
+
+    def test_blank_runtime_default_template_field_does_not_trigger_guard(self) -> None:
+        report = closeout_audit.audit_pr_body(
+            """
+            ## Summary
+            Small CLI wording fix.
+
+            Runtime/default policy change:
+            Benchmark outcome card or gate:
+            Non-benchmark rationale / override:
+
+            Closes #2379.
+            """
+        )
+
+        self.assertTrue(report["ok"], report)
+        self.assertFalse(report["default_runtime_change_signal"])
+
     def test_benchmark_source_side_closeout_requires_aippocampus_orientation(
         self,
     ) -> None:

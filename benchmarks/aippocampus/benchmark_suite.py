@@ -29,6 +29,7 @@ import benchmark_memory_decision_gate as gate_benchmark
 import benchmark_payload_fidelity as payload_benchmark
 import benchmark_source_evidence_retrieval as retrieval_benchmark
 from shared.benchmark_entrypoints import benchmark_entrypoint_manifest
+from shared.benchmark_outcome_router import benchmark_report_outcome_digest
 from shared.benchmark_report_contract import (
     benchmark_cli_summary,
     benchmark_report_contract_lint,
@@ -1120,7 +1121,7 @@ def run_benchmark_suite_with_config(config: BenchmarkSuiteConfig) -> dict[str, A
             1 for item in benchmark_contract_lint.values() if not item.get("ok")
         ),
     )
-    return {
+    payload = {
         "schema_version": SCHEMA_VERSION,
         "kind": "aippocampus_benchmark_suite",
         "generated_at": now_utc(),
@@ -1151,6 +1152,8 @@ def run_benchmark_suite_with_config(config: BenchmarkSuiteConfig) -> dict[str, A
         "cannot_claim": cannot_claim,
         "elapsed_ms": round((time.perf_counter() - started) * 1000, 2),
     }
+    payload["outcome_digest"] = benchmark_report_outcome_digest(payload)
+    return payload
 
 
 def print_human_summary(payload: dict[str, Any]) -> None:
@@ -1226,6 +1229,8 @@ def compact_json_summary(
             "cite_status": claimability["cite_status"],
             "track_statuses": payload.get("track_statuses") or {},
             "best_next_benchmark": claimability["best_next_benchmark"],
+            "outcome_digest": payload.get("outcome_digest")
+            or benchmark_report_outcome_digest(payload),
         }
     )
     return summary
@@ -1590,6 +1595,7 @@ def main() -> int:
     payload = run_benchmark_suite_with_config(benchmark_suite_config_from_args(args))
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
+        payload["outcome_digest"] = benchmark_report_outcome_digest(payload, report_path=args.output)
         args.output.write_text(
             json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
             encoding="utf-8",

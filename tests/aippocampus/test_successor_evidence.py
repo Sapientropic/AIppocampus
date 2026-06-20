@@ -187,7 +187,8 @@ class SuccessorEvidenceTests(unittest.TestCase):
         )
         self.assertIn("large_association_term_count", by_issue[1963]["metrics"])
         self.assertTrue(by_issue[1964]["metrics"]["source_addressable_card_rate_reported"])
-        self.assertIn("real_producer_complete_count", by_issue[1965]["metrics"])
+        self.assertIn("fixture_replay_complete_count", by_issue[1965]["metrics"])
+        self.assertIn("runtime_line_signal_producer_present", by_issue[1965]["metrics"])
         self.assertIn("real_foreground_packet_path_count", by_issue[1966]["metrics"])
         self.assertIn("active_arm_delta_vs_fts_only", by_issue[1967]["metrics"])
         self.assertIn("aippocampus_delta_vs_fresh_missing_context", by_issue[1968]["metrics"])
@@ -227,7 +228,10 @@ class SuccessorEvidenceTests(unittest.TestCase):
 
         self.assertGreaterEqual(macro_metrics["macro_replay_case_count"], 4)
         self.assertEqual(macro_metrics["macro_fixture_only_case_count"], 1)
-        self.assertGreaterEqual(macro_metrics["real_producer_complete_count"], 1)
+        self.assertGreaterEqual(macro_metrics["fixture_replay_complete_count"], 1)
+        self.assertEqual(macro_metrics["real_producer_complete_count"], 0)
+        self.assertFalse(macro_metrics["runtime_line_signal_producer_present"])
+        self.assertEqual(macro_metrics["runtime_macro_state_write_count"], 0)
         self.assertGreaterEqual(macro_metrics["macro_helpful_route_change_count"], 1)
         self.assertGreaterEqual(
             macro_metrics["macro_helpful_deepen_or_recheck_change_count"],

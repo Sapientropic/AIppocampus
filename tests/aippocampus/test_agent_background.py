@@ -169,10 +169,13 @@ class AgentBackgroundTests(unittest.TestCase):
         self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
         self.assertEqual(action["id"], "background_for_task_cue")
         self.assertEqual(action["tool_name"], "agent_background")
+        self.assertEqual(action["command_template"], 'aippocampus agent background "{task_cue}" --json')
+        self.assertTrue(action["template_only"])
         self.assertEqual(action["arguments_template"], {"task": "{task_cue}"})
         self.assertNotIn("command", action)
         self.assertIn("cli_fallback", action)
         self.assertEqual(action["cli_fallback"]["command_template"], 'aippocampus agent background "{task_cue}" --json')
+        self.assertTrue(action["cli_fallback"]["template_only"])
         self.assertEqual(payload["agent_next_action"], action)
         self.assertEqual(payload["safe_next_actions"][0], action)
 

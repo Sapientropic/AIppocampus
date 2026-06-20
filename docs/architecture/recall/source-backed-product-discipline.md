@@ -78,3 +78,12 @@ the agent should reopen current issue comments and run the relevant source route
 or owner test. A Task Orientation Packet can guide the first route, but issue
 closure still needs fresh evidence from source, code, tests, or verified
 GitHub state.
+
+For PRs that touch recall, orient, AIppo, ambient, MCP compact, hook, or
+foreground-action surfaces, closeout should also name the foreground usefulness
+delta. The useful check is not "did we add more caveat fields?" but "does the
+next foreground agent know the situation, the load-bearing unknown, and the
+smallest useful next action or reopen route?" Visible `cannot_claim`,
+`claim_boundary`, or source-open pressure belongs in compact/default output only
+when it answers that load-bearing risk; otherwise keep the detail behind
+full/explain/deepen/operator views.

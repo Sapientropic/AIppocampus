@@ -34,6 +34,7 @@ def _template_action(
         "id": action_id,
         "label": label,
         "command_template": command_template,
+        "template_only": True,
         "requires": list(requires),
         "mutation_risk": mutation_risk,
         "claim_boundary": claim_boundary,

@@ -163,16 +163,8 @@ def print_import_recovery_card(*, file: TextIO | None = None) -> None:
 def plugin_chooser_payload() -> dict[str, Any]:
     return foreground_chooser_card(
         kind="aippocampus_plugin_chooser",
-        decision="choose plugin status, verify, or install",
+        decision="check plugin status before choosing any install or rollback write",
         choices=[
-            foreground_shell_action(
-                action_id="install_or_refresh_codex_plugin",
-                label="Install or refresh Codex plugin",
-                command="aippocampus plugin install --codex --verify --json",
-                why="This is the ordinary Codex setup path and verifies host-visible tools after refresh.",
-                mutation_risk="explicit_local_plugin_write",
-                claim_boundary="host_setup_not_memory_evidence",
-            ),
             foreground_shell_action(
                 action_id="check_codex_plugin_status",
                 label="Check Codex plugin status",
@@ -180,6 +172,14 @@ def plugin_chooser_payload() -> dict[str, Any]:
                 why="Read current freshness/callability without changing local plugin files.",
                 mutation_risk="read_only",
                 claim_boundary="host_status_not_memory_evidence",
+            ),
+            foreground_shell_action(
+                action_id="install_or_refresh_codex_plugin",
+                label="Install or refresh Codex plugin",
+                command="aippocampus plugin install --codex --verify --json",
+                why="Run only after the status check or an explicit setup request; it refreshes local Codex plugin files.",
+                mutation_risk="explicit_local_plugin_write",
+                claim_boundary="host_setup_not_memory_evidence",
             ),
             foreground_shell_action(
                 action_id="preview_codex_plugin_uninstall",
@@ -514,6 +514,7 @@ def _template_action(
         "id": action_id,
         "label": label,
         "command_template": command_template,
+        "template_only": True,
         "mutation_risk": mutation_risk,
         "claim_boundary": claim_boundary,
         "why": why,

@@ -483,6 +483,11 @@ class AippocampusMaintenanceTests(unittest.TestCase):
         self.assertEqual(payload["health_probe"]["status"], "compact_readiness_probe")
         self.assertTrue(payload["health_probe"]["full_diagnostics_deferred"])
         self.assertEqual(payload["full_audit_flag"], "--json")
+        self.assertNotIn("operator_detail", payload)
+        self.assertEqual(
+            payload["operator_detail_command"],
+            "aippocampus maintenance plan --json",
+        )
         self.assertEqual(payload["apply_command"], "aippocampus maintenance apply --summary-json")
         self.assertEqual(health_calls, [])
 
@@ -511,6 +516,7 @@ class AippocampusMaintenanceTests(unittest.TestCase):
         self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
         self.assertEqual(payload["health_probe"]["status"], "failed")
         self.assertIn("health probe timeout", payload["health_probe"]["message"])
+        self.assertNotIn("operator_detail", payload)
 
     def test_plan_is_read_only_and_does_not_run_maintenance_actions(self) -> None:
         probe_calls: list[Path] = []
@@ -574,6 +580,11 @@ class AippocampusMaintenanceTests(unittest.TestCase):
         self.assertEqual(apply_action["command"], "aippocampus maintenance apply --summary-json")
         self.assertTrue(apply_action["requires_user_consent"])
         self.assertIn("git status --short", apply_action["preflight_commands"])
+        self.assertNotIn("operator_detail", payload)
+        self.assertEqual(
+            payload["operator_detail_command"],
+            "aippocampus maintenance plan --json",
+        )
         self.assertNotIn("health_error", payload)
 
     def test_plan_projects_health_state_without_nested_health_error_or_duplicate_actions(self) -> None:
@@ -625,7 +636,11 @@ class AippocampusMaintenanceTests(unittest.TestCase):
         self.assertNotIn("health_error", payload)
         self.assertNotIn("health_returncode", payload)
         self.assertNotIn("best_next_action", payload)
-        self.assertEqual(payload["operator_detail"]["best_next_action"]["id"], "build_clean_source")
+        self.assertNotIn("operator_detail", payload)
+        self.assertEqual(
+            payload["operator_detail_command"],
+            "aippocampus maintenance plan --json",
+        )
         self.assertEqual(payload["user_impact"]["recall_usable"], "degraded")
         self.assertEqual(payload["user_impact"]["first_recall_phase"], "cold_start_maintenance_required")
         self.assertTrue(payload["user_impact"]["cold_start_expected"])
@@ -723,14 +738,18 @@ class AippocampusMaintenanceTests(unittest.TestCase):
         payload = json.loads(stdout.getvalue())
 
         self.assertEqual(code, 0)
-        self.assertEqual(
-            payload["operator_detail"]["best_next_action"]["command"],
-            "aippocampus storage gc --dry-run --json --top 1 --cwd .",
-        )
         self.assertEqual(payload["agent_next_action"]["id"], "review_maintenance_plan")
         self.assertFalse(payload["agent_next_action"]["mutates"])
         action_ids = [action["id"] for action in payload["safe_next_actions"]]
         self.assertIn("storage_gc_audit", action_ids)
+        storage_action = next(
+            action for action in payload["safe_next_actions"] if action["id"] == "storage_gc_audit"
+        )
+        self.assertEqual(
+            storage_action["command"],
+            "aippocampus storage gc --dry-run --json --top 1 --cwd .",
+        )
+        self.assertNotIn("operator_detail", payload)
 
     def test_default_help_hides_activation_compaction_flags(self) -> None:
         with (

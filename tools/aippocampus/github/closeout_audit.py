@@ -105,6 +105,49 @@ ISOLATED_EXPERIMENT_RE = re.compile(
     r"\b(isolated[_ -]?experiment|proxy[_ -]?baseline|narrow[_ -]?experiment)\b",
     re.I,
 )
+DEFAULT_RUNTIME_CHANGE_RE = re.compile(
+    r"\b("
+    r"runtime default change|default behavior change|"
+    r"default routing change|default adoption change|changed default routing|"
+    r"changed default behavior|hook foreground behavior changed|ranking default changed|"
+    r"policy gate default changed"
+    r")\b",
+    re.I,
+)
+DEFAULT_RUNTIME_CHANGE_FIELD_RE = re.compile(
+    r"^\s*-?\s*Runtime/default policy change:[ \t]*(?P<value>.*)$",
+    re.I | re.M,
+)
+BENCHMARK_ADOPTION_OUTCOME_RE = re.compile(
+    r"\b("
+    r"runtime_policy_adoption_gate_ok\s*[:=]\s*true|"
+    r"default_adoption_gate_ok\s*[:=]\s*true|"
+    r"adoption_action\s*[:=]\s*allow_default_adoption|"
+    r"adoption_scope\s*[:=]"
+    r")",
+    re.I,
+)
+BENCHMARK_ADOPTION_FIELD_RE = re.compile(
+    r"^\s*-?\s*Benchmark outcome card or gate:[ \t]*(?P<value>.*)$",
+    re.I | re.M,
+)
+NON_BENCHMARK_ADOPTION_RATIONALE_RE = re.compile(
+    r"\b("
+    r"not benchmark[- ]gated|benchmark[- ]gated\s*[:=]\s*no|"
+    r"human override|override rationale|small internal refactor|contract[- ]only default"
+    r")\b",
+    re.I,
+)
+NON_BENCHMARK_ADOPTION_RATIONALE_FIELD_RE = re.compile(
+    r"^\s*-?\s*Non[- ]benchmark rationale(?:\s*/\s*override)?:[ \t]*(?P<value>.*)$",
+    re.I | re.M,
+)
+DIAGNOSTIC_DEFAULT_AUTHORITY_RE = re.compile(
+    r"\bdiagnostic[- ]only\b.{0,120}\b("
+    r"authorize|allow|approve|promote|default adoption|default behavior|default routing"
+    r")\b|\b(default adoption|default behavior|default routing)\b.{0,120}\bdiagnostic[- ]only\b",
+    re.I | re.S,
+)
 FOLLOWUP_RE = re.compile(
     r"\b("
     r"remaining[_ -]?gap|followup[_ -]?issue|follow[- ]up issue|"
@@ -415,6 +458,34 @@ def _honest_lower_evidence_followup(closeout_class: str | None, has_followup_poi
     return bool(has_followup_pointer and closeout_class in {"complete_with_followups", "blocker_recorded"})
 
 
+def _field_has_substantive_value(match: re.Match[str]) -> bool:
+    value = match.group("value").strip().strip("`").casefold()
+    return value not in {"", "no", "none", "n/a", "not applicable", "not_applicable"}
+
+
+def _default_runtime_change_signal(body: str, evidence_level: str | None) -> bool:
+    if evidence_level == "default_adoption":
+        return True
+    if any(_field_has_substantive_value(match) for match in DEFAULT_RUNTIME_CHANGE_FIELD_RE.finditer(body)):
+        return True
+    return bool(DEFAULT_RUNTIME_CHANGE_RE.search(body))
+
+
+def _has_benchmark_adoption_outcome(body: str) -> bool:
+    if any(_field_has_substantive_value(match) for match in BENCHMARK_ADOPTION_FIELD_RE.finditer(body)):
+        return True
+    return bool(BENCHMARK_ADOPTION_OUTCOME_RE.search(body))
+
+
+def _has_non_benchmark_adoption_rationale(body: str) -> bool:
+    if any(
+        _field_has_substantive_value(match)
+        for match in NON_BENCHMARK_ADOPTION_RATIONALE_FIELD_RE.finditer(body)
+    ):
+        return True
+    return bool(NON_BENCHMARK_ADOPTION_RATIONALE_RE.search(body))
+
+
 def _has_followup_pointer(body: str) -> bool:
     in_followup_section = False
     for line in body.splitlines():
@@ -497,6 +568,10 @@ def audit_pr_body(
     )
     has_aippocampus_orientation = bool(AIPPOCAMPUS_ORIENTATION_RE.search(text))
     has_isolated_experiment_label = bool(ISOLATED_EXPERIMENT_RE.search(text))
+    default_runtime_change_signal = _default_runtime_change_signal(text, evidence_level)
+    has_benchmark_adoption_outcome = _has_benchmark_adoption_outcome(text)
+    has_non_benchmark_adoption_rationale = _has_non_benchmark_adoption_rationale(text)
+    diagnostic_default_authority = bool(DIAGNOSTIC_DEFAULT_AUTHORITY_RE.search(text))
     findings: list[dict[str, Any]] = []
 
     if closing_issues and closeout_class == "narrow_slice_only":
@@ -595,6 +670,42 @@ def audit_pr_body(
             }
         )
 
+    if (
+        closing_issues
+        and diagnostic_default_authority
+        and not has_non_benchmark_adoption_rationale
+    ):
+        findings.append(
+            {
+                "kind": "diagnostic_outcome_authorizes_default",
+                "severity": "error",
+                "message": (
+                    "Diagnostic-only benchmark results cannot silently authorize "
+                    "runtime/default behavior changes. Cite a passing adoption "
+                    "outcome card or state an explicit non-benchmark override."
+                ),
+                "closing_issues": closing_issues,
+            }
+        )
+
+    if (
+        closing_issues
+        and default_runtime_change_signal
+        and not has_benchmark_adoption_outcome
+        and not has_non_benchmark_adoption_rationale
+    ):
+        findings.append(
+            {
+                "kind": "missing_benchmark_adoption_outcome",
+                "severity": "error",
+                "message": (
+                    "Runtime/default behavior changes need a cited benchmark "
+                    "outcome card or an explicit non-benchmark rationale."
+                ),
+                "closing_issues": closing_issues,
+            }
+        )
+
     return {
         "kind": "aippocampus_closeout_audit",
         "schema_version": SCHEMA_VERSION,
@@ -610,6 +721,9 @@ def audit_pr_body(
         "benchmark_local_scaffold_terms": benchmark_local_scaffold_terms,
         "has_aippocampus_orientation": has_aippocampus_orientation,
         "has_isolated_experiment_label": has_isolated_experiment_label,
+        "default_runtime_change_signal": default_runtime_change_signal,
+        "has_benchmark_adoption_outcome": has_benchmark_adoption_outcome,
+        "has_non_benchmark_adoption_rationale": has_non_benchmark_adoption_rationale,
         "has_followup_pointer": has_followup_pointer,
         "findings": findings,
         "policy": {
@@ -622,6 +736,7 @@ def audit_pr_body(
             ],
             "evidence_levels": list(EVIDENCE_LEVELS),
             "benchmark_source_side_orientation_required": True,
+            "runtime_default_changes_need_benchmark_outcome_or_rationale": True,
             "heuristic_only": True,
         },
     }

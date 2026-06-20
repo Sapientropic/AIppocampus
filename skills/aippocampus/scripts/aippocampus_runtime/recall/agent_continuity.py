@@ -739,6 +739,7 @@ def macro_orientation(
                 "id": "recall_project_macro_orientation",
                 "label": "Recall project macro-orientation context",
                 "command_template": 'aippocampus agent recall "{cue}" --json',
+                "template_only": True,
                 "requires": ["cue"],
                 "mutation_risk": "read_only",
                 "claim_boundary": "no_claim_before_reopen",

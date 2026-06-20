@@ -247,6 +247,8 @@ class AgentFeedbackMacroCliTests(unittest.TestCase):
         self.assertNotIn('"memory_packets"', proc.stdout)
         payload = json.loads(json_proc.stdout)
         encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertTrue(payload["ok"])
+        self.assertTrue(payload["fallback_available"])
         self.assertIsInstance(payload["agent_next_action"], dict)
         self.assertEqual(payload["detail"], "compact")
         self.assertNotIn("cannot_claim", payload)

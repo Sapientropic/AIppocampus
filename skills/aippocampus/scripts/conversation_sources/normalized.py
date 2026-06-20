@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 from typing import Any, Iterable
 
+from aippocampus_runtime.source.normalization_loss import count_provider_loss
 from aippocampus_runtime.source.turns import empty_turn, message_digest
 
 from .base import ConversationSourceRef, NormalizedConversationMessage
@@ -111,7 +112,11 @@ def turn_summaries(messages: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
     return [turns[key] for key in sorted(turns)]
 
 
-def load_jsonl_dicts(path: Path) -> Iterable[tuple[int, dict[str, Any]]]:
+def load_jsonl_dicts(
+    path: Path,
+    *,
+    normalization_loss: dict[str, Any] | None = None,
+) -> Iterable[tuple[int, dict[str, Any]]]:
     if not path.is_file():
         return
     with path.open("r", encoding="utf-8") as f:
@@ -119,6 +124,10 @@ def load_jsonl_dicts(path: Path) -> Iterable[tuple[int, dict[str, Any]]]:
             try:
                 item = json.loads(line)
             except json.JSONDecodeError:
+                if normalization_loss is not None:
+                    count_provider_loss(normalization_loss, "invalid_json_line_count")
                 continue
             if isinstance(item, dict):
                 yield line_no, item
+            elif normalization_loss is not None:
+                count_provider_loss(normalization_loss, "non_object_line_count")

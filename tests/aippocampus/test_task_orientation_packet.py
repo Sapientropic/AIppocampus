@@ -10,7 +10,10 @@ SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 from aippocampus_runtime.cli import facade  # noqa: E402
-from aippocampus_runtime.contracts import executable_command_violations  # noqa: E402
+from aippocampus_runtime.contracts import (  # noqa: E402
+    executable_command_violations,
+    foreground_action_contract_violations,
+)
 from aippocampus_runtime.recall import task_orientation, understanding_state  # noqa: E402
 
 
@@ -24,17 +27,19 @@ class TaskOrientationPacketTests(unittest.TestCase):
 
         self.assertEqual(packet["kind"], "aippocampus_task_orientation_packet")
         self.assertEqual(packet["status"], "ok")
-        self.assertEqual(packet["understanding_state_read_model"]["authority"], "navigation_only_not_fact")
-        self.assertEqual(
-            packet["understanding_state_read_model"]["truth_authority"],
-            "clean_source_after_reopen",
-        )
-        self.assertEqual(packet["understanding_state_read_model"]["storage"], "derived_no_new_truth_store")
-        self.assertEqual(packet["active_path_packet"]["kind"], "aippocampus_active_path_packet")
-        self.assertLessEqual(packet["active_path_packet"]["path_count"], 3)
+        self.assertEqual(packet["detail"], "compact")
+        self.assertIn("current_orientation", packet)
+        self.assertLessEqual(packet["current_orientation"]["active_path_count"], 3)
+        self.assertNotIn("understanding_state_read_model", packet)
+        self.assertNotIn("active_path_packet", packet)
+        self.assertNotIn("external_source_anchors", packet)
+        self.assertNotIn("suppressed_external_source_anchors", packet)
+        self.assertNotIn("learning_and_aippo_constraints", packet)
+        self.assertNotIn("suppressed_constraints", packet)
         self.assertIn("route_plan", packet)
         self.assertGreaterEqual(len(packet["route_plan"]["first_sources_to_reopen"]), 1)
         self.assertGreaterEqual(len(packet["route_plan"]["stop_conditions"]), 2)
+        self.assertLessEqual(len(packet["source_routes"]), 3)
         self.assertTrue(packet["source_boundary"]["navigation_not_truth"])
         self.assertFalse(packet["source_boundary"]["raw_source_text_serialized"])
         self.assertFalse(packet["source_boundary"]["local_paths_serialized"])
@@ -42,19 +47,27 @@ class TaskOrientationPacketTests(unittest.TestCase):
         self.assertIn("operator_detail_command", packet)
         self.assertNotIn("cannot_claim", packet)
         self.assertNotIn("red_lines", packet)
-        self.assertNotIn("foreground_json_bytes", packet["metrics"])
-        self.assertNotIn("foreground_byte_budget", packet["metrics"])
+        self.assertNotIn("metrics", packet)
         full_packet = task_orientation.build_task_orientation_packet(
             "Land Task Orientation Packets across agent recall, AIppo, and issue work guard",
             project="AIppocampus",
             detail="full",
         )
+        self.assertEqual(full_packet["understanding_state_read_model"]["authority"], "navigation_only_not_fact")
+        self.assertEqual(
+            full_packet["understanding_state_read_model"]["truth_authority"],
+            "clean_source_after_reopen",
+        )
+        self.assertEqual(full_packet["understanding_state_read_model"]["storage"], "derived_no_new_truth_store")
+        self.assertEqual(full_packet["active_path_packet"]["kind"], "aippocampus_active_path_packet")
+        self.assertLessEqual(full_packet["active_path_packet"]["path_count"], 3)
         self.assertIn("cannot_claim", full_packet)
         self.assertIn("red_lines", full_packet)
         self.assertIn("foreground_json_bytes", full_packet["metrics"])
-        self.assertNotIn("trust_taxonomy", packet["active_path_packet"])
+        self.assertNotIn("trust_taxonomy", full_packet["active_path_packet"])
         self.assertNotIn("active_path_packet_proves_memory_fact", encoded)
         self.assertEqual(executable_command_violations(packet), [])
+        self.assertEqual(foreground_action_contract_violations(packet), [])
         self.assertNotIn("get_turn_context", encoded)
         self.assertNotIn("PRIVATE_SOURCE_SENTINEL", encoded)
         self.assertNotIn("PRIVATE_SUMMARY_SENTINEL", encoded)
@@ -64,7 +77,8 @@ class TaskOrientationPacketTests(unittest.TestCase):
 
     def test_external_source_anchors_have_roles_and_stale_boundaries(self) -> None:
         packet = task_orientation.build_task_orientation_packet(
-            "Connect papers, GitHub issues, and docs without treating them as memory truth"
+            "Connect papers, GitHub issues, and docs without treating them as memory truth",
+            detail="full",
         )
         anchors = packet["external_source_anchors"]
         suppressed = packet["suppressed_external_source_anchors"]
@@ -91,7 +105,8 @@ class TaskOrientationPacketTests(unittest.TestCase):
 
     def test_learning_loop_and_aippo_constraints_feed_route_readiness_only(self) -> None:
         packet = task_orientation.build_task_orientation_packet(
-            "Use learning-loop and AIppo constraints when orienting a new agent to issue work"
+            "Use learning-loop and AIppo constraints when orienting a new agent to issue work",
+            detail="full",
         )
         constraints = packet["learning_and_aippo_constraints"]
 
@@ -111,7 +126,7 @@ class TaskOrientationPacketTests(unittest.TestCase):
         self.assertEqual(full_packet["red_lines"]["learning_constraint_promoted_to_fact"], 0)
         self.assertEqual(full_packet["red_lines"]["unripe_constraint_ranked_as_current"], 0)
 
-        quiet = task_orientation.build_task_orientation_packet("Fix typo in README")
+        quiet = task_orientation.build_task_orientation_packet("Fix typo in README", detail="full")
         self.assertFalse(quiet["issue_work_guard"]["should_pull"])
         self.assertNotIn(
             "issue_work_guard",
@@ -263,10 +278,14 @@ class TaskOrientationPacketTests(unittest.TestCase):
         self.assertEqual(payload["kind"], "aippocampus_task_orientation_packet")
         self.assertEqual(payload["mode"], "orient")
         self.assertIn("product_boundary", payload)
+        self.assertIn("current_orientation", payload)
+        self.assertNotIn("active_path_packet", payload)
+        self.assertNotIn("suppressed_detail", payload)
         self.assertNotIn("cannot_claim", payload)
         self.assertNotIn("red_lines", payload)
         self.assertEqual(payload["foreground_action"]["command_template"], 'aippocampus agent recall "{task}" --json')
         self.assertEqual(executable_command_violations(payload), [])
+        self.assertEqual(foreground_action_contract_violations(payload), [])
 
         full_result = facade.run_command(
             [

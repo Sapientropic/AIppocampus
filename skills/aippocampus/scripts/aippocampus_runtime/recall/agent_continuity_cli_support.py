@@ -593,6 +593,7 @@ def missing_feedback_route_payload(
                 f"aippocampus agent feedback {shell_quote(choice['route_id'])} "
                 "--outcome {{feedback_outcome}} --json"
             ),
+            "template_only": True,
             "requires": ["feedback_outcome"],
             "outcome_choices": outcome_choices,
             "route_id": choice["route_id"],
@@ -615,6 +616,7 @@ def missing_feedback_route_payload(
         ),
         {
             "id": "deepen_if_needed",
+            "label": "Deepen route before judging",
             "command": "aippocampus agent deepen --request 1 --last-recall --json",
             "mutation_risk": "read_only",
             "claim_boundary": "no_claim_before_reopen",
@@ -622,9 +624,11 @@ def missing_feedback_route_payload(
         },
         {
             "id": "record_route_feedback",
+            "label": "Record route feedback",
             "command_template": (
                 "aippocampus agent feedback {route_id} --outcome {feedback_outcome} --json"
             ),
+            "template_only": True,
             "requires": ["route_id", "feedback_outcome"],
             "mutation_risk": "durable_low_authority_feedback_write",
             "claim_boundary": "feedback_is_not_source_truth",

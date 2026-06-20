@@ -98,10 +98,7 @@ class AippocampusHealthTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertTrue(payload["ok"])
         self.assertEqual(payload["agent_next_action"]["id"], "continue_with_nonblocking_maintenance")
-        self.assertEqual(
-            payload["agent_next_action"]["primary"]["message"],
-            "ordinary source-backed recall/search can continue",
-        )
+        self.assertTrue(payload["agent_next_action"]["primary"]["ordinary_first_recall_usable"])
         self.assertEqual(
             payload["maintenance_summary"]["recommended_action_ids"][0],
             "prepare_graphify_corpus",

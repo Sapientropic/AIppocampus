@@ -630,14 +630,26 @@ class AippocampusCliRecoveryCardTests(unittest.TestCase):
         self.assertEqual(import_json.returncode, 0, import_json.stderr)
         payload = json.loads(import_json.stdout)
         self.assertEqual(payload["kind"], "aippocampus_import_recovery")
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["status"], "choose_action")
         self.assertEqual(payload["surface_class"], "foreground_chooser_card")
         self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
         self.assertFalse(payload["write_boundary"]["written"])
+        self.assertTrue(payload["write_boundary"]["explicit_write_required"])
         self.assertTrue(payload["safety"]["no_write_happened"])
         self.assertEqual(payload["agent_next_action"], payload["safe_next_actions"][0])
         self.assertEqual(payload["agent_next_action"]["id"], "preview_conversation_import")
         self.assertEqual(payload["agent_next_action"]["requires"], ["input_path"])
+        self.assertNotIn(
+            "import_private_bundle",
+            {action["id"] for action in payload["safe_next_actions"]},
+        )
+        self.assertIn(
+            "import_private_bundle",
+            {action["id"] for action in payload["write_actions"]},
+        )
         self.assertIn("bundle_import", payload["choices"])
+        self.assertTrue(payload["choices"]["bundle_import"]["template_only"])
         self.assertIn("conversation_import", payload["choices"])
         conversation_choice = payload["choices"]["conversation_import"]
         self.assertIn("--dry-run --json", conversation_choice["preview_command_template"])
@@ -1189,6 +1201,9 @@ class AippocampusCliRecoveryCardTests(unittest.TestCase):
                 self.assertEqual(payload["agent_next_action"], payload["foreground_action"])
                 self.assertIn("safe_next_actions", payload)
                 self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
+                if args == ("plugin", "--json"):
+                    self.assertEqual(payload["foreground_action"]["id"], "check_codex_plugin_status")
+                    self.assertEqual(payload["foreground_action"]["mutation_risk"], "read_only")
                 actions = payload.get("safe_next_actions") or payload.get("choices") or []
                 if args == ("smoke", "--json"):
                     encoded = json.dumps(payload, ensure_ascii=False)

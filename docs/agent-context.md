@@ -220,10 +220,6 @@ uvx aippocampus onboard --provider claude-code --dry-run --json
 uvx aippocampus onboard --provider claude-code --cwd . --json
 uvx aippocampus import conversation --format generic-jsonl --input ./conversation.jsonl --dry-run --json
 uvx aippocampus import conversation --format generic-jsonl --input ./conversation.jsonl --json
-uvx aippocampus agent recall "old decision or handoff cue" --json
-uvx aippocampus agent deepen --request 1 --last-recall --json
-uvx aippocampus export --json
-uvx aippocampus sync --json
 ```
 
 These commands scan selected local agent transcript history or visible-message
@@ -238,7 +234,8 @@ For the first recall, use `agent recall`/`agent deepen` for vague decisions,
 handoffs, corrections, or project cues. Use exact search when the user
 remembers wording, and label vague routes as candidate navigation until a
 source-backed snippet or opened source appears. Add `--json` only for
-automation.
+automation. Do not append export/sync to that path unless the user explicitly
+wants to move reopened context into another thread, device, or project.
 
 ## Core Continuity Hooks
 

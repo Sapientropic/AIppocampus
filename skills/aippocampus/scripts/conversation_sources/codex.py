@@ -59,6 +59,7 @@ class CodexConversationProvider:
 
     def __init__(self, home: str | Path) -> None:
         self.home = Path(home)
+        self.last_normalization_loss: dict[str, Any] | None = None
 
     def iter_rollouts(self) -> Iterable[Path]:
         """Yield Codex rollout paths from live and app-archived storage."""
@@ -133,11 +134,15 @@ class CodexConversationProvider:
     ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
         # Keep Codex-specific envelope parsing under the source owner while
         # exposing the same provider-neutral shape as newer host providers.
-        from aippocampus_runtime.source.rollout import normalize_rollout
+        from aippocampus_runtime.source.rollout import normalize_rollout_with_loss
 
         source_path = _source_path(source)
         meta = public_codex_session_meta(self.read_metadata(source_path))
-        messages, turns = normalize_rollout(source_path, include_tools=include_tools)
+        messages, turns, normalization_loss = normalize_rollout_with_loss(
+            source_path,
+            include_tools=include_tools,
+        )
+        self.last_normalization_loss = normalization_loss
         for message in messages:
             line_no = message.get("line")
             if isinstance(line_no, int):

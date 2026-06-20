@@ -33,6 +33,7 @@ from aippocampus_runtime.contracts import (  # noqa: E402
     public_envelope,
     shell_quote,
 )
+from aippocampus_runtime.mcp.public_projection import compact_health_payload  # noqa: E402
 from aippocampus_runtime.registry import store as registry_store  # noqa: E402
 
 ENV_PATTERN = re.compile(r"\bAIPPOCAMPUS_[A-Z0-9_]+\b")
@@ -278,6 +279,35 @@ class RuntimeContractsAndConfigRegistryTests(unittest.TestCase):
         self.assertEqual(card["safe_next_actions"], card["choices"])
         self.assertEqual(foreground_action_contract_violations(card), [])
 
+    def test_compact_health_payload_keeps_safe_next_action_mirror(self) -> None:
+        card = compact_health_payload(
+            {
+                "ok": False,
+                "status": "no_current_thread",
+                "product_readiness": {
+                    "status": "no_current_thread",
+                    "ordinary_first_recall_usable": False,
+                },
+                "recommended_actions": [
+                    {
+                        "kind": "open_current_thread_or_run_registry_wide_health",
+                        "severity": "warning",
+                        "message": "Run health inside an active Codex thread, or use registry-wide health.",
+                        "command": "aippocampus health --registry-wide --agent-json",
+                    }
+                ],
+            }
+        )
+
+        self.assertEqual(card["foreground_action_contract"], "foreground-action-v1")
+        self.assertEqual(card["agent_next_action"], card["foreground_action"])
+        self.assertEqual(card["safe_next_actions"][0], card["foreground_action"])
+        self.assertEqual(
+            card["foreground_action"]["id"],
+            "open_current_thread_or_run_registry_wide_health",
+        )
+        self.assertEqual(foreground_action_contract_violations(card), [])
+
     def test_runtime_aippocampus_env_names_are_registered(self) -> None:
         runtime_names = aippocampus_env_names_from(
             [
@@ -424,6 +454,8 @@ class RuntimeContractsAndConfigRegistryTests(unittest.TestCase):
         self.assertEqual(payload["foreground_action"]["id"], "no_action_needed")
         self.assertNotIn("action_id", payload["foreground_action"])
         self.assertNotIn("command", payload["foreground_action"])
+        self.assertTrue(payload["foreground_action"]["continue_without_command"])
+        self.assertEqual(foreground_action_contract_violations(payload), [])
         self.assertEqual(payload["agent_next_action"]["id"], "no_action_needed")
         self.assertEqual(
             payload["safe_next_actions"][1]["command"],
