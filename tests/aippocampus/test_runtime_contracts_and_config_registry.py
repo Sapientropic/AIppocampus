@@ -28,6 +28,7 @@ from aippocampus_runtime.contracts import (  # noqa: E402
     PUBLIC_RUNTIME_SURFACE_CLASSES,
     RUNTIME_FAILURE_FAMILIES,
     canonical_foreground_action_fields,
+    executable_command_violations,
     foreground_action_contract_violations,
     foreground_chooser_card,
     public_envelope,
@@ -219,6 +220,29 @@ class RuntimeContractsAndConfigRegistryTests(unittest.TestCase):
                 "reason": "command_template_requires_template_only_true",
             },
             foreground_action_contract_violations(payload),
+        )
+
+    def test_foreground_action_contract_lint_rejects_fake_commands(self) -> None:
+        primary = {
+            "id": "stop_without_cleanup",
+            "label": "Stop without cleanup",
+            "command": "continue-without-cleanup",
+            "why": "Continue without running storage cleanup.",
+            "mutation_risk": "read_only",
+            "claim_boundary": "storage_pressure_summary_not_memory_quality_evidence",
+        }
+        payload = canonical_foreground_action_fields(primary)
+
+        self.assertIn(
+            {
+                "field": "foreground_action.command",
+                "reason": "executable_field_is_non_runnable_marker",
+            },
+            foreground_action_contract_violations(payload),
+        )
+        self.assertIn(
+            "executable_field_is_non_runnable_marker",
+            {violation["reason"] for violation in executable_command_violations(payload)},
         )
 
     def test_foreground_action_contract_lint_rejects_unmarked_secondary_templates(self) -> None:

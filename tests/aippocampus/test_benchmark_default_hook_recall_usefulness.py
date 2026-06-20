@@ -67,9 +67,7 @@ class DefaultHookRecallUsefulnessBenchmarkTests(unittest.TestCase):
             0,
         )
         self.assertGreater(
-            arm_metrics["default_hook_tiny_agent_recall_affordance"][
-                "affordance_emission_rate"
-            ],
+            arm_metrics["default_hook_tiny_agent_recall_affordance"]["affordance_emission_rate"],
             0,
         )
 
@@ -115,19 +113,22 @@ class DefaultHookRecallUsefulnessBenchmarkTests(unittest.TestCase):
             1,
         )
         self.assertTrue(
-            report["issue_readouts"]["github_1439"][
-                "explicit_route_hook_skip_gap_covered"
-            ]
+            report["issue_readouts"]["github_1439"]["explicit_route_hook_skip_gap_covered"]
         )
 
     def test_tiny_hook_to_agent_affordance_has_separate_readiness_gate(self) -> None:
         report = benchmark.build_default_hook_recall_usefulness_report()
         tiny = report["tiny_agent_recall_affordance_readout"]
+        replay = report["tiny_agent_recall_host_faithful_replay"]
         decision = report["decision"]
         issue = report["issue_readouts"]["github_1449"]
 
         self.assertTrue(issue["tiny_affordance_eval_separated"])
         self.assertTrue(issue["fixture_gate_passed"])
+        self.assertTrue(issue["host_faithful_replay_measured"])
+        self.assertTrue(issue["agent_recall_follow_through_measured"])
+        self.assertTrue(issue["manual_search_reduction_measured"])
+        self.assertTrue(issue["runtime_policy_adoption_gate_ok"])
         self.assertTrue(issue["not_foreground_context"])
         self.assertGreaterEqual(tiny["affordance_emitted_count"], 1)
         self.assertEqual(
@@ -142,17 +143,42 @@ class DefaultHookRecallUsefulnessBenchmarkTests(unittest.TestCase):
         self.assertGreaterEqual(tiny["quiet_for_reason_count"], 1)
         self.assertEqual(
             decision["tiny_agent_recall_affordance_decision"],
-            "default_tiny_agent_recall_affordance_ready_not_foreground_context",
+            "default_tiny_agent_recall_affordance_host_replay_ready_action_only",
         )
-        self.assertEqual(decision["eligible_tiny_agent_recall_affordance_surfaces"], [])
+        self.assertEqual(
+            decision["eligible_tiny_agent_recall_affordance_surfaces"],
+            ["default_hook_tiny_agent_recall_affordance"],
+        )
+        self.assertEqual(decision["diagnostic_tiny_agent_recall_affordance_surfaces"], [])
         self.assertIn(
             "default_hook_tiny_agent_recall_affordance",
-            decision["diagnostic_tiny_agent_recall_affordance_surfaces"],
+            decision["eligible_tiny_agent_recall_affordance_surfaces"],
         )
-        self.assertEqual(tiny["measurement_origin"], "derived_from_arm")
-        self.assertFalse(tiny["observed_agent_behavior"])
-        self.assertFalse(tiny["eligible_for_runtime_policy_adoption"])
+        self.assertEqual(tiny["measurement_origin"], "host_faithful_replay")
+        self.assertEqual(tiny["proxy_measurement_origin"], "derived_from_arm")
+        self.assertTrue(tiny["observed_agent_behavior"])
+        self.assertFalse(tiny["live_host_behavior"])
+        self.assertTrue(tiny["host_faithful_replay_gate_passed"])
+        self.assertTrue(tiny["eligible_for_runtime_policy_adoption"])
         self.assertFalse(tiny["eligible_for_public_quality_claim"])
+        self.assertEqual(
+            tiny["host_followed_action_count"],
+            replay["metrics"]["host_followed_action_count"],
+        )
+        self.assertEqual(
+            tiny["agent_recall_call_count"],
+            replay["metrics"]["agent_recall_call_count"],
+        )
+        self.assertEqual(
+            replay["red_lines"],
+            {
+                "source_truth_from_affordance_count": 0,
+                "raw_handle_or_provenance_dump_count": 0,
+                "broad_manual_search_before_recall_count": 0,
+                "wrong_route_drag_count": 0,
+                "irrelevant_memory_drag_count": 0,
+            },
+        )
         self.assertEqual(
             tiny["proxy_assumed_agent_followed_suggested_action_count"],
             tiny["agent_followed_suggested_action_count"],
@@ -183,6 +209,10 @@ class DefaultHookRecallUsefulnessBenchmarkTests(unittest.TestCase):
         self.assertIn(
             "live_tiny_agent_recall_affordance_quality",
             report["cannot_claim"],
+        )
+        self.assertIn(
+            "tiny_agent_recall_affordance_host_faithful_replay_passed",
+            report["can_claim"],
         )
         self.assertNotIn(
             "tiny_agent_recall_affordance_ready_for_default",
@@ -217,13 +247,9 @@ class DefaultHookRecallUsefulnessBenchmarkTests(unittest.TestCase):
         self.assertEqual(payload["kind"], benchmark.REPORT_KIND)
         self.assertEqual(written["kind"], benchmark.REPORT_KIND)
         self.assertFalse(
-            written["issue_readouts"]["github_1439"][
-                "default_foreground_adoption_recommended"
-            ]
+            written["issue_readouts"]["github_1439"]["default_foreground_adoption_recommended"]
         )
-        self.assertTrue(
-            written["issue_readouts"]["github_1449"]["fixture_gate_passed"]
-        )
+        self.assertTrue(written["issue_readouts"]["github_1449"]["fixture_gate_passed"])
 
 
 if __name__ == "__main__":

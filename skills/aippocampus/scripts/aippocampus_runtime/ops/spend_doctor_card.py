@@ -74,7 +74,12 @@ def _primary_spend_action(decision: Mapping[str, Any]) -> dict[str, Any]:
         "id": "continue_with_spend_guardrails",
         "label": "Continue with current spend guardrails",
         "next_step": "continue_current_task",
-        "why": "No local spend/yield warning crossed the configured thresholds.",
+        "continue_without_command": True,
+        "no_command_needed": True,
+        "why": str(
+            decision.get("reason")
+            or "No local spend/yield warning crossed the configured thresholds."
+        ),
         "mutation_risk": "read_only",
         "claim_boundary": "operator_diagnostic_not_source_evidence",
     }
@@ -86,6 +91,13 @@ def compact_spend_doctor_card(report: Mapping[str, Any]) -> dict[str, Any]:
     decision = report.get("decision") if isinstance(report.get("decision"), Mapping) else {}
     totals = report.get("totals") if isinstance(report.get("totals"), Mapping) else {}
     spend = totals.get("spend") if isinstance(totals.get("spend"), Mapping) else {}
+    route_scan = (
+        report.get("route_artifact_scan")
+        if isinstance(report.get("route_artifact_scan"), Mapping)
+        else {}
+    )
+    scan_status = str(route_scan.get("status") or "complete")
+    effective_tokens_known = bool(route_scan.get("effective_tokens_known", scan_status == "complete"))
     warning_codes = [str(code) for code in report.get("warning_codes") or []]
     routes_to_inspect = [str(route) for route in decision.get("routes_to_pause_or_inspect") or []]
     primary_action = _primary_spend_action(decision)
@@ -108,8 +120,10 @@ def compact_spend_doctor_card(report: Mapping[str, Any]) -> dict[str, Any]:
         "window": report.get("window") or {},
         "summary": {
             "effective_tokens": _safe_int(spend.get("effective_tokens")),
+            "effective_tokens_known": effective_tokens_known,
             "request_count": _safe_int(spend.get("request_count")),
             "warning_count": len(warning_codes),
+            "scan_status": scan_status,
         },
         "decision": {
             "action": decision.get("action"),
@@ -129,6 +143,7 @@ def compact_spend_doctor_card(report: Mapping[str, Any]) -> dict[str, Any]:
         ),
         "routes_to_pause_or_inspect": routes_to_inspect,
         "warning_codes": warning_codes,
+        "route_artifact_scan": route_scan,
         "privacy_boundary": report.get("privacy_boundary") or {},
         "reporting_boundary": report.get("reporting_boundary") or {},
         "operator_json_available": {

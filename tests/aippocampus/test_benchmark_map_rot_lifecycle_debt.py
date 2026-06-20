@@ -99,6 +99,41 @@ class MapRotLifecycleDebtBenchmarkTests(unittest.TestCase):
         self.assertNotIn("PRIVATE", encoded)
         self.assertNotIn("C:\\", encoded)
 
+    def test_public_cohort_report_measures_holdout_and_blocker_counts(self) -> None:
+        report = benchmark.build_map_rot_public_cohort_report()
+        metrics = report["metrics"]
+
+        self.assertTrue(report["ok"], json.dumps(report, ensure_ascii=False, indent=2))
+        self.assertEqual(
+            report["kind"],
+            "aippocampus_map_rot_lifecycle_debt_public_cohort",
+        )
+        self.assertEqual(metrics["public_cohort_case_count"], 270)
+        self.assertEqual(metrics["heldout_case_count"], 68)
+        self.assertEqual(metrics["contract_fixture_case_count"], 9)
+        self.assertEqual(metrics["correct_behavior_rate"], 1.0)
+        self.assertTrue(metrics["usefulness_gate_ok"])
+        self.assertTrue(metrics["attention_cost_ok"])
+        self.assertTrue(metrics["quality_gate_ok"])
+        self.assertEqual(metrics["holdout_used_for_tuning_count"], 0)
+        for key in (
+            "generic_hint_count",
+            "route_label_collision_count",
+            "wrong_route_drag_count",
+            "unnecessary_reopen_count",
+            "manual_search_fallback_count",
+            "foreground_noise_added_count",
+            "attention_cost_overrun_count",
+        ):
+            self.assertEqual(metrics[key], 0)
+
+        self.assertEqual(set(report["family_counts"]), benchmark.LIFECYCLE_STATES)
+        self.assertTrue(report["quality_gate"]["sample_floor_ok"])
+        self.assertTrue(report["quality_gate"]["holdout_no_tuning_leak_ok"])
+        self.assertFalse(report["quality_gate"]["cleanup_write_adoption_gate_ok"])
+        self.assertFalse(report["privacy_boundary"]["maintenance_writes_executed"])
+        self.assertIn("cleanup_write_runtime_adoption", report["cannot_claim"])
+
 
 if __name__ == "__main__":
     unittest.main()

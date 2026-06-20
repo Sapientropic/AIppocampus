@@ -83,8 +83,9 @@ class DreamWorkingMemoryTests(unittest.TestCase):
             "stay_silent",
         )
         expired = wm.plan_dream_hypothesis_use(row, now="2026-05-30T00:00:00Z")
-        self.assertEqual(expired["action"], "stay_silent")
-        self.assertEqual(expired["reason"], "dream_hypothesis_expired")
+        self.assertEqual(expired["action"], "reopen_source")
+        self.assertEqual(expired["reason"], "dream_hypothesis_expired_requires_source_reopen")
+        self.assertEqual(expired["recovery_kind"], "value_preserving_degradation")
 
     def test_strong_user_facing_claim_requires_source_reopen(self) -> None:
         row = wm.adjudicated_dream_findings_to_working_memory([adjudicated_finding()])[0]
@@ -161,6 +162,11 @@ class DreamWorkingMemoryTests(unittest.TestCase):
             user_requested_evidence=True,
             now="2026-06-01T00:00:00Z",
         )
+        corrected = wm.plan_dream_hypothesis_use(
+            row,
+            user_correction_visible=True,
+            now="2026-06-01T00:00:00Z",
+        )
         changed_source = wm.plan_dream_hypothesis_use(
             row,
             source_fingerprint_current=fingerprint + "_new",
@@ -185,8 +191,37 @@ class DreamWorkingMemoryTests(unittest.TestCase):
         self.assertEqual(exact["reason"], "exact_or_quote_claim_requires_source_reopen")
         self.assertEqual(contradicted["reason"], "contradiction_visible_requires_source_reopen")
         self.assertEqual(requested["reason"], "user_requested_evidence_requires_source_reopen")
+        self.assertEqual(corrected["action"], "ask_to_confirm")
+        self.assertEqual(corrected["reason"], "user_correction_requires_confirmation")
         self.assertEqual(changed_source["reason"], "source_fingerprint_changed")
         self.assertEqual(review_due["reason"], "trust_horizon_review_due_requires_source_reopen")
+
+    def test_single_thread_dream_probe_projects_as_source_reopen_required_optional_probe(self) -> None:
+        refs = [
+            source_ref("session:long", "msg-a", 10),
+            source_ref("session:long", "msg-b", 20),
+            source_ref("session:long", "msg-c", 30),
+        ]
+        row = wm.adjudicated_dream_findings_to_working_memory(
+            [
+                adjudicated_finding(
+                    dream_function="active_imagination",
+                    source_refs=refs,
+                    bridge_claims=[bridge_claim(refs)],
+                    source_authority="source_reopen_required_probe",
+                    probe_authority={
+                        "state": "single_thread_source_dense_probe",
+                        "requires_source_reopen_before_claim": True,
+                    },
+                )
+            ]
+        )[0]
+
+        self.assertEqual(row["foreground_use"]["default_action"], "source_reopen_required_probe")
+        self.assertEqual(row["foreground_use"]["single_thread_probe_action"], "optional_probe")
+        self.assertFalse(row["foreground_use"]["accepted_capsule_can_be_used_quietly_until_invalidated"])
+        self.assertEqual(row["source_strength"]["source_thread_count"], 1)
+        self.assertEqual(row["source_authority"]["state"], "single_thread_source_dense_probe")
 
     def test_source_fingerprint_uses_raw_ref_identity_before_working_memory_cleanup(self) -> None:
         refs_a = [
@@ -434,7 +469,7 @@ class DreamWorkingMemoryTests(unittest.TestCase):
         self.assertEqual(high_annoyance["action"], "stay_silent")
         self.assertEqual(high_annoyance["reason"], "prospective_invitation_annoyance_high")
         self.assertEqual(high_annoyance["invitation_diagnostic"], "annoyance_suppressed")
-        self.assertEqual(expired["reason"], "dream_hypothesis_expired")
+        self.assertEqual(expired["reason"], "dream_hypothesis_expired_requires_source_reopen")
         self.assertEqual(expired["invitation_diagnostic"], "delivery_gate_blocked")
 
     def test_profile_or_secret_dream_hypothesis_is_parked_before_working_memory_projection(self) -> None:

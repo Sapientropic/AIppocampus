@@ -20,6 +20,18 @@ Community reports belong in
 [`community-field-reports.md`](community-field-reports.md) until a maintainer
 promotes a public-safe result into the official evidence flow.
 
+## Benchmark-To-Action
+
+| Task | First file or command | Next action | Avoid |
+| --- | --- | --- | --- |
+| Choose which benchmark to run | [`benchmarks/design/benchmark-priority-map.md`](benchmarks/design/benchmark-priority-map.md) | Pick the profile named there, then run the changed-surface planner before broad suites. | Do not infer priority from old report volume. |
+| Decide whether a report is publicly recommendable | [`docs/evidence/current-claims.md`](current-claims.md) | Cite only rows with current `measured_result`, `supports`, and `material_limits`. | Do not copy dated report numbers directly into product copy. |
+| Turn a benchmark report into claim, owner, or no-action work | `python tools/aippocampus/benchmark_outcomes.py --report <report.json> --json` | Use the generated outcome card before updating claims, drafting issues, or closing work. | Do not invent a second report-routing schema. |
+| Update or retire a current claim | [`docs/evidence/current-claims.md`](current-claims.md) | Edit the row owner and supersession pointer, then run docs health. | Do not leave the current state only in a PR comment. |
+| Explain a blocker or expected-null result | [`current-claims.md#confirmed-scope-boundaries-expected-null-results`](current-claims.md#confirmed-scope-boundaries-expected-null-results) | Follow the linked issue or report before opening a duplicate. | Do not treat `cannot_claim` count as the user-facing summary. |
+| Close a benchmark issue | [`benchmark-evidence-maturity.md`](benchmark-evidence-maturity.md) | Confirm maturity, owner route, and no-open-followup status first. | Do not close broad runtime work from a narrow fixture smoke. |
+| Review advanced navigation or default-hook adoption | [`benchmarks/reports/recall-navigation/README.md`](benchmarks/reports/recall-navigation/README.md) | Start from its current-state card, then open the named report row. | Do not promote full default foreground because an adjacent tiny affordance passed. |
+
 ## Start Here
 
 | Reader question | First stop | Then use |
@@ -128,9 +140,9 @@ fixture file and link it from the ledger instead of embedding the payload.
     repeated-wrong cold navigation-map objects:
     [`benchmarks/reports/field-journey/map-rot-lifecycle-debt.md`](benchmarks/reports/field-journey/map-rot-lifecycle-debt.md).
 16. Need the #1195 benchmark-family promotion decision for the first public
-    cohort candidate targets, holdout/no-tuning-leak boundaries, usefulness
-    blockers, and gate separation:
-    [`benchmarks/reports/benchmark-family/benchmark-family-promotion-candidates-2026-06-12.md`](benchmarks/reports/benchmark-family/benchmark-family-promotion-candidates-2026-06-12.md).
+    cohort measurements, holdout/no-tuning-leak boundaries, usefulness
+    blockers, closed-owner hygiene, and gate separation:
+    [`benchmarks/reports/benchmark-family/benchmark-family-promotion-candidates-2026-06-20.md`](benchmarks/reports/benchmark-family/benchmark-family-promotion-candidates-2026-06-20.md).
 
 ## Maintainer Directory
 
@@ -268,12 +280,12 @@ instead of deriving priority from this directory map.
 
 ### Benchmark family promotion candidates
 
-- **Canonical owner:** `docs/evidence/benchmarks/reports/benchmark-family/benchmark-family-promotion-candidates-2026-06-12.md`
+- **Canonical owner:** `docs/evidence/benchmarks/reports/benchmark-family/benchmark-family-promotion-candidates-2026-06-20.md`
   and `benchmarks/aippocampus/benchmark_family_promotion_candidates.py`
 - **What belongs there:** #1195 first-family promotion decision for agent continuity, attention navigation, and map-rot
-  lifecycle debt; records target sample floors, family distribution, holdout/no-tuning-leakage,
-  uncertainty policy, sanitization, and usefulness blockers without claiming public-quality
-  results.
+  lifecycle debt; records observed public/holdout cohort measurements, target metadata boundaries,
+  holdout/no-tuning-leakage, uncertainty policy, sanitization, and usefulness blockers without
+  claiming live host or private-history lift.
 
 ### Benchmark priority registry
 
@@ -1478,9 +1490,9 @@ pasting raw JSON into multiple docs.
 ### Default-hook recall usefulness four-arm benchmark
 
 - **Entrypoint:** `benchmarks/aippocampus/benchmark_default_hook_recall_usefulness.py` and `tests/aippocampus/test_benchmark_default_hook_recall_usefulness.py`
-- **Primary evidence owner:** `docs/evidence/benchmarks/reports/recall-navigation/default-hook-recall-usefulness-2026-06-14.md`,
+- **Primary evidence owner:** `docs/evidence/benchmarks/reports/recall-navigation/default-hook-recall-usefulness-2026-06-20.md`,
   `docs/evidence/current-claims.md`, #1439, #1449; separates broad default foreground context
-  from the tiny `agent_recall` hook-to-agent affordance
+  from the tiny `agent_recall` hook-to-agent affordance and its host-faithful replay gate
 
 ### Real-history semantic scope smoke
 

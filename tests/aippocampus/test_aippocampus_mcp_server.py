@@ -480,7 +480,11 @@ class AippocampusMcpServerTests(unittest.TestCase):
         self.assertIn("source_backed_facts", aippo_payload["claim_boundary"]["must_reopen_for"])
         self.assertNotIn("contract_action", aippo_payload)
         self.assertNotIn("operator_detail", aippo_payload)
-        self.assertIn("operator_json_command_template", aippo_payload)
+        self.assertNotIn("operator_json_command_template", aippo_payload)
+        self.assertEqual(
+            aippo_payload["operator_json_command"],
+            "aippocampus agent aippo --task 'product usability closeout' --json --operator-json",
+        )
         self.assertNotIn("activation_packet", aippo_payload)
 
         aippo_no_task_response = mcp.handle_request(

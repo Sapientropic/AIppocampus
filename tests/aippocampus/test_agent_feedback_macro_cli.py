@@ -52,6 +52,14 @@ class AgentFeedbackMacroCliTests(unittest.TestCase):
         self.assertIn("First useful loop:", proc.stdout)
         self.assertIn('aippocampus agent recall "old cue" --json', proc.stdout)
         self.assertIn("aippocampus agent deepen --request 1 --last-recall --json", proc.stdout)
+        self.assertLess(
+            proc.stdout.index('aippocampus agent recall "old cue" --json'),
+            proc.stdout.index("aippocampus agent deepen --request 1 --last-recall --json"),
+        )
+        self.assertLess(
+            proc.stdout.index("aippocampus agent deepen --request 1 --last-recall --json"),
+            proc.stdout.index('aippocampus agent background "task cue" --json'),
+        )
         self.assertIn("aippocampus agent feedback <route_id>", proc.stdout)
 
     def test_cli_agent_recall_missing_cue_returns_recovery_card(self) -> None:

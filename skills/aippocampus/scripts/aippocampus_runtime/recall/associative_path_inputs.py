@@ -401,8 +401,12 @@ def build_associative_path_diagnostic(
         query=query,
         candidates=[row for row in pack.get("candidates") or [] if isinstance(row, Mapping)],
         bridge_rows=[row for row in pack.get("semantic_bridge_rows") or [] if isinstance(row, Mapping)],
-        navigation_rows=[row for row in pack.get("navigation_rows") or [] if isinstance(row, Mapping)],
-        active_locks=[row for row in pack.get("active_lock_rows") or [] if isinstance(row, Mapping)],
+        # The input-pack builder already materializes navigation and active-lock
+        # sidecars into `candidates`. Passing the raw rows again would let the
+        # walker materialize the same route twice, inflating route-count and
+        # usefulness diagnostics without adding a new reopenable path.
+        navigation_rows=[],
+        active_locks=[],
         feedback_rows=[row for row in pack.get("feedback_rows") or [] if isinstance(row, Mapping)],
         limit=max_routes,
     )

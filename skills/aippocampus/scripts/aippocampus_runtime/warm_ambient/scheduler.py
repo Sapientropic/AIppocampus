@@ -317,10 +317,15 @@ def warm_status_payload(
             {
                 "id": "snooze_optional_warm_ambient",
                 "label": "Snooze optional warm ambient",
-                "command_template": "AIPPOCAMPUS_WARM_RECALL_BACKGROUND=0 aippocampus warm status --json",
+                "command_template": "aippocampus warm status --json",
                 "requires": ["operator_env_change"],
                 "template_only": True,
                 "env": {"AIPPOCAMPUS_WARM_RECALL_BACKGROUND": "0"},
+                "env_instruction": (
+                    "Set AIPPOCAMPUS_WARM_RECALL_BACKGROUND=0 in the host environment, "
+                    "then run the status command."
+                ),
+                "shell_agnostic_env": True,
                 "mutation_risk": "configuration_change",
                 "claim_boundary": "warm_ambient_optional_not_first_recall_blocker",
                 "why": "Disable optional background warming in the active host environment when the queue is stale or noisy.",

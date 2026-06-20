@@ -67,6 +67,7 @@ GENERIC_TRIGGER_TERMS = {
     "project",
     "memory",
     "candidate",
+    "issue", "issues", "message", "messages",
     "preference",
     "review",
     "source",
@@ -625,8 +626,8 @@ def match_working_memory(
             20.0, len(matched) * 2.0 + float(row.get("confidence") or 0.0) * 6.0 + route_bonus
         )
         copy = dict(row)
-        copy["matched_terms"] = unique_preserve(matched, limit=8)
-        copy["score"] = round(score, 3)
+        copy["matched_terms"], copy["distinctive_match_count"] = unique_preserve(matched, limit=8), len(matched)
+        copy["generic_only_match"], copy["match_strength"], copy["score"] = False, "distinctive", round(score, 3)
         if copy.get("candidate_type") == DREAM_HYPOTHESIS_TYPE:
             special_use = dream_constructive.prospective_invitation_match_use(copy) or journey_bridges.journey_bridge_match_use(copy)
             if special_use:

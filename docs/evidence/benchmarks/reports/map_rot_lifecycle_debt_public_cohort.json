@@ -1,0 +1,2316 @@
+{
+  "benchmark_maturity": {
+    "attention_cost_ok": true,
+    "benchmark_maturity_level": "public_cohort",
+    "cannot_claim": [],
+    "cannot_claim_due_to_sample_size": false,
+    "case_count": 270,
+    "contract_gate_ok": true,
+    "default_adoption_gate_ok": true,
+    "external_or_public_cohort_case_count": 270,
+    "failure_family_count": 9,
+    "holdout_case_count": 68,
+    "holdout_used_for_tuning_count": 0,
+    "minimum_family_case_floor": 30,
+    "next_promotion_target": "operator_review_before_cleanup_writes",
+    "per_family_case_counts": {
+      "challenged": 30,
+      "current": 30,
+      "dead_letter": 30,
+      "deleted_no_recall": 30,
+      "missing_middle": 30,
+      "quarantined": 30,
+      "repeated_wrong": 30,
+      "stale": 30,
+      "superseded": 30
+    },
+    "public_quality_gate_ok": true,
+    "quality_gate_blockers": [],
+    "quality_gate_ok": true,
+    "quality_gate_ok_means": "public_quality_gate_ok",
+    "sample_floor_met": true,
+    "success_rate": {
+      "confidence_interval": {
+        "confidence_level": 0.95,
+        "defined": true,
+        "lower": 0.986,
+        "method": "wilson_score",
+        "point_estimate": 1.0,
+        "success_count": 270,
+        "total_count": 270,
+        "upper": 1.0
+      },
+      "defined": true,
+      "denominator": 270,
+      "name": "contract_case_success_rate",
+      "numerator": 270,
+      "point_estimate": 1.0
+    },
+    "usefulness_gate_ok": true,
+    "wilson_or_uncertainty_reported": true
+  },
+  "cannot_claim": [
+    "cold_map_self_cleaning",
+    "automatic_semantic_cleanup_solved",
+    "private_history_map_rot_quality",
+    "forgetting_completed",
+    "cleanup_write_runtime_adoption"
+  ],
+  "contract_gate_ok": true,
+  "family_counts": {
+    "challenged": 30,
+    "current": 30,
+    "dead_letter": 30,
+    "deleted_no_recall": 30,
+    "missing_middle": 30,
+    "quarantined": 30,
+    "repeated_wrong": 30,
+    "stale": 30,
+    "superseded": 30
+  },
+  "hard_red_lines": {
+    "deleted_no_recall_emit_count": 0,
+    "masked_source_resurrection_count": 0,
+    "quarantined_route_emit_count": 0,
+    "stale_as_current_count": 0,
+    "superseded_route_emit_count": 0,
+    "wrong_route_revival_count": 0
+  },
+  "kind": "aippocampus_map_rot_lifecycle_debt_public_cohort",
+  "maintenance_actions": {
+    "kind": "aippocampus_map_rot_maintenance_plan",
+    "metrics": {
+      "action_counts": {
+        "dead_letter_compact": 30,
+        "keep_current": 30,
+        "needs_review": 60,
+        "prune_or_decay": 30,
+        "refresh_source": 60,
+        "suppress_until_source_changes": 60
+      },
+      "case_count": 270,
+      "dead_letter_cleanup_count": 30,
+      "hot_surface_removal_count": 240,
+      "oldest_challenged_age_days": 45,
+      "reactivation_after_source_refresh_count": 60,
+      "review_queue_count": 60
+    },
+    "write_mode": "no_write_plan_only"
+  },
+  "measured_blocker_categories": [
+    "generic_hint",
+    "route_label_collision",
+    "wrong_route_drag",
+    "unnecessary_reopen",
+    "manual_search_fallback",
+    "foreground_noise_added",
+    "attention_cost_overrun"
+  ],
+  "metrics": {
+    "attention_cost_avg_units": 1.688889,
+    "attention_cost_ok": true,
+    "attention_cost_overrun_count": 0,
+    "contract_fixture_case_count": 9,
+    "correct_behavior_rate": 1.0,
+    "foreground_noise_added_count": 0,
+    "generic_hint_count": 0,
+    "heldout_case_count": 68,
+    "holdout_case_count": 68,
+    "holdout_used_for_tuning_count": 0,
+    "live_product_lift_claimed": false,
+    "manual_search_fallback_count": 0,
+    "public_cohort_case_count": 270,
+    "quality_gate_ok": true,
+    "route_label_collision_count": 0,
+    "unnecessary_reopen_count": 0,
+    "usefulness_gate_ok": true,
+    "wrong_route_drag_count": 0
+  },
+  "no_open_followup_reason": "Public/holdout lifecycle measurement is consumed by the #2396 family promotion report; cleanup-write adoption and private-history map quality need fresh scoped work.",
+  "ok": true,
+  "privacy_boundary": {
+    "heldout_rows_excluded_from_tuning": true,
+    "local_paths_serialized": false,
+    "maintenance_writes_executed": false,
+    "private_text_serialized": false,
+    "raw_source_text_serialized": false,
+    "source_handles_serialized": false
+  },
+  "public_quality_gate_ok": true,
+  "quality_gate": {
+    "attention_cost_ok": true,
+    "cleanup_write_adoption_gate_ok": false,
+    "holdout_no_tuning_leak_ok": true,
+    "quality_gate_ok": true,
+    "red_line_gate_ok": true,
+    "sample_floor_cases": 30,
+    "sample_floor_ok": true,
+    "usefulness_gate_ok": true
+  },
+  "quality_gate_ok": true,
+  "rows": [
+    {
+      "attention_cost_units": 2.4,
+      "case_id": "maprot-public-challenged-00",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "challenged",
+      "heldout": true
+    },
+    {
+      "attention_cost_units": 2.4,
+      "case_id": "maprot-public-challenged-01",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "challenged",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 2.4,
+      "case_id": "maprot-public-challenged-02",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "challenged",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 2.4,
+      "case_id": "maprot-public-challenged-03",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "challenged",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 2.4,
+      "case_id": "maprot-public-challenged-04",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "challenged",
+      "heldout": true
+    },
+    {
+      "attention_cost_units": 2.4,
+      "case_id": "maprot-public-challenged-05",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "challenged",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 2.4,
+      "case_id": "maprot-public-challenged-06",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "challenged",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 2.4,
+      "case_id": "maprot-public-challenged-07",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "challenged",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 2.4,
+      "case_id": "maprot-public-challenged-08",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "challenged",
+      "heldout": true
+    },
+    {
+      "attention_cost_units": 2.4,
+      "case_id": "maprot-public-challenged-09",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "challenged",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 2.4,
+      "case_id": "maprot-public-challenged-10",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "challenged",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 2.4,
+      "case_id": "maprot-public-challenged-11",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "challenged",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 2.4,
+      "case_id": "maprot-public-challenged-12",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "challenged",
+      "heldout": true
+    },
+    {
+      "attention_cost_units": 2.4,
+      "case_id": "maprot-public-challenged-13",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "challenged",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 2.4,
+      "case_id": "maprot-public-challenged-14",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "challenged",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 2.4,
+      "case_id": "maprot-public-challenged-15",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "challenged",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 2.4,
+      "case_id": "maprot-public-challenged-16",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "challenged",
+      "heldout": true
+    },
+    {
+      "attention_cost_units": 2.4,
+      "case_id": "maprot-public-challenged-17",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "challenged",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 2.4,
+      "case_id": "maprot-public-challenged-18",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "challenged",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 2.4,
+      "case_id": "maprot-public-challenged-19",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "challenged",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 2.4,
+      "case_id": "maprot-public-challenged-20",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "challenged",
+      "heldout": true
+    },
+    {
+      "attention_cost_units": 2.4,
+      "case_id": "maprot-public-challenged-21",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "challenged",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 2.4,
+      "case_id": "maprot-public-challenged-22",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "challenged",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 2.4,
+      "case_id": "maprot-public-challenged-23",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "challenged",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 2.4,
+      "case_id": "maprot-public-challenged-24",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "challenged",
+      "heldout": true
+    },
+    {
+      "attention_cost_units": 2.4,
+      "case_id": "maprot-public-challenged-25",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "challenged",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 2.4,
+      "case_id": "maprot-public-challenged-26",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "challenged",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 2.4,
+      "case_id": "maprot-public-challenged-27",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "challenged",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 2.4,
+      "case_id": "maprot-public-challenged-28",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "challenged",
+      "heldout": true
+    },
+    {
+      "attention_cost_units": 2.4,
+      "case_id": "maprot-public-challenged-29",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "challenged",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.4,
+      "case_id": "maprot-public-current-00",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "current",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.4,
+      "case_id": "maprot-public-current-01",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "current",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.4,
+      "case_id": "maprot-public-current-02",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "current",
+      "heldout": true
+    },
+    {
+      "attention_cost_units": 1.4,
+      "case_id": "maprot-public-current-03",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "current",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.4,
+      "case_id": "maprot-public-current-04",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "current",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.4,
+      "case_id": "maprot-public-current-05",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "current",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.4,
+      "case_id": "maprot-public-current-06",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "current",
+      "heldout": true
+    },
+    {
+      "attention_cost_units": 1.4,
+      "case_id": "maprot-public-current-07",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "current",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.4,
+      "case_id": "maprot-public-current-08",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "current",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.4,
+      "case_id": "maprot-public-current-09",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "current",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.4,
+      "case_id": "maprot-public-current-10",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "current",
+      "heldout": true
+    },
+    {
+      "attention_cost_units": 1.4,
+      "case_id": "maprot-public-current-11",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "current",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.4,
+      "case_id": "maprot-public-current-12",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "current",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.4,
+      "case_id": "maprot-public-current-13",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "current",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.4,
+      "case_id": "maprot-public-current-14",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "current",
+      "heldout": true
+    },
+    {
+      "attention_cost_units": 1.4,
+      "case_id": "maprot-public-current-15",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "current",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.4,
+      "case_id": "maprot-public-current-16",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "current",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.4,
+      "case_id": "maprot-public-current-17",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "current",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.4,
+      "case_id": "maprot-public-current-18",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "current",
+      "heldout": true
+    },
+    {
+      "attention_cost_units": 1.4,
+      "case_id": "maprot-public-current-19",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "current",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.4,
+      "case_id": "maprot-public-current-20",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "current",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.4,
+      "case_id": "maprot-public-current-21",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "current",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.4,
+      "case_id": "maprot-public-current-22",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "current",
+      "heldout": true
+    },
+    {
+      "attention_cost_units": 1.4,
+      "case_id": "maprot-public-current-23",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "current",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.4,
+      "case_id": "maprot-public-current-24",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "current",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.4,
+      "case_id": "maprot-public-current-25",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "current",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.4,
+      "case_id": "maprot-public-current-26",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "current",
+      "heldout": true
+    },
+    {
+      "attention_cost_units": 1.4,
+      "case_id": "maprot-public-current-27",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "current",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.4,
+      "case_id": "maprot-public-current-28",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "current",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.4,
+      "case_id": "maprot-public-current-29",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "current",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-dead_letter-00",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "dead_letter",
+      "heldout": true
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-dead_letter-01",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "dead_letter",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-dead_letter-02",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "dead_letter",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-dead_letter-03",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "dead_letter",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-dead_letter-04",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "dead_letter",
+      "heldout": true
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-dead_letter-05",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "dead_letter",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-dead_letter-06",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "dead_letter",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-dead_letter-07",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "dead_letter",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-dead_letter-08",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "dead_letter",
+      "heldout": true
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-dead_letter-09",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "dead_letter",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-dead_letter-10",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "dead_letter",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-dead_letter-11",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "dead_letter",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-dead_letter-12",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "dead_letter",
+      "heldout": true
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-dead_letter-13",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "dead_letter",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-dead_letter-14",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "dead_letter",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-dead_letter-15",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "dead_letter",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-dead_letter-16",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "dead_letter",
+      "heldout": true
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-dead_letter-17",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "dead_letter",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-dead_letter-18",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "dead_letter",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-dead_letter-19",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "dead_letter",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-dead_letter-20",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "dead_letter",
+      "heldout": true
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-dead_letter-21",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "dead_letter",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-dead_letter-22",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "dead_letter",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-dead_letter-23",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "dead_letter",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-dead_letter-24",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "dead_letter",
+      "heldout": true
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-dead_letter-25",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "dead_letter",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-dead_letter-26",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "dead_letter",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-dead_letter-27",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "dead_letter",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-dead_letter-28",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "dead_letter",
+      "heldout": true
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-dead_letter-29",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "dead_letter",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-deleted_no_recall-00",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "deleted_no_recall",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-deleted_no_recall-01",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "deleted_no_recall",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-deleted_no_recall-02",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "deleted_no_recall",
+      "heldout": true
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-deleted_no_recall-03",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "deleted_no_recall",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-deleted_no_recall-04",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "deleted_no_recall",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-deleted_no_recall-05",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "deleted_no_recall",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-deleted_no_recall-06",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "deleted_no_recall",
+      "heldout": true
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-deleted_no_recall-07",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "deleted_no_recall",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-deleted_no_recall-08",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "deleted_no_recall",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-deleted_no_recall-09",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "deleted_no_recall",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-deleted_no_recall-10",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "deleted_no_recall",
+      "heldout": true
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-deleted_no_recall-11",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "deleted_no_recall",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-deleted_no_recall-12",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "deleted_no_recall",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-deleted_no_recall-13",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "deleted_no_recall",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-deleted_no_recall-14",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "deleted_no_recall",
+      "heldout": true
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-deleted_no_recall-15",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "deleted_no_recall",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-deleted_no_recall-16",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "deleted_no_recall",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-deleted_no_recall-17",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "deleted_no_recall",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-deleted_no_recall-18",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "deleted_no_recall",
+      "heldout": true
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-deleted_no_recall-19",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "deleted_no_recall",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-deleted_no_recall-20",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "deleted_no_recall",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-deleted_no_recall-21",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "deleted_no_recall",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-deleted_no_recall-22",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "deleted_no_recall",
+      "heldout": true
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-deleted_no_recall-23",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "deleted_no_recall",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-deleted_no_recall-24",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "deleted_no_recall",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-deleted_no_recall-25",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "deleted_no_recall",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-deleted_no_recall-26",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "deleted_no_recall",
+      "heldout": true
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-deleted_no_recall-27",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "deleted_no_recall",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-deleted_no_recall-28",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "deleted_no_recall",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-deleted_no_recall-29",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "deleted_no_recall",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 2.4,
+      "case_id": "maprot-public-missing_middle-00",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "missing_middle",
+      "heldout": true
+    },
+    {
+      "attention_cost_units": 2.4,
+      "case_id": "maprot-public-missing_middle-01",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "missing_middle",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 2.4,
+      "case_id": "maprot-public-missing_middle-02",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "missing_middle",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 2.4,
+      "case_id": "maprot-public-missing_middle-03",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "missing_middle",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 2.4,
+      "case_id": "maprot-public-missing_middle-04",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "missing_middle",
+      "heldout": true
+    },
+    {
+      "attention_cost_units": 2.4,
+      "case_id": "maprot-public-missing_middle-05",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "missing_middle",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 2.4,
+      "case_id": "maprot-public-missing_middle-06",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "missing_middle",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 2.4,
+      "case_id": "maprot-public-missing_middle-07",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "missing_middle",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 2.4,
+      "case_id": "maprot-public-missing_middle-08",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "missing_middle",
+      "heldout": true
+    },
+    {
+      "attention_cost_units": 2.4,
+      "case_id": "maprot-public-missing_middle-09",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "missing_middle",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 2.4,
+      "case_id": "maprot-public-missing_middle-10",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "missing_middle",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 2.4,
+      "case_id": "maprot-public-missing_middle-11",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "missing_middle",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 2.4,
+      "case_id": "maprot-public-missing_middle-12",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "missing_middle",
+      "heldout": true
+    },
+    {
+      "attention_cost_units": 2.4,
+      "case_id": "maprot-public-missing_middle-13",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "missing_middle",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 2.4,
+      "case_id": "maprot-public-missing_middle-14",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "missing_middle",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 2.4,
+      "case_id": "maprot-public-missing_middle-15",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "missing_middle",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 2.4,
+      "case_id": "maprot-public-missing_middle-16",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "missing_middle",
+      "heldout": true
+    },
+    {
+      "attention_cost_units": 2.4,
+      "case_id": "maprot-public-missing_middle-17",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "missing_middle",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 2.4,
+      "case_id": "maprot-public-missing_middle-18",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "missing_middle",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 2.4,
+      "case_id": "maprot-public-missing_middle-19",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "missing_middle",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 2.4,
+      "case_id": "maprot-public-missing_middle-20",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "missing_middle",
+      "heldout": true
+    },
+    {
+      "attention_cost_units": 2.4,
+      "case_id": "maprot-public-missing_middle-21",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "missing_middle",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 2.4,
+      "case_id": "maprot-public-missing_middle-22",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "missing_middle",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 2.4,
+      "case_id": "maprot-public-missing_middle-23",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "missing_middle",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 2.4,
+      "case_id": "maprot-public-missing_middle-24",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "missing_middle",
+      "heldout": true
+    },
+    {
+      "attention_cost_units": 2.4,
+      "case_id": "maprot-public-missing_middle-25",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "missing_middle",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 2.4,
+      "case_id": "maprot-public-missing_middle-26",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "missing_middle",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 2.4,
+      "case_id": "maprot-public-missing_middle-27",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "missing_middle",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 2.4,
+      "case_id": "maprot-public-missing_middle-28",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "missing_middle",
+      "heldout": true
+    },
+    {
+      "attention_cost_units": 2.4,
+      "case_id": "maprot-public-missing_middle-29",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "missing_middle",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-quarantined-00",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "quarantined",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-quarantined-01",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "quarantined",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-quarantined-02",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "quarantined",
+      "heldout": true
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-quarantined-03",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "quarantined",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-quarantined-04",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "quarantined",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-quarantined-05",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "quarantined",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-quarantined-06",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "quarantined",
+      "heldout": true
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-quarantined-07",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "quarantined",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-quarantined-08",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "quarantined",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-quarantined-09",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "quarantined",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-quarantined-10",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "quarantined",
+      "heldout": true
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-quarantined-11",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "quarantined",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-quarantined-12",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "quarantined",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-quarantined-13",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "quarantined",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-quarantined-14",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "quarantined",
+      "heldout": true
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-quarantined-15",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "quarantined",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-quarantined-16",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "quarantined",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-quarantined-17",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "quarantined",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-quarantined-18",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "quarantined",
+      "heldout": true
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-quarantined-19",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "quarantined",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-quarantined-20",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "quarantined",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-quarantined-21",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "quarantined",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-quarantined-22",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "quarantined",
+      "heldout": true
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-quarantined-23",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "quarantined",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-quarantined-24",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "quarantined",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-quarantined-25",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "quarantined",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-quarantined-26",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "quarantined",
+      "heldout": true
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-quarantined-27",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "quarantined",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-quarantined-28",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "quarantined",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.2,
+      "case_id": "maprot-public-quarantined-29",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "quarantined",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-repeated_wrong-00",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "repeated_wrong",
+      "heldout": true
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-repeated_wrong-01",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "repeated_wrong",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-repeated_wrong-02",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "repeated_wrong",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-repeated_wrong-03",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "repeated_wrong",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-repeated_wrong-04",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "repeated_wrong",
+      "heldout": true
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-repeated_wrong-05",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "repeated_wrong",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-repeated_wrong-06",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "repeated_wrong",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-repeated_wrong-07",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "repeated_wrong",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-repeated_wrong-08",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "repeated_wrong",
+      "heldout": true
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-repeated_wrong-09",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "repeated_wrong",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-repeated_wrong-10",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "repeated_wrong",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-repeated_wrong-11",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "repeated_wrong",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-repeated_wrong-12",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "repeated_wrong",
+      "heldout": true
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-repeated_wrong-13",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "repeated_wrong",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-repeated_wrong-14",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "repeated_wrong",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-repeated_wrong-15",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "repeated_wrong",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-repeated_wrong-16",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "repeated_wrong",
+      "heldout": true
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-repeated_wrong-17",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "repeated_wrong",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-repeated_wrong-18",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "repeated_wrong",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-repeated_wrong-19",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "repeated_wrong",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-repeated_wrong-20",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "repeated_wrong",
+      "heldout": true
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-repeated_wrong-21",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "repeated_wrong",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-repeated_wrong-22",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "repeated_wrong",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-repeated_wrong-23",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "repeated_wrong",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-repeated_wrong-24",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "repeated_wrong",
+      "heldout": true
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-repeated_wrong-25",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "repeated_wrong",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-repeated_wrong-26",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "repeated_wrong",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-repeated_wrong-27",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "repeated_wrong",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-repeated_wrong-28",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "repeated_wrong",
+      "heldout": true
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-repeated_wrong-29",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "repeated_wrong",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-stale-00",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "stale",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-stale-01",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "stale",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-stale-02",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "stale",
+      "heldout": true
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-stale-03",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "stale",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-stale-04",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "stale",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-stale-05",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "stale",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-stale-06",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "stale",
+      "heldout": true
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-stale-07",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "stale",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-stale-08",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "stale",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-stale-09",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "stale",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-stale-10",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "stale",
+      "heldout": true
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-stale-11",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "stale",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-stale-12",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "stale",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-stale-13",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "stale",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-stale-14",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "stale",
+      "heldout": true
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-stale-15",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "stale",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-stale-16",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "stale",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-stale-17",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "stale",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-stale-18",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "stale",
+      "heldout": true
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-stale-19",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "stale",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-stale-20",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "stale",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-stale-21",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "stale",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-stale-22",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "stale",
+      "heldout": true
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-stale-23",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "stale",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-stale-24",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "stale",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-stale-25",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "stale",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-stale-26",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "stale",
+      "heldout": true
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-stale-27",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "stale",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-stale-28",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "stale",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-stale-29",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "stale",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-superseded-00",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "superseded",
+      "heldout": true
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-superseded-01",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "superseded",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-superseded-02",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "superseded",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-superseded-03",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "superseded",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-superseded-04",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "superseded",
+      "heldout": true
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-superseded-05",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "superseded",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-superseded-06",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "superseded",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-superseded-07",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "superseded",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-superseded-08",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "superseded",
+      "heldout": true
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-superseded-09",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "superseded",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-superseded-10",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "superseded",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-superseded-11",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "superseded",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-superseded-12",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "superseded",
+      "heldout": true
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-superseded-13",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "superseded",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-superseded-14",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "superseded",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-superseded-15",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "superseded",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-superseded-16",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "superseded",
+      "heldout": true
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-superseded-17",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "superseded",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-superseded-18",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "superseded",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-superseded-19",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "superseded",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-superseded-20",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "superseded",
+      "heldout": true
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-superseded-21",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "superseded",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-superseded-22",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "superseded",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-superseded-23",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "superseded",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-superseded-24",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "superseded",
+      "heldout": true
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-superseded-25",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "superseded",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-superseded-26",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "superseded",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-superseded-27",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "superseded",
+      "heldout": false
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-superseded-28",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "superseded",
+      "heldout": true
+    },
+    {
+      "attention_cost_units": 1.8,
+      "case_id": "maprot-public-superseded-29",
+      "case_origin": "public_safe_generated_lifecycle_cohort",
+      "correct_behavior": true,
+      "family": "superseded",
+      "heldout": false
+    }
+  ],
+  "run_at": "2026-06-20T12:23:06Z",
+  "schema_version": 1,
+  "status": "completed_score_scoped_public_cohort"
+}

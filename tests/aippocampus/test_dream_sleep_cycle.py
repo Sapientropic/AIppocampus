@@ -211,6 +211,10 @@ class DreamSleepCycleTests(unittest.TestCase):
         self.assertTrue(payload["no_write"])
         self.assertFalse(payload["foreground_eligible"])
         self.assertEqual(summary["worker_statuses"], {"candidate_emitted": 1, "model_output_rejected": 1})
+        card = summary["dream_output_status_card"]
+        self.assertEqual(card["status"], "no_foreground_output")
+        self.assertEqual(card["reason_buckets"]["no_write_mode"], 1)
+        self.assertEqual(card["primary_next_action"], "rerun_with_write_or_publish_when_operator_intends_persistence")
         self.assertNotIn("source_refs", encoded)
         self.assertNotIn("message_id", encoded)
         self.assertNotIn("thread_key", encoded)
@@ -257,6 +261,9 @@ class DreamSleepCycleTests(unittest.TestCase):
         self.assertEqual(completed["cache"]["kind"], "deepseek_prefix")
         self.assertEqual(completed["cache"]["hit_tokens"], 6)
         self.assertEqual(completed["cache"]["miss_tokens"], 4)
+        self.assertTrue(payload["write_lock"]["used"])
+        self.assertTrue(payload["write_lock"]["owner_token_matched_on_release"])
+        self.assertFalse(payload["write_lock"]["foreground_readers_wait"])
         self.assertEqual(len(finding_rows), 1)
         self.assertEqual(finding_rows[0]["adjudication_result"]["status"], "accepted")
         self.assertEqual(len(working_rows), 1)
@@ -394,8 +401,61 @@ class DreamSleepCycleTests(unittest.TestCase):
         self.assertEqual(payload["worker_statuses"], {"candidate_emitted": 1, "candidate_parked": 1})
         self.assertEqual(payload["counts"]["accepted"], 1)
         self.assertEqual(payload["counts"]["parked"], 1)
+        card = payload["dream_output_status_card"]
+        self.assertEqual(card["reason_buckets"]["adjudication_parked"], 1)
+        self.assertEqual(card["retention_lifecycle_actions"]["park_for_review"]["action"], "revisit_on_review_horizon")
         self.assertEqual({row["status"] for row in payload["queue_lifecycle_rows"]}, {"completed", "parked"})
         self.assertEqual(len(payload["dream_working_memory_rows"]), 1)
+
+    def test_public_sleep_cycle_summary_explains_no_queue_without_raw_refs(self) -> None:
+        payload = dream_sleep_cycle.run_sleep_cycle(
+            [],
+            now="2026-05-30T00:00:00Z",
+            config=config(),
+            no_write=True,
+            run_ready=True,
+        )
+        summary = dream_sleep_cycle.public_sleep_cycle_summary(payload)
+        encoded = json.dumps(summary, ensure_ascii=False)
+
+        self.assertEqual(summary["dream_output_status_card"]["reason_buckets"]["no_queue"], 1)
+        self.assertEqual(summary["dream_output_status_card"]["primary_next_action"], "wait_for_due_queue_or_run_ready")
+        self.assertNotIn("thread_key", encoded)
+        self.assertNotIn("message_id", encoded)
+
+    def test_sleep_cycle_lock_recovers_stale_owner_and_reports_diagnostic(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            lock_path = Path(tmp) / "dream_sleep_cycle_write.lock"
+            lock_path.write_text('{"owner_token": "old", "pid": 999999}', encoding="utf-8")
+            os.utime(lock_path, (1, 1))
+
+            lock = dream_sleep_cycle.FileLock(lock_path, stale_seconds=1)
+            with lock:
+                payload = json.loads(lock_path.read_text(encoding="utf-8"))
+
+            diagnostic = lock.diagnostic()
+
+        self.assertNotEqual(payload["owner_token"], "old")
+        self.assertTrue(diagnostic["recovered_stale_lock"])
+        self.assertEqual(diagnostic["stale_recovery"]["stale_owner_token"], "old")
+        self.assertTrue(diagnostic["owner_token_matched_on_release"])
+
+    def test_old_sleep_cycle_lock_owner_does_not_unlink_new_owner_generation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            lock_path = Path(tmp) / "dream_sleep_cycle_write.lock"
+            new_lock = dream_sleep_cycle.FileLock(lock_path, stale_seconds=60)
+            with new_lock:
+                payload = json.loads(lock_path.read_text(encoding="utf-8"))
+                old_lock = dream_sleep_cycle.FileLock(lock_path, stale_seconds=60)
+                old_lock.owner_token = "old-owner-token"
+                old_lock.__exit__(None, None, None)
+                still_current = json.loads(lock_path.read_text(encoding="utf-8"))
+
+            release = old_lock.diagnostic()["release"]
+
+        self.assertEqual(still_current["owner_token"], payload["owner_token"])
+        self.assertFalse(release["released"])
+        self.assertEqual(release["reason"], "owner_token_changed")
 
     def test_sleep_cycle_dedups_existing_findings_before_running_workers(self) -> None:
         existing_compensatory = {

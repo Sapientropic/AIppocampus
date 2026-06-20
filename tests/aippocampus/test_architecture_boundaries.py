@@ -115,6 +115,9 @@ OPS_DIRECT_RECALL_HOOK_IMPORT_ALLOWLIST = {
     "aippocampus_runtime.ops.spend_doctor": {
         "aippocampus_runtime.recall.semantic_recall_gate",
     },
+    "aippocampus_runtime.ops.spend_doctor_compact": {
+        "aippocampus_runtime.recall.semantic_recall_gate",
+    },
     "aippocampus_runtime.ops.worker_hook_handoff": {
         "aippocampus_runtime.hooks",
         "aippocampus_runtime.hooks.prompt",

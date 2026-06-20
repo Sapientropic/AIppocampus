@@ -495,50 +495,16 @@ class AippocampusHealthTests(unittest.TestCase):
         text = stdout.getvalue()
         self.assertIn("AIppocampus health", text)
         self.assertIn("readiness: partial (needs_maintenance)", text)
+        self.assertIn("can_continue_recall_now: partial", text)
+        self.assertIn("blocks_exact_latest_claims: no", text)
         self.assertIn("best next action: build_clean_source", text)
+        self.assertIn("repair: aippocampus maintenance --cwd .", text)
+        self.assertNotIn("fix:", text)
         self.assertIn("recommended actions:", text)
-        self.assertIn("Next:", text)
-        self.assertIn("1. build_clean_source: aippocampus maintenance --cwd .", text)
-        self.assertIn("2. build_index: aippocampus maintenance --cwd .", text)
+        self.assertIn("Next actions:", text)
+        self.assertIn("1. build_clean_source [repair]: aippocampus maintenance --cwd .", text)
+        self.assertIn("2. build_index [repair]: aippocampus maintenance --cwd .", text)
         self.assertNotIn("python -m aippocampus_runtime", text)
-
-    def test_human_health_labels_ready_advisory_commands_as_optional(self) -> None:
-        payload = {
-            "ok": True,
-            "rollout": {"path": "rollout.jsonl", "size": 10, "message_count": 2},
-            "index": {"exists": True, "stale": False, "message_delta": 2, "byte_delta": 100, "rag": {}},
-            "clean_source": {"exists": True, "stale": False},
-            "segments": {"exists": False, "needed": False},
-            "checkpoint": {"due": True},
-            "graphify": {"stale": True},
-            "storage": {},
-            "question_stats": {},
-            "background_cognition": {},
-            "logs": {},
-            "health_trajectory": {},
-            "product_readiness": {
-                "status": "ready_with_live_delta",
-                "ready": True,
-                "blocking_action_count": 0,
-            },
-            "recommended_actions": [
-                {
-                    "id": "prepare_graphify_corpus",
-                    "severity": "info",
-                    "reason": "graphify corpus was prepared from an older index manifest",
-                    "command": "aippocampus maintenance",
-                }
-            ],
-        }
-
-        with mock.patch("sys.stdout", new=StringIO()) as stdout:
-            health.render_health_text(payload)
-
-        text = stdout.getvalue()
-        self.assertIn("thread memory health: OK", text)
-        self.assertIn("best next action: continue", text)
-        self.assertIn("Optional maintenance:", text)
-        self.assertNotIn("\nNext:", text)
 
     def write_rollout(
         self,

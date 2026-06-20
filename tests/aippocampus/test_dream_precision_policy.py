@@ -109,6 +109,44 @@ class DreamPrecisionPolicyTests(unittest.TestCase):
         self.assertNotEqual(payload["decision"], "park_for_review")
         self.assertEqual(payload["ignored_model_self_rating"]["input_model_confidence"], 0.99)
 
+    def test_active_imagination_single_thread_dense_probe_degrades_not_truth(self) -> None:
+        refs = [
+            source_ref("session:long", "msg-a", 10),
+            source_ref("session:long", "msg-b", 20),
+            source_ref("session:long", "msg-c", 30),
+        ]
+        finding = dream_finding(
+            dream_function="active_imagination",
+            source_refs=refs,
+            bridge_claims=[
+                {"claim": "The probe is tied to several turns in one long thread.", "source_refs": refs[:2]},
+            ],
+            why_this_is_not_fact="This is a sandbox lens over one long thread, not cross-thread truth.",
+            sandbox_boundary="active_imagination_candidate_not_fact",
+            truth_boundary="dream_synthesized_candidate_not_fact",
+        )
+
+        payload = policy.retention_policy_for_probe(finding, now="2026-05-30T00:00:00Z")
+
+        self.assertTrue(payload["hard_gate"]["passed"])
+        self.assertEqual(payload["authority"]["state"], "single_thread_source_dense_probe")
+        self.assertEqual(payload["authority"]["authority"], "source_reopen_required_probe")
+        self.assertNotIn("active_imagination_two_source_anchors", payload["hard_gate"]["failures"])
+        self.assertTrue(payload["lifecycle_action"]["action"])
+
+    def test_active_imagination_cross_thread_path_remains_standard_candidate(self) -> None:
+        finding = dream_finding(
+            dream_function="active_imagination",
+            why_this_is_not_fact="This is a sandbox lens, not a source claim.",
+            sandbox_boundary="active_imagination_candidate_not_fact",
+        )
+
+        payload = policy.retention_policy_for_probe(finding, now="2026-05-30T00:00:00Z")
+
+        self.assertTrue(payload["hard_gate"]["passed"])
+        self.assertEqual(payload["authority"]["state"], "cross_thread_source_required")
+        self.assertEqual(payload["decision"], "retain_for_review")
+
     def test_retention_policy_still_parks_profile_or_secret_claims(self) -> None:
         finding = dream_finding(
             title="Personality diagnosis",

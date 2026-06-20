@@ -1,0 +1,1518 @@
+{
+  "cannot_claim": [
+    "live_host_behavior_lift",
+    "private_history_quality",
+    "answer_generation_quality",
+    "default_foreground_adoption"
+  ],
+  "family_counts": {
+    "aippo_low_risk_workflow_guidance": 30,
+    "anti_nag_recently_dismissed_route": 30,
+    "blocked_privacy_route": 30,
+    "semantic_warm_requires_deepen": 30,
+    "similar_reopenable_route_packets": 30,
+    "stale_or_conflicted_route": 30
+  },
+  "kind": "aippocampus_agent_continuity_loop_public_cohort",
+  "measured_blocker_categories": [
+    "generic_hint",
+    "route_label_collision",
+    "wrong_route_drag",
+    "unnecessary_reopen",
+    "manual_search_fallback",
+    "blind_deepen_required",
+    "foreground_noise_added",
+    "attention_cost_overrun"
+  ],
+  "metrics": {
+    "anti_nag_violation_count": 0,
+    "attention_cost_avg_units": 3.816667,
+    "attention_cost_ok": true,
+    "attention_cost_overrun_count": 0,
+    "blind_deepen_required_count": 0,
+    "contract_fixture_case_count": 8,
+    "deepen_required_follow_through_rate": 1.0,
+    "foreground_noise_added_count": 0,
+    "generic_hint_count": 0,
+    "heldout_case_count": 45,
+    "holdout_used_for_tuning_count": 0,
+    "integrated_loop_success_rate": 1.0,
+    "live_product_lift_claimed": false,
+    "manual_search_fallback_count": 0,
+    "manual_search_fallback_rate": 0.0,
+    "packet_triage_distinctiveness_rate": 0.833333,
+    "privacy_bypass_count": 0,
+    "public_cohort_case_count": 180,
+    "quality_gate_ok": true,
+    "raw_private_text_leak_count": 0,
+    "route_label_collision_count": 0,
+    "source_backed_claim_without_reopen_count": 0,
+    "source_reopen_followthrough_rate": 1.0,
+    "unnecessary_reopen_count": 0,
+    "unnecessary_reopen_rate": 0.0,
+    "usefulness_gate_ok": true,
+    "wrong_route_drag_count": 0,
+    "wrong_route_drag_rate": 0.0
+  },
+  "no_open_followup_reason": "Public/holdout cohort measurement is consumed by the #2396 family promotion report; live host, private-history, answer-generation, and default-foreground adoption claims need fresh scoped work.",
+  "ok": true,
+  "privacy_boundary": {
+    "heldout_rows_excluded_from_tuning": true,
+    "local_paths_serialized": false,
+    "raw_private_text_serialized": false,
+    "source_handles_serialized": false
+  },
+  "quality_gate": {
+    "attention_cost_ok": true,
+    "holdout_no_tuning_leak_ok": true,
+    "quality_gate_ok": true,
+    "red_line_gate_ok": true,
+    "sample_floor_cases": 180,
+    "sample_floor_ok": true,
+    "usefulness_gate_ok": true
+  },
+  "rows": [
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-similar_reopenable_route_packets-00",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "similar_reopenable_route_packets",
+      "heldout": true,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-similar_reopenable_route_packets-01",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "similar_reopenable_route_packets",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-similar_reopenable_route_packets-02",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "similar_reopenable_route_packets",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-similar_reopenable_route_packets-03",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "similar_reopenable_route_packets",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-similar_reopenable_route_packets-04",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "similar_reopenable_route_packets",
+      "heldout": true,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-similar_reopenable_route_packets-05",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "similar_reopenable_route_packets",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-similar_reopenable_route_packets-06",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "similar_reopenable_route_packets",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-similar_reopenable_route_packets-07",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "similar_reopenable_route_packets",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-similar_reopenable_route_packets-08",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "similar_reopenable_route_packets",
+      "heldout": true,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-similar_reopenable_route_packets-09",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "similar_reopenable_route_packets",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-similar_reopenable_route_packets-10",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "similar_reopenable_route_packets",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-similar_reopenable_route_packets-11",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "similar_reopenable_route_packets",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-similar_reopenable_route_packets-12",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "similar_reopenable_route_packets",
+      "heldout": true,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-similar_reopenable_route_packets-13",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "similar_reopenable_route_packets",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-similar_reopenable_route_packets-14",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "similar_reopenable_route_packets",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-similar_reopenable_route_packets-15",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "similar_reopenable_route_packets",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-similar_reopenable_route_packets-16",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "similar_reopenable_route_packets",
+      "heldout": true,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-similar_reopenable_route_packets-17",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "similar_reopenable_route_packets",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-similar_reopenable_route_packets-18",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "similar_reopenable_route_packets",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-similar_reopenable_route_packets-19",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "similar_reopenable_route_packets",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-similar_reopenable_route_packets-20",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "similar_reopenable_route_packets",
+      "heldout": true,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-similar_reopenable_route_packets-21",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "similar_reopenable_route_packets",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-similar_reopenable_route_packets-22",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "similar_reopenable_route_packets",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-similar_reopenable_route_packets-23",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "similar_reopenable_route_packets",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-similar_reopenable_route_packets-24",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "similar_reopenable_route_packets",
+      "heldout": true,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-similar_reopenable_route_packets-25",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "similar_reopenable_route_packets",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-similar_reopenable_route_packets-26",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "similar_reopenable_route_packets",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-similar_reopenable_route_packets-27",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "similar_reopenable_route_packets",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-similar_reopenable_route_packets-28",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "similar_reopenable_route_packets",
+      "heldout": true,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-similar_reopenable_route_packets-29",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "similar_reopenable_route_packets",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-stale_or_conflicted_route-00",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "stale_or_conflicted_route",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-stale_or_conflicted_route-01",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "stale_or_conflicted_route",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-stale_or_conflicted_route-02",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "stale_or_conflicted_route",
+      "heldout": true,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-stale_or_conflicted_route-03",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "stale_or_conflicted_route",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-stale_or_conflicted_route-04",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "stale_or_conflicted_route",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-stale_or_conflicted_route-05",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "stale_or_conflicted_route",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-stale_or_conflicted_route-06",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "stale_or_conflicted_route",
+      "heldout": true,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-stale_or_conflicted_route-07",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "stale_or_conflicted_route",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-stale_or_conflicted_route-08",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "stale_or_conflicted_route",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-stale_or_conflicted_route-09",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "stale_or_conflicted_route",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-stale_or_conflicted_route-10",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "stale_or_conflicted_route",
+      "heldout": true,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-stale_or_conflicted_route-11",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "stale_or_conflicted_route",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-stale_or_conflicted_route-12",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "stale_or_conflicted_route",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-stale_or_conflicted_route-13",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "stale_or_conflicted_route",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-stale_or_conflicted_route-14",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "stale_or_conflicted_route",
+      "heldout": true,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-stale_or_conflicted_route-15",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "stale_or_conflicted_route",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-stale_or_conflicted_route-16",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "stale_or_conflicted_route",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-stale_or_conflicted_route-17",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "stale_or_conflicted_route",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-stale_or_conflicted_route-18",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "stale_or_conflicted_route",
+      "heldout": true,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-stale_or_conflicted_route-19",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "stale_or_conflicted_route",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-stale_or_conflicted_route-20",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "stale_or_conflicted_route",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-stale_or_conflicted_route-21",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "stale_or_conflicted_route",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-stale_or_conflicted_route-22",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "stale_or_conflicted_route",
+      "heldout": true,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-stale_or_conflicted_route-23",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "stale_or_conflicted_route",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-stale_or_conflicted_route-24",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "stale_or_conflicted_route",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-stale_or_conflicted_route-25",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "stale_or_conflicted_route",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-stale_or_conflicted_route-26",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "stale_or_conflicted_route",
+      "heldout": true,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-stale_or_conflicted_route-27",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "stale_or_conflicted_route",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-stale_or_conflicted_route-28",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "stale_or_conflicted_route",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-stale_or_conflicted_route-29",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "stale_or_conflicted_route",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 2.1,
+      "case_id": "acl-public-blocked_privacy_route-00",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "blocked_privacy_route",
+      "heldout": true,
+      "success": true
+    },
+    {
+      "attention_cost_units": 2.1,
+      "case_id": "acl-public-blocked_privacy_route-01",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "blocked_privacy_route",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 2.1,
+      "case_id": "acl-public-blocked_privacy_route-02",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "blocked_privacy_route",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 2.1,
+      "case_id": "acl-public-blocked_privacy_route-03",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "blocked_privacy_route",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 2.1,
+      "case_id": "acl-public-blocked_privacy_route-04",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "blocked_privacy_route",
+      "heldout": true,
+      "success": true
+    },
+    {
+      "attention_cost_units": 2.1,
+      "case_id": "acl-public-blocked_privacy_route-05",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "blocked_privacy_route",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 2.1,
+      "case_id": "acl-public-blocked_privacy_route-06",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "blocked_privacy_route",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 2.1,
+      "case_id": "acl-public-blocked_privacy_route-07",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "blocked_privacy_route",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 2.1,
+      "case_id": "acl-public-blocked_privacy_route-08",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "blocked_privacy_route",
+      "heldout": true,
+      "success": true
+    },
+    {
+      "attention_cost_units": 2.1,
+      "case_id": "acl-public-blocked_privacy_route-09",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "blocked_privacy_route",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 2.1,
+      "case_id": "acl-public-blocked_privacy_route-10",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "blocked_privacy_route",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 2.1,
+      "case_id": "acl-public-blocked_privacy_route-11",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "blocked_privacy_route",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 2.1,
+      "case_id": "acl-public-blocked_privacy_route-12",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "blocked_privacy_route",
+      "heldout": true,
+      "success": true
+    },
+    {
+      "attention_cost_units": 2.1,
+      "case_id": "acl-public-blocked_privacy_route-13",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "blocked_privacy_route",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 2.1,
+      "case_id": "acl-public-blocked_privacy_route-14",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "blocked_privacy_route",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 2.1,
+      "case_id": "acl-public-blocked_privacy_route-15",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "blocked_privacy_route",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 2.1,
+      "case_id": "acl-public-blocked_privacy_route-16",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "blocked_privacy_route",
+      "heldout": true,
+      "success": true
+    },
+    {
+      "attention_cost_units": 2.1,
+      "case_id": "acl-public-blocked_privacy_route-17",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "blocked_privacy_route",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 2.1,
+      "case_id": "acl-public-blocked_privacy_route-18",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "blocked_privacy_route",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 2.1,
+      "case_id": "acl-public-blocked_privacy_route-19",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "blocked_privacy_route",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 2.1,
+      "case_id": "acl-public-blocked_privacy_route-20",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "blocked_privacy_route",
+      "heldout": true,
+      "success": true
+    },
+    {
+      "attention_cost_units": 2.1,
+      "case_id": "acl-public-blocked_privacy_route-21",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "blocked_privacy_route",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 2.1,
+      "case_id": "acl-public-blocked_privacy_route-22",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "blocked_privacy_route",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 2.1,
+      "case_id": "acl-public-blocked_privacy_route-23",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "blocked_privacy_route",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 2.1,
+      "case_id": "acl-public-blocked_privacy_route-24",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "blocked_privacy_route",
+      "heldout": true,
+      "success": true
+    },
+    {
+      "attention_cost_units": 2.1,
+      "case_id": "acl-public-blocked_privacy_route-25",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "blocked_privacy_route",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 2.1,
+      "case_id": "acl-public-blocked_privacy_route-26",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "blocked_privacy_route",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 2.1,
+      "case_id": "acl-public-blocked_privacy_route-27",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "blocked_privacy_route",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 2.1,
+      "case_id": "acl-public-blocked_privacy_route-28",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "blocked_privacy_route",
+      "heldout": true,
+      "success": true
+    },
+    {
+      "attention_cost_units": 2.1,
+      "case_id": "acl-public-blocked_privacy_route-29",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "blocked_privacy_route",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-aippo_low_risk_workflow_guidance-00",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "aippo_low_risk_workflow_guidance",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-aippo_low_risk_workflow_guidance-01",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "aippo_low_risk_workflow_guidance",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-aippo_low_risk_workflow_guidance-02",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "aippo_low_risk_workflow_guidance",
+      "heldout": true,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-aippo_low_risk_workflow_guidance-03",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "aippo_low_risk_workflow_guidance",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-aippo_low_risk_workflow_guidance-04",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "aippo_low_risk_workflow_guidance",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-aippo_low_risk_workflow_guidance-05",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "aippo_low_risk_workflow_guidance",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-aippo_low_risk_workflow_guidance-06",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "aippo_low_risk_workflow_guidance",
+      "heldout": true,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-aippo_low_risk_workflow_guidance-07",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "aippo_low_risk_workflow_guidance",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-aippo_low_risk_workflow_guidance-08",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "aippo_low_risk_workflow_guidance",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-aippo_low_risk_workflow_guidance-09",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "aippo_low_risk_workflow_guidance",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-aippo_low_risk_workflow_guidance-10",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "aippo_low_risk_workflow_guidance",
+      "heldout": true,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-aippo_low_risk_workflow_guidance-11",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "aippo_low_risk_workflow_guidance",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-aippo_low_risk_workflow_guidance-12",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "aippo_low_risk_workflow_guidance",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-aippo_low_risk_workflow_guidance-13",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "aippo_low_risk_workflow_guidance",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-aippo_low_risk_workflow_guidance-14",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "aippo_low_risk_workflow_guidance",
+      "heldout": true,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-aippo_low_risk_workflow_guidance-15",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "aippo_low_risk_workflow_guidance",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-aippo_low_risk_workflow_guidance-16",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "aippo_low_risk_workflow_guidance",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-aippo_low_risk_workflow_guidance-17",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "aippo_low_risk_workflow_guidance",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-aippo_low_risk_workflow_guidance-18",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "aippo_low_risk_workflow_guidance",
+      "heldout": true,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-aippo_low_risk_workflow_guidance-19",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "aippo_low_risk_workflow_guidance",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-aippo_low_risk_workflow_guidance-20",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "aippo_low_risk_workflow_guidance",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-aippo_low_risk_workflow_guidance-21",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "aippo_low_risk_workflow_guidance",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-aippo_low_risk_workflow_guidance-22",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "aippo_low_risk_workflow_guidance",
+      "heldout": true,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-aippo_low_risk_workflow_guidance-23",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "aippo_low_risk_workflow_guidance",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-aippo_low_risk_workflow_guidance-24",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "aippo_low_risk_workflow_guidance",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-aippo_low_risk_workflow_guidance-25",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "aippo_low_risk_workflow_guidance",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-aippo_low_risk_workflow_guidance-26",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "aippo_low_risk_workflow_guidance",
+      "heldout": true,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-aippo_low_risk_workflow_guidance-27",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "aippo_low_risk_workflow_guidance",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-aippo_low_risk_workflow_guidance-28",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "aippo_low_risk_workflow_guidance",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 4.5,
+      "case_id": "acl-public-aippo_low_risk_workflow_guidance-29",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "aippo_low_risk_workflow_guidance",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 1.5,
+      "case_id": "acl-public-anti_nag_recently_dismissed_route-00",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "anti_nag_recently_dismissed_route",
+      "heldout": true,
+      "success": true
+    },
+    {
+      "attention_cost_units": 1.5,
+      "case_id": "acl-public-anti_nag_recently_dismissed_route-01",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "anti_nag_recently_dismissed_route",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 1.5,
+      "case_id": "acl-public-anti_nag_recently_dismissed_route-02",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "anti_nag_recently_dismissed_route",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 1.5,
+      "case_id": "acl-public-anti_nag_recently_dismissed_route-03",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "anti_nag_recently_dismissed_route",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 1.5,
+      "case_id": "acl-public-anti_nag_recently_dismissed_route-04",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "anti_nag_recently_dismissed_route",
+      "heldout": true,
+      "success": true
+    },
+    {
+      "attention_cost_units": 1.5,
+      "case_id": "acl-public-anti_nag_recently_dismissed_route-05",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "anti_nag_recently_dismissed_route",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 1.5,
+      "case_id": "acl-public-anti_nag_recently_dismissed_route-06",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "anti_nag_recently_dismissed_route",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 1.5,
+      "case_id": "acl-public-anti_nag_recently_dismissed_route-07",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "anti_nag_recently_dismissed_route",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 1.5,
+      "case_id": "acl-public-anti_nag_recently_dismissed_route-08",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "anti_nag_recently_dismissed_route",
+      "heldout": true,
+      "success": true
+    },
+    {
+      "attention_cost_units": 1.5,
+      "case_id": "acl-public-anti_nag_recently_dismissed_route-09",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "anti_nag_recently_dismissed_route",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 1.5,
+      "case_id": "acl-public-anti_nag_recently_dismissed_route-10",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "anti_nag_recently_dismissed_route",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 1.5,
+      "case_id": "acl-public-anti_nag_recently_dismissed_route-11",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "anti_nag_recently_dismissed_route",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 1.5,
+      "case_id": "acl-public-anti_nag_recently_dismissed_route-12",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "anti_nag_recently_dismissed_route",
+      "heldout": true,
+      "success": true
+    },
+    {
+      "attention_cost_units": 1.5,
+      "case_id": "acl-public-anti_nag_recently_dismissed_route-13",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "anti_nag_recently_dismissed_route",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 1.5,
+      "case_id": "acl-public-anti_nag_recently_dismissed_route-14",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "anti_nag_recently_dismissed_route",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 1.5,
+      "case_id": "acl-public-anti_nag_recently_dismissed_route-15",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "anti_nag_recently_dismissed_route",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 1.5,
+      "case_id": "acl-public-anti_nag_recently_dismissed_route-16",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "anti_nag_recently_dismissed_route",
+      "heldout": true,
+      "success": true
+    },
+    {
+      "attention_cost_units": 1.5,
+      "case_id": "acl-public-anti_nag_recently_dismissed_route-17",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "anti_nag_recently_dismissed_route",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 1.5,
+      "case_id": "acl-public-anti_nag_recently_dismissed_route-18",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "anti_nag_recently_dismissed_route",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 1.5,
+      "case_id": "acl-public-anti_nag_recently_dismissed_route-19",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "anti_nag_recently_dismissed_route",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 1.5,
+      "case_id": "acl-public-anti_nag_recently_dismissed_route-20",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "anti_nag_recently_dismissed_route",
+      "heldout": true,
+      "success": true
+    },
+    {
+      "attention_cost_units": 1.5,
+      "case_id": "acl-public-anti_nag_recently_dismissed_route-21",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "anti_nag_recently_dismissed_route",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 1.5,
+      "case_id": "acl-public-anti_nag_recently_dismissed_route-22",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "anti_nag_recently_dismissed_route",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 1.5,
+      "case_id": "acl-public-anti_nag_recently_dismissed_route-23",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "anti_nag_recently_dismissed_route",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 1.5,
+      "case_id": "acl-public-anti_nag_recently_dismissed_route-24",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "anti_nag_recently_dismissed_route",
+      "heldout": true,
+      "success": true
+    },
+    {
+      "attention_cost_units": 1.5,
+      "case_id": "acl-public-anti_nag_recently_dismissed_route-25",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "anti_nag_recently_dismissed_route",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 1.5,
+      "case_id": "acl-public-anti_nag_recently_dismissed_route-26",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "anti_nag_recently_dismissed_route",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 1.5,
+      "case_id": "acl-public-anti_nag_recently_dismissed_route-27",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "anti_nag_recently_dismissed_route",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 1.5,
+      "case_id": "acl-public-anti_nag_recently_dismissed_route-28",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "anti_nag_recently_dismissed_route",
+      "heldout": true,
+      "success": true
+    },
+    {
+      "attention_cost_units": 1.5,
+      "case_id": "acl-public-anti_nag_recently_dismissed_route-29",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "anti_nag_recently_dismissed_route",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 5.8,
+      "case_id": "acl-public-semantic_warm_requires_deepen-00",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "semantic_warm_requires_deepen",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 5.8,
+      "case_id": "acl-public-semantic_warm_requires_deepen-01",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "semantic_warm_requires_deepen",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 5.8,
+      "case_id": "acl-public-semantic_warm_requires_deepen-02",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "semantic_warm_requires_deepen",
+      "heldout": true,
+      "success": true
+    },
+    {
+      "attention_cost_units": 5.8,
+      "case_id": "acl-public-semantic_warm_requires_deepen-03",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "semantic_warm_requires_deepen",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 5.8,
+      "case_id": "acl-public-semantic_warm_requires_deepen-04",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "semantic_warm_requires_deepen",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 5.8,
+      "case_id": "acl-public-semantic_warm_requires_deepen-05",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "semantic_warm_requires_deepen",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 5.8,
+      "case_id": "acl-public-semantic_warm_requires_deepen-06",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "semantic_warm_requires_deepen",
+      "heldout": true,
+      "success": true
+    },
+    {
+      "attention_cost_units": 5.8,
+      "case_id": "acl-public-semantic_warm_requires_deepen-07",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "semantic_warm_requires_deepen",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 5.8,
+      "case_id": "acl-public-semantic_warm_requires_deepen-08",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "semantic_warm_requires_deepen",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 5.8,
+      "case_id": "acl-public-semantic_warm_requires_deepen-09",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "semantic_warm_requires_deepen",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 5.8,
+      "case_id": "acl-public-semantic_warm_requires_deepen-10",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "semantic_warm_requires_deepen",
+      "heldout": true,
+      "success": true
+    },
+    {
+      "attention_cost_units": 5.8,
+      "case_id": "acl-public-semantic_warm_requires_deepen-11",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "semantic_warm_requires_deepen",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 5.8,
+      "case_id": "acl-public-semantic_warm_requires_deepen-12",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "semantic_warm_requires_deepen",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 5.8,
+      "case_id": "acl-public-semantic_warm_requires_deepen-13",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "semantic_warm_requires_deepen",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 5.8,
+      "case_id": "acl-public-semantic_warm_requires_deepen-14",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "semantic_warm_requires_deepen",
+      "heldout": true,
+      "success": true
+    },
+    {
+      "attention_cost_units": 5.8,
+      "case_id": "acl-public-semantic_warm_requires_deepen-15",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "semantic_warm_requires_deepen",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 5.8,
+      "case_id": "acl-public-semantic_warm_requires_deepen-16",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "semantic_warm_requires_deepen",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 5.8,
+      "case_id": "acl-public-semantic_warm_requires_deepen-17",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "semantic_warm_requires_deepen",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 5.8,
+      "case_id": "acl-public-semantic_warm_requires_deepen-18",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "semantic_warm_requires_deepen",
+      "heldout": true,
+      "success": true
+    },
+    {
+      "attention_cost_units": 5.8,
+      "case_id": "acl-public-semantic_warm_requires_deepen-19",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "semantic_warm_requires_deepen",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 5.8,
+      "case_id": "acl-public-semantic_warm_requires_deepen-20",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "semantic_warm_requires_deepen",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 5.8,
+      "case_id": "acl-public-semantic_warm_requires_deepen-21",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "semantic_warm_requires_deepen",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 5.8,
+      "case_id": "acl-public-semantic_warm_requires_deepen-22",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "semantic_warm_requires_deepen",
+      "heldout": true,
+      "success": true
+    },
+    {
+      "attention_cost_units": 5.8,
+      "case_id": "acl-public-semantic_warm_requires_deepen-23",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "semantic_warm_requires_deepen",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 5.8,
+      "case_id": "acl-public-semantic_warm_requires_deepen-24",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "semantic_warm_requires_deepen",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 5.8,
+      "case_id": "acl-public-semantic_warm_requires_deepen-25",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "semantic_warm_requires_deepen",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 5.8,
+      "case_id": "acl-public-semantic_warm_requires_deepen-26",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "semantic_warm_requires_deepen",
+      "heldout": true,
+      "success": true
+    },
+    {
+      "attention_cost_units": 5.8,
+      "case_id": "acl-public-semantic_warm_requires_deepen-27",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "semantic_warm_requires_deepen",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 5.8,
+      "case_id": "acl-public-semantic_warm_requires_deepen-28",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "semantic_warm_requires_deepen",
+      "heldout": false,
+      "success": true
+    },
+    {
+      "attention_cost_units": 5.8,
+      "case_id": "acl-public-semantic_warm_requires_deepen-29",
+      "case_origin": "public_safe_generated_cohort",
+      "family": "semantic_warm_requires_deepen",
+      "heldout": false,
+      "success": true
+    }
+  ],
+  "schema_version": 1,
+  "status": "completed_score_scoped_public_cohort"
+}

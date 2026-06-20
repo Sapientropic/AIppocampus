@@ -26,11 +26,17 @@ from aippocampus_runtime.privacy import (
     redact_sensitive_values,
 )
 from aippocampus_runtime.source.clean_source import SCOPE_LABEL_ORDER
+from aippocampus_runtime.source.current_source_window import (
+    annotate_current_search_reopen_commands,
+    open_current_thread_source_window,
+    render_current_source_window_text,
+)
 from aippocampus_runtime.source.registry_search import (
     add_registry_search_arguments,
     run_registry_search_cli,
 )
 from aippocampus_runtime.source.search_core import iter_clean_messages, score_message
+from aippocampus_runtime.source.search_projection import search_foreground_authority
 from aippocampus_runtime.source.search_terms import search_query_terms
 from aippocampus_runtime.source.semantic_scope_labels import (
     load_semantic_scope_labels,
@@ -238,6 +244,10 @@ def first_recall_mode_lines() -> list[str]:
 
 
 def render_human_search_result(result: dict[str, Any]) -> str:
+    if result.get("kind") == "aippocampus_current_thread_source_window":
+        return render_current_source_window_text(
+            result, snippet_chars=DEFAULT_HUMAN_SNIPPET_CHARS
+        )
     terms = result.get("query_terms") or []
     query = str(result.get("query_text") or "").strip()
     if not query:
@@ -267,6 +277,9 @@ def render_human_search_result(result: dict[str, Any]) -> str:
                     lines.append(f'   match: "{snippet}"')
                 else:
                     lines.append("   match omitted; reopen source for exact text.")
+            command = str(match.get("reopen_command") or "").strip()
+            if command:
+                lines.append(f"   reopen: {command}")
         lines.append(
             "Next: reopen source before quoting beyond these snippets, or refine with "
             "a project cue / time cue if this is not the thread you meant."
@@ -303,9 +316,16 @@ def public_search_result(
     if query_text is not None:
         public["query_text"] = str(query_text)
     original_matches = [item for item in result.get("matches") or [] if isinstance(item, dict)]
+    annotate_current_search_reopen_commands(
+        original_matches,
+        source_path=result.get("source"),
+        include_paths=include_paths,
+    )
+    if not metadata_only:
+        public["matches"] = [dict(item) for item in original_matches]
     if metadata_only:
         matches: list[dict[str, Any]] = []
-        for index, match in enumerate(public.get("matches") or [], start=1):
+        for index, match in enumerate(original_matches, start=1):
             timestamp = str(match.get("timestamp") or "")
             raw_snippet = "" if match.get("search_noise") else str(match.get("snippet") or "")
             snippet = compact_text(raw_snippet, DEFAULT_PUBLIC_SNIPPET_CHARS) if raw_snippet else ""
@@ -322,6 +342,8 @@ def public_search_result(
                     "snippet": snippet,
                     "snippet_omitted": not bool(snippet),
                     "source_refs_omitted": True,
+                    "hit_index": index,
+                    "reopen_command": match.get("reopen_command"),
                     "search_noise": bool(match.get("search_noise")),
                     "noise_reason": match.get("noise_reason"),
                 }
@@ -382,136 +404,6 @@ def public_search_result(
     if isinstance(foreground_action, Mapping):
         public.update(canonical_foreground_action_fields(foreground_action))
     return public
-
-
-def _query_text(query_terms: list[str], query_text: str | None) -> str:
-    explicit = str(query_text or "").strip()
-    if explicit:
-        return explicit
-    return " ".join(str(term) for term in query_terms if str(term).strip()).strip()
-
-
-def _first_match_selector(matches: list[dict[str, Any]]) -> dict[str, Any]:
-    if not matches:
-        return {}
-    first = matches[0]
-    for key in ("message_id", "id", "turn_id", "turn_index"):
-        value = first.get(key)
-        if value not in (None, ""):
-            return {key: value}
-    return {}
-
-
-def search_foreground_authority(
-    *,
-    matches: list[dict[str, Any]],
-    query_terms: list[str],
-    metadata_only: bool,
-    query_text: str | None = None,
-) -> dict[str, Any]:
-    """Project clean-source search into the shared foreground authority posture.
-
-    Search may expose local snippets in CLI JSON, or metadata-only cards through
-    public/MCP surfaces. Both are useful first-touch routes, but neither should
-    be mistaken for permission to quote or make broad claims without reopening
-    the clean source window. Keep the action machine-readable so foreground
-    agents do not have to parse prose like "reopen before quoting".
-    """
-
-    query = _query_text(query_terms, query_text)
-    has_matches = bool(matches)
-    if has_matches and metadata_only:
-        return {
-            "kind": "aippocampus_search_result",
-            "ok": True,
-            "status": "ok",
-            "entry_state": "explicit_search_invoked",
-            "route_state": "reopenable_route",
-            "usefulness": "useful_for_next_action",
-            "claim_permission": "capped_search_snippet_no_claim_before_reopen",
-            "source_boundary": {
-                "authority": "reopenable_route",
-                "source_backed_claim_allowed": False,
-                "metadata_only": True,
-                "capped_snippets_are_bounded_receipts": True,
-                "source_reopen_required_before_claim": True,
-                "snippets_are_source_open": False,
-            },
-            "foreground_action": {
-                "action_id": "recall_context_from_search",
-                "label": "Recall context from search match",
-                "tool_name": "recall_context",
-                "arguments": {"intent": query, "max": min(max(len(matches), 1), 5)},
-                "mutation_risk": "read_only",
-                "claim_boundary": "source_reopen_required_before_claim",
-                "why": "Capped search snippet found matching clean-source wording; reopen context before quoting or relying on exact wording.",
-            },
-            "forbidden_claims": [
-                "exact wording",
-                "sensitive/stale/disputed facts",
-                "absence of other source matches",
-            ],
-        }
-    if has_matches:
-        return {
-            "kind": "aippocampus_search_result",
-            "ok": True,
-            "status": "ok",
-            "entry_state": "explicit_search_invoked",
-            "route_state": "source_refs_available",
-            "usefulness": "useful_for_next_action",
-            "claim_permission": "bounded_search_receipt_requires_reopen",
-            "source_boundary": {
-                "authority": "bounded_evidence",
-                "source_backed_claim_allowed": True,
-                "metadata_only": False,
-                "source_reopen_required_before_claim": True,
-                "snippets_are_bounded_receipts": True,
-            },
-            "foreground_action": {
-                "action_id": "reopen_search_match_source",
-                "label": "Reopen the first search match",
-                "tool_name": "get_turn_context",
-                "arguments": _first_match_selector(matches),
-                "mutation_risk": "read_only",
-                "claim_boundary": "source_reopen_required_before_claim",
-                "why": "Use the selected clean-source match as a route, then reopen the surrounding turn before quoting or making strong claims.",
-            },
-            "forbidden_claims": [
-                "exact wording beyond the emitted snippet",
-                "sensitive/stale/disputed facts",
-                "absence of other source matches",
-            ],
-        }
-    return {
-        "kind": "aippocampus_search_result",
-        "ok": False,
-        "status": "no_matches",
-        "entry_state": "explicit_search_invoked",
-        "route_state": "no_useful_route",
-        "usefulness": "needs_refined_cue",
-        "claim_permission": "no_claim_before_source_match",
-        "source_boundary": {
-            "authority": "direction_only",
-            "source_backed_claim_allowed": False,
-            "source_reopen_required_before_claim": True,
-            "search_miss_is_not_absence_of_memory": True,
-        },
-        "foreground_action": {
-            "action_id": "refine_or_recall",
-            "label": "Refine the cue or use recall",
-            "tool_name": "agent_recall",
-            "arguments": {"query": query or "old decision or handoff cue"},
-            "mutation_risk": "read_only",
-            "claim_boundary": "no_claim_before_reopen",
-            "why": "Search found no source-backed snippet; use a richer continuity cue or exact wording before claiming from memory.",
-        },
-        "forbidden_claims": [
-            "source-backed fact",
-            "absence of memory",
-            "exact wording",
-        ],
-    }
 
 
 def search_recovery_payload() -> dict[str, Any]:
@@ -643,7 +535,32 @@ the reopened source boundary.""",
         dest="metadata_only",
         help="Emit public-safe compact output: capped snippets, no source refs, message ids, or local reopen ids.",
     )
+    parser.add_argument(
+        "--open-current-source",
+        action="store_true",
+        help="Open a bounded source window from the current thread clean-source directory.",
+    )
     args = parser.parse_args(argv)
+    if args.open_current_source:
+        if args.open_source or args.hit or args.last_search or args.registry_search:
+            parser.error("--open-current-source cannot be combined with registry source-window options")
+        if args.from_last_recall or args.request or args.recall_selector:
+            parser.error("--open-current-source cannot be combined with last-recall search options")
+        if args.patterns:
+            parser.error("--open-current-source does not take search patterns")
+        payload = open_current_thread_source_window(
+            cwd=args.cwd,
+            clean_source_dir=args.clean_source_dir,
+            message_id=args.message_id,
+            line=args.line,
+            context_lines=args.context_lines,
+            include_paths=bool(args.include_paths),
+        )
+        if args.json_output:
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
+        else:
+            print(render_human_search_result(payload))
+        return 0 if payload.get("ok") else 1
     if args.open_source or args.hit:
         if args.hit and not args.last_search:
             parser.error("--hit requires --last-search")

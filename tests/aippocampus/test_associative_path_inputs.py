@@ -163,6 +163,41 @@ class AssociativePathInputPackTests(unittest.TestCase):
             project_feedback["top_candidates"][0]["reason_codes"],
         )
 
+    def test_diagnostic_does_not_count_materialized_navigation_sidecar_twice(self) -> None:
+        bridge = {
+            "candidate_id": "bridge:apw-cn",
+            "from_terms": ["黏菌", "联想回忆", "探索算法"],
+            "to_terms": ["associative path walker", "routing exploration"],
+            "source_refs": [{"thread_key": "fixture:path-walker", "source_id": "src-apw"}],
+            "scope_bucket": "project",
+        }
+        navigation = {
+            "route_id": "route:apw-cn",
+            "candidate_id": "bridge:apw-cn",
+            "route_terms": ["associative path walker", "routing exploration"],
+            "thread_key": "thread:apw",
+            "source_refs": [{"thread_key": "fixture:path-walker", "source_id": "src-apw"}],
+            "scope_bucket": "project",
+        }
+        pack = build_associative_path_input_pack(
+            query="黏菌 联想回忆 探索算法",
+            semantic_bridge_rows=[bridge],
+            navigation_rows=[navigation],
+        )
+
+        diagnostic = build_associative_path_diagnostic(
+            query="黏菌 联想回忆 探索算法",
+            input_pack=pack,
+        )
+
+        self.assertEqual(pack["metrics"]["candidate_count"], 1)
+        self.assertEqual(pack["metrics"]["navigation_row_count"], 1)
+        self.assertEqual(diagnostic["candidate_count"], 1)
+        self.assertEqual(
+            [candidate.get("route_id") for candidate in diagnostic["top_candidates"]],
+            ["route:apw-cn"],
+        )
+
     def test_why_recall_apw_sidecar_is_opt_in(self) -> None:
         pack = build_associative_path_input_pack(
             query="黏菌 联想回忆 探索算法",

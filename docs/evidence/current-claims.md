@@ -452,16 +452,17 @@ verdict:
   private-history quality, answer generation, evidence support from attention scores, or broad
   live/default successor quality.
 
-#### `recall.default_hook_usefulness_2026_06_14`
+#### `recall.default_hook_usefulness_2026_06_20`
 
 - **What it shows:** Public-safe #1439/#1449 four-arm benchmark compares no-packet baseline, explicit recall,
   default-hook foreground candidate, and `default_hook_tiny_agent_recall_affordance` under the
   same packet/source-reopen budget. Explicit recall and the tiny affordance both reach helpful
   next-action rate 0.636364 and manual-search reduction 11; the broad default-hook foreground
   candidate remains rejected with helpful rate 0.272727, wrong-route drag rate 0.363636, and
-  irrelevant-memory drag rate 0.272727. The tiny `not evidence` affordance fixture gate passes
-  with 7 emitted/followed/recall-after-hint successes and 0 wrong-route, irrelevant-memory, or
-  source-truth overclaim counts.
+  irrelevant-memory drag rate 0.272727. The tiny `not evidence` affordance now has a
+  host-faithful replay gate with 7 emitted/followed `agent_recall` calls, 7 recall-after-hint
+  successes, 0 broad-manual-search-before-recall, and 0 wrong-route, irrelevant-memory,
+  source-truth, raw-handle, or provenance-dump counts.
 - **Boundary:** Public synthetic diagnostic benchmark only; not live default-hook or tiny-affordance quality,
   private-history question/theme usefulness, default foreground adoption readiness, source truth
   from theme/load/router rows, or source claims from the tiny affordance without
@@ -961,27 +962,27 @@ back into giant Markdown table rows.
   #1195 benchmark-family promotion by itself, external-system superiority, or source truth from
   assistant narrative.
 
-### `benchmark_family.promotion_candidates_2026_06_12`
+### `benchmark_family.promotion_candidates_2026_06_20`
 
-- **current_value:** #1195 public-safe family-promotion decision: selected agent continuity loop, attention
-  navigation quality, and map-rot lifecycle debt as the first public cohort candidate targets;
-  deferred E2E50 to #279 and treated rollout hard-event V2 as a seed, not the promotion
-  decision. Candidate target metadata includes per-family floor 30, declared family
-  distributions, held-out target counts, no tuning leakage, Wilson/uncertainty requirement,
-  sanitization check, and usefulness blockers for generic hints, route-label collisions,
-  wrong-route drag, unnecessary reopen, and manual-search fallback.
-- **run_date:** 2026-06-12
-- **source_report:** [`benchmark-family-promotion-candidates-2026-06-12.md`](benchmarks/reports/benchmark-family/benchmark-family-promotion-candidates-2026-06-12.md),
-  [`benchmark-family-promotion-candidates-2026-06-12.json`](benchmarks/reports/benchmark-family/benchmark-family-promotion-candidates-2026-06-12.json),
+- **current_value:** #1195 public-safe family-promotion decision: attention navigation remains promoted
+  for the explicit-pull public/holdout surface, and selected agent continuity loop plus map-rot
+  lifecycle debt now include observed public/holdout cohort measurements. Agent continuity
+  measures 180 public-safe cases with 45 holdout; map-rot measures 270 public-safe cases with
+  68 holdout. For both selected families, required usefulness blocker counts/rates are 0,
+  `holdout_used_for_tuning_count=0`, and unresolved `next_measurement_actions=[]`.
+- **run_date:** 2026-06-20
+- **source_report:** [`benchmark-family-promotion-candidates-2026-06-20.md`](benchmarks/reports/benchmark-family/benchmark-family-promotion-candidates-2026-06-20.md),
+  [`benchmark-family-promotion-candidates-2026-06-20.json`](benchmarks/reports/benchmark-family/benchmark-family-promotion-candidates-2026-06-20.json),
   and `python benchmarks\aippocampus\benchmark_family_promotion_candidates.py --json`
-- **claim_level:** `public_cohort_candidate_decision_report`
-- **cohort:** Public-safe decision report over existing deterministic contract surfaces; no private history,
-  live model, raw text, raw source refs, local paths, or provider output in committed evidence.
-- **supersedes / superseded_by:** Closes the #1195 decision layer by making `contract_gate_ok`, `usefulness_gate_ok`, and
-  `quality_gate_ok` separate for the first three candidate families before broader cohort
-  construction.
-- **cannot_claim:** Representative public quality, holdout quality, observed candidate pass/fail score, live/private
-  behavior lift, answer-generation quality, E2E50 closeout, or external-system superiority.
+- **claim_level:** `public_safe_family_promotion_public_cohort_report`
+- **cohort:** Public-safe generated cohort reports plus retained deterministic contract surfaces; no private
+  history, live model, raw text, raw source refs, local paths, provider output, or cleanup writes
+  in committed evidence.
+- **supersedes / superseded_by:** Supersedes the 2026-06-12 target-only candidate report by embedding observed
+  public/holdout measurements and treating #1969/#1948 as historical closed owners rather than
+  active unresolved owner issues.
+- **cannot_claim:** Live/private behavior lift, answer-generation quality, E2E50 closeout, cleanup-write runtime
+  adoption, or external-system superiority.
 
 ### `fts5.real_history_recall_2026_05_29`
 
@@ -1984,7 +1985,7 @@ back into giant Markdown table rows.
   completion, #1185 natural-handoff/default-session usefulness closeout, private-history
   quality, answer generation, or source truth from attention scores.
 
-### `recall.default_hook_usefulness_2026_06_14`
+### `recall.default_hook_usefulness_2026_06_20`
 
 - **current_value:** Public-safe #1439/#1449 same-budget four-arm benchmark: 11 cases across deictic prompts,
   multilingual prompts, self-referential continuity, explicit-route/hook-skip gap, already-good
@@ -1997,12 +1998,15 @@ back into giant Markdown table rows.
   0.272727, latency proxy avg 15.363636, and cost proxy avg 0.727273. Tiny `agent_recall`
   affordance activation/emission rate 0.636364, helpful next-action rate 0.636364, manual-search
   reduction 11, source-reopen follow-through rate 0.636364, wrong-route drag 0,
-  irrelevant-memory drag 0, source-truth overclaim 0, and quiet-for-a-reason count 4. Decision:
+  irrelevant-memory drag 0, source-truth overclaim 0, and quiet-for-a-reason count 4. The tiny
+  affordance now has a host-faithful replay gate with 7 emitted/followed `agent_recall` calls,
+  7 recall-after-hint successes, and 0 source-truth, raw-handle, provenance-dump,
+  broad-manual-search-before-recall, wrong-route, or irrelevant-memory red lines. Decision:
   keep default hook foreground diagnostic-only; mark `default_hook_tiny_agent_recall_affordance`
-  eligible as a tiny `not evidence` action hint, not as foreground context/evidence.
-- **run_date:** 2026-06-14
-- **source_report:** [`default-hook-recall-usefulness-2026-06-14.md`](benchmarks/reports/recall-navigation/default-hook-recall-usefulness-2026-06-14.md),
-  [`default-hook-recall-usefulness-2026-06-14.json`](benchmarks/reports/recall-navigation/default-hook-recall-usefulness-2026-06-14.json),
+  eligible as an action-only runtime-policy candidate, not as foreground context/evidence.
+- **run_date:** 2026-06-20
+- **source_report:** [`default-hook-recall-usefulness-2026-06-20.md`](benchmarks/reports/recall-navigation/default-hook-recall-usefulness-2026-06-20.md),
+  [`default-hook-recall-usefulness-2026-06-20.json`](benchmarks/reports/recall-navigation/default-hook-recall-usefulness-2026-06-20.json),
   and `python -m pytest tests\aippocampus\test_benchmark_default_hook_recall_usefulness.py -q`
 - **claim_level:** `public_safe_four_arm_default_hook_usefulness_eval`
 - **cohort:** Public synthetic same-budget cohort only; no private history, live hook, model calls, raw

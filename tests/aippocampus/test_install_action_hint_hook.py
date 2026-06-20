@@ -166,9 +166,10 @@ class InstallActionHintHookTests(unittest.TestCase):
         action_ids = [action["id"] for action in result["safe_next_actions"]]
 
         self.assertEqual(result["frontstage_card"]["status"], "with_missing_cache_file")
-        self.assertEqual(result["agent_next_action"]["id"], "check_action_hint_status")
-        self.assertEqual(result["agent_next_action"]["mutation_risk"], "read_only")
+        self.assertEqual(result["agent_next_action"]["id"], "refresh_action_hint_cache")
+        self.assertEqual(result["agent_next_action"]["mutation_risk"], "explicit_local_cache_write")
         self.assertIn("refresh_action_hint_cache", action_ids)
+        self.assertIn("check_action_hint_status", action_ids)
         self.assertIn("rollback_action_hint_hook", action_ids)
         self.assertEqual(
             next(action for action in result["safe_next_actions"] if action["id"] == "refresh_action_hint_cache")["mutation_risk"],
@@ -242,8 +243,12 @@ class InstallActionHintHookTests(unittest.TestCase):
         self.assertFalse(result["hot_path_active"])
         self.assertFalse(card["hot_path_active"])
         self.assertEqual(card["setup_role"], "cleanup_or_prepare_required")
-        self.assertEqual(result["agent_next_action"]["id"], "check_action_hint_status")
-        self.assertEqual(result["agent_next_action"]["mutation_risk"], "read_only")
+        self.assertEqual(result["agent_next_action"]["id"], "refresh_action_hint_cache")
+        self.assertEqual(result["agent_next_action"]["mutation_risk"], "explicit_local_cache_write")
+        self.assertIn(
+            "check_action_hint_status",
+            [action["id"] for action in result["safe_next_actions"]],
+        )
         self.assertIn(
             "rollback_action_hint_hook",
             [action["id"] for action in result["safe_next_actions"]],

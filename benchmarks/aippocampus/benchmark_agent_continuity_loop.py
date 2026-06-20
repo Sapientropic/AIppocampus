@@ -13,6 +13,7 @@ import argparse
 import json
 from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
+from pathlib import Path
 from typing import Any
 
 import _paths
@@ -226,7 +227,11 @@ def fixture_agent_continuity_loop_cases() -> list[dict[str, Any]]:
             },
             "route_label": "stale conflict route",
             "why_may_matter": "Route may have conflicting updates; reopen and check currentness before use.",
-            "risk_flags": ["source_reopen_required", "check_currentness", "conflict_requires_deepen"],
+            "risk_flags": [
+                "source_reopen_required",
+                "check_currentness",
+                "conflict_requires_deepen",
+            ],
             "triage_rank_reason_codes": ["stale_or_conflicted_source_reopen", "source_bridge_ok"],
             "source_reopen": {
                 "path": "cold",
@@ -328,7 +333,9 @@ def _foreground_projection(
 
 
 def _project_route_case(case: Mapping[str, Any]) -> dict[str, Any]:
-    token = semantic_warm_route_producer.project_semantic_warm_route_tokens([_semantic_row(case)])[0]
+    token = semantic_warm_route_producer.project_semantic_warm_route_tokens([_semantic_row(case)])[
+        0
+    ]
     if isinstance(case.get("bounded_summary"), Mapping):
         token["bounded_summary"] = dict(case["bounded_summary"])
 
@@ -413,7 +420,9 @@ def _project_aippo_case(case: Mapping[str, Any]) -> dict[str, Any]:
                     "anti_nag_suppressed_count": 0,
                     "debug_or_source_field_leak_count": _foreground_forbidden_count([packet]),
                 },
-                "red_lines": {"foreground_forbidden_key_leak": _foreground_forbidden_count([packet])},
+                "red_lines": {
+                    "foreground_forbidden_key_leak": _foreground_forbidden_count([packet])
+                },
             },
         },
         "red_lines": red_lines,
@@ -457,7 +466,9 @@ def _route_case_red_lines(
         "foreground_forbidden_key_leak": _foreground_forbidden_count(
             foreground.get("foreground_packets") or []
         ),
-        "semantic_route_used_as_truth_count": int(packet["claim_permission"] == "bounded_claim_allowed"),
+        "semantic_route_used_as_truth_count": int(
+            packet["claim_permission"] == "bounded_claim_allowed"
+        ),
         "feedback_promoted_without_source": 0,
         "anti_nag_violation_count": anti_nag_violation,
     }
@@ -498,8 +509,7 @@ def _selection_hint_present(packet: Mapping[str, Any]) -> bool:
     label = str(packet.get("route_label") or "").strip()
     hint = str(packet.get("display_hint") or "").strip()
     return bool(label) and bool(
-        hint
-        and hint != "A source route may matter; reopen it before using the detail."
+        hint and hint != "A source route may matter; reopen it before using the detail."
     )
 
 
@@ -521,9 +531,7 @@ def _triage_metrics(projected_cases: Sequence[Mapping[str, Any]]) -> dict[str, A
         if packet.get("output_mode") in {"bounded_summary_as_route", "reopenable_route"}
     ]
     signatures = {
-        _triage_signature(packet)
-        for packet in triage_packets
-        if _selection_hint_present(packet)
+        _triage_signature(packet) for packet in triage_packets if _selection_hint_present(packet)
     }
     blind_deepen_required_count = sum(
         1
@@ -621,9 +629,7 @@ def evaluate_agent_continuity_loop_cases(cases: Iterable[Mapping[str, Any]]) -> 
             anti_nag_suppressed += int(metrics.get("anti_nag_suppressed_count") or 0)
 
     red_lines["foreground_forbidden_key_leak"] += _foreground_forbidden_count(foreground_packets)
-    red_lines["blind_deepen_required_count"] = int(
-        triage_metrics["blind_deepen_required_count"]
-    )
+    red_lines["blind_deepen_required_count"] = int(triage_metrics["blind_deepen_required_count"])
     red_lines["packet_triage_collision_count"] = int(
         triage_metrics["packet_triage_collision_count"]
     )
@@ -666,9 +672,7 @@ def evaluate_agent_continuity_loop_cases(cases: Iterable[Mapping[str, Any]]) -> 
                 if case["case_id"] == "aippo_low_risk_workflow" and case.get("passed")
             ),
             "stale_or_conflicted_as_current_count": red_lines["stale_as_current_count"],
-            "source_backed_claim_without_reopen": red_lines[
-                "source_backed_claim_without_reopen"
-            ],
+            "source_backed_claim_without_reopen": red_lines["source_backed_claim_without_reopen"],
             "anti_nag_suppressed_count": anti_nag_suppressed,
             **triage_metrics,
         },
@@ -806,10 +810,14 @@ def build_agent_continuity_public_cohort_report(
         for key in USEFULNESS_BLOCKER_KEYS
     }
     attention_cost_overrun_count = blocker_counts["attention_cost_overrun_count"]
-    attention_avg = round(
-        sum(float(row.get("attention_cost_units") or 0.0) for row in cohort_rows) / case_count,
-        6,
-    ) if case_count else 0.0
+    attention_avg = (
+        round(
+            sum(float(row.get("attention_cost_units") or 0.0) for row in cohort_rows) / case_count,
+            6,
+        )
+        if case_count
+        else 0.0
+    )
     red_lines = {
         "anti_nag_violation_count": sum(1 for row in cohort_rows if row.get("anti_nag_violation")),
         "privacy_bypass_count": sum(1 for row in cohort_rows if row.get("privacy_bypass")),
@@ -821,11 +829,12 @@ def build_agent_continuity_public_cohort_report(
         ),
     }
     usefulness_gate_ok = all(value == 0 for value in blocker_counts.values())
-    attention_cost_ok = attention_cost_overrun_count == 0 and attention_avg <= PUBLIC_COHORT_ATTENTION_COST_BUDGET
+    attention_cost_ok = (
+        attention_cost_overrun_count == 0 and attention_avg <= PUBLIC_COHORT_ATTENTION_COST_BUDGET
+    )
     family_counts = Counter(str(row.get("family") or "unknown") for row in cohort_rows)
     sample_floor_ok = case_count >= PUBLIC_COHORT_MIN_SAMPLE_FLOOR and all(
-        family_counts[family] >= PUBLIC_COHORT_CASES_PER_FAMILY
-        for family in PUBLIC_COHORT_FAMILIES
+        family_counts[family] >= PUBLIC_COHORT_CASES_PER_FAMILY for family in PUBLIC_COHORT_FAMILIES
     )
     red_line_gate_ok = all(value == 0 for value in red_lines.values())
     quality_gate_ok = bool(
@@ -877,9 +886,7 @@ def build_agent_continuity_public_cohort_report(
         "kind": "aippocampus_agent_continuity_loop_public_cohort",
         "schema_version": 1,
         "ok": quality_gate_ok,
-        "status": "completed_score_scoped_public_cohort"
-        if quality_gate_ok
-        else "measured_blocker",
+        "status": "completed_score_scoped_public_cohort" if quality_gate_ok else "measured_blocker",
         "metrics": metrics,
         "family_counts": dict(sorted(family_counts.items())),
         "measured_blocker_categories": list(USEFULNESS_BLOCKER_KEYS),
@@ -909,6 +916,11 @@ def build_agent_continuity_public_cohort_report(
             "source_handles_serialized": False,
             "heldout_rows_excluded_from_tuning": tuning_leak_count == 0,
         },
+        "no_open_followup_reason": (
+            "Public/holdout cohort measurement is consumed by the #2396 family "
+            "promotion report; live host, private-history, answer-generation, "
+            "and default-foreground adoption claims need fresh scoped work."
+        ),
         "cannot_claim": [
             "live_host_behavior_lift",
             "private_history_quality",
@@ -930,12 +942,19 @@ def main(argv: list[str] | None = None) -> int:
         help="print the #1969 public cohort successor report",
     )
     parser.add_argument("--json", action="store_true", help="print JSON report")
+    parser.add_argument("--output", type=Path, help="write JSON report to this path")
     args = parser.parse_args(argv)
     report = (
         build_agent_continuity_public_cohort_report()
         if args.public_cohort
         else run_agent_continuity_loop()
     )
+    if args.output:
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(
+            json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
     if args.json:
         print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
     else:

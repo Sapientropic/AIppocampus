@@ -1,0 +1,784 @@
+{
+  "agent_action": "use_as_family_promotion_public_cohort_evidence_not_runtime_adoption",
+  "benchmark_maturity_level": "public_cohort",
+  "can_support_after_action": [
+    "runtime or private-history adoption only after separate live/dogfood evidence"
+  ],
+  "cannot_claim": [
+    "selected_family_runtime_lift",
+    "live_private_history_family_promotion",
+    "cleanup_write_runtime_adoption"
+  ],
+  "case_count": 4,
+  "case_count_meaning": "selected candidate families plus deferred candidate families",
+  "claim_boundary": {
+    "material_limits": [
+      "Selected family measurements are public-safe synthetic cohorts, not live-host proof.",
+      "Private history, live host behavior, and answer generation remain out of scope."
+    ],
+    "supports": "First #1195 family-promotion decision with observed public/holdout cohort measurements for selected public-safe families."
+  },
+  "completed_measurements": [
+    {
+      "attention_cost": {
+        "attention_cost_avg_units": 3.816667,
+        "attention_cost_gate_ok": true,
+        "attention_cost_overrun_count": 0
+      },
+      "attention_cost_ok": true,
+      "command": "python benchmarks/aippocampus/benchmark_agent_continuity_loop.py --public-cohort --json",
+      "current_issue": "#2396",
+      "family_id": "agent_continuity_loop",
+      "foreground_noise": {
+        "foreground_noise_added_count": 0,
+        "foreground_noise_gate_ok": true
+      },
+      "hard_red_lines_zero": true,
+      "historical_owner_issue": "#1969",
+      "historical_owner_issue_state": "closed_historical",
+      "holdout_case_count": 45,
+      "holdout_used_for_tuning_count": 0,
+      "kind": "aippocampus_agent_continuity_loop_public_cohort",
+      "measurement_origin": "public_safe_generated_cohort",
+      "no_open_followup_reason": "Public/holdout measurement is embedded in this report; no unresolved measurement action remains for the closed historical owner.",
+      "observed_result_interpretation": "observed_score_not_target_metadata",
+      "observed_usefulness_blockers": [
+        {
+          "blocks_usefulness_gate": false,
+          "control_id": "generic_hints",
+          "gate_ok": true,
+          "observed_count": 0,
+          "observed_rate": 0.0,
+          "promotion_threshold": 0
+        },
+        {
+          "blocks_usefulness_gate": false,
+          "control_id": "route_label_collisions",
+          "gate_ok": true,
+          "observed_count": 0,
+          "observed_rate": 0.0,
+          "promotion_threshold": 0
+        },
+        {
+          "blocks_usefulness_gate": false,
+          "control_id": "wrong_route_drag",
+          "gate_ok": true,
+          "observed_count": 0,
+          "observed_rate": 0.0,
+          "promotion_threshold": 0
+        },
+        {
+          "blocks_usefulness_gate": false,
+          "control_id": "unnecessary_reopen",
+          "gate_ok": true,
+          "observed_count": 0,
+          "observed_rate": 0.0,
+          "promotion_threshold": 0
+        },
+        {
+          "blocks_usefulness_gate": false,
+          "control_id": "manual_search_fallback",
+          "gate_ok": true,
+          "observed_count": 0,
+          "observed_rate": 0.0,
+          "promotion_threshold": 0
+        }
+      ],
+      "output_artifact": "docs/evidence/benchmarks/reports/agent_continuity_loop_public_cohort.json",
+      "public_cohort_case_count": 180,
+      "public_quality_gate_ok": true,
+      "quality_gate_ok": true,
+      "sample_floor_met": true,
+      "status": "completed_score_scoped_public_cohort",
+      "usefulness_gate_ok": true
+    },
+    {
+      "attention_cost": {
+        "attention_cost_avg_units": 1.688889,
+        "attention_cost_gate_ok": true,
+        "attention_cost_overrun_count": 0
+      },
+      "attention_cost_ok": true,
+      "command": "python benchmarks/aippocampus/benchmark_map_rot_lifecycle_debt.py --public-cohort --json",
+      "current_issue": "#2396",
+      "family_id": "map_rot_lifecycle_debt",
+      "foreground_noise": {
+        "foreground_noise_added_count": 0,
+        "foreground_noise_gate_ok": true
+      },
+      "hard_red_lines_zero": true,
+      "historical_owner_issue": "#1948",
+      "historical_owner_issue_state": "closed_historical",
+      "holdout_case_count": 68,
+      "holdout_used_for_tuning_count": 0,
+      "kind": "aippocampus_map_rot_lifecycle_debt_public_cohort",
+      "measurement_origin": "public_safe_generated_cohort",
+      "no_open_followup_reason": "Public/holdout measurement is embedded in this report; no unresolved measurement action remains for the closed historical owner.",
+      "observed_result_interpretation": "observed_score_not_target_metadata",
+      "observed_usefulness_blockers": [
+        {
+          "blocks_usefulness_gate": false,
+          "control_id": "generic_hints",
+          "gate_ok": true,
+          "observed_count": 0,
+          "observed_rate": 0.0,
+          "promotion_threshold": 0
+        },
+        {
+          "blocks_usefulness_gate": false,
+          "control_id": "route_label_collisions",
+          "gate_ok": true,
+          "observed_count": 0,
+          "observed_rate": 0.0,
+          "promotion_threshold": 0
+        },
+        {
+          "blocks_usefulness_gate": false,
+          "control_id": "wrong_route_drag",
+          "gate_ok": true,
+          "observed_count": 0,
+          "observed_rate": 0.0,
+          "promotion_threshold": 0
+        },
+        {
+          "blocks_usefulness_gate": false,
+          "control_id": "unnecessary_reopen",
+          "gate_ok": true,
+          "observed_count": 0,
+          "observed_rate": 0.0,
+          "promotion_threshold": 0
+        },
+        {
+          "blocks_usefulness_gate": false,
+          "control_id": "manual_search_fallback",
+          "gate_ok": true,
+          "observed_count": 0,
+          "observed_rate": 0.0,
+          "promotion_threshold": 0
+        }
+      ],
+      "output_artifact": "docs/evidence/benchmarks/reports/map_rot_lifecycle_debt_public_cohort.json",
+      "public_cohort_case_count": 270,
+      "public_quality_gate_ok": true,
+      "quality_gate_ok": true,
+      "sample_floor_met": true,
+      "status": "completed_score_scoped_public_cohort",
+      "usefulness_gate_ok": true
+    }
+  ],
+  "contract_gate_ok": true,
+  "decision_impact": "diagnostic_only",
+  "decision_impact_not_applicable": true,
+  "deferred_families": [
+    {
+      "family_id": "e2e50_silent_constraint",
+      "reason": "Deferred to #279 because it needs behavior-pack ownership, compaction boundary evidence, and ablation arms rather than a generic family-promotion row."
+    },
+    {
+      "family_id": "rollout_hard_event",
+      "reason": "Used as a public-safe seed for agent-continuity route-chain cases, but the V2 cohort is not by itself the #1195 contract-smoke family promotion decision."
+    }
+  ],
+  "gate_separation": {
+    "contract_gate_ok": "current deterministic contract still passes",
+    "public_quality_gate_ok": "true only for named public/holdout surfaces with sample floor and no tuning leak",
+    "quality_gate_ok": "alias for the surface-specific public_quality_gate_ok",
+    "usefulness_gate_ok": "observed public/holdout cohort usefulness blockers must be zero"
+  },
+  "issue": 1195,
+  "kind": "aippocampus_benchmark_family_promotion_candidates",
+  "material_limits": [
+    "Attention navigation is promoted only for the narrow explicit-pull public cohort.",
+    "Agent-continuity loop and map-rot public cohorts are synthetic/public-safe evidence.",
+    "Private history, live host behavior, and answer generation remain out of scope."
+  ],
+  "measured_result": "selected agent-continuity and map-rot families now include observed public/holdout cohort measurements",
+  "measurement_origin": "deterministic_contract",
+  "metrics": {
+    "case_count": 3,
+    "case_count_scope": "selected_and_promoted_public_quality_family_surfaces",
+    "deferred_family_count": 2,
+    "evaluated_public_quality_family_count": 3,
+    "holdout_case_count": 203,
+    "holdout_no_tuning_leak_rate": {
+      "denominator": 3,
+      "numerator": 3,
+      "rate": 1.0,
+      "unit": "evaluated_public_quality_family"
+    },
+    "promoted_family_count": 1,
+    "promoted_holdout_case_count": 90,
+    "promoted_public_cohort_case_count": 270,
+    "public_cohort_case_count": 720,
+    "public_quality_gate_rate": {
+      "denominator": 3,
+      "numerator": 3,
+      "rate": 1.0,
+      "unit": "evaluated_public_quality_family"
+    },
+    "sample_floor_rate": {
+      "denominator": 3,
+      "numerator": 3,
+      "rate": 1.0,
+      "unit": "evaluated_public_quality_family"
+    },
+    "selected_attention_cost_gate_rate": {
+      "denominator": 2,
+      "numerator": 2,
+      "rate": 1.0,
+      "unit": "selected_family"
+    },
+    "selected_family_count": 2,
+    "selected_foreground_silent_rate": {
+      "denominator": 2,
+      "numerator": 2,
+      "rate": 1.0,
+      "unit": "selected_family"
+    },
+    "selected_hard_red_line_zero_rate": {
+      "denominator": 2,
+      "numerator": 2,
+      "rate": 1.0,
+      "unit": "selected_family"
+    },
+    "selected_holdout_case_count": 113,
+    "selected_public_cohort_case_count": 450,
+    "selected_usefulness_blocker_zero_rate": {
+      "denominator": 10,
+      "numerator": 10,
+      "rate": 1.0,
+      "unit": "required_usefulness_control_observation"
+    },
+    "selected_usefulness_gate_rate": {
+      "denominator": 2,
+      "numerator": 2,
+      "rate": 1.0,
+      "unit": "selected_family"
+    }
+  },
+  "next_measurement_actions": [],
+  "observed_agent_behavior": false,
+  "ok": true,
+  "privacy_boundary": {
+    "absolute_paths_emitted": false,
+    "provider_calls": 0,
+    "raw_private_text_emitted": false
+  },
+  "promoted_families": [
+    {
+      "current_public_maturity": {
+        "benchmark_maturity_level": "public_cohort",
+        "case_count": 270,
+        "contract_gate_ok": true,
+        "kind": "aippocampus_attention_navigation_public_cohort",
+        "next_promotion_target": "explicit_agent_recall_auto",
+        "ok": true,
+        "per_family_case_counts": {
+          "action_time": 30,
+          "anti_nag": 30,
+          "conflict": 30,
+          "generic_hint": 30,
+          "hard_mask": 30,
+          "multilingual_alias": 30,
+          "positive_route": 30,
+          "stale_currentness": 30,
+          "wrong_source": 30
+        },
+        "quality_gate_blockers": [],
+        "quality_gate_ok": true,
+        "sample_floor_met": true,
+        "usefulness_gate_ok": true
+      },
+      "display_name": "Attention navigation quality",
+      "family_id": "attention_navigation_quality",
+      "gate_status": {
+        "contract_gate_ok": true,
+        "public_quality_gate_ok": true,
+        "quality_gate_ok": true,
+        "status": "narrow_public_cohort_promoted"
+      },
+      "non_goals": [
+        "live_host_behavior_lift",
+        "answer_generation_quality",
+        "private_history_router_quality",
+        "default_foreground_hook_lift",
+        "representative_production_routing"
+      ],
+      "promoted_surface": "explicit_agent_recall_auto_attention_router",
+      "promotion_state": "narrow_public_cohort_promoted",
+      "public_cohort_completed": {
+        "benchmark_maturity_level": "public_cohort",
+        "case_count": 270,
+        "explicit_agent_recall_auto_gate_ok": true,
+        "failure_family_count": 9,
+        "hard_red_lines_zero": true,
+        "holdout_case_count": 90,
+        "holdout_used_for_tuning_count": 0,
+        "minimum_family_case_floor": 30,
+        "public_quality_gate_ok": true,
+        "sample_floor_met": true,
+        "wilson_or_uncertainty_reported": true
+      },
+      "sanitization_check": {
+        "local_paths_emitted": false,
+        "private_text_emitted": false,
+        "provider_credentials_emitted": false,
+        "public_safe_or_synthetic_only": true,
+        "raw_source_refs_emitted": false,
+        "raw_text_emitted": false,
+        "status": "passed"
+      }
+    }
+  ],
+  "promoted_family_count": 1,
+  "public_quality_gate_ok": true,
+  "quality_gate_ok": true,
+  "run_at": "2026-06-20T12:29:21Z",
+  "sanitization_check": {
+    "local_paths_emitted": false,
+    "private_text_emitted": false,
+    "provider_credentials_emitted": false,
+    "public_safe_or_synthetic_only": true,
+    "raw_source_refs_emitted": false,
+    "raw_text_emitted": false,
+    "status": "passed"
+  },
+  "schema_version": 1,
+  "selected_families": [
+    {
+      "cohort_source_plan": "Public synthetic and public-replayable agent-task traces, seeded by existing agent continuity fixtures and rollout hard-event V2 route-chain patterns; holdout cases are declared before threshold or prompt tuning.",
+      "current_contract_maturity": {
+        "benchmark_maturity_level": "contract_smoke",
+        "case_count": 8,
+        "contract_gate_ok": true,
+        "kind": "aippocampus_agent_continuity_loop_fixture",
+        "next_promotion_target": "public_cohort_candidate",
+        "ok": true,
+        "per_family_case_counts": {
+          "aippo": 1,
+          "anti_nag": 1,
+          "blocked": 1,
+          "packet_triage": 2,
+          "positive_route": 2,
+          "stale_conflict": 1
+        },
+        "quality_gate_blockers": [
+          "maturity_level_below_public_quality",
+          "sample_floor_not_met",
+          "public_or_external_cohort_missing",
+          "holdout_missing"
+        ],
+        "quality_gate_ok": false,
+        "sample_floor_met": false,
+        "usefulness_gate_ok": true
+      },
+      "display_name": "Agent continuity loop / recall degradation",
+      "family_id": "agent_continuity_loop",
+      "gate_status": {
+        "contract_gate_ok": true,
+        "public_quality_gate_ok": true,
+        "quality_gate_ok": true,
+        "status": "public_holdout_cohort_measured",
+        "usefulness_gate_ok": true
+      },
+      "negative_control_families": [
+        "generic_hints",
+        "route_label_collisions",
+        "wrong_route_drag",
+        "unnecessary_reopen",
+        "manual_search_fallback"
+      ],
+      "non_goals": [
+        "live_host_behavior_lift",
+        "private_history_quality",
+        "answer_generation_quality",
+        "default_foreground_adoption"
+      ],
+      "priority_reason": "Highest user-facing composition risk: recall packets, deepen handles, AIppo guidance, stale/conflict boundaries, and anti-nag behavior must work together.",
+      "promotion_state": "public_cohort_measured",
+      "public_cohort_candidate": {
+        "attention_cost_ok": true,
+        "benchmark_maturity_level": "public_cohort_candidate",
+        "cannot_claim": [
+          "live_user_visible_lift",
+          "private_history_quality",
+          "competitor_superiority"
+        ],
+        "cannot_claim_due_to_sample_size": false,
+        "case_count": 180,
+        "contract_gate_ok": true,
+        "external_or_public_cohort_case_count": 180,
+        "failure_family_count": 6,
+        "holdout_case_count": 45,
+        "holdout_not_run": false,
+        "holdout_used_for_tuning_count": 0,
+        "metadata_interpretation": "target_design_superseded_by_observed_public_cohort_measurement",
+        "minimum_family_case_floor": 30,
+        "next_promotion_target": "public_cohort",
+        "observed_measurement_ref": "public_cohort_measurement",
+        "per_family_case_counts": {
+          "blocked_or_private_route": 30,
+          "manual_search_fallback": 30,
+          "positive_reopenable_route": 30,
+          "route_label_collision": 30,
+          "stale_conflict_reopen_required": 30,
+          "wrong_route_drag": 30
+        },
+        "quality_gate_blockers": [],
+        "quality_gate_ok": true,
+        "sample_floor_met": true,
+        "uncertainty_policy": "Report Wilson intervals for every rate on the measured candidate cohort; the interval describes only the declared cohort and does not repair sampling bias.",
+        "usefulness_gate_ok": true,
+        "wilson_or_uncertainty_reported": true
+      },
+      "public_cohort_measurement": {
+        "attention_cost": {
+          "attention_cost_avg_units": 3.816667,
+          "attention_cost_gate_ok": true,
+          "attention_cost_overrun_count": 0
+        },
+        "attention_cost_ok": true,
+        "command": "python benchmarks/aippocampus/benchmark_agent_continuity_loop.py --public-cohort --json",
+        "current_issue": "#2396",
+        "foreground_noise": {
+          "foreground_noise_added_count": 0,
+          "foreground_noise_gate_ok": true
+        },
+        "hard_red_lines_zero": true,
+        "historical_owner_issue": "#1969",
+        "historical_owner_issue_state": "closed_historical",
+        "holdout_case_count": 45,
+        "holdout_used_for_tuning_count": 0,
+        "kind": "aippocampus_agent_continuity_loop_public_cohort",
+        "measurement_origin": "public_safe_generated_cohort",
+        "no_open_followup_reason": "Public/holdout measurement is embedded in this report; no unresolved measurement action remains for the closed historical owner.",
+        "observed_result_interpretation": "observed_score_not_target_metadata",
+        "observed_usefulness_blockers": [
+          {
+            "blocks_usefulness_gate": false,
+            "control_id": "generic_hints",
+            "gate_ok": true,
+            "observed_count": 0,
+            "observed_rate": 0.0,
+            "promotion_threshold": 0
+          },
+          {
+            "blocks_usefulness_gate": false,
+            "control_id": "route_label_collisions",
+            "gate_ok": true,
+            "observed_count": 0,
+            "observed_rate": 0.0,
+            "promotion_threshold": 0
+          },
+          {
+            "blocks_usefulness_gate": false,
+            "control_id": "wrong_route_drag",
+            "gate_ok": true,
+            "observed_count": 0,
+            "observed_rate": 0.0,
+            "promotion_threshold": 0
+          },
+          {
+            "blocks_usefulness_gate": false,
+            "control_id": "unnecessary_reopen",
+            "gate_ok": true,
+            "observed_count": 0,
+            "observed_rate": 0.0,
+            "promotion_threshold": 0
+          },
+          {
+            "blocks_usefulness_gate": false,
+            "control_id": "manual_search_fallback",
+            "gate_ok": true,
+            "observed_count": 0,
+            "observed_rate": 0.0,
+            "promotion_threshold": 0
+          }
+        ],
+        "output_artifact": "docs/evidence/benchmarks/reports/agent_continuity_loop_public_cohort.json",
+        "public_cohort_case_count": 180,
+        "public_quality_gate_ok": true,
+        "quality_gate_ok": true,
+        "sample_floor_met": true,
+        "status": "completed_score_scoped_public_cohort",
+        "usefulness_gate_ok": true
+      },
+      "sanitization_check": {
+        "local_paths_emitted": false,
+        "private_text_emitted": false,
+        "provider_credentials_emitted": false,
+        "public_safe_or_synthetic_only": true,
+        "raw_source_refs_emitted": false,
+        "raw_text_emitted": false,
+        "status": "passed"
+      },
+      "usefulness_promotion_blockers": [
+        {
+          "blocks_usefulness_gate": false,
+          "control_id": "generic_hints",
+          "gate_ok": true,
+          "observed_count": 0,
+          "observed_rate": 0.0,
+          "promotion_threshold": 0
+        },
+        {
+          "blocks_usefulness_gate": false,
+          "control_id": "route_label_collisions",
+          "gate_ok": true,
+          "observed_count": 0,
+          "observed_rate": 0.0,
+          "promotion_threshold": 0
+        },
+        {
+          "blocks_usefulness_gate": false,
+          "control_id": "wrong_route_drag",
+          "gate_ok": true,
+          "observed_count": 0,
+          "observed_rate": 0.0,
+          "promotion_threshold": 0
+        },
+        {
+          "blocks_usefulness_gate": false,
+          "control_id": "unnecessary_reopen",
+          "gate_ok": true,
+          "observed_count": 0,
+          "observed_rate": 0.0,
+          "promotion_threshold": 0
+        },
+        {
+          "blocks_usefulness_gate": false,
+          "control_id": "manual_search_fallback",
+          "gate_ok": true,
+          "observed_count": 0,
+          "observed_rate": 0.0,
+          "promotion_threshold": 0
+        }
+      ]
+    },
+    {
+      "cohort_source_plan": "Public synthetic lifecycle-state rows with explicit source-refresh, review, decay, deletion, and dead-letter controls; all maintenance actions are no-write until a separate operator-approved cleanup path exists.",
+      "current_contract_maturity": {
+        "benchmark_maturity_level": "contract_smoke",
+        "case_count": 9,
+        "contract_gate_ok": true,
+        "kind": "aippocampus_map_rot_lifecycle_debt",
+        "next_promotion_target": "public_cohort_candidate",
+        "ok": true,
+        "per_family_case_counts": {
+          "challenged": 1,
+          "current": 1,
+          "dead_letter": 1,
+          "deleted_no_recall": 1,
+          "missing_middle": 1,
+          "quarantined": 1,
+          "repeated_wrong": 1,
+          "stale": 1,
+          "superseded": 1
+        },
+        "quality_gate_blockers": [
+          "maturity_level_below_public_quality",
+          "sample_floor_not_met",
+          "public_or_external_cohort_missing",
+          "holdout_missing"
+        ],
+        "quality_gate_ok": false,
+        "sample_floor_met": false,
+        "usefulness_gate_ok": true
+      },
+      "display_name": "Map-rot lifecycle debt",
+      "family_id": "map_rot_lifecycle_debt",
+      "gate_status": {
+        "contract_gate_ok": true,
+        "public_quality_gate_ok": true,
+        "quality_gate_ok": true,
+        "status": "public_holdout_cohort_measured",
+        "usefulness_gate_ok": true
+      },
+      "negative_control_families": [
+        "generic_hints",
+        "route_label_collisions",
+        "wrong_route_drag",
+        "unnecessary_reopen",
+        "manual_search_fallback"
+      ],
+      "non_goals": [
+        "automatic_cleanup_proof",
+        "completed_forgetting",
+        "private_history_map_rot_quality",
+        "live_current_route_quality"
+      ],
+      "priority_reason": "Cold navigation maps can harm usefulness by reviving stale, challenged, quarantined, deleted, or repeated-wrong routes; this family protects the source-backed currentness boundary before cleanup automation.",
+      "promotion_state": "public_cohort_measured",
+      "public_cohort_candidate": {
+        "attention_cost_ok": true,
+        "benchmark_maturity_level": "public_cohort_candidate",
+        "cannot_claim": [
+          "live_user_visible_lift",
+          "private_history_quality",
+          "competitor_superiority"
+        ],
+        "cannot_claim_due_to_sample_size": false,
+        "case_count": 270,
+        "contract_gate_ok": true,
+        "external_or_public_cohort_case_count": 270,
+        "failure_family_count": 9,
+        "holdout_case_count": 68,
+        "holdout_not_run": false,
+        "holdout_used_for_tuning_count": 0,
+        "metadata_interpretation": "target_design_superseded_by_observed_public_cohort_measurement",
+        "minimum_family_case_floor": 30,
+        "next_promotion_target": "public_cohort",
+        "observed_measurement_ref": "public_cohort_measurement",
+        "per_family_case_counts": {
+          "challenged": 30,
+          "current": 30,
+          "dead_letter": 30,
+          "deleted_no_recall": 30,
+          "missing_middle": 30,
+          "quarantined": 30,
+          "repeated_wrong": 30,
+          "stale": 30,
+          "superseded": 30
+        },
+        "quality_gate_blockers": [],
+        "quality_gate_ok": true,
+        "sample_floor_met": true,
+        "uncertainty_policy": "Report Wilson intervals for every rate on the measured candidate cohort; the interval describes only the declared cohort and does not repair sampling bias.",
+        "usefulness_gate_ok": true,
+        "wilson_or_uncertainty_reported": true
+      },
+      "public_cohort_measurement": {
+        "attention_cost": {
+          "attention_cost_avg_units": 1.688889,
+          "attention_cost_gate_ok": true,
+          "attention_cost_overrun_count": 0
+        },
+        "attention_cost_ok": true,
+        "command": "python benchmarks/aippocampus/benchmark_map_rot_lifecycle_debt.py --public-cohort --json",
+        "current_issue": "#2396",
+        "foreground_noise": {
+          "foreground_noise_added_count": 0,
+          "foreground_noise_gate_ok": true
+        },
+        "hard_red_lines_zero": true,
+        "historical_owner_issue": "#1948",
+        "historical_owner_issue_state": "closed_historical",
+        "holdout_case_count": 68,
+        "holdout_used_for_tuning_count": 0,
+        "kind": "aippocampus_map_rot_lifecycle_debt_public_cohort",
+        "measurement_origin": "public_safe_generated_cohort",
+        "no_open_followup_reason": "Public/holdout measurement is embedded in this report; no unresolved measurement action remains for the closed historical owner.",
+        "observed_result_interpretation": "observed_score_not_target_metadata",
+        "observed_usefulness_blockers": [
+          {
+            "blocks_usefulness_gate": false,
+            "control_id": "generic_hints",
+            "gate_ok": true,
+            "observed_count": 0,
+            "observed_rate": 0.0,
+            "promotion_threshold": 0
+          },
+          {
+            "blocks_usefulness_gate": false,
+            "control_id": "route_label_collisions",
+            "gate_ok": true,
+            "observed_count": 0,
+            "observed_rate": 0.0,
+            "promotion_threshold": 0
+          },
+          {
+            "blocks_usefulness_gate": false,
+            "control_id": "wrong_route_drag",
+            "gate_ok": true,
+            "observed_count": 0,
+            "observed_rate": 0.0,
+            "promotion_threshold": 0
+          },
+          {
+            "blocks_usefulness_gate": false,
+            "control_id": "unnecessary_reopen",
+            "gate_ok": true,
+            "observed_count": 0,
+            "observed_rate": 0.0,
+            "promotion_threshold": 0
+          },
+          {
+            "blocks_usefulness_gate": false,
+            "control_id": "manual_search_fallback",
+            "gate_ok": true,
+            "observed_count": 0,
+            "observed_rate": 0.0,
+            "promotion_threshold": 0
+          }
+        ],
+        "output_artifact": "docs/evidence/benchmarks/reports/map_rot_lifecycle_debt_public_cohort.json",
+        "public_cohort_case_count": 270,
+        "public_quality_gate_ok": true,
+        "quality_gate_ok": true,
+        "sample_floor_met": true,
+        "status": "completed_score_scoped_public_cohort",
+        "usefulness_gate_ok": true
+      },
+      "sanitization_check": {
+        "local_paths_emitted": false,
+        "private_text_emitted": false,
+        "provider_credentials_emitted": false,
+        "public_safe_or_synthetic_only": true,
+        "raw_source_refs_emitted": false,
+        "raw_text_emitted": false,
+        "status": "passed"
+      },
+      "usefulness_promotion_blockers": [
+        {
+          "blocks_usefulness_gate": false,
+          "control_id": "generic_hints",
+          "gate_ok": true,
+          "observed_count": 0,
+          "observed_rate": 0.0,
+          "promotion_threshold": 0
+        },
+        {
+          "blocks_usefulness_gate": false,
+          "control_id": "route_label_collisions",
+          "gate_ok": true,
+          "observed_count": 0,
+          "observed_rate": 0.0,
+          "promotion_threshold": 0
+        },
+        {
+          "blocks_usefulness_gate": false,
+          "control_id": "wrong_route_drag",
+          "gate_ok": true,
+          "observed_count": 0,
+          "observed_rate": 0.0,
+          "promotion_threshold": 0
+        },
+        {
+          "blocks_usefulness_gate": false,
+          "control_id": "unnecessary_reopen",
+          "gate_ok": true,
+          "observed_count": 0,
+          "observed_rate": 0.0,
+          "promotion_threshold": 0
+        },
+        {
+          "blocks_usefulness_gate": false,
+          "control_id": "manual_search_fallback",
+          "gate_ok": true,
+          "observed_count": 0,
+          "observed_rate": 0.0,
+          "promotion_threshold": 0
+        }
+      ]
+    }
+  ],
+  "selected_family_count": 2,
+  "supports": [
+    "first #1195 family-promotion decision",
+    "observed public-safe cohort measurements for selected candidate families"
+  ],
+  "useful_now": [
+    "separates target cohort design from observed blocker counts and rates",
+    "keeps closed historical owner issues out of unresolved measurement actions"
+  ]
+}

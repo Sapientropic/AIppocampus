@@ -21,20 +21,29 @@ def storage_gc_foreground_actions(
         return {
             "safe_next_actions": [
                 {
-                    "id": "inspect_path_level_candidates",
-                    "label": "Inspect path-level storage candidates",
-                    "command": "aippocampus storage gc --dry-run --json --full --cwd .",
-                    "mutation_risk": "read_only",
-                    "claim_boundary": "operator_diagnostic_not_source_evidence",
-                    "why": "Capacity aggregates are plan-only; path-level retention candidates are required before apply.",
-                },
-                {
                     "id": "preview_storage_gc_summary",
                     "label": "Preview compact storage summary",
                     "command": "aippocampus storage gc --dry-run --summary-json --cwd .",
                     "mutation_risk": "read_only",
                     "claim_boundary": "operator_diagnostic_not_source_evidence",
-                    "why": "Use this when a compact no-write pressure card is enough.",
+                    "why": "Use the compact no-write pressure card before opening path-level storage detail.",
+                },
+                {
+                    "id": "bounded_storage_audit",
+                    "label": "Run bounded storage audit",
+                    "command": "aippocampus storage gc --dry-run --json --top 1 --cwd .",
+                    "mutation_risk": "read_only",
+                    "claim_boundary": "operator_diagnostic_not_source_evidence",
+                    "why": "Capacity aggregates are plan-only; path-level retention candidates are required before apply.",
+                },
+                {
+                    "id": "open_full_storage_audit",
+                    "label": "Open full storage audit",
+                    "command": "aippocampus storage gc --dry-run --json --full --cwd .",
+                    "mutation_risk": "read_only",
+                    "claim_boundary": "operator_diagnostic_not_source_evidence",
+                    "operator_only": True,
+                    "why": "Use only when bounded detail is insufficient; full scans are operator diagnostics, not foreground defaults.",
                 },
             ],
             "next_steps": [
@@ -84,7 +93,8 @@ def storage_gc_summary_actions(*, limit: int, include_apply: bool) -> list[dict[
         {
             "id": "stop_without_cleanup",
             "label": "Stop without cleanup",
-            "command": "continue-without-cleanup",
+            "continue_without_command": True,
+            "no_command_needed": True,
             "message": "No cleanup is required from this summary; continue without mutating storage.",
             "mutation_risk": "read_only",
             "claim_boundary": "storage_pressure_summary_not_memory_quality_evidence",

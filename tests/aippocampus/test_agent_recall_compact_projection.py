@@ -157,14 +157,16 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
         self.assertEqual(action["id"], "refine_low_specificity_recall_cue")
         self.assertNotIn("action_id", action)
         self.assertEqual(action["tool_name"], "agent_recall")
-        self.assertEqual(action["arguments"]["query"], "dashboard mobile continuity state")
-        assert_command_args(
-            self,
-            action["command"],
-            ["aippocampus", "agent", "recall", "dashboard mobile continuity state", "--json"],
+        self.assertNotIn("arguments", action)
+        self.assertNotIn("command", action)
+        self.assertEqual(action["previous_low_specificity_cue"], "dashboard mobile continuity state")
+        self.assertEqual(action["previous_cue_role"], "context_only_not_executable")
+        self.assertEqual(action["requires"], ["tighter_cue"])
+        self.assertTrue(action["template_only"])
+        self.assertEqual(
+            action["command_template"],
+            'aippocampus agent recall "{tighter_cue}" --json',
         )
-        self.assertNotIn("requires", action)
-        self.assertNotIn("command_template", action)
         self.assertEqual(action["tighter_cue_template"]["requires"], ["tighter_cue"])
         self.assertEqual(
             action["tighter_cue_template"]["command_template"],
@@ -252,6 +254,12 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
         self.assertEqual(action["topic_label_present_count"], 5)
         self.assertEqual(action["packet_triage_distinctiveness"], 0.4)
         self.assertEqual(action["repeated_route_label"], "benchmark_claim_posture")
+        self.assertNotIn("command", action)
+        self.assertEqual(action["requires"], ["tighter_cue"])
+        self.assertEqual(
+            action["previous_low_specificity_cue"],
+            "AIppocampus UX review foreground agent usability noisy cannot_claim",
+        )
         self.assertEqual(action["secondary_action"]["id"], "deepen_top_route_low_confidence")
         for route in public["routes"]:
             self.assertIn("labels_low_specificity", route["choice_reason"])

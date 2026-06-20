@@ -450,7 +450,16 @@ class TaskOrientationPacketTests(unittest.TestCase):
         self.assertNotIn("suppressed_detail", payload)
         self.assertNotIn("cannot_claim", payload)
         self.assertNotIn("red_lines", payload)
-        self.assertEqual(payload["foreground_action"]["command_template"], 'aippocampus agent recall "{task}" --json')
+        self.assertEqual(payload["foreground_action"]["tool_name"], "agent_recall")
+        self.assertEqual(
+            payload["foreground_action"]["arguments"],
+            {"query": "fresh-thread task orientation for AIppocampus issue work"},
+        )
+        self.assertIn(
+            "aippocampus agent recall",
+            payload["foreground_action"]["command"],
+        )
+        self.assertNotIn("{task}", payload["foreground_action"]["command"])
         self.assertEqual(executable_command_violations(payload), [])
         self.assertEqual(foreground_action_contract_violations(payload), [])
 

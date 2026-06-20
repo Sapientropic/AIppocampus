@@ -18,7 +18,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from aippocampus_runtime.core import compact_text, now_utc
-from aippocampus_runtime.dream import journey_bridges
+from aippocampus_runtime.dream import journey_bridges, probe_authority, trust_horizon_recovery
 from aippocampus_runtime.dream.constructive_outputs import (
     clean_constructive_artifact,
     clean_prospective_invitation,
@@ -476,6 +476,7 @@ def adjudicated_dream_findings_to_working_memory(
         constructive_artifact = clean_constructive_artifact(finding.get("constructive_artifact"))
         prospective_invitation = clean_prospective_invitation(finding.get("prospective_invitation"))
         journey_bridge = journey_bridges.clean_journey_bridge_from_finding(finding)
+        authority = probe_authority.authority_from_finding(finding)
         candidate = {
             "candidate_type": DREAM_HYPOTHESIS_TYPE,
             "title": title,
@@ -504,6 +505,7 @@ def adjudicated_dream_findings_to_working_memory(
             "stay_silent_when_annoyance_risk_high": True,
             "render_boundary": "dream_hypothesis_not_source_fact",
         }
+        probe_authority.apply_foreground_use(authority, foreground_use)
         if constructive_artifact:
             foreground_use["draft_artifact_action"] = "optional_probe"
         if prospective_invitation:
@@ -543,7 +545,7 @@ def adjudicated_dream_findings_to_working_memory(
                 "invalidation_triggers": trust_horizon["invalidation_triggers"],
                 "visibility_tier": trust_horizon["visibility_tier"],
                 "source_strength": {
-                    "score": 1.0 if len(refs) >= 2 else 0.75,
+                    "score": probe_authority.source_strength_score(authority, len(refs)),
                     "source_ref_count": len(refs),
                     "source_thread_count": len({str(ref.get("thread_key") or "") for ref in refs}),
                     "source_line_count": sum(1 for ref in refs if ref.get("line")),
@@ -562,6 +564,9 @@ def adjudicated_dream_findings_to_working_memory(
                 "expires_at": finding.get("expires_at"),
                 "trust_horizon": trust_horizon,
                 "foreground_use": foreground_use,
+                "source_authority": dict(authority)
+                if authority
+                else {"state": "cross_thread_or_standard_probe", "not_foreground_truth": True},
                 "sensitive_use_gate": {
                     "state": "blocked" if sensitive_dream_hypothesis(finding) else "allowed",
                     "human_or_user_intervention_required_for_direct_assertion": True,
@@ -620,6 +625,7 @@ def plan_dream_hypothesis_use(
     exact_or_quote_claim: bool = False,
     sensitive_claim: bool = False,
     contradiction_visible: bool = False,
+    user_correction_visible: bool = False,
     user_requested_evidence: bool = False,
     source_fingerprint_current: str | None = None,
     now: str | datetime | None = None,
@@ -628,17 +634,25 @@ def plan_dream_hypothesis_use(
         return {"action": "stay_silent", "reason": "not_dream_hypothesis"}
     if row.get("review_state") not in ADJUDICATED_REVIEW_STATES:
         return {"action": "stay_silent", "reason": "not_adjudicated"}
-    if (row.get("sensitive_use_gate") or {}).get("state") == "blocked" or row.get("human_review_required"):
-        return {"action": "stay_silent", "reason": "sensitive_review_required"}
-    if dream_hypothesis_expired(row, now=now):
+    horizon_status = trust_horizon_status(row, now=now)
+    expired = dream_hypothesis_expired(row, now=now)
+    invitation_diagnostic = None
+    if expired:
         invitation_blocked = prospective_invitation_silent_plan(
             row,
             reason="dream_hypothesis_expired",
             diagnostic="delivery_gate_blocked",
         )
-        if invitation_blocked:
-            return invitation_blocked
-        return {"action": "stay_silent", "reason": "dream_hypothesis_expired"}
+        invitation_diagnostic = (invitation_blocked or {}).get("invitation_diagnostic")
+    early_plan = trust_horizon_recovery.invalidation_plan(
+        row,
+        trust_status=horizon_status,
+        sensitive_blocked=(row.get("sensitive_use_gate") or {}).get("state") == "blocked" or bool(row.get("human_review_required")),
+        expired=expired,
+        invitation_diagnostic=invitation_diagnostic,
+    )
+    if early_plan:
+        return early_plan
     if source_visible:
         return {"action": "stay_silent", "reason": "source_already_visible"}
     if str(annoyance_risk or "").casefold() in {"high", "annoying", "noisy"}:
@@ -658,60 +672,20 @@ def plan_dream_hypothesis_use(
         or (horizon.get("source_fingerprint") if isinstance(horizon, Mapping) else "")
         or ""
     )
-    if source_fingerprint_current and stored_fingerprint and source_fingerprint_current != stored_fingerprint:
-        return {
-            "action": "reopen_source",
-            "reason": "source_fingerprint_changed",
-            "requires_source_reopen": True,
-            "truth_boundary": row.get("truth_boundary"),
-            "trust_horizon_status": trust_horizon_status(row, now=now),
-        }
-    if contradiction_visible:
-        return {
-            "action": "reopen_source",
-            "reason": "contradiction_visible_requires_source_reopen",
-            "requires_source_reopen": True,
-            "truth_boundary": row.get("truth_boundary"),
-            "trust_horizon_status": trust_horizon_status(row, now=now),
-        }
-    if user_requested_evidence:
-        return {
-            "action": "reopen_source",
-            "reason": "user_requested_evidence_requires_source_reopen",
-            "requires_source_reopen": True,
-            "truth_boundary": row.get("truth_boundary"),
-            "trust_horizon_status": trust_horizon_status(row, now=now),
-        }
-    if exact_or_quote_claim or sensitive_claim:
-        reason = (
-            "sensitive_claim_requires_source_reopen"
-            if sensitive_claim
-            else "exact_or_quote_claim_requires_source_reopen"
-        )
-        return {
-            "action": "reopen_source",
-            "reason": reason,
-            "requires_source_reopen": True,
-            "truth_boundary": row.get("truth_boundary"),
-            "trust_horizon_status": trust_horizon_status(row, now=now),
-        }
-    if strong_user_facing_claim:
-        return {
-            "action": "reopen_source",
-            "reason": "strong_claim_requires_source_reopen",
-            "requires_source_reopen": True,
-            "truth_boundary": row.get("truth_boundary"),
-            "trust_horizon_status": trust_horizon_status(row, now=now),
-        }
-    horizon_status = trust_horizon_status(row, now=now)
-    if horizon_status == "review_due":
-        return {
-            "action": "reopen_source",
-            "reason": "trust_horizon_review_due_requires_source_reopen",
-            "requires_source_reopen": True,
-            "truth_boundary": row.get("truth_boundary"),
-            "trust_horizon_status": horizon_status,
-        }
+    blocked_plan = trust_horizon_recovery.invalidation_plan(
+        row,
+        trust_status=horizon_status,
+        source_fingerprint_changed=bool(source_fingerprint_current and stored_fingerprint and source_fingerprint_current != stored_fingerprint),
+        contradiction_visible=contradiction_visible,
+        user_correction_visible=user_correction_visible,
+        user_requested_evidence=user_requested_evidence,
+        exact_or_quote_claim=exact_or_quote_claim,
+        sensitive_claim=sensitive_claim,
+        strong_user_facing_claim=strong_user_facing_claim,
+        review_due=horizon_status == "review_due",
+    )
+    if blocked_plan:
+        return blocked_plan
     if route_relevance is None:
         haystack = " ".join(
             [

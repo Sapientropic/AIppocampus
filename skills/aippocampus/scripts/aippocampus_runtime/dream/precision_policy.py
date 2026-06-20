@@ -17,7 +17,9 @@ from datetime import datetime, timezone
 from typing import Any
 
 from aippocampus_runtime.core import compact_text
+from aippocampus_runtime.dream.probe_authority import active_imagination_probe_boundary
 from aippocampus_runtime.dream.risk_terms import dream_text_hard_risk
+from aippocampus_runtime.dream.status import retention_lifecycle_action
 
 SCHEMA_VERSION = 1
 POLICY_VERSION = "dream_precision_policy_v1"
@@ -61,6 +63,8 @@ LOW_SIGNAL_TERMS = {
     "summary",
     "thread",
 }
+
+
 def clamp(value: float, low: float = 0.0, high: float = 1.0) -> float:
     return max(low, min(high, value))
 
@@ -206,7 +210,8 @@ def hard_gate_failures(probe: Mapping[str, Any]) -> list[str]:
     if sensitive_probe(probe) or (probe.get("sensitive_use_gate") or {}).get("state") == "blocked":
         failures.append("sensitive_profile_claim_parked")
     if str(probe.get("dream_function") or "") == "active_imagination":
-        if source_thread_count(refs) < 2:
+        boundary = active_imagination_probe_boundary(probe)
+        if source_thread_count(refs) < 2 and not boundary["allowed"]:
             failures.append("active_imagination_two_source_anchors")
         if not compact_text(str(probe.get("why_this_is_not_fact") or ""), 300):
             failures.append("active_imagination_why_not_fact")
@@ -368,6 +373,10 @@ def retention_policy_for_probe(
         "probe_id": str(probe.get("dream_finding_id") or probe.get("fingerprint") or probe.get("id") or ""),
         "hard_gate": {"passed": not failures, "failures": failures},
         "decision": decision,
+        "lifecycle_action": retention_lifecycle_action(decision),
+        "authority": active_imagination_probe_boundary(probe)
+        if str(probe.get("dream_function") or "") == "active_imagination"
+        else {"state": "standard_dream_candidate", "not_foreground_truth": True},
         "ignored_model_self_rating": {
             "input_model_confidence": safe_float(probe.get("confidence"), 0.0) if probe.get("confidence") is not None else None,
             "reason": "model_self_rating_is_not_truth_or_gate_input",

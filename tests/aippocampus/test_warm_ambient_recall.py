@@ -613,7 +613,10 @@ class WarmAmbientRecallTests(unittest.TestCase):
             if action["id"] == "snooze_optional_warm_ambient"
         )
         self.assertNotIn("command", snooze_action)
+        self.assertEqual(snooze_action["command_template"], "aippocampus warm status --json")
         self.assertEqual(snooze_action["env"], {"AIPPOCAMPUS_WARM_RECALL_BACKGROUND": "0"})
+        self.assertTrue(snooze_action["shell_agnostic_env"])
+        self.assertIn("host environment", snooze_action["env_instruction"])
         self.assertTrue(snooze_action["template_only"])
         retire_action = next(
             action

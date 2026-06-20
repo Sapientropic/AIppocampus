@@ -9,7 +9,6 @@ from aippocampus_runtime import core
 from aippocampus_runtime.contracts import (
     command_value_needs_input,
     normalize_foreground_action,
-    shell_quote,
 )
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 
@@ -233,14 +232,11 @@ def with_low_specificity_foreground_action(
     if repeated_route_label:
         next_action["repeated_route_label"] = repeated_route_label
     clean_cue = str(redact_sensitive_values(redact_private_paths(str(cue or "").strip())) or "")
+    next_action.update(next_action["tighter_cue_template"])
     if clean_cue and not command_value_needs_input(clean_cue):
-        next_action["arguments"] = {"query": clean_cue, "max": 3}
-        next_action["command"] = (
-            f"aippocampus agent recall {shell_quote(clean_cue)} --json"
-        )
+        next_action["previous_low_specificity_cue"] = clean_cue
+        next_action["previous_cue_role"] = "context_only_not_executable"
         next_action["same_cue_fallback"] = "low_confidence_not_a_substitute_for_tighter_cue"
-    else:
-        next_action.update(next_action["tighter_cue_template"])
     return {
         key: value
         for key, value in normalize_foreground_action(next_action).items()

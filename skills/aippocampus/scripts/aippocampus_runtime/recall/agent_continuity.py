@@ -1490,8 +1490,9 @@ def _parser() -> argparse.ArgumentParser:
         epilog=(
             "First useful loop:\n"
             '  aippocampus agent recall "old cue" --json\n'
-            '  aippocampus agent background "task cue" --json\n'
             "  aippocampus agent deepen --request 1 --last-recall --json\n"
+            '  aippocampus agent aippo "task cue" --json\n'
+            '  aippocampus agent background "task cue" --json\n'
             "  aippocampus agent feedback <route_id> --outcome source_reopen_success --json\n\n"
             "Default recall JSON is compact and foreground-safe. Use --detail full only for "
             "local diagnostics that may include private handles."

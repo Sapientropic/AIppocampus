@@ -24,6 +24,7 @@ from aippocampus_runtime.dream.constructive_outputs import (
     normalized_prospective_invitation,
 )
 from aippocampus_runtime.dream.macro_guidance import dream_worker_strategy_from_perturbation
+from aippocampus_runtime.dream.probe_authority import active_imagination_probe_boundary
 from aippocampus_runtime.dream.risk_terms import dream_text_hard_risk
 from aippocampus_runtime.dream.source_refs import (
     bridge_claims_from_candidate,
@@ -290,14 +291,8 @@ def finding_from_candidate(
         if not counter_evidence:
             failures.append("missing_counter_evidence")
         prospective_fields = {
-            "emergence_signal": compact_text(
-                str(candidate.get("emergence_signal") or title),
-                240,
-            ),
-            "trajectory_hint": compact_text(
-                str(candidate.get("trajectory_hint") or summary),
-                360,
-            ),
+            "emergence_signal": compact_text(str(candidate.get("emergence_signal") or title), 240),
+            "trajectory_hint": compact_text(str(candidate.get("trajectory_hint") or summary), 360),
             "counter_evidence": counter_evidence,
             "review_after": future_utc(days=14),
             "expires_at": future_utc(days=45),
@@ -308,14 +303,20 @@ def finding_from_candidate(
     if dream_function == "active_imagination":
         why_not_fact = compact_text(str(candidate.get("why_this_is_not_fact") or ""), 360)
         counter_evidence = string_list(candidate.get("counter_evidence"), limit=6)
-        sensitive_risk = has_active_imagination_sensitive_risk(
-            candidate_kind,
-            title,
-            summary,
-            why_not_fact,
-            " ".join(counter_evidence),
-        )
-        if source_thread_count < 2:
+        sensitive_risk = has_active_imagination_sensitive_risk(candidate_kind, title, summary, why_not_fact, " ".join(counter_evidence))
+        source_authority = active_imagination_probe_boundary({
+            "dream_function": "active_imagination",
+            "title": title,
+            "summary": summary,
+            "source_refs": refs,
+            "bridge_claims": bridge_claims,
+            "why_this_is_not_fact": why_not_fact,
+            "counter_evidence": counter_evidence,
+            "activation_cues": activation_cues,
+            "sandbox_boundary": "active_imagination_candidate_not_fact",
+            "truth_boundary": "dream_synthesized_candidate_not_fact",
+        })
+        if source_thread_count < 2 and not source_authority["allowed"]:
             failures.append("insufficient_independent_source_anchors")
         if not why_not_fact:
             failures.append("missing_why_this_is_not_fact")
@@ -328,6 +329,8 @@ def finding_from_candidate(
             "counter_evidence": counter_evidence,
             "sandbox_boundary": "active_imagination_candidate_not_fact",
             "audit_gate": "two_source_anchors_plus_counter_evidence",
+            "source_authority": source_authority["authority"],
+            "probe_authority": source_authority,
             "human_review_required": sensitive_risk,
         }
 

@@ -234,7 +234,9 @@ def bounded_cli_projection(
             **action_fields,
             "safe_next_action": {
                 "decision": "continue without cleanup unless the user explicitly wants storage detail",
-                "command": str(summary_actions[0].get("command") or "continue-without-cleanup"),
+                "continue_without_command": True,
+                "no_command_needed": True,
+                "instruction": "Continue the user's foreground work without running storage cleanup.",
             },
             "comparable_metrics_command": audit_command,
             "warnings": list(report.get("warnings") or [])[:6],
