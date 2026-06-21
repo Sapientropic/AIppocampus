@@ -137,6 +137,64 @@ class HookAgentAffordanceTests(unittest.TestCase):
         )
         self.assertNotIn("handle", text or "")
 
+    def test_distinctive_ambient_tiny_affordance_emits_agent_recall_action_only(
+        self,
+    ) -> None:
+        packet = affordance.build_hook_agent_affordance(
+            {
+                "decision": "skip",
+                "confidence": "medium",
+                "ambient_recall": {
+                    "tiny_agent_recall_affordance": {
+                        "status": "host_replay_ready_action_only",
+                        "suggested_agent_action": "agent_recall",
+                        "cue_shape": "relationship continuity / old UX review",
+                        "source_open_gates_passed": True,
+                        "safety_blockers": [],
+                        "not_evidence": True,
+                    }
+                },
+            }
+        )
+        policy = affordance.agent_policy_decision_from_affordance(packet)
+        text = affordance.format_hook_agent_affordance(packet)
+
+        self.assertTrue(packet["usable_continuity_lead"])
+        self.assertEqual(packet["suggested_agent_action"], "agent_recall")
+        self.assertEqual(
+            packet["suggested_query_seed"],
+            "relationship continuity / old UX review",
+        )
+        self.assertIn("ambient_tiny_agent_recall", packet["lead_kinds"])
+        self.assertIn("ambient_tiny_agent_recall_ready", packet["reason_codes"])
+        self.assertTrue(packet["not_enough_for_claim"])
+        self.assertEqual(policy["next_step"], "call_agent_recall")
+        self.assertEqual(policy["claim_permission"], "navigation_only_not_fact")
+        self.assertIn("Next: call agent_recall", text or "")
+        self.assertNotIn("source_refs", text or "")
+
+    def test_tiny_affordance_safety_blockers_keep_hook_quiet(self) -> None:
+        packet = affordance.build_hook_agent_affordance(
+            {
+                "decision": "skip",
+                "confidence": "medium",
+                "ambient_recall": {
+                    "tiny_agent_recall_affordance": {
+                        "status": "host_replay_ready_action_only",
+                        "suggested_agent_action": "agent_recall",
+                        "cue_shape": "stale route drag",
+                        "source_open_gates_passed": True,
+                        "safety_blockers": ["wrong_route_drag_present"],
+                        "not_evidence": True,
+                    }
+                },
+            }
+        )
+
+        self.assertFalse(packet["usable_continuity_lead"])
+        self.assertEqual(packet["suggested_agent_action"], "stay_silent")
+        self.assertEqual(affordance.format_hook_agent_affordance(packet), None)
+
     def test_low_risk_aippo_posture_and_strong_claim_boundaries_are_separate(self) -> None:
         report = affordance.build_hook_agent_affordance_fixture_report()
         by_id = {case["case_id"]: case for case in report["agent_policy_cases"]}

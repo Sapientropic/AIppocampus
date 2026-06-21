@@ -10,6 +10,10 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 from aippocampus_runtime.model import cache_contract_guard as cache_guard
 from aippocampus_runtime.model import routing as routing
+from tests.aippocampus.env_fixtures import (
+    MODEL_ROUTING_ENV_VARS,
+    isolate_env_vars_for_testcase,
+)
 
 
 def json_dump_for_test(item: dict[str, str]) -> str:
@@ -17,42 +21,7 @@ def json_dump_for_test(item: dict[str, str]) -> str:
 
 class DeepSeekModelRoutingTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.old_values = {
-            name: os.environ.get(name)
-            for name in [
-                "AIPPOCAMPUS_DEEPSEEK_API_KEY",
-                "DEEPSEEK_API_KEY",
-                "DEEPSEEK_MODEL",
-                "DEEPSEEK_BASE_URL",
-                "AIPPOCAMPUS_DEEPSEEK_FLASH_MODEL",
-                "AIPPOCAMPUS_DEEPSEEK_BASE_URL",
-                "AIPPOCAMPUS_DEEPSEEK_PRO_MODEL",
-                "DEEPSEEK_PRO_MODEL",
-                "AIPPOCAMPUS_OPENAI_COMPAT_ROUTE",
-                "AIPPOCAMPUS_OPENAI_COMPAT_PROVIDER",
-                "AIPPOCAMPUS_OPENAI_COMPAT_MODEL",
-                "AIPPOCAMPUS_OPENAI_COMPAT_BASE_URL",
-                "AIPPOCAMPUS_OPENAI_COMPAT_API_KEY_ENV",
-                "AIPPOCAMPUS_OPENAI_COMPAT_CONCURRENCY",
-                "AIPPOCAMPUS_OPENAI_COMPAT_SUPPORTS_JSON",
-                "AIPPOCAMPUS_OPENAI_COMPAT_SUPPORTS_USER_ID",
-                "AIPPOCAMPUS_OPENAI_COMPAT_SUPPORTS_THINKING",
-                "AIPPOCAMPUS_OPENAI_COMPAT_SUPPORTS_REASONING_EFFORT",
-                "AIPPOCAMPUS_OPENAI_COMPAT_DEFAULT_THINKING",
-                "AIPPOCAMPUS_OPENAI_COMPAT_DEFAULT_REASONING_EFFORT",
-                "AIPPOCAMPUS_OPENAI_COMPAT_REASONING_CONTENT_HANDLING",
-                "AIPPOCAMPUS_OPENAI_COMPAT_CACHE_METRICS_KIND",
-            ]
-        }
-        for name in self.old_values:
-            os.environ.pop(name, None)
-
-    def tearDown(self) -> None:
-        for name, value in self.old_values.items():
-            if value is None:
-                os.environ.pop(name, None)
-            else:
-                os.environ[name] = value
+        isolate_env_vars_for_testcase(self, MODEL_ROUTING_ENV_VARS)
 
     def test_flash_is_default_and_pro_routes_are_explicit(self) -> None:
         default = routing.resolve_model_route(None)

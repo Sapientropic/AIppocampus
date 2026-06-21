@@ -19,6 +19,7 @@ from typing import Any
 
 from aippocampus_runtime.core import now_utc
 from aippocampus_runtime.privacy import OPENAI_KEY_RE, SENSITIVE_ASSIGNMENT_RE
+from aippocampus_runtime.source.jsonl_reader import load_jsonl_dict_rows
 
 SOURCE_FACTUAL_ALIASES_FILENAME = "source-factual-aliases.jsonl"
 SOURCE_FACTUAL_ALIASES_MANIFEST_FILENAME = "source-factual-aliases.manifest.json"
@@ -93,18 +94,7 @@ def _json_sha1(value: Any, *, length: int = 16) -> str:
 
 
 def _read_messages(path: Path) -> list[dict[str, Any]]:
-    rows: list[dict[str, Any]] = []
-    if not path.exists():
-        return rows
-    with path.open("r", encoding="utf-8") as fh:
-        for line in fh:
-            try:
-                item = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if isinstance(item, dict):
-                rows.append(item)
-    return rows
+    return load_jsonl_dict_rows(path).rows
 
 
 def _messages_fingerprint(path: Path) -> str:
@@ -210,7 +200,8 @@ def materialize_source_factual_aliases(
     clean_dir = Path(clean_source_dir)
     messages_path = clean_dir / "messages.jsonl"
     out_path = Path(output_path) if output_path else clean_dir / SOURCE_FACTUAL_ALIASES_FILENAME
-    rows = [row for message in _read_messages(messages_path) if (row := factual_alias_row(message))]
+    read_result = load_jsonl_dict_rows(messages_path)
+    rows = [row for message in read_result.rows if (row := factual_alias_row(message))]
     _write_jsonl_atomic(out_path, rows)
     manifest = {
         "schema_version": 1,
@@ -221,6 +212,7 @@ def materialize_source_factual_aliases(
         "source_messages_sha1": _messages_fingerprint(messages_path),
         "artifact_sha1": _messages_fingerprint(out_path),
         "row_count": len(rows),
+        "source_messages_jsonl_loss": read_result.loss,
         "query_alias_term_count": sum(len(row.get("query_aliases") or []) for row in rows),
         "route_term_count": sum(len(row.get("route_terms") or []) for row in rows),
         "provider_call_count": 0,
@@ -236,6 +228,7 @@ def materialize_source_factual_aliases(
         "artifact": str(out_path),
         "manifest": str(out_path.with_name(SOURCE_FACTUAL_ALIASES_MANIFEST_FILENAME)),
         "row_count": len(rows),
+        "source_messages_jsonl_loss": read_result.loss,
         "provider_call_count": 0,
         "hot_query_provider_call_count": 0,
         "raw_source_text_emitted": False,

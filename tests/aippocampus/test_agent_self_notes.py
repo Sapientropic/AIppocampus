@@ -60,6 +60,31 @@ class AgentSelfNoteTests(unittest.TestCase):
         self.assertFalse(row["trust_contract"]["treat_as_fact"])
         self.assertIn('"clean_source_mutation_allowed": false', raw)
 
+    def test_load_self_notes_diagnostics_reports_jsonl_loss(self) -> None:
+        notes = self._notes_module()
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "agent-self-notes.jsonl"
+            valid = notes.build_agent_self_note_row(
+                note_text="Short self note for diagnostics.",
+                thread_key="session:old",
+                source_refs=[],
+            )
+            path.write_text(
+                json.dumps(valid, ensure_ascii=False) + "\n"
+                "{bad-json}\n"
+                + json.dumps(["not", "an", "object"], ensure_ascii=False)
+                + "\n",
+                encoding="utf-8",
+            )
+
+            rows = notes.load_agent_self_notes(path)
+            diagnostics = notes.load_agent_self_notes_diagnostics(path)
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(diagnostics["row_count"], 1)
+        self.assertEqual(diagnostics["jsonl_loss"]["invalid_json_line_count"], 1)
+        self.assertEqual(diagnostics["jsonl_loss"]["non_object_line_count"], 1)
+
     def test_long_self_note_keeps_private_body_but_compact_projection(self) -> None:
         notes = self._notes_module()
         long_note = (

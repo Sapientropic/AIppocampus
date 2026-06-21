@@ -12,6 +12,8 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import subprocess
+from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from aippocampus_runtime.core import compact_text
@@ -26,6 +28,218 @@ DEFAULT_MAX_PACKET_BYTES = 1800
 def _stable_id(parts: Sequence[Any]) -> str:
     raw = "\n".join(str(part or "") for part in parts)
     return "rfc_" + hashlib.sha256(raw.encode("utf-8")).hexdigest()[:18]
+
+
+def _repo_rel(path: str | Path) -> str:
+    return Path(path).as_posix()
+
+
+def _git_commit(repo_root: Path) -> str:
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=repo_root,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except Exception:
+        return ""
+    return result.stdout.strip()
+
+
+def _file_sha256(repo_root: Path, repo_relative: str) -> str:
+    try:
+        return hashlib.sha256((repo_root / repo_relative).read_bytes()).hexdigest()
+    except OSError:
+        return ""
+
+
+def _current_invalidation_files(repo_root: Path, *repo_relative_paths: str) -> list[dict[str, str]]:
+    files: list[dict[str, str]] = []
+    for repo_relative in sorted({_repo_rel(path) for path in repo_relative_paths}):
+        digest = _file_sha256(repo_root, repo_relative)
+        if digest:
+            files.append({"path": repo_relative, "sha256": digest})
+    return files
+
+
+def _current_source_row(
+    *,
+    kind: str,
+    landmark: str,
+    route_terms: list[str],
+    boundary: str,
+    route: dict[str, list[str]],
+    source_path: str,
+    source_line: int,
+    first_source_to_reopen: str,
+    why_now: str,
+    action_delta_required: str,
+    stop_after: str,
+    repo_commit: str,
+    invalidation_files: list[dict[str, str]],
+    do_not_use_for: list[str] | None = None,
+    decision_shadow: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    return {
+        "kind": kind,
+        "landmark": landmark,
+        "route_terms": route_terms,
+        "boundary": boundary,
+        "route": route,
+        "decision_shadow": decision_shadow or {},
+        "source_refs": [{"path": source_path, "line": source_line}],
+        "freshness": "current",
+        "invalidation": {
+            "commit": repo_commit,
+            "files": invalidation_files,
+        },
+        "why_now": why_now,
+        "action_delta_required": action_delta_required,
+        "first_source_to_reopen": first_source_to_reopen,
+        "stop_after": stop_after,
+        "do_not_use_for": do_not_use_for or [],
+    }
+
+
+def current_checkout_source_rows(
+    repo_root: str | Path,
+    *,
+    repo_commit: str | None = None,
+) -> list[dict[str, Any]]:
+    """Return small, current-checkout familiarity rows for repo-doc fallback.
+
+    This is deliberately a short public-repo map, not an inferred knowledge
+    graph. It only offers source-to-open navigation when current checkout
+    fingerprints still match, so a familiarity card cannot become current-code
+    truth by itself.
+    """
+
+    root = Path(repo_root).resolve()
+    commit = repo_commit if repo_commit is not None else _git_commit(root)
+    hook_path = _repo_rel("skills/aippocampus/scripts/aippocampus_runtime/hooks/prompt.py")
+    compat_doc = _repo_rel("docs/architecture/ops/compatibility-shim-inventory.md")
+    legacy_doc = _repo_rel("docs/architecture/ops/legacy-alias-inventory.md")
+    return [
+        _current_source_row(
+            kind="docs_boundary",
+            landmark="source-backed memory boundary",
+            route_terms=["source", "truth", "memory"],
+            boundary="Source is ground; interpretation and scent remain navigation.",
+            route={"docs": [_repo_rel("docs/research/source-as-world.md")]},
+            source_path=_repo_rel("docs/research/source-as-world.md"),
+            source_line=28,
+            why_now="Relevant when a task may turn navigation hints into memory claims.",
+            action_delta_required="Reopen source docs before making a memory-backed claim.",
+            first_source_to_reopen=_repo_rel("docs/research/source-as-world.md"),
+            stop_after="Stop once the source-vs-weather boundary is confirmed.",
+            do_not_use_for=["current repo facts without reopening source"],
+            repo_commit=commit,
+            invalidation_files=_current_invalidation_files(root, "docs/research/source-as-world.md"),
+        ),
+        _current_source_row(
+            kind="runtime_owner",
+            landmark="foreground hook semantic budget",
+            route_terms=["hook", "semantic", "budget"],
+            boundary="Foreground hook must stay cheap and fail open.",
+            route={
+                "files": [hook_path],
+                "tests": [_repo_rel("tests/aippocampus/test_aippocampus_prompt_hook.py")],
+            },
+            source_path=_repo_rel("docs/architecture/runtime/cognitive-runtime-architecture.md"),
+            source_line=160,
+            why_now="May affect hook timeout and route visibility decisions.",
+            action_delta_required="Inspect hook prompt owner and hook tests before changing semantic budget.",
+            first_source_to_reopen=hook_path,
+            stop_after="Stop after hook owner and tests confirm the budget boundary.",
+            do_not_use_for=["unrelated README/public readiness edits"],
+            repo_commit=commit,
+            invalidation_files=_current_invalidation_files(
+                root,
+                "docs/architecture/runtime/cognitive-runtime-architecture.md",
+                hook_path,
+            ),
+        ),
+        _current_source_row(
+            kind="compat_shim",
+            landmark="compatibility and legacy-alias inventory",
+            route_terms=[
+                "compat",
+                "compatibility",
+                "shim",
+                "package",
+                "owner",
+                "historical",
+                "fields",
+                "inventory",
+                "report",
+                "legacy",
+                "alias",
+            ],
+            boundary="Compatibility and legacy-alias docs are source routes, not proof without reopening.",
+            route={
+                "docs": [compat_doc, legacy_doc],
+                "tests": [_repo_rel("tests/aippocampus/test_compat_shim_inventory.py")],
+            },
+            source_path=compat_doc,
+            source_line=1,
+            why_now="Relevant when recall/search misses compatibility inventory docs in the current repo.",
+            action_delta_required="Open the compatibility inventory before changing aliases or claiming cleanup state.",
+            first_source_to_reopen=compat_doc,
+            stop_after="Stop after inventory explains the shim bucket and alias removal condition.",
+            do_not_use_for=["current code claims without inventory output"],
+            repo_commit=commit,
+            invalidation_files=_current_invalidation_files(root, compat_doc, legacy_doc),
+        ),
+        _current_source_row(
+            kind="test_boundary",
+            landmark="storage governance rebuildable cache",
+            route_terms=["storage", "governance", "cache"],
+            boundary="Apply mode only evicts supported rebuildable caches with manifests.",
+            route={
+                "files": [
+                    _repo_rel(
+                        "skills/aippocampus/scripts/aippocampus_runtime/ops/storage_governance.py"
+                    )
+                ],
+                "tests": [_repo_rel("tests/aippocampus/test_storage_governance.py")],
+            },
+            source_path=_repo_rel("docs/architecture/ops/gb-scale-roadmap.md"),
+            source_line=90,
+            why_now="Relevant when touching storage GC or cache eviction contracts.",
+            action_delta_required="Inspect storage governance tests before changing apply behavior.",
+            first_source_to_reopen=_repo_rel("tests/aippocampus/test_storage_governance.py"),
+            stop_after="Stop after manifest and health degraded/rebuildable behavior are verified.",
+            do_not_use_for=["raw source deletion"],
+            repo_commit=commit,
+            invalidation_files=_current_invalidation_files(
+                root,
+                "docs/architecture/ops/gb-scale-roadmap.md",
+                "tests/aippocampus/test_storage_governance.py",
+            ),
+        ),
+        _current_source_row(
+            kind="decision_shadow",
+            landmark="rejected registry route card",
+            route_terms=["registry", "rejected", "route"],
+            boundary="Rejected-route hints require current source reopen before warning.",
+            route={"tests": [_repo_rel("tests/aippocampus/test_coding_ticket_host_contract.py")]},
+            source_path=_repo_rel("docs/research/agent-coding-context-analysis.md"),
+            source_line=313,
+            why_now="Relevant when a task may repeat an old rejected registry route.",
+            action_delta_required="Check the host contract before surfacing a rejected-route warning.",
+            first_source_to_reopen=_repo_rel("docs/research/agent-coding-context-analysis.md"),
+            stop_after="Stop after source thickness and current visibility are checked.",
+            do_not_use_for=["routine README edits", "unrelated public-readiness work"],
+            repo_commit=commit,
+            invalidation_files=_current_invalidation_files(
+                root,
+                "docs/research/agent-coding-context-analysis.md",
+            ),
+            decision_shadow={"status": "candidate", "source_thickness": "usable"},
+        ),
+    ]
 
 
 def _text(value: Any, limit: int = 220) -> str:
@@ -123,6 +337,54 @@ def _invalidation(value: Any) -> dict[str, Any]:
     if files:
         clean["files"] = files
     return clean
+
+
+def fingerprints_from_rows(rows: Sequence[Mapping[str, Any]]) -> dict[str, str]:
+    fingerprints: dict[str, str] = {}
+    for row in rows:
+        invalidation = row.get("invalidation")
+        if not isinstance(invalidation, Mapping):
+            continue
+        files = invalidation.get("files")
+        if not isinstance(files, Sequence) or isinstance(files, (str, bytes)):
+            continue
+        for item in files:
+            if not isinstance(item, Mapping):
+                continue
+            path = str(item.get("path") or "")
+            digest = str(item.get("sha256") or "")
+            if path and digest:
+                fingerprints[path] = digest
+    return fingerprints
+
+
+def current_checkout_manifest(repo_root: str | Path) -> dict[str, Any]:
+    root = Path(repo_root).resolve()
+    commit = _git_commit(root)
+    return {
+        "repo_commit": commit,
+        "source_rows": current_checkout_source_rows(root, repo_commit=commit),
+    }
+
+
+def select_current_checkout_packet(
+    repo_root: str | Path,
+    *,
+    task: str,
+    max_cards: int = 1,
+    max_packet_bytes: int = DEFAULT_MAX_PACKET_BYTES,
+) -> dict[str, Any]:
+    manifest = current_checkout_manifest(repo_root)
+    rows = [row for row in manifest.get("source_rows") or [] if isinstance(row, Mapping)]
+    cards = build_repo_familiarity_cards(manifest)
+    return select_repo_familiarity_packet(
+        cards,
+        task=task,
+        current_fingerprints=fingerprints_from_rows(rows),
+        current_commit=str(manifest.get("repo_commit") or ""),
+        max_cards=max_cards,
+        max_packet_bytes=max_packet_bytes,
+    )
 
 
 def build_repo_familiarity_cards(manifest: Mapping[str, Any]) -> list[dict[str, Any]]:

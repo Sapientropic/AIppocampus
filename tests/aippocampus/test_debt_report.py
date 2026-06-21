@@ -65,6 +65,15 @@ class DebtReportTests(unittest.TestCase):
                 "architecture_debt_register_count_drift",
             ],
         )
+        drift_warning = next(
+            warning
+            for warning in warnings
+            if warning["code"] == "architecture_debt_register_count_drift"
+        )
+        self.assertEqual(
+            drift_warning["refresh_command"],
+            "python tools\\aippocampus\\docs\\debt_report.py --refresh-register-counts --write",
+        )
 
     def test_clean_headroom_does_not_emit_nonfatal_warnings(self) -> None:
         system_weight = debt_report.build_system_weight(
@@ -86,6 +95,79 @@ class DebtReportTests(unittest.TestCase):
             stale_allowances=[],
         )
         self.assertEqual(warnings, [])
+
+    def test_single_digit_guard_pressure_is_explicitly_owned_or_warned(self) -> None:
+        system_weight = debt_report.build_system_weight(
+            [
+                {
+                    "path": "skills/aippocampus/scripts/aippocampus_runtime/dream/input_pack.py",
+                    "current_count": 856,
+                    "guard_budget": 860,
+                    "margin": 4,
+                    "over_budget": False,
+                },
+                {
+                    "path": "skills/aippocampus/scripts/aippocampus_runtime/new_owner.py",
+                    "current_count": 92,
+                    "guard_budget": 100,
+                    "margin": 8,
+                    "over_budget": False,
+                },
+            ],
+            split_boundaries={
+                "skills/aippocampus/scripts/aippocampus_runtime/dream/input_pack.py": (
+                    "Split seed-family builders before adding new dream-pack families."
+                )
+            },
+        )
+
+        pressure = system_weight["single_digit_guard_pressure"]
+        by_path = {row["path"]: row for row in pressure}
+
+        self.assertEqual(len(pressure), 2)
+        self.assertEqual(
+            by_path["skills/aippocampus/scripts/aippocampus_runtime/dream/input_pack.py"][
+                "owner_issue"
+            ],
+            "#2548",
+        )
+        self.assertTrue(
+            by_path["skills/aippocampus/scripts/aippocampus_runtime/dream/input_pack.py"][
+                "tracked_owner_issue"
+            ]
+        )
+        self.assertFalse(
+            by_path["skills/aippocampus/scripts/aippocampus_runtime/new_owner.py"][
+                "tracked_owner_issue"
+            ]
+        )
+        self.assertEqual(
+            system_weight["guard_headroom_summary"][
+                "unowned_single_digit_guard_pressure_count"
+            ],
+            1,
+        )
+        archive_target = next(
+            row
+            for row in system_weight["archive_or_split_targets"]
+            if row["path"]
+            == "skills/aippocampus/scripts/aippocampus_runtime/dream/input_pack.py"
+        )
+        self.assertEqual(archive_target["owner_issue"], "#2548")
+
+        warnings = debt_report.report_warnings(
+            headroom_summary=system_weight["guard_headroom_summary"],
+            count_drifts=[],
+            stale_allowances=[],
+            single_digit_guard_pressure=pressure,
+        )
+        pressure_warning = next(
+            warning
+            for warning in warnings
+            if warning["code"] == "architecture_debt_single_digit_guard_pressure"
+        )
+        self.assertEqual(pressure_warning["count"], 2)
+        self.assertEqual(pressure_warning["unowned_count"], 1)
 
     def test_count_drift_classifies_small_positive_and_stale_allowance(self) -> None:
         self.assertEqual(
@@ -155,6 +237,31 @@ class DebtReportTests(unittest.TestCase):
             "architecture_debt_stale_allowance",
             [warning["code"] for warning in warnings],
         )
+
+    def test_refresh_register_count_rows_updates_only_current_count_column(self) -> None:
+        text = (
+            "| Path | Current `script_line_count()` | Guard budget | Owner |\n"
+            "| --- | ---: | ---: | --- |\n"
+            "| `skills/aippocampus/scripts/aippocampus_runtime/mcp/agent_recall_projection.py` | 674 | 700 | #2483 |\n"
+            "| `tests/aippocampus/test_update_sync.py` | 2126 | 2290 | #1307 |\n"
+        )
+
+        refreshed, changes = debt_report.refresh_register_count_rows(
+            text,
+            {
+                "skills/aippocampus/scripts/aippocampus_runtime/mcp/agent_recall_projection.py": 798,
+                "tests/aippocampus/test_update_sync.py": 2126,
+            },
+        )
+
+        self.assertEqual(len(changes), 1)
+        self.assertEqual(changes[0]["old_current_count"], 674)
+        self.assertEqual(changes[0]["current_count"], 798)
+        self.assertIn(
+            "| `skills/aippocampus/scripts/aippocampus_runtime/mcp/agent_recall_projection.py` | 798 | 700 | #2483 |",
+            refreshed,
+        )
+        self.assertIn("| `tests/aippocampus/test_update_sync.py` | 2126 | 2290 | #1307 |", refreshed)
 
 if __name__ == "__main__":
     unittest.main()

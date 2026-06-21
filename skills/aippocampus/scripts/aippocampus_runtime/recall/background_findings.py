@@ -27,9 +27,6 @@ from aippocampus_runtime.subconscious import candidate_router
 
 DEFAULT_BACKGROUND_FINDINGS_LIMIT = 4
 BACKGROUND_FINDING_DETAIL_LEVELS = {"compact", "detail", "full", "operator"}
-COMPACT_BACKGROUND_ACTION_IDS = {
-    "reopen_background_finding_source_route",
-}
 
 
 def _mcp_background_for_task_action() -> dict[str, Any]:
@@ -168,20 +165,11 @@ def _read_only_actions(finding: Mapping[str, Any]) -> list[dict[str, Any]]:
     ]
 
 
-def _compact_finding_actions(finding: Mapping[str, Any]) -> list[dict[str, Any]]:
-    actions: list[dict[str, Any]] = []
-    for action in finding.get("next_actions") or []:
-        if not isinstance(action, Mapping):
-            continue
-        if action.get("id") not in COMPACT_BACKGROUND_ACTION_IDS:
-            continue
-        projected = dict(action)
-        projected.pop("target", None)
-        actions.append(projected)
-    return actions
-
-
 def _finding_summary(finding: Mapping[str, Any]) -> dict[str, Any]:
+    boundary_raw = finding.get("boundary")
+    boundary: Mapping[str, Any] = boundary_raw if isinstance(boundary_raw, Mapping) else {}
+    source_raw = finding.get("source")
+    source: Mapping[str, Any] = source_raw if isinstance(source_raw, Mapping) else {}
     pairs = {
         "index": finding.get("index"),
         "finding_id": finding.get("finding_id"),
@@ -196,9 +184,13 @@ def _finding_summary(finding: Mapping[str, Any]) -> dict[str, Any]:
         "why_it_may_matter_now": finding.get("why_it_may_matter_now"),
         "confidence": finding.get("confidence"),
         "review_state": finding.get("review_state"),
-        "boundary": finding.get("boundary"),
-        "source_summary": finding.get("source"),
-        "next_actions": _compact_finding_actions(finding),
+        "source_ref_count": source.get("source_ref_count"),
+        "source_finding_count": source.get("source_finding_count"),
+        "use_boundary": {
+            "use": "navigation_only",
+            "before_claiming": "reopen_source_route",
+            "action_grammar": boundary.get("action_grammar") or "reopenable_route",
+        },
     }
     return {key: value for key, value in pairs.items() if value not in (None, "", [])}
 

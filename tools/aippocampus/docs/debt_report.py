@@ -24,10 +24,29 @@ BUDGET_ROW = re.compile(
     r"\|\s*(?P<first>\d+)\s*\|(?:\s*(?P<second>\d+)\s*\|)?",
     re.MULTILINE,
 )
+REGISTER_COUNT_ROW = re.compile(
+    r"^(?P<prefix>\|\s*`(?P<path>[^`]+\.py)`\s*\|\s*)"
+    r"(?P<count>\d+)"
+    r"(?P<suffix>\s*\|\s*\d+\s*\|.*)$"
+)
+REFRESH_REGISTER_COUNTS_COMMAND = (
+    "python tools\\aippocampus\\docs\\debt_report.py --refresh-register-counts --write"
+)
 SMALL_DRIFT_LIMIT = 5
 STALE_ALLOWANCE_MIN_BUDGET = 1000
 STALE_ALLOWANCE_MAX_CURRENT = 300
 STALE_ALLOWANCE_MAX_RATIO = 0.25
+SINGLE_DIGIT_GUARD_MARGIN_LIMIT = 9
+LOW_MARGIN_OWNER_ISSUES = {
+    "skills/aippocampus/scripts/aippocampus_runtime/dream/input_pack.py": "#2548",
+    "skills/aippocampus/scripts/aippocampus_runtime/hooks/install_action_hint.py": "#2548",
+    "skills/aippocampus/scripts/aippocampus_runtime/recall/continuity_domains.py": "#2548",
+    "skills/aippocampus/scripts/aippocampus_runtime/coding/episode_arc_private_adjudication.py": "#2548",
+    "skills/aippocampus/scripts/aippocampus_runtime/contracts.py": "#2548",
+    "skills/aippocampus/scripts/aippocampus_runtime/sync/object_storage/cli.py": "#2548",
+    "skills/aippocampus/scripts/aippocampus_runtime/ops/provider_doctor.py": "#2548",
+    "tests/aippocampus/test_warm_ambient_recall.py": "#2548",
+}
 
 
 def script_line_count(path: Path) -> int:
@@ -114,6 +133,7 @@ def build_system_weight(
     }
     archive_or_split_targets: list[dict[str, object]] = []
     near_zero_runtime_split_queue: list[dict[str, object]] = []
+    single_digit_guard_pressure: list[dict[str, object]] = []
     for row in rows:
         rel_path = str(row["path"])
         layer = layer_for_path(rel_path)
@@ -148,21 +168,44 @@ def build_system_weight(
                     ),
                 }
             )
-        if margin <= max(25, int(budget * 0.08)):
-            bucket["near_budget_count"] = int(bucket["near_budget_count"]) + 1
-            archive_or_split_targets.append(
+        low_margin_owner = LOW_MARGIN_OWNER_ISSUES.get(rel_path, "")
+        if margin <= SINGLE_DIGIT_GUARD_MARGIN_LIMIT:
+            single_digit_guard_pressure.append(
                 {
                     "path": rel_path,
                     "layer": layer,
                     "current_count": current,
                     "guard_budget": budget,
                     "margin": margin,
-                    "recommendation": "split_owner_or_archive_stale_supporting_material",
+                    "owner_issue": low_margin_owner,
+                    "tracked_owner_issue": bool(low_margin_owner),
+                    "next_split_boundary": split_boundaries.get(
+                        rel_path,
+                        "Open or assign a focused split owner before growing this file.",
+                    ),
+                    "recommendation": (
+                        "split_trim_or_assign_owner_before_growing_low_margin_guard"
+                    ),
                 }
             )
+        if margin <= max(25, int(budget * 0.08)):
+            bucket["near_budget_count"] = int(bucket["near_budget_count"]) + 1
+            target = {
+                "path": rel_path,
+                "layer": layer,
+                "current_count": current,
+                "guard_budget": budget,
+                "margin": margin,
+                "recommendation": "split_owner_or_archive_stale_supporting_material",
+            }
+            if margin <= SINGLE_DIGIT_GUARD_MARGIN_LIMIT:
+                target["owner_issue"] = low_margin_owner
+                target["tracked_owner_issue"] = bool(low_margin_owner)
+            archive_or_split_targets.append(target)
     total_lines = sum(int(layer["tracked_lines"]) for layer in layers.values())
     archive_or_split_targets.sort(key=lambda item: (int(item["margin"]), str(item["path"])))
     near_zero_runtime_split_queue.sort(key=lambda item: (int(item["margin"]), str(item["path"])))
+    single_digit_guard_pressure.sort(key=lambda item: (int(item["margin"]), str(item["path"])))
     exact_zero_runtime_count = sum(
         1
         for row in near_zero_runtime_split_queue
@@ -200,8 +243,15 @@ def build_system_weight(
             "runtime_near_zero_count": near_zero_runtime_count,
             "runtime_over_budget_count": over_budget_runtime_count,
             "runtime_split_queue_count": len(near_zero_runtime_split_queue),
+            "single_digit_guard_pressure_count": len(single_digit_guard_pressure),
+            "unowned_single_digit_guard_pressure_count": sum(
+                1
+                for row in single_digit_guard_pressure
+                if not row.get("tracked_owner_issue")
+            ),
         },
         "near_zero_runtime_split_queue": near_zero_runtime_split_queue,
+        "single_digit_guard_pressure": single_digit_guard_pressure,
     }
 
 
@@ -231,6 +281,76 @@ def count_drift_entries(rows: list[dict[str, object]]) -> list[dict[str, object]
             }
         )
     return sorted(drifts, key=lambda row: (str(row["path"])))
+
+
+def refresh_register_count_rows(
+    text: str,
+    current_counts: dict[str, int],
+) -> tuple[str, list[dict[str, object]]]:
+    """Refresh only the human-written current-count column in the action register.
+
+    Guard budgets and owner-boundary prose are still human decisions. This helper
+    deliberately touches only the first numeric count in register table rows so
+    agents do not hand-edit stale counts or accidentally rewrite budgets while
+    trying to clear a drift warning.
+    """
+
+    changes: list[dict[str, object]] = []
+    lines: list[str] = []
+    for line in text.splitlines(keepends=True):
+        newline = ""
+        body = line
+        if line.endswith("\r\n"):
+            body = line[:-2]
+            newline = "\r\n"
+        elif line.endswith("\n"):
+            body = line[:-1]
+            newline = "\n"
+        match = REGISTER_COUNT_ROW.match(body)
+        if not match:
+            lines.append(line)
+            continue
+        rel_path = match.group("path")
+        current_count = current_counts.get(rel_path)
+        if current_count is None:
+            lines.append(line)
+            continue
+        old_count = int(match.group("count"))
+        if old_count == current_count:
+            lines.append(line)
+            continue
+        changes.append(
+            {
+                "path": rel_path,
+                "old_current_count": old_count,
+                "current_count": current_count,
+                "drift": current_count - old_count,
+            }
+        )
+        lines.append(f"{match.group('prefix')}{current_count}{match.group('suffix')}{newline}")
+    return "".join(lines), changes
+
+
+def refresh_register_counts(*, write: bool = False) -> dict[str, object]:
+    report = build_report()
+    current_counts = {
+        str(row["path"]): int(row["current_count"])
+        for row in report["rows"]
+        if isinstance(row, dict)
+    }
+    original = ARCHITECTURE_DEBT_REGISTER.read_text(encoding="utf-8")
+    refreshed, changes = refresh_register_count_rows(original, current_counts)
+    if write and refreshed != original:
+        ARCHITECTURE_DEBT_REGISTER.write_text(refreshed, encoding="utf-8")
+    return {
+        "ok": True,
+        "write": write,
+        "changed": bool(changes),
+        "changed_count": len(changes),
+        "changes": changes,
+        "target": ARCHITECTURE_DEBT_REGISTER.relative_to(REPO_ROOT).as_posix(),
+        "refresh_command": REFRESH_REGISTER_COUNTS_COMMAND,
+    }
 
 
 def drift_class(
@@ -309,6 +429,7 @@ def report_warnings(
     headroom_summary: dict[str, object],
     count_drifts: list[dict[str, object]],
     stale_allowances: list[dict[str, object]],
+    single_digit_guard_pressure: list[dict[str, object]] | None = None,
 ) -> list[dict[str, object]]:
     warnings: list[dict[str, object]] = []
     exact_zero = int(headroom_summary.get("runtime_exact_zero_count") or 0)
@@ -343,6 +464,7 @@ def report_warnings(
                 ),
                 "count": len(count_drifts),
                 "drift_summary": drift_summary,
+                "refresh_command": REFRESH_REGISTER_COUNTS_COMMAND,
             }
         )
     if stale_allowances:
@@ -354,6 +476,22 @@ def report_warnings(
                     "lower the budget or archive the row with a dated owner rationale."
                 ),
                 "count": len(stale_allowances),
+            }
+        )
+    guard_pressure = list(single_digit_guard_pressure or [])
+    if guard_pressure:
+        unowned = [row for row in guard_pressure if not row.get("tracked_owner_issue")]
+        warnings.append(
+            {
+                "code": "architecture_debt_single_digit_guard_pressure",
+                "message": (
+                    f"{len(guard_pressure)} guard budget row(s) have single-digit headroom. "
+                    "Touching them should start with a split/trim plan, not late closeout cleanup."
+                ),
+                "count": len(guard_pressure),
+                "unowned_count": len(unowned),
+                "owned_count": len(guard_pressure) - len(unowned),
+                "sample_paths": [str(row.get("path")) for row in guard_pressure[:5]],
             }
         )
     return warnings
@@ -398,6 +536,9 @@ def build_report() -> dict[str, object]:
             headroom_summary=headroom_summary,
             count_drifts=count_drifts,
             stale_allowances=stale_allowances,
+            single_digit_guard_pressure=list(
+                system_weight["single_digit_guard_pressure"]
+            ),
         ),
         "system_weight": system_weight,
         "rows": rows,
@@ -407,7 +548,31 @@ def build_report() -> dict[str, object]:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--json", action="store_true", dest="json_output")
+    parser.add_argument(
+        "--refresh-register-counts",
+        action="store_true",
+        help=(
+            "Refresh only the current script_line_count() column in "
+            "docs/architecture/architecture-debt-register.md."
+        ),
+    )
+    parser.add_argument(
+        "--write",
+        action="store_true",
+        help="With --refresh-register-counts, write the refreshed counts to disk.",
+    )
     args = parser.parse_args()
+
+    if args.refresh_register_counts:
+        result = refresh_register_counts(write=bool(args.write))
+        if args.json_output:
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+        else:
+            mode = "updated" if args.write else "would update"
+            print(f"{mode}: {result['changed_count']} architecture debt register count row(s)")
+            if result["changed_count"] and not args.write:
+                print(f"write with: {REFRESH_REGISTER_COUNTS_COMMAND}")
+        return 0
 
     report = build_report()
     if args.json_output:

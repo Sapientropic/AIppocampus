@@ -10,7 +10,6 @@ instead of adding another foreground search surface.
 
 from __future__ import annotations
 
-import json
 import re
 import time
 from pathlib import Path
@@ -22,6 +21,7 @@ from aippocampus_runtime.recall.living_cue_cache import select_living_cue_packet
 from aippocampus_runtime.recall.prompt_recall_core import candidate_summary, sort_candidates
 from aippocampus_runtime.recall.retrieval import search_hybrid_index
 from aippocampus_runtime.registry.api import unique_preserve
+from aippocampus_runtime.source.jsonl_reader import load_jsonl_dict_rows
 from aippocampus_runtime.warm_ambient.query_pattern_routes import select_query_pattern_packet
 
 MAX_STAGE_CANDIDATES = 3
@@ -29,21 +29,7 @@ SOURCE_FACTUAL_ALIASES_FILENAME = "source-factual-aliases.jsonl"
 
 
 def _iter_jsonl_dicts(path: Path) -> list[dict[str, Any]]:
-    if not path.exists():
-        return []
-    rows: list[dict[str, Any]] = []
-    try:
-        with path.open("r", encoding="utf-8") as fh:
-            for line in fh:
-                try:
-                    item = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                if isinstance(item, dict):
-                    rows.append(item)
-    except OSError:
-        return []
-    return rows
+    return load_jsonl_dict_rows(path).rows
 
 
 def _source_factual_aliases_path(paths: dict[str, Any]) -> Path | None:

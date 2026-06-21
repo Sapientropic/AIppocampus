@@ -47,12 +47,18 @@ def query_anchor_terms(query_text: str) -> list[str]:
 def query_match_gate(query_text: str) -> dict[str, Any]:
     anchors = query_anchor_terms(query_text)
     phrase_like = len(anchors) >= 4 or len(str(query_text or "").strip()) >= 48
+    if len(anchors) >= 4:
+        min_coverage = 0.75
+        min_matched = 3
+    else:
+        min_coverage = 1.0
+        min_matched = max(1, len(anchors))
     return {
         "phrase_like_query": phrase_like,
         "distinctive_anchors": anchors[:16],
         "distinctive_anchor_count": len(anchors),
-        "minimum_anchor_coverage": 0.5 if len(anchors) >= 4 else 1.0,
-        "minimum_matched_anchors": 2 if len(anchors) >= 4 else max(1, len(anchors)),
+        "minimum_anchor_coverage": min_coverage,
+        "minimum_matched_anchors": min_matched,
     }
 
 

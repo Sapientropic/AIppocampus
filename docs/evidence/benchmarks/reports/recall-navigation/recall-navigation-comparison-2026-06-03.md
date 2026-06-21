@@ -19,7 +19,8 @@ The runner is:
 python tools\aippocampus\smoke\smoke_recall_navigation_comparison.py --json
 ```
 
-The promotion harness for #1302 / #1185 is:
+The promotion harness for #1302 / #1185 now routes active default-promotion
+ownership through #2559:
 
 ```powershell
 python tools\aippocampus\smoke\smoke_recall_navigation_promotion.py --json
@@ -59,13 +60,14 @@ than the comparison smoke:
   claim-without-source-reopen, and stale-as-current.
 
 The 2026-06-12 fixture run reports `promotion_decision=not_promoted`. This is
-the desired behavior for now: it gives #1300 Yi Macro Orientation and #1301
-Attention Router a reusable promotion gate without claiming either feature is
-default-ready. The report can close #1302 as a harness implementation, but it
-does not close #1185's broader default-session / natural-handoff usefulness
-gate by itself.
+the desired behavior for now: #2559 owns the next default-promotion decision,
+while #1300 Yi Macro Orientation and #1301 Attention Router remain historical
+feature evidence owners. The report can close #1302 as a harness
+implementation, but it does not close #1185's broader default-session /
+natural-handoff usefulness gate by itself.
 
-For #1300, the harness now includes a public-safe `macro_navigation` fixture
+For the historical #1300 macro-navigation slice, the harness now includes a
+public-safe `macro_navigation` fixture
 case. The macro arm uses the same route set and budgets as the baseline, consumes
 a scoped project macro state as a navigation prior, and reports:
 
@@ -79,7 +81,7 @@ This is enough to show that scoped macro state can change route ordering,
 candidate fanout, and currentness/recheck diagnostics in the agent recall path.
 It is not enough to promote macro navigation to default-ready behavior.
 
-For #1301, `feature_navigation_only` consumes the
+For the historical #1301 attention-router slice, `feature_navigation_only` consumes the
 `attention_router_navigation_only` comparison arm. That arm may select a
 route-family and report packet cost, but it is not source-backed success until
 the separate `feature_plus_deepen` arm reopens clean source. The attention

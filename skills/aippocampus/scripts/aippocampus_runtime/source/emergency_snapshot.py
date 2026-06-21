@@ -27,6 +27,7 @@ from aippocampus_runtime.core import (
     default_thread_store_dir,
     now_utc,
 )
+from aippocampus_runtime.source.jsonl_reader import load_jsonl_dict_rows
 
 EMERGENCY_SNAPSHOT_SCHEMA_VERSION = 1
 DEFAULT_MAX_MESSAGES = 12
@@ -68,28 +69,26 @@ def _rollout_ref_hash(path: Path, stat: os.stat_result) -> str:
 
 
 def _clean_source_keys(clean_source_dir: Path) -> set[tuple[str, str, str]]:
+    keys, _ = _clean_source_keys_with_loss(clean_source_dir)
+    return keys
+
+
+def _clean_source_keys_with_loss(
+    clean_source_dir: Path,
+) -> tuple[set[tuple[str, str, str]], dict[str, Any]]:
     path = clean_source_dir / "messages.jsonl"
     if not path.exists():
-        return set()
+        return set(), load_jsonl_dict_rows(path).loss
     keys: set[tuple[str, str, str]] = set()
-    try:
-        with path.open("r", encoding="utf-8") as f:
-            for line in f:
-                try:
-                    item = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                if not isinstance(item, dict):
-                    continue
-                role = str(item.get("role") or "")
-                source_line = str(item.get("source_line") or "")
-                text_sha1 = str(item.get("text_sha1") or item.get("sha1") or "")
-                source_ref = str(item.get("source_ref") or "")
-                if role and (source_line or source_ref or text_sha1):
-                    keys.add((role, source_ref or source_line, text_sha1))
-    except OSError:
-        return set()
-    return keys
+    result = load_jsonl_dict_rows(path)
+    for item in result.rows:
+        role = str(item.get("role") or "")
+        source_line = str(item.get("source_line") or "")
+        text_sha1 = str(item.get("text_sha1") or item.get("sha1") or "")
+        source_ref = str(item.get("source_ref") or "")
+        if role and (source_line or source_ref or text_sha1):
+            keys.add((role, source_ref or source_line, text_sha1))
+    return keys, result.loss
 
 
 def _message_key(item: Mapping[str, Any]) -> tuple[str, str, str]:
@@ -218,6 +217,7 @@ def public_snapshot_diagnostic(result: Mapping[str, Any]) -> dict[str, Any]:
         "line_span",
         "source",
         "error_type",
+        "clean_source_jsonl_loss",
     }
     diagnostic = {key: result[key] for key in allowed if key in result}
     if result.get("error") and not diagnostic.get("error_type"):
@@ -248,7 +248,9 @@ def create_emergency_snapshot(
     meta = provider.read_metadata(source_path) or {}
     thread_key = provider.thread_key(source_path, meta)
     messages, turns = provider.read_normalized_messages(source_path, include_tools=False)
-    represented = _clean_source_keys(default_thread_clean_source_dir(cwd_path, source_path))
+    represented, clean_source_jsonl_loss = _clean_source_keys_with_loss(
+        default_thread_clean_source_dir(cwd_path, source_path)
+    )
     selected = _apply_caps(
         _turn_tail_messages(messages, represented_keys=represented),
         max_messages=max_messages,
@@ -294,6 +296,7 @@ def create_emergency_snapshot(
         "message_count": len(snapshot_messages),
         "turn_count": len({item.get("turn_index") for item in snapshot_messages}),
         "text_bytes": text_bytes,
+        "clean_source_jsonl_loss": clean_source_jsonl_loss,
         "messages": snapshot_messages,
     }
     pointer = {
@@ -307,6 +310,7 @@ def create_emergency_snapshot(
         "text_bytes": text_bytes,
         "line_span": line_span,
         "source": source_diagnostic,
+        "clean_source_jsonl_loss": clean_source_jsonl_loss,
     }
     with artifact_lease(snapshot_path.parent, LEASE_NAME, wait_timeout_seconds=0.0):
         _write_json_atomic(snapshot_path, payload)
@@ -326,6 +330,7 @@ def create_emergency_snapshot(
         "text_bytes": text_bytes,
         "line_span": line_span,
         "source": source_diagnostic,
+        "clean_source_jsonl_loss": clean_source_jsonl_loss,
     }
     if not snapshot_messages:
         result["status"] = "no_unrepresented_visible_tail"

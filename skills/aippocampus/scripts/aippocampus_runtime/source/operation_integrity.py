@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.source.jsonl_reader import load_jsonl_dict_rows
 from aippocampus_runtime.source.operation_integrity_conflicts import (
     SUPPLEMENTAL_SUPERSESSION_FIELDS,
     conflict_gap_events,
@@ -118,18 +119,7 @@ MAX_PLAUSIBLE_EXIT_STATUS = 2_147_483_647
 
 
 def _iter_jsonl(path: Path) -> list[dict[str, Any]]:
-    if not path.exists():
-        return []
-    rows: list[dict[str, Any]] = []
-    with path.open("r", encoding="utf-8") as handle:
-        for line in handle:
-            try:
-                item = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if isinstance(item, dict):
-                rows.append(item)
-    return rows
+    return load_jsonl_dict_rows(path).rows
 
 
 def _read_manifest(path: Path) -> dict[str, Any]:
@@ -512,7 +502,8 @@ def diagnose_clean_source(clean_source_dir: str | Path) -> dict[str, Any]:
     root = Path(clean_source_dir)
     manifest = _read_manifest(root / "manifest.json")
     events_path = root / "events.jsonl"
-    events = _iter_jsonl(events_path)
+    events_result = load_jsonl_dict_rows(events_path)
+    events = events_result.rows
     rows_by_family: dict[str, list[dict[str, Any]]] = {spec.family: [] for spec in MANDATORY_FAMILIES}
     privacy_issues: list[dict[str, Any]] = []
     for row in events:
@@ -645,6 +636,7 @@ def diagnose_clean_source(clean_source_dir: str | Path) -> dict[str, Any]:
             "raw_payload_policy": manifest_policy.get("raw_payload_policy"),
         },
         "event_count": len(events),
+        "events_jsonl_loss": events_result.loss,
         "coverage_summary": {
             "covered_family_count": covered_count,
             "weak_covered_family_count": weak_covered_count,
@@ -653,6 +645,7 @@ def diagnose_clean_source(clean_source_dir: str | Path) -> dict[str, Any]:
             "gap_count": len(gaps),
             "conflict_count": conflict_count,
             "privacy_issue_count": len(privacy_issues),
+            "jsonl_loss_count": events_result.loss["total_loss_count"],
         },
         "families": family_reports,
         "gaps": gaps,

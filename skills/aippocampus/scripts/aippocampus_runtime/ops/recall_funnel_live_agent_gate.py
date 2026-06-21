@@ -128,18 +128,34 @@ def _agent_deepen_argv(
     return argv
 
 
+def _can_drive_agent_deepen(action: dict[str, Any]) -> bool:
+    arguments = _as_dict(action.get("arguments"))
+    return bool(
+        arguments.get("recall_selector")
+        or action.get("recall_selector")
+        or arguments.get("last_recall")
+        or action.get("last_recall")
+    )
+
+
 def _selected_agent_action(recall_payload: dict[str, Any]) -> dict[str, Any]:
     foreground = _as_dict(recall_payload.get("foreground_action"))
     secondary = _as_dict(foreground.get("secondary_action"))
+    candidates: list[dict[str, Any]] = []
     if secondary:
-        return secondary
+        candidates.append(secondary)
     for route in _as_list(recall_payload.get("routes")):
         if not isinstance(route, dict):
             continue
         action = _as_dict(route.get("action"))
         if action:
+            candidates.append(action)
+    if _as_dict(foreground.get("arguments")):
+        candidates.append(foreground)
+    for action in candidates:
+        if _can_drive_agent_deepen(action):
             return action
-    return foreground if _as_dict(foreground.get("arguments")) else {}
+    return candidates[0] if candidates else {}
 
 
 def _gate_item(status: str, reason: str, **extra: Any) -> dict[str, Any]:

@@ -9,6 +9,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.navigation import repo_familiarity
 from aippocampus_runtime.ops.repo_familiarity_foreground_experiment import (
     build_repo_familiarity_foreground_experiment,
 )
@@ -158,132 +159,10 @@ def current_checkout_source_rows(
     *,
     repo_commit: str | None = None,
 ) -> list[dict[str, Any]]:
-    root = Path(repo_root).resolve()
-    commit = repo_commit if repo_commit is not None else _git_commit(root)
-    hook_path = _repo_rel("skills/aippocampus/scripts/aippocampus_runtime/hooks/prompt.py")
-    return [
-        _source_row(
-            kind="docs_boundary",
-            landmark="source-backed memory boundary",
-            route_terms=["source", "truth", "memory"],
-            boundary="Source is ground; interpretation and scent remain navigation.",
-            route={"docs": [_repo_rel("docs/research/source-as-world.md")]},
-            source_path=_repo_rel("docs/research/source-as-world.md"),
-            source_line=28,
-            why_now="Relevant when a task may turn navigation hints into memory claims.",
-            action_delta_required="Reopen source docs before making a memory-backed claim.",
-            first_source_to_reopen=_repo_rel("docs/research/source-as-world.md"),
-            stop_after="Stop once the source-vs-weather boundary is confirmed.",
-            do_not_use_for=["current repo facts without reopening source"],
-            repo_commit=commit,
-            invalidation_files=_current_invalidation_files(
-                root,
-                "docs/research/source-as-world.md",
-            ),
-        ),
-        _source_row(
-            kind="runtime_owner",
-            landmark="foreground hook semantic budget",
-            route_terms=["hook", "semantic", "budget"],
-            boundary="Foreground hook must stay cheap and fail open.",
-            route={
-                "files": [hook_path],
-                "tests": [_repo_rel("tests/aippocampus/test_aippocampus_prompt_hook.py")],
-            },
-            source_path=_repo_rel("docs/architecture/runtime/cognitive-runtime-architecture.md"),
-            source_line=160,
-            why_now="May affect hook timeout and route visibility decisions.",
-            action_delta_required=(
-                "Inspect hook prompt owner and hook tests before changing semantic budget."
-            ),
-            first_source_to_reopen=hook_path,
-            stop_after="Stop after hook owner and tests confirm the budget boundary.",
-            do_not_use_for=["unrelated README/public readiness edits"],
-            repo_commit=commit,
-            invalidation_files=_current_invalidation_files(
-                root,
-                "docs/architecture/runtime/cognitive-runtime-architecture.md",
-                hook_path,
-            ),
-        ),
-        _source_row(
-            kind="compat_shim",
-            landmark="compatibility shim cleanup",
-            route_terms=["compat", "shim", "package owner"],
-            boundary="Flat shims are temporary unless documented as direct commands.",
-            route={
-                "docs": [_repo_rel("docs/architecture/ops/compatibility-shim-inventory.md")],
-                "tests": [_repo_rel("tests/aippocampus/test_compat_shim_inventory.py")],
-            },
-            source_path=_repo_rel("docs/architecture/ops/compatibility-shim-inventory.md"),
-            source_line=1,
-            why_now="Relevant when deleting flat runtime scripts or changing packaging exposure.",
-            action_delta_required="Run the inventory before deleting another flat shim.",
-            first_source_to_reopen=_repo_rel(
-                "docs/architecture/ops/compatibility-shim-inventory.md"
-            ),
-            stop_after="Stop after inventory explains the shim bucket and removal condition.",
-            do_not_use_for=["current code claims without inventory output"],
-            repo_commit=commit,
-            invalidation_files=_current_invalidation_files(
-                root,
-                "docs/architecture/ops/compatibility-shim-inventory.md",
-            ),
-        ),
-        _source_row(
-            kind="test_boundary",
-            landmark="storage governance rebuildable cache",
-            route_terms=["storage", "governance", "cache"],
-            boundary="Apply mode only evicts supported rebuildable caches with manifests.",
-            route={
-                "files": [
-                    _repo_rel(
-                        "skills/aippocampus/scripts/aippocampus_runtime/ops/storage_governance.py"
-                    )
-                ],
-                "tests": [_repo_rel("tests/aippocampus/test_storage_governance.py")],
-            },
-            source_path=_repo_rel("docs/architecture/ops/gb-scale-roadmap.md"),
-            source_line=90,
-            why_now="Relevant when touching storage GC or cache eviction contracts.",
-            action_delta_required=(
-                "Inspect storage governance tests before changing apply behavior."
-            ),
-            first_source_to_reopen=_repo_rel("tests/aippocampus/test_storage_governance.py"),
-            stop_after=(
-                "Stop after manifest and health degraded/rebuildable behavior are verified."
-            ),
-            do_not_use_for=["raw source deletion"],
-            repo_commit=commit,
-            invalidation_files=_current_invalidation_files(
-                root,
-                "docs/architecture/ops/gb-scale-roadmap.md",
-                "tests/aippocampus/test_storage_governance.py",
-            ),
-        ),
-        _source_row(
-            kind="decision_shadow",
-            landmark="rejected registry route card",
-            route_terms=["registry", "rejected", "route"],
-            boundary="Rejected-route hints require current source reopen before warning.",
-            route={"tests": [_repo_rel("tests/aippocampus/test_coding_ticket_host_contract.py")]},
-            source_path=_repo_rel("docs/research/agent-coding-context-analysis.md"),
-            source_line=313,
-            why_now="Relevant when a task may repeat an old rejected registry route.",
-            action_delta_required=(
-                "Check the host contract before surfacing a rejected-route warning."
-            ),
-            first_source_to_reopen=_repo_rel("docs/research/agent-coding-context-analysis.md"),
-            stop_after="Stop after source thickness and current visibility are checked.",
-            do_not_use_for=["routine README edits", "unrelated public-readiness work"],
-            repo_commit=commit,
-            invalidation_files=_current_invalidation_files(
-                root,
-                "docs/research/agent-coding-context-analysis.md",
-            ),
-            decision_shadow={"status": "candidate", "source_thickness": "usable"},
-        ),
-    ]
+    return repo_familiarity.current_checkout_source_rows(
+        repo_root,
+        repo_commit=repo_commit,
+    )
 
 
 def current_checkout_cases(

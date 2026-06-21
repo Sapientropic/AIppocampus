@@ -13,6 +13,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 
 from aippocampus_runtime.contracts import executable_command_violations
+from aippocampus_runtime.mcp.agent_deepen_projection import compact_agent_deepen_payload
 from aippocampus_runtime.recall import (
     agent_continuity,
     agent_continuity_cli_support,
@@ -143,6 +144,23 @@ class AgentRecallApwFallbackTests(unittest.TestCase):
             associative_path_sidecar_dir=self.root / ".aippocampus",
         )
 
+    def _assert_opened_message(
+        self,
+        deepened: dict[str, object],
+        *,
+        message_id: str,
+        required_text: str,
+    ) -> None:
+        self.assertEqual(deepened["status"], "ok")
+        result = deepened["result"]
+        self.assertEqual(result["source_refs"][0]["message_id"], message_id)
+        window_text = "\n".join(
+            str(message.get("text") or "")
+            for message in result["source_window"]["messages"]
+            if isinstance(message, dict)
+        )
+        self.assertIn(required_text, window_text)
+
     def test_semidefault_apw_recovery_runs_for_no_route_when_candidate_input_exists(self) -> None:
         self._write_apw_sidecars()
 
@@ -253,10 +271,26 @@ class AgentRecallApwFallbackTests(unittest.TestCase):
             clean_source_dir=self.clean,
             registry_dir=self.registry,
         )
-        self.assertEqual(deepened["status"], "ok")
-        self.assertGreater(deepened["result"]["source_window"]["message_count"], 0)
+        self._assert_opened_message(
+            deepened,
+            message_id="msg-apw",
+            required_text="associative path walker",
+        )
 
     def test_current_clean_source_apw_parity_reaches_compact_fallback_action(self) -> None:
+        self._append_clean_message(
+            {
+                "message_id": "msg-clean-control",
+                "turn_id": "turn-clean-apw",
+                "turn_index": 8,
+                "source_id": "src-clean-control",
+                "source_line": 20,
+                "role": "developer",
+                "phase": "commentary",
+                "source_use_class": "control_only",
+                "text": "<goal_context> 黏菌 联想回忆 探索算法 should not be selected as APW foreground source.",
+            }
+        )
         self._append_clean_message(
             {
                 "message_id": "msg-clean-apw",
@@ -281,6 +315,8 @@ class AgentRecallApwFallbackTests(unittest.TestCase):
             diagnostic["metrics"]["candidate_source_counts"]["current_clean_source"],
             1,
         )
+        self.assertEqual(diagnostic["metrics"]["goal_context_filtered_count"], 1)
+        self.assertEqual(diagnostic["top_candidates"][0]["source_refs"][0]["message_id"], "msg-clean-apw")
 
         payload = self._recall(include_apw=True)
         policy = payload["associative_path_policy"]
@@ -291,6 +327,11 @@ class AgentRecallApwFallbackTests(unittest.TestCase):
         self.assertEqual(fallback["status"], "route_candidate")
         self.assertEqual(fallback["candidate_source_kind"], "current_clean_source")
         self.assertEqual(fallback["matched_cue_anchors"], ["黏菌", "联想回忆", "探索算法"])
+        self.assertEqual(fallback["source_ref_digest"], payload["deepen_requests"][-1]["source_ref_digest"])
+        self.assertEqual(
+            fallback["apw_route_identity"]["source_ref_digest"],
+            payload["deepen_requests"][-1]["apw_route_identity"]["source_ref_digest"],
+        )
         self.assertIn("APW source route", fallback["label"])
         self.assertNotIn("associative_path_input_pack_empty", fallback["reason_codes"])
 
@@ -320,14 +361,22 @@ class AgentRecallApwFallbackTests(unittest.TestCase):
         self.assertEqual(action["id"], "deepen_associative_path_fallback")
         self.assertIn("APW source route", action["label"])
         self.assertIn("黏菌 / 联想回忆 / 探索算法", action["why"])
+        self.assertEqual(
+            action["apw_route_identity"]["source_ref_digest"],
+            fallback["source_ref_digest"],
+        )
         self.assertEqual(public["associative_path_fallback"]["candidate_source_kind"], "current_clean_source")
         self.assertNotIn("source_refs", encoded)
         self.assertNotIn("msg-clean-apw", encoded)
         self.assertEqual(executable_command_violations(public), [])
 
-        handle, _context = agent_continuity_cli_support.handle_from_last_recall_cache(
+        handle, context = agent_continuity_cli_support.handle_from_last_recall_cache(
             request_index=int(fallback["request_index"]),
             path=cache_path,
+        )
+        self.assertEqual(
+            context["apw_route_identity"]["source_ref_digest"],
+            fallback["source_ref_digest"],
         )
         deepened = agent_continuity.deepen(
             handle,
@@ -335,8 +384,24 @@ class AgentRecallApwFallbackTests(unittest.TestCase):
             clean_source_dir=self.clean,
             registry_dir=self.registry,
         )
-        self.assertEqual(deepened["status"], "ok")
-        self.assertGreater(deepened["result"]["source_window"]["message_count"], 0)
+        deepened["apw_route_identity"] = context["apw_route_identity"]
+        deepened["result"]["apw_route_identity"] = context["apw_route_identity"]
+        self._assert_opened_message(
+            deepened,
+            message_id="msg-clean-apw",
+            required_text="黏菌 联想回忆 探索算法",
+        )
+        compact_deepened = compact_agent_deepen_payload(
+            deepened,
+            request_index=int(fallback["request_index"]),
+            last_recall=True,
+        )
+        self.assertEqual(
+            compact_deepened["apw_route_identity"]["source_ref_digest"],
+            fallback["source_ref_digest"],
+        )
+        self.assertIn("黏菌 联想回忆 探索算法", compact_deepened["primary_source_snippet"]["text"])
+        self.assertNotIn("<goal_context>", compact_deepened["primary_source_snippet"]["text"])
 
     def test_opt_in_apw_fallback_preserves_shadowed_source_shape_posture(self) -> None:
         self._write_apw_sidecars(freshness="unknown")
@@ -498,6 +563,38 @@ class AgentRecallApwFallbackTests(unittest.TestCase):
         self.assertIn("黏菌 / 联想回忆 / 探索算法", payload["foreground_action"]["why"])
         self.assertNotIn("source_refs", encoded)
         self.assertEqual(executable_command_violations(payload), [])
+
+        deepen_proc = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "aippocampus_runtime.cli.facade",
+                "agent",
+                "deepen",
+                "--request",
+                str(payload["foreground_action"]["arguments"]["request_index"]),
+                "--recall-selector",
+                str(payload["foreground_action"]["arguments"]["recall_selector"]),
+                "--json",
+                "--detail",
+                "full",
+            ],
+            cwd=SCRIPTS,
+            env=env,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            check=False,
+        )
+
+        self.assertEqual(deepen_proc.returncode, 0, deepen_proc.stderr)
+        deepened = json.loads(deepen_proc.stdout)
+        self._assert_opened_message(
+            deepened,
+            message_id="msg-cli-clean-apw",
+            required_text="黏菌 联想回忆 探索算法",
+        )
 
     def test_source_free_apw_bridge_abstains_instead_of_emitting_fake_action(self) -> None:
         self._write_apw_sidecars(with_source_refs=False)

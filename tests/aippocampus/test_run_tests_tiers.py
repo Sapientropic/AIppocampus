@@ -258,7 +258,7 @@ class RunTestsTierTests(unittest.TestCase):
                 {"module": "tests.aippocampus.test_alpha", "test_count": 3},
             ],
         )
-        self.assertEqual(report["tier_aliases"]["fast"], "pr")
+        self.assertEqual(report["tier_aliases"], {})
         self.assertEqual(report["tiers"]["quick"]["budget"]["module_count_target"], 46)
         self.assertEqual(report["tiers"]["quick"]["budget"]["test_count_target"], 330)
         self.assertEqual(report["tiers"]["quick"]["budget"]["module_count_status"], "within_target")
@@ -269,7 +269,7 @@ class RunTestsTierTests(unittest.TestCase):
         self.assertIsNone(report["tiers"]["pr"]["budget"]["recommended_action"])
         self.assertTrue(
             any(
-                "broad-pr aliases" in limitation
+                "Use canonical tiers directly" in limitation
                 for limitation in report["known_limitations"]
             ),
         )
@@ -321,7 +321,7 @@ class RunTestsTierTests(unittest.TestCase):
     def test_report_json_cli_prints_report_without_running_tests(self) -> None:
         report = {
             "kind": "aippocampus_test_tier_report",
-            "tiers": {"fast": {"module_count": 1, "test_count": 2}},
+            "tiers": {"pr": {"module_count": 1, "test_count": 2}},
         }
 
         with (
@@ -760,7 +760,7 @@ class RunTestsTierTests(unittest.TestCase):
         self.assertLess(quick, pr)
         self.assertLess(pr, broad_pr)
         # Keep this as a drift guard, not an off-by-one blocker when small
-        # foreground contract tests enter the fast PR lane.
+        # foreground contract tests enter the PR lane.
         self.assertLessEqual(len(pr) * 3, len(broad_pr) + PR_SIZE_DRIFT_SLACK)
         self.assertTrue(PR_CRITICAL_MODULES.isdisjoint(quick))
         self.assertLessEqual(PR_CRITICAL_MODULES, pr)
@@ -825,15 +825,12 @@ class RunTestsTierTests(unittest.TestCase):
                 ["tests.aippocampus.test_benchmark_new_fast_guard"],
             )
 
-    def test_fast_is_compatibility_alias_for_pr(self) -> None:
-        self.assertEqual(run_tests.modules_for_tier("fast"), run_tests.modules_for_tier("pr"))
-
-    def test_ci_and_deterministic_aliases_keep_broad_pr_coverage(self) -> None:
-        self.assertEqual(run_tests.modules_for_tier("ci"), run_tests.modules_for_tier("broad-pr"))
-        self.assertEqual(
-            run_tests.modules_for_tier("deterministic"),
-            run_tests.modules_for_tier("broad-pr"),
-        )
+    def test_legacy_tier_aliases_are_not_exposed(self) -> None:
+        self.assertEqual(run_tests.TIER_ALIASES, {})
+        for tier in ("fast", "ci", "deterministic"):
+            with self.assertRaisesRegex(ValueError, "unknown test tier"):
+                run_tests.modules_for_tier(tier)
+            self.assertNotIn(tier, run_tests.TEST_TIERS)
 
     def test_tiers_partition_the_discovered_test_modules(self) -> None:
         discovered = set(run_tests.discover_modules())

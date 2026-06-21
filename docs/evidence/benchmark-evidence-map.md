@@ -1480,7 +1480,7 @@ pasting raw JSON into multiple docs.
 ### Recall navigation promotion harness
 
 - **Entrypoint:** `tools/aippocampus/smoke/smoke_recall_navigation_promotion.py`
-- **Primary evidence owner:** `docs/evidence/benchmarks/reports/recall-navigation/recall-navigation-comparison-2026-06-03.md`, #1302, #1185, #1300, #1301
+- **Primary evidence owner:** `docs/evidence/benchmarks/reports/recall-navigation/recall-navigation-comparison-2026-06-03.md`, #2559 active default-promotion owner; #1302/#1185/#1300/#1301 historical harness and feature evidence owners
 
 ### Dashboard viewport reachability smoke
 

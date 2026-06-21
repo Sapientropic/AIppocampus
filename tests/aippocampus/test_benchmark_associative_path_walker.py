@@ -18,6 +18,8 @@ class AssociativePathWalkerBenchmarkTests(unittest.TestCase):
         self.assertEqual(report["red_lines"]["wrong_hop_drag_count"], 0)
         self.assertEqual(report["red_lines"]["scope_violation_count"], 0)
         self.assertEqual(report["red_lines"]["diagnostic_agent_fallback_parity_failure_count"], 0)
+        self.assertEqual(report["red_lines"]["foreground_action_roundtrip_failure_count"], 0)
+        self.assertEqual(report["red_lines"]["apw_label_opened_source_mismatch_count"], 0)
         self.assertEqual(report["red_lines"]["default_ranking_influence_count"], 0)
         self.assertGreaterEqual(report["metrics"]["top_action_specificity_ok_count"], 7)
         self.assertGreaterEqual(report["metrics"]["apw_action_emitted_count"], 3)
@@ -58,6 +60,12 @@ class AssociativePathWalkerBenchmarkTests(unittest.TestCase):
         self.assertTrue(parity_gate["ok"], parity_gate)
         self.assertEqual(parity_gate["evidence_mode"], "real-clean-source fixture")
         self.assertEqual(parity_gate["candidate_source_kind"], "current_clean_source")
+        self.assertTrue(parity_gate["foreground_action_roundtrip_ok"])
+        self.assertTrue(parity_gate["opened_source_matches_apw_candidate"])
+        self.assertTrue(parity_gate["opened_source_contains_safe_cue_anchors"])
+        self.assertEqual(parity_gate["opened_source_primary_message_id"], "msg-real-clean-apw")
+        self.assertEqual(parity_gate["expected_apw_candidate_message_id"], "msg-real-clean-apw")
+        self.assertTrue(parity_gate["foreground_action_recall_selector_present"])
         self.assertEqual(
             parity_gate["candidate_source_counts"]["current_clean_source"],
             1,

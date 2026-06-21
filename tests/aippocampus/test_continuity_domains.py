@@ -32,56 +32,17 @@ from aippocampus_runtime.recall.continuity_domains import (
     project_situation_glyph,
     publish_continuity_domains_snapshot,
 )
+from tests.aippocampus.continuity_domain_fixtures import (
+    append_clean_source_messages,
+    continuity_domain_fixture_repo,
+    write_continuity_domain_clean_source,
+    write_empty_continuity_domain_clean_source,
+    write_jsonl,
+)
 
 
 def _write_clean_source(clean: Path) -> None:
-    clean.mkdir(parents=True, exist_ok=True)
-    messages = [
-        {
-            "message_id": "msg-a",
-            "turn_id": "turn-a",
-            "turn_index": 1,
-            "source_line": 2,
-            "role": "user",
-            "phase": "",
-            "text": "AIppocampus should keep source-backed continuity domains.",
-        },
-        {
-            "message_id": "msg-b",
-            "turn_id": "turn-b",
-            "turn_index": 2,
-            "source_line": 4,
-            "role": "assistant",
-            "phase": "final_answer",
-            "text": "The working conclusion is navigation; clean source remains authority.",
-        },
-        {
-            "message_id": "msg-c",
-            "turn_id": "turn-c",
-            "turn_index": 3,
-            "source_line": 6,
-            "role": "user",
-            "phase": "",
-            "text": "A later correction says hook output should stay pointer-only.",
-        },
-    ]
-    with (clean / "messages.jsonl").open("w", encoding="utf-8", newline="\n") as fh:
-        for row in messages:
-            fh.write(json.dumps(row, ensure_ascii=False) + "\n")
-    with (clean / "turns.jsonl").open("w", encoding="utf-8", newline="\n") as fh:
-        for row in messages:
-            fh.write(
-                json.dumps(
-                    {
-                        "turn_id": row["turn_id"],
-                        "turn_index": row["turn_index"],
-                        "message_ids": [row["message_id"]],
-                        "assistant_phase": row["phase"],
-                    },
-                    ensure_ascii=False,
-                )
-                + "\n"
-            )
+    write_continuity_domain_clean_source(clean)
 
 def _write_registry_clean_source_fixture(root: Path) -> tuple[Path, Path]:
     registry_dir = root / "registry"
@@ -178,10 +139,11 @@ def _domain_events() -> list[dict]:
 
 class ContinuityDomainTests(unittest.TestCase):
     def test_materializer_keeps_source_trail_and_rejects_unresolved_refs(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            clean = Path(tmp) / "clean-source"
-            _write_clean_source(clean)
-            snapshot = materialize_continuity_domains(_domain_events(), clean_source_dir=clean)
+        with continuity_domain_fixture_repo(clean_source_subpath="clean-source") as repo:
+            snapshot = materialize_continuity_domains(
+                _domain_events(),
+                clean_source_dir=repo.clean_source_dir,
+            )
 
         self.assertEqual(snapshot["metrics"]["domain_count"], 1)
         self.assertEqual(snapshot["metrics"]["pathlet_count"], 1)
@@ -197,19 +159,20 @@ class ContinuityDomainTests(unittest.TestCase):
         self.assertEqual(snapshot["macro_tendencies"][0]["action_grammar"], ACTION_DIRECTION_ONLY)
 
     def test_append_publish_is_append_only_and_latest_snapshot_pointer(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            clean = root / "clean-source"
-            _write_clean_source(clean)
-            events_path = clean / "continuity-domain-events.jsonl"
-            snapshot_dir = root / "continuity-domain-snapshots"
+        with continuity_domain_fixture_repo(clean_source_subpath="clean-source") as repo:
+            events_path = repo.clean_source_dir / "continuity-domain-events.jsonl"
+            snapshot_dir = repo.root / "continuity-domain-snapshots"
             for event in _domain_events()[:2]:
-                append_continuity_domain_event(events_path, event, clean_source_dir=clean)
+                append_continuity_domain_event(
+                    events_path,
+                    event,
+                    clean_source_dir=repo.clean_source_dir,
+                )
 
             report = publish_continuity_domains_snapshot(
                 events_path=events_path,
                 snapshot_dir=snapshot_dir,
-                clean_source_dir=clean,
+                clean_source_dir=repo.clean_source_dir,
             )
 
             self.assertEqual(report["status"], "ok")
@@ -219,9 +182,7 @@ class ContinuityDomainTests(unittest.TestCase):
             self.assertTrue((snapshot_dir / f"{report['snapshot_id']}.json").exists())
 
     def test_blocking_boundary_suppresses_domain_authority(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            clean = Path(tmp) / "clean-source"
-            _write_clean_source(clean)
+        with continuity_domain_fixture_repo(clean_source_subpath="clean-source") as repo:
             events = [
                 _domain_events()[0],
                 {
@@ -233,7 +194,10 @@ class ContinuityDomainTests(unittest.TestCase):
                     "source_refs": [{"message_id": "msg-c"}],
                 },
             ]
-            snapshot = materialize_continuity_domains(events, clean_source_dir=clean)
+            snapshot = materialize_continuity_domains(
+                events,
+                clean_source_dir=repo.clean_source_dir,
+            )
 
         domain = snapshot["domains"][0]
         self.assertEqual(domain["lifecycle"]["status"], "blocked")
@@ -244,19 +208,20 @@ class ContinuityDomainTests(unittest.TestCase):
         )
 
     def test_stale_and_negative_cue_domains_do_not_surface_as_normal_routes(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            clean = Path(tmp) / "clean-source"
-            _write_clean_source(clean)
+        with continuity_domain_fixture_repo(clean_source_subpath="clean-source") as repo:
             stale_event = {**_domain_events()[0], "status": "stale"}
             negative_event = {
                 **_domain_events()[0],
                 "domain_id": "cd-negative-cue",
                 "negative_cues": ["wrong lane"],
             }
-            stale_snapshot = materialize_continuity_domains([stale_event], clean_source_dir=clean)
+            stale_snapshot = materialize_continuity_domains(
+                [stale_event],
+                clean_source_dir=repo.clean_source_dir,
+            )
             negative_snapshot = materialize_continuity_domains(
                 [negative_event],
-                clean_source_dir=clean,
+                clean_source_dir=repo.clean_source_dir,
             )
 
         self.assertEqual(match_continuity_domain_pointers("continuity domain", stale_snapshot), [])
@@ -275,10 +240,11 @@ class ContinuityDomainTests(unittest.TestCase):
                 "source_refs": [{"message_id": "msg-a"}],
             }
         ]
-        with tempfile.TemporaryDirectory() as tmp:
-            clean = Path(tmp) / "clean-source"
-            _write_clean_source(clean)
-            snapshot = materialize_continuity_domains(events, clean_source_dir=clean)
+        with continuity_domain_fixture_repo(clean_source_subpath="clean-source") as repo:
+            snapshot = materialize_continuity_domains(
+                events,
+                clean_source_dir=repo.clean_source_dir,
+            )
 
         matches = match_continuity_domain_pointers(
             "我们继续聊长期连续性怎么找回源头",
@@ -298,10 +264,11 @@ class ContinuityDomainTests(unittest.TestCase):
                 "source_refs": [{"message_id": "msg-a"}],
             }
         ]
-        with tempfile.TemporaryDirectory() as tmp:
-            clean = Path(tmp) / "clean-source"
-            _write_clean_source(clean)
-            snapshot = materialize_continuity_domains(events, clean_source_dir=clean)
+        with continuity_domain_fixture_repo(clean_source_subpath="clean-source") as repo:
+            snapshot = materialize_continuity_domains(
+                events,
+                clean_source_dir=repo.clean_source_dir,
+            )
 
         matches = match_continuity_domain_pointers(
             "今天我们先聊晚饭安排和天气变化",
@@ -311,10 +278,11 @@ class ContinuityDomainTests(unittest.TestCase):
         self.assertEqual(matches, [])
 
     def test_hook_renders_pointer_without_working_conclusion_body(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            clean = Path(tmp) / "clean-source"
-            _write_clean_source(clean)
-            snapshot = materialize_continuity_domains(_domain_events(), clean_source_dir=clean)
+        with continuity_domain_fixture_repo(clean_source_subpath="clean-source") as repo:
+            snapshot = materialize_continuity_domains(
+                _domain_events(),
+                clean_source_dir=repo.clean_source_dir,
+            )
             pointer = continuity_domain_pointer(snapshot["domains"][0])
 
         payload = ambient_cards.ambient_recall_from_decision(
@@ -334,24 +302,17 @@ class ContinuityDomainTests(unittest.TestCase):
         self.assertIn("pointer only", context)
 
     def test_active_recall_surfaces_domain_handle_without_summary_body(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            clean = root / ".aippocampus" / "clean-source"
-            _write_clean_source(clean)
-            snapshot = materialize_continuity_domains(_domain_events(), clean_source_dir=clean)
-            snapshot_path = root / "snapshot.json"
-            snapshot_path.write_text(json.dumps(snapshot, ensure_ascii=False), encoding="utf-8")
-            notes = root / "notes.jsonl"
-            notes.write_text("", encoding="utf-8")
-            working = root / "working.jsonl"
-            working.write_text("", encoding="utf-8")
+        with continuity_domain_fixture_repo() as repo:
+            repo.materialize_snapshot(_domain_events())
+            notes = repo.empty_jsonl("notes.jsonl")
+            working = repo.empty_jsonl("working.jsonl")
 
             result = active_recall.active_recall_context(
                 prompt="继续 continuity domain 的 source trail 设计",
-                cwd=root,
+                cwd=repo.cwd,
                 agent_self_notes_path=notes,
                 working_memory_path=working,
-                continuity_domains_snapshot_path=snapshot_path,
+                continuity_domains_snapshot_path=repo.snapshot_path,
                 max_matches=3,
             )
             raw = json.dumps(result, ensure_ascii=False)
@@ -366,24 +327,18 @@ class ContinuityDomainTests(unittest.TestCase):
         self.assertIn("snapshot_fingerprint", domain_routes[0]["handle"])
         self.assertIn("expires_unix", domain_routes[0]["handle"])
         self.assertNotIn("durable working conclusion layer", raw)
-        self.assertNotIn(str(root), raw)
+        self.assertNotIn(str(repo.root), raw)
 
     def test_active_recall_domain_handle_stales_when_snapshot_changes(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            clean = root / ".aippocampus" / "clean-source"
-            _write_clean_source(clean)
-            snapshot = materialize_continuity_domains(_domain_events(), clean_source_dir=clean)
-            snapshot_path = root / "snapshot.json"
-            snapshot_path.write_text(json.dumps(snapshot, ensure_ascii=False), encoding="utf-8")
-            empty = root / "empty.jsonl"
-            empty.write_text("", encoding="utf-8")
+        with continuity_domain_fixture_repo() as repo:
+            snapshot = repo.materialize_snapshot(_domain_events())
+            empty = repo.empty_jsonl()
             result = active_recall.active_recall_context(
                 prompt="continuity domain source trail",
-                cwd=root,
+                cwd=repo.cwd,
                 agent_self_notes_path=empty,
                 working_memory_path=empty,
-                continuity_domains_snapshot_path=snapshot_path,
+                continuity_domains_snapshot_path=repo.snapshot_path,
                 max_matches=3,
             )
             handle = next(
@@ -392,7 +347,7 @@ class ContinuityDomainTests(unittest.TestCase):
                 if route.get("kind") == "continuity_domain"
             )
             mutated = {**snapshot, "generated_at": "2099-01-01T00:00:00Z"}
-            snapshot_path.write_text(json.dumps(mutated, ensure_ascii=False), encoding="utf-8")
+            repo.write_snapshot(mutated)
 
             response = mcp.handle_request(
                 {
@@ -403,8 +358,8 @@ class ContinuityDomainTests(unittest.TestCase):
                         "name": "recall_deepen",
                         "arguments": {
                             "handle": handle,
-                            "cwd": str(root),
-                            "continuity_domains_snapshot": str(snapshot_path),
+                            "cwd": str(repo.cwd),
+                            "continuity_domains_snapshot": str(repo.snapshot_path),
                         },
                     },
                 }
@@ -415,10 +370,7 @@ class ContinuityDomainTests(unittest.TestCase):
         self.assertEqual(payload["error"]["code"], "stale_recall_handle")
 
     def test_blocked_domain_does_not_enter_active_or_mcp_routes(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            cwd = Path(tmp)
-            clean = cwd / ".aippocampus" / "clean-source"
-            _write_clean_source(clean)
+        with continuity_domain_fixture_repo() as repo:
             events = [
                 _domain_events()[0],
                 {
@@ -430,18 +382,15 @@ class ContinuityDomainTests(unittest.TestCase):
                     "source_refs": [{"message_id": "msg-c"}],
                 },
             ]
-            snapshot = materialize_continuity_domains(events, clean_source_dir=clean)
-            snapshot_path = cwd / "snapshot.json"
-            snapshot_path.write_text(json.dumps(snapshot, ensure_ascii=False), encoding="utf-8")
-            empty = cwd / "empty.jsonl"
-            empty.write_text("", encoding="utf-8")
+            repo.materialize_snapshot(events)
+            empty = repo.empty_jsonl()
 
             active = active_recall.active_recall_context(
                 prompt="continuity domain",
-                cwd=cwd,
+                cwd=repo.cwd,
                 agent_self_notes_path=empty,
                 working_memory_path=empty,
-                continuity_domains_snapshot_path=snapshot_path,
+                continuity_domains_snapshot_path=repo.snapshot_path,
                 max_matches=3,
             )
             response = mcp.handle_request(
@@ -453,8 +402,8 @@ class ContinuityDomainTests(unittest.TestCase):
                         "name": "recall_context",
                         "arguments": {
                             "intent": "continuity domain",
-                            "cwd": str(cwd),
-                            "continuity_domains_snapshot": str(snapshot_path),
+                            "cwd": str(repo.cwd),
+                            "continuity_domains_snapshot": str(repo.snapshot_path),
                             "max": 5,
                             "detail": "full",
                         },
@@ -468,13 +417,8 @@ class ContinuityDomainTests(unittest.TestCase):
         self.assertNotIn("continuity_domain", {route.get("kind") for route in payload["routes"]})
 
     def test_mcp_context_returns_domain_route_and_deepen_opens_source_trail(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            cwd = Path(tmp)
-            clean = cwd / ".aippocampus" / "clean-source"
-            _write_clean_source(clean)
-            snapshot = materialize_continuity_domains(_domain_events(), clean_source_dir=clean)
-            snapshot_path = cwd / "snapshot.json"
-            snapshot_path.write_text(json.dumps(snapshot, ensure_ascii=False), encoding="utf-8")
+        with continuity_domain_fixture_repo() as repo:
+            repo.materialize_snapshot(_domain_events())
 
             context_response = mcp.handle_request(
                 {
@@ -485,8 +429,8 @@ class ContinuityDomainTests(unittest.TestCase):
                         "name": "recall_context",
                         "arguments": {
                             "intent": "source trail continuity domain",
-                            "cwd": str(cwd),
-                            "continuity_domains_snapshot": str(snapshot_path),
+                            "cwd": str(repo.cwd),
+                            "continuity_domains_snapshot": str(repo.snapshot_path),
                             "max": 5,
                             "detail": "full",
                         },
@@ -506,9 +450,9 @@ class ContinuityDomainTests(unittest.TestCase):
                         "name": "recall_deepen",
                         "arguments": {
                             "handle": handle,
-                            "cwd": str(cwd),
-                            "clean_source_dir": str(clean),
-                            "continuity_domains_snapshot": str(snapshot_path),
+                            "cwd": str(repo.cwd),
+                            "clean_source_dir": str(repo.clean_source_dir),
+                            "continuity_domains_snapshot": str(repo.snapshot_path),
                         },
                     },
                 }
@@ -528,11 +472,8 @@ class ContinuityDomainTests(unittest.TestCase):
         )
 
     def test_mcp_context_returns_pathlet_route_before_broad_manual_search(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            cwd = Path(tmp)
-            clean = cwd / ".aippocampus" / "clean-source"
-            _write_clean_source(clean)
-            snapshot = materialize_continuity_domains(
+        with continuity_domain_fixture_repo() as repo:
+            repo.materialize_snapshot(
                 [
                     {
                         "event_kind": "pathlet_created",
@@ -545,10 +486,7 @@ class ContinuityDomainTests(unittest.TestCase):
                         ],
                     }
                 ],
-                clean_source_dir=clean,
             )
-            snapshot_path = cwd / "snapshot.json"
-            snapshot_path.write_text(json.dumps(snapshot, ensure_ascii=False), encoding="utf-8")
 
             context_response = mcp.handle_request(
                 {
@@ -559,9 +497,9 @@ class ContinuityDomainTests(unittest.TestCase):
                         "name": "recall_context",
                         "arguments": {
                             "intent": "frontend taste layout density",
-                            "cwd": str(cwd),
-                            "clean_source_dir": str(clean),
-                            "continuity_domains_snapshot": str(snapshot_path),
+                            "cwd": str(repo.cwd),
+                            "clean_source_dir": str(repo.clean_source_dir),
+                            "continuity_domains_snapshot": str(repo.snapshot_path),
                             "max": 5,
                             "detail": "full",
                         },
@@ -581,8 +519,8 @@ class ContinuityDomainTests(unittest.TestCase):
                         "name": "recall_deepen",
                         "arguments": {
                             "handle": pathlet_route["handle"],
-                            "cwd": str(cwd),
-                            "clean_source_dir": str(clean),
+                            "cwd": str(repo.cwd),
+                            "clean_source_dir": str(repo.clean_source_dir),
                         },
                     },
                 }
@@ -601,13 +539,9 @@ class ContinuityDomainTests(unittest.TestCase):
         self.assertEqual(deepen_payload["source_refs"][0]["message_id"], "msg-a")
 
     def test_mcp_context_reports_missing_continuity_snapshot_when_no_routes_exist(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            cwd = Path(tmp)
-            clean = cwd / ".aippocampus" / "clean-source"
-            clean.mkdir(parents=True, exist_ok=True)
-            (clean / "messages.jsonl").write_text("", encoding="utf-8")
-            (clean / "turns.jsonl").write_text("", encoding="utf-8")
-            missing_snapshot = cwd / "missing" / "latest.json"
+        with continuity_domain_fixture_repo() as repo:
+            write_empty_continuity_domain_clean_source(repo.clean_source_dir)
+            missing_snapshot = repo.cwd / "missing" / "latest.json"
 
             context_response = mcp.handle_request(
                 {
@@ -618,9 +552,9 @@ class ContinuityDomainTests(unittest.TestCase):
                         "name": "recall_context",
                         "arguments": {
                             "intent": "unmatched little hippocampus route",
-                            "cwd": str(cwd),
-                            "clean_source_dir": str(clean),
-                            "registry_dir": str(cwd / "empty-registry"),
+                            "cwd": str(repo.cwd),
+                            "clean_source_dir": str(repo.clean_source_dir),
+                            "registry_dir": str(repo.cwd / "empty-registry"),
                             "continuity_domains_snapshot": str(missing_snapshot),
                             "max": 5,
                         },
@@ -638,11 +572,7 @@ class ContinuityDomainTests(unittest.TestCase):
         self.assertIn("publish_continuity_domains_snapshot", context_payload["suggested_next"])
 
     def test_mcp_rejects_bare_continuity_domain_handle_without_freshness(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            cwd = Path(tmp)
-            clean = cwd / ".aippocampus" / "clean-source"
-            _write_clean_source(clean)
-
+        with continuity_domain_fixture_repo() as repo:
             response = mcp.handle_request(
                 {
                     "jsonrpc": "2.0",
@@ -655,7 +585,7 @@ class ContinuityDomainTests(unittest.TestCase):
                                 "kind": "continuity_domain",
                                 "domain_id": "cd-source-trailed-continuity",
                             },
-                            "cwd": str(cwd),
+                            "cwd": str(repo.cwd),
                         },
                     },
                 }
@@ -666,17 +596,12 @@ class ContinuityDomainTests(unittest.TestCase):
         self.assertEqual(payload["error"]["code"], "malformed_recall_handle")
 
     def test_mcp_rejects_fresh_continuity_domain_handle_without_source_refs(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            cwd = Path(tmp)
-            clean = cwd / ".aippocampus" / "clean-source"
-            _write_clean_source(clean)
-            snapshot = materialize_continuity_domains(_domain_events(), clean_source_dir=clean)
-            snapshot_path = cwd / "snapshot.json"
-            snapshot_path.write_text(json.dumps(snapshot, ensure_ascii=False), encoding="utf-8")
+        with continuity_domain_fixture_repo() as repo:
+            snapshot = repo.materialize_snapshot(_domain_events())
             handle = continuity_domain_handle(
                 snapshot["domains"][0],
-                clean_source_dir=clean,
-                snapshot_path=snapshot_path,
+                clean_source_dir=repo.clean_source_dir,
+                snapshot_path=repo.snapshot_path,
             )
             handle["source_refs"] = []
 
@@ -689,9 +614,9 @@ class ContinuityDomainTests(unittest.TestCase):
                         "name": "recall_deepen",
                         "arguments": {
                             "handle": handle,
-                            "cwd": str(cwd),
-                            "clean_source_dir": str(clean),
-                            "continuity_domains_snapshot": str(snapshot_path),
+                            "cwd": str(repo.cwd),
+                            "clean_source_dir": str(repo.clean_source_dir),
+                            "continuity_domains_snapshot": str(repo.snapshot_path),
                         },
                     },
                 }
@@ -702,10 +627,7 @@ class ContinuityDomainTests(unittest.TestCase):
         self.assertEqual(payload["error"]["code"], "malformed_recall_handle")
 
     def test_mcp_deepen_rejects_blocked_domain_handle_even_with_freshness(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            cwd = Path(tmp)
-            clean = cwd / ".aippocampus" / "clean-source"
-            _write_clean_source(clean)
+        with continuity_domain_fixture_repo() as repo:
             events = [
                 _domain_events()[0],
                 {
@@ -717,13 +639,11 @@ class ContinuityDomainTests(unittest.TestCase):
                     "source_refs": [{"message_id": "msg-c"}],
                 },
             ]
-            snapshot = materialize_continuity_domains(events, clean_source_dir=clean)
-            snapshot_path = cwd / "snapshot.json"
-            snapshot_path.write_text(json.dumps(snapshot, ensure_ascii=False), encoding="utf-8")
+            snapshot = repo.materialize_snapshot(events)
             handle = continuity_domain_handle(
                 snapshot["domains"][0],
-                clean_source_dir=clean,
-                snapshot_path=snapshot_path,
+                clean_source_dir=repo.clean_source_dir,
+                snapshot_path=repo.snapshot_path,
             )
 
             response = mcp.handle_request(
@@ -735,9 +655,9 @@ class ContinuityDomainTests(unittest.TestCase):
                         "name": "recall_deepen",
                         "arguments": {
                             "handle": handle,
-                            "cwd": str(cwd),
-                            "clean_source_dir": str(clean),
-                            "continuity_domains_snapshot": str(snapshot_path),
+                            "cwd": str(repo.cwd),
+                            "clean_source_dir": str(repo.clean_source_dir),
+                            "continuity_domains_snapshot": str(repo.snapshot_path),
                         },
                     },
                 }
@@ -749,20 +669,12 @@ class ContinuityDomainTests(unittest.TestCase):
 
     def test_mcp_deepen_rejects_inactive_domain_statuses_even_with_freshness(self) -> None:
         for status in ("stale", "superseded", "retired"):
-            with self.subTest(status=status), tempfile.TemporaryDirectory() as tmp:
-                cwd = Path(tmp)
-                clean = cwd / ".aippocampus" / "clean-source"
-                _write_clean_source(clean)
-                snapshot = materialize_continuity_domains(
-                    [{**_domain_events()[0], "status": status}],
-                    clean_source_dir=clean,
-                )
-                snapshot_path = cwd / "snapshot.json"
-                snapshot_path.write_text(json.dumps(snapshot, ensure_ascii=False), encoding="utf-8")
+            with self.subTest(status=status), continuity_domain_fixture_repo() as repo:
+                snapshot = repo.materialize_snapshot([{**_domain_events()[0], "status": status}])
                 handle = continuity_domain_handle(
                     snapshot["domains"][0],
-                    clean_source_dir=clean,
-                    snapshot_path=snapshot_path,
+                    clean_source_dir=repo.clean_source_dir,
+                    snapshot_path=repo.snapshot_path,
                 )
 
                 response = mcp.handle_request(
@@ -774,9 +686,9 @@ class ContinuityDomainTests(unittest.TestCase):
                             "name": "recall_deepen",
                             "arguments": {
                                 "handle": handle,
-                                "cwd": str(cwd),
-                                "clean_source_dir": str(clean),
-                                "continuity_domains_snapshot": str(snapshot_path),
+                                "cwd": str(repo.cwd),
+                                "clean_source_dir": str(repo.clean_source_dir),
+                                "continuity_domains_snapshot": str(repo.snapshot_path),
                             },
                         },
                     }
@@ -787,14 +699,9 @@ class ContinuityDomainTests(unittest.TestCase):
                 self.assertEqual(payload["error"]["code"], "continuity_domain_blocked")
 
     def test_mcp_deepen_uses_registry_for_cross_thread_domain_ref(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            cwd = root / "workspace"
-            clean = cwd / ".aippocampus" / "clean-source"
-            _write_clean_source(clean)
-            registry_dir = root / "registry"
+        with continuity_domain_fixture_repo(workspace_name="workspace") as repo:
+            registry_dir = repo.root / "registry"
             foreign_clean = registry_dir / "threads" / "foreign-thread" / "clean-source"
-            foreign_clean.mkdir(parents=True, exist_ok=True)
             foreign_message = {
                 "message_id": "foreign-msg",
                 "turn_id": "foreign-turn",
@@ -804,21 +711,16 @@ class ContinuityDomainTests(unittest.TestCase):
                 "phase": "",
                 "text": "Cross-thread source says continuity domains must reopen registry clean source.",
             }
-            (foreign_clean / "messages.jsonl").write_text(
-                json.dumps(foreign_message, ensure_ascii=False) + "\n",
-                encoding="utf-8",
-            )
-            (foreign_clean / "turns.jsonl").write_text(
-                json.dumps(
+            write_jsonl(foreign_clean / "messages.jsonl", [foreign_message])
+            write_jsonl(
+                foreign_clean / "turns.jsonl",
+                [
                     {
                         "turn_id": "foreign-turn",
                         "turn_index": 8,
                         "message_ids": ["foreign-msg"],
-                    },
-                    ensure_ascii=False,
-                )
-                + "\n",
-                encoding="utf-8",
+                    }
+                ],
             )
             (registry_dir / "threads.json").write_text(
                 json.dumps(
@@ -857,9 +759,7 @@ class ContinuityDomainTests(unittest.TestCase):
                     }
                 ],
             )
-            snapshot_path = cwd / "snapshot.json"
-            snapshot_path.parent.mkdir(parents=True, exist_ok=True)
-            snapshot_path.write_text(json.dumps(snapshot, ensure_ascii=False), encoding="utf-8")
+            repo.write_snapshot(snapshot)
 
             context_response = mcp.handle_request(
                 {
@@ -870,10 +770,10 @@ class ContinuityDomainTests(unittest.TestCase):
                         "name": "recall_context",
                         "arguments": {
                             "intent": "cross-thread registry clean source",
-                            "cwd": str(cwd),
-                            "clean_source_dir": str(clean),
+                            "cwd": str(repo.cwd),
+                            "clean_source_dir": str(repo.clean_source_dir),
                             "registry_dir": str(registry_dir),
-                            "continuity_domains_snapshot": str(snapshot_path),
+                            "continuity_domains_snapshot": str(repo.snapshot_path),
                             "detail": "full",
                         },
                     },
@@ -889,10 +789,10 @@ class ContinuityDomainTests(unittest.TestCase):
                         "name": "recall_deepen",
                         "arguments": {
                             "handle": context_payload["routes"][0]["handle"],
-                            "cwd": str(cwd),
-                            "clean_source_dir": str(clean),
+                            "cwd": str(repo.cwd),
+                            "clean_source_dir": str(repo.clean_source_dir),
                             "registry_dir": str(registry_dir),
-                            "continuity_domains_snapshot": str(snapshot_path),
+                            "continuity_domains_snapshot": str(repo.snapshot_path),
                             "detail": "full",
                         },
                     },
@@ -908,11 +808,7 @@ class ContinuityDomainTests(unittest.TestCase):
         )
 
     def test_cross_thread_ref_does_not_fall_back_to_current_source_on_id_collision(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            cwd = root / "workspace"
-            clean = cwd / ".aippocampus" / "clean-source"
-            _write_clean_source(clean)
+        with continuity_domain_fixture_repo(workspace_name="workspace") as repo:
             current_rows = [
                 {
                     "message_id": "same-msg",
@@ -924,14 +820,12 @@ class ContinuityDomainTests(unittest.TestCase):
                     "text": "CURRENT THREAD TEXT should not satisfy foreign-thread refs.",
                 }
             ]
-            with (clean / "messages.jsonl").open("a", encoding="utf-8", newline="\n") as fh:
-                for row in current_rows:
-                    fh.write(json.dumps(row, ensure_ascii=False) + "\n")
-            registry_dir = root / "registry"
+            append_clean_source_messages(repo.clean_source_dir, current_rows)
+            registry_dir = repo.root / "registry"
             foreign_clean = registry_dir / "threads" / "foreign-thread" / "clean-source"
-            foreign_clean.mkdir(parents=True, exist_ok=True)
-            (foreign_clean / "messages.jsonl").write_text(
-                json.dumps(
+            write_jsonl(
+                foreign_clean / "messages.jsonl",
+                [
                     {
                         "message_id": "same-msg",
                         "turn_id": "foreign-turn",
@@ -940,11 +834,8 @@ class ContinuityDomainTests(unittest.TestCase):
                         "role": "user",
                         "phase": "",
                         "text": "FOREIGN THREAD TEXT is the only valid evidence.",
-                    },
-                    ensure_ascii=False,
-                )
-                + "\n",
-                encoding="utf-8",
+                    }
+                ],
             )
             (foreign_clean / "turns.jsonl").write_text("", encoding="utf-8")
             (registry_dir / "threads.json").write_text(
@@ -978,9 +869,7 @@ class ContinuityDomainTests(unittest.TestCase):
                     }
                 ],
             )
-            snapshot_path = cwd / "snapshot.json"
-            snapshot_path.parent.mkdir(parents=True, exist_ok=True)
-            snapshot_path.write_text(json.dumps(snapshot, ensure_ascii=False), encoding="utf-8")
+            repo.write_snapshot(snapshot)
             context_response = mcp.handle_request(
                 {
                     "jsonrpc": "2.0",
@@ -990,10 +879,10 @@ class ContinuityDomainTests(unittest.TestCase):
                         "name": "recall_context",
                         "arguments": {
                             "intent": "collision domain",
-                            "cwd": str(cwd),
-                            "clean_source_dir": str(clean),
+                            "cwd": str(repo.cwd),
+                            "clean_source_dir": str(repo.clean_source_dir),
                             "registry_dir": str(registry_dir),
-                            "continuity_domains_snapshot": str(snapshot_path),
+                            "continuity_domains_snapshot": str(repo.snapshot_path),
                             "detail": "full",
                         },
                     },
@@ -1009,10 +898,10 @@ class ContinuityDomainTests(unittest.TestCase):
                         "name": "recall_deepen",
                         "arguments": {
                             "handle": context_payload["routes"][0]["handle"],
-                            "cwd": str(cwd),
-                            "clean_source_dir": str(clean),
+                            "cwd": str(repo.cwd),
+                            "clean_source_dir": str(repo.clean_source_dir),
                             "registry_dir": str(registry_dir),
-                            "continuity_domains_snapshot": str(snapshot_path),
+                            "continuity_domains_snapshot": str(repo.snapshot_path),
                             "detail": "full",
                         },
                     },
@@ -1025,17 +914,13 @@ class ContinuityDomainTests(unittest.TestCase):
         self.assertNotIn("CURRENT THREAD TEXT", encoded_window)
 
     def test_cross_thread_domain_handle_stales_when_registry_source_changes(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            cwd = root / "workspace"
-            clean = cwd / ".aippocampus" / "clean-source"
-            _write_clean_source(clean)
-            registry_dir = root / "registry"
+        with continuity_domain_fixture_repo(workspace_name="workspace") as repo:
+            registry_dir = repo.root / "registry"
             foreign_clean = registry_dir / "threads" / "foreign-thread" / "clean-source"
-            foreign_clean.mkdir(parents=True, exist_ok=True)
             foreign_messages = foreign_clean / "messages.jsonl"
-            foreign_messages.write_text(
-                json.dumps(
+            write_jsonl(
+                foreign_messages,
+                [
                     {
                         "message_id": "foreign-msg",
                         "turn_id": "foreign-turn",
@@ -1044,11 +929,8 @@ class ContinuityDomainTests(unittest.TestCase):
                         "role": "user",
                         "phase": "",
                         "text": "Original foreign source text.",
-                    },
-                    ensure_ascii=False,
-                )
-                + "\n",
-                encoding="utf-8",
+                    }
+                ],
             )
             (foreign_clean / "turns.jsonl").write_text("", encoding="utf-8")
             (registry_dir / "threads.json").write_text(
@@ -1082,9 +964,7 @@ class ContinuityDomainTests(unittest.TestCase):
                     }
                 ],
             )
-            snapshot_path = cwd / "snapshot.json"
-            snapshot_path.parent.mkdir(parents=True, exist_ok=True)
-            snapshot_path.write_text(json.dumps(snapshot, ensure_ascii=False), encoding="utf-8")
+            repo.write_snapshot(snapshot)
             context_response = mcp.handle_request(
                 {
                     "jsonrpc": "2.0",
@@ -1094,18 +974,19 @@ class ContinuityDomainTests(unittest.TestCase):
                         "name": "recall_context",
                         "arguments": {
                             "intent": "freshness domain",
-                            "cwd": str(cwd),
-                            "clean_source_dir": str(clean),
+                            "cwd": str(repo.cwd),
+                            "clean_source_dir": str(repo.clean_source_dir),
                             "registry_dir": str(registry_dir),
-                            "continuity_domains_snapshot": str(snapshot_path),
+                            "continuity_domains_snapshot": str(repo.snapshot_path),
                             "detail": "full",
                         },
                     },
                 }
             )
             context_payload = json.loads(context_response["result"]["content"][0]["text"])
-            foreign_messages.write_text(
-                json.dumps(
+            write_jsonl(
+                foreign_messages,
+                [
                     {
                         "message_id": "foreign-msg",
                         "turn_id": "foreign-turn",
@@ -1114,11 +995,8 @@ class ContinuityDomainTests(unittest.TestCase):
                         "role": "user",
                         "phase": "",
                         "text": "Changed foreign source text.",
-                    },
-                    ensure_ascii=False,
-                )
-                + "\n",
-                encoding="utf-8",
+                    }
+                ],
             )
             deepen_response = mcp.handle_request(
                 {
@@ -1129,10 +1007,10 @@ class ContinuityDomainTests(unittest.TestCase):
                         "name": "recall_deepen",
                         "arguments": {
                             "handle": context_payload["routes"][0]["handle"],
-                            "cwd": str(cwd),
-                            "clean_source_dir": str(clean),
+                            "cwd": str(repo.cwd),
+                            "clean_source_dir": str(repo.clean_source_dir),
                             "registry_dir": str(registry_dir),
-                            "continuity_domains_snapshot": str(snapshot_path),
+                            "continuity_domains_snapshot": str(repo.snapshot_path),
                             "detail": "full",
                         },
                     },
@@ -1148,20 +1026,16 @@ class ContinuityDomainTests(unittest.TestCase):
         )
 
     def test_cross_thread_domain_deepen_validates_only_handle_refs(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            cwd = root / "workspace"
-            clean = cwd / ".aippocampus" / "clean-source"
-            _write_clean_source(clean)
-            registry_dir = root / "registry"
+        with continuity_domain_fixture_repo(workspace_name="workspace") as repo:
+            registry_dir = repo.root / "registry"
             threads = []
             source_refs = []
             for index in range(4):
                 thread_key = f"foreign-thread-{index}"
                 foreign_clean = registry_dir / "threads" / thread_key / "clean-source"
-                foreign_clean.mkdir(parents=True, exist_ok=True)
-                (foreign_clean / "messages.jsonl").write_text(
-                    json.dumps(
+                write_jsonl(
+                    foreign_clean / "messages.jsonl",
+                    [
                         {
                             "message_id": f"foreign-msg-{index}",
                             "turn_id": f"foreign-turn-{index}",
@@ -1170,11 +1044,8 @@ class ContinuityDomainTests(unittest.TestCase):
                             "role": "user",
                             "phase": "",
                             "text": f"Foreign source text {index}.",
-                        },
-                        ensure_ascii=False,
-                    )
-                    + "\n",
-                    encoding="utf-8",
+                        }
+                    ],
                 )
                 (foreign_clean / "turns.jsonl").write_text("", encoding="utf-8")
                 threads.append(
@@ -1204,9 +1075,7 @@ class ContinuityDomainTests(unittest.TestCase):
                     }
                 ],
             )
-            snapshot_path = cwd / "snapshot.json"
-            snapshot_path.parent.mkdir(parents=True, exist_ok=True)
-            snapshot_path.write_text(json.dumps(snapshot, ensure_ascii=False), encoding="utf-8")
+            repo.write_snapshot(snapshot)
             context_response = mcp.handle_request(
                 {
                     "jsonrpc": "2.0",
@@ -1216,10 +1085,10 @@ class ContinuityDomainTests(unittest.TestCase):
                         "name": "recall_context",
                         "arguments": {
                             "intent": "many foreign refs",
-                            "cwd": str(cwd),
-                            "clean_source_dir": str(clean),
+                            "cwd": str(repo.cwd),
+                            "clean_source_dir": str(repo.clean_source_dir),
                             "registry_dir": str(registry_dir),
-                            "continuity_domains_snapshot": str(snapshot_path),
+                            "continuity_domains_snapshot": str(repo.snapshot_path),
                             "detail": "full",
                         },
                     },
@@ -1235,10 +1104,10 @@ class ContinuityDomainTests(unittest.TestCase):
                         "name": "recall_deepen",
                         "arguments": {
                             "handle": context_payload["routes"][0]["handle"],
-                            "cwd": str(cwd),
-                            "clean_source_dir": str(clean),
+                            "cwd": str(repo.cwd),
+                            "clean_source_dir": str(repo.clean_source_dir),
                             "registry_dir": str(registry_dir),
-                            "continuity_domains_snapshot": str(snapshot_path),
+                            "continuity_domains_snapshot": str(repo.snapshot_path),
                         },
                     },
                 }

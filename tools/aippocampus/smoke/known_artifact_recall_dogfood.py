@@ -5,9 +5,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import _paths
 
@@ -27,7 +28,12 @@ OBSERVED_METRICS = (
     "wrong_route_drag",
     "known_artifact_found",
     "usable_next_action",
+    "artifact_exists",
+    "live_recall_found",
+    "live_search_found",
+    "usable_foreground_action",
 )
+CommandRunner = Callable[[list[str], Path], dict[str, Any]]
 
 DEFAULT_CASES: tuple[dict[str, Any], ...] = (
     {
@@ -78,8 +84,102 @@ def _has_action(value: Any) -> bool:
     return False
 
 
+def _default_command_runner(argv: list[str], cwd: Path) -> dict[str, Any]:
+    proc = subprocess.run(
+        argv,
+        cwd=cwd,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        capture_output=True,
+        check=False,
+    )
+    payload: Any = {}
+    try:
+        payload = json.loads(proc.stdout) if proc.stdout.strip() else {}
+    except json.JSONDecodeError:
+        payload = {}
+    return {
+        "returncode": proc.returncode,
+        "payload": payload,
+        "stdout_present": bool(proc.stdout.strip()),
+        "stderr_present": bool(proc.stderr.strip()),
+    }
+
+
+def _target_needles(case: dict[str, Any]) -> list[str]:
+    needles = [str(path) for path in case.get("expected_paths") or [] if str(path).strip()]
+    discussion = str(case.get("discussion") or "").strip()
+    if discussion:
+        needles.extend([f"/discussions/{discussion}", f"discussion {discussion}", f"#{discussion}"])
+    if case.get("case_id") == "discussion_2127_exact_public_phrase":
+        needles.extend(["/discussions/2127", "discussion 2127", "#2127"])
+    return needles
+
+
+def _payload_contains_any(value: Any, needles: list[str]) -> bool:
+    if not needles:
+        return False
+    lowered = [needle.casefold() for needle in needles if needle]
+
+    def walk(item: Any) -> bool:
+        if isinstance(item, dict):
+            return any(walk(child) for child in item.values())
+        if isinstance(item, list):
+            return any(walk(child) for child in item)
+        text = str(item or "").casefold()
+        return any(needle in text for needle in lowered)
+
+    return walk(value)
+
+
+def _foreground_action_is_usable(payload: Any) -> bool:
+    if not isinstance(payload, dict):
+        return False
+    return _has_action(payload.get("foreground_action")) or _has_action(
+        payload.get("safe_next_actions")
+    )
+
+
+def _live_case_observation(
+    case: dict[str, Any],
+    *,
+    repo_root: Path,
+    command_runner: CommandRunner,
+) -> dict[str, Any]:
+    cue = str(case.get("cue") or "")
+    needles = _target_needles(case)
+    recall = command_runner(["aippocampus", "agent", "recall", cue, "--json"], repo_root)
+    search = command_runner(["aippocampus", "search", "--all", cue, "--json"], repo_root)
+    recall_payload = recall.get("payload")
+    search_payload = search.get("payload")
+    live_recall_found = _payload_contains_any(recall_payload, needles)
+    live_search_found = _payload_contains_any(search_payload, needles)
+    usable_foreground_action = bool(
+        (live_recall_found and _foreground_action_is_usable(recall_payload))
+        or (live_search_found and _foreground_action_is_usable(search_payload))
+    )
+    return {
+        "status": "live_checked",
+        "metrics": {
+            "live_recall_found": live_recall_found,
+            "live_search_found": live_search_found,
+            "usable_foreground_action": usable_foreground_action,
+            "usable_next_action": usable_foreground_action,
+        },
+        "live": {
+            "recall_returncode": recall.get("returncode"),
+            "search_returncode": search.get("returncode"),
+            "recall_status": recall_payload.get("status") if isinstance(recall_payload, dict) else None,
+            "search_status": search_payload.get("status") if isinstance(search_payload, dict) else None,
+            "expected_target_seen_in_recall": live_recall_found,
+            "expected_target_seen_in_search": live_search_found,
+        },
+    }
+
+
 def _metrics_from_observation(observation: dict[str, Any]) -> dict[str, bool]:
-    metrics = _empty_metrics()
+    metrics: dict[str, bool] = {}
     raw_metrics = observation.get("metrics")
     if isinstance(raw_metrics, dict):
         for metric in OBSERVED_METRICS:
@@ -94,6 +194,8 @@ def _metrics_from_observation(observation: dict[str, Any]) -> dict[str, bool]:
         metrics["irrelevant_memory_drag"] = True
     if observation.get("known_artifact_found"):
         metrics["known_artifact_found"] = True
+    if observation.get("artifact_exists"):
+        metrics["artifact_exists"] = True
     if _has_action(observation.get("next_action") or observation.get("safe_next_actions")):
         metrics["usable_next_action"] = True
     return metrics
@@ -108,15 +210,19 @@ def _static_case_result(case: dict[str, Any], repo_root: Path) -> dict[str, Any]
             for path in case.get("expected_paths") or []
             if (repo_root / str(path)).exists()
         ]
+        metrics["artifact_exists"] = bool(found)
         metrics["known_artifact_found"] = bool(found)
-        metrics["usable_next_action"] = bool(found)
         evidence["found_paths"] = found
-        next_action = f"Open {found[0]} before answering." if found else "Run repo/doc search for the named inventory."
+        next_action = (
+            "Run live agent recall/search for the named inventory; static file existence is setup only."
+        )
     elif case["artifact_kind"] == "discussion_atlas_pointer":
         atlas_text = (repo_root / ATLAS_REL_PATH).read_text(encoding="utf-8")
         pointer = discussion_atlas_navigation_pointer(atlas_text, str(case["cue"]))
+        metrics["artifact_exists"] = bool(pointer.get("ok"))
         metrics["known_artifact_found"] = bool(pointer.get("ok"))
         metrics["usable_next_action"] = bool(pointer.get("ok"))
+        metrics["usable_foreground_action"] = bool(pointer.get("ok"))
         evidence["pointer"] = pointer.get("pointer") if pointer.get("ok") else None
         next_action = (
             str((pointer.get("pointer") or {}).get("next_action") or "")
@@ -141,20 +247,56 @@ def evaluate_known_artifact_recall(
     *,
     repo_root: Path,
     observations: list[dict[str, Any]] | None = None,
+    command_runner: CommandRunner | None = _default_command_runner,
     cases: tuple[dict[str, Any], ...] = DEFAULT_CASES,
 ) -> dict[str, Any]:
     by_case = _observation_by_case(observations or [])
     results: list[dict[str, Any]] = []
     for case in cases:
         result = _static_case_result(case, repo_root)
+        if command_runner is not None:
+            live_observation = _live_case_observation(
+                case,
+                repo_root=repo_root,
+                command_runner=command_runner,
+            )
+            observed_metrics = _metrics_from_observation(live_observation)
+            result["metrics"] = {**result["metrics"], **observed_metrics}
+            result["live"] = live_observation.get("live")
         observation = by_case.get(str(case["case_id"]))
         if observation:
             observed_metrics = _metrics_from_observation(observation)
             result["metrics"] = {**result["metrics"], **observed_metrics}
             result["observation_status"] = observation.get("status")
+        for field in (
+            "artifact_exists",
+            "live_recall_found",
+            "live_search_found",
+            "usable_foreground_action",
+        ):
+            result[field] = bool(result["metrics"].get(field))
+        if case["artifact_kind"] == "repo_doc":
+            live_found = bool(
+                result["metrics"]["live_recall_found"] or result["metrics"]["live_search_found"]
+            )
+            setup_ok = bool(result["metrics"]["artifact_exists"])
+            usable = bool(result["metrics"]["usable_foreground_action"])
+        elif case["artifact_kind"] == "phrase_search_negative_control":
+            live_found = bool(result["metrics"]["live_search_found"])
+            setup_ok = True
+            usable = live_found
+        else:
+            live_found = bool(
+                result["metrics"]["live_recall_found"]
+                or result["metrics"]["live_search_found"]
+                or result["metrics"]["usable_foreground_action"]
+            )
+            setup_ok = bool(result["metrics"]["artifact_exists"])
+            usable = bool(result["metrics"]["usable_next_action"])
         result["ok"] = bool(
-            result["metrics"]["known_artifact_found"]
-            and result["metrics"]["usable_next_action"]
+            setup_ok
+            and (live_found or result["metrics"]["usable_foreground_action"])
+            and usable
             and not result["metrics"]["irrelevant_memory_drag"]
             and not result["metrics"]["wrong_route_drag"]
         )

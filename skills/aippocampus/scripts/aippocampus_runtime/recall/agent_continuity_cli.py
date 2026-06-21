@@ -533,6 +533,12 @@ def main(argv: list[str] | None = None) -> int:
             project=args.project or cached_context.get("project") or "AIppocampus",
             max_matches=args.max,
         )
+        apw_identity = cached_context.get("apw_route_identity")
+        if isinstance(apw_identity, Mapping):
+            payload["apw_route_identity"] = dict(apw_identity)
+            result = payload.get("result")
+            if isinstance(result, dict):
+                result["apw_route_identity"] = dict(apw_identity)
         request_index = int(args.request or 1) if has_request_selector else None
         if request_index is not None and payload.get("status") == "cannot_verify":
             recovery_cue = (

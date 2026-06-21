@@ -356,10 +356,11 @@ class TaskOrientationPacketTests(unittest.TestCase):
         self.assertGreater(compact["current_orientation"]["advanced_navigation_route_count"], 0)
         self.assertEqual(
             compact["foreground_action"]["id"],
-            "inspect_first_orientation_source_route",
+            "open_orientation_detail",
         )
         self.assertIn("aippocampus agent orient", compact["foreground_action"]["command"])
         self.assertIn("--detail full", compact["foreground_action"]["command"])
+        self.assertNotIn("source_route", compact["foreground_action"]["id"])
         self.assertNotIn("agent_next_action", compact)
         self.assertEqual(foreground_action_contract_violations(compact), [])
         self.assertNotIn(str(Path(tempfile.gettempdir())), encoded)
@@ -379,6 +380,45 @@ class TaskOrientationPacketTests(unittest.TestCase):
         components = packet["orientation_sidecar_load"]["components"]
         self.assertTrue(any(item.get("next_action") for item in components))
         self.assertEqual(packet["metrics"]["orientation_sidecar_projected_item_count"], 0)
+
+    def test_agent_orient_sidecar_jsonl_loss_is_visible_in_components(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            sidecars = root / ".aippocampus"
+            source_ref = {"thread_key": "session:journey", "message_id": "m1", "line": 12}
+            (sidecars / "journeys.jsonl").parent.mkdir(parents=True, exist_ok=True)
+            (sidecars / "journeys.jsonl").write_text(
+                "{bad-json}\n"
+                + json.dumps(
+                    {
+                        "kind": "aippocampus_journey",
+                        "journey_id": "journey-continuity",
+                        "path_label": "continuity route",
+                        "current_frontier": "Continue the source-backed continuity route.",
+                        "status": "traveling",
+                        "source_refs": [source_ref],
+                    },
+                    ensure_ascii=False,
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            packet = task_orientation.build_task_orientation_packet(
+                "continue continuity route",
+                cwd=root,
+                detail="full",
+            )
+
+        components = {
+            item["component"]: item
+            for item in packet["orientation_sidecar_load"]["components"]
+        }
+        journey = components["journey_sidecar"]
+        self.assertEqual(journey["status"], "projected")
+        self.assertEqual(journey["jsonl_loss_count"], 1)
+        self.assertEqual(journey["jsonl_warning_codes"], ["invalid_json_lines"])
 
     def test_live_journey_materializer_writes_compact_sidecar_and_orient_consumes_it(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -478,12 +518,13 @@ class TaskOrientationPacketTests(unittest.TestCase):
         self.assertNotIn("suppressed_detail", payload)
         self.assertNotIn("cannot_claim", payload)
         self.assertNotIn("red_lines", payload)
-        self.assertEqual(payload["foreground_action"]["id"], "inspect_first_orientation_source_route")
+        self.assertEqual(payload["foreground_action"]["id"], "open_orientation_detail")
         self.assertIn(
             "aippocampus agent orient",
             payload["foreground_action"]["command"],
         )
         self.assertIn("--detail full", payload["foreground_action"]["command"])
+        self.assertNotIn("source_route", payload["foreground_action"]["id"])
         self.assertNotIn("{task}", payload["foreground_action"]["command"])
         self.assertEqual(executable_command_violations(payload), [])
         self.assertEqual(foreground_action_contract_violations(payload), [])

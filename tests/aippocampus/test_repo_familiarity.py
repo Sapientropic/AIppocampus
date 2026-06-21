@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import json
 import unittest
+from pathlib import Path
 
 from aippocampus_runtime.navigation import repo_familiarity
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def fixture_rows() -> list[dict[str, object]]:
@@ -190,6 +193,24 @@ class RepoFamiliarityTests(unittest.TestCase):
         self.assertTrue(
             any(item["reason"] == "irrelevant_to_task" for item in readme_packet["rejected_cards"])
         )
+
+    def test_current_checkout_selects_compatibility_inventory_for_natural_cue(self) -> None:
+        packet = repo_familiarity.select_current_checkout_packet(
+            REPO_ROOT,
+            task="compatibility historical fields inventory report",
+            max_cards=1,
+        )
+
+        self.assertEqual(packet["kind"], "aippocampus_repo_familiarity_packet")
+        self.assertEqual(len(packet["selected_cards"]), 1)
+        card = packet["selected_cards"][0]
+        self.assertEqual(card["landmark"], "compatibility and legacy-alias inventory")
+        self.assertEqual(
+            card["first_source_to_reopen"],
+            "docs/architecture/ops/compatibility-shim-inventory.md",
+        )
+        self.assertTrue(card["invalidation"]["files"])
+        self.assertTrue(card["injection_policy"]["source_reopen_required"])
 
 if __name__ == "__main__":
     unittest.main()

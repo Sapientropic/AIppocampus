@@ -9,6 +9,9 @@ from typing import Any
 from aippocampus_runtime.macro import state as macro_state
 from aippocampus_runtime.recall import macro_live_recall
 
+ACTIVE_PROMOTION_OWNER_ISSUE = "#2559"
+HISTORICAL_MACRO_PROMOTION_ISSUES = ["#1300"]
+
 
 def _as_dict(value: Any) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
@@ -247,7 +250,8 @@ def macro_navigation_readout(
     return {
         "measured": bool(macro_cases),
         "status": "fixture_candidate_not_promoted",
-        "promotion_issue": "#1300",
+        "promotion_issue": ACTIVE_PROMOTION_OWNER_ISSUE,
+        "historical_promotion_issues": HISTORICAL_MACRO_PROMOTION_ISSUES,
         "case_count": len(macro_cases),
         "active_layer_order_delta_count": active_layer_delta,
         "hamming_fanout_delta_count": fanout_delta,

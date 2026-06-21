@@ -83,6 +83,36 @@ class SearchCleanSourceTests(unittest.TestCase):
         self.assertEqual(result["matches"][0]["scope_labels"], ["technical_work"])
         self.assertIn("AIppocampus 是清洗后的原文记忆库", result["matches"][0]["snippet"])
 
+    def test_search_reports_malformed_jsonl_loss_without_losing_valid_rows(self) -> None:
+        with (self.source / "messages.jsonl").open("a", encoding="utf-8", newline="\n") as f:
+            f.write("{not-json}\n")
+            f.write(json.dumps(["not", "an", "object"], ensure_ascii=False) + "\n")
+            f.write(
+                json.dumps(
+                    {
+                        "id": "msg_after_bad_row",
+                        "source_line": 90,
+                        "role": "assistant",
+                        "phase": "final_answer",
+                        "turn_index": 9,
+                        "is_final": True,
+                        "scope_labels": ["technical_work"],
+                        "text": "The recall surface should still find this unique valid row.",
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n"
+            )
+
+        result = search.search_clean_source(self.cwd, ["unique valid row"], limit=5)
+
+        self.assertEqual(result["matches"][0]["id"], "msg_after_bad_row")
+        self.assertEqual(result["jsonl_loss"]["invalid_json_line_count"], 1)
+        self.assertEqual(result["jsonl_loss"]["non_object_line_count"], 1)
+        warning = next(item for item in result["warnings"] if item["code"] == "jsonl_read_degraded")
+        self.assertEqual(warning["stage"], "clean_source")
+        self.assertEqual(warning["path"], "messages.jsonl")
+
     def test_search_uses_cjk_sidecar_terms_for_near_exact_phrase(self) -> None:
         with (self.source / "messages.jsonl").open("a", encoding="utf-8", newline="\n") as f:
             f.write(
@@ -1236,6 +1266,70 @@ class SearchCleanSourceTests(unittest.TestCase):
         self.assertTrue(payload["source_boundary"]["phrase_like_low_coverage_suppressed"])
         self.assertEqual(payload["foreground_action_contract"], "foreground-action-v2")
         self.assertNotIn("agent_next_action", payload)
+
+    def test_search_all_phrase_like_absent_query_suppresses_generic_two_anchor_decoy(self) -> None:
+        noisy_clean = self.cwd / "generic-anchor-thread" / "clean-source"
+        noisy_clean.mkdir(parents=True)
+        (noisy_clean / "messages.jsonl").write_text(
+            json.dumps(
+                {
+                    "id": "msg_generic_anchor_decoy",
+                    "message_id": "msg_generic_anchor_decoy",
+                    "source_line": 5,
+                    "role": "assistant",
+                    "phase": "final_answer",
+                    "is_final": True,
+                    "text": (
+                        "No blocking findings in run_task_group_prepare; a future change could emit "
+                        "a success payload before link completion or leaves stale binding state."
+                    ),
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (self.cwd / "threads.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "threads": [
+                        {
+                            "thread_key": "session:generic-anchor-decoy",
+                            "title": "Generic two-anchor decoy",
+                            "paths": {
+                                "clean_source_messages_jsonl": str(noisy_clean / "messages.jsonl"),
+                                "sqlite": str(self.cwd / "missing-generic-anchor.sqlite"),
+                            },
+                        }
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            code = search.main(
+                [
+                    "--all",
+                    "A safe packet that leaves the agent lost is not a success",
+                    "--registry-dir",
+                    str(self.cwd),
+                    "--search-budget",
+                    "deep",
+                    "--json",
+                ]
+            )
+        payload = json.loads(stdout.getvalue())
+
+        self.assertEqual(code, 1)
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["status"], "no_phrase_like_matches")
+        self.assertEqual(payload["match_count"], 0)
+        self.assertEqual(payload["suppressed_low_coverage_match_count"], 1)
+        self.assertTrue(payload["source_boundary"]["phrase_like_low_coverage_suppressed"])
 
     def test_search_all_phrase_like_present_query_ranks_exact_source_first(self) -> None:
         exact_clean = self.cwd / "exact-thread" / "clean-source"

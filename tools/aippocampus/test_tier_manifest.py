@@ -11,45 +11,25 @@ class TestModuleClassification(NamedTuple):
 PR_STEMS = frozenset(
     {
         "test_agent_native_recall_facade",
-        "test_agent_feedback_macro_cli",
-        "test_agent_background",
         "test_agent_last_recall_recovery",
-        "test_agent_opt_in_aippo_semantic",
-        "test_agent_opt_in_cli_contracts",
-        "test_agent_opt_in_recall_routes",
-        "test_agent_recall_apw_fallback",
-        "test_agent_recall_compact_projection",
         "test_agent_pull_gesture",
-        "test_agent_self_note_cli",
-        "test_agent_self_notes",
         "test_aippo_clause_lifecycle",
-        "test_aippo_skill_bridge",
-        "test_aippo_working_contract",
-        "test_ambient_recall_cards",
-        "test_avatar_illumination",
-        "test_cognitive_load_sidecar",
-        "test_cognitive_observatory",
         "test_circuit_feedback",
         "test_cli_recovery_cards_core",
-        "test_cli_start",
         "test_command_quoting_contract",
         "test_debt_report",
         "test_docs_health_benchmark_evidence",
         "test_consolidation_priority",
-        "test_continuity_domain_cli",
         "test_dream_delivery_eligibility",
         "test_attention_route_compatibility",
-        "test_foreground_action_card",
         "test_first_useful_recall_demo",
         "test_health_human_text",
         "test_lane_cache_verifier",
-        "test_learning_loop",
         "test_learning_loop_aippo_adapter",
         "test_learning_loop_behavioral_records",
         "test_learning_loop_effectiveness_ledger",
         "test_learning_loop_private_replay",
         "test_learning_loop_second_user_dogfood",
-        "test_local_global_compatibility",
         "test_macro_topology_loadbearing",
         "test_macro_total_encoder",
         "test_memory_system_incident_corpus",
@@ -60,14 +40,10 @@ PR_STEMS = frozenset(
         "test_parallel_derivation_bundle",
         "test_prompt_hook_semantic_diagnostics",
         "test_prompt_hook_anti_nag_behavior",
-        "test_query_pattern_enrichment",
-        "test_question_tracking",
         "test_semantic_subregion_budget",
         "test_semantic_candidate_context_bridge_effectiveness",
         "test_source_shape_projection",
-        "test_successor_evidence",
         "test_update_agent_status",
-        "test_yi_macro_runtime_interfaces",
     }
 )
 
@@ -405,6 +381,7 @@ TEST_MODULE_STEMS = frozenset(
         "test_query_profile",
         "test_recall_funnel_smoke",
         "test_recall_feedback_events",
+        "test_recall_integration_readiness",
         "test_recall_navigation_comparison",
         "test_recall_navigation_promotion",
         "test_recall_scoring_policy",
@@ -492,19 +469,13 @@ TEST_MODULE_STEMS = frozenset(
 
 QUICK_STEMS = frozenset(
     {
-        "test_active_recall",
-        "test_active_recall_lock",
         "test_active_path_packet",
-        "test_action_hint_cache",
-        "test_action_hint_hook",
         "test_action_hint_replay",
         "test_agent_fallback_executor",
         "test_agent_fallback_materializer",
         "test_aippo_clause_lifecycle",
         "test_aippo_feedback_eval_ficus",
         "test_aippocampuslib",
-        "test_architecture_boundaries",
-        "test_build_clean_source",
         "test_capture_consolidation_boundary",
         "test_ci_parity",
         "test_cli_json_contract",
@@ -515,10 +486,7 @@ QUICK_STEMS = frozenset(
         "test_continuity_domain_salience_adapter",
         "test_continuity_domain_producer",
         "test_cross_agent_isolation",
-        "test_foreground_action_card",
         "test_foreground_usefulness_and_candidate_survival",
-        "test_hook_agent_affordance",
-        "test_issue_work_guard",
         "test_magic_activation_policy",
         "test_memory_evidence_drawer",
         "test_microcircuit_router",
@@ -530,20 +498,14 @@ QUICK_STEMS = frozenset(
         "test_query_pattern_routes_prompt_hook",
         "test_query_profile",
         "test_recall_feedback_events",
-        "test_retrieval_lifecycle",
-        "test_runtime_contracts_and_config_registry",
         "test_runtime_recheck_events",
-        "test_run_tests_tiers",
         "test_semantic_subregion_budget",
         "test_semantic_warm_route_producer",
         "test_source_shape_projection",
         "test_source_shape_runtime",
-        "test_last_recall_source_search",
         "test_source_factual_aliases",
-        "test_task_orientation_packet",
         "test_source_intake_health",
         "test_source_backed_lessons",
-        "test_learning_loop",
         "test_learning_loop_aippo_adapter",
         "test_learning_loop_behavioral_records",
         "test_learning_loop_effectiveness_ledger",
@@ -551,9 +513,7 @@ QUICK_STEMS = frozenset(
         "test_learning_loop_second_user_dogfood",
         "test_source_reopen_budget",
         "test_source_texture",
-        "test_sparse_provenance_codebook",
         "test_standard_line_reranker_contract",
-        "test_test_plan",
         "test_topology_anchor_policy",
     }
 )
@@ -561,6 +521,7 @@ QUICK_STEMS = frozenset(
 SMOKE_STEMS = frozenset(
     {
         "test_aippocampus_lifecycle_hook",
+        "test_action_hint_hook",
         "test_codex_long_session_smoke",
         "test_claude_code_hooks",
         "test_cross_agent_continuity_smoke",
@@ -569,6 +530,7 @@ SMOKE_STEMS = frozenset(
         "test_fresh_thread_real_history_smoke",
         "test_frontier_probe",
         "test_generic_jsonl_integration_smoke",
+        "test_hook_agent_affordance",
         "test_install_action_hint_hook",
         "test_install_lifecycle_hook",
         "test_install_prompt_hook",
@@ -897,7 +859,216 @@ TIER_SHRINK_REPLACEMENT_LANES: dict[str, dict[str, str]] = {
     },
 }
 
-TIER_ALIASES = {"fast": "pr", "deterministic": "broad-pr", "ci": "broad-pr"}
+FAST_LANE_RECLASSIFIED_MODULES: dict[str, tuple[str, str, str]] = {
+    "test_active_recall": (
+        "broad",
+        "broad-pr plus focused active-recall runs own the full matrix.",
+        "Active recall behavior is important, but the full matrix is wider than the inner loop.",
+    ),
+    "test_active_recall_lock": (
+        "broad",
+        "broad-pr plus focused active-recall lock runs own lock and cache edge cases.",
+        "Lock/cache edge cases belong to broad deterministic coverage unless the changed surface asks for them.",
+    ),
+    "test_action_hint_cache": (
+        "broad",
+        "broad-pr plus focused action-hint cache runs own the full cache contract.",
+        "Action-hint cache breadth is not required for every unrelated quick run.",
+    ),
+    "test_action_hint_hook": (
+        "smoke",
+        "smoke and broad-pr own hook behavior; hook changes get focused tests from the planner.",
+        "Hook surfaces are host-adjacent and should not live in quick by default.",
+    ),
+    "test_architecture_boundaries": (
+        "broad",
+        "broad-pr and architecture changed-surface planner commands own the boundary suite.",
+        "Architecture boundary coverage is pre-merge safety, not ordinary inner-loop iteration.",
+    ),
+    "test_build_clean_source": (
+        "broad",
+        "broad-pr plus focused clean-source build runs own source-building breadth.",
+        "Clean-source construction has enough fixture breadth to stay out of quick by default.",
+    ),
+    "test_foreground_action_card": (
+        "broad",
+        "broad-pr plus focused foreground-action contract runs own the full card matrix.",
+        "PR keeps smaller command/quoting and anti-nag contracts; the full card catalog is wider.",
+    ),
+    "test_hook_agent_affordance": (
+        "smoke",
+        "smoke and broad-pr own hook affordance wiring; #2554 uses focused hook tests.",
+        "Ambient hook affordances are a foreground smoke surface, not quick default coverage.",
+    ),
+    "test_issue_work_guard": (
+        "broad",
+        "broad-pr plus focused issue-work guard runs own contributor workflow protection.",
+        "Issue workflow checks are valuable but not a quick inner-loop dependency.",
+    ),
+    "test_retrieval_lifecycle": (
+        "broad",
+        "broad-pr plus focused retrieval-lifecycle runs own lifecycle breadth.",
+        "Lifecycle breadth should be selected by changed surface, not every quick run.",
+    ),
+    "test_runtime_contracts_and_config_registry": (
+        "broad",
+        "broad-pr plus focused runtime/config contract runs own registry-wide contract checks.",
+        "Runtime registry coverage is broad deterministic safety rather than quick default.",
+    ),
+    "test_run_tests_tiers": (
+        "broad",
+        "broad-pr plus focused run-tests tier checks own runner manifest changes.",
+        "The runner tests are essential when tier files change, but too wide for every quick run.",
+    ),
+    "test_last_recall_source_search": (
+        "broad",
+        "broad-pr plus focused last-recall source-search runs own recall source breadth.",
+        "Last-recall source-search coverage belongs with recall changed-surface checks.",
+    ),
+    "test_task_orientation_packet": (
+        "broad",
+        "broad-pr plus focused task-orientation runs own packet projection breadth.",
+        "Orientation packet coverage is broad enough to stay out of quick by default.",
+    ),
+    "test_learning_loop": (
+        "broad",
+        "broad-pr plus focused learning-loop runs own the full loop contract.",
+        "PR keeps selected learning-loop slices; the whole loop is broad deterministic coverage.",
+    ),
+    "test_sparse_provenance_codebook": (
+        "broad",
+        "broad-pr plus focused provenance codebook runs own sparse-provenance breadth.",
+        "Provenance-codebook checks are evidence hygiene, not inner-loop coverage.",
+    ),
+    "test_test_plan": (
+        "broad",
+        "broad-pr plus focused test-plan runs own planner changes.",
+        "Planner behavior should be tested when touched, not by every quick run.",
+    ),
+    "test_agent_feedback_macro_cli": (
+        "broad",
+        "broad-pr plus focused agent feedback macro CLI runs own CLI breadth.",
+        "Macro feedback CLI coverage is broader than the PR-critical core.",
+    ),
+    "test_agent_background": (
+        "broad",
+        "broad-pr plus focused agent-background runs own compact/detail projection breadth.",
+        "Background projection changed-surface tests remain explicit without bloating every PR gate.",
+    ),
+    "test_agent_opt_in_aippo_semantic": (
+        "broad",
+        "broad-pr plus focused AIppo semantic opt-in runs own semantic breadth.",
+        "Semantic opt-in coverage is important but not fast-lane default coverage.",
+    ),
+    "test_agent_opt_in_cli_contracts": (
+        "broad",
+        "broad-pr plus focused opt-in CLI contract runs own CLI breadth.",
+        "PR keeps smaller command/quoting contracts; the opt-in CLI matrix is broad.",
+    ),
+    "test_agent_opt_in_recall_routes": (
+        "broad",
+        "broad-pr plus focused recall-route runs own the full route matrix.",
+        "Recall route matrix tests are selected by recall changed-surface work.",
+    ),
+    "test_agent_recall_apw_fallback": (
+        "broad",
+        "broad-pr plus focused APW fallback runs own APW recovery breadth.",
+        "APW fallback is actively guarded by focused changed-surface tests and broad-pr.",
+    ),
+    "test_agent_recall_compact_projection": (
+        "broad",
+        "broad-pr plus focused compact recall projection runs own projection breadth.",
+        "Compact recall projection has many route families; changed surfaces should call it directly.",
+    ),
+    "test_agent_self_note_cli": (
+        "broad",
+        "broad-pr plus focused self-note CLI runs own CLI breadth.",
+        "Self-note CLI coverage is not PR-critical for unrelated changes.",
+    ),
+    "test_agent_self_notes": (
+        "broad",
+        "broad-pr plus focused agent-self-notes runs own source-note breadth.",
+        "Self-note source behavior belongs to changed-surface coverage and broad-pr.",
+    ),
+    "test_aippo_skill_bridge": (
+        "broad",
+        "broad-pr plus focused AIppo skill bridge runs own bridge breadth.",
+        "Skill bridge checks are valuable but broader than the local PR gate.",
+    ),
+    "test_aippo_working_contract": (
+        "broad",
+        "broad-pr plus focused AIppo working-contract runs own full contract breadth.",
+        "Working-contract breadth is not needed for every local PR run.",
+    ),
+    "test_ambient_recall_cards": (
+        "broad",
+        "broad-pr plus focused ambient recall card runs own the full card matrix.",
+        "Ambient recall cards are a wide foreground projection surface.",
+    ),
+    "test_avatar_illumination": (
+        "broad",
+        "broad-pr plus focused avatar illumination runs own avatar behavior breadth.",
+        "Avatar behavior is product coverage, not fast-lane default coverage.",
+    ),
+    "test_cognitive_load_sidecar": (
+        "broad",
+        "broad-pr plus focused cognitive-load sidecar runs own sidecar breadth.",
+        "Cognitive-load sidecar coverage should follow changed-surface selection.",
+    ),
+    "test_cognitive_observatory": (
+        "broad",
+        "broad-pr plus focused cognitive observatory runs own observatory breadth.",
+        "Observatory coverage is broad diagnostic safety, not a default PR chore.",
+    ),
+    "test_cli_start": (
+        "broad",
+        "broad-pr plus focused CLI start runs own onboarding/start breadth.",
+        "Start-card breadth is selected by CLI/onboarding changes.",
+    ),
+    "test_continuity_domain_cli": (
+        "broad",
+        "broad-pr plus focused continuity-domain CLI runs own CLI breadth.",
+        "Continuity-domain CLI tests are broader than the default PR gate.",
+    ),
+    "test_local_global_compatibility": (
+        "broad",
+        "broad-pr plus focused local/global compatibility runs own route-quality breadth.",
+        "Compatibility route matrices should not keep PR one module over budget.",
+    ),
+    "test_query_pattern_enrichment": (
+        "broad",
+        "broad-pr plus focused query-pattern enrichment runs own enrichment breadth.",
+        "Query-pattern breadth is selected by retrieval/query changes.",
+    ),
+    "test_question_tracking": (
+        "broad",
+        "broad-pr plus focused question-tracking runs own question breadth.",
+        "Question-tracking breadth is useful but not default PR coverage.",
+    ),
+    "test_successor_evidence": (
+        "broad",
+        "broad-pr plus focused successor-evidence runs own evidence breadth.",
+        "Successor evidence checks belong to broad deterministic evidence coverage.",
+    ),
+    "test_yi_macro_runtime_interfaces": (
+        "broad",
+        "broad-pr plus focused Yi macro runtime interface runs own macro breadth.",
+        "Macro runtime interface breadth is not required for every local PR gate.",
+    ),
+}
+
+TIER_SHRINK_REPLACEMENT_LANES.update(
+    {
+        _module_name(stem): {
+            "primary_tier": primary_tier,
+            "replacement_lane": replacement_lane,
+            "rationale": rationale,
+        }
+        for stem, (primary_tier, replacement_lane, rationale) in FAST_LANE_RECLASSIFIED_MODULES.items()
+    }
+)
+
+TIER_ALIASES: dict[str, str] = {}
 PR_PRIMARY_TIERS = frozenset({"quick", "pr"})
 BROAD_PR_PRIMARY_TIERS = frozenset({"quick", "pr", "broad", "smoke", "integration"})
 PRIMARY_TIER_ORDER = ("quick", "pr", "broad", "smoke", "integration", "slow", "benchmark")
@@ -912,7 +1083,6 @@ TEST_TIERS = (
     "benchmark-smoke",
     "benchmark",
     "full",
-    "fast",
 )
 
 TIER_DESCRIPTIONS = {
@@ -926,7 +1096,6 @@ TIER_DESCRIPTIONS = {
     "benchmark-smoke": "Curated public benchmark/support smoke lane.",
     "benchmark": "Full checked-in benchmark test mirror.",
     "full": "Composition of all explicitly classified tests.",
-    "fast": "Compatibility alias for pr.",
 }
 
 

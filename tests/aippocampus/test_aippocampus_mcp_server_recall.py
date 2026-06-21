@@ -11,6 +11,11 @@ from aippocampus_runtime import core
 from aippocampus_runtime.contracts import executable_command_violations
 from aippocampus_runtime.mcp import server as mcp
 from aippocampus_runtime.mcp import tool_handlers as mcp_handlers
+from aippocampus_runtime.recall import (
+    agent_continuity,
+    apw_route_identity,
+    associative_path_fallback,
+)
 from aippocampus_runtime.recall.agent_recall_cache import write_last_recall_cache
 from aippocampus_runtime.registry import store as registry_store
 from conversation_sources import ConversationSourceRef
@@ -87,6 +92,194 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
             }
         )
         return self.tool_payload(response)
+
+    def append_clean_message(self, row: dict[str, object]) -> None:
+        with (self.clean / "messages.jsonl").open("a", encoding="utf-8", newline="\n") as f:
+            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+        with (self.clean / "turns.jsonl").open("a", encoding="utf-8", newline="\n") as f:
+            f.write(
+                json.dumps(
+                    {
+                        "turn_id": row.get("turn_id"),
+                        "turn_index": row.get("turn_index"),
+                        "message_ids": [row.get("message_id") or row.get("id")],
+                        "assistant_phase": row.get("phase") or row.get("role"),
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n"
+            )
+
+    def assert_mcp_apw_roundtrip(
+        self,
+        *,
+        cue: str,
+        message_id: str,
+        source_id: str,
+        source_line: int,
+        source_text: str,
+        cache_name: str,
+        feedback_path: Path | None = None,
+    ) -> tuple[dict[str, object], dict[str, object]]:
+        cache_path = self.cwd / cache_name
+        recall_payload = self.call_tool_payload(
+            "agent_recall",
+            {
+                "query": cue,
+                "cwd": str(self.cwd),
+                "clean_source_dir": str(self.clean),
+                "registry_dir": str(self.cwd / "registry"),
+                "apw_fallback": True,
+                "last_recall_path": str(cache_path),
+                **({"apw_feedback_path": str(feedback_path)} if feedback_path else {}),
+            },
+        )
+
+        self.assertIn(recall_payload["status"], {"ok", "no_routes"})
+        self.assertTrue(recall_payload["associative_path_policy"]["apw_candidate_input_available"])
+        self.assertEqual(recall_payload["associative_path_fallback"]["status"], "route_candidate")
+        action = recall_payload["foreground_action"]
+        self.assertEqual(action["id"], "deepen_associative_path_fallback")
+        self.assertEqual(action["tool_name"], "agent_deepen")
+        identity = action["apw_route_identity"]
+        self.assertEqual(identity["source_ref_digest"], recall_payload["associative_path_fallback"]["source_ref_digest"])
+        self.assertIn("recall_selector", action["arguments"])
+        self.assertEqual(executable_command_violations(recall_payload), [])
+
+        deepen_payload = self.call_tool_payload(
+            "agent_deepen",
+            {
+                "request_index": action["arguments"]["request_index"],
+                "recall_selector": action["arguments"]["recall_selector"],
+                "last_recall_path": str(cache_path),
+                "cwd": str(self.cwd),
+                "clean_source_dir": str(self.clean),
+                "detail": "full",
+            },
+        )
+        self.assertEqual(deepen_payload["status"], "ok")
+        source_refs = deepen_payload["result"]["source_refs"]
+        self.assertEqual(source_refs[0]["message_id"], message_id)
+        self.assertEqual(
+            deepen_payload["result"]["apw_route_identity"]["source_ref_digest"],
+            identity["source_ref_digest"],
+        )
+        window_text = "\n".join(
+            str(message.get("text") or "")
+            for message in deepen_payload["result"]["source_window"]["messages"]
+            if isinstance(message, dict)
+        )
+        self.assertIn(source_text, window_text)
+        self.assertEqual(
+            identity["source_ref_digest"],
+            apw_route_identity.source_ref_digest(
+                [
+                    {
+                        "source_id": source_id,
+                        "message_id": message_id,
+                        "turn_id": deepen_payload["result"]["source_refs"][0].get("turn_id"),
+                        "turn_index": deepen_payload["result"]["source_refs"][0].get("turn_index"),
+                        "line": source_line,
+                    }
+                ]
+            ),
+        )
+        return recall_payload, deepen_payload
+
+    def test_mcp_first_apw_current_clean_source_roundtrip_and_feedback_gate(self) -> None:
+        registry = self.cwd / "registry"
+        registry.mkdir()
+        self.append_clean_message(
+            {
+                "message_id": "msg-mcp-cn-apw",
+                "turn_id": "turn-mcp-cn-apw",
+                "turn_index": 8,
+                "source_id": "src-mcp-cn-apw",
+                "source_line": 30,
+                "role": "assistant",
+                "phase": "final_answer",
+                "is_final": True,
+                "text": "公开 fixture 锚点：黏菌 联想回忆 探索算法，供 MCP APW gate 追踪。",
+            }
+        )
+        self.append_clean_message(
+            {
+                "message_id": "msg-mcp-en-apw",
+                "turn_id": "turn-mcp-en-apw",
+                "turn_index": 9,
+                "source_id": "src-mcp-en-apw",
+                "source_line": 31,
+                "role": "assistant",
+                "phase": "final_answer",
+                "is_final": True,
+                "text": "The source-shape narrative mesh slime mold pathlet is the English MCP APW gate.",
+            }
+        )
+        feedback_path = self.cwd / "apw-feedback.jsonl"
+
+        with mock.patch.dict(
+            "os.environ",
+            {associative_path_fallback.PROMOTION_MODE_ENV: "semi_default_recovery"},
+        ):
+            cn_recall, _cn_deepen = self.assert_mcp_apw_roundtrip(
+                cue="黏菌 联想回忆 探索算法",
+                message_id="msg-mcp-cn-apw",
+                source_id="src-mcp-cn-apw",
+                source_line=30,
+                source_text="黏菌 联想回忆 探索算法",
+                cache_name="mcp-cn-last-recall.json",
+                feedback_path=feedback_path,
+            )
+            self.assert_mcp_apw_roundtrip(
+                cue="source-shape narrative mesh slime mold pathlet",
+                message_id="msg-mcp-en-apw",
+                source_id="src-mcp-en-apw",
+                source_line=31,
+                source_text="source-shape narrative mesh slime mold pathlet",
+                cache_name="mcp-en-last-recall.json",
+            )
+            diagnostic = self.call_tool_payload(
+                "recall_diagnostic",
+                {
+                    "cue": "黏菌 联想回忆 探索算法",
+                    "cwd": str(self.cwd),
+                    "clean_source_dir": str(self.clean),
+                    "registry_dir": str(registry),
+                    "include_associative_path_diagnostics": True,
+                },
+            )
+            apw_diagnostic = diagnostic["associative_path_diagnostics"]
+            self.assertEqual(apw_diagnostic["decision"], "route_candidates")
+            self.assertEqual(
+                apw_diagnostic["top_candidates"][0]["apw_route_identity"]["source_ref_digest"],
+                cn_recall["foreground_action"]["apw_route_identity"]["source_ref_digest"],
+            )
+
+            identity = cn_recall["foreground_action"]["apw_route_identity"]
+            receipt = agent_continuity.capture_feedback(
+                route_id=str(identity["feedback_target_id"]),
+                outcome="wrong_route",
+                route_kind="active_path",
+                feedback_path=feedback_path,
+            )
+            self.assertTrue(receipt["wrote_event"])
+
+            rerun = self.call_tool_payload(
+                "agent_recall",
+                {
+                    "query": "黏菌 联想回忆 探索算法",
+                    "cwd": str(self.cwd),
+                    "clean_source_dir": str(self.clean),
+                    "registry_dir": str(registry),
+                    "apw_fallback": True,
+                    "last_recall_path": str(self.cwd / "mcp-cn-rerun-last-recall.json"),
+                    "apw_feedback_path": str(feedback_path),
+                },
+            )
+
+        self.assertTrue(rerun["associative_path_policy"]["apw_candidate_input_available"])
+        self.assertEqual(rerun["associative_path_fallback"]["status"], "abstained")
+        self.assertIn("negative_feedback_evaporated", rerun["associative_path_fallback"]["reason_codes"])
 
     def test_register_thread_requires_explicit_write_shape(self) -> None:
         with mock.patch.object(mcp_handlers.registry, "register_current_thread") as register:

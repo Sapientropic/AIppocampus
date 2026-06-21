@@ -241,5 +241,114 @@ class ForegroundIssueSweepTests(unittest.TestCase):
             any(action.get("surface") == "operator_detail" for action in payload["safe_next_actions"])
         )
 
+    def test_agent_json_status_prioritizes_measured_ambient_blockers_over_tool_review(self) -> None:
+        payload = agent_status_summary.compact_agent_status_report(
+            {
+                "ok": True,
+                "mode": "status",
+                "summary": {
+                    "core_ready": True,
+                    "agent_callable_ready": False,
+                    "agent_callable_host_ready": True,
+                    "agent_callable_current_thread_visible": False,
+                    "agent_callable_status": "host_live_probe_ok_foreground_probe_not_checked",
+                    "needs_action": [],
+                },
+                "surfaces": {
+                    "agent_callable": {
+                        "surface": "agent_callable",
+                        "ready": False,
+                        "status": "host_live_probe_ok_foreground_probe_not_checked",
+                        "next_command": "aippocampus update status --foreground-tools-visible --agent-json",
+                        "foreground_probe_state": "not_requested",
+                        "host_live_probe": {"ok": True},
+                    },
+                    "hooks": {
+                        "status": "current",
+                        "prompt_installed": True,
+                        "lifecycle_installed": True,
+                        "action_hints": {
+                            "installed": True,
+                            "cache_status": "with_missing_cache_file",
+                        },
+                        "prompt_hook_status": {
+                            "prompt_hook_latency_risk_status": "near_host_timeout_risk",
+                            "foreground_latency_red_line_violation_count": 1,
+                            "near_timeout_event_count": 2,
+                        },
+                        "warm_ambient": {
+                            "status": "blocked",
+                            "next_command": "aippocampus warm status --json",
+                            "job_activity": {
+                                "queue_state": "blocked_stale_pending",
+                                "stale_queue_blocked": True,
+                            },
+                        },
+                    },
+                    "llm": {"status": "missing_provider_env_var"},
+                },
+            },
+            schema_version=update_cli.SCHEMA_VERSION,
+        )
+
+        ordered_surfaces = [
+            payload["foreground_action"].get("surface"),
+            *[action.get("surface") for action in payload["safe_next_actions"]],
+        ]
+        self.assertEqual(payload["foreground_action"]["surface"], "prompt_hook_latency")
+        self.assertEqual(
+            ordered_surfaces[:5],
+            [
+                "prompt_hook_latency",
+                "warm_ambient",
+                "provider",
+                "action_hints",
+                "agent_callable",
+            ],
+        )
+        self.assertEqual(
+            payload["ambient_recall"]["next_command"],
+            "aippocampus hooks prompt status --last --json",
+        )
+
+    def test_agent_json_status_keeps_true_foreground_tool_failure_first(self) -> None:
+        payload = agent_status_summary.compact_agent_status_report(
+            {
+                "ok": True,
+                "mode": "status",
+                "summary": {
+                    "core_ready": True,
+                    "agent_callable_ready": False,
+                    "agent_callable_host_ready": True,
+                    "agent_callable_current_thread_visible": False,
+                    "agent_callable_status": "foreground_mcp_runtime_mismatch",
+                    "needs_action": [],
+                },
+                "surfaces": {
+                    "agent_callable": {
+                        "surface": "agent_callable",
+                        "ready": False,
+                        "status": "foreground_mcp_runtime_mismatch",
+                        "next_command": "aippocampus agent recall \"old decision\" --json",
+                        "foreground_probe_state": "failed",
+                        "host_live_probe": {"ok": True},
+                    },
+                    "hooks": {
+                        "status": "current",
+                        "prompt_installed": True,
+                        "prompt_hook_status": {
+                            "prompt_hook_latency_risk_status": "near_host_timeout_risk",
+                            "foreground_latency_red_line_violation_count": 1,
+                        },
+                    },
+                },
+            },
+            schema_version=update_cli.SCHEMA_VERSION,
+        )
+
+        self.assertEqual(payload["foreground_action"]["surface"], "agent_callable")
+        self.assertEqual(payload["foreground_action"]["status_code"], "foreground_mcp_runtime_mismatch")
+        self.assertEqual(payload["safe_next_actions"][0]["surface"], "prompt_hook_latency")
+
 if __name__ == "__main__":
     unittest.main()

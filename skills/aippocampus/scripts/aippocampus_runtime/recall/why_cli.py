@@ -240,15 +240,19 @@ def _recovery_payload(mode: str) -> dict[str, Any]:
             claim_boundary="diagnostic_not_source_evidence",
             why="Use when you have the cue whose recall behavior needs explanation.",
         ),
-        foreground_shell_action(
+        foreground_template_action(
             action_id="deepen_selected_route",
             label="Deepen selected route after recall",
-            command="aippocampus agent deepen --request 1 --last-recall --json",
+            command_template=(
+                "aippocampus agent deepen --request {request_index} "
+                "--recall-selector {recall_selector} --json"
+            ),
+            requires=["request_index", "recall_selector"],
             mutation_risk="read_only",
             claim_boundary="no_claim_before_reopen",
-            why="Use after recall has written a same-machine route request cache.",
+            why="Use the selector emitted by agent recall to reopen the selected source route.",
         )
-        | {"depends_on": "last_recall_cache"},
+        | {"depends_on": "recall_selector_from_agent_recall"},
     ]
     return {
         "kind": "aippocampus_recall_diagnostic_recovery",
@@ -272,9 +276,8 @@ def _recovery_payload(mode: str) -> dict[str, Any]:
 def _attach_foreground_actions(payload: dict[str, Any], *, cue: str) -> dict[str, Any]:
     cue_arg = _quoted(_cue_for_command(cue))
     recall_command = f"aippocampus agent recall {cue_arg} --json"
-    search_command = f"aippocampus search {cue_arg} --json"
+    search_command = f"aippocampus search --all {cue_arg} --json"
     onboard_command = "aippocampus onboard --provider auto --status --json"
-    deepen_command = "aippocampus agent deepen --request 1 --last-recall --json"
     next_safe = str(payload.get("next_safe_action") or "")
     decision = str(payload.get("decision") or "")
     diagnostic = str(payload.get("diagnostic_class") or "")
@@ -309,14 +312,21 @@ def _attach_foreground_actions(payload: dict[str, Any], *, cue: str) -> dict[str
         mutation_risk="read_only",
         claim_boundary="source_reopen_required_before_claim",
     )
-    deepen_action = foreground_shell_action(
+    deepen_action = foreground_template_action(
         action_id="deepen_after_recall",
         label="Deepen after recall",
-        command=deepen_command,
-        why="Routes already surfaced; inspect the selected route before using it.",
+        command_template=(
+            "aippocampus agent deepen --request {request_index} "
+            "--recall-selector {recall_selector} --json"
+        ),
+        requires=["request_index", "recall_selector"],
+        why=(
+            "Use the selector emitted by agent recall to inspect the selected route; "
+            "fallback is a fresh recall if no selector is available."
+        ),
         mutation_risk="read_only",
         claim_boundary="no_claim_before_reopen",
-    ) | {"depends_on": "last_recall_cache"}
+    ) | {"depends_on": "recall_selector_from_agent_recall"}
     if next_safe == "run_onboard_or_build_clean_source":
         primary = foreground_shell_action(
             action_id="check_onboarding_status",

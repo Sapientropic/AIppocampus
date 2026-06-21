@@ -29,6 +29,19 @@ class RecallNavigationPromotionTests(unittest.TestCase):
         self.assertEqual(prereg["deepen_budget_per_arm"], 5)
         self.assertIn("macro_navigation", report["feature_slots"])
         self.assertIn("attention_router", report["feature_slots"])
+        self.assertEqual(report["active_promotion_owner_issue"], "#2559")
+        self.assertEqual(
+            report["feature_slots"]["attention_router"]["promotion_issue"],
+            "#2559",
+        )
+        self.assertEqual(
+            report["feature_slots"]["attention_router"]["historical_promotion_issues"],
+            ["#1301"],
+        )
+        self.assertEqual(
+            report["feature_slots"]["macro_navigation"]["historical_promotion_issues"],
+            ["#1300"],
+        )
         self.assertEqual(
             report["feature_slots"]["attention_router"]["comparison_arm"],
             "attention_router_navigation_only",
@@ -58,6 +71,10 @@ class RecallNavigationPromotionTests(unittest.TestCase):
             )
         )
         self.assertIn("usefulness_gate_not_satisfied", report["promotion_blockers"])
+        self.assertEqual(
+            report["blocker_owner_issue_map"]["fixture_only_not_live_default_path"],
+            "#2559",
+        )
 
     def test_arm_rows_expose_attention_cost_and_wrong_route_metrics(self) -> None:
         report = recall_navigation_promotion.fixture_recall_navigation_promotion_report()
@@ -150,7 +167,8 @@ class RecallNavigationPromotionTests(unittest.TestCase):
         plus_deepen = case["arms"]["feature_plus_deepen"]
 
         self.assertTrue(readout["measured"])
-        self.assertEqual(readout["promotion_issue"], "#1300")
+        self.assertEqual(readout["promotion_issue"], "#2559")
+        self.assertEqual(readout["historical_promotion_issues"], ["#1300"])
         self.assertEqual(readout["status"], "fixture_candidate_not_promoted")
         self.assertEqual(readout["active_layer_order_delta_count"], 1)
         self.assertEqual(readout["hamming_fanout_delta_count"], 1)
@@ -182,6 +200,23 @@ class RecallNavigationPromotionTests(unittest.TestCase):
         payload = json.loads(proc.stdout)
         self.assertEqual(payload["kind"], "aippocampus_recall_navigation_promotion_harness")
         self.assertFalse(payload["default_adoption_allowed"])
+        self.assertEqual(payload["active_promotion_owner_issue"], "#2559")
+        self.assertEqual(
+            payload["macro_navigation_readout"]["promotion_issue"],
+            "#2559",
+        )
+        self.assertEqual(
+            payload["macro_navigation_readout"]["historical_promotion_issues"],
+            ["#1300"],
+        )
+        self.assertEqual(
+            payload["historical_promotion_issues"]["attention_router"],
+            ["#1301"],
+        )
+        self.assertEqual(
+            payload["blocker_owner_issue_map"]["fixture_only_not_live_default_path"],
+            "#2559",
+        )
         self.assertNotIn("cases", payload)
         self.assertNotIn("cases_by_id", payload)
 

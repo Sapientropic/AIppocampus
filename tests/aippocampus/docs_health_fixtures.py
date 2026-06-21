@@ -26,6 +26,17 @@ def write_origin_essays(repo: Path) -> None:
         encoding="utf-8",
     )
 
+
+def write_minimal_public_repo_shape(repo: Path) -> None:
+    (repo / "README.md").write_text("# Test\n", encoding="utf-8")
+    (repo / "skills" / "aippocampus").mkdir(parents=True)
+    (repo / ".gitignore").write_text(
+        ".aippocampus/\naippocampus-registry/\nthread-anchors.md\n",
+        encoding="utf-8",
+    )
+    write_origin_essays(repo)
+
+
 def write_development_status_pyproject(
     repo: Path,
     classifier: str = classifier_policy_guard.ALPHA_CLASSIFIER,

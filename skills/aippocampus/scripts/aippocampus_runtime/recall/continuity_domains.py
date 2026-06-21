@@ -38,15 +38,27 @@ from aippocampus_runtime.recall.authority import (
     action_grammar_for_level,
     trust_contract_for_level,
 )
+from aippocampus_runtime.recall.continuity_situation_glyphs import (
+    SITUATION_GLYPH_KIND as _SITUATION_GLYPH_KIND,
+)
+from aippocampus_runtime.recall.continuity_situation_glyphs import (
+    normalize_continuity_signal as _normalize_continuity_signal,
+)
+from aippocampus_runtime.recall.continuity_situation_glyphs import (
+    project_situation_glyph as _project_situation_glyph,
+)
 from aippocampus_runtime.recall.query_policy import split_query_terms
 from aippocampus_runtime.source.search import iter_clean_messages
+
+SITUATION_GLYPH_KIND = _SITUATION_GLYPH_KIND
+normalize_continuity_signal = _normalize_continuity_signal
+project_situation_glyph = _project_situation_glyph
 
 CONTINUITY_DOMAIN_SCHEMA_VERSION = 1
 CONTINUITY_DOMAIN_EVENT_KIND = "aippocampus_continuity_domain_event"
 CONTINUITY_DOMAIN_SNAPSHOT_KIND = "aippocampus_continuity_domains_snapshot"
 CONTINUITY_DOMAIN_POINTER_KIND = "continuity_domain_pointer"
 CONTINUITY_DOMAIN_DEEPEN_KIND = "aippocampus_continuity_domain_deepen"
-SITUATION_GLYPH_KIND = "aippocampus_situation_glyph"
 
 EVENT_LOG_FILENAME = "continuity-domain-events.jsonl"
 SNAPSHOT_DIR_NAME = "continuity-domain-snapshots"
@@ -97,27 +109,6 @@ REDACTION_MARKERS = (
     "<sensitive-value-redacted>",
     "<redacted:",
 )
-
-SIGNAL_PRODUCERS = {
-    "source_texture",
-    "dream",
-    "journey",
-    "hexagram",
-    "cognitive_map",
-    "navigation_potential",
-    "working_memory",
-    "continuity_domain",
-}
-SIGNAL_PRODUCER_BOUNDARIES = {
-    "dream": "dream_hypothesis_not_source_fact",
-    "hexagram": "hexagram_atmosphere_not_fact",
-    "cognitive_map": "cognitive_map_route_not_source_fact",
-    "journey": "journey_route_not_source_fact",
-    "source_texture": "texture_signal_not_source_fact",
-    "navigation_potential": "navigation_not_truth",
-    "working_memory": "working_memory_candidate_not_source_fact",
-    "continuity_domain": "domain_pointer_not_source_fact",
-}
 
 TEXT_FIELDS = (
     "title",
@@ -1156,135 +1147,3 @@ def domain_brief_for_deepen(
             },
         }
     return None
-
-
-def normalize_continuity_signal(row: Mapping[str, Any]) -> dict[str, Any] | None:
-    producer = _safe_text(row.get("producer") or row.get("source") or row.get("surface"), 80)
-    if producer not in SIGNAL_PRODUCERS:
-        return None
-    signal_kind = _safe_text(row.get("signal_kind") or row.get("kind") or producer, 100)
-    source_refs = safe_source_refs(row.get("source_refs") or row.get("event_refs"))
-    signal_id = _safe_text(row.get("signal_id"), 100) or _stable_id(
-        producer,
-        signal_kind,
-        row.get("signal_labels") or row.get("labels"),
-        source_refs,
-        prefix="sig",
-    )
-    signal = {
-        "signal_id": signal_id,
-        "producer": producer,
-        "signal_kind": signal_kind,
-        "signal_detail": _safe_text(row.get("signal_detail") or row.get("detail") or "", 220),
-        "signal_labels": _safe_list(row.get("signal_labels") or row.get("labels"), limit=12),
-        "source_refs": source_refs[:8],
-        "action_grammar": ACTION_DIRECTION_ONLY,
-        "trust_level": TRUST_SEMANTIC_HINT,
-        "memory_surface": "memory_atmosphere",
-        "foreground_eligible": False,
-        "truth_boundary": SIGNAL_PRODUCER_BOUNDARIES.get(producer, "signal_not_source_fact"),
-        "cannot_claim": [
-            "signal_is_fact",
-            "signal_can_support_exact_claim",
-            "signal_replaces_source_reopen",
-        ],
-    }
-    return redact_sensitive_values(redact_private_paths(signal))
-
-
-def _ordered_pathlet_fingerprint(pathlets: Sequence[Mapping[str, Any]]) -> str:
-    ordered = []
-    for pathlet in pathlets:
-        ordered.append(
-            [
-                pathlet.get("pathlet_id"),
-                [_ref_key(ref) for ref in pathlet.get("ordered_source_refs") or [] if isinstance(ref, Mapping)],
-            ]
-        )
-    return _stable_id(ordered, prefix="pathorder")
-
-
-def project_situation_glyph(
-    *,
-    signals: Sequence[Mapping[str, Any]],
-    pathlets: Sequence[Mapping[str, Any]] | None = None,
-    pinned_boundaries: Sequence[Mapping[str, Any]] | None = None,
-) -> dict[str, Any]:
-    normalized = [
-        signal
-        for row in signals
-        if isinstance(row, Mapping)
-        for signal in [normalize_continuity_signal(row)]
-        if signal is not None
-    ]
-    pathlet_rows = [dict(row) for row in pathlets or [] if isinstance(row, Mapping)]
-    boundary_rows = [dict(row) for row in pinned_boundaries or [] if isinstance(row, Mapping)]
-    blocking = [
-        row
-        for row in boundary_rows
-        if str(row.get("effect") or "") in HARD_BLOCKING_BOUNDARY_EFFECTS | {"redirect"}
-    ]
-    action = ACTION_IGNORE_OR_BLOCKED if blocking else ACTION_DIRECTION_ONLY
-    status = "redirected_by_boundary" if blocking else "ok"
-    labels = _safe_list(
-        [
-            label
-            for signal in normalized
-            for label in signal.get("signal_labels") or [signal.get("signal_kind")]
-        ],
-        limit=12,
-    )
-    path_order = _ordered_pathlet_fingerprint(pathlet_rows)
-    glyph_id = _stable_id(
-        [signal.get("signal_id") for signal in normalized],
-        path_order,
-        [
-            (boundary.get("pin_id"), boundary.get("effect"))
-            for boundary in boundary_rows
-        ],
-        prefix="glyph",
-    )
-    source_refs = _dedupe_refs(
-        [ref for signal in normalized for ref in signal.get("source_refs") or []],
-        limit=12,
-    )
-    glyph = {
-        "kind": SITUATION_GLYPH_KIND,
-        "schema_version": CONTINUITY_DOMAIN_SCHEMA_VERSION,
-        "glyph_id": glyph_id,
-        "status": status,
-        "action_grammar": action,
-        "trust_level": TRUST_IGNORE if blocking else TRUST_SEMANTIC_HINT,
-        "memory_surface": "memory_atmosphere",
-        "foreground_eligible": False,
-        "atmosphere_labels": labels,
-        "producer_counts": {
-            producer: sum(1 for signal in normalized if signal.get("producer") == producer)
-            for producer in sorted({str(signal.get("producer") or "") for signal in normalized})
-        },
-        "source_refs": source_refs,
-        "pathlet_ids": [row.get("pathlet_id") for row in pathlet_rows if row.get("pathlet_id")],
-        "boundary_redirects": [
-            {
-                "kind": row.get("kind") or row.get("boundary_kind"),
-                "effect": row.get("effect"),
-                "strength": row.get("strength"),
-            }
-            for row in blocking
-        ],
-        "truth_boundary": "situation_glyph_is_atmosphere_not_source_fact",
-        "cannot_claim": [
-            "glyph_is_fact",
-            "glyph_is_user_profile",
-            "glyph_predicts_future",
-            "glyph_overrides_clean_source",
-        ],
-        "diagnostics": {
-            "signal_count": len(normalized),
-            "pathlet_count": len(pathlet_rows),
-            "pathlet_order_fingerprint": path_order,
-            "pathlet_order_sensitive": True,
-            "pinned_boundary_count": len(boundary_rows),
-        },
-    }
-    return redact_sensitive_values(redact_private_paths(glyph))

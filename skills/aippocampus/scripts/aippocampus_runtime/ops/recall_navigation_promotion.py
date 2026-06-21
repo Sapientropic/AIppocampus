@@ -26,6 +26,12 @@ from aippocampus_runtime.recall.continuity_usefulness import continuity_usefulne
 
 PROMOTION_KIND = "aippocampus_recall_navigation_promotion_harness"
 PROMOTION_SCHEMA_VERSION = 1
+ACTIVE_PROMOTION_OWNER_ISSUE = "#2559"
+HISTORICAL_PROMOTION_ISSUES = {
+    "shared_harness": ["#1302", "#1185"],
+    "macro_navigation": ["#1300"],
+    "attention_router": ["#1301"],
+}
 ARM_BASELINE = "baseline_flat_recall"
 ARM_NAV_ONLY = "feature_navigation_only"
 ARM_PLUS_DEEPEN = "feature_plus_deepen"
@@ -584,6 +590,10 @@ def _promotion_blockers(
     return blockers
 
 
+def _blocker_owner_issue_map(blockers: Sequence[str]) -> dict[str, str]:
+    return {str(blocker): ACTIVE_PROMOTION_OWNER_ISSUE for blocker in blockers}
+
+
 def _neutral_noop(cases: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     case_ids = [
         str(case.get("case_id") or "")
@@ -647,6 +657,13 @@ def build_recall_navigation_promotion_report(
         "default_adoption_allowed": promotion_gate_ok,
         "promotion_decision": "promoted" if promotion_gate_ok else "not_promoted",
         "promotion_blockers": blockers,
+        "active_promotion_owner_issue": ACTIVE_PROMOTION_OWNER_ISSUE,
+        "historical_promotion_issues": HISTORICAL_PROMOTION_ISSUES,
+        "blocker_owner_issue_map": _blocker_owner_issue_map(blockers),
+        "promotion_owner_boundary": (
+            "#2559 owns the next default-promotion decision; #1300/#1301 are "
+            "historical feature evidence owners, not current default-adoption blockers."
+        ),
         "preregistration": {
             "arms": list(PROMOTION_ARMS),
             "same_source_corpus": True,
@@ -659,13 +676,15 @@ def build_recall_navigation_promotion_report(
         "feature_slots": {
             "attention_router": {
                 "status": "candidate",
-                "promotion_issue": "#1301",
+                "promotion_issue": ACTIVE_PROMOTION_OWNER_ISSUE,
+                "historical_promotion_issues": HISTORICAL_PROMOTION_ISSUES["attention_router"],
                 "uses_this_harness_before_default": True,
                 "comparison_arm": ARM_ATTENTION_NAV,
             },
             "macro_navigation": {
                 "status": "candidate",
-                "promotion_issue": "#1300",
+                "promotion_issue": ACTIVE_PROMOTION_OWNER_ISSUE,
+                "historical_promotion_issues": HISTORICAL_PROMOTION_ISSUES["macro_navigation"],
                 "uses_this_harness_before_default": True,
             },
         },

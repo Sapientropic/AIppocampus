@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import os
-import shutil
 import tempfile
 import unittest
 from contextlib import redirect_stdout
@@ -19,6 +18,7 @@ from tests.aippocampus.update_sync_fixtures import (
     aippocampus_hook_commands_by_event,
     append_direct_aippocampus_hook_duplicates,
     init_git_fixture,
+    plugin_update_scenario,
     provider_env,
     pushd,
     run_update,
@@ -1043,11 +1043,13 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertTrue(ambient["warm_queue"]["stale_queue_blocked"])
         self.assertTrue(ambient["warm_queue"]["ordinary_recall_usable"])
         self.assertTrue(ambient["provider"]["degraded"])
-        surfaces = {item.get("surface") for item in payload["safe_next_actions"]}
+        surfaces = {payload["foreground_action"].get("surface")} | {
+            item.get("surface") for item in payload["safe_next_actions"]
+        }
         self.assertIn("action_hints", surfaces)
         self.assertIn("prompt_hook_latency", surfaces)
         self.assertIn("warm_ambient", surfaces)
-        self.assertEqual(ambient["next_command"], "aippocampus hooks action status --json")
+        self.assertEqual(ambient["next_command"], "aippocampus hooks prompt status --last --json")
         self.assertNotIn(str(codex_home), raw)
         self.assertNotIn(str(registry), raw)
         self.assertNotIn(str(cache_path), raw)
@@ -1762,14 +1764,8 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertNotIn(fixture_value, json.dumps(report, ensure_ascii=False))
 
     def test_plugin_apply_rebuilds_staged_package_without_hook_or_cache_side_effects(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp, provider_env():
-            root = Path(tmp)
-            repo = root / "repo"
-            output = repo / "dist" / "aippocampus-plugin"
-            write_minimal_repo(repo)
-            plugin = repo / "plugins" / "aippocampus"
-            plugin.mkdir(parents=True)
-            shutil.copy2(REPO_ROOT / "plugins" / "aippocampus" / "build_plugin_package.py", plugin)
+        with plugin_update_scenario() as scenario:
+            plugin = scenario.write_current_source_plugin()
             (plugin / ".mcp.json").write_text(
                 json.dumps(
                     {
@@ -1783,7 +1779,7 @@ class UpdateSyncTests(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
-            (plugin / ".codex-plugin").mkdir()
+            (plugin / ".codex-plugin").mkdir(exist_ok=True)
             (plugin / ".codex-plugin" / "plugin.json").write_text(
                 json.dumps({"name": "aippocampus", "mcpServers": "./.mcp.json"}),
                 encoding="utf-8",
@@ -1798,52 +1794,49 @@ class UpdateSyncTests(unittest.TestCase):
                 "--surface",
                 "plugin",
                 "--repo-root",
-                str(repo),
+                str(scenario.repo),
                 "--plugin-output",
-                str(output),
+                str(scenario.plugin_output),
                 "--codex-home",
-                str(root / "codex-home"),
+                str(scenario.codex_home),
                 "--no-child-check",
             )
 
             self.assertEqual(code, 0, payload)
-            self.assertTrue((output / ".mcp.json").exists())
-            self.assertTrue((output / "skills" / "aippocampus" / "SKILL.md").exists())
-            self.assertFalse((output / ".pytest_cache").exists())
-            self.assertFalse((output / "plugin.egg-info").exists())
+            self.assertTrue((scenario.plugin_output / ".mcp.json").exists())
+            self.assertTrue(
+                (scenario.plugin_output / "skills" / "aippocampus" / "SKILL.md").exists()
+            )
+            self.assertFalse((scenario.plugin_output / ".pytest_cache").exists())
+            self.assertFalse((scenario.plugin_output / "plugin.egg-info").exists())
             self.assertFalse(payload["applied_surfaces"][0]["builder"]["hooks_auto_enabled"])
             self.assertTrue(payload["applied_surfaces"][0]["ok"])
             self.assertFalse(payload["applied_surfaces"][0]["cache_refresh"]["requested"])
 
     def test_plugin_apply_can_refresh_local_marketplace_and_installed_cache(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp, provider_env():
-            root = Path(tmp)
-            repo = root / "repo"
-            output = repo / "dist" / "aippocampus-plugin"
-            marketplace = root / "local-marketplace" / "aippocampus"
-            installed = root / "codex-home" / "plugins" / "cache" / "aippocampus-local" / "aippocampus" / "0.1.0"
-            write_minimal_repo(repo)
-            plugin = repo / "plugins" / "aippocampus"
-            plugin.mkdir(parents=True)
-            shutil.copy2(REPO_ROOT / "plugins" / "aippocampus" / "build_plugin_package.py", plugin)
-            write_plugin_package(plugin, version="0.2.0", include_skill=False)
+        with plugin_update_scenario() as scenario:
+            marketplace = scenario.root / "local-marketplace" / "aippocampus"
+            installed = scenario.write_installed_cache(
+                "0.1.0",
+                mcp_args=["-m", "aippocampus_runtime.mcp.server"],
+            )
+            scenario.write_current_source_plugin()
             write_plugin_package(marketplace, version="0.1.0")
-            write_plugin_package(installed, version="0.1.0", mcp_command="python3", mcp_args=["-m", "aippocampus_runtime.mcp.server"])
 
             code, payload = run_update(
                 "apply",
                 "--surface",
                 "plugin",
                 "--repo-root",
-                str(repo),
+                str(scenario.repo),
                 "--plugin-output",
-                str(output),
+                str(scenario.plugin_output),
                 "--plugin-marketplace-dir",
                 str(marketplace),
                 "--plugin-installed-dir",
                 str(installed),
                 "--codex-home",
-                str(root / "codex-home"),
+                str(scenario.codex_home),
                 "--no-child-check",
             )
 
@@ -1872,35 +1865,20 @@ class UpdateSyncTests(unittest.TestCase):
         )
 
     def test_all_local_refreshes_configured_local_marketplace_without_extra_flag(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp, provider_env():
-            root = Path(tmp)
-            repo = root / "repo"
-            output = repo / "dist" / "aippocampus-plugin"
-            codex_home = root / "codex-home"
-            marketplace_root = root / "local-marketplace"
-            marketplace_plugin = marketplace_root / "plugins" / "aippocampus"
-            write_minimal_repo(repo)
-            plugin = repo / "plugins" / "aippocampus"
-            plugin.mkdir(parents=True)
-            shutil.copy2(REPO_ROOT / "plugins" / "aippocampus" / "build_plugin_package.py", plugin)
-            write_plugin_package(plugin, version="0.2.0", include_skill=False)
-            write_plugin_package(marketplace_plugin, version="0.1.0")
-            codex_home.mkdir(parents=True)
-            (codex_home / "config.toml").write_text(
-                "[marketplaces.aippocampus-local]\n"
-                f"source = '{marketplace_root.as_posix()}'\n",
-                encoding="utf-8",
-            )
+        with plugin_update_scenario() as scenario:
+            marketplace_plugin = scenario.write_local_marketplace_plugin()
+            scenario.write_current_source_plugin()
+            scenario.configure_local_marketplace()
 
             code, payload = run_update(
                 "apply",
                 "--all-local",
                 "--repo-root",
-                str(repo),
+                str(scenario.repo),
                 "--plugin-output",
-                str(output),
+                str(scenario.plugin_output),
                 "--codex-home",
-                str(codex_home),
+                str(scenario.codex_home),
                 "--no-child-check",
             )
             plugin_result = next(
@@ -1918,39 +1896,26 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertIn("local_marketplace", plugin_result["cache_refresh"]["refreshed"])
 
     def test_all_local_resolves_relative_marketplace_source_from_codex_home(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp, provider_env():
-            root = Path(tmp)
-            repo = root / "repo"
-            output = repo / "dist" / "aippocampus-plugin"
-            codex_home = root / "codex-home"
-            cwd = root / "agent-cwd"
+        with plugin_update_scenario() as scenario:
+            cwd = scenario.root / "agent-cwd"
             relative_source = Path("relative-marketplace")
-            marketplace_plugin = codex_home / relative_source / "plugins" / "aippocampus"
+            marketplace_plugin = scenario.codex_home / relative_source / "plugins" / "aippocampus"
             stray_cwd_marketplace = cwd / relative_source
-            write_minimal_repo(repo)
             cwd.mkdir()
-            plugin = repo / "plugins" / "aippocampus"
-            plugin.mkdir(parents=True)
-            shutil.copy2(REPO_ROOT / "plugins" / "aippocampus" / "build_plugin_package.py", plugin)
-            write_plugin_package(plugin, version="0.2.0", include_skill=False)
+            scenario.write_current_source_plugin()
             write_plugin_package(marketplace_plugin, version="0.1.0")
-            codex_home.mkdir(parents=True, exist_ok=True)
-            (codex_home / "config.toml").write_text(
-                "[marketplaces.aippocampus-local]\n"
-                "source = 'relative-marketplace'\n",
-                encoding="utf-8",
-            )
+            scenario.configure_local_marketplace(relative_source)
 
             with pushd(cwd):
                 code, payload = run_update(
                     "apply",
                     "--all-local",
                     "--repo-root",
-                    str(repo),
+                    str(scenario.repo),
                     "--plugin-output",
-                    str(output),
+                    str(scenario.plugin_output),
                     "--codex-home",
-                    str(codex_home),
+                    str(scenario.codex_home),
                     "--no-child-check",
                 )
             plugin_result = next(
@@ -1972,33 +1937,23 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertIn("<redacted:local-path>", refreshed["target_path"])
 
     def test_plugin_apply_auto_reports_requested_when_multiple_cache_candidates_block_refresh(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp, provider_env():
-            root = Path(tmp)
-            repo = root / "repo"
-            output = repo / "dist" / "aippocampus-plugin"
-            cache_root = root / "codex-home" / "plugins" / "cache" / "aippocampus-local" / "aippocampus"
-            first = cache_root / "0.1.0"
-            second = cache_root / "0.1.1"
-            write_minimal_repo(repo)
-            plugin = repo / "plugins" / "aippocampus"
-            plugin.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(REPO_ROOT / "plugins" / "aippocampus" / "build_plugin_package.py", plugin)
-            write_plugin_package(plugin, version="0.2.0", include_skill=False)
-            write_plugin_package(first, version="0.1.0", mcp_command="python3")
-            write_plugin_package(second, version="0.1.1", mcp_command="python3")
+        with plugin_update_scenario() as scenario:
+            scenario.write_current_source_plugin()
+            scenario.write_installed_cache("0.1.0")
+            scenario.write_installed_cache("0.1.1")
 
             code, payload = run_update(
                 "apply",
                 "--surface",
                 "plugin",
                 "--repo-root",
-                str(repo),
+                str(scenario.repo),
                 "--plugin-output",
-                str(output),
+                str(scenario.plugin_output),
                 "--plugin-installed-dir",
                 "auto",
                 "--codex-home",
-                str(root / "codex-home"),
+                str(scenario.codex_home),
                 "--no-child-check",
             )
 
@@ -2015,21 +1970,10 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertIn("--plugin-installed-dir <path>", cache_refresh["manual_selection_command"])
 
     def test_apply_agent_json_reports_plugin_cache_failure_action(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp, provider_env():
-            root = Path(tmp)
-            repo = root / "repo"
-            output = repo / "dist" / "aippocampus-plugin"
-            codex_home = root / "codex-home"
-            cache_root = codex_home / "plugins" / "cache" / "aippocampus-local" / "aippocampus"
-            first = cache_root / "0.1.0"
-            second = cache_root / "0.1.1"
-            write_minimal_repo(repo)
-            plugin = repo / "plugins" / "aippocampus"
-            plugin.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(REPO_ROOT / "plugins" / "aippocampus" / "build_plugin_package.py", plugin)
-            write_plugin_package(plugin, version="0.2.0", include_skill=False)
-            write_plugin_package(first, version="0.1.0", mcp_command="python3")
-            write_plugin_package(second, version="0.1.1", mcp_command="python3")
+        with plugin_update_scenario() as scenario:
+            scenario.write_current_source_plugin()
+            scenario.write_installed_cache("0.1.0")
+            scenario.write_installed_cache("0.1.1")
             stdout = StringIO()
 
             with redirect_stdout(stdout):
@@ -2038,11 +1982,11 @@ class UpdateSyncTests(unittest.TestCase):
                         "apply",
                         "--all-local",
                         "--repo-root",
-                        str(repo),
+                        str(scenario.repo),
                         "--plugin-output",
-                        str(output),
+                        str(scenario.plugin_output),
                         "--codex-home",
-                        str(codex_home),
+                        str(scenario.codex_home),
                         "--no-child-check",
                         "--agent-json",
                     ]
@@ -2062,31 +2006,20 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertEqual(executable_command_violations(action), [])
 
     def test_all_local_refreshes_matching_version_among_multiple_cache_candidates(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp, provider_env():
-            root = Path(tmp)
-            repo = root / "repo"
-            output = repo / "dist" / "aippocampus-plugin"
-            codex_home = root / "codex-home"
-            cache_root = codex_home / "plugins" / "cache" / "aippocampus-local" / "aippocampus"
-            old_cache = cache_root / "0.1.0"
-            current_cache = cache_root / "0.2.0"
-            write_minimal_repo(repo)
-            plugin = repo / "plugins" / "aippocampus"
-            plugin.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(REPO_ROOT / "plugins" / "aippocampus" / "build_plugin_package.py", plugin)
-            write_plugin_package(plugin, version="0.2.0", include_skill=False)
-            write_plugin_package(old_cache, version="0.1.0", mcp_command="python3")
-            write_plugin_package(current_cache, version="0.2.0", mcp_command="python3")
+        with plugin_update_scenario() as scenario:
+            scenario.write_current_source_plugin()
+            scenario.write_installed_cache("0.1.0")
+            scenario.write_installed_cache("0.2.0")
 
             code, payload = run_update(
                 "apply",
                 "--all-local",
                 "--repo-root",
-                str(repo),
+                str(scenario.repo),
                 "--plugin-output",
-                str(output),
+                str(scenario.plugin_output),
                 "--codex-home",
-                str(codex_home),
+                str(scenario.codex_home),
                 "--no-child-check",
             )
 
@@ -2109,31 +2042,21 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertEqual(cache_refresh["installed_cache_status"], "current")
 
     def test_all_local_does_not_fail_when_multiple_cache_candidates_already_current(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp, provider_env():
-            root = Path(tmp)
-            repo = root / "repo"
-            output = repo / "dist" / "aippocampus-plugin"
-            codex_home = root / "codex-home"
-            cache_root = codex_home / "plugins" / "cache" / "aippocampus-local" / "aippocampus"
-            old_cache = cache_root / "0.1.0"
-            current_cache = cache_root / "0.2.0"
-            write_minimal_repo(repo)
-            plugin = repo / "plugins" / "aippocampus"
-            plugin.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(REPO_ROOT / "plugins" / "aippocampus" / "build_plugin_package.py", plugin)
-            write_plugin_package(plugin, version="0.2.0", include_skill=False)
-            write_plugin_package(old_cache, version="0.1.0", mcp_command="python3")
+        with plugin_update_scenario() as scenario:
+            current_cache = scenario.installed_cache("0.2.0")
+            scenario.write_current_source_plugin()
+            scenario.write_installed_cache("0.1.0")
 
             prep_code, prep_payload = run_update(
                 "apply",
                 "--surface",
                 "plugin",
                 "--repo-root",
-                str(repo),
+                str(scenario.repo),
                 "--plugin-output",
-                str(output),
+                str(scenario.plugin_output),
                 "--codex-home",
-                str(codex_home),
+                str(scenario.codex_home),
                 "--plugin-installed-dir",
                 str(current_cache),
                 "--no-child-check",
@@ -2144,11 +2067,11 @@ class UpdateSyncTests(unittest.TestCase):
                 "apply",
                 "--all-local",
                 "--repo-root",
-                str(repo),
+                str(scenario.repo),
                 "--plugin-output",
-                str(output),
+                str(scenario.plugin_output),
                 "--codex-home",
-                str(codex_home),
+                str(scenario.codex_home),
                 "--no-child-check",
             )
 
@@ -2172,30 +2095,22 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertEqual(cache_refresh["installed_cache_status"], "current")
 
     def test_plugin_apply_can_refresh_unique_installed_cache_with_auto(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp, provider_env():
-            root = Path(tmp)
-            repo = root / "repo"
-            output = repo / "dist" / "aippocampus-plugin"
-            installed = root / "codex-home" / "plugins" / "cache" / "aippocampus-local" / "aippocampus" / "0.1.0"
-            write_minimal_repo(repo)
-            plugin = repo / "plugins" / "aippocampus"
-            plugin.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(REPO_ROOT / "plugins" / "aippocampus" / "build_plugin_package.py", plugin)
-            write_plugin_package(plugin, version="0.2.0", include_skill=False)
-            write_plugin_package(installed, version="0.1.0", mcp_command="python3")
+        with plugin_update_scenario() as scenario:
+            installed = scenario.write_installed_cache("0.1.0")
+            scenario.write_current_source_plugin()
 
             code, payload = run_update(
                 "apply",
                 "--surface",
                 "plugin",
                 "--repo-root",
-                str(repo),
+                str(scenario.repo),
                 "--plugin-output",
-                str(output),
+                str(scenario.plugin_output),
                 "--plugin-installed-dir",
                 "auto",
                 "--codex-home",
-                str(root / "codex-home"),
+                str(scenario.codex_home),
                 "--no-child-check",
             )
 
@@ -2213,28 +2128,19 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertEqual(installed_manifest["version"], "0.2.0")
 
     def test_all_local_refreshes_unique_installed_plugin_cache_without_extra_flag(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp, provider_env():
-            root = Path(tmp)
-            repo = root / "repo"
-            output = repo / "dist" / "aippocampus-plugin"
-            codex_home = root / "codex-home"
-            installed = codex_home / "plugins" / "cache" / "aippocampus-local" / "aippocampus" / "0.1.0"
-            write_minimal_repo(repo)
-            plugin = repo / "plugins" / "aippocampus"
-            plugin.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(REPO_ROOT / "plugins" / "aippocampus" / "build_plugin_package.py", plugin)
-            write_plugin_package(plugin, version="0.2.0", include_skill=False)
-            write_plugin_package(installed, version="0.1.0", mcp_command="python3")
+        with plugin_update_scenario() as scenario:
+            installed = scenario.write_installed_cache("0.1.0")
+            scenario.write_current_source_plugin()
 
             code, payload = run_update(
                 "apply",
                 "--all-local",
                 "--repo-root",
-                str(repo),
+                str(scenario.repo),
                 "--plugin-output",
-                str(output),
+                str(scenario.plugin_output),
                 "--codex-home",
-                str(codex_home),
+                str(scenario.codex_home),
                 "--no-child-check",
             )
 
@@ -2255,16 +2161,8 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertEqual(installed_manifest["version"], "0.2.0")
 
     def test_all_local_agent_json_reports_host_reload_followup(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp, provider_env():
-            root = Path(tmp)
-            repo = root / "repo"
-            output = repo / "dist" / "aippocampus-plugin"
-            codex_home = root / "codex-home"
-            write_minimal_repo(repo)
-            plugin = repo / "plugins" / "aippocampus"
-            plugin.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(REPO_ROOT / "plugins" / "aippocampus" / "build_plugin_package.py", plugin)
-            write_plugin_package(plugin, version="0.2.0", include_skill=False)
+        with plugin_update_scenario() as scenario:
+            scenario.write_current_source_plugin()
             stdout = StringIO()
 
             with redirect_stdout(stdout):
@@ -2273,11 +2171,11 @@ class UpdateSyncTests(unittest.TestCase):
                         "apply",
                         "--all-local",
                         "--repo-root",
-                        str(repo),
+                        str(scenario.repo),
                         "--plugin-output",
-                        str(output),
+                        str(scenario.plugin_output),
                         "--codex-home",
-                        str(codex_home),
+                        str(scenario.codex_home),
                         "--no-child-check",
                         "--agent-json",
                     ]

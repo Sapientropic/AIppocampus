@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import tempfile
 from collections.abc import Iterator
 from contextlib import contextmanager, redirect_stdout
+from dataclasses import dataclass
 from io import StringIO
 from pathlib import Path
 
@@ -142,6 +144,92 @@ def write_plugin_package(
             "# AIppocampus fixture\n",
             encoding="utf-8",
         )
+
+@dataclass(frozen=True)
+class PluginUpdateScenario:
+    root: Path
+    repo: Path
+    codex_home: Path
+    plugin_output: Path
+
+    @property
+    def source_plugin(self) -> Path:
+        return self.repo / "plugins" / "aippocampus"
+
+    @property
+    def local_marketplace_root(self) -> Path:
+        return self.root / "local-marketplace"
+
+    @property
+    def local_marketplace_plugin(self) -> Path:
+        return self.local_marketplace_root / "plugins" / "aippocampus"
+
+    @property
+    def installed_cache_root(self) -> Path:
+        return (
+            self.codex_home
+            / "plugins"
+            / "cache"
+            / "aippocampus-local"
+            / "aippocampus"
+        )
+
+    def installed_cache(self, version: str) -> Path:
+        return self.installed_cache_root / version
+
+    def write_current_source_plugin(self, *, version: str = "0.2.0") -> Path:
+        self.source_plugin.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(
+            REPO_ROOT / "plugins" / "aippocampus" / "build_plugin_package.py",
+            self.source_plugin,
+        )
+        write_plugin_package(self.source_plugin, version=version, include_skill=False)
+        return self.source_plugin
+
+    def write_installed_cache(
+        self,
+        version: str,
+        *,
+        mcp_command: str = "python3",
+        mcp_args: list[str] | None = None,
+    ) -> Path:
+        cache = self.installed_cache(version)
+        write_plugin_package(
+            cache,
+            version=version,
+            mcp_command=mcp_command,
+            mcp_args=mcp_args,
+        )
+        return cache
+
+    def write_local_marketplace_plugin(self, version: str = "0.1.0") -> Path:
+        write_plugin_package(self.local_marketplace_plugin, version=version)
+        return self.local_marketplace_plugin
+
+    def configure_local_marketplace(self, source: str | Path | None = None) -> None:
+        self.codex_home.mkdir(parents=True, exist_ok=True)
+        source_text = (
+            source.as_posix()
+            if isinstance(source, Path)
+            else str(source or self.local_marketplace_root.as_posix())
+        )
+        (self.codex_home / "config.toml").write_text(
+            "[marketplaces.aippocampus-local]\n"
+            f"source = '{source_text}'\n",
+            encoding="utf-8",
+        )
+
+@contextmanager
+def plugin_update_scenario() -> Iterator[PluginUpdateScenario]:
+    with update_workspace() as root:
+        scenario = PluginUpdateScenario(
+            root=root,
+            repo=root / "repo",
+            codex_home=root / "codex-home",
+            plugin_output=root / "repo" / "dist" / "aippocampus-plugin",
+        )
+        write_minimal_repo(scenario.repo)
+        yield scenario
 
 def aippocampus_hook_commands_by_event(hooks_path: Path) -> dict[str, list[str]]:
     data = json.loads(hooks_path.read_text(encoding="utf-8"))
