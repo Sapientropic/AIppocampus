@@ -13,6 +13,7 @@ import _paths
 _paths.ensure_paths()
 
 from aippocampus_runtime.core import now_utc
+from aippocampus_runtime.recall import associative_path_fallback
 from aippocampus_runtime.recall.associative_path_inputs import build_associative_path_diagnostic
 from aippocampus_runtime.recall.associative_path_walker import walk_associative_paths
 
@@ -273,6 +274,10 @@ def evaluate_path_walker_gate(
         manual_search_before_apw = bool(expectation.get("manual_search_before_apw"))
         expected_decision = str(expectation.get("expected_decision") or report["decision"])
         decision_ok = report["decision"] == expected_decision
+        source_free_scent = bool(
+            "source_free_path_evaporated" in report.get("reason_codes", [])
+            or "source_free_candidates_will_evaporate" in diagnostic.get("reason_codes", [])
+        )
         rows.append(
             {
                 "case_id": str(case.get("case_id") or ""),
@@ -292,6 +297,10 @@ def evaluate_path_walker_gate(
                 "source_reopen_success": source_reopen_success,
                 "manual_search_before_apw": manual_search_before_apw,
                 "irrelevant_drag": bool(route_count and not expectation.get("useful_route")),
+                "source_free_scent": source_free_scent,
+                "source_free_scent_projected": bool(
+                    source_free_scent and (route_count or apw_action_emitted)
+                ),
                 "unsupported_cue_abstain": bool(
                     not route_count and not expectation.get("useful_route")
                 ),
@@ -326,6 +335,44 @@ def evaluate_path_walker_gate(
     ok = all(value == 0 for value in red_lines.values()) and all(
         row["task_usefulness_ok"] and row["decision_ok"] for row in rows
     )
+    promotion_observed = {
+        "wrong_hop_drag_count": red_lines["wrong_hop_drag_count"],
+        "irrelevant_drag_count": sum(1 for row in rows if row["irrelevant_drag"]),
+        "source_free_scent_projected_count": sum(
+            1 for row in rows if row["source_free_scent_projected"]
+        ),
+        "manual_search_before_apw_count": sum(1 for row in rows if row["manual_search_before_apw"]),
+        "route_count_without_executable_action_count": warnings[
+            "route_count_without_executable_action_count"
+        ],
+        "action_without_source_reopen_success_count": warnings[
+            "action_without_source_reopen_success_count"
+        ],
+        "decision_mismatch_count": warnings["decision_mismatch_count"],
+        "default_ranking_influence_count": red_lines["default_ranking_influence_count"],
+        "scope_violation_count": red_lines["scope_violation_count"],
+    }
+    promotion_thresholds = {
+        "wrong_hop_drag_count": 0,
+        "irrelevant_drag_count": 0,
+        "source_free_scent_projected_count": 0,
+        "manual_search_before_apw_count": 0,
+        "route_count_without_executable_action_count": 0,
+        "action_without_source_reopen_success_count": 0,
+        "decision_mismatch_count": 0,
+        "default_ranking_influence_count": 0,
+        "scope_violation_count": 0,
+    }
+    promotion_checklist = [
+        {
+            "metric": metric,
+            "observed": promotion_observed[metric],
+            "threshold_max": threshold,
+            "passed": promotion_observed[metric] <= threshold,
+        }
+        for metric, threshold in promotion_thresholds.items()
+    ]
+    promotion_gate_ok = ok and all(row["passed"] for row in promotion_checklist)
     return {
         "kind": "aippocampus_associative_path_walker_quality_gate",
         "schema_version": SCHEMA_VERSION,
@@ -348,8 +395,38 @@ def evaluate_path_walker_gate(
             "manual_search_before_apw_count": sum(1 for row in rows if row["manual_search_before_apw"]),
             "wrong_hop_drag_count": red_lines["wrong_hop_drag_count"],
             "irrelevant_drag_count": sum(1 for row in rows if row["irrelevant_drag"]),
+            "source_free_scent_count": sum(1 for row in rows if row["source_free_scent"]),
+            "source_free_scent_projected_count": sum(
+                1 for row in rows if row["source_free_scent_projected"]
+            ),
             "unsupported_cue_abstain_count": sum(1 for row in rows if row["unsupported_cue_abstain"]),
             "scope_violation_count": red_lines["scope_violation_count"],
+        },
+        "promotion_gate": {
+            "ok": promotion_gate_ok,
+            "status": (
+                "passed_for_semi_default_recovery"
+                if promotion_gate_ok
+                else "blocked_for_semi_default_recovery"
+            ),
+            "allowed_build_posture": "semi_default_recovery",
+            "blocked_build_postures": ["default_ranking", "source_truth_claims_from_apw"],
+            "checklist": promotion_checklist,
+            "thresholds": promotion_thresholds,
+            "observed": promotion_observed,
+            "rollback_env": (
+                f"{associative_path_fallback.PROMOTION_MODE_ENV}="
+                f"{associative_path_fallback.MODE_OPT_IN}"
+            ),
+            "hard_off_env": (
+                f"{associative_path_fallback.PROMOTION_MODE_ENV}="
+                f"{associative_path_fallback.MODE_OFF}"
+            ),
+            "evidence_mode": "public_fixture_proxy_with_chinese_dogfood_cue",
+            "live_model_calls": 0,
+            "requires_live_history_before_default_ranking": True,
+            "semi_default_surface": "secondary_recovery_action_for_no_route_or_weak_recall",
+            "default_ranking_influence_allowed": False,
         },
         "warnings": warnings,
         "red_lines": red_lines,

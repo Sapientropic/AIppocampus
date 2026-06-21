@@ -7,17 +7,27 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 from aippocampus_runtime.contracts import executable_command_violations  # noqa: E402
-from aippocampus_runtime.recall import agent_continuity, agent_continuity_cli_support  # noqa: E402
+from aippocampus_runtime.recall import (  # noqa: E402
+    agent_continuity,
+    agent_continuity_cli_support,
+    associative_path_fallback,
+)
 
 
 class AgentRecallApwFallbackTests(unittest.TestCase):
     def setUp(self) -> None:
+        self.env_patch = patch.dict(
+            os.environ,
+            {associative_path_fallback.PROMOTION_MODE_ENV: "semi_default_recovery"},
+        )
+        self.env_patch.start()
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)
         self.clean = self.root / ".aippocampus" / "clean-source"
@@ -52,6 +62,7 @@ class AgentRecallApwFallbackTests(unittest.TestCase):
             )
 
     def tearDown(self) -> None:
+        self.env_patch.stop()
         self.tmp.cleanup()
 
     def _write_jsonl(self, name: str, rows: list[dict[str, object]]) -> None:
@@ -115,14 +126,56 @@ class AgentRecallApwFallbackTests(unittest.TestCase):
             associative_path_sidecar_dir=self.root / ".aippocampus",
         )
 
-    def test_apw_fallback_is_gated_off_by_default(self) -> None:
+    def test_semidefault_apw_recovery_runs_for_no_route_when_candidate_input_exists(self) -> None:
         self._write_apw_sidecars()
 
         payload = self._recall(include_apw=False)
 
         self.assertEqual(payload["status"], "no_routes")
+        policy = payload["associative_path_policy"]
+        self.assertEqual(policy["current_build_posture"], "semi_default_recovery")
+        self.assertTrue(policy["run_fallback"])
+        self.assertEqual(policy["run_reason"], "apw_semi_default_recovery")
+        fallback = payload["associative_path_fallback"]
+        self.assertIsInstance(fallback, dict)
+        self.assertEqual(fallback["status"], "route_candidate")
+        self.assertFalse(fallback["opt_in_required"])
+        self.assertFalse(fallback["applied_to_default_ranking"])
+        self.assertEqual(fallback["route_choice_posture"], "associative_path_semi_default_recovery")
+        self.assertEqual(len(payload["deepen_requests"]), 1)
+        self.assertTrue(payload["metrics"]["associative_path_fallback_semidefault_attempted"])
+
+    def test_semidefault_apw_recovery_stays_quiet_without_candidate_input(self) -> None:
+        payload = self._recall(include_apw=False)
+
+        self.assertEqual(payload["status"], "no_routes")
+        policy = payload["associative_path_policy"]
+        self.assertEqual(policy["current_build_posture"], "semi_default_recovery")
+        self.assertFalse(policy["apw_candidate_input_available"])
+        self.assertFalse(policy["run_fallback"])
+        self.assertEqual(policy["run_reason"], "apw_candidate_input_missing")
         self.assertIsNone(payload.get("associative_path_fallback"))
         self.assertEqual(payload["deepen_requests"], [])
+
+    def test_opt_in_policy_rolls_back_semidefault_recovery(self) -> None:
+        self._write_apw_sidecars()
+        with patch.dict(
+            os.environ,
+            {associative_path_fallback.PROMOTION_MODE_ENV: "opt_in"},
+        ):
+            default_payload = self._recall(include_apw=False)
+            opt_in_payload = self._recall(include_apw=True)
+
+        self.assertEqual(default_payload["associative_path_policy"]["promotion_mode"], "opt_in")
+        self.assertEqual(
+            default_payload["associative_path_policy"]["run_reason"],
+            "apw_fallback_requires_explicit_opt_in",
+        )
+        self.assertIsNone(default_payload.get("associative_path_fallback"))
+        fallback = opt_in_payload["associative_path_fallback"]
+        self.assertEqual(fallback["status"], "route_candidate")
+        self.assertTrue(fallback["opt_in_required"])
+        self.assertEqual(fallback["route_choice_posture"], "associative_path_opt_in_fallback")
 
     def test_opt_in_apw_fallback_becomes_request_index_source_reopen_action(self) -> None:
         self._write_apw_sidecars()
@@ -133,6 +186,7 @@ class AgentRecallApwFallbackTests(unittest.TestCase):
         fallback = payload["associative_path_fallback"]
         self.assertIsInstance(fallback, dict)
         self.assertEqual(fallback["status"], "route_candidate")
+        self.assertTrue(fallback["opt_in_required"])
         self.assertEqual(fallback["request_index"], 1)
         self.assertEqual(len(payload["deepen_requests"]), 1)
 
@@ -165,6 +219,8 @@ class AgentRecallApwFallbackTests(unittest.TestCase):
         self.assertEqual(public["foreground_action"]["arguments"]["recall_selector"], selector_id)
         self.assertIn("--recall-selector", public["foreground_action"]["command"])
         self.assertIn("associative_path_opt_in_fallback", public["foreground_action"]["route_choice_posture"])
+        self.assertEqual(public["associative_path_policy"]["current_build_posture"], "semi_default_recovery")
+        self.assertTrue(public["associative_path_fallback"]["opt_in_required"])
         self.assertIn("search_registry_sources_for_original_cue_anchors", encoded)
         self.assertNotIn("source_refs", encoded)
         self.assertNotIn("msg-apw", encoded)
@@ -201,6 +257,7 @@ class AgentRecallApwFallbackTests(unittest.TestCase):
         env = {
             **os.environ,
             agent_continuity.LAST_RECALL_CACHE_ENV: str(self.root / "cli-last-recall.json"),
+            associative_path_fallback.PROMOTION_MODE_ENV: "semi_default_recovery",
         }
 
         proc = subprocess.run(
@@ -237,6 +294,52 @@ class AgentRecallApwFallbackTests(unittest.TestCase):
         self.assertEqual(payload["foreground_action"]["id"], "deepen_associative_path_fallback")
         self.assertEqual(payload["associative_path_fallback"]["status"], "route_candidate")
         self.assertNotIn("source_refs", encoded)
+        self.assertEqual(executable_command_violations(payload), [])
+
+    def test_cli_semidefault_apw_fallback_returns_compact_action_without_flag(self) -> None:
+        self._write_apw_sidecars()
+        env = {
+            **os.environ,
+            agent_continuity.LAST_RECALL_CACHE_ENV: str(self.root / "cli-last-recall.json"),
+            associative_path_fallback.PROMOTION_MODE_ENV: "semi_default_recovery",
+        }
+
+        proc = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "aippocampus_runtime.cli.facade",
+                "agent",
+                "recall",
+                "黏菌 联想回忆 探索算法",
+                "--cwd",
+                str(self.root),
+                "--clean-source-dir",
+                str(self.clean),
+                "--registry-dir",
+                str(self.registry),
+                "--apw-sidecar-dir",
+                str(self.root / ".aippocampus"),
+                "--json",
+            ],
+            cwd=SCRIPTS,
+            env=env,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            check=False,
+        )
+
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        payload = json.loads(proc.stdout)
+        self.assertEqual(payload["foreground_action"]["id"], "deepen_associative_path_fallback")
+        self.assertEqual(
+            payload["foreground_action"]["route_choice_posture"],
+            "associative_path_semi_default_recovery",
+        )
+        self.assertEqual(payload["associative_path_policy"]["promotion_mode"], "semi_default_recovery")
+        self.assertFalse(payload["associative_path_fallback"]["opt_in_required"])
         self.assertEqual(executable_command_violations(payload), [])
 
     def test_source_free_apw_bridge_abstains_instead_of_emitting_fake_action(self) -> None:

@@ -280,6 +280,11 @@ def _compact_associative_path_fallback_card(value: Any) -> dict[str, Any] | None
             "status": value.get("status"),
             "decision": value.get("decision"),
             "ordinary_recall_status": value.get("ordinary_recall_status"),
+            "current_build_posture": value.get("current_build_posture"),
+            "policy_mode": value.get("policy_mode"),
+            "promotion_surface": value.get("promotion_surface"),
+            "promotion_gate": value.get("promotion_gate"),
+            "route_choice_posture": value.get("route_choice_posture"),
             "request_index": value.get("request_index"),
             "label": value.get("label"),
             "why_this_route": value.get("why_this_route"),
@@ -288,9 +293,39 @@ def _compact_associative_path_fallback_card(value: Any) -> dict[str, Any] | None
             "reason_codes": value.get("reason_codes"),
             "risk_flags": value.get("risk_flags"),
             "summary": value.get("summary"),
-            "opt_in_required": True,
+            "opt_in_required": value.get("opt_in_required"),
             "applied_to_default_ranking": False,
+            "rollback_env": value.get("rollback_env"),
+            "rollback_behavior": value.get("rollback_behavior"),
             "source_shape_guarded": value.get("source_shape_guarded"),
+            "source_reopen_required_before_claim": True,
+        }
+    )
+
+
+def _compact_associative_path_policy(value: Any) -> dict[str, Any] | None:
+    if not isinstance(value, Mapping):
+        return None
+    return _without_empty(
+        {
+            "kind": value.get("kind"),
+            "schema_version": value.get("schema_version"),
+            "current_build_posture": value.get("current_build_posture"),
+            "promotion_mode": value.get("promotion_mode"),
+            "promotion_surface": value.get("promotion_surface"),
+            "promotion_gate": value.get("promotion_gate"),
+            "explicit_requested": value.get("explicit_requested"),
+            "ordinary_recall_recovery_needed": value.get("ordinary_recall_recovery_needed"),
+            "apw_candidate_input_available": value.get("apw_candidate_input_available"),
+            "run_fallback": value.get("run_fallback"),
+            "run_reason": value.get("run_reason"),
+            "opt_in_required_for_this_run": value.get("opt_in_required_for_this_run"),
+            "applied_to_default_ranking": False,
+            "default_ranking_influence_allowed": False,
+            "default_mode_allowed": False,
+            "rollback_env": value.get("rollback_env"),
+            "hard_off_env": value.get("hard_off_env"),
+            "rollback_behavior": value.get("rollback_behavior"),
             "source_reopen_required_before_claim": True,
         }
     )
@@ -318,7 +353,9 @@ def _associative_path_fallback_action(
         or "APW found a source-ref-backed fallback; reopen it before using it."
     )
     action["claim_boundary"] = "no_claim_before_reopen"
-    action["route_choice_posture"] = "associative_path_opt_in_fallback"
+    action["route_choice_posture"] = str(
+        card.get("route_choice_posture") or "associative_path_opt_in_fallback"
+    )
     return action
 
 
@@ -523,6 +560,9 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
     associative_path_fallback = _compact_associative_path_fallback_card(
         payload.get("associative_path_fallback")
     )
+    associative_path_policy = _compact_associative_path_policy(
+        payload.get("associative_path_policy")
+    )
     associative_path_action = _associative_path_fallback_action(
         associative_path_fallback,
         recall_selector=recall_selector,
@@ -607,6 +647,7 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
         or None,
         "omitted_duplicate_route_labels": duplicate_omission_rows[:3] or None,
         "semantic_gate_diagnostics": semantic_compact,
+        "associative_path_policy": associative_path_policy,
         "associative_path_fallback": associative_path_fallback,
         "provider_key_bridge": payload.get("provider_key_bridge"),
         "claim_boundary": _compact_claim_boundary(

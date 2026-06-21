@@ -50,7 +50,7 @@ may retain detailed source trails and boundary fields.
 | Issue work guard | `useful_guard` | Prevents broad manual scaffolding before owner-route checks. | Navigation-only owner refs. | `tests/aippocampus/test_issue_work_guard.py` |
 | Foreground action cards | `useful_guard` | Copyable next action for agents. | Commands must be executable or explicit templates. | `executable_command_violations` checks |
 | MCP `agent_recall` / `agent_deepen` | `progressive_disclosure` | Host tool projection. | Compact default redacts private handles and local paths. | `tests/aippocampus/test_aippocampus_mcp_server_catalog.py` / `tests/aippocampus/test_aippocampus_mcp_server_recall.py` |
-| Associative Path Walker diagnostics | `progressive_disclosure` | Explicit `why-recall --apw-diagnostics` sidecar for associative route investigation. | Opt-in only; input packs are read-only navigation, positive feedback lifts only inside the same safe scope, source-shape guards run before fallback projection, and default recall ranking is unchanged. | `tests/aippocampus/test_associative_path_inputs.py` / `tests/aippocampus/test_associative_path_source_shape.py` |
+| Associative Path Walker diagnostics | `progressive_disclosure` | Explicit `why-recall --apw-diagnostics` sidecar plus a narrow `agent recall` recovery action for weak/no-route recall. | Current build posture is `semi_default_recovery`: APW may append one secondary source-reopen action only when ordinary recall is weak or silent and APW candidate sidecars exist. It is not default ranking. `AIPPOCAMPUS_APW_PROMOTION_MODE=opt_in` rolls back to explicit fallback; `off` suppresses recall fallback. | `tests/aippocampus/test_agent_recall_apw_fallback.py` / `tests/aippocampus/test_associative_path_inputs.py` / `tests/aippocampus/test_associative_path_source_shape.py` |
 | Hook affordances | `overblocking` risk | Tiny prompt-time ignition. | No raw source, local paths, or source refs in hook output. | hook affordance tests |
 | Background findings / observatory | `progressive_disclosure` | Reviewed navigation readouts. | Findings stay navigation-only until source is reopened. | foreground/output audit tests |
 
@@ -59,9 +59,10 @@ may retain detailed source trails and boundary fields.
 Two public-safe gates guard the foreground usability boundary:
 
 - `benchmark_associative_path_walker.py` checks the Associative Path Walker
-  opt-in proxy gate: source-reopenable bridge rescue, no generic wrong-hop
-  drag, no cross-scope positive-feedback lift, Chinese dogfood cue coverage,
-  and no default recall-ranking influence.
+  promotion gate: source-reopenable bridge rescue, no generic wrong-hop drag,
+  no projected source-free scent, no irrelevant drag, no manual-search-before-APW
+  fixture regression, no cross-scope positive-feedback lift, Chinese dogfood cue
+  coverage, and no default recall-ranking influence.
 - `benchmark_conversation_orientation_usefulness.py` checks that compact
   working orientation can beat safe-but-useless caveat output without source
   truth overclaim.
@@ -70,6 +71,29 @@ Score-fusion calibration also reports a public-safe retrieval quality slice in
 `live_score_fusion_quality`; that slice is measured, but it still cannot claim
 production, private-history, or broad live ranking lift without a separate
 dogfood/live run.
+
+## APW Recall Promotion Boundary
+
+APW is promoted only to `semi_default_recovery` in the current build. The
+default `agent recall` ranking path remains unchanged; APW can only append one
+secondary deepen request after ordinary recall is weak or silent and a
+navigation-potential or active-lock APW candidate sidecar exists. Missing
+candidate sidecars stay silent in compact foreground output.
+
+The recall payload exposes `associative_path_policy` with:
+
+- `current_build_posture`: `semi_default_recovery`, `opt_in`, or `off`;
+- `run_reason`: why APW did or did not run;
+- `rollback_env`: `AIPPOCAMPUS_APW_PROMOTION_MODE=opt_in`;
+- `applied_to_default_ranking = false`.
+
+The benchmark report exposes `promotion_gate`. Semi-default recovery is blocked
+when wrong-hop drag, irrelevant drag, projected source-free scent,
+manual-search-before-APW, route-without-action, action-without-source-reopen,
+decision mismatch, scope violation, or default-ranking influence exceed their
+listed thresholds. That gate permits only the recovery surface above. Default
+ranking or claim-authority promotion still requires separate live/private-history
+evidence and issue review.
 
 ## Task Orientation Packet Boundary
 

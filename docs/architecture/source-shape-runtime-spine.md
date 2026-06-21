@@ -11,6 +11,7 @@ recall pipeline or a new source of truth.
 Runtime owner:
 
 - `aippocampus_runtime.source_shape`
+- APW adapter: `aippocampus_runtime.recall.associative_path_source_shape`
 - Producer contract: `docs/architecture/parallel-derivation-compatibility.md`
 - Tests: `tests/aippocampus/test_source_shape_runtime.py` and the source-shape
   fixture in `tests/aippocampus/test_active_recall.py`
@@ -51,6 +52,13 @@ permission.
 
 Foreground recall may consume compact projection only. It can use source-shape
 pressure to decide what to reopen first, not what to say as fact.
+
+Associative Path Walker consumes this spine through its recall fallback adapter.
+Current recall posture is `semi_default_recovery`: APW can add one secondary
+source-reopen action for weak or silent recall when APW candidate sidecars are
+present, but it cannot change ordinary recall ranking or raise claim authority.
+`docs/architecture/recall/source-backed-product-discipline.md` owns the product
+promotion boundary and rollback mode.
 
 Explicit explain/deepen may inspect diagnostics and temporal semantics, then
 reopen source or run the relevant producer again.
