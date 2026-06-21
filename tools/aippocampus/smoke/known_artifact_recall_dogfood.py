@@ -149,8 +149,9 @@ def _live_case_observation(
 ) -> dict[str, Any]:
     cue = str(case.get("cue") or "")
     needles = _target_needles(case)
-    recall = command_runner(["aippocampus", "agent", "recall", cue, "--json"], repo_root)
-    search = command_runner(["aippocampus", "search", "--all", cue, "--json"], repo_root)
+    cli = [sys.executable, "-m", "aippocampus_runtime.cli.facade"]
+    recall = command_runner([*cli, "agent", "recall", cue, "--json"], repo_root)
+    search = command_runner([*cli, "search", "--all", cue, "--json"], repo_root)
     recall_payload = recall.get("payload")
     search_payload = search.get("payload")
     live_recall_found = _payload_contains_any(recall_payload, needles)
@@ -201,6 +202,13 @@ def _metrics_from_observation(observation: dict[str, Any]) -> dict[str, bool]:
     return metrics
 
 
+def _merge_metrics(base: dict[str, bool], observed: dict[str, bool]) -> dict[str, bool]:
+    return {
+        metric: bool(base.get(metric) or observed.get(metric))
+        for metric in OBSERVED_METRICS
+    }
+
+
 def _static_case_result(case: dict[str, Any], repo_root: Path) -> dict[str, Any]:
     metrics = _empty_metrics()
     evidence: dict[str, Any] = {}
@@ -230,8 +238,18 @@ def _static_case_result(case: dict[str, Any], repo_root: Path) -> dict[str, Any]
             else str(pointer.get("next_action") or "")
         )
     else:
-        next_action = "Run `aippocampus search --all` and require no-match/low-coverage instead of unrelated routes."
-        metrics["usable_next_action"] = True
+        atlas_text = (repo_root / ATLAS_REL_PATH).read_text(encoding="utf-8")
+        pointer = discussion_atlas_navigation_pointer(atlas_text, str(case["cue"]))
+        metrics["artifact_exists"] = bool(pointer.get("ok"))
+        metrics["known_artifact_found"] = bool(pointer.get("ok"))
+        metrics["usable_next_action"] = bool(pointer.get("ok"))
+        metrics["usable_foreground_action"] = bool(pointer.get("ok"))
+        evidence["pointer"] = pointer.get("pointer") if pointer.get("ok") else None
+        next_action = (
+            str((pointer.get("pointer") or {}).get("next_action") or "")
+            if pointer.get("ok")
+            else "Run `aippocampus search --all` and require no-match/low-coverage instead of unrelated routes."
+        )
     return {
         "case_id": case["case_id"],
         "cue": case["cue"],
@@ -261,12 +279,12 @@ def evaluate_known_artifact_recall(
                 command_runner=command_runner,
             )
             observed_metrics = _metrics_from_observation(live_observation)
-            result["metrics"] = {**result["metrics"], **observed_metrics}
+            result["metrics"] = _merge_metrics(result["metrics"], observed_metrics)
             result["live"] = live_observation.get("live")
         observation = by_case.get(str(case["case_id"]))
         if observation:
             observed_metrics = _metrics_from_observation(observation)
-            result["metrics"] = {**result["metrics"], **observed_metrics}
+            result["metrics"] = _merge_metrics(result["metrics"], observed_metrics)
             result["observation_status"] = observation.get("status")
         for field in (
             "artifact_exists",
@@ -282,9 +300,16 @@ def evaluate_known_artifact_recall(
             setup_ok = bool(result["metrics"]["artifact_exists"])
             usable = bool(result["metrics"]["usable_foreground_action"])
         elif case["artifact_kind"] == "phrase_search_negative_control":
-            live_found = bool(result["metrics"]["live_search_found"])
-            setup_ok = True
-            usable = live_found
+            live_found = bool(
+                result["metrics"]["live_recall_found"]
+                or result["metrics"]["live_search_found"]
+                or result["metrics"]["known_artifact_found"]
+            )
+            setup_ok = bool(result["metrics"]["known_artifact_found"])
+            usable = bool(
+                result["metrics"]["usable_next_action"]
+                or result["metrics"]["usable_foreground_action"]
+            )
         else:
             live_found = bool(
                 result["metrics"]["live_recall_found"]

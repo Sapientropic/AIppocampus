@@ -235,10 +235,14 @@ vague and you need route help before choosing search terms.
 Workflows:
   exact phrase: aippocampus search "distinctive old wording"
   all sources:   aippocampus search --all "distinctive old wording" --json
-  last recall:   aippocampus search --from-last-recall "distinctive old wording" --json
+  recall route:  aippocampus search --from-last-recall --recall-selector <emitted-selector> "distinctive old wording" --json
   fuzzy cue:    aippocampus search "repo feature last month"
   agent JSON:   aippocampus search "project cue" --json
   vague route:  aippocampus agent recall "old decision about setup" --json
+
+After `agent recall`, prefer `--from-last-recall --recall-selector <id>` for
+stable same-recall source narrowing. Bare `--from-last-recall` is a mutable
+same-machine fallback for compatibility when the selector is unavailable.
 
 No match: the default search only checked the current resolved thread clean
 source. Refine the cue, use `--all` for registered sources, or run
@@ -263,13 +267,15 @@ the reopened source boundary.""",
     )
     add_registry_search_arguments(parser)
     parser.add_argument("--from-last-recall", action="store_true", help=(
-        "Search only the source candidates from the same-machine last agent recall."
+        "Search only source candidates from an agent recall route set; pair with "
+        "--recall-selector when available."
     ))
     parser.add_argument("--request", type=positive_int, default=None, help=(
         "With --from-last-recall, search one numbered recall route."
     ))
     parser.add_argument("--recall-selector", default=None, help=(
-        "With --from-last-recall, use an isolated recall selector snapshot."
+        "With --from-last-recall, use an isolated recall selector snapshot instead "
+        "of the mutable same-machine fallback cache."
     ))
     parser.add_argument("--last-recall-path", default=None, help=(
         "Local diagnostic override for the same-machine last-recall cache path."

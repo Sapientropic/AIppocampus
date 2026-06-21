@@ -428,7 +428,12 @@ class RecallWhyDiagnosticsTests(unittest.TestCase):
         self.assertIn("deepen selected route", why_help.stdout)
         self.assertIn("refine cue", why_not_help.stdout)
         self.assertIn('aippocampus why-recall "old decision about setup"', why_help.stdout)
-        self.assertIn('aippocampus agent deepen --request 1 --last-recall --json', why_help.stdout)
+        self.assertIn(
+            "aippocampus agent deepen --request 1 "
+            "--recall-selector <emitted-selector> --json",
+            why_help.stdout,
+        )
+        self.assertIn("fallback only: --last-recall", why_help.stdout)
         self.assertNotIn("--semantic-result-json", why_help.stdout)
         self.assertNotIn("--lock-path", why_help.stdout)
         self.assertNotIn("--registry-dir", why_help.stdout)

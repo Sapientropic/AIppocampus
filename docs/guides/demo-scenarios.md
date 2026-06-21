@@ -48,7 +48,7 @@ bounded context forward.
 3. Reopen the selected source:
 
    ```sh
-   aippocampus agent deepen --request 1 --last-recall --json
+   aippocampus agent deepen --request 1 --recall-selector <emitted-selector> --json
    ```
 
    Expected result: the response reports source-backed evidence for the selected

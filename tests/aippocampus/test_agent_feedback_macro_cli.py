@@ -50,13 +50,18 @@ class AgentFeedbackMacroCliTests(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stderr)
         self.assertIn("First useful loop:", proc.stdout)
         self.assertIn('aippocampus agent recall "old cue" --json', proc.stdout)
-        self.assertIn("aippocampus agent deepen --request 1 --last-recall --json", proc.stdout)
+        selector_deepen = (
+            "aippocampus agent deepen --request 1 "
+            "--recall-selector <emitted-selector> --json"
+        )
+        self.assertIn(selector_deepen, proc.stdout)
+        self.assertIn("follow the emitted deepen action", proc.stdout)
         self.assertLess(
             proc.stdout.index('aippocampus agent recall "old cue" --json'),
-            proc.stdout.index("aippocampus agent deepen --request 1 --last-recall --json"),
+            proc.stdout.index(selector_deepen),
         )
         self.assertLess(
-            proc.stdout.index("aippocampus agent deepen --request 1 --last-recall --json"),
+            proc.stdout.index(selector_deepen),
             proc.stdout.index('aippocampus agent background "task cue" --json'),
         )
         self.assertIn("aippocampus agent feedback <route_id>", proc.stdout)
@@ -230,8 +235,12 @@ class AgentFeedbackMacroCliTests(unittest.TestCase):
             self.assertNotIn('agent recall "old decision or handoff cue"', encoded)
             follow_up = payload["safe_next_actions"][0]
             self.assertEqual(follow_up["id"], f"{mode}_last_recall_request")
-            self.assertEqual(follow_up["requires"], ["last_recall_cache", "request_index"])
-            self.assertIn(f"agent {mode} --request {{request_index}} --last-recall", follow_up["command_template"])
+            self.assertEqual(follow_up["requires"], ["recall_selector", "request_index"])
+            self.assertIn(
+                f"agent {mode} --request {{request_index}} --recall-selector",
+                follow_up["command_template"],
+            )
+            self.assertIn("--last-recall", follow_up["last_recall_fallback_command_template"])
 
     def test_cli_agent_macro_help_is_task_first(self) -> None:
         proc = self.run_agent("macro", "--help")

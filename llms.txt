@@ -35,7 +35,7 @@ the plugin or hooks when needed, then pull and deepen a source-backed route:
 ```sh
 uvx aippocampus start --json
 uvx aippocampus agent recall "the old decision or handoff to continue" --json
-uvx aippocampus agent deepen --request 1 --last-recall --json
+uvx aippocampus agent deepen --request 1 --recall-selector <emitted-selector> --json
 ```
 
 Use the recall result as a route. Reopen/deepen source before exact wording,

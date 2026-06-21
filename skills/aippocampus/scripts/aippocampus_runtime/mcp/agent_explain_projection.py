@@ -64,17 +64,35 @@ def _deepen_action(
                 f"aippocampus agent deepen --request {request_index} "
                 f"--recall-selector {shell_quote(selector)} --json"
             )
+            return {
+                "id": "deepen_selected_route",
+                "tool_name": "agent_deepen",
+                "arguments": arguments,
+                "command": command,
+                "mutation_risk": "read_only",
+                "claim_boundary": "no_claim_before_reopen",
+            }
         else:
-            arguments["last_recall"] = True
-            command = f"aippocampus agent deepen --request {request_index} --last-recall --json"
-        return {
-            "id": "deepen_selected_route",
-            "tool_name": "agent_deepen",
-            "arguments": arguments,
-            "command": command,
-            "mutation_risk": "read_only",
-            "claim_boundary": "no_claim_before_reopen",
-        }
+            return {
+                "id": "deepen_selected_route",
+                "tool_name": "agent_deepen",
+                "arguments": arguments,
+                "command_template": (
+                    "aippocampus agent deepen --request {request_index} "
+                    "--recall-selector {recall_selector} --json"
+                ),
+                "requires": ["request_index", "recall_selector"],
+                "template_only": True,
+                "last_recall_fallback_command": (
+                    f"aippocampus agent deepen --request {request_index} --last-recall --json"
+                ),
+                "last_recall_fallback_boundary": (
+                    "--last-recall reads a mutable same-machine cache; use only when "
+                    "the recall_selector emitted by the same recall is unavailable."
+                ),
+                "mutation_risk": "read_only",
+                "claim_boundary": "no_claim_before_reopen",
+            }
     return {
         "id": "select_route_from_fresh_recall",
         "tool_name": "agent_recall",

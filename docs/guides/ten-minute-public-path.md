@@ -30,7 +30,7 @@ If local source is already registered, try the source-backed route:
 
 ```sh
 uvx aippocampus agent recall "old decision or handoff cue" --json
-uvx aippocampus agent deepen --request 1 --last-recall --json
+uvx aippocampus agent deepen --request 1 --recall-selector <emitted-selector> --json
 ```
 
 Use exact search when the user remembers wording or the recall route is blocked:
@@ -77,7 +77,7 @@ After registration, ask for one route again:
 
 ```sh
 uvx aippocampus agent recall "old decision or handoff cue" --json
-uvx aippocampus agent deepen --request 1 --last-recall --json
+uvx aippocampus agent deepen --request 1 --recall-selector <emitted-selector> --json
 ```
 
 Do not add export or sync to the first-use path. Use those only after a

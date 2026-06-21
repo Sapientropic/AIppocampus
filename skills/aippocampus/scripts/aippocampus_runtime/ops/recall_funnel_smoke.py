@@ -332,7 +332,7 @@ def main(argv: list[str] | None = None) -> int:
             "Try:\n"
             "  aippocampus smoke recall-funnel \"old cue\" --json\n"
             "  aippocampus agent recall \"old cue\" --json\n"
-            "  aippocampus agent deepen --request 1 --last-recall --json"
+            "  aippocampus agent deepen --request 1 --recall-selector <emitted-selector> --json"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
         help="Run recall_context -> first reopenable recall_deepen route as a diagnostic.",

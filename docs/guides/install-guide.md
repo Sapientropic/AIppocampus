@@ -37,7 +37,7 @@ After verify, show the first useful route:
 
 ```sh
 aippocampus agent recall "old decision or handoff cue" --json
-aippocampus agent deepen --request 1 --last-recall --json
+aippocampus agent deepen --request 1 --recall-selector <emitted-selector> --json
 ```
 
 Use exact search when the user remembers wording or the route is blocked. From
@@ -132,7 +132,7 @@ setup:
 
 ```sh
 uvx aippocampus agent recall "old decision or handoff cue" --json
-uvx aippocampus agent deepen --request 1 --last-recall --json
+uvx aippocampus agent deepen --request 1 --recall-selector <emitted-selector> --json
 uvx aippocampus search "a distinctive old phrase"
 ```
 
@@ -165,7 +165,7 @@ uvx aippocampus onboard --provider claude-code --cwd . --json
 uvx aippocampus import conversation --format generic-jsonl --input ./conversation.jsonl --dry-run --json
 uvx aippocampus import conversation --format generic-jsonl --input ./conversation.jsonl --json
 uvx aippocampus agent recall "old decision or handoff cue" --json
-uvx aippocampus agent deepen --request 1 --last-recall --json
+uvx aippocampus agent deepen --request 1 --recall-selector <emitted-selector> --json
 uvx aippocampus export --json
 uvx aippocampus sync --json
 ```
@@ -585,7 +585,7 @@ aippocampus onboard --provider claude-code --cwd . --json
 aippocampus import conversation --format generic-jsonl --input ./conversation.jsonl --dry-run --json
 aippocampus import conversation --format generic-jsonl --input ./conversation.jsonl --json
 aippocampus agent recall "old decision or handoff cue" --json
-aippocampus agent deepen --request 1 --last-recall --json
+aippocampus agent deepen --request 1 --recall-selector <emitted-selector> --json
 ```
 
 Replace `./conversation.jsonl` with the user-selected export. Use `--dry-run`

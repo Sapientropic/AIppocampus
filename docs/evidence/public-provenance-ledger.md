@@ -84,7 +84,7 @@ Exact search remains the fallback when the user remembers wording:
 
 ```sh
 uvx aippocampus agent recall "a continuity-sensitive cue" --json
-uvx aippocampus agent deepen --request 1 --last-recall --json
+uvx aippocampus agent deepen --request 1 --recall-selector <emitted-selector> --json
 uvx aippocampus search "a distinctive old phrase"
 ```
 
@@ -100,7 +100,7 @@ After explicit consent to register selected local history:
 uvx aippocampus onboard --provider codex --status --json
 # Then follow the explicit write recommendation after consent.
 uvx aippocampus agent recall "a continuity-sensitive cue" --json
-uvx aippocampus agent deepen --request 1 --last-recall --json
+uvx aippocampus agent deepen --request 1 --recall-selector <emitted-selector> --json
 uvx aippocampus mcp status
 uvx aippocampus mcp list-tools --json
 ```

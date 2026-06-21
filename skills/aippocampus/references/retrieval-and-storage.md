@@ -7,7 +7,7 @@ details here instead of expanding `SKILL.md`.
 
 ```bash
 aippocampus agent recall "old decision or handoff cue" --json
-aippocampus agent deepen --request 1 --last-recall --json
+aippocampus agent deepen --request 1 --recall-selector <emitted-selector> --json
 aippocampus vault sync --json
 ```
 
@@ -16,6 +16,20 @@ human-readable memory vault and dashboard under `AIPPOCAMPUS_VAULT` or
 `~/AIppocampus Memory`; see [Vault And Dashboard](#vault-and-dashboard).
 Foreground agents can also leave a short current-thread margin note; see
 [Agent Self-Notes](#agent-self-notes).
+
+### Selector-Safe Deepen Vs Last-Recall Fallback
+
+`agent recall` writes a selector-safe snapshot and emits a `recall_selector`.
+Foreground agents should follow the emitted deepen action, usually:
+
+```bash
+aippocampus agent deepen --request 1 --recall-selector <emitted-selector> --json
+```
+
+`--last-recall` is still accepted for same-machine compatibility and local
+recovery, but it reads a mutable cache. Do not teach it as the ordinary path in
+frontstage docs, help cards, MCP readiness, or compact recall output when a
+selector-safe action can be emitted.
 
 Source-backed boundary: route hints, summaries, maps, self-notes, and generated
 sidecars help choose where to look. Exact wording, sensitive facts, stale

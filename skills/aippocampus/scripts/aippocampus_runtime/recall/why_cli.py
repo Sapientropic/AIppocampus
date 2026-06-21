@@ -117,7 +117,7 @@ def render_text(payload: Mapping[str, Any]) -> str:
         if "then deepen route 1" in next_command:
             next_command = next_command.replace(
                 "then deepen route 1",
-                "then aippocampus agent deepen --request 1 --last-recall --json",
+                "then follow the emitted selector-safe deepen action",
             )
     lines = [
         f"AIppocampus {mode}",
@@ -212,7 +212,8 @@ def render_compact_help(mode: str) -> str:
             "Useful shapes:",
             f"  {example}",
             '  aippocampus agent recall "old cue" --json',
-            "  aippocampus agent deepen --request 1 --last-recall --json",
+            "  aippocampus agent deepen --request 1 --recall-selector <emitted-selector> --json",
+            "  fallback only: --last-recall reads a mutable same-machine cache",
             "  primary next action: deepen selected route before claims, or refine cue if no route surfaced.",
             "",
             "When to use it:",

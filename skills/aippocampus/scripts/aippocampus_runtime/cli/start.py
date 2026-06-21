@@ -294,11 +294,18 @@ def _start_actions(cwd: Path, state: dict[str, Any], cue: str = "") -> tuple[str
                 if cue
                 else []
             ),
-            foreground_shell_action(
+            _template_action(
                 action_id="deepen_selected_route",
                 label="Deepen selected route",
-                command="aippocampus agent deepen --request 1 --last-recall --json",
-                why="Use after a recall card exposes a request-index route.",
+                command_template=(
+                    "aippocampus agent deepen --request {request_index} "
+                    "--recall-selector {recall_selector} --json"
+                ),
+                requires=["request_index", "recall_selector"],
+                why=(
+                    "Use after a recall card exposes a request-index route and recall_selector; "
+                    "--last-recall is only a mutable-cache compatibility fallback."
+                ),
             ),
             *_carry_actions(),
         ]

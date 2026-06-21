@@ -11,7 +11,10 @@ from unittest.mock import patch
 
 from aippocampus_runtime.contracts import foreground_action_contract_violations
 from aippocampus_runtime.recall import agent_continuity
-from aippocampus_runtime.recall.agent_recall_cache import write_last_recall_cache
+from aippocampus_runtime.recall.agent_recall_cache import (
+    write_last_recall_cache,
+    write_recall_selector_snapshot,
+)
 from aippocampus_runtime.recall.continuity_domains import clean_source_fingerprint
 from aippocampus_runtime.registry import api as registry
 from aippocampus_runtime.source import search
@@ -146,12 +149,16 @@ class LastRecallSourceSearchTests(unittest.TestCase):
                 },
             ]
         )
+        selector = write_recall_selector_snapshot(cache_path)
+        self.assertIsNotNone(selector)
 
         stdout = io.StringIO()
         with contextlib.redirect_stdout(stdout):
             code = search.main(
                 [
                     "--from-last-recall",
+                    "--recall-selector",
+                    str(selector),
                     "last recall exact phrase",
                     "--cwd",
                     str(self.cwd),
@@ -170,7 +177,13 @@ class LastRecallSourceSearchTests(unittest.TestCase):
         self.assertEqual({match["request_index"] for match in payload["matches"]}, {1, 2})
         self.assertEqual(
             payload["foreground_action"]["command"],
-            "aippocampus agent deepen --request 1 --last-recall --json",
+            f"aippocampus agent deepen --request 1 --recall-selector {selector} --json",
+        )
+        self.assertEqual(payload["foreground_action"]["arguments"]["recall_selector"], selector)
+        self.assertEqual(payload["matches"][0]["source_route"]["recall_selector"], selector)
+        self.assertIn(
+            f"--recall-selector {selector}",
+            payload["safe_next_actions"][0]["command_template"],
         )
         encoded = json.dumps(payload, ensure_ascii=False)
         self.assertNotIn(str(self.cwd), encoded)
@@ -394,10 +407,23 @@ class LastRecallSourceSearchTests(unittest.TestCase):
         payload = json.loads(stdout.getvalue())
 
         self.assertEqual(code, 2)
-        self.assertEqual(payload["status"], "cannot_verify")
+        self.assertEqual(payload["status"], "routes_not_searchable")
         self.assertEqual(payload["error"]["code"], "last_recall_sources_unavailable")
         self.assertEqual(payload["unavailable_request_count"], 1)
-        self.assertEqual(payload["foreground_action"]["id"], "rerun_recall_for_fresh_search_set")
+        self.assertEqual(
+            payload["foreground_action"]["id"],
+            "deepen_route_when_exact_search_not_available",
+        )
+        self.assertIn(
+            "--recall-selector {recall_selector}",
+            payload["foreground_action"]["command_template"],
+        )
+        self.assertEqual(payload["foreground_action"]["requires"], ["recall_selector"])
+        self.assertIn("--last-recall", payload["foreground_action"]["last_recall_fallback_command"])
+        self.assertEqual(
+            payload["safe_next_actions"][0]["id"],
+            "rerun_recall_for_fresh_search_set",
+        )
         self.assertNotIn(str(self.cwd), json.dumps(payload, ensure_ascii=False))
 
     def test_registry_audit_reports_redacted_source_reachability_counts(self) -> None:

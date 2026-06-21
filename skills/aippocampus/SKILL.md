@@ -32,10 +32,12 @@ Primary foreground loop:
    `aippocampus agent recall "old decision or handoff cue" --json`.
 2. Deepen the selected route before claims with `agent_deepen` /
    `recall_deepen`, or:
-   `aippocampus agent deepen --request 1 --last-recall --json`.
+   `aippocampus agent deepen --request 1 --recall-selector <emitted-selector> --json`.
+   Prefer the selector emitted by that recall; `--last-recall` is a mutable
+   same-machine fallback for old clients.
 3. If recall found plausible routes and the user then remembers exact wording,
    search inside those candidates:
-   `aippocampus search --from-last-recall "a distinctive old phrase" --json`.
+   `aippocampus search --from-last-recall --recall-selector <emitted-selector> "a distinctive old phrase" --json`.
 4. If no route appears and the user remembers wording, use
    `search_memory` or `aippocampus search "a distinctive old phrase" --json`.
 

@@ -104,11 +104,17 @@ def tool_readiness_summary() -> dict[str, Any]:
             claim_boundary="no_claim_before_reopen",
         )
         deepen = foreground_template_action(
-            action_id="deepen_last_recall_route",
-            command_template="aippocampus agent deepen --request {request_index} --last-recall --json",
-            requires=["last_recall_cache", "request_index"],
+            action_id="deepen_recall_selector_route",
+            command_template=(
+                "aippocampus agent deepen --request {request_index} "
+                "--recall-selector {recall_selector} --json"
+            ),
+            requires=["request_index", "recall_selector"],
             label="Open a selected recall route",
-            why="Use only after recall returns a numbered route selector.",
+            why=(
+                "Use only after recall returns a numbered request and recall_selector; "
+                "--last-recall is a mutable-cache compatibility fallback."
+            ),
             mutation_risk="read_only",
             claim_boundary="no_claim_before_reopen",
         )

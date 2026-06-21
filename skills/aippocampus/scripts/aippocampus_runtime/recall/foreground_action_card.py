@@ -199,9 +199,20 @@ def _canonical_action(
         "tool_name": "agent_deepen",
         "arguments": {
             "request_index": request_index,
-            "last_recall": True,
         },
-        "cli_command": f"aippocampus agent deepen --request {request_index} --last-recall --json",
+        "cli_command_template": (
+            f"aippocampus agent deepen --request {request_index} "
+            "--recall-selector {recall_selector} --json"
+        ),
+        "requires": ["recall_selector"],
+        "template_only": True,
+        "last_recall_fallback_command": (
+            f"aippocampus agent deepen --request {request_index} --last-recall --json"
+        ),
+        "last_recall_fallback_boundary": (
+            "--last-recall reads a mutable same-machine cache; use only when "
+            "the recall_selector emitted by the same recall is unavailable."
+        ),
         "why": "reopen before using this route",
         "claim_boundary": CLAIM_BOUNDARY,
     }

@@ -223,18 +223,28 @@ def _recall_with_cue_action(*, label: str, why: str, action_id: str = "recall_wi
 def _request_index_followup_action(mode: str) -> dict[str, Any]:
     action = _foreground_template_action(
         f"{mode}_last_recall_request",
-        f"aippocampus agent {mode} --request {{request_index}} --last-recall --json",
-        ["last_recall_cache", "request_index"],
-        f"Run agent {mode} against a numbered route from the last recall",
-        "Requires a fresh recall cache and selected request index.",
+        (
+            f"aippocampus agent {mode} --request {{request_index}} "
+            "--recall-selector {recall_selector} --json"
+        ),
+        ["recall_selector", "request_index"],
+        f"Run agent {mode} against a numbered route from an emitted recall selector",
+        "Requires a fresh recall selector and selected request index.",
     )
     action.update(
         {
             "tool_name": f"agent_{mode}",
             "arguments_template": {
                 "request_index": "{request_index}",
-                "last_recall": True,
+                "recall_selector": "{recall_selector}",
             },
+            "last_recall_fallback_command_template": (
+                f"aippocampus agent {mode} --request {{request_index}} --last-recall --json"
+            ),
+            "last_recall_fallback_boundary": (
+                "--last-recall reads a mutable same-machine cache; use only when "
+                "the recall_selector emitted by the same recall is unavailable."
+            ),
         }
     )
     return action
@@ -576,7 +586,19 @@ def missing_feedback_route_payload(
         {
             "id": "deepen_if_needed",
             "label": "Deepen route before judging",
-            "command": "aippocampus agent deepen --request 1 --last-recall --json",
+            "command_template": (
+                "aippocampus agent deepen --request 1 "
+                "--recall-selector {recall_selector} --json"
+            ),
+            "template_only": True,
+            "requires": ["recall_selector"],
+            "last_recall_fallback_command": (
+                "aippocampus agent deepen --request 1 --last-recall --json"
+            ),
+            "last_recall_fallback_boundary": (
+                "--last-recall reads a mutable same-machine cache; use only when "
+                "the recall_selector emitted by the same recall is unavailable."
+            ),
             "mutation_risk": "read_only",
             "claim_boundary": "no_claim_before_reopen",
             "why": "Use after recall when you need to inspect the first route before judging it.",
@@ -633,20 +655,40 @@ def public_recall_projection(payload: Mapping[str, Any], *, query: str | None = 
     projected["last_recall_cache_available"] = cache_available
     action = projected.get("foreground_action")
     action_map = action if isinstance(action, Mapping) else {}
-    raw_action_args = action_map.get("arguments")
-    action_args = raw_action_args if isinstance(raw_action_args, Mapping) else {}
     raw_card = source.get("foreground_action_card")
     card_map = raw_card if isinstance(raw_card, Mapping) else {}
     raw_canonical = card_map.get("canonical_action")
     canonical_action = raw_canonical if isinstance(raw_canonical, Mapping) else {}
-    raw_canonical_args = canonical_action.get("arguments")
-    canonical_args = raw_canonical_args if isinstance(raw_canonical_args, Mapping) else {}
-    advertises_last_recall = bool(action_args.get("last_recall")) or "--last-recall" in str(
-        action_map.get("command") or action_map.get("cli_command") or ""
-    ) or bool(canonical_args.get("last_recall")) or "--last-recall" in str(
-        canonical_action.get("command") or canonical_action.get("cli_command") or ""
-    )
-    if not cache_available and advertises_last_recall:
+
+    def action_depends_on_same_machine_recall(value: Mapping[str, Any]) -> bool:
+        arguments = value.get("arguments")
+        argument_map = arguments if isinstance(arguments, Mapping) else {}
+        if bool(argument_map.get("last_recall")):
+            return True
+        requires = value.get("requires")
+        if isinstance(requires, list) and any(
+            str(item) in {"last_recall_cache", "recall_selector"} for item in requires
+        ):
+            return True
+        template_arguments = value.get("arguments_template")
+        if isinstance(template_arguments, Mapping) and "recall_selector" in template_arguments:
+            return True
+        command_text = " ".join(
+            str(value.get(key) or "")
+            for key in (
+                "command",
+                "cli_command",
+                "command_template",
+                "cli_command_template",
+                "last_recall_fallback_command",
+            )
+        )
+        return "--last-recall" in command_text or "--recall-selector" in command_text
+
+    advertises_same_machine_recall = action_depends_on_same_machine_recall(
+        action_map
+    ) or action_depends_on_same_machine_recall(canonical_action)
+    if not cache_available and advertises_same_machine_recall:
         recovery_cue = str(
             redact_sensitive_values(redact_private_paths(str(source.get("query") or "").strip()))
             or ""
@@ -1181,7 +1223,11 @@ def render_recall_human(payload: Mapping[str, Any]) -> str:
             or "--json --detail full for local-private handle" in next_action
         ):
             request_index = int(first.get("request_index") or 1)
-            next_action = f"aippocampus agent deepen --request {request_index} --last-recall"
+            next_action = (
+                f"aippocampus agent deepen --request {request_index} "
+                "--recall-selector <emitted-selector> --json; "
+                "fallback: --last-recall only if the selector is unavailable"
+            )
         if not next_action:
             request_index = int(first.get("request_index") or 1)
             next_action = (

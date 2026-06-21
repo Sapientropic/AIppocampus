@@ -19,7 +19,7 @@ aippocampus start --json
 
 ```sh
 aippocampus agent recall "can an agent catch up without pretending it has innate memory?" --cwd . --clean-source-dir ./examples/public-memory-bundle/clean-source --json
-aippocampus agent deepen --request 1 --last-recall --json
+aippocampus agent deepen --request 1 --recall-selector <emitted-selector> --json
 ```
 
 第一条命令只给 route。第二条命令打开 source。只有打开 source 后，agent 才可以在这个 scope 内使用更强的事实或原文判断。

@@ -558,9 +558,15 @@ def agent_chooser_payload() -> dict[str, Any]:
             _template_action(
                 action_id="deepen",
                 label="Deepen the selected route",
-                command_template="aippocampus agent deepen --request 1 --last-recall --json",
-                requires="prior recall result",
-                why="Use after recall chooses a route; deepen/reopen before exact or high-risk claims.",
+                command_template=(
+                    "aippocampus agent deepen --request {request_index} "
+                    "--recall-selector {recall_selector} --json"
+                ),
+                requires="request_index and recall_selector from prior recall result",
+                why=(
+                    "Use after recall chooses a route; prefer the emitted recall_selector. "
+                    "--last-recall is a mutable-cache compatibility fallback."
+                ),
                 claim_boundary="source_reopen_required_before_claim",
             ),
             _template_action(
@@ -1451,7 +1457,10 @@ def print_help(*, file: TextIO | None = None) -> None:
     print("  aippocampus start --json              Choose the first useful continuity path", file=target)
     print("  aippocampus agent recall \"old cue\" --json", file=target)
     print("                                        Continue old work from source routes", file=target)
-    print("  aippocampus agent deepen --request 1 --last-recall --json", file=target)
+    print(
+        "  aippocampus agent deepen --request 1 --recall-selector <emitted-selector> --json",
+        file=target,
+    )
     print("                                        Reopen the selected route before claims", file=target)
     print("  aippocampus search \"exact phrase\"      Exact wording fallback/demo", file=target)
     print("  aippocampus plugin install --codex --verify", file=target)

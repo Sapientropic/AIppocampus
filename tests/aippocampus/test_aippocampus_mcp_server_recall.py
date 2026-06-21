@@ -16,7 +16,10 @@ from aippocampus_runtime.recall import (
     apw_route_identity,
     associative_path_fallback,
 )
-from aippocampus_runtime.recall.agent_recall_cache import write_last_recall_cache
+from aippocampus_runtime.recall.agent_recall_cache import (
+    write_last_recall_cache,
+    write_recall_selector_snapshot,
+)
 from aippocampus_runtime.registry import store as registry_store
 from conversation_sources import ConversationSourceRef
 from tests.aippocampus.frontstage_assertions import assert_compact_detail_affordances
@@ -709,6 +712,8 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
                 path=cache_path,
             )
         )
+        selector = write_recall_selector_snapshot(cache_path)
+        self.assertIsNotNone(selector)
 
         response = mcp.handle_request(
             {
@@ -721,6 +726,7 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
                         "query": "last recall exact phrase",
                         "cwd": str(self.cwd),
                         "last_recall_path": str(cache_path),
+                        "recall_selector": selector,
                         "scope": "last_recall_candidates",
                     },
                 },
@@ -734,7 +740,10 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
         self.assertEqual(payload["mcp_search_scope"], "last_recall_candidates")
         self.assertEqual(payload["match_count"], 1)
         self.assertEqual(payload["matches"][0]["request_index"], 1)
-        self.assertIn("aippocampus agent deepen --request 1 --last-recall --json", encoded)
+        self.assertIn(
+            f"aippocampus agent deepen --request 1 --recall-selector {selector} --json",
+            encoded,
+        )
         self.assertNotIn(str(self.cwd), encoded)
 
     def test_recall_context_default_is_compact_without_opaque_handles(self) -> None:
@@ -1369,7 +1378,8 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
             "aippocampus agent deepen --request",
             agent_payload["follow_up_action"]["command_template"],
         )
-        self.assertEqual(agent_payload["follow_up_action"]["requires"], ["last_recall_cache", "request_index"])
+        self.assertIn("--recall-selector {recall_selector}", agent_payload["follow_up_action"]["command_template"])
+        self.assertEqual(agent_payload["follow_up_action"]["requires"], ["recall_selector", "request_index"])
 
         self.assertTrue(recall_response["result"]["isError"])
         recall_payload = self.tool_payload(recall_response)

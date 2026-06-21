@@ -7,12 +7,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from aippocampus_runtime.contracts import (
-    canonical_foreground_action_fields,
-    foreground_shell_action,
-    foreground_template_action,
-    shell_quote,
-)
+from aippocampus_runtime.contracts import canonical_foreground_action_fields
 from aippocampus_runtime.core import compact_text, default_thread_clean_source_dir
 from aippocampus_runtime.mcp.recall_navigation import RecallNavigationError, normalize_handle
 from aippocampus_runtime.mcp.source_ref_registry import source_candidate_dirs_for_ref
@@ -25,10 +20,27 @@ from aippocampus_runtime.recall.agent_recall_cache import (
     handle_from_last_recall_cache,
     query_from_last_recall_cache,
     read_last_recall_cache,
-    recall_selector_cache_path,
 )
 from aippocampus_runtime.recall.continuity_domains import clean_source_fingerprint
 from aippocampus_runtime.source.clean_source import SCOPE_LABEL_ORDER
+from aippocampus_runtime.source.last_recall_actions import (
+    actions_for_last_recall_search as _actions_for_last_recall_search,
+)
+from aippocampus_runtime.source.last_recall_actions import (
+    clean_recall_selector as _clean_recall_selector,
+)
+from aippocampus_runtime.source.last_recall_actions import (
+    deepen_action_for_request as _deepen_action_for_request,
+)
+from aippocampus_runtime.source.last_recall_actions import (
+    deepen_command_for_request as _deepen_command_for_request,
+)
+from aippocampus_runtime.source.last_recall_actions import (
+    rerun_recall_action as _rerun_recall_action,
+)
+from aippocampus_runtime.source.last_recall_actions import (
+    selector_cache_path as _selector_cache_path,
+)
 from aippocampus_runtime.source.search_core import iter_clean_messages, score_message
 from aippocampus_runtime.source.search_terms import search_query_terms
 from aippocampus_runtime.source.semantic_scope_labels import (
@@ -64,39 +76,6 @@ def _process_noise_reason(text: str) -> str:
         if snippet.startswith(prefix):
             return reason
     return ""
-
-
-def _selector_cache_path(
-    *,
-    recall_selector: str | None,
-    last_recall_path: str | Path | None,
-) -> str | Path | None:
-    selector = str(recall_selector or "").strip()
-    if not selector:
-        return last_recall_path
-    return recall_selector_cache_path(selector, last_recall_path_value=last_recall_path)
-
-
-def _rerun_recall_action(cue: str | None) -> dict[str, Any]:
-    clean_cue = str(cue or "").strip()
-    if clean_cue:
-        return foreground_shell_action(
-            action_id="rerun_recall_for_fresh_search_set",
-            label="Rerun recall for fresh route search",
-            command=f"aippocampus agent recall {shell_quote(clean_cue)} --json --detail full",
-            why="The last recall route set is unavailable or stale; rerun recall before exact route search.",
-            mutation_risk="read_only",
-            claim_boundary="no_claim_before_reopen",
-        )
-    return foreground_template_action(
-        action_id="rerun_recall_for_fresh_search_set",
-        label="Rerun recall for fresh route search",
-        command_template='aippocampus agent recall "{cue}" --json --detail full',
-        requires=["cue"],
-        why="The last recall route set is unavailable or stale; rerun recall before exact route search.",
-        mutation_risk="read_only",
-        claim_boundary="no_claim_before_reopen",
-    )
 
 
 def _recovery_payload(
@@ -195,10 +174,22 @@ def _match_for_last_recall(
     *,
     request_index: int,
     route_id: str,
+    recall_selector: str | None,
     source_dir: Path,
     match: Mapping[str, Any],
     include_paths: bool,
 ) -> dict[str, Any]:
+    selector = _clean_recall_selector(recall_selector)
+    source_route = {
+        "kind": "last_recall_candidate_hit",
+        "request_index": request_index,
+        "route_id": route_id,
+        "line": match.get("source_line") or match.get("line"),
+        "message_id": match.get("message_id") or match.get("id"),
+        "boundary": "deepen_last_recall_route_before_quoting_or_strong_claims",
+    }
+    if selector:
+        source_route["recall_selector"] = selector
     item = {
         "request_index": request_index,
         "route_id": route_id,
@@ -219,17 +210,8 @@ def _match_for_last_recall(
         ),
         "search_noise": bool(match.get("search_noise")),
         "noise_reason": match.get("noise_reason"),
-        "source_route": {
-            "kind": "last_recall_candidate_hit",
-            "request_index": request_index,
-            "route_id": route_id,
-            "line": match.get("source_line") or match.get("line"),
-            "message_id": match.get("message_id") or match.get("id"),
-            "boundary": "deepen_last_recall_route_before_quoting_or_strong_claims",
-        },
-        "deepen_command": (
-            f"aippocampus agent deepen --request {request_index} --last-recall --json"
-        ),
+        "source_route": source_route,
+        "deepen_command": _deepen_command_for_request(request_index, selector),
     }
     if include_paths:
         item["local_diagnostic"] = {
@@ -328,61 +310,6 @@ def render_last_recall_search_result(result: Mapping[str, Any]) -> str:
         if command:
             lines.append(f"next: {command}")
     return "\n".join(lines)
-
-
-def _actions_for_last_recall_search(
-    *,
-    query_text: str,
-    has_matches: bool,
-    first_match: Mapping[str, Any] | None,
-    partial_unavailable_no_matches: bool = False,
-    recall_cue: str | None = None,
-) -> list[dict[str, Any]]:
-    if has_matches and first_match:
-        return [
-            foreground_shell_action(
-                action_id="deepen_last_recall_search_hit",
-                label="Deepen the matching recall route",
-                command=str(first_match.get("deepen_command") or ""),
-                why=(
-                    "Exact wording matched inside a last-recall candidate route; "
-                    "deepen that route before quoting or making strong claims."
-                ),
-                mutation_risk="read_only",
-                claim_boundary="source_reopen_required_before_claim",
-            ),
-            foreground_template_action(
-                action_id="search_one_last_recall_request",
-                label="Search one recalled route",
-                command_template='aippocampus search --from-last-recall --request {request_index} "{exact_phrase}" --json',
-                requires=["request_index", "exact_phrase"],
-                why="Use this when the relevant numbered recall route is known.",
-                mutation_risk="read_only",
-                claim_boundary="source_reopen_required_before_claim",
-            ),
-        ]
-    no_match_actions = [
-        foreground_template_action(
-            action_id="refine_last_recall_exact_search",
-            label="Refine search inside last recall routes",
-            command_template='aippocampus search --from-last-recall "{distinctive_phrase}" --json',
-            requires=["distinctive_phrase"],
-            why="The last recall route set did not contain this wording; try a more distinctive phrase.",
-            mutation_risk="read_only",
-            claim_boundary="search_miss_is_not_absence_of_memory",
-        ),
-        foreground_shell_action(
-            action_id="search_all_registered_sources",
-            label="Search all registered sources",
-            command=f"aippocampus search --all {shell_quote(query_text)} --json",
-            why="Use only if the expected evidence may be outside the routes returned by the last recall.",
-            mutation_risk="read_only",
-            claim_boundary="source_reopen_required_before_claim",
-        ),
-    ]
-    if partial_unavailable_no_matches:
-        return [_rerun_recall_action(recall_cue), *no_match_actions]
-    return no_match_actions
 
 
 def search_last_recall_sources(
@@ -531,6 +458,7 @@ def search_last_recall_sources(
                             _match_for_last_recall(
                                 request_index=index,
                                 route_id=route_id,
+                                recall_selector=recall_selector,
                                 source_dir=source_dir,
                                 match=match,
                                 include_paths=include_paths,
@@ -559,12 +487,24 @@ def search_last_recall_sources(
         and bool(unavailable_request_indices)
     )
     actions = (
-        [_rerun_recall_action(query_from_last_recall_cache(cache_path))]
-        if all_unavailable
+        [
+            _deepen_action_for_request(
+                indices[0],
+                recall_selector,
+                action_id="deepen_route_when_exact_search_not_available",
+                why=(
+                    "The recall route set could not be phrase-searched from local source refs; "
+                    "deepen the same selector/request before falling back to a new recall."
+                ),
+            ),
+            _rerun_recall_action(query_from_last_recall_cache(cache_path)),
+        ]
+        if all_unavailable and indices
         else _actions_for_last_recall_search(
             query_text=query_text,
             has_matches=bool(matches),
             first_match=matches[0] if matches else None,
+            recall_selector=recall_selector,
             partial_unavailable_no_matches=partial_unavailable_no_matches,
             recall_cue=query_from_last_recall_cache(cache_path),
         )
@@ -572,7 +512,7 @@ def search_last_recall_sources(
     status = (
         "ok"
         if matches
-        else "cannot_verify"
+        else "routes_not_searchable"
         if all_unavailable
         else "partial_unavailable_no_matches"
         if partial_unavailable_no_matches
@@ -590,6 +530,7 @@ def search_last_recall_sources(
         ),
         "query_text": query_text,
         "query_terms": search_query_terms(patterns),
+        "recall_selector": _clean_recall_selector(recall_selector) or None,
         "matches": matches,
         "match_count": len(matches),
         "searched_route_count": searched_route_count,
@@ -642,7 +583,11 @@ def run_last_recall_search_cli(args: Any) -> int:
         print(json.dumps(result, ensure_ascii=False, indent=2))
     else:
         print(render_last_recall_search_result(result))
-    if result.get("status") in {"cannot_verify", "partial_unavailable_no_matches"}:
+    if result.get("status") in {
+        "cannot_verify",
+        "partial_unavailable_no_matches",
+        "routes_not_searchable",
+    }:
         return 2
     return 0 if result.get("matches") else 1
 

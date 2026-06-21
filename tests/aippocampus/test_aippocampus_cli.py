@@ -69,7 +69,10 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertIn("aippocampus start --json", proc.stdout)
         self.assertIn('aippocampus agent recall "old cue"', proc.stdout)
         self.assertIn('aippocampus search "exact phrase"', proc.stdout)
-        self.assertIn("aippocampus agent deepen --request 1 --last-recall --json", proc.stdout)
+        self.assertIn(
+            "aippocampus agent deepen --request 1 --recall-selector <emitted-selector> --json",
+            proc.stdout,
+        )
         self.assertIn("Personal path", proc.stdout)
         self.assertIn("Advanced/operator diagnostics", proc.stdout)
         self.assertLess(proc.stdout.index("Start here:"), proc.stdout.index("Personal path"))
@@ -617,7 +620,11 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertIn('aippocampus search "exact phrase"', recall.stdout)
         self.assertIn("deepen/reopen before factual", recall.stdout)
         self.assertIn("Agent deepen task card", deepen.stdout)
-        self.assertIn("aippocampus agent deepen --request 1 --last-recall --json", deepen.stdout)
+        self.assertIn(
+            "aippocampus agent deepen --request 1 --recall-selector <emitted-selector> --json",
+            deepen.stdout,
+        )
+        self.assertIn("Fallback: --last-recall", deepen.stdout)
         self.assertIn("Raw handles are local/private diagnostics", deepen.stdout)
 
     def test_lifecycle_hook_status_json_redacts_host_wiring_by_default(self) -> None:

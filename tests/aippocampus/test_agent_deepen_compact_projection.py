@@ -212,7 +212,19 @@ class AgentDeepenCompactProjectionTests(unittest.TestCase):
         self.assertNotIn(compact_payload["foreground_action"], compact_payload.get("safe_next_actions", []))
         self.assertEqual(compact_payload["foreground_action"]["tool_name"], "agent_deepen")
         self.assertEqual(compact_payload["foreground_action"]["arguments"]["request_index"], 1)
-        self.assertIn("agent deepen --request 1 --last-recall --json", compact_payload["foreground_action"]["command"])
+        self.assertIn(
+            "--recall-selector {recall_selector}",
+            compact_payload["foreground_action"]["command_template"],
+        )
+        self.assertEqual(
+            compact_payload["foreground_action"]["requires"],
+            ["request_index", "recall_selector"],
+        )
+        self.assertIn(
+            "agent deepen --request 1 --last-recall --json",
+            compact_payload["foreground_action"]["last_recall_fallback_command"],
+        )
+        self.assertNotIn("command", compact_payload["foreground_action"])
         self.assertNotIn("cli_command", compact_payload["foreground_action"])
         self.assertEqual(
             compact_payload["claim_boundary"],

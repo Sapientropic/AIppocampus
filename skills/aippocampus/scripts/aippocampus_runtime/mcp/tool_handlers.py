@@ -46,7 +46,7 @@ from aippocampus_runtime.mcp.recall_navigation import (
 from aippocampus_runtime.mcp.sync_status_projection import backend_selection_payload
 from aippocampus_runtime.ops import telepathy_handoff_store
 from aippocampus_runtime.privacy import LOCAL_PATH_REDACTION
-from aippocampus_runtime.recall import why_cli
+from aippocampus_runtime.recall import agent_deepen_requests, why_cli
 from aippocampus_runtime.recall.agent_continuity_cli_support import (
     RouteLimitError,
     agent_recall_missing_query_payload,
@@ -368,14 +368,14 @@ def continuity_domains_snapshot_arg(arguments: dict[str, Any]) -> Path | None:
 
 
 def call_recall_context(arguments: dict[str, Any]) -> dict[str, Any]:
-    intent = str(arguments.get("intent") or arguments.get("query") or "").strip()
+    intent = str(arguments.get("intent") or arguments.get("query") or arguments.get("cue") or "").strip()
     if not intent:
         return missing_input_recovery_card(
             code="missing_intent",
             message="recall_context requires a non-empty intent or query.",
             tool_name="recall_context",
             arguments=arguments,
-            required_any=["intent", "query"],
+            required_any=["intent", "query", "cue"],
             safe_next_actions=[
                 _template_tool_action(
                     "recall_context",
@@ -487,7 +487,7 @@ def call_recall_deepen(arguments: dict[str, Any]) -> dict[str, Any]:
 
 
 def call_agent_recall(arguments: dict[str, Any]) -> dict[str, Any]:
-    query = str(arguments.get("query") or arguments.get("intent") or "").strip()
+    query = str(arguments.get("query") or arguments.get("intent") or arguments.get("cue") or "").strip()
     if not query:
         payload = agent_recall_missing_query_payload(
             schema_version=str(getattr(agent_continuity_module(), "SCHEMA_VERSION", "agent-continuity-path-v1")),
@@ -542,6 +542,8 @@ def call_agent_recall(arguments: dict[str, Any]) -> dict[str, Any]:
         path=arguments.get("last_recall_path"),
     )
     selector_id = write_recall_selector_snapshot(arguments.get("last_recall_path")) if cache_written else None
+    if selector_id:
+        agent_deepen_requests.attach_recall_selector_to_payload(payload, selector_id)
     payload["last_recall_cache_available"] = cache_written
     payload["recall_selector_available"] = bool(selector_id)
     payload["recall_selector_id"] = selector_id

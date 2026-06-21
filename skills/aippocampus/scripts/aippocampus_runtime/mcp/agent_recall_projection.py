@@ -200,7 +200,12 @@ def _with_recall_selector(action: Mapping[str, Any], recall_selector: str) -> di
         f"aippocampus agent deepen --request {request_index} "
         f"--recall-selector {shell_quote(clean_selector)} --json"
     )
+    payload.pop("command_template", None)
+    payload.pop("template_only", None)
+    payload.pop("requires", None)
     payload.pop("cli_command", None)
+    payload.pop("last_recall_fallback_command", None)
+    payload.pop("last_recall_fallback_boundary", None)
     return payload
 
 
@@ -270,16 +275,34 @@ def route_deepen_action(
             f"--recall-selector {shell_quote(clean_selector)} --json"
         )
     else:
-        arguments["last_recall"] = True
-        command = f"aippocampus agent deepen --request {request_index} --last-recall --json"
-    action = {
+        command = ""
+    action: dict[str, Any] = {
         "id": "deepen_this_route",
         "tool_name": "agent_deepen",
         "arguments": arguments,
-        "command": command,
         "mutation_risk": "read_only",
         "claim_boundary": "no_claim_before_reopen",
     }
+    if clean_selector:
+        action["command"] = command
+    else:
+        action.update(
+            {
+                "command_template": (
+                    "aippocampus agent deepen --request {request_index} "
+                    "--recall-selector {recall_selector} --json"
+                ),
+                "requires": ["request_index", "recall_selector"],
+                "template_only": True,
+                "last_recall_fallback_command": (
+                    f"aippocampus agent deepen --request {request_index} --last-recall --json"
+                ),
+                "last_recall_fallback_boundary": (
+                    "--last-recall reads a mutable same-machine cache; use only when "
+                    "the recall_selector emitted by the same recall is unavailable."
+                ),
+            }
+        )
     if low_confidence:
         action["route_choice_posture"] = "labels_low_specificity"
         action["confidence"] = "low_confidence_navigation"
@@ -525,6 +548,55 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
         recall_selector=recall_selector,
         cache_available=cache_available,
     )
+    apw_requested_but_unwired = (
+        isinstance(associative_path_policy, dict)
+        and associative_path_policy.get("explicit_requested")
+        and isinstance(associative_path_fallback, dict)
+        and associative_path_fallback.get("status") == "abstained"
+        and not associative_path_policy.get("apw_candidate_input_available")
+    )
+    if apw_requested_but_unwired and labels_low_specificity:
+        # A foreground APW request is stronger evidence of user intent than a
+        # generic relationship/task-management route. When APW cannot produce a
+        # source-openable candidate, keep ordinary low-confidence routes as
+        # secondary navigation only and make the primary action recover the cue.
+        ordinary_recovery_action = _without_empty(normalize_foreground_action(foreground_action))
+        if ordinary_recovery_action:
+            ordinary_recovery_action["route_choice_posture"] = (
+                ordinary_recovery_action.get("route_choice_posture")
+                or "ordinary_low_confidence_not_apw"
+            )
+            safe_next_actions = [ordinary_recovery_action, *safe_next_actions]
+        registry_fallback = recall_choices.registry_source_search_fallback_action(recovery_cue)
+        foreground_action = registry_fallback or {
+            "id": "refine_apw_recovery_cue",
+            "label": "Refine APW recovery cue",
+            "tool_name": "agent_recall",
+            "command_template": 'aippocampus agent recall "{tighter_cue}" --apw-fallback --json',
+            "requires": ["tighter_cue"],
+            "template_only": True,
+            "mutation_risk": "read_only",
+            "claim_boundary": "apw_navigation_only_until_source_reopened",
+            "why": (
+                "APW was explicitly requested but found no source-reopenable route; "
+                "tighten the cue instead of deepening a low-confidence ordinary route."
+            ),
+        }
+        foreground_action["route_choice_posture"] = "apw_requested_no_source_reopenable_candidate"
+        foreground_action["why"] = (
+            "APW was explicitly requested but did not find a source-reopenable candidate; "
+            "search or refine the original cue before choosing an ordinary low-confidence route."
+        )
+        if isinstance(associative_path_fallback, dict):
+            associative_path_fallback["primary_action"] = (
+                foreground_action.get("id") or foreground_action.get("action_id")
+            )
+            associative_path_fallback["ordinary_low_confidence_routes_demoted"] = True
+        if isinstance(weak_route_recovery_card, dict):
+            weak_route_recovery_card["primary_action"] = (
+                foreground_action.get("id") or foreground_action.get("action_id")
+            )
+            weak_route_recovery_card["posture"] = "apw_requested_no_source_reopenable_candidate"
     if associative_path_action:
         ordinary_recovery_action = _without_empty(normalize_foreground_action(foreground_action))
         ordinary_action_id = str(
@@ -633,6 +705,7 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "opt_in_required": payload.get("opt_in_required"),
         "last_recall_cache_available": cache_available,
         "recall_selector_available": bool(recall_selector),
+        "recall_selector_id": recall_selector or None,
         "foreground_action": foreground_action,
         "miss_recovery_card": miss_recovery_card,
         "weak_route_recovery_card": weak_route_recovery_card,

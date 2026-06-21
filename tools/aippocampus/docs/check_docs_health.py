@@ -85,7 +85,12 @@ REQUIRED_SKILL_CONTINUITY_TERMS = {
     "Tool visibility fallback": "SKILL.md missing MCP/CLI fallback rule",
     "MCP first when the tool is listed": "SKILL.md missing canonical MCP/CLI order",
     'aippocampus agent recall "old decision or handoff cue" --json': "SKILL.md missing recall command",
-    "aippocampus agent deepen --request 1 --last-recall --json": "SKILL.md missing deepen command",
+    "aippocampus agent deepen --request 1 --recall-selector <emitted-selector> --json": (
+        "SKILL.md missing selector-safe deepen command"
+    ),
+    "--last-recall` is a mutable": (
+        "SKILL.md missing last-recall fallback boundary"
+    ),
     "## Agent Stance": "SKILL.md missing agent stance section",
     "Do not search every turn.": (
         "SKILL.md missing proactive-vs-overactive anti-nag boundary"
@@ -124,6 +129,23 @@ REQUIRED_PROJECT_DOCS = [
     "docs/architecture/future/wukong-mining-notes.md",
     "docs/planning/technical-differentiation-analysis.md",
 ]
+
+FRONTSTAGE_SELECTOR_DEFAULT_DOCS = (
+    "README.md",
+    "llms.txt",
+    "docs/start-here.md",
+    "docs/agent-context.md",
+    "docs/guides/ten-minute-public-path.md",
+    "docs/guides/first-recall-decision-card.md",
+    "docs/guides/coding-agent-memory.md",
+    "docs/guides/install-guide.md",
+    "docs/guides/public-api.md",
+    "docs/guides/setup/claude-code-mcp.md",
+    "docs/guides/zh/first-useful-recall.md",
+)
+STALE_LAST_RECALL_DEFAULT_COMMAND = (
+    "aippocampus agent deepen --request 1 --last-recall --json"
+)
 
 AGENT_FACING_UX_CHARTER = "skills/aippocampus-ux/references/agent-facing-ux-charter.md"
 AGENT_FACING_UX_DISCOVERY_DOCS = (("docs/architecture/recall/README.md", "recall architecture index missing agent-facing UX charter pointer"), ("docs/architecture/recall/foreground-memory-ux-budget.md", "foreground memory UX budget missing agent-facing UX charter pointer"))
@@ -1197,6 +1219,21 @@ def find_repo_root(skill_root: Path) -> Path | None:
     return None
 
 
+def selector_default_doc_issues(repo_root: Path) -> list[str]:
+    issues: list[str] = []
+    for relative in FRONTSTAGE_SELECTOR_DEFAULT_DOCS:
+        path = repo_root / relative
+        if not path.exists():
+            continue
+        text = path.read_text(encoding="utf-8")
+        if STALE_LAST_RECALL_DEFAULT_COMMAND in text:
+            issues.append(
+                f"{relative} teaches mutable --last-recall as a first-touch deepen path; "
+                "use recall_selector as the default and label --last-recall as fallback"
+            )
+    return issues
+
+
 def check_repo_docs(repo_root: Path) -> tuple[list[str], dict[str, Any]]:
     issues: list[str] = []
     metrics: dict[str, Any] = {"repo_docs_checked": True}
@@ -1214,6 +1251,7 @@ def check_repo_docs(repo_root: Path) -> tuple[list[str], dict[str, Any]]:
         issues.append("docs/origin.md duplicates the origin essay; link docs/未干的地图.md instead")
 
     issues.extend(reader_path_issues(repo_root))
+    issues.extend(selector_default_doc_issues(repo_root))
     issues.extend(runtime_script_map_issues(repo_root))
     issues.extend(dream_phase1_contract_issues(repo_root))
     issues.extend(llm_call_contract_issues(repo_root))
