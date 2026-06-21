@@ -95,11 +95,12 @@ class DeepSeekModelRoutingTests(unittest.TestCase):
             self.assertEqual(resolved.tier, "pro")
             self.assertEqual(resolved.capabilities.safe_default_concurrency, 1)
 
-    def test_environment_overrides_keep_legacy_default_model_compatible(self) -> None:
+    def test_environment_overrides_use_canonical_default_model_knobs(self) -> None:
         os.environ["DEEPSEEK_MODEL"] = "legacy-flash"
+        os.environ["AIPPOCAMPUS_DEEPSEEK_FLASH_MODEL"] = "primary-flash"
         os.environ["AIPPOCAMPUS_DEEPSEEK_PRO_MODEL"] = "pro-expensive"
 
-        self.assertEqual(routing.resolve_model_route("default").model, "legacy-flash")
+        self.assertEqual(routing.resolve_model_route("default").model, "primary-flash")
         self.assertEqual(
             routing.resolve_model_route("agentic_source_review").model, "pro-expensive"
         )
@@ -145,14 +146,17 @@ class DeepSeekModelRoutingTests(unittest.TestCase):
         self.assertEqual(flash.base_url, "https://primary.example/v1")
         self.assertEqual(pro.base_url, "https://primary.example/v1")
 
-    def test_aippocampus_deepseek_api_key_env_wins_with_legacy_fallback(self) -> None:
+    def test_aippocampus_deepseek_api_key_env_is_the_only_default_env(self) -> None:
         self.assertEqual(
             routing.resolve_model_route("default").api_key_env,
             "AIPPOCAMPUS_DEEPSEEK_API_KEY",
         )
 
         os.environ["DEEPSEEK_API_KEY"] = "legacy-key"
-        self.assertEqual(routing.resolve_model_route("default").api_key_env, "DEEPSEEK_API_KEY")
+        self.assertEqual(
+            routing.resolve_model_route("default").api_key_env,
+            "AIPPOCAMPUS_DEEPSEEK_API_KEY",
+        )
 
         os.environ["AIPPOCAMPUS_DEEPSEEK_API_KEY"] = "canonical-key"
         self.assertEqual(

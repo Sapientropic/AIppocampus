@@ -853,7 +853,7 @@ def run_warm_ambient_recall_benchmark(
     registry_path: Path | str | None = None,
     registry_dir: Path | str | None = None,
     cases_file: Path | str | None = None,
-    api_key_env: str = "DEEPSEEK_API_KEY",
+    api_key_env: str = "AIPPOCAMPUS_DEEPSEEK_API_KEY",
     user_id: str | None = None,
     progress_jsonl: Path | str | None = None,
     min_available_rate: float = 0.65,
@@ -1227,7 +1227,7 @@ def main() -> int:
     parser.add_argument("--registry")
     parser.add_argument("--registry-dir")
     parser.add_argument("--cases-file", help="Optional JSON/JSONL sanitized trace case file.")
-    parser.add_argument("--api-key-env", default="DEEPSEEK_API_KEY")
+    parser.add_argument("--api-key-env", default="AIPPOCAMPUS_DEEPSEEK_API_KEY")
     parser.add_argument("--user-id", help="Optional DeepSeek user_id; omit to use a stable sanitized hash.")
     parser.add_argument("--progress-jsonl", help="Optional sanitized per-case progress JSONL path.")
     parser.add_argument("--min-available-rate", type=float, default=0.65)

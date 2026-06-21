@@ -336,19 +336,18 @@ class StorageGovernanceTests(unittest.TestCase):
         self.assertTrue(payload["candidate_detail_deferred"])
         self.assertEqual(payload["metrics_status"], "computed")
         self.assertEqual(payload["pressure_interpretation"], "pressure_present")
-        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
-        self.assertEqual(payload["foreground_action"], payload["agent_next_action"])
-        self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
+        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v2")
+        self.assertNotIn(payload["foreground_action"], payload["safe_next_actions"])
         action_ids = [action["id"] for action in payload["safe_next_actions"]]
-        self.assertEqual(action_ids[:3], ["stop_without_cleanup", "bounded_storage_audit", "apply_rebuildable_after_audit"])
+        self.assertEqual(action_ids[:2], ["bounded_storage_audit", "apply_rebuildable_after_audit"])
         self.assertEqual(payload["foreground_action"]["mutation_risk"], "read_only")
         self.assertEqual(
-            payload["safe_next_actions"][2]["mutation_risk"],
+            payload["safe_next_actions"][1]["mutation_risk"],
             "explicit_local_delete_of_rebuildable_cache",
         )
-        self.assertTrue(payload["safe_next_actions"][2]["requires_prior_audit"])
-        self.assertIn("deterministic_checks", payload["safe_next_actions"][2])
-        self.assertIn("rollback_or_rebuild_boundary", payload["safe_next_actions"][2])
+        self.assertTrue(payload["safe_next_actions"][1]["requires_prior_audit"])
+        self.assertIn("deterministic_checks", payload["safe_next_actions"][1])
+        self.assertIn("rollback_or_rebuild_boundary", payload["safe_next_actions"][1])
         self.assertTrue(payload["foreground_action"]["continue_without_command"])
         self.assertNotIn("command", payload["foreground_action"])
         self.assertTrue(payload["safe_next_action"]["continue_without_command"])
@@ -423,9 +422,9 @@ class StorageGovernanceTests(unittest.TestCase):
         self.assertTrue(payload["needs_full_scan"])
         self.assertTrue(payload["candidate_detail_deferred"])
         self.assertEqual(payload["metrics_status"], "not_computed_in_summary_mode")
-        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
-        self.assertEqual(payload["safe_next_actions"][0]["id"], "stop_without_cleanup")
-        self.assertEqual(payload["safe_next_actions"][1]["id"], "bounded_storage_audit")
+        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v2")
+        self.assertEqual(payload["foreground_action"]["id"], "stop_without_cleanup")
+        self.assertEqual(payload["safe_next_actions"][0]["id"], "bounded_storage_audit")
         self.assertNotIn(
             "apply_rebuildable_after_audit",
             [action["id"] for action in payload["safe_next_actions"]],
@@ -468,7 +467,7 @@ class StorageGovernanceTests(unittest.TestCase):
         self.assertEqual(payload["kind"], "aippocampus_storage_gc_summary")
         self.assertEqual(payload["status"], "needs_full_scan")
         self.assertTrue(payload["foreground_action"]["continue_without_command"])
-        self.assertEqual(payload["safe_next_actions"][1]["id"], "bounded_storage_audit")
+        self.assertEqual(payload["safe_next_actions"][0]["id"], "bounded_storage_audit")
         self.assertNotEqual(
             payload["foreground_action"].get("command"),
             "aippocampus storage gc --dry-run --json --full --cwd .",
@@ -484,11 +483,11 @@ class StorageGovernanceTests(unittest.TestCase):
         payload = json.dumps(plan, ensure_ascii=False)
 
         self.assertFalse(plan["privacy"]["loads_existing_retention_report"])
-        self.assertEqual(plan["foreground_action_contract"], "foreground-action-v1")
+        self.assertEqual(plan["foreground_action_contract"], "foreground-action-v2")
         self.assertEqual(plan["surface_class"], "foreground_storage_gc_plan")
         keys = list(plan)
         self.assertLess(keys.index("foreground_action"), keys.index("policy_model"))
-        self.assertLess(keys.index("agent_next_action"), keys.index("candidates"))
+        self.assertNotIn("agent_next_action", keys)
         self.assertLess(keys.index("safe_next_actions"), keys.index("metrics"))
         self.assertGreater(plan["metrics"]["reclaimable_rebuildable_bytes"], 0)
         self.assertGreaterEqual(plan["metrics"]["eviction_candidate_count"], 1)
@@ -501,16 +500,16 @@ class StorageGovernanceTests(unittest.TestCase):
         self.assertIn("rebuild_note", plan["candidates"][0])
         self.assertNotIn("rebuild_command", plan["candidates"][0])
         self.assertEqual(
-            plan["agent_next_action"]["command"],
+            plan["foreground_action"]["command"],
             "aippocampus storage gc --dry-run --summary-json --cwd .",
         )
         self.assertEqual(
-            plan["safe_next_actions"][1]["command"],
+            plan["safe_next_actions"][0]["command"],
             "aippocampus storage gc --dry-run --json --top 1 --cwd .",
         )
-        self.assertTrue(plan["safe_next_actions"][2]["operator_only"])
+        self.assertTrue(plan["safe_next_actions"][1]["operator_only"])
         self.assertEqual(
-            plan["safe_next_actions"][2]["command"],
+            plan["safe_next_actions"][1]["command"],
             "aippocampus storage gc --dry-run --json --full --cwd .",
         )
         self.assertTrue(

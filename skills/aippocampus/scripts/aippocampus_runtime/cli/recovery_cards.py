@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from aippocampus_runtime.contracts import (
+    canonical_foreground_action_fields,
     foreground_chooser_card,
     foreground_shell_action,
     foreground_template_action,
@@ -59,7 +60,6 @@ def import_recovery_payload() -> dict[str, Any]:
         "ok": True,
         "status": "choose_action",
         "surface_class": "foreground_chooser_card",
-        "foreground_action_contract": "foreground-action-v1",
         "decision": "preview conversation import first, or explicitly choose a write path",
         "choices": {
             "bundle_import": {
@@ -82,9 +82,10 @@ def import_recovery_payload() -> dict[str, Any]:
             },
         },
         "write_actions": write_actions,
-        "agent_next_action": safe_actions[0],
-        "foreground_action": safe_actions[0],
-        "safe_next_actions": safe_actions,
+        **canonical_foreground_action_fields(
+            safe_actions[0],
+            safe_next_actions=safe_actions,
+        ),
         "safety": {
             "no_write_happened": True,
             "preview_before_write": True,

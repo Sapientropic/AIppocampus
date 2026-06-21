@@ -9,6 +9,7 @@ from aippocampus_runtime import core
 from aippocampus_runtime.contracts import (
     command_value_needs_input,
     normalize_foreground_action,
+    shell_quote,
 )
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 
@@ -93,6 +94,7 @@ def repeated_low_distinctiveness_label(
 _CUE_TOKEN_RE = re.compile(r"[\u4e00-\u9fff]{2,}|[A-Za-z0-9][A-Za-z0-9_-]{3,}")
 _ANCHOR_NORMALIZE_RE = re.compile(r"[^0-9A-Za-z\u4e00-\u9fff]+")
 _LOW_SIGNAL_WORDS = {
+    "agent",
     "about",
     "clean",
     "continuity",
@@ -101,8 +103,11 @@ _LOW_SIGNAL_WORDS = {
     "memory",
     "recall",
     "route",
+    "safe",
     "search",
     "source",
+    "source-backed",
+    "sourcebacked",
     "technical",
     "work",
 }
@@ -140,6 +145,52 @@ def distinctive_cue_anchor_gap(cue: str | None, packets: list[dict[str, Any]]) -
         return False
     matched = [token for token in tokens if token in label_text]
     return len(matched) == 0
+
+
+def registry_source_search_anchor_query(cue: str | None, *, max_tokens: int = 8) -> str:
+    """Extract a compact registry-wide source-search query from a vague cue.
+
+    Low-specificity recall must not ask the user to invent a better cue from
+    scratch when the original wording already contains useful anchors. Keep this
+    deterministic and cheap: compact recall emits the command, while the agent
+    decides whether to run the registry-wide search.
+    """
+
+    raw = str(redact_sensitive_values(redact_private_paths(str(cue or "").strip())) or "")
+    tokens: list[str] = []
+    seen: set[str] = set()
+    for match in _CUE_TOKEN_RE.finditer(raw):
+        token = match.group(0)
+        key = _ANCHOR_NORMALIZE_RE.sub("", token.casefold())
+        if key in _LOW_SIGNAL_WORDS or key in seen:
+            continue
+        seen.add(key)
+        tokens.append(token)
+        if len(tokens) >= max_tokens:
+            break
+    if tokens:
+        return " ".join(tokens)
+    return core.compact_text(raw, 160)
+
+
+def registry_source_search_fallback_action(cue: str | None) -> dict[str, Any] | None:
+    query = registry_source_search_anchor_query(cue)
+    if not query or command_value_needs_input(query):
+        return None
+    return {
+        "id": "search_registry_sources_for_original_cue_anchors",
+        "label": "Search all registered source for cue anchors",
+        "tool_name": "search_memory",
+        "arguments": {"query": query, "scope": "all_registered_sources", "max": 5},
+        "command": f"aippocampus search --all {shell_quote(query)} --json",
+        "search_anchor_query": query,
+        "mutation_risk": "read_only",
+        "claim_boundary": "source_reopen_required_before_claim",
+        "why": (
+            "Recall could not choose a route safely from compact labels; search all registered "
+            "source for the original cue anchors before asking the user for a brand-new cue."
+        ),
+    }
 
 
 def route_choice_reason(
@@ -195,15 +246,15 @@ def with_low_specificity_foreground_action(
         "Source reopen is still read-only, but compact labels are not enough to "
         "make this the default route choice."
     )
+    low_confidence_deepen_action = {
+        key: value
+        for key, value in normalize_foreground_action(secondary).items()
+        if value not in (None, "", [])
+    }
     next_action = {
         "id": "refine_low_specificity_recall_cue",
         "label": "Refine low-specificity recall cue",
         "tool_name": "agent_recall",
-        "secondary_action": {
-            key: value
-            for key, value in normalize_foreground_action(secondary).items()
-            if value not in (None, "", [])
-        },
         "tighter_cue_template": {
             "arguments_template": {"query": "{tighter_cue}", "max": 3},
             "requires": ["tighter_cue"],
@@ -237,8 +288,34 @@ def with_low_specificity_foreground_action(
         next_action["previous_low_specificity_cue"] = clean_cue
         next_action["previous_cue_role"] = "context_only_not_executable"
         next_action["same_cue_fallback"] = "low_confidence_not_a_substitute_for_tighter_cue"
-    return {
+    refine_action = {
         key: value
         for key, value in normalize_foreground_action(next_action).items()
         if value not in (None, "", [])
     }
+    registry_fallback = registry_source_search_fallback_action(clean_cue)
+    if registry_fallback:
+        registry_fallback.update(
+            {
+                "route_choice_posture": "labels_low_specificity",
+                "route_label_specificity_floor": refine_action.get("route_label_specificity_floor"),
+                "topic_label_present_count": refine_action.get("topic_label_present_count"),
+                "packet_triage_distinctiveness": refine_action.get("packet_triage_distinctiveness"),
+                "same_cue_fallback": "registry_wide_source_search_before_new_user_cue",
+                "alternative_action_ids": [
+                    str(low_confidence_deepen_action.get("id") or ""),
+                    str(refine_action.get("id") or ""),
+                ],
+            }
+        )
+        if repeated_route_label:
+            registry_fallback["repeated_route_label"] = repeated_route_label
+        primary = {
+            key: value
+            for key, value in normalize_foreground_action(registry_fallback).items()
+            if value not in (None, "", [])
+        }
+        primary["_safe_next_actions"] = [low_confidence_deepen_action, refine_action]
+        return primary
+    refine_action["_safe_next_actions"] = [low_confidence_deepen_action]
+    return refine_action

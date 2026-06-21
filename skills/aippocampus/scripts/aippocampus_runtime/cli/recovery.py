@@ -13,7 +13,7 @@ from aippocampus_runtime.cli.errors import (
     cli_exit_code_for_error_code,
 )
 from aippocampus_runtime.contracts import (
-    FOREGROUND_ACTION_CONTRACT_VERSION,
+    canonical_foreground_action_fields,
     foreground_shell_action,
     foreground_template_action,
 )
@@ -138,10 +138,7 @@ def module_exception_payload(
             "status": "error",
             "surface": "cli_facade",
             "entrypoint": Path(script_name).stem,
-            "foreground_action_contract": FOREGROUND_ACTION_CONTRACT_VERSION,
-            "foreground_action": action,
-            "agent_next_action": action,
-            "safe_next_actions": [action],
+            **canonical_foreground_action_fields(action),
             "recovery_boundary": {
                 "raw_traceback_suppressed": True,
                 "local_paths_redacted": True,
@@ -154,7 +151,7 @@ def module_exception_payload(
 
 def render_module_exception_text(payload: dict[str, Any]) -> str:
     error = payload.get("error") if isinstance(payload.get("error"), dict) else {}
-    action = payload.get("agent_next_action")
+    action = payload.get("foreground_action")
     action_map = action if isinstance(action, Mapping) else {}
     lines = [
         f"Error: {error.get('code') or 'runtime_error'}. Try: {action_command_text(action_map)}",

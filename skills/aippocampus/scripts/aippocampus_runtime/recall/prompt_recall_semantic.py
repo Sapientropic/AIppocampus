@@ -123,7 +123,7 @@ def run_semantic_gate_for_prompt(
                 if float(budgeted_timeout) != float(semantic_timeout)
                 else SEMANTIC_SOCKET_TIMEOUT_REASON
             ),
-            "agent_next_action": (
+            "next_step_hint": (
                 SEMANTIC_BUDGET_AGENT_NEXT_ACTION
                 if float(budgeted_timeout) != float(semantic_timeout)
                 else "no_budget_change_needed"

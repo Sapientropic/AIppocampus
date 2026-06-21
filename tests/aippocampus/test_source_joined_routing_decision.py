@@ -79,7 +79,7 @@ class SourceJoinedRoutingDecisionTests(unittest.TestCase):
         report = source_joined_routing_decision.build_source_joined_routing_decision()
         report["debug_model_route"] = {
             "provider": "fixture",
-            "api_key_env": "DEEPSEEK_API_KEY",
+            "api_key_env": "AIPPOCAMPUS_DEEPSEEK_API_KEY",
         }
 
         with self.assertRaises(ValueError):
@@ -103,7 +103,7 @@ class SourceJoinedRoutingDecisionTests(unittest.TestCase):
         encoded = source_joined_routing_decision.encode_public_json(report)
 
         self.assertNotIn("api_key_env", encoded)
-        self.assertNotIn("DEEPSEEK_API_KEY", encoded)
+        self.assertNotIn("AIPPOCAMPUS_DEEPSEEK_API_KEY", encoded)
         self.assertNotIn("SECRET_TOKEN", encoded)
         self.assertNotIn('"source_refs": [', encoded)
         self.assertNotIn(str(REPO_ROOT), encoded)

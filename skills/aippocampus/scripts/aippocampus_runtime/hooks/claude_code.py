@@ -135,8 +135,10 @@ def _mutation_blocked_result(
         "handler_command": command_report or handler_command_report(),
         "settings": status["settings"],
         "rollback_command": rollback,
-        "agent_next_action": status["agent_next_action"],
-        "safe_next_actions": status["safe_next_actions"],
+        **canonical_foreground_action_fields(
+            status["foreground_action"],
+            safe_next_actions=status["safe_next_actions"],
+        ),
     }
 
 
@@ -266,8 +268,10 @@ def _mutation_result(
             for event in SUPPORTED_HANDLER_EVENTS
         },
         "rollback_command": rollback,
-        "agent_next_action": status["agent_next_action"],
-        "safe_next_actions": status["safe_next_actions"],
+        **canonical_foreground_action_fields(
+            status["foreground_action"],
+            safe_next_actions=status["safe_next_actions"],
+        ),
         "privacy_boundary": {
             "local_path_serialized": False,
             "raw_prompt_serialized": False,
@@ -629,9 +633,11 @@ def status_report(
             "contract_only_events": list(CONTRACT_ONLY_EVENTS),
         },
         "events": events,
-        "foreground_action": foreground_action,
-        "agent_next_action": foreground_action["primary"],
-        "safe_next_actions": foreground_action["safe_next_actions"],
+        "foreground_action_card": foreground_action,
+        **canonical_foreground_action_fields(
+            foreground_action["primary"],
+            safe_next_actions=foreground_action["safe_next_actions"],
+        ),
         "status_vocabulary": list(STATUS_VOCABULARY),
         "cannot_claim": [
             "real_host_hook_firing_without_event_log",

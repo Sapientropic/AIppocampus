@@ -391,16 +391,18 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
                 "mode": semantic.get("mode"),
                 "overall_recall_diagnostic": semantic.get("overall_recall_diagnostic"),
                 "semantic_sidecar": semantic.get("semantic_sidecar"),
-                "agent_next_action": semantic.get("agent_next_action"),
+                "foreground_action": semantic.get("foreground_action"),
                 "boundary": semantic.get("boundary"),
             }
         )
     status = payload.get("status")
     miss_recovery_card = None if memory_packets else _recall_miss_recovery_card(status)
     weak_route_recovery_card = None
+    safe_next_actions: list[dict[str, Any]] = []
     foreground_action = _canonical_agent_action(payload.get("foreground_action_card"))
     if miss_recovery_card is not None:
-        foreground_action = {
+        registry_fallback = recall_choices.registry_source_search_fallback_action(recovery_cue)
+        foreground_action = registry_fallback or {
             "action_id": "recover_recall_miss",
             "label": "Recover recall miss",
             "tool_name": "search_memory",
@@ -408,9 +410,22 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
             "mutation_risk": "read_only",
             "claim_boundary": "no_route_claim",
         } | search_fields
+        if registry_fallback:
+            foreground_action["secondary_action"] = {
+                "id": "refine_recall_cue_after_registry_search",
+                "label": "Refine the recall cue",
+                "tool_name": "agent_recall",
+                "command_template": 'aippocampus agent recall "{tighter_cue}" --json',
+                "requires": ["tighter_cue"],
+                "template_only": True,
+                "mutation_risk": "read_only",
+                "claim_boundary": "no_claim_before_reopen",
+                "why": "Use if registry-wide source search still cannot find a useful anchor.",
+            }
     elif foreground_action.get("action_id") == "continue_normally" or foreground_action.get("id") == "continue_normally":
         weak_route_recovery_card = _weak_route_recovery_card()
-        foreground_action = {
+        registry_fallback = recall_choices.registry_source_search_fallback_action(recovery_cue)
+        foreground_action = registry_fallback or {
             "action_id": "recover_weak_route",
             "label": "Recover weak route",
             "tool_name": "search_memory",
@@ -426,6 +441,11 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
             cue=recovery_cue,
             repeated_route_label=repeated_route_label,
         )
+        raw_safe_actions = foreground_action.pop("_safe_next_actions", [])
+        if isinstance(raw_safe_actions, list):
+            safe_next_actions = [
+                action for action in raw_safe_actions if isinstance(action, dict)
+            ]
     else:
         foreground_action = _with_recall_selector(foreground_action, recall_selector)
     if (
@@ -452,24 +472,40 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
     )
     route_availability_summary = None
     if labels_low_specificity and memory_packets:
+        safe_action_ids = [
+            str(action.get("id") or action.get("action_id") or "")
+            for action in safe_next_actions
+        ]
+        refine_action_id = next(
+            (action_id for action_id in safe_action_ids if action_id.startswith("refine")),
+            None,
+        )
+        deepen_action_id = next(
+            (action_id for action_id in safe_action_ids if action_id.startswith("deepen")),
+            None,
+        )
         route_availability_summary = _without_empty(
             {
                 "posture": "labels_low_specificity",
                 "summary": (
                     "Compact route labels are too low-specificity for foreground route "
-                    "choice; refine the cue before selecting a route."
+                    "choice; search all registered source for the original cue anchors "
+                    "before asking the user to invent a new cue."
                 ),
                 "route_count": len(memory_packets),
                 "displayed_as_choices": 0,
                 "hidden_low_confidence_route_count": len(memory_packets),
-                "primary_action": "refine_low_specificity_recall_cue",
+                "primary_action": foreground_action.get("id") or foreground_action.get("action_id"),
+                "source_search_fallback_action_id": (
+                    foreground_action.get("id") or foreground_action.get("action_id")
+                ),
                 "full_detail_escape_hatch": {
                     "command": detail_command or None,
                     "command_template": detail_command_template or None,
                     "requires": detail_fields.get("operator_detail_requires"),
                 },
-                "deepen_escape_hatch": foreground_action.get("secondary_action"),
-                "claim_boundary": "no_claim_before_reopen",
+                "refine_escape_hatch_action_id": refine_action_id,
+                "deepen_escape_hatch_action_id": deepen_action_id,
             }
         )
     can_use_for = ["next_action_choice"]
@@ -508,5 +544,10 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
         ),
         **detail_fields,
     }
-    result.update(canonical_foreground_action_fields(foreground_action))
+    result.update(
+        canonical_foreground_action_fields(
+            foreground_action,
+            safe_next_actions=safe_next_actions,
+        )
+    )
     return _without_empty(result)

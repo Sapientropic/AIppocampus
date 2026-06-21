@@ -181,9 +181,9 @@ class LastRecallSourceSearchTests(unittest.TestCase):
         self.assertNotIn(str(self.cwd), encoded)
         self.assertNotIn("local_reopen_token", encoded)
         self.assertNotIn("aippo-nav:", encoded)
-        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
-        self.assertEqual(payload["foreground_action"], payload["agent_next_action"])
-        self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
+        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v2")
+        self.assertNotIn("agent_next_action", payload)
+        self.assertNotIn(payload["foreground_action"], payload["safe_next_actions"])
         self.assertEqual(foreground_action_contract_violations(payload), [])
 
     def test_search_from_last_recall_request_limits_scope(self) -> None:
@@ -349,7 +349,8 @@ class LastRecallSourceSearchTests(unittest.TestCase):
         self.assertFalse(payload["ok"])
         self.assertEqual(payload["status"], "cannot_verify")
         self.assertEqual(payload["error"]["code"], "stale_recall_handle")
-        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
+        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v2")
+        self.assertNotIn("agent_next_action", payload)
         self.assertIn("agent recall", payload["foreground_action"].get("command", ""))
         self.assertNotIn("--last-recall", payload["foreground_action"].get("command", ""))
         self.assertNotIn(str(self.cwd), json.dumps(payload, ensure_ascii=False))
@@ -455,9 +456,9 @@ class LastRecallSourceSearchTests(unittest.TestCase):
             },
         )
         self.assertNotIn(str(self.cwd), json.dumps(payload, ensure_ascii=False))
-        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
-        self.assertEqual(payload["foreground_action"], payload["agent_next_action"])
-        self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
+        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v2")
+        self.assertNotIn("agent_next_action", payload)
+        self.assertNotIn(payload["foreground_action"], payload["safe_next_actions"])
         self.assertEqual(foreground_action_contract_violations(payload), [])
 
     def test_registry_backed_recall_to_deepen_smoke_uses_fresh_last_recall_cache(self) -> None:

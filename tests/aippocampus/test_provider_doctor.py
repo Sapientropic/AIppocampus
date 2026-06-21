@@ -120,10 +120,10 @@ class ProviderDoctorTests(unittest.TestCase):
         self.assertTrue(report["hook_relevance"]["prompt_hook_reads_process_env"])
         self.assertFalse(report["hook_relevance"]["actual_installed_hook_process_checked"])
         self.assertTrue(report["recommended_actions"])
-        self.assertEqual(report["legacy_aliases"]["active_count"], 0)
+        self.assertNotIn("legacy_aliases", report)
         self.assertNotIn("sk-", encoded)
 
-    def test_provider_doctor_reports_legacy_env_alias_names_without_values(self) -> None:
+    def test_provider_doctor_ignores_retired_provider_native_env_aliases(self) -> None:
         fixture_value = fake_provider_doctor_value("LEGACY")
         with provider_env(
             {
@@ -133,20 +133,15 @@ class ProviderDoctorTests(unittest.TestCase):
             }
         ):
             report = provider_doctor.build_provider_doctor_report(model_route="default")
-        alias_diagnostics = json.dumps(report["legacy_aliases"], ensure_ascii=False)
-        aliases = {entry["alias"] for entry in report["legacy_aliases"]["active"]}
+        encoded = json.dumps(report, ensure_ascii=False)
 
-        self.assertEqual(
-            aliases,
-            {"AIIPPOCAMPUS_SUBCONSCIOUS_HOOK", "DEEPSEEK_API_KEY", "DEEPSEEK_MODEL"},
-        )
-        self.assertEqual(report["provider_env"]["env_var"], "DEEPSEEK_API_KEY")
-        self.assertFalse(report["legacy_aliases"]["value_printed"])
-        self.assertFalse(report["legacy_aliases"]["local_paths_included"])
-        self.assertFalse(report["privacy"]["legacy_alias_values_printed"])
-        self.assertNotIn("legacy-flash-model", alias_diagnostics)
-        self.assertNotIn('"0"', alias_diagnostics)
-        self.assertNotIn(fixture_value, json.dumps(report, ensure_ascii=False))
+        self.assertNotIn("legacy_aliases", report)
+        self.assertEqual(report["provider_env"]["env_var"], "AIPPOCAMPUS_DEEPSEEK_API_KEY")
+        self.assertFalse(report["ok"])
+        self.assertEqual(report["status"], "missing_provider_env_var")
+        self.assertNotIn("legacy-flash-model", encoded)
+        self.assertNotIn('"0"', encoded)
+        self.assertNotIn(fixture_value, encoded)
 
     def test_visible_default_key_reports_ready_without_leaking_value(self) -> None:
         fixture_value = fake_provider_doctor_value("VISIBLE")
@@ -184,7 +179,7 @@ class ProviderDoctorTests(unittest.TestCase):
         )
         self.assertNotIn(fixture_value, encoded)
 
-    def test_canonical_provider_key_shadows_legacy_key_without_reading_values(self) -> None:
+    def test_canonical_provider_key_ready_without_reporting_retired_alias_shadow(self) -> None:
         canonical = fake_provider_doctor_value("CANONICAL")
         legacy = fake_provider_doctor_value("LEGACY_SHADOWED")
         with provider_env(
@@ -194,12 +189,11 @@ class ProviderDoctorTests(unittest.TestCase):
             }
         ):
             report = provider_doctor.build_provider_doctor_report(model_route="default")
-        shadowed = {entry["alias"] for entry in report["legacy_aliases"]["shadowed"]}
         encoded = json.dumps(report, ensure_ascii=False)
 
         self.assertTrue(report["ok"])
         self.assertEqual(report["provider_env"]["env_var"], "AIPPOCAMPUS_DEEPSEEK_API_KEY")
-        self.assertIn("DEEPSEEK_API_KEY", shadowed)
+        self.assertNotIn("legacy_aliases", report)
         self.assertNotIn(canonical, encoded)
         self.assertNotIn(legacy, encoded)
 
@@ -309,8 +303,9 @@ class ProviderDoctorTests(unittest.TestCase):
         self.assertEqual(payload["surface"], "foreground_decision_card")
         self.assertTrue(payload["ok"])
         self.assertEqual(payload["foreground_action"]["command"], "aippocampus hooks prompt status --last --json")
-        self.assertEqual(payload["agent_next_action"], payload["foreground_action"])
-        self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
+        self.assertNotIn("agent_next_action", payload)
+        self.assertNotIn(payload["foreground_action"], payload["safe_next_actions"])
+        self.assertEqual(payload["safe_next_actions"][0]["id"], "inspect_provider_doctor_detail")
         self.assertEqual(payload["full_audit_command"], "aippocampus doctor provider --detail full --json")
         self.assertNotIn("recommended_actions", payload)
         self.assertIn("recommended_action_count", payload)
@@ -382,7 +377,7 @@ class ProviderDoctorTests(unittest.TestCase):
                 payload = json.loads(proc.stdout)
                 self.assertEqual(payload["kind"], "aippocampus_provider_doctor")
                 self.assertIn("provider_env", payload)
-                self.assertIn("legacy_aliases", payload)
+                self.assertNotIn("legacy_aliases", payload)
                 self.assertIn("cannot_claim", payload["boundary_detail"])
                 self.assertNotIn(fixture_value, proc.stdout)
 
@@ -399,8 +394,9 @@ class ProviderDoctorTests(unittest.TestCase):
         self.assertEqual(card["status"], "missing_provider_env_var")
         self.assertEqual(card["foreground_action"]["id"], "set_provider_env_in_hook_environment")
         self.assertEqual(card["foreground_action"]["command"], "aippocampus onboard provider-key --plan --json")
-        self.assertEqual(card["agent_next_action"], card["foreground_action"])
-        self.assertEqual(card["safe_next_actions"][0], card["foreground_action"])
+        self.assertNotIn("agent_next_action", card)
+        self.assertNotIn(card["foreground_action"], card["safe_next_actions"])
+        self.assertEqual(card["safe_next_actions"][0]["id"], "inspect_provider_doctor_detail")
         self.assertNotIn("recommended_actions", card)
         self.assertEqual(card["recommended_action_count"], 1)
         self.assertEqual(card["recommended_action_ids"], ["set_provider_env_in_hook_environment"])

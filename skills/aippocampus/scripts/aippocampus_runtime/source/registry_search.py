@@ -9,7 +9,6 @@ from typing import Any
 
 from aippocampus_runtime.contracts import (
     canonical_foreground_action_fields,
-    foreground_shell_action,
     foreground_template_action,
     shell_quote,
 )
@@ -19,11 +18,21 @@ from aippocampus_runtime.privacy import (
     redact_private_paths,
     redact_sensitive_values,
 )
+from aippocampus_runtime.source.query_match_gate import (
+    match_query_profile,
+    query_match_gate,
+)
+from aippocampus_runtime.source.registry_search_actions import registry_search_actions
 from aippocampus_runtime.source.search_terms import search_query_terms
 
 DEFAULT_PUBLIC_SNIPPET_CHARS = 260
 DEFAULT_SOURCE_WINDOW_CHARS = 700
 LAST_SEARCH_CACHE_NAME = "last-registry-source-search.json"
+COMPACT_MATCH_DIAGNOSTIC_KEYS = {"score", "query_match_profile"}
+
+
+def _without_empty(value: Mapping[str, Any]) -> dict[str, Any]:
+    return {key: item for key, item in value.items() if item not in (None, "", {})}
 
 
 def as_float(value: Any, default: float = 0.0) -> float:
@@ -159,6 +168,28 @@ def _registry_match(
     return {key: value for key, value in match.items() if value not in (None, "", [], {})}
 
 
+def _match_haystack(match: Mapping[str, Any]) -> str:
+    thread = match.get("thread")
+    thread_map = thread if isinstance(thread, Mapping) else {}
+    return " ".join(
+        str(value or "")
+        for value in (
+            match.get("snippet"),
+            thread_map.get("title"),
+            thread_map.get("workspace_name"),
+            match.get("source"),
+        )
+    )
+
+
+def _compact_registry_match(match: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        key: value
+        for key, value in match.items()
+        if key not in COMPACT_MATCH_DIAGNOSTIC_KEYS
+    }
+
+
 def _annotate_last_search_reopen_commands(
     matches: list[dict[str, Any]],
     *,
@@ -190,69 +221,6 @@ def _annotate_last_search_reopen_commands(
         match["source_window_command"] = " ".join(part for part in direct_parts if part)
 
 
-def _registry_search_actions(
-    *,
-    query: str,
-    has_matches: bool,
-    first_match: Mapping[str, Any] | None,
-) -> list[dict[str, Any]]:
-    if has_matches and first_match:
-        command = str(first_match.get("reopen_command") or "").strip()
-        actions = [
-            foreground_shell_action(
-                action_id="open_registry_search_source_window",
-                label="Open the first registry search source window",
-                command=command,
-                why=(
-                    "Registry search found capped snippets; open the selected "
-                    "bounded source window before quoting or making strong claims."
-                ),
-                mutation_risk="read_only",
-                claim_boundary="source_reopen_required_before_claim",
-            ),
-            foreground_template_action(
-                action_id="diagnostic_registry_search_with_paths",
-                label="Rerun registry search with local paths",
-                command_template='aippocampus search --all "{exact_phrase}" --include-paths --json',
-                requires=["exact_phrase"],
-                why="Local diagnostic opt-in for finding the exact clean-source artifact.",
-                mutation_risk="read_only",
-                claim_boundary="local_paths_are_operator_diagnostics",
-            ),
-        ]
-        return [
-            action for action in actions if action.get("command") or action.get("command_template")
-        ]
-    return [
-        foreground_template_action(
-            action_id="refine_registry_exact_search",
-            label="Refine registry exact search",
-            command_template='aippocampus search --all "{distinctive_phrase}" --json',
-            requires=["distinctive_phrase"],
-            why="No registry snippet matched; try a more distinctive phrase or term set.",
-            mutation_risk="read_only",
-            claim_boundary="search_miss_is_not_absence_of_memory",
-        ),
-        foreground_template_action(
-            action_id="recall_before_exact_search",
-            label="Use recall for vague continuity cues",
-            command_template='aippocampus agent recall "{cue}" --json',
-            requires=["cue"],
-            why="Use recall when the user remembers the situation but not exact wording.",
-            mutation_risk="read_only",
-            claim_boundary="no_claim_before_reopen",
-        ),
-        foreground_shell_action(
-            action_id="check_registered_sources",
-            label="Check registered source status",
-            command="aippocampus onboard --provider auto --status --json",
-            why="Use this if the expected old source may not be registered locally.",
-            mutation_risk="read_only",
-            claim_boundary="host_status_not_source_evidence",
-        ),
-    ]
-
-
 def search_registry_sources(
     patterns: list[str],
     *,
@@ -274,9 +242,12 @@ def search_registry_sources(
     registry_root = Path(registry_dir).resolve() if registry_dir else None
     registry_json, _ = registry_paths(registry_root)
     registry_payload = load_registry(registry_json)
+    query_text = " ".join(str(pattern) for pattern in patterns).strip()
     terms = search_query_terms(patterns)
+    query_gate = query_match_gate(query_text)
     budget = REGISTRY_SEARCH_DEEP_BUDGET if search_budget == "deep" else None
     matches: list[dict[str, Any]] = []
+    suppressed_matches: list[dict[str, Any]] = []
     warnings: list[dict[str, Any]] = []
     searched_entry_count = 0
     unavailable_source_count = 0
@@ -301,13 +272,29 @@ def search_registry_sources(
             unavailable_source_count += 1
         for hit in result.get("hits") or []:
             if isinstance(hit, Mapping):
-                matches.append(
-                    _registry_match(
-                        entry=entry,
-                        hit=hit,
-                        include_paths=include_paths,
-                    )
+                match = _registry_match(
+                    entry=entry,
+                    hit=hit,
+                    include_paths=include_paths,
                 )
+                profile = match_query_profile(
+                    query_text=query_text,
+                    gate=query_gate,
+                    haystack=_match_haystack(match),
+                )
+                match["query_match_profile"] = profile
+                if profile["accepted"]:
+                    matches.append(match)
+                else:
+                    suppressed_matches.append(
+                        {
+                            "thread": match.get("thread"),
+                            "score": match.get("score"),
+                            "query_match_profile": profile,
+                            "source": match.get("source"),
+                            "line": match.get("line"),
+                        }
+                    )
 
     matches.sort(
         key=lambda item: (
@@ -323,22 +310,24 @@ def search_registry_sources(
         registry_dir=registry_root,
         include_paths=include_paths,
     )
-    query_text = " ".join(str(pattern) for pattern in patterns).strip()
     if record_last_search:
         write_last_registry_search_cache(
             registry_dir=registry_root,
             query_text=query_text,
             matches=matches,
         )
-    actions = _registry_search_actions(
+    actions = registry_search_actions(
         query=query_text,
         has_matches=bool(matches),
         first_match=matches[0] if matches else None,
     )
-    payload: dict[str, Any] = {
+    no_phrase_like_matches = bool(query_gate.get("phrase_like_query")) and not matches and bool(suppressed_matches)
+    diagnostic_output = include_paths or search_budget == "deep"
+    output_matches = matches if diagnostic_output else [_compact_registry_match(match) for match in matches]
+    payload: dict[str, Any] = _without_empty({
         "kind": "aippocampus_registry_source_search",
         "ok": bool(matches),
-        "status": "ok" if matches else "no_matches",
+        "status": "ok" if matches else "no_phrase_like_matches" if no_phrase_like_matches else "no_matches",
         "search_scope": "registered_clean_source_and_indexes",
         "scope_description": (
             "registered clean-source/index entries across the local registry; "
@@ -346,12 +335,31 @@ def search_registry_sources(
         ),
         "registry": str(registry_json),
         "query_text": query_text,
-        "query_terms": terms,
-        "matches": matches,
+        "query_terms": terms if diagnostic_output else None,
+        "query_match_gate": query_gate if diagnostic_output else None,
+        "matches": output_matches,
         "match_count": len(matches),
+        "suppressed_low_coverage_match_count": len(suppressed_matches),
+        "suppressed_low_coverage_matches": suppressed_matches[:3] if diagnostic_output else None,
         "searched_entry_count": searched_entry_count,
         "unavailable_source_count": unavailable_source_count,
         "warnings": warnings,
+        "diagnostic_fields_omitted": (
+            [
+                "query_terms",
+                "query_match_gate",
+                "matches[].score",
+                "matches[].query_match_profile",
+                "suppressed_low_coverage_matches",
+            ]
+            if not diagnostic_output
+            else None
+        ),
+        "diagnostic_detail_command": (
+            f"aippocampus search --all {shell_quote(query_text)} --search-budget deep --json"
+            if not diagnostic_output and query_text
+            else None
+        ),
         "output_boundary": (
             "local_private_source_routes_with_paths"
             if include_paths
@@ -363,6 +371,7 @@ def search_registry_sources(
             "source_backed_claim_allowed": bool(matches),
             "source_reopen_required_before_claim": True,
             "search_miss_is_not_absence_of_memory": not bool(matches),
+            "phrase_like_low_coverage_suppressed": no_phrase_like_matches,
         },
         "privacy": {
             "paths_included": include_paths,
@@ -372,7 +381,7 @@ def search_registry_sources(
             "full_session_metadata_emitted": False,
             "last_search_cache_contains_paths": False,
         },
-    }
+    })
     if actions:
         payload.update(
             canonical_foreground_action_fields(

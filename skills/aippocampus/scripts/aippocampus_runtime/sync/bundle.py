@@ -13,7 +13,7 @@ from typing import Any, Iterable
 
 from aippocampus_runtime.artifacts.publish import resolve_sqlite_index_path
 from aippocampus_runtime.cli.human_io import exit_code_for_payload
-from aippocampus_runtime.contracts import write_boundary
+from aippocampus_runtime.contracts import canonical_foreground_action_fields, write_boundary
 from aippocampus_runtime.core import aippocampus_registry_dir, file_sha256, now_utc, safe_path_name
 from aippocampus_runtime.io_integrity import stale_tmp_recovery_card
 from aippocampus_runtime.sync.bundle_recovery import (
@@ -995,15 +995,12 @@ def available_requires_sync_dir_status() -> dict[str, Any]:
         "ok": True,
         "status": "available_requires_sync_dir",
         "surface_class": "foreground_status_card",
-        "foreground_action_contract": "foreground-action-v1",
         "backend": "local_folder",
         "backends": ["local_folder", "http_object_store"],
         "commands": ["status", "push", "pull", "repair"],
         "next_command_template": 'aippocampus sync status --sync-dir "{sync_dir}" --json',
         "requires": ["sync_dir"],
-        "agent_next_action": actions[0],
-        "foreground_action": actions[0],
-        "safe_next_actions": actions,
+        **canonical_foreground_action_fields(actions[0], safe_next_actions=actions),
         "raw_rollout_sync": "explicit_only",
         "claim_boundary": "sync capability exists, but no local sync backend is selected",
     }

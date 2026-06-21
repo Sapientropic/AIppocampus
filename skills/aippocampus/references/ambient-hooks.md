@@ -557,7 +557,7 @@ When sanitized prior prompt-trace rows already carry source refs, the warm path
 may add one deterministic fallback card, but it must still pass the same local
 source-ref validation and must not use the current prompt as memory.
 Foreground code schedules background warming by default after non-skip cache
-misses when the hook has a thread id and `DEEPSEEK_API_KEY` is available.
+misses when the hook has a thread id and `AIPPOCAMPUS_DEEPSEEK_API_KEY` is available.
 `aippocampus_runtime.warm_ambient.scheduler` writes a redacted local job file and starts a
 detached `warm_ambient_recall.py --job-file` run. That job uses wait-all by
 default with its own detached timeout (`AIPPOCAMPUS_DETACHED_WARM_TIMEOUT`,
@@ -866,7 +866,7 @@ should not be the first evidence card when better human-facing source exists.
 
 ## Semantic Gate
 
-When `DEEPSEEK_API_KEY` is present and `AIPPOCAMPUS_SEMANTIC_GATE` is not `off`,
+When `AIPPOCAMPUS_DEEPSEEK_API_KEY` is present and `AIPPOCAMPUS_SEMANTIC_GATE` is not `off`,
 the prompt hook may call the packaged semantic gate through
 `aippocampus_runtime.recall.semantic_recall_gate`. The semantic gate runs small
 parallel workers:

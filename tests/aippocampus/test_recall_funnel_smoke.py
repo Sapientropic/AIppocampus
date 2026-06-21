@@ -302,7 +302,7 @@ class RecallFunnelSmokeTests(unittest.TestCase):
                 "aippocampus_runtime.cli.facade",
                 "smoke",
                 "recall-funnel",
-                "progressive recall evidence",
+                "SECRET_TOKEN=abc progressive recall evidence",
                 "--cwd",
                 str(self.cwd),
                 "--json",
@@ -371,14 +371,14 @@ class RecallFunnelSmokeTests(unittest.TestCase):
         self.assertFalse(payload["ok"])
         self.assertTrue(payload["cue_required"])
         self.assertEqual(payload["error"]["code"], "cue_required")
-        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
-        self.assertEqual(payload["foreground_action"], payload["agent_next_action"])
-        self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
+        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v2")
+        self.assertIn("foreground_action", payload)
+        self.assertNotIn(payload["foreground_action"], payload["safe_next_actions"])
         self.assertIn("diagnostic", payload["source_boundary"]["claim_boundary"])
         self.assertIn("not source evidence", payload["source_boundary"]["claim_boundary"])
 
-        smoke_action = payload["safe_next_actions"][0]
-        ordinary_action = payload["safe_next_actions"][1]
+        smoke_action = payload["foreground_action"]
+        ordinary_action = payload["safe_next_actions"][0]
         self.assertNotIn("command", smoke_action)
         self.assertNotIn("command", ordinary_action)
         self.assertIn("{cue}", smoke_action["command_template"])

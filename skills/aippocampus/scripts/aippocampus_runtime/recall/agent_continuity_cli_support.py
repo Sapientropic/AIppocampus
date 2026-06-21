@@ -13,7 +13,6 @@ from typing import Any
 from aippocampus_runtime import core
 from aippocampus_runtime.aippo import working_contract as aippo_working_contract
 from aippocampus_runtime.contracts import (
-    FOREGROUND_ACTION_CONTRACT_VERSION,
     canonical_foreground_action_fields,
     command_value_needs_input,
     foreground_recovery_card,
@@ -263,13 +262,11 @@ def handle_recovery_fields(mode: str) -> dict[str, Any]:
         _request_index_followup_action(mode),
     ]
     return {
-        "foreground_action_contract": FOREGROUND_ACTION_CONTRACT_VERSION,
-        "foreground_action": actions[0],
+        **canonical_foreground_action_fields(
+            actions[0],
+            safe_next_actions=actions[1:],
+        ),
         "follow_up_action": actions[1],
-        "agent_next_action": actions[0],
-        "next_safe_action": actions[0],
-        "next_safe_action_id": "recall_with_cue",
-        "safe_next_actions": actions,
     }
 
 
@@ -308,12 +305,7 @@ def last_recall_cache_recovery_fields(
                 "as context when writing a fresh current cue."
             )
     return {
-        "foreground_action_contract": FOREGROUND_ACTION_CONTRACT_VERSION,
-        "foreground_action": action,
-        "agent_next_action": action,
-        "next_safe_action": action,
-        "next_safe_action_id": "recall_with_cue_full_detail",
-        "safe_next_actions": [action],
+        **canonical_foreground_action_fields(action),
     }
 
 
@@ -359,7 +351,6 @@ def missing_handle_payload(
             "code": "missing_recall_handle",
             "message": f"agent {mode} requires a local handle or --request N --last-recall",
         },
-        "next_safe_action_id": "recall_with_cue",
     }
     # Missing selector is a foreground input-recovery case. Malformed or stale
     # handles stay `cannot_verify` in the caller paths because those are source
@@ -1070,7 +1061,11 @@ def render_macro_human(payload: Mapping[str, Any]) -> str:
         if diagnostics:
             lines.append("Why: " + ", ".join(diagnostics[:3]))
         actions: list[str] = []
-        for action in payload.get("safe_next_actions") or []:
+        candidate_actions = [
+            payload.get("foreground_action"),
+            *(payload.get("safe_next_actions") or []),
+        ]
+        for action in candidate_actions:
             if not isinstance(action, Mapping):
                 continue
             command = str(action.get("command") or "").strip()
@@ -1167,7 +1162,9 @@ def render_recall_human(payload: Mapping[str, Any]) -> str:
     lines = [f"AIppocampus agent recall: {payload.get('status') or 'unknown'}"]
     if not packets:
         lines.append("No compact route surfaced.")
-    for index, packet in enumerate(packets[:3], start=1):
+    rendered_packets: list[Mapping[str, Any]] = []
+    duplicate_counts: dict[tuple[str, str], int] = {}
+    for packet in packets:
         label = (
             packet.get("route_topic")
             or packet.get("route_label")
@@ -1175,13 +1172,32 @@ def render_recall_human(payload: Mapping[str, Any]) -> str:
             or "memory route"
         )
         next_action = packet.get("recommended_next") or packet.get("next_action") or "reopen_source"
-        lines.append(f"{index}. {label} -> {next_action}")
+        key = (str(label), str(next_action))
+        if key in duplicate_counts:
+            duplicate_counts[key] += 1
+            continue
+        duplicate_counts[key] = 0
+        rendered_packets.append(packet)
+    for index, packet in enumerate(rendered_packets[:3], start=1):
+        label = (
+            packet.get("route_topic")
+            or packet.get("route_label")
+            or packet.get("route_id")
+            or "memory route"
+        )
+        next_action = packet.get("recommended_next") or packet.get("next_action") or "reopen_source"
+        duplicate_count = duplicate_counts.get((str(label), str(next_action)), 0)
+        duplicate_suffix = f" (+{duplicate_count} similar omitted)" if duplicate_count else ""
+        lines.append(f"{index}. {label} -> {next_action}{duplicate_suffix}")
         hint = packet.get("selection_hint")
         if isinstance(hint, Mapping) and hint.get("source"):
             lines.append(f"   why: {hint.get('source')}:{hint.get('why') or 'selected'}")
         reason_codes = packet.get("route_delta_reason_codes") or packet.get("triage_rank_reason_codes")
         if isinstance(reason_codes, list) and reason_codes:
             lines.append("   codes: " + ", ".join(str(code) for code in reason_codes[:3]))
+    omitted_duplicate_count = sum(duplicate_counts.values())
+    if omitted_duplicate_count:
+        lines.append(f"Collapsed duplicate route labels: {omitted_duplicate_count}.")
     navigation = payload.get("navigation_signals")
     if isinstance(navigation, Mapping):
         signals = [str(signal) for signal in navigation.get("signals") or [] if str(signal)]

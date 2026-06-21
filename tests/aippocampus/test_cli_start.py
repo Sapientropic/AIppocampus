@@ -48,8 +48,9 @@ class AippocampusStartCliTests(unittest.TestCase):
         payload = json.loads(proc.stdout)
         self.assertEqual(payload["kind"], "aippocampus_start_card")
         self.assertEqual(payload["decision"], "continue_from_existing_source")
-        self.assertEqual(payload["agent_next_action"]["id"], "recall_continuity_cue")
-        self.assertIn("command_template", payload["agent_next_action"])
+        self.assertNotIn("agent_next_action", payload)
+        self.assertEqual(payload["foreground_action"]["id"], "recall_continuity_cue")
+        self.assertIn("command_template", payload["foreground_action"])
         self.assertEqual(payload["first_recall_readiness"]["phase"], "steady_state_available")
         self.assertTrue(payload["first_recall_readiness"]["ordinary_first_recall_usable"])
         self.assertFalse(payload["first_recall_readiness"]["cold_start_expected"])
@@ -65,7 +66,7 @@ class AippocampusStartCliTests(unittest.TestCase):
         raw_card = {
             "kind": "aippocampus_start_card",
             "decision": "continue_from_existing_source",
-            "agent_next_action": {"why": "token=raw-start-token", "command": "aippocampus health --json"},
+            "foreground_action": {"why": "token=raw-start-token", "command": "aippocampus health --json"},
             "state_summary": {
                 "secret": "raw-secret-value",
                 "cwd": "/Users/example/private-project",
@@ -92,7 +93,7 @@ class AippocampusStartCliTests(unittest.TestCase):
         raw_card = {
             "kind": "aippocampus_start_card",
             "decision": "continue_from_existing_source",
-            "agent_next_action": {
+            "foreground_action": {
                 "why": "password=raw-start-password",
                 "command": "aippocampus health --json",
             },
@@ -127,19 +128,20 @@ class AippocampusStartCliTests(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stderr)
         payload = json.loads(proc.stdout)
         self.assertEqual(payload["decision"], "register_source_before_continuity")
-        self.assertEqual(payload["agent_next_action"]["id"], "register_codex_source")
+        self.assertNotIn("agent_next_action", payload)
+        self.assertEqual(payload["foreground_action"]["id"], "register_codex_source")
         self.assertEqual(payload["first_recall_readiness"]["phase"], "cold_start_setup_required")
         self.assertFalse(payload["first_recall_readiness"]["ordinary_first_recall_usable"])
         self.assertTrue(payload["first_recall_readiness"]["cold_start_expected"])
         self.assertTrue(payload["first_recall_readiness"]["requires_user_consent_for_writes"])
         self.assertEqual(payload["first_recall_readiness"]["progress_signal"], "no_clean_source_registered")
         self.assertEqual(
-            payload["agent_next_action"]["command"],
+            payload["foreground_action"]["command"],
             "aippocampus onboard --provider codex --cwd . --json",
         )
-        self.assertEqual(payload["agent_next_action"]["mutation_risk"], "writes_local_clean_source")
+        self.assertEqual(payload["foreground_action"]["mutation_risk"], "writes_local_clean_source")
         action_ids = [action["id"] for action in payload["safe_next_actions"]]
-        self.assertEqual(action_ids[0], "register_codex_source")
+        self.assertNotIn("register_codex_source", action_ids)
         self.assertIn("register_claude_code_source", action_ids)
         self.assertIn("import_generic_jsonl_source", action_ids)
         self.assertIn("inspect_onboarding_status", action_ids)
@@ -177,13 +179,14 @@ class AippocampusStartCliTests(unittest.TestCase):
                 payload = start_cli.build_start_card(Path(tmp))
 
         self.assertEqual(payload["decision"], "register_source_before_continuity")
-        self.assertEqual(payload["agent_next_action"]["id"], "register_claude_code_source")
+        self.assertEqual(payload["foreground_action"]["id"], "register_claude_code_source")
         self.assertEqual(
-            payload["agent_next_action"]["command"],
+            payload["foreground_action"]["command"],
             "aippocampus onboard --provider claude-code --cwd . --json",
         )
         action_ids = [action["id"] for action in payload["safe_next_actions"]]
-        self.assertLess(action_ids.index("register_claude_code_source"), action_ids.index("register_codex_source"))
+        self.assertEqual(payload["foreground_action"]["id"], "register_claude_code_source")
+        self.assertIn("register_codex_source", action_ids)
 
     def test_bare_aippocampus_in_new_workspace_shows_start_card_not_help_wall(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -221,15 +224,15 @@ class AippocampusStartCliTests(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stderr)
         payload = json.loads(proc.stdout)
         self.assertEqual(payload["decision"], "try_read_only_continuity_before_setup")
-        self.assertEqual(payload["agent_next_action"]["id"], "try_first_recall")
+        self.assertNotIn("agent_next_action", payload)
+        self.assertEqual(payload["foreground_action"]["id"], "try_first_recall")
         self.assertEqual(payload["first_recall_readiness"]["phase"], "cold_start_probe_or_public_demo")
         self.assertFalse(payload["first_recall_readiness"]["private_source_ready"])
         self.assertFalse(payload["first_recall_readiness"]["ordinary_first_recall_usable"])
         self.assertTrue(payload["first_recall_readiness"]["read_only_probe_available"])
         self.assertTrue(payload["first_recall_readiness"]["public_demo_available"])
-        self.assertEqual(payload["foreground_action"], payload["agent_next_action"])
-        self.assertEqual(payload["safe_next_actions"][0], payload["agent_next_action"])
-        self.assertEqual(payload["agent_next_action"]["mutation_risk"], "read_only")
+        self.assertNotIn(payload["foreground_action"], payload["safe_next_actions"])
+        self.assertEqual(payload["foreground_action"]["mutation_risk"], "read_only")
         action_ids = [action["id"] for action in payload["safe_next_actions"]]
         self.assertIn("public_safe_demo_search", action_ids)
         public_demo = next(
@@ -257,7 +260,8 @@ class AippocampusStartCliTests(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stderr)
         payload = json.loads(proc.stdout)
         self.assertEqual(payload["decision"], "repair_stale_source_before_continuity")
-        self.assertEqual(payload["agent_next_action"]["id"], "repair_health_first")
+        self.assertNotIn("agent_next_action", payload)
+        self.assertEqual(payload["foreground_action"]["id"], "repair_health_first")
         self.assertEqual(payload["first_recall_readiness"]["phase"], "cold_start_maintenance_required")
         self.assertFalse(payload["first_recall_readiness"]["ordinary_first_recall_usable"])
         self.assertTrue(payload["first_recall_readiness"]["cold_start_expected"])

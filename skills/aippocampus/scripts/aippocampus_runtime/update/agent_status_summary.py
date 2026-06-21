@@ -150,10 +150,10 @@ def compact_agent_status_report(
             }
         )
     actions: list[dict[str, Any]] = []
-    agent_next_action = update_actions.agent_callable_foreground_action(agent)
+    foreground_action = update_actions.agent_callable_foreground_action(agent)
     agent_action_needed = bool(
         agent.get("status")
-        and (agent.get("next_command") or agent_next_action.get("command"))
+        and (agent.get("next_command") or foreground_action.get("command"))
         and not agent.get("ready")
     )
     agent_action_added = False
@@ -162,8 +162,8 @@ def compact_agent_status_report(
             _compact_update_action(
                 surface="agent_callable",
                 reason=str(agent.get("status") or "foreground tools not verified"),
-                command=str(agent_next_action.get("command") or agent.get("next_command")),
-                manual_instruction=agent_next_action.get("manual_instruction"),
+                command=str(foreground_action.get("command") or agent.get("next_command")),
+                manual_instruction=foreground_action.get("manual_instruction"),
             )
         )
         agent_action_added = True
@@ -235,8 +235,8 @@ def compact_agent_status_report(
             _compact_update_action(
                 surface="agent_callable",
                 reason=str(agent.get("status") or "foreground tools not verified"),
-                command=str(agent_next_action.get("command") or agent.get("next_command")),
-                manual_instruction=agent_next_action.get("manual_instruction"),
+                command=str(foreground_action.get("command") or agent.get("next_command")),
+                manual_instruction=foreground_action.get("manual_instruction"),
             )
         )
     cache_refresh = plugin.get("cache_refresh") if isinstance(plugin, dict) else None

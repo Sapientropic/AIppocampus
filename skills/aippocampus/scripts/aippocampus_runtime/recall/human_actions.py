@@ -14,7 +14,7 @@ def recall_human_next_hint(payload: Mapping[str, Any]) -> str:
     suggested = str(payload.get("suggested_next_command") or "").strip()
     if suggested and "aippo-nav:" not in suggested and len(suggested) <= 160:
         return suggested
-    action = payload.get("agent_next_action")
+    action = payload.get("foreground_action")
     if isinstance(action, Mapping):
         command = action_command_text(action).strip()
         if command:

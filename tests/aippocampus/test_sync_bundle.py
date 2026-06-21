@@ -145,9 +145,9 @@ class SyncBundleTests(unittest.TestCase):
         self.assertEqual(payload["requested_command"], "push")
         self.assertTrue(payload["plan_skipped_no_destination"])
         self.assertIsNone(payload["estimated_file_count"])
-        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
-        self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
+        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v2")
         self.assertEqual(payload["foreground_action"]["id"], "check_local_sync_status")
+        self.assertNotIn(payload["foreground_action"], payload["safe_next_actions"])
         self.assertTrue(all(action["mutation_risk"] == "read_only" for action in payload["safe_next_actions"]))
 
     def test_push_writes_device_neutral_bundle_without_raw_rollout(self) -> None:
@@ -230,7 +230,9 @@ class SyncBundleTests(unittest.TestCase):
                 self.assertTrue(payload["issues"][0]["path_redacted"])
                 self.assertIn("safe_next_actions", payload)
                 action_ids = [action["id"] for action in payload["safe_next_actions"]]
-                self.assertEqual(action_ids[0], "check_local_sync_status")
+                self.assertEqual(payload["foreground_action"]["id"], "check_local_sync_status")
+                self.assertNotIn("check_local_sync_status", action_ids)
+                self.assertIn("preview_local_sync_push", action_ids)
                 self.assertIn("preview_local_sync_repair", action_ids)
                 self.assertTrue(all(action["template_only"] for action in payload["safe_next_actions"]))
                 self.assertNotIn(str(missing_sync_dir), encoded)

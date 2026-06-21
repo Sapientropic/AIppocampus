@@ -49,8 +49,6 @@ def _now(value: str | datetime | None) -> datetime:
 
 def _subconscious_hook_enabled() -> bool:
     raw = os.environ.get("AIPPOCAMPUS_SUBCONSCIOUS_HOOK")
-    if raw is None:
-        raw = os.environ.get("AIIPPOCAMPUS_SUBCONSCIOUS_HOOK")
     return str(raw or "").strip().casefold() in {"1", "true", "on", "yes", "enabled"}
 
 

@@ -93,9 +93,9 @@ class ContinuityDomainCliTests(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stderr)
         payload = json.loads(proc.stdout)
         self.assertEqual(payload["detail"], "agent_preview")
-        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
-        self.assertEqual(payload["foreground_action"], payload["agent_next_action"])
-        self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
+        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v2")
+        self.assertNotIn("agent_next_action", payload)
+        self.assertNotIn(payload["foreground_action"], payload["safe_next_actions"])
         self.assertIn("route_value", payload)
         self.assertIn("current_uncertainty", payload)
         self.assertIn("summary_metrics", payload)
@@ -175,10 +175,10 @@ class ContinuityDomainCliTests(unittest.TestCase):
         self.assertEqual(latest.returncode, 0, latest.stderr)
         for payload in (json.loads(proc.stdout), json.loads(latest.stdout)):
             self.assertEqual(payload["status"], "empty")
-            self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
-            self.assertEqual(payload["agent_next_action"], payload["foreground_action"])
-            self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
-            self.assertIsInstance(payload["agent_next_action"], dict)
+            self.assertEqual(payload["foreground_action_contract"], "foreground-action-v2")
+            self.assertNotIn("agent_next_action", payload)
+            self.assertNotIn(payload["foreground_action"], payload["safe_next_actions"])
+            self.assertIsInstance(payload["foreground_action"], dict)
             self.assertIn("safe_next_actions", payload)
             self.assertNotIn("recovery_actions", payload)
             recall = next(
@@ -245,7 +245,8 @@ class ContinuityDomainCliTests(unittest.TestCase):
         preview = continuity_domain_cli._producer_agent_preview(payload)
 
         self.assertEqual(preview["foreground_candidate_quality"], "needs_broader_scan")
-        self.assertEqual(preview["agent_next_action"]["id"], "needs_broader_scan_or_cue")
+        self.assertNotIn("agent_next_action", preview)
+        self.assertEqual(preview["foreground_action"]["id"], "needs_broader_scan_or_cue")
         candidates = preview["candidate_previews"]
         self.assertEqual(candidates[0]["foreground_candidate_quality"], "low_information")
         self.assertEqual(candidates[0]["foreground_actions"], [])
@@ -271,7 +272,7 @@ class ContinuityDomainCliTests(unittest.TestCase):
         preview = continuity_domain_cli._producer_agent_preview(payload)
 
         self.assertEqual(preview["foreground_candidate_quality"], "actionable")
-        command = preview["agent_next_action"]["command"]
+        command = preview["foreground_action"]["command"]
         self.assertIn("provider orchestration route", command)
         self.assertNotIn("锚点", command)
         self.assertNotIn("Sapientropic", command)

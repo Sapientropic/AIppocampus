@@ -363,7 +363,7 @@ def _status_main(argv: Sequence[str]) -> int:
         )
         print(f"worker: {activity.get('worker_evidence')}")
         print(f"next: {payload.get('action_code')}")
-        action = payload.get("agent_next_action") if isinstance(payload, dict) else None
+        action = payload.get("foreground_action") if isinstance(payload, dict) else None
         if isinstance(action, dict):
             print(f"action: {action.get('command')}")
         else:

@@ -32,23 +32,75 @@ def _cue_for_command(cue: str) -> str:
     return raw
 
 
+def _diagnostic_codes(payload: Mapping[str, Any]) -> list[str]:
+    return [str(item) for item in payload.get("reasons") or [] if str(item)]
+
+
+def _readable_why(payload: Mapping[str, Any]) -> list[str]:
+    mode = str(payload.get("mode") or "why-recall")
+    decision = str(payload.get("decision") or "unknown")
+    diagnostic = str(payload.get("diagnostic_class") or "unknown")
+    specificity = str(payload.get("route_specificity") or "")
+    codes = set(_diagnostic_codes(payload))
+    if diagnostic == "surfaced_but_low_specificity" or specificity == "low":
+        return [
+            "Recall did find routes, but they are too broad or repetitive to answer this cue cleanly.",
+            "Use the original cue for a bounded source search, or provide a sharper phrase if you know one.",
+        ]
+    if "missing_clean_source" in codes:
+        return [
+            "The clean-source index for this workspace is missing or unavailable.",
+            "Check onboarding/index status before treating recall silence as meaningful.",
+        ]
+    if decision == "surfaced":
+        return [
+            "Recall found a route, but the diagnostic is only navigation guidance.",
+            "Reopen or deepen the source route before using it for a claim.",
+        ]
+    if decision in {"suppressed", "silent", "missing", "unknown"}:
+        no_route_text = (
+            "No usable recall route surfaced for this cue."
+            if mode == "why-not-recall"
+            else "Recall did not surface a claim-ready route for this cue."
+        )
+        return [
+            no_route_text,
+            "Search the same cue against source material before broadening the question.",
+        ]
+    return ["The diagnostic finished, but did not produce a claim-ready source route."]
+
+
+def _readable_what_happened(payload: Mapping[str, Any]) -> str:
+    diagnostic = str(payload.get("diagnostic_class") or "")
+    decision = str(payload.get("decision") or "unknown")
+    specificity = str(payload.get("route_specificity") or "")
+    if diagnostic == "surfaced_but_low_specificity" or specificity == "low":
+        return "Recall surfaced low-specificity routes."
+    if "missing_clean_source" in set(_diagnostic_codes(payload)):
+        return "Clean-source artifacts are unavailable."
+    if decision == "surfaced":
+        return "Recall surfaced a source route."
+    if decision in {"suppressed", "silent", "missing", "unknown"}:
+        return "No usable recall route surfaced."
+    return f"Recall diagnostic returned {decision}."
+
+
 def render_text(payload: Mapping[str, Any]) -> str:
     mode = str(payload.get("mode") or "why-recall")
     decision = str(payload.get("decision") or "unknown")
     diagnostic = str(payload.get("diagnostic_class") or "unknown")
-    reasons = [str(item) for item in payload.get("reasons") or []][:3]
-    specificity = payload.get("route_specificity") or "unknown"
+    readable_why = _readable_why(payload)
     raw_action_card = payload.get("action_card")
     action_card: Mapping[str, Any] = raw_action_card if isinstance(raw_action_card, Mapping) else {}
     if mode == "why-not-recall" and diagnostic == "surfaced_but_low_specificity":
-        happened = "A route did surface, but it was too broad to treat as a good recall answer."
-        next_command = "aippocampus why-recall \"<more specific cue>\""
+        happened = "Recall did find routes, but they are broad and repetitive."
+        next_command = "aippocampus search \"<cue>\" --json"
     elif decision == "surfaced":
         happened = "Recall surfaced a source route."
         next_command = "aippocampus agent recall \"<cue>\" --public"
-    elif decision in {"suppressed", "silent"}:
-        happened = "Recall stayed quiet or suppressed the route."
-        next_command = "tighten the cue, then run aippocampus why-recall \"<cue>\""
+    elif decision in {"suppressed", "silent", "missing", "unknown"}:
+        happened = "No usable recall route surfaced."
+        next_command = "aippocampus search \"<cue>\" --json"
     else:
         happened = f"Recall diagnostic returned {decision}."
         next_command = "aippocampus health --json"
@@ -70,8 +122,7 @@ def render_text(payload: Mapping[str, Any]) -> str:
     lines = [
         f"AIppocampus {mode}",
         f"what happened: {happened}",
-        f"specificity: {specificity}",
-        f"why: {', '.join(reasons) or 'no blocking reason recorded'}",
+        "why: " + " ".join(readable_why),
         f"next: {next_command}",
         "boundary: this diagnostic is route guidance, not source evidence.",
     ]
@@ -229,7 +280,7 @@ def _attach_foreground_actions(payload: dict[str, Any], *, cue: str) -> dict[str
     diagnostic = str(payload.get("diagnostic_class") or "")
     specificity = str(payload.get("route_specificity") or "")
     primary: dict[str, Any]
-    tighten_action: dict[str, Any] = foreground_template_action(
+    diagnostic_tighten_action: dict[str, Any] = foreground_template_action(
         action_id="tighten_cue",
         label="Tighten the diagnostic cue",
         command_template='aippocampus why-recall "{more_specific_cue}" --json',
@@ -237,6 +288,26 @@ def _attach_foreground_actions(payload: dict[str, Any], *, cue: str) -> dict[str
         why="The surfaced route was too broad; refine the cue before repeating recall.",
         mutation_risk="read_only",
         claim_boundary="diagnostic_not_source_evidence",
+    )
+    recall_refined_action: dict[str, Any] = foreground_template_action(
+        action_id="rerun_refined_recall",
+        label="Rerun recall with a better cue",
+        command_template='aippocampus agent recall "{more_specific_cue}" --json',
+        requires=["more_specific_cue"],
+        why=(
+            "The surfaced route was too broad; rerun recall with a more specific cue "
+            "before staying in diagnostics."
+        ),
+        mutation_risk="read_only",
+        claim_boundary="no_claim_before_reopen",
+    )
+    search_same_cue_action = foreground_shell_action(
+        action_id="search_same_cue",
+        label="Search same cue",
+        command=search_command,
+        why="Use the original cue as a bounded source search before inventing a broader query.",
+        mutation_risk="read_only",
+        claim_boundary="source_reopen_required_before_claim",
     )
     deepen_action = foreground_shell_action(
         action_id="deepen_after_recall",
@@ -256,18 +327,15 @@ def _attach_foreground_actions(payload: dict[str, Any], *, cue: str) -> dict[str
             claim_boundary="diagnostic_not_source_evidence",
         )
     elif diagnostic == "surfaced_but_low_specificity" or specificity == "low":
-        primary = tighten_action
+        primary = (
+            search_same_cue_action
+            if str(payload.get("mode") or "") == "why-not-recall"
+            else diagnostic_tighten_action
+        )
     elif decision == "surfaced" or next_safe == "reopen_source":
         primary = deepen_action
     else:
-        primary = foreground_shell_action(
-            action_id="search_same_cue",
-            label="Search same cue",
-            command=search_command,
-            why="No route is claim-ready; use the same cue as a bounded source search before broadening.",
-            mutation_risk="read_only",
-            claim_boundary="source_reopen_required_before_claim",
-        )
+        primary = search_same_cue_action
     candidate_actions: list[dict[str, Any]] = [
         primary,
         foreground_shell_action(
@@ -280,6 +348,11 @@ def _attach_foreground_actions(payload: dict[str, Any], *, cue: str) -> dict[str
         ),
         deepen_action,
     ]
+    if primary["id"] == "search_same_cue" and (diagnostic == "surfaced_but_low_specificity" or specificity == "low"):
+        candidate_actions.append(recall_refined_action)
+        candidate_actions.append(diagnostic_tighten_action)
+    if primary["id"] == "rerun_refined_recall":
+        candidate_actions.append(diagnostic_tighten_action)
     if primary["id"] != "check_onboarding_status":
         candidate_actions.append(
             foreground_shell_action(
@@ -327,7 +400,8 @@ def _compact_json_payload(payload: Mapping[str, Any], *, cue: str) -> dict[str, 
     """
 
     mode = str(payload.get("mode") or "why-recall")
-    reasons = [str(item) for item in payload.get("reasons") or [] if str(item)][:3]
+    diagnostic_codes = _diagnostic_codes(payload)
+    readable_why = _readable_why(payload)
     primary = payload.get("foreground_action")
     safe_actions = payload.get("safe_next_actions")
     if not isinstance(primary, Mapping):
@@ -355,12 +429,11 @@ def _compact_json_payload(payload: Mapping[str, Any], *, cue: str) -> dict[str, 
         "diagnostic_class": payload.get("diagnostic_class"),
         "route_specificity": payload.get("route_specificity"),
         "explanation_card": {
-            "what_happened": payload.get("decision")
-            or payload.get("diagnostic_class")
-            or "diagnostic_complete",
-            "why": reasons,
+            "what_happened": _readable_what_happened(payload),
+            "why": readable_why,
             "next": payload.get("foreground_next_action") or payload.get("next_safe_action"),
         },
+        "diagnostic_codes": diagnostic_codes,
         **canonical_foreground_action_fields(primary, safe_next_actions=actions),
         "claim_boundary": "Diagnostic output is route guidance, not source evidence; reopen/deepen before claims.",
         "operator_detail_command": f"aippocampus {mode} {_quoted(_cue_for_command(cue))} --json --detail full",

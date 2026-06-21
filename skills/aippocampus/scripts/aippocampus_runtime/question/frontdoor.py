@@ -45,7 +45,7 @@ def _status_payload(args: argparse.Namespace) -> dict[str, Any]:
     summary.pop("registry", None)
     open_count = _safe_int(summary.get("open_question_count"))
     if open_count:
-        agent_next_action: dict[str, Any] = {
+        foreground_action: dict[str, Any] = {
             "id": "list_open_question_routes",
             "label": "List open question routes",
             "command": f"aippocampus questions list --max {int(args.max or 8)} --json",
@@ -54,7 +54,7 @@ def _status_payload(args: argparse.Namespace) -> dict[str, Any]:
             "why": "Status found open source-backed questions; list rows to get reopenable routes.",
         }
     else:
-        agent_next_action = {
+        foreground_action = {
             "id": "continue_with_ordinary_recall",
             "label": "Continue with ordinary recall",
             "command": "aippocampus agent recall --json",
@@ -63,7 +63,7 @@ def _status_payload(args: argparse.Namespace) -> dict[str, Any]:
             "why": "No open question rows were found; use ordinary source-backed recall when needed.",
         }
     safe_next_actions = [
-        agent_next_action,
+        foreground_action,
         {
             "id": "inspect_question_status",
             "label": "Inspect question status",
@@ -73,7 +73,7 @@ def _status_payload(args: argparse.Namespace) -> dict[str, Any]:
         },
     ]
     action_fields = canonical_foreground_action_fields(
-        agent_next_action,
+        foreground_action,
         safe_next_actions=safe_next_actions,
     )
     return {
@@ -104,8 +104,15 @@ def _safe_int(value: Any) -> int:
         return 0
 
 
-def _search_command(title: Any) -> str:
+def _search_command(
+    title: Any,
+    *,
+    source_ref_count: int = 0,
+    source_thread_count: int = 0,
+) -> str:
     query = str(title or "question route").strip() or "question route"
+    if source_ref_count > 0 or source_thread_count > 0:
+        return f"aippocampus search --all {shell_quote(query)} --json"
     return f"aippocampus search {shell_quote(query)} --json"
 
 
@@ -132,7 +139,11 @@ def _question_action_card(item: Mapping[str, Any]) -> dict[str, Any]:
     state = str(item.get("state") or "unknown")
     source_ref_count = _safe_int(item.get("source_ref_count"))
     source_thread_count = _safe_int(item.get("source_thread_count"))
-    command = _search_command(title)
+    command = _search_command(
+        title,
+        source_ref_count=source_ref_count,
+        source_thread_count=source_thread_count,
+    )
     row: dict[str, Any] = {
         "unit_id": item.get("unit_id"),
         "title": title,
@@ -149,7 +160,7 @@ def _question_action_card(item: Mapping[str, Any]) -> dict[str, Any]:
                 "action_grammar": "ignore_or_blocked",
                 "route_state": "blocked_missing_source_refs",
                 "blocked_reason": "source refs are missing or no longer resolve",
-                "agent_next_action": _row_action(
+                "foreground_action": _row_action(
                     action_id="repair_question_source_refs",
                     label="Repair question source refs",
                     command="aippocampus questions status --json",
@@ -169,6 +180,11 @@ def _question_action_card(item: Mapping[str, Any]) -> dict[str, Any]:
         "source_ref_count": source_ref_count,
         "source_thread_count": source_thread_count,
         "reopen_command": command,
+        "reopen_scope": (
+            "registry_wide"
+            if source_ref_count > 0 or source_thread_count > 0
+            else "current_thread"
+        ),
         "claim_boundary": "reopen source before treating this question state as evidence",
     }
     if state == "resolved":
@@ -176,7 +192,7 @@ def _question_action_card(item: Mapping[str, Any]) -> dict[str, Any]:
             {
                 "action_grammar": "bounded_evidence",
                 "route_state": "resolved_recheck_before_use",
-                "agent_next_action": _row_action(
+                "foreground_action": _row_action(
                     action_id="recheck_resolved_question_source",
                     label="Recheck resolved question source",
                     command=command,
@@ -190,7 +206,7 @@ def _question_action_card(item: Mapping[str, Any]) -> dict[str, Any]:
             {
                 "action_grammar": "reopenable_route",
                 "route_state": "dormant_recheck_before_reviving",
-                "agent_next_action": _row_action(
+                "foreground_action": _row_action(
                     action_id="recheck_dormant_question_source",
                     label="Recheck dormant question source",
                     command=command,
@@ -204,7 +220,7 @@ def _question_action_card(item: Mapping[str, Any]) -> dict[str, Any]:
             {
                 "action_grammar": "reopenable_route",
                 "route_state": "ready_to_reopen",
-                "agent_next_action": _row_action(
+                "foreground_action": _row_action(
                     action_id="reopen_question_source",
                     label="Reopen question source",
                     command=command,
@@ -227,7 +243,7 @@ def _blocked_ref_card(count: int) -> dict[str, Any]:
         "action_grammar": "ignore_or_blocked",
         "route_state": "blocked_missing_source_refs",
         "blocked_reason": "some question rows had missing or unresolved source refs",
-        "agent_next_action": _row_action(
+        "foreground_action": _row_action(
             action_id="repair_question_source_refs",
             label="Repair question source refs",
             command="aippocampus questions status --json",
@@ -238,6 +254,22 @@ def _blocked_ref_card(count: int) -> dict[str, Any]:
         ),
         "source_route": None,
     }
+
+
+def _row_action_priority(row: Mapping[str, Any], index: int) -> tuple[int, int]:
+    state = str(row.get("state") or "")
+    route_state = str(row.get("route_state") or "")
+    if state == "open" and route_state == "ready_to_reopen":
+        return (0, index)
+    if route_state == "ready_to_reopen":
+        return (1, index)
+    if state == "dormant":
+        return (2, index)
+    if state == "resolved":
+        return (3, index)
+    if route_state.startswith("blocked"):
+        return (5, index)
+    return (4, index)
 
 
 def _list_payload(args: argparse.Namespace) -> dict[str, Any]:
@@ -256,11 +288,15 @@ def _list_payload(args: argparse.Namespace) -> dict[str, Any]:
     if unresolved_count and len(rows) < max_rows:
         rows.append(_blocked_ref_card(unresolved_count))
     if rows:
+        prioritized_rows = sorted(
+            enumerate(rows),
+            key=lambda pair: _row_action_priority(pair[1], pair[0]),
+        )
         primary_action = next(
             (
-                row["agent_next_action"]
-                for row in rows
-                if isinstance(row.get("agent_next_action"), Mapping)
+                row["foreground_action"]
+                for _, row in prioritized_rows
+                if isinstance(row.get("foreground_action"), Mapping)
             ),
             {
                 "id": "inspect_question_status",
@@ -271,6 +307,20 @@ def _list_payload(args: argparse.Namespace) -> dict[str, Any]:
                 "why": "Inspect question status before using ambiguous rows.",
             },
         )
+        primary_row = next(
+            (
+                row
+                for _, row in prioritized_rows
+                if row.get("foreground_action") == primary_action
+            ),
+            None,
+        )
+        primary_selection = {
+            "strategy": "open_ready_routes_before_dormant",
+            "row_title": primary_row.get("title") if isinstance(primary_row, Mapping) else None,
+            "row_state": primary_row.get("state") if isinstance(primary_row, Mapping) else None,
+            "route_state": primary_row.get("route_state") if isinstance(primary_row, Mapping) else None,
+        }
         empty_state = None
     else:
         primary_action = {
@@ -283,9 +333,10 @@ def _list_payload(args: argparse.Namespace) -> dict[str, Any]:
         }
         empty_state = {
             "state": "no_source_backed_question_rows",
-            "agent_next_action": primary_action,
-            "safe_next_actions": [
+            **canonical_foreground_action_fields(
                 primary_action,
+                safe_next_actions=[
+                    primary_action,
                 {
                     "id": "inspect_question_status",
                     "label": "Inspect question status",
@@ -294,7 +345,14 @@ def _list_payload(args: argparse.Namespace) -> dict[str, Any]:
                     "claim_boundary": "question_lifecycle_stats_are_navigation_only",
                     "why": "Check whether rows are missing, blocked, or simply absent.",
                 },
-            ],
+                ],
+            ),
+        }
+        primary_selection = {
+            "strategy": "empty_list_ordinary_recall",
+            "row_title": None,
+            "row_state": None,
+            "route_state": None,
         }
     action_fields = canonical_foreground_action_fields(
         primary_action,
@@ -317,6 +375,9 @@ def _list_payload(args: argparse.Namespace) -> dict[str, Any]:
         "available": bool(payload.get("available")),
         "count": len(rows),
         "rows": rows,
+        "primary_selection": {
+            key: value for key, value in primary_selection.items() if value not in (None, "")
+        },
         "empty_state": empty_state,
         "source_boundary": {
             "rows_are_navigation_not_source_truth": True,
@@ -353,15 +414,15 @@ def _print_payload(payload: Mapping[str, Any], *, json_output: bool) -> None:
                 print(f"- {row.get('state')} [{grammar}]: {row.get('title')}")
                 if row.get("blocked_reason"):
                     print(f"  blocked: {row.get('blocked_reason')}")
-                if row.get("agent_next_action"):
-                    action = row.get("agent_next_action")
+                if row.get("foreground_action"):
+                    action = row.get("foreground_action")
                     if isinstance(action, Mapping):
                         print(f"  next: {action.get('command') or action.get('command_template')}")
                     else:
                         print(f"  next: {action}")
     print("boundary: navigation only; reopen source before claims")
-    if payload.get("agent_next_action"):
-        action = payload.get("agent_next_action")
+    if payload.get("foreground_action"):
+        action = payload.get("foreground_action")
         if isinstance(action, Mapping):
             print(f"next: {action.get('command') or action.get('label')}")
         else:

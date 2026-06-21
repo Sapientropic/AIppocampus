@@ -78,7 +78,7 @@ CONFIG_KNOBS = (
         "model routing",
         "unset",
         sensitive=True,
-        notes="Canonical DeepSeek credential env; DEEPSEEK_API_KEY remains a legacy migration fallback.",
+        notes="Canonical DeepSeek credential env; provider-native env names are no longer defaults.",
     ),
     _knob("AIPPOCAMPUS_OPENAI_COMPAT_API_KEY_ENV", "model/routing", "provider_specific", "model routing", "provider route default"),
     _knob("AIPPOCAMPUS_OPENAI_COMPAT_BASE_URL", "model/routing", "provider_specific", "model routing", "unset"),

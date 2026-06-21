@@ -44,15 +44,15 @@ class ClaudeCodeHooksTests(unittest.TestCase):
         self.assertEqual(status["events"]["Stop"]["status"], "installable")
         self.assertEqual(status["events"]["PostToolUse"]["status"], "unsupported_event")
         self.assertEqual(
-            status["agent_next_action"]["command"],
+            status["foreground_action"]["command"],
             "aippocampus hooks claude-code dry-run --json",
         )
         self.assertEqual(
-            status["foreground_action"]["unsupported_events"]["action"],
+            status["foreground_action_card"]["unsupported_events"]["action"],
             "do_not_install_or_claim_unsupported_events_yet",
         )
-        self.assertIn("PostToolUse", status["foreground_action"]["unsupported_events"]["events"])
-        self.assertTrue(status["foreground_action"]["claim_boundary"]["no_configuration_mutation_happened"])
+        self.assertIn("PostToolUse", status["foreground_action_card"]["unsupported_events"]["events"])
+        self.assertTrue(status["foreground_action_card"]["claim_boundary"]["no_configuration_mutation_happened"])
         self.assertNotIn("no_configuration_mutating_installer", status["cannot_claim"])
         self.assertFalse(dry_run["would_write"])
         self.assertIn("handler_command", dry_run)
@@ -60,11 +60,12 @@ class ClaudeCodeHooksTests(unittest.TestCase):
         self.assertFalse(dry_run["handler_command"]["resolved_executable_path_emitted"])
         self.assertEqual(dry_run["rollback_command"], "aippocampus hooks claude-code uninstall --json")
         self.assertEqual(dry_run["install_command"], "aippocampus hooks claude-code install --json")
-        self.assertEqual(dry_run["foreground_action_contract"], "foreground-action-v1")
-        self.assertEqual(dry_run["agent_next_action"], dry_run["foreground_action"])
+        self.assertEqual(dry_run["foreground_action_contract"], "foreground-action-v2")
+        self.assertIn("foreground_action", dry_run)
+        self.assertEqual(dry_run["foreground_action"]["id"], "install_claude_code_hooks_after_review")
         action_ids = [action["id"] for action in dry_run["safe_next_actions"]]
         self.assertEqual(action_ids, list(dict.fromkeys(action_ids)))
-        self.assertEqual(action_ids[0], "install_claude_code_hooks_after_review")
+        self.assertNotIn("install_claude_code_hooks_after_review", action_ids)
         self.assertNotIn("inspect_claude_code_hook_status", action_ids)
         self.assertNotIn("copy the dry-run handlers", dry_run["next_operator_step"])
         self.assertNotIn(str(settings), encoded)
@@ -209,14 +210,14 @@ class ClaudeCodeHooksTests(unittest.TestCase):
 
         self.assertEqual(status["settings"]["status"], "installed")
         self.assertEqual(
-            status["agent_next_action"]["command"],
+            status["foreground_action"]["command"],
             "aippocampus hooks claude-code smoke --json",
         )
         action_commands = {action["command"] for action in status["safe_next_actions"] if action.get("command")}
         self.assertIn("aippocampus hooks claude-code uninstall --json", action_commands)
         self.assertIn(
             "UserPromptSubmit",
-            status["foreground_action"]["supported_installed_or_firing_events"],
+            status["foreground_action_card"]["supported_installed_or_firing_events"],
         )
         encoded = json.dumps(status, ensure_ascii=False)
         self.assertNotIn(str(settings), encoded)
@@ -241,7 +242,7 @@ class ClaudeCodeHooksTests(unittest.TestCase):
         self.assertEqual(status["events"]["UserPromptSubmit"]["status"], "blocked")
         self.assertEqual(status["events"]["Stop"]["blocker"], "settings_json_unreadable")
         self.assertEqual(
-            status["agent_next_action"]["id"],
+            status["foreground_action"]["id"],
             "repair_claude_code_settings_json",
         )
         self.assertFalse(install["ok"])
@@ -294,10 +295,9 @@ class ClaudeCodeHooksTests(unittest.TestCase):
         self.assertFalse(dry_run["handler_command"]["command_resolvable"])
         self.assertFalse(dry_run["handler_command"]["copy_paste_ready"])
         self.assertIn("resolvable", dry_run["next_operator_step"])
-        self.assertEqual(dry_run["agent_next_action"]["id"], "inspect_claude_code_hook_status")
+        self.assertEqual(dry_run["foreground_action"]["id"], "inspect_claude_code_hook_status")
         action_ids = [action["id"] for action in dry_run["safe_next_actions"]]
         self.assertEqual(action_ids, list(dict.fromkeys(action_ids)))
-        self.assertEqual(action_ids[0], "inspect_claude_code_hook_status")
         self.assertNotIn("install_claude_code_hooks_after_review", action_ids)
 
     def test_synthetic_smoke_handles_claude_events_without_payload_leakage(self) -> None:

@@ -337,6 +337,14 @@ class TaskOrientationPacketTests(unittest.TestCase):
         self.assertIn("reviewed_background_findings", upstream)
         self.assertIn("reflection_adjustments", upstream)
         self.assertGreater(compact["current_orientation"]["advanced_navigation_route_count"], 0)
+        self.assertEqual(
+            compact["foreground_action"]["id"],
+            "inspect_first_orientation_source_route",
+        )
+        self.assertIn("aippocampus agent orient", compact["foreground_action"]["command"])
+        self.assertIn("--detail full", compact["foreground_action"]["command"])
+        self.assertNotIn("agent_next_action", compact)
+        self.assertEqual(foreground_action_contract_violations(compact), [])
         self.assertNotIn(str(Path(tempfile.gettempdir())), encoded)
         self.assertNotIn("raw_text", encoded)
         self.assertNotIn("dream_findings", encoded)
@@ -450,15 +458,12 @@ class TaskOrientationPacketTests(unittest.TestCase):
         self.assertNotIn("suppressed_detail", payload)
         self.assertNotIn("cannot_claim", payload)
         self.assertNotIn("red_lines", payload)
-        self.assertEqual(payload["foreground_action"]["tool_name"], "agent_recall")
-        self.assertEqual(
-            payload["foreground_action"]["arguments"],
-            {"query": "fresh-thread task orientation for AIppocampus issue work"},
-        )
+        self.assertEqual(payload["foreground_action"]["id"], "inspect_first_orientation_source_route")
         self.assertIn(
-            "aippocampus agent recall",
+            "aippocampus agent orient",
             payload["foreground_action"]["command"],
         )
+        self.assertIn("--detail full", payload["foreground_action"]["command"])
         self.assertNotIn("{task}", payload["foreground_action"]["command"])
         self.assertEqual(executable_command_violations(payload), [])
         self.assertEqual(foreground_action_contract_violations(payload), [])

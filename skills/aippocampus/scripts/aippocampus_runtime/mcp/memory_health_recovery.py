@@ -14,7 +14,10 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime import core
-from aippocampus_runtime.contracts import foreground_readiness_card
+from aippocampus_runtime.contracts import (
+    canonical_foreground_action_fields,
+    foreground_readiness_card,
+)
 
 
 def payload_for_health_exception(arguments: dict[str, Any]) -> dict[str, Any]:
@@ -44,7 +47,7 @@ def recall_first_health_payload(
 
     recall_action = _recall_action()
     deepen_action = _deepen_action()
-    maintenance_action = payload.get("agent_next_action") or payload.get("foreground_action")
+    maintenance_action = payload.get("foreground_action")
     safe_next_actions = [recall_action, deepen_action]
     if isinstance(maintenance_action, dict):
         maintenance_copy = dict(maintenance_action)
@@ -73,9 +76,10 @@ def recall_first_health_payload(
                 next_actions=[recall_action, deepen_action],
                 claim_boundary="health_readiness_not_source_evidence",
             ),
-            "agent_next_action": recall_action,
-            "foreground_action": recall_action,
-            "safe_next_actions": safe_next_actions,
+            **canonical_foreground_action_fields(
+                recall_action,
+                safe_next_actions=safe_next_actions,
+            ),
             "source_boundary": {
                 **merged_source_boundary,
                 "health_card_is_not_memory_evidence": True,
@@ -294,6 +298,16 @@ def _deepen_action() -> dict[str, Any]:
 
 
 def _unavailable_recovery_payload() -> dict[str, Any]:
+    recovery_action = {
+        "id": "recover_or_continue_without_memory",
+        "label": (
+            "Check provider/onboarding status, register/sync a thread if this is setup, "
+            "or continue without memory."
+        ),
+        "command": "aippocampus onboard --provider auto --status --json",
+        "mutation_risk": "read_only",
+        "claim_boundary": "setup_status_not_memory_evidence",
+    }
     return {
         "kind": "aippocampus_memory_health_recovery",
         "ok": False,
@@ -302,18 +316,11 @@ def _unavailable_recovery_payload() -> dict[str, Any]:
             "code": "health_unavailable",
             "message": "Memory health could not find usable local source artifacts for this scope.",
         },
-        "agent_next_action": {
-            "id": "recover_or_continue_without_memory",
-            "label": (
-                "Check provider/onboarding status, register/sync a thread if this is setup, "
-                "or continue without memory."
-            ),
-            "command": "aippocampus onboard --provider auto --status --json",
-            "mutation_risk": "read_only",
-            "claim_boundary": "setup_status_not_memory_evidence",
-        },
-        "safe_next_actions": [
-            {
+        **canonical_foreground_action_fields(
+            recovery_action,
+            safe_next_actions=[
+                recovery_action,
+                {
                 "id": "check_onboarding_status",
                 "command": "aippocampus onboard --provider auto --status --json",
                 "mutation_risk": "read_only",
@@ -339,7 +346,8 @@ def _unavailable_recovery_payload() -> dict[str, Any]:
                 "mutation_risk": "read_only",
                 "claim_boundary": "no_local_source_available",
             },
-        ],
+            ],
+        ),
         "source_boundary": {
             "no_rollout_found_is_not_a_recall_quality_claim": True,
             "local_paths_serialized": False,
@@ -362,11 +370,11 @@ def _degraded_recall_payload(recall_capability: dict[str, Any]) -> dict[str, Any
                 "Memory health artifacts are missing, but the foreground recall path can still be used."
             ),
         },
-        "agent_next_action": recall_action,
-        "foreground_action": recall_action,
-        "safe_next_actions": [
+        **canonical_foreground_action_fields(
             recall_action,
-            deepen_action,
+            safe_next_actions=[
+                recall_action,
+                deepen_action,
             {
                 "id": "check_onboarding_status",
                 "command": "aippocampus onboard --provider auto --status --json",
@@ -380,7 +388,8 @@ def _degraded_recall_payload(recall_capability: dict[str, Any]) -> dict[str, Any
                 "mutation_risk": "read_only",
                 "claim_boundary": "tool_discovery_not_memory_evidence",
             },
-        ],
+            ],
+        ),
         "source_boundary": {
             "health_card_is_not_memory_evidence": True,
             "navigation_only": True,

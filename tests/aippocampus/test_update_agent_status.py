@@ -15,14 +15,13 @@ from tests.aippocampus.test_update_sync import REPO_ROOT, provider_env
 
 PROVIDER_KEY_ENV_NAMES = (
     "AIPPOCAMPUS_DEEPSEEK_API_KEY",
-    "DEEPSEEK_API_KEY",
     "AIPPOCAMPUS_OPENAI_COMPAT_API_KEY_ENV",
 )
 
 
 class UpdateAgentStatusTests(unittest.TestCase):
     def test_agent_json_returns_partial_card_before_slow_probes(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp, provider_env({"DEEPSEEK_API_KEY": "test"}):
+        with tempfile.TemporaryDirectory() as tmp, provider_env({"AIPPOCAMPUS_DEEPSEEK_API_KEY": "test"}):
             root = Path(tmp)
             probe = root / "host-probe.json"
             probe.write_text(
@@ -108,7 +107,7 @@ class UpdateAgentStatusTests(unittest.TestCase):
         )
         surfaces = {item.get("surface") for item in payload["safe_next_actions"]}
         self.assertIn("operator_detail", surfaces)
-        self.assertIn("agent_callable", surfaces)
+        self.assertNotIn("agent_callable", surfaces)
         operator_detail = next(
             item for item in payload["safe_next_actions"] if item.get("surface") == "operator_detail"
         )

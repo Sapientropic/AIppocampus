@@ -119,6 +119,11 @@ def benchmark_entrypoint_manifest(benchmark_dir: Path | str) -> dict[str, object
             {
                 "script": script,
                 "entrypoint_class": "heavy_local_eval" if heavy else "public_fast_json_candidate",
+                "execution_status": "not_run",
+                "classification_basis": "static_manifest_only",
+                "execution_status_reason": (
+                    "entrypoint manifest classifies expected CLI shape without running benchmarks"
+                ),
                 "public_fast_json_default": not heavy,
                 "safe_sweep_modes": ["json_contract"] if heavy else ["json"],
                 "classification_reason": heavy_reason or "default_json_expected_to_return_quickly",
@@ -135,6 +140,7 @@ def benchmark_entrypoint_manifest(benchmark_dir: Path | str) -> dict[str, object
         "entrypoints": entrypoints,
         "contract": {
             "manifest_classification_does_not_run_benchmarks": True,
+            "entrypoint_class_is_static_expected_shape_not_measured_result": True,
             "heavy_local_eval_is_not_broken_json": True,
             "real_benchmark_runs_keep_their_existing_quality_behavior": True,
         },

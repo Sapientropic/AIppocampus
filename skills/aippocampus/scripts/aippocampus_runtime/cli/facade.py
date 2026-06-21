@@ -472,29 +472,20 @@ def print_memory_card(*, file: TextIO | None = None) -> None:
     print("Boundary: reopen/deepen clean source before quoting or making source-backed claims.", file=target)
 
 
-def _with_safe_next_actions(payload: dict[str, Any]) -> dict[str, Any]:
-    """Expose the chooser choices under the recovery-card action name too.
-
-    Some front doors are choosers, but foreground agents already know to look
-    for `safe_next_actions` on recovery cards. Keep both names pointed at the
-    same action list so parent-command cards stay easy to consume without
-    inventing a second contract shape.
-    """
-
-    payload["safe_next_actions"] = list(payload.get("choices", []))
-    return payload
-
-
 def print_chooser_card(title: str, payload: Mapping[str, Any], *, file: TextIO | None = None) -> None:
     target = file or sys.stdout
     print(title, file=target)
     decision = payload.get("decision") or payload.get("status") or "choose a foreground action"
     print(f"decision: {decision}", file=target)
-    actions = [
-        action
-        for action in (payload.get("safe_next_actions") or payload.get("choices") or [])
-        if isinstance(action, Mapping)
-    ]
+    raw_choices = payload.get("choices")
+    if isinstance(raw_choices, list) and raw_choices:
+        action_source = raw_choices
+    else:
+        action_source = [
+            payload.get("foreground_action"),
+            *(payload.get("safe_next_actions") or []),
+        ]
+    actions = [action for action in action_source if isinstance(action, Mapping)]
     for index, action in enumerate(actions[:3]):
         command = action.get("command") or action.get("command_template") or action.get("label")
         if not command:
@@ -583,7 +574,7 @@ def agent_chooser_payload() -> dict[str, Any]:
             ),
         ],
     )
-    return _with_safe_next_actions(payload)
+    return payload
 
 
 def memory_chooser_payload() -> dict[str, Any]:
@@ -625,7 +616,7 @@ def memory_chooser_payload() -> dict[str, Any]:
             ),
         ],
     )
-    return _with_safe_next_actions(payload)
+    return payload
 
 
 def print_privacy_card(*, file: TextIO | None = None) -> None:
@@ -685,7 +676,7 @@ def privacy_chooser_payload() -> dict[str, Any]:
             ),
         ],
     )
-    return _with_safe_next_actions(payload)
+    return payload
 
 
 def controls_chooser_payload() -> dict[str, Any]:
@@ -736,7 +727,7 @@ def controls_chooser_payload() -> dict[str, Any]:
             ),
         ],
     )
-    return _with_safe_next_actions(payload)
+    return payload
 
 
 def warm_chooser_payload() -> dict[str, Any]:
@@ -781,7 +772,7 @@ def warm_chooser_payload() -> dict[str, Any]:
             ),
         ],
     )
-    return _with_safe_next_actions(payload)
+    return payload
 
 
 
@@ -846,7 +837,11 @@ COMMANDS = {
     "maintenance": CommandSpec("maintenance.py", "aippocampus_runtime.ops.maintenance"),
     "warm": CommandSpec("warm_ambient_cli.py", "aippocampus_runtime.warm_ambient.cli"),
     "dream": CommandSpec("dream_frontdoor.py", "aippocampus_runtime.dream.frontdoor"),
-    "subconscious": CommandSpec("dream_frontdoor.py", "aippocampus_runtime.dream.frontdoor"),
+    "subconscious": CommandSpec(
+        "dream_frontdoor.py",
+        "aippocampus_runtime.dream.frontdoor",
+        prefix=("subconscious",),
+    ),
     "storage": CommandSpec(
         "storage_governance.py",
         "aippocampus_runtime.ops.storage_governance",

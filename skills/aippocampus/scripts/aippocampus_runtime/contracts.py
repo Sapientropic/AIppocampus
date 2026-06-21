@@ -54,7 +54,7 @@ PUBLIC_RUNTIME_SURFACE_CLASSES = (
     "internal_helper",
 )
 
-FOREGROUND_ACTION_CONTRACT_VERSION = "foreground-action-v1"
+FOREGROUND_ACTION_CONTRACT_VERSION = "foreground-action-v2"
 READINESS_CARD_CONTRACT_VERSION = "readiness-card-v1"
 
 EXECUTABLE_COMMAND_FIELDS = {
@@ -365,32 +365,74 @@ def canonical_foreground_action_fields(
     foreground_action: Mapping[str, object],
     *,
     safe_next_actions: Sequence[Mapping[str, object]] | None = None,
-    include_compat_alias: bool = True,
 ) -> dict[str, object]:
     """Return the shared foreground action field set for compact cards.
 
-    `foreground_action` is the authoritative field. The legacy
-    `agent_next_action` alias remains only as a byte-for-byte compatibility
-    mirror so host agents do not have to guess precedence while older clients
-    migrate. Keep `safe_next_actions[0]` equal to the foreground action; put
-    alternates after it.
+    `foreground_action` is the authoritative primary action. In
+    ``foreground-action-v2`` the default compact shape no longer repeats the
+    same object through ``agent_next_action`` or ``safe_next_actions[0]``:
+    repeated primary aliases made foreground cards heavier and drift-prone.
+    ``safe_next_actions`` now carries true alternatives or follow-up actions.
+
+    See ``docs/architecture/ops/json-compatibility-inventory.md`` before
+    reviving any retired alias.
     """
 
     primary = normalize_foreground_action(foreground_action)
-    alternates = [
-        normalize_foreground_action(action)
-        for action in (safe_next_actions or [])
-        if action
-    ]
-    if not alternates or alternates[0] != primary:
-        alternates = [primary, *[action for action in alternates if action != primary]]
+    alternates = []
+    for action in (safe_next_actions or []):
+        if not action:
+            continue
+        normalized = normalize_foreground_action(action)
+        if normalized != primary and normalized not in alternates:
+            alternates.append(normalized)
     payload: dict[str, object] = {
         "foreground_action_contract": FOREGROUND_ACTION_CONTRACT_VERSION,
         "foreground_action": primary,
         "safe_next_actions": alternates,
     }
-    if include_compat_alias:
-        payload["agent_next_action"] = primary
+    return payload
+
+
+def strip_foreground_action_legacy_aliases(value: object) -> object:
+    """Return public JSON with duplicated v1 foreground action aliases removed.
+
+    ``foreground_action`` is the only primary action in v2. This sanitizer is a
+    boundary backstop for older cards that still build ``agent_next_action`` or
+    repeat the primary in ``safe_next_actions``. It intentionally does not touch
+    nested row-level action fields unless a mapping also carries a canonical
+    ``foreground_action``; those fields are domain data, not v1 compatibility
+    mirrors.
+    """
+
+    if isinstance(value, list):
+        return [strip_foreground_action_legacy_aliases(item) for item in value]
+    if not isinstance(value, Mapping):
+        return value
+    payload = {
+        key: strip_foreground_action_legacy_aliases(item)
+        for key, item in value.items()
+    }
+    foreground = payload.get("foreground_action")
+    if not isinstance(foreground, Mapping):
+        return payload
+    foreground_dict = dict(foreground)
+    payload["foreground_action_contract"] = FOREGROUND_ACTION_CONTRACT_VERSION
+    payload.pop("agent_next_action", None)
+    next_safe_action = payload.get("next_safe_action")
+    if isinstance(next_safe_action, Mapping) and dict(next_safe_action) == foreground_dict:
+        payload.pop("next_safe_action", None)
+    safe_actions = payload.get("safe_next_actions")
+    if isinstance(safe_actions, Sequence) and not isinstance(safe_actions, str):
+        alternates = []
+        for action in safe_actions:
+            if not isinstance(action, Mapping):
+                continue
+            action_dict = dict(action)
+            if action_dict == foreground_dict or action_dict in alternates:
+                continue
+            alternates.append(action_dict)
+        payload["safe_next_actions"] = alternates
     return payload
 
 
@@ -435,7 +477,7 @@ def foreground_readiness_card(
 
 
 def foreground_action_contract_violations(payload: Mapping[str, object]) -> list[dict[str, str]]:
-    """Lint compact-card action aliases against the foreground-action contract."""
+    """Lint compact-card action fields against the foreground-action contract."""
 
     violations: list[dict[str, str]] = []
     foreground = payload.get("foreground_action")
@@ -462,36 +504,33 @@ def foreground_action_contract_violations(payload: Mapping[str, object]) -> list
     foreground_dict = dict(foreground)
     violations.extend(_foreground_action_shape_violations(foreground, field="foreground_action"))
     violations.extend(_command_template_marker_violations(foreground, field="foreground_action"))
-    if isinstance(agent_next, Mapping) and dict(agent_next) != foreground_dict:
+    if isinstance(agent_next, Mapping):
         violations.append(
             {
                 "field": "agent_next_action",
-                "reason": "alias_must_match_foreground_action",
+                "reason": "legacy_alias_removed_from_foreground_action_v2",
             }
         )
     if isinstance(safe_actions, Sequence) and not isinstance(safe_actions, str):
-        first = next(iter(safe_actions), None)
-        if not isinstance(first, Mapping):
-            violations.append(
-                {
-                    "field": "safe_next_actions.0",
-                    "reason": "primary_safe_action_must_be_object",
-                }
-            )
-        elif dict(first) != foreground_dict:
-            violations.append(
-                {
-                    "field": "safe_next_actions.0",
-                    "reason": "primary_safe_action_must_match_foreground_action",
-                }
-            )
-        else:
-            violations.extend(_foreground_action_shape_violations(first, field="safe_next_actions.0"))
         for index, action in enumerate(safe_actions):
-            if index == 0 or not isinstance(action, Mapping):
+            if not isinstance(action, Mapping):
                 continue
+            if dict(action) == foreground_dict:
+                violations.append(
+                    {
+                        "field": f"safe_next_actions.{index}",
+                        "reason": "primary_action_must_not_be_repeated_in_safe_next_actions",
+                    }
+                )
             violations.extend(
                 _command_template_marker_violations(action, field=f"safe_next_actions.{index}")
+            )
+        if any(not isinstance(action, Mapping) for action in safe_actions):
+            violations.append(
+                {
+                    "field": "safe_next_actions",
+                    "reason": "safe_next_actions_items_must_be_objects",
+                }
             )
     for key in ("next_safe_action", "follow_up_action", "secondary_action"):
         action = payload.get(key)
@@ -590,7 +629,6 @@ def foreground_recovery_card(
         else {
             "foreground_action_contract": FOREGROUND_ACTION_CONTRACT_VERSION,
             "foreground_action": {},
-            "agent_next_action": {},
             "safe_next_actions": [],
         }
     )
@@ -655,7 +693,6 @@ def foreground_chooser_card(
         else {
             "foreground_action_contract": FOREGROUND_ACTION_CONTRACT_VERSION,
             "foreground_action": {},
-            "agent_next_action": {},
             "safe_next_actions": [],
         }
     )

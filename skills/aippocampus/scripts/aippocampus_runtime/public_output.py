@@ -12,6 +12,7 @@ import json
 import sys
 from typing import Any, TextIO
 
+from aippocampus_runtime.contracts import strip_foreground_action_legacy_aliases
 from aippocampus_runtime.core import sanitize_external_model_text
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 
@@ -38,7 +39,9 @@ def emit_public_text(text: str, *, end: str = "\n", stream: TextIO | None = None
 def emit_public_json(payload: Any, *, indent: int | None = 2, stream: TextIO | None = None) -> None:
     """Write structured public JSON while preserving JSON validity."""
 
-    public_payload = redact_sensitive_values(redact_private_paths(payload))
+    public_payload = strip_foreground_action_legacy_aliases(
+        redact_sensitive_values(redact_private_paths(payload))
+    )
     target = stream or sys.stdout
     public_json = json.dumps(public_payload, ensure_ascii=False, indent=indent)
     # Keep the structured stdout sink centralized: callers can pass raw runtime

@@ -183,10 +183,11 @@ def compact_agent_deepen_payload(
     source = dict(payload)
     if source.get("surface") == "recall" and source.get("status") != "ok":
         # Recovery cards must be parseable foreground JSON even for module
-        # entrypoints. Keep the actionable error and compatibility aliases up
-        # front, while any heavier local diagnostics stay behind detail fields.
+        # entrypoints. Keep the actionable error and canonical v2 foreground
+        # action up front, while any heavier local diagnostics stay behind
+        # detail fields.
         result = _as_dict(source.get("result"))
-        primary_action = _as_dict(source.get("foreground_action") or source.get("agent_next_action"))
+        primary_action = _as_dict(source.get("foreground_action"))
         follow_up_action = _as_dict(source.get("follow_up_action"))
         safe_next_actions = [primary_action] if primary_action else []
         if follow_up_action and follow_up_action != primary_action:
@@ -210,8 +211,6 @@ def compact_agent_deepen_payload(
                 "ok": False,
                 "error": result.get("error") or source.get("error"),
                 **foreground_fields,
-                "next_safe_action": primary_action,
-                "next_safe_action_id": source.get("next_safe_action_id") or primary_action.get("id"),
                 "claim_boundary": source.get("claim_boundary"),
                 "operator_detail_command": source.get("operator_detail_command"),
             }

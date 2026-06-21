@@ -247,7 +247,8 @@ class AgentSelfNoteTests(unittest.TestCase):
         self.assertEqual(payload["note"]["truth_boundary"], "agent_self_note_not_source_fact")
         self.assertTrue(payload["source_boundary"]["self_note_is_not_source_fact"])
         self.assertTrue(payload["source_boundary"]["source_reopen_required_before_claim"])
-        self.assertIn("--current-thread", payload["agent_next_action"])
+        action_text = json.dumps(payload.get("foreground_action", {}), ensure_ascii=False)
+        self.assertIn("--current-thread", action_text)
         self.assertEqual(human_code, 0)
         human = human_stdout.getvalue()
         self.assertIn("source refs: 0", human)
@@ -275,13 +276,13 @@ class AgentSelfNoteTests(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertEqual(payload["status"], "needs_input")
         self.assertEqual(payload["error"]["code"], "agent_self_note_empty")
-        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
-        self.assertIsInstance(payload["agent_next_action"], dict)
-        self.assertEqual(payload["foreground_action"], payload["agent_next_action"])
-        self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
-        self.assertEqual(payload["agent_next_action"]["id"], "append_direction_only_note")
-        self.assertEqual(payload["agent_next_action"]["requires"], ["note_text"])
-        self.assertIn("command_template", payload["agent_next_action"])
+        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v2")
+        self.assertNotIn("agent_next_action", payload)
+        self.assertIsInstance(payload["foreground_action"], dict)
+        self.assertNotIn(payload["foreground_action"], payload["safe_next_actions"])
+        self.assertEqual(payload["foreground_action"]["id"], "append_direction_only_note")
+        self.assertEqual(payload["foreground_action"]["requires"], ["note_text"])
+        self.assertIn("command_template", payload["foreground_action"])
         self.assertIn(
             "use_source_backed_recall_instead",
             [action["id"] for action in payload["safe_next_actions"]],
@@ -300,11 +301,11 @@ class AgentSelfNoteTests(unittest.TestCase):
 
         self.assertEqual(code, 0)
         self.assertEqual(payload["error"]["code"], "self_note_command_required")
-        self.assertIsInstance(payload["agent_next_action"], dict)
-        self.assertEqual(payload["foreground_action"], payload["agent_next_action"])
-        self.assertEqual(payload["safe_next_actions"][0], payload["agent_next_action"])
-        self.assertEqual(payload["agent_next_action"]["id"], "list_direction_only_notes")
-        self.assertEqual(payload["agent_next_action"]["mutation_risk"], "read_only")
+        self.assertNotIn("agent_next_action", payload)
+        self.assertIsInstance(payload["foreground_action"], dict)
+        self.assertNotIn(payload["foreground_action"], payload["safe_next_actions"])
+        self.assertEqual(payload["foreground_action"]["id"], "list_direction_only_notes")
+        self.assertEqual(payload["foreground_action"]["mutation_risk"], "read_only")
         self.assertEqual(
             [choice["label"] for choice in payload["choices"]],
             ["list", "search", "append", "read"],

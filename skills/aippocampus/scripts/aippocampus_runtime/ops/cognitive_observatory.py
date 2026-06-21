@@ -15,8 +15,8 @@ from aippocampus_runtime.ops.activation_authority_audit import (
     activation_surface_authority_audit,
 )
 from aippocampus_runtime.ops.cognitive_observatory_actions import (
-    empty_readout_next_actions,
     foreground_action,
+    readout_next_actions,
 )
 from aippocampus_runtime.ops.observatory_cognitive_load import (
     cognitive_load_calibration_summary,
@@ -467,10 +467,8 @@ def cognitive_observatory_readout(
     control_authority = observatory_boundary.with_boundary_detail(control_authority)
     readout_state = observatory_boundary.readout_state(readiness, metrics)
     action = foreground_action(no_rows=readout_state["status"] == "no_rows")
-    safe_next_actions = (
-        empty_readout_next_actions()
-        if readout_state["status"] == "no_rows"
-        else [action]
+    safe_next_actions = readout_next_actions(
+        no_rows=readout_state["status"] == "no_rows"
     )
     report = {
         "kind": OBSERVATORY_KIND,
@@ -490,7 +488,6 @@ def cognitive_observatory_readout(
         "metrics": metrics,
         "readout_state": readout_state,
         "foreground_action": action,
-        "agent_next_action": action,
         "safe_next_actions": safe_next_actions,
         "claim_boundary": _compact_claim_boundary(),
         "boundary_detail": observatory_boundary.boundary_detail(route_readiness=readiness, control_authority=control_authority),
@@ -868,7 +865,7 @@ def summary_projection(report: Mapping[str, Any]) -> dict[str, Any]:
         and str(readout_state.get("status") or "") == "no_rows"
     )
     action = foreground_action(no_rows=no_rows)
-    safe_next_actions = empty_readout_next_actions() if no_rows else [action]
+    safe_next_actions = readout_next_actions(no_rows=no_rows)
     return {
         "kind": "aippocampus_cognitive_observatory_summary",
         **canonical_foreground_action_fields(action, safe_next_actions=safe_next_actions),

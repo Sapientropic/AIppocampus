@@ -405,7 +405,7 @@ def maintenance_safe_next_actions(best: dict, *, read_only: bool) -> list[dict[s
     return unique
 
 
-def maintenance_agent_next_action(best: dict, *, read_only: bool) -> dict[str, Any]:
+def maintenance_foreground_action(best: dict, *, read_only: bool) -> dict[str, Any]:
     action_id = str(best.get("id") or "")
     if read_only and action_id == "continue":
         return _continue_without_maintenance_action(best)
@@ -536,7 +536,7 @@ def summary_payload(result: dict) -> dict:
         if isinstance(item, dict)
     ]
     best = best_next_action(result.get("remaining_recommended_actions") or [])
-    agent_action = maintenance_agent_next_action(best, read_only=False)
+    agent_action = maintenance_foreground_action(best, read_only=False)
     safe_actions = maintenance_safe_next_actions(best, read_only=False)
     return {
         "kind": "aippocampus_maintenance_summary",
@@ -560,10 +560,7 @@ def summary_payload(result: dict) -> dict:
             for item in (result.get("action_failures") or [])[:5]
         ],
         "remaining_recommended_actions": remaining,
-        "user_impact": user_impact(
-            result.get("health_final"),
-            result.get("remaining_recommended_actions") or [],
-        ),
+        "user_impact": user_impact(result.get("health_final"), result.get("remaining_recommended_actions") or []),
         "full_audit_available": True,
         "full_audit_flag": "--json",
         "operator_detail_available": True,
@@ -584,15 +581,23 @@ def plan_payload(
     mode: str = "plan",
 ) -> dict:
     recommended = list((health or {}).get("recommended_actions") or [])
-    would_run_ids = [str(item.get("id") or "") for item in recommended if item.get("id")]
+    recommended_ids = unique_action_ids(
+        [str(item.get("id") or "") for item in recommended if item.get("id")]
+    )
+    would_run_ids = list(recommended_ids)
+    implicit_would_run_ids: list[str] = []
     if refresh_cognitive_map:
         would_run_ids.append("build_cognitive_map")
+        if "build_cognitive_map" not in recommended_ids:
+            implicit_would_run_ids.append("build_cognitive_map")
     if refresh_graphify and any(item.get("id") == "prepare_graphify_corpus" for item in recommended):
         would_run_ids.append("prepare_graphify_corpus")
+    would_run_ids = unique_action_ids(would_run_ids)[:16]
+    implicit_would_run_ids = unique_action_ids(implicit_would_run_ids)[:16]
     command_ok = health_returncode == 0 and health is not None
     maintenance_ok = command_ok and health_maintenance_ok(health)
     best = best_next_action(recommended)
-    agent_action = maintenance_agent_next_action(best, read_only=True)
+    agent_action = maintenance_foreground_action(best, read_only=True)
     safe_actions = maintenance_safe_next_actions(best, read_only=True)
     payload = {
         "kind": (
@@ -610,7 +615,16 @@ def plan_payload(
         "cwd": LOCAL_PATH_REDACTION,
         "cwd_label": cwd.name or str(cwd),
         "recommended_action_count": len(recommended),
-        "would_run_action_ids": unique_action_ids(would_run_ids)[:16],
+        "recommended_action_ids": recommended_ids[:16],
+        "would_run_action_ids": would_run_ids,
+        "would_run_action_count": len(would_run_ids),
+        "implicit_would_run_action_ids": implicit_would_run_ids,
+        "implicit_would_run_action_count": len(implicit_would_run_ids),
+        "would_run_contract": {
+            "would_run_action_ids_are_apply_plan_superset": True,
+            "recommended_action_count_counts_health_recommendations_only": True,
+            "implicit_actions_are_apply_dependencies_or_refreshes": bool(implicit_would_run_ids),
+        },
         "remaining_recommended_actions": [
             public_recommended_action(item)
             for item in recommended[:8]

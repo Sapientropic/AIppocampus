@@ -57,7 +57,7 @@ class AippocampusHealthTests(unittest.TestCase):
         self.assertEqual(payload["kind"], "aippocampus_health_card")
         self.assertEqual(payload["detail"], "compact")
         self.assertFalse(payload["ok"])
-        self.assertEqual(payload["agent_next_action"]["id"], "refresh_clean_source")
+        self.assertEqual(payload["foreground_action"]["id"], "refresh_clean_source")
         self.assertEqual(payload["foreground_action"]["id"], "refresh_clean_source")
         self.assertNotIn("recommended_actions", payload)
         self.assertNotIn("freshness", payload)
@@ -97,8 +97,8 @@ class AippocampusHealthTests(unittest.TestCase):
         payload = json.loads(stdout.getvalue())
         self.assertEqual(code, 0)
         self.assertTrue(payload["ok"])
-        self.assertEqual(payload["agent_next_action"]["id"], "continue_with_nonblocking_maintenance")
-        self.assertTrue(payload["agent_next_action"]["primary"]["ordinary_first_recall_usable"])
+        self.assertEqual(payload["foreground_action"]["id"], "continue_with_nonblocking_maintenance")
+        self.assertTrue(payload["foreground_action"]["primary"]["ordinary_first_recall_usable"])
         self.assertEqual(
             payload["maintenance_summary"]["recommended_action_ids"][0],
             "prepare_graphify_corpus",
@@ -195,7 +195,7 @@ class AippocampusHealthTests(unittest.TestCase):
         payload = json.loads(stdout.getvalue())
         self.assertEqual(code, 0)
         self.assertTrue(payload["ok"])
-        self.assertEqual(payload["agent_next_action"]["id"], "no_action")
+        self.assertEqual(payload["foreground_action"]["id"], "no_action")
         self.assertEqual(payload["maintenance_summary"]["recommended_action_count"], 0)
 
     def test_agent_json_preserves_high_severity_storage_pressure_action(self) -> None:
@@ -271,10 +271,10 @@ class AippocampusHealthTests(unittest.TestCase):
         payload = json.loads(stdout.getvalue())
 
         self.assertEqual(code, 0)
-        self.assertEqual(payload["agent_next_action"]["id"], "continue_with_nonblocking_maintenance")
-        self.assertEqual(payload["agent_next_action"]["when_idle"]["id"], "review_storage_gc_summary")
+        self.assertEqual(payload["foreground_action"]["id"], "continue_with_nonblocking_maintenance")
+        self.assertEqual(payload["foreground_action"]["when_idle"]["id"], "review_storage_gc_summary")
         self.assertEqual(
-            payload["agent_next_action"]["when_idle"]["command"],
+            payload["foreground_action"]["when_idle"]["command"],
             "aippocampus storage gc --dry-run --summary-json --cwd .",
         )
         self.assertEqual(
@@ -327,16 +327,16 @@ class AippocampusHealthTests(unittest.TestCase):
         payload = json.loads(stdout.getvalue())
 
         self.assertEqual(code, 0)
-        self.assertEqual(payload["agent_next_action"]["id"], "continue_with_nonblocking_maintenance")
+        self.assertEqual(payload["foreground_action"]["id"], "continue_with_nonblocking_maintenance")
         self.assertEqual(payload["readiness_card"]["state"], "ready_with_freshness_degraded")
         self.assertTrue(payload["readiness_card"]["usable_now"])
         self.assertFalse(payload["readiness_card"]["blocks_first_recall"])
         self.assertTrue(payload["readiness_card"]["blocks_exact_latest"])
         self.assertEqual(
-            payload["agent_next_action"]["before_exact_latest_claims"]["command"],
+            payload["foreground_action"]["before_exact_latest_claims"]["command"],
             "aippocampus maintenance plan --summary-json",
         )
-        self.assertTrue(payload["agent_next_action"]["primary"]["ordinary_first_recall_usable"])
+        self.assertTrue(payload["foreground_action"]["primary"]["ordinary_first_recall_usable"])
         self.assertTrue(payload["blocks_exact_latest_claims"])
         self.assertNotIn("freshness", payload)
 

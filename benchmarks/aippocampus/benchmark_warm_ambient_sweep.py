@@ -327,7 +327,7 @@ def run_warm_ambient_recall_sweep(
     prefix_cache_warmup_delay: float = benchmark.warm.DEFAULT_PREFIX_CACHE_WARMUP_DELAY,
     quorum: int = benchmark.warm.DEFAULT_QUORUM,
     max_tokens: int | None = None,
-    api_key_env: str = "DEEPSEEK_API_KEY",
+    api_key_env: str = "AIPPOCAMPUS_DEEPSEEK_API_KEY",
     user_id: str | None = None,
     progress_dir: Path | str | None = None,
     min_available_rate: float = 0.65,
@@ -450,7 +450,7 @@ def main() -> int:
     parser.add_argument("--prefix-cache-warmup-delay", type=float, default=benchmark.warm.DEFAULT_PREFIX_CACHE_WARMUP_DELAY)
     parser.add_argument("--quorum", type=int, default=benchmark.warm.DEFAULT_QUORUM)
     parser.add_argument("--max-tokens", type=int, default=None)
-    parser.add_argument("--api-key-env", default="DEEPSEEK_API_KEY")
+    parser.add_argument("--api-key-env", default="AIPPOCAMPUS_DEEPSEEK_API_KEY")
     parser.add_argument("--user-id")
     parser.add_argument("--progress-dir", help="Optional directory for sanitized per-run case progress JSONL files.")
     parser.add_argument("--min-available-rate", type=float, default=0.65)

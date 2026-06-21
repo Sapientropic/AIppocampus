@@ -1377,7 +1377,7 @@ class ContinuityDomainTests(unittest.TestCase):
         self.assertGreaterEqual(preview["source_ref_count"], 2)
         self.assertTrue(preview["source_reopen_required_before_claim"])
         self.assertEqual(
-            payload["agent_next_action"]["id"],
+            payload["foreground_action"]["id"],
             "use_candidate_preview_as_reopenable_route",
         )
         self.assertNotIn('"source_refs"', encoded)

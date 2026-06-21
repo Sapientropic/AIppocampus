@@ -12,6 +12,7 @@ SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 from aippocampus_runtime.mcp import server as mcp  # noqa: E402
+from aippocampus_runtime.source import latest_reply as latest_reply_module  # noqa: E402
 
 
 class McpLatestReplyTests(unittest.TestCase):
@@ -85,14 +86,23 @@ class McpLatestReplyTests(unittest.TestCase):
         self.assertEqual(payload["status"], "clean_source_final_answer")
         self.assertEqual(payload["message"]["message_id"], "msg_final")
         self.assertEqual(payload["detail"], "compact")
-        self.assertIn("agent_next_action", payload)
+        self.assertEqual(
+            payload["message"]["text"],
+            "AIppocampus 使用 clean source，而不是摘要替代事实。",
+        )
+        self.assertIn("foreground_action", payload)
+        self.assertNotIn("agent_next_action", payload)
+        self.assertEqual(payload["foreground_action"]["id"], "open_full_latest_reply")
         self.assertEqual(payload["source_reopen_action"]["tool_name"], "get_turn_context")
         self.assertEqual(payload["source_reopen_action"]["arguments"]["message_id"], "msg_final")
         self.assertEqual(
             payload["source_reopen_action"]["claim_boundary"],
             "source_open_required_before_quoting",
         )
-        self.assertNotIn("text", payload["message"])
+        self.assertLessEqual(
+            payload["message"]["text_char_limit"],
+            latest_reply_module.MAX_COMPACT_FINAL_ANSWER_CHARS,
+        )
 
         full_payload = self.call_latest_reply(cwd=str(self.cwd), detail="full")
         self.assertEqual(full_payload["detail"], "full")
@@ -138,10 +148,10 @@ class McpLatestReplyTests(unittest.TestCase):
         self.assertNotIn(commentary_text, encoded)
         self.assertNotIn("preview", payload["message"])
         self.assertEqual(
-            shlex.split(payload["safe_next_actions"][0]["command"]),
+            shlex.split(payload["foreground_action"]["command"]),
             ["aippocampus", "agent", "recall", "finish recovery command card", "--json"],
         )
-        self.assertNotIn("command_template", payload["safe_next_actions"][0])
+        self.assertNotIn("command_template", payload["foreground_action"])
         self.assertNotIn("latest closeout or current handoff", encoded)
 
     def test_latest_reply_mcp_omits_host_internal_recovery_cue_from_command(self) -> None:
@@ -176,7 +186,7 @@ class McpLatestReplyTests(unittest.TestCase):
 
         payload = self.call_latest_reply(cwd=str(self.cwd), rollout=str(rollout))
         encoded = json.dumps(payload, ensure_ascii=False)
-        action = payload["safe_next_actions"][0]
+        action = payload["foreground_action"]
 
         self.assertNotIn("command", action)
         self.assertEqual(action["command_template"], 'aippocampus agent recall "{cue}" --json')
@@ -200,8 +210,9 @@ class McpLatestReplyTests(unittest.TestCase):
         self.assertTrue(response["result"]["isError"])
         self.assertEqual(payload["status"], "no_latest_reply_source_found")
         self.assertEqual(payload["error"]["code"], "no_rollout_for_cwd")
-        self.assertEqual(payload["agent_next_action"]["requires"], ["cue"])
-        self.assertIn("agent recall", payload["agent_next_action"]["command_template"])
+        self.assertEqual(payload["foreground_action"]["requires"], ["cue"])
+        self.assertIn("agent recall", payload["foreground_action"]["command_template"])
+        self.assertNotIn("agent_next_action", payload)
         self.assertNotIn(str(missing), encoded)
 
 

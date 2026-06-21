@@ -22,16 +22,14 @@ def optional_env_path(name: str, legacy_name: str | None = None) -> Path | None:
     return Path(value) if value else None
 
 
-DEFAULT_VAULT = Path(
-    env_value("AIPPOCAMPUS_VAULT", "CODEX_MEMORY_VAULT") or (Path.home() / "AIppocampus Memory")
-)
-DEFAULT_STYLE_SOURCE = optional_env_path("AIPPOCAMPUS_STYLE_SOURCE", "CODEX_MEMORY_STYLE_SOURCE")
-DEFAULT_SCRIPT_SOURCE = optional_env_path("AIPPOCAMPUS_SCRIPT_SOURCE", "CODEX_MEMORY_SCRIPT_SOURCE")
-DEFAULT_SITE_MARK = optional_env_path("AIPPOCAMPUS_SITE_MARK", "CODEX_MEMORY_SITE_MARK")
+DEFAULT_VAULT = Path(env_value("AIPPOCAMPUS_VAULT") or (Path.home() / "AIppocampus Memory"))
+DEFAULT_STYLE_SOURCE = optional_env_path("AIPPOCAMPUS_STYLE_SOURCE")
+DEFAULT_SCRIPT_SOURCE = optional_env_path("AIPPOCAMPUS_SCRIPT_SOURCE")
+DEFAULT_SITE_MARK = optional_env_path("AIPPOCAMPUS_SITE_MARK")
 DEFAULT_SITE_MARK_SOURCE = (
     SCRIPT_DIR / "aippocampus_runtime" / "vault" / "dashboard_assets" / "aippocampus-site-mark.png"
 )
-DEFAULT_SITE_TITLE = env_value("AIPPOCAMPUS_SITE_TITLE", "CODEX_MEMORY_SITE_TITLE") or "AIppocampus"
+DEFAULT_SITE_TITLE = env_value("AIPPOCAMPUS_SITE_TITLE") or "AIppocampus"
 DEFAULT_D3_SOURCE = SCRIPT_DIR.parent / "assets" / "d3-7.9.0.min.js"
 DEFAULT_PIXI_SOURCE = SCRIPT_DIR.parent / "assets" / "pixi-7.2.4.min.js"
 

@@ -61,7 +61,7 @@ class SubconsciousWorkerTests(unittest.TestCase):
                 model_route={
                     "provider": "deepseek",
                     "base_url": "https://api.deepseek.example/v1",
-                    "api_key_env": "DEEPSEEK_API_KEY",
+                    "api_key_env": "AIPPOCAMPUS_DEEPSEEK_API_KEY",
                 },
             )
 
@@ -500,7 +500,7 @@ class SubconsciousWorkerTests(unittest.TestCase):
                 patch.dict(
                     os.environ,
                     {
-                        "DEEPSEEK_API_KEY": "wrong-deepseek-key",
+                        "AIPPOCAMPUS_DEEPSEEK_API_KEY": "wrong-deepseek-key",
                         "AIPPOCAMPUS_OPENAI_COMPAT_ROUTE": "local_worker_cli",
                         "AIPPOCAMPUS_OPENAI_COMPAT_PROVIDER": "local-test",
                         "AIPPOCAMPUS_OPENAI_COMPAT_MODEL": "local-worker-model",

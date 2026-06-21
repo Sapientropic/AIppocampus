@@ -2544,7 +2544,7 @@ def standard_line_reranker_candidate_pack_sha1(
     return sha1_text(json.dumps(material, ensure_ascii=False, sort_keys=True))[:16]
 
 
-def semantic_line_reranker_available(api_key_env: str = "DEEPSEEK_API_KEY") -> bool:
+def semantic_line_reranker_available(api_key_env: str = "AIPPOCAMPUS_DEEPSEEK_API_KEY") -> bool:
     return bool(os.environ.get(api_key_env))
 
 
@@ -2662,7 +2662,7 @@ def summarize_line_reranker_metadata(rows: list[dict[str, Any]]) -> dict[str, An
 
 def semantic_line_reranker_public_contract(
     *,
-    api_key_env: str = "DEEPSEEK_API_KEY",
+    api_key_env: str = "AIPPOCAMPUS_DEEPSEEK_API_KEY",
     model: str | None = None,
     base_url: str | None = None,
     timeout: int = DEFAULT_STANDARD_LINE_RERANKER_TIMEOUT,
@@ -2784,7 +2784,7 @@ def run_semantic_line_reranker(
     candidates: list[dict[str, Any]],
     *,
     timeout: int = DEFAULT_STANDARD_LINE_RERANKER_TIMEOUT,
-    api_key_env: str = "DEEPSEEK_API_KEY",
+    api_key_env: str = "AIPPOCAMPUS_DEEPSEEK_API_KEY",
     model: str | None = None,
     base_url: str | None = None,
     max_tokens: int | None = None,

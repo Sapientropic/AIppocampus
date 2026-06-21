@@ -293,7 +293,7 @@ class OnboardCodexTests(unittest.TestCase):
         self.assertEqual(providers["claude-code"]["requires"], ["exact_phrase"])
         primary = data["data"]["primary_next_action"]
         self.assertEqual(data["primary_next_action"], primary)
-        self.assertEqual(data["agent_next_action"], primary["agent_next_action"])
+        self.assertEqual(data["foreground_guidance"], primary["foreground_guidance"])
         self.assertEqual(primary["provider"], "codex")
         self.assertEqual(primary["code"], "search_existing_registered_memory")
         self.assertIn("aippocampus search", primary["command_template"])
@@ -343,7 +343,7 @@ class OnboardCodexTests(unittest.TestCase):
         )
         self.assertEqual(providers["generic-jsonl"]["state"], "blocked")
         primary = data["primary_next_action"]
-        self.assertEqual(data["agent_next_action"], primary)
+        self.assertEqual(data["foreground_action"], primary)
         self.assertEqual(primary["provider"], "codex")
         self.assertEqual(primary["code"], "preview_current_project_registration")
         self.assertEqual(primary["mutation_risk"], "read_only")
@@ -400,7 +400,7 @@ class OnboardCodexTests(unittest.TestCase):
         self.assertNotIn(str(private_home), redacted.stdout)
         self.assertIn(str(private_home), full_payload["data"]["storage"]["path"])
 
-    def test_onboard_status_json_reports_legacy_storage_alias_without_private_path(self) -> None:
+    def test_onboard_status_json_reports_retired_storage_alias_without_using_it(self) -> None:
         legacy_registry = self.root / "private-legacy-registry"
         proc = self._run_onboard_facade(
             "--status",
@@ -419,9 +419,9 @@ class OnboardCodexTests(unittest.TestCase):
         aliases = {entry["alias"] for entry in data["data"]["legacy_aliases"]["active"]}
         encoded_aliases = json.dumps(data["data"]["legacy_aliases"], ensure_ascii=False)
 
-        self.assertEqual(data["data"]["storage"]["source"], "THREAD_MEMORY_REGISTRY_DIR")
+        self.assertNotEqual(data["data"]["storage"]["source"], "THREAD_MEMORY_REGISTRY_DIR")
         self.assertTrue(data["data"]["storage"]["legacy_fallback"])
-        self.assertIn("THREAD_MEMORY_REGISTRY_DIR", aliases)
+        self.assertNotIn("THREAD_MEMORY_REGISTRY_DIR", aliases)
         self.assertFalse(data["data"]["legacy_aliases"]["value_printed"])
         self.assertFalse(data["data"]["legacy_aliases"]["local_paths_included"])
         self.assertNotIn(str(legacy_registry), encoded_aliases)
@@ -451,10 +451,10 @@ class OnboardCodexTests(unittest.TestCase):
 
         self.assertEqual(data["kind"], "aippocampus_onboard_status_card")
         self.assertEqual(data["provider_scope"], "codex")
-        self.assertEqual(data["foreground_action_contract"], "foreground-action-v1")
-        self.assertEqual(data["agent_next_action"], data["foreground_action"])
-        self.assertEqual(data["safe_next_actions"][0], data["foreground_action"])
-        self.assertNotIsInstance(data["agent_next_action"], str)
+        self.assertEqual(data["foreground_action_contract"], "foreground-action-v2")
+        self.assertIn("foreground_action", data)
+        self.assertNotIn(data["foreground_action"], data["safe_next_actions"])
+        self.assertNotIsInstance(data["foreground_action"], str)
         self.assertNotIn("data", data)
         self.assertEqual(providers, ["codex"])
 
@@ -481,9 +481,9 @@ class OnboardCodexTests(unittest.TestCase):
 
         self.assertEqual(data["kind"], "aippocampus_onboard_status_card")
         self.assertEqual(data["provider_scope"], "generic-jsonl")
-        self.assertEqual(data["foreground_action_contract"], "foreground-action-v1")
-        self.assertEqual(data["agent_next_action"], data["foreground_action"])
-        self.assertEqual(data["safe_next_actions"][0], data["foreground_action"])
+        self.assertEqual(data["foreground_action_contract"], "foreground-action-v2")
+        self.assertIn("foreground_action", data)
+        self.assertNotIn(data["foreground_action"], data["safe_next_actions"])
         self.assertEqual(primary["provider"], "generic-jsonl")
         self.assertEqual(primary["code"], "import_conversation_preview")
         self.assertEqual(provider["provider"], "generic-jsonl")
@@ -743,7 +743,7 @@ class OnboardCodexTests(unittest.TestCase):
 
         self.assertLess(keys.index("foreground_action_contract"), keys.index("data"))
         self.assertLess(keys.index("foreground_action"), keys.index("data"))
-        self.assertLess(keys.index("agent_next_action"), keys.index("data"))
+        self.assertNotIn("agent_next_action", public)
         self.assertLess(keys.index("safe_next_actions"), keys.index("data"))
         self.assertEqual(public["next_count"], len(public["next_actions"]))
         self.assertIn("aippocampus onboard --provider codex --cwd . --json", commands)

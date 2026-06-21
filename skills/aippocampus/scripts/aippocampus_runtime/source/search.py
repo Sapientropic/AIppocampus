@@ -14,6 +14,7 @@ from aippocampus_runtime.contracts import (
     foreground_recovery_card,
     foreground_shell_action,
     foreground_template_action,
+    shell_quote,
 )
 from aippocampus_runtime.core import (
     compact_text,
@@ -243,6 +244,54 @@ def first_recall_mode_lines() -> list[str]:
     ]
 
 
+_LOW_SIGNAL_SEARCH_TERMS = {
+    "agent",
+    "claim",
+    "compact",
+    "continuity",
+    "foreground",
+    "memory",
+    "navigation",
+    "recall",
+    "route",
+    "safe",
+    "search",
+    "source",
+}
+
+
+def _no_match_anchor_queries(query: str, terms: list[Any]) -> list[str]:
+    anchors: list[str] = []
+    seen: set[str] = set()
+    for raw in terms or search_query_terms([query]):
+        term = str(raw or "").strip()
+        key = term.casefold()
+        if len(term) < 4 or key in seen or key in _LOW_SIGNAL_SEARCH_TERMS:
+            continue
+        seen.add(key)
+        anchors.append(term)
+        if len(anchors) >= 6:
+            break
+    if len(anchors) >= 4:
+        return [" ".join(anchors[:3]), " ".join(anchors[3:6])][:2]
+    if len(anchors) >= 2:
+        return [" ".join(anchors)]
+    clean_query = compact_text(query, 120)
+    return [clean_query] if clean_query and clean_query != "(empty query)" else []
+
+
+def _no_match_warning_line(warning: Mapping[str, Any]) -> str:
+    code = str(warning.get("code") or "").strip()
+    message = str(warning.get("message") or "").strip()
+    if "unable to open database file" in message.casefold():
+        return (
+            "source index note: one registered index was unavailable; run "
+            "`aippocampus onboard --provider auto --status --json` if expected sources are missing."
+        )
+    label = code or "source warning"
+    return f"{label}: {compact_text(message, 160)}" if message else label
+
+
 def render_human_search_result(result: dict[str, Any]) -> str:
     if result.get("kind") == "aippocampus_current_thread_source_window":
         return render_current_source_window_text(
@@ -285,23 +334,40 @@ def render_human_search_result(result: dict[str, Any]) -> str:
             "a project cue / time cue if this is not the thread you meant."
         )
     else:
-        lines.append(f"No source-backed snippet found for: {query}")
+        if result.get("status") == "no_phrase_like_matches":
+            lines.append(f"No exact or phrase-like source match found for: {query}")
+            suppressed_count = int(result.get("suppressed_low_coverage_match_count") or 0)
+            if suppressed_count:
+                lines.append(
+                    f"suppressed low-coverage broad matches: {suppressed_count}"
+                )
+        else:
+            lines.append(f"No source-backed snippet found for: {query}")
         scope = str(
             result.get("scope_description")
             or "current resolved thread clean-source directory only"
         )
         lines.append(f"searched scope: {scope}")
-        lines.append("Possible routes, not yet evidence:")
-        lines.extend(first_recall_mode_lines())
-        lines.append(
-            "Next: refine the current-thread cue, run `aippocampus search --all`, "
-            "or use `aippocampus agent recall` when the cue is vague."
+        anchor_queries = _no_match_anchor_queries(query, terms)
+        search_prefix = (
+            "aippocampus search --all"
+            if result.get("registry_wide_search")
+            or result.get("search_scope") == "registered_clean_source_and_indexes"
+            else "aippocampus search"
         )
-        lines.append(
-            "Boundary: candidate routes are navigation only until a source-backed snippet appears."
-        )
+        if anchor_queries:
+            lines.append("Next: try a shorter source search from the original cue:")
+            for anchor in anchor_queries[:3]:
+                lines.append(f"- {search_prefix} {shell_quote(anchor)} --json")
+        else:
+            lines.append(
+                "Next: use `aippocampus agent recall \"<cue>\" --json` with a sharper cue, "
+                "or inspect source registration if expected sources are missing."
+            )
+        lines.append("Boundary: a search miss is not proof that no memory exists.")
     for warning in result.get("warnings") or []:
-        lines.append(f"warning: {warning.get('code')}: {warning.get('message')}")
+        if isinstance(warning, Mapping):
+            lines.append(_no_match_warning_line(warning))
     return "\n".join(lines)
 
 
@@ -361,7 +427,7 @@ def public_search_result(
         )
     if not public.get("matches"):
         public["decision"] = "no_source_backed_snippet_found"
-        public["agent_next_action"] = (
+        public["recovery_guidance"] = (
             "Refine the current-thread cue, run `aippocampus search --all` for "
             "registered sources, or use `agent recall` for vague continuity cues."
         )

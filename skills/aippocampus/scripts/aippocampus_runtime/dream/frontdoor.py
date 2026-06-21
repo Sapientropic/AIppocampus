@@ -33,11 +33,13 @@ def _count_status_rows(rows: list[dict[str, Any]], statuses: set[str]) -> int:
 
 def dream_status_payload(
     *,
+    lane: str = "dream",
     registry_dir: Path | None = None,
     queue_jsonl: Path | None = None,
     findings_jsonl: Path | None = None,
     working_memory_jsonl: Path | None = None,
 ) -> dict[str, Any]:
+    lane = "subconscious" if str(lane or "").strip() == "subconscious" else "dream"
     root = registry_root(registry_dir)
     queue_rows = sleep_cycle.iter_jsonl(queue_jsonl or root / "dream_queue.jsonl")
     finding_rows = sleep_cycle.iter_jsonl(findings_jsonl or root / "dream_findings.jsonl")
@@ -63,10 +65,20 @@ def dream_status_payload(
         or _row_status(row) in {"rejected", "model_output_rejected", "dropped"}
     )
     payload: dict[str, Any] = {
-        "kind": "aippocampus_dream_status",
+        "kind": (
+            "aippocampus_subconscious_status"
+            if lane == "subconscious"
+            else "aippocampus_dream_status"
+        ),
         "ok": True,
         "read_only": True,
         "status": "status_card",
+        "lane": lane,
+        "status_alias": (
+            "shared_dream_background_status"
+            if lane == "subconscious"
+            else "dream_background_status"
+        ),
         "surface": "foreground_status_card",
         "counts": {
             "queue_items": len(queue_rows),
@@ -79,6 +91,11 @@ def dream_status_payload(
         },
         "adjudicated_findings": finding_rows,
         "write_mode": "status_only",
+        "write_contract": {
+            "status_command_is_read_only": True,
+            "writes_performed": False,
+            "working_memory_projection_requires_explicit_write_command": True,
+        },
         "privacy_boundary": {
             "raw_candidate_text_emitted": False,
             "local_paths_emitted": False,
@@ -115,13 +132,29 @@ def build_arg_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _top_reason_bucket_lines(card: dict[str, Any], *, limit: int = 3) -> list[str]:
+    buckets = card.get("reason_buckets")
+    if not isinstance(buckets, dict):
+        return []
+    ordered = sorted(
+        ((str(name), int(count or 0)) for name, count in buckets.items()),
+        key=lambda item: (-item[1], item[0]),
+    )
+    return [f"{name}={count}" for name, count in ordered[:limit] if count > 0]
+
+
 def main(argv: list[str] | None = None) -> int:
+    raw_args = list(argv or [])
+    lane = "dream"
+    if raw_args and raw_args[0] in {"dream", "subconscious"}:
+        lane = raw_args.pop(0)
     parser = build_arg_parser()
-    args = parser.parse_args(argv)
+    args = parser.parse_args(raw_args if argv is not None else None)
     if args.command != "status":
         parser.print_help()
         return 2
     payload = dream_status_payload(
+        lane=lane,
         registry_dir=args.registry_dir,
         queue_jsonl=args.queue_jsonl,
         findings_jsonl=args.findings_jsonl,
@@ -131,10 +164,19 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(payload, ensure_ascii=False, indent=2))
     else:
         card = payload["dream_output_status_card"]
-        print("AIppocampus Dream status")
+        print(
+            "AIppocampus subconscious status"
+            if payload.get("lane") == "subconscious"
+            else "AIppocampus Dream status"
+        )
+        if payload.get("lane") == "subconscious":
+            print("alias: shared Dream/background status surface")
         print(f"status: {card.get('status')}")
+        reason_lines = _top_reason_bucket_lines(card)
+        if reason_lines:
+            print("why_no_output: " + ", ".join(reason_lines))
         print(f"primary_next_action: {card.get('primary_next_action')}")
-        print('next: aippocampus agent background "{task_cue}" --json')
+        print('template: aippocampus agent background "{task_cue}" --json')
     return 0
 
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from aippocampus_runtime.contracts import write_boundary
+from aippocampus_runtime.contracts import canonical_foreground_action_fields, write_boundary
 from aippocampus_runtime.sync.cli_support import sync_dir_required_actions
 from aippocampus_runtime.sync.contract import SYNC_MANIFEST_NAME
 
@@ -27,9 +27,7 @@ def missing_manifest_recovery_payload() -> dict[str, Any]:
                 "path_redacted": True,
             }
         ],
-        "agent_next_action": actions[0],
-        "foreground_action": actions[0],
-        "safe_next_actions": actions,
+        **canonical_foreground_action_fields(actions[0], safe_next_actions=actions),
     }
 
 
@@ -74,9 +72,7 @@ def sync_manifest_recovery_payload(
         "raw_rollout_included": False,
         "issues": [{"code": code, "path": str(sync_root / SYNC_MANIFEST_NAME), "message": message}],
         "recovery_actions": actions,
-        "agent_next_action": actions[0],
-        "foreground_action": actions[0],
-        "safe_next_actions": actions,
+        **canonical_foreground_action_fields(actions[0], safe_next_actions=actions),
         "write_boundary": write_boundary(written=False, explicit_write_required=True),
     }
 

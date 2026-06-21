@@ -129,10 +129,9 @@ def repro_package_template_payload() -> dict[str, Any]:
                 primary,
                 safe_next_actions=[primary, stdin_action, validate_action],
             ),
-            "compatibility": {
-                "legacy_primary_next_action": primary,
-                "legacy_nested_agent_next_action_retired": True,
-                "no_file_payload_field": "stdin_payload",
+            "input_delivery": {
+                "primary": "input_json_file",
+                "stdin_payload_field": "stdin_payload",
             },
             "next_actions": [
                 {"label": str(action.get("label") or action.get("id")), "command": str(action["command"]), "mutates": False}

@@ -327,7 +327,7 @@ def normalize_public_semantic_findings(
 def run_public_semantic_labeler(
     candidates: list[dict[str, Any]],
     *,
-    api_key_env: str = "DEEPSEEK_API_KEY",
+    api_key_env: str = "AIPPOCAMPUS_DEEPSEEK_API_KEY",
     model: str | None = None,
     base_url: str | None = None,
     timeout: int = DEFAULT_PUBLIC_SEMANTIC_TIMEOUT,

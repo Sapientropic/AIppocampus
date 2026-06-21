@@ -31,7 +31,7 @@ from aippocampus_runtime.ops import provider_key_bridge  # noqa: E402
 
 SCHEMA_VERSION = 1
 KIND = "aippocampus_provider_key_bridge_os_store_smoke"
-ENV_VAR = "DEEPSEEK_API_KEY"
+ENV_VAR = "AIPPOCAMPUS_DEEPSEEK_API_KEY"
 SUPPORTED_SOURCES = ("macos-keychain", "windows-credential-manager", "linux-secret-service")
 
 

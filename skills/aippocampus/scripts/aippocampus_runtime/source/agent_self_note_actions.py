@@ -164,16 +164,14 @@ def empty_notes_state(command: str, query: str = "") -> dict[str, Any]:
             "decision": "empty",
             "message": "No agent self-note matched this cue.",
             "query": query,
-            "agent_next_action": actions[1],
-            "safe_next_actions": actions,
+            **canonical_foreground_action_fields(actions[1], safe_next_actions=actions),
             "authority": "direction_only_empty_state",
         }
     actions = self_note_empty_list_actions()
     return {
         "decision": "empty",
         "message": "No agent self-notes have been recorded yet.",
-        "agent_next_action": actions[0],
-        "safe_next_actions": actions,
+        **canonical_foreground_action_fields(actions[0], safe_next_actions=actions),
         "authority": "direction_only_empty_state",
     }
 

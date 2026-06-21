@@ -84,9 +84,9 @@ class AgentBackgroundTests(unittest.TestCase):
         finding = payload["best_finding"]
         encoded = json.dumps(payload, ensure_ascii=False)
         self.assertEqual(payload["detail"], "compact")
-        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
-        self.assertEqual(payload["agent_next_action"], payload["foreground_action"])
-        self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
+        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v2")
+        self.assertNotIn("agent_next_action", payload)
+        self.assertNotIn(payload["foreground_action"], payload["safe_next_actions"])
         self.assertNotIn("findings", payload)
         self.assertNotIn("operator_detail", payload)
         self.assertNotIn("reader_diagnostic", payload)
@@ -137,7 +137,8 @@ class AgentBackgroundTests(unittest.TestCase):
 
         finding = payload["findings"][0]
         actions = {action["id"]: action for action in finding["next_actions"]}
-        self.assertEqual(payload["agent_next_action"], finding["next_actions"][0])
+        self.assertEqual(payload["foreground_action"], finding["next_actions"][0])
+        self.assertNotIn("agent_next_action", payload)
         self.assertEqual(
             actions["reopen_background_finding_source_route"]["target"]["finding_id"],
             "wm_action_time_learning",
@@ -211,7 +212,7 @@ class AgentBackgroundTests(unittest.TestCase):
         payload = self.tool_payload(response)
         action = payload["foreground_action"]
         self.assertTrue(response["result"].get("isError", False), payload)
-        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
+        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v2")
         self.assertEqual(action["id"], "background_for_task_cue")
         self.assertEqual(action["tool_name"], "agent_background")
         self.assertEqual(action["command_template"], 'aippocampus agent background "{task_cue}" --json')
@@ -221,8 +222,8 @@ class AgentBackgroundTests(unittest.TestCase):
         self.assertIn("cli_fallback", action)
         self.assertEqual(action["cli_fallback"]["command_template"], 'aippocampus agent background "{task_cue}" --json')
         self.assertTrue(action["cli_fallback"]["template_only"])
-        self.assertEqual(payload["agent_next_action"], action)
-        self.assertEqual(payload["safe_next_actions"][0], action)
+        self.assertNotIn("agent_next_action", payload)
+        self.assertNotIn(action, payload["safe_next_actions"])
 
     def test_agent_background_mcp_tool_projects_reviewed_findings(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -249,9 +250,9 @@ class AgentBackgroundTests(unittest.TestCase):
         self.assertFalse(response["result"].get("isError", False), payload)
         self.assertEqual(payload["kind"], "aippocampus_background_findings_card")
         self.assertEqual(payload["surface"], "agent_background")
-        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v1")
-        self.assertEqual(payload["agent_next_action"], payload["foreground_action"])
-        self.assertEqual(payload["safe_next_actions"][0], payload["foreground_action"])
+        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v2")
+        self.assertNotIn("agent_next_action", payload)
+        self.assertNotIn(payload["foreground_action"], payload["safe_next_actions"])
         self.assertEqual(payload["finding_count"], 1)
         self.assertEqual(payload["best_finding"]["shape_label"], "action_hint_candidate")
         self.assertIn("Action-time learning", payload["best_finding"]["match_reason"])

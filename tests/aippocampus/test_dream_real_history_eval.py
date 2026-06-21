@@ -136,14 +136,14 @@ class DreamRealHistoryEvalTests(unittest.TestCase):
             model_route = None
             model = ""
             base_url = ""
-            api_key_env = "DEEPSEEK_API_KEY"
+            api_key_env = "AIPPOCAMPUS_DEEPSEEK_API_KEY"
             max_tokens = None
             dream_model_timeout = 5.0
             dream_model_temperature = 0.0
             dream_model_thinking = "auto"
             dream_model_reasoning_effort = "auto"
 
-        with patch.dict(os.environ, {"DEEPSEEK_API_KEY": "test"}, clear=False):
+        with patch.dict(os.environ, {"AIPPOCAMPUS_DEEPSEEK_API_KEY": "test"}, clear=False):
             config, route_payload = dream_eval.dream_model_config_from_args(Args())
 
         self.assertEqual(config.thinking, "enabled")
@@ -155,7 +155,7 @@ class DreamRealHistoryEvalTests(unittest.TestCase):
             model_route = "local_dream_eval"
             model = ""
             base_url = ""
-            api_key_env = "DEEPSEEK_API_KEY"
+            api_key_env = "AIPPOCAMPUS_DEEPSEEK_API_KEY"
             max_tokens = None
             dream_model_timeout = 5.0
             dream_model_temperature = 0.0

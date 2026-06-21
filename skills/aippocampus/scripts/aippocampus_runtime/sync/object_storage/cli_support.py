@@ -300,7 +300,6 @@ def public_object_sync_status(result: dict[str, Any]) -> dict[str, Any]:
         "backend": result.get("backend", OBJECT_BACKEND),
         "status": "ready" if result.get("ok") else "needs_attention",
         "surface_class": "foreground_status_card",
-        "foreground_action_contract": "foreground-action-v1",
         "object_store": "<object-store-redacted>" if result.get("object_store") else None,
         "object_prefix": "<object-prefix-redacted>" if result.get("object_prefix") else None,
         "object_config_source": result.get("object_config_source"),
@@ -321,9 +320,7 @@ def public_object_sync_status(result: dict[str, Any]) -> dict[str, Any]:
             "bucket_or_account_included": False,
             "writes_performed": False,
         },
-        "agent_next_action": actions[0],
-        "foreground_action": actions[0],
-        "safe_next_actions": actions,
+        **canonical_foreground_action_fields(actions[0], safe_next_actions=actions),
     }
 
 
@@ -346,7 +343,7 @@ def print_object_sync_human_result(command: str, result: dict[str, Any]) -> None
         print(f"raw rollout: {str(public.get('raw_rollout_included')).lower()}")
         for issue in public.get("issues") or []:
             print(f"- {issue.get('code')}: {issue.get('path') or issue.get('message')}")
-        action_raw = public.get("agent_next_action")
+        action_raw = public.get("foreground_action")
         action = action_raw if isinstance(action_raw, dict) else {}
         print(f"next: {action.get('command') or action.get('label') or 'aippocampus object-sync push --plan --json'}")
         print(

@@ -116,7 +116,7 @@ def agent_semantic_gate_diagnostics(
                 degraded_reason=degraded_reason,
             ),
         },
-        "agent_next_action": report.get("next_safe_action"),
+        "next_step_hint": report.get("next_safe_action"),
         "semantic_surface": surface,
         "boundary": "diagnostic_sidecar_only_not_route_truth",
     }

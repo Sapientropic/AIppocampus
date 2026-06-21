@@ -16,7 +16,7 @@ sys.path.insert(0, str(SCRIPTS))
 from aippocampus_runtime.update import cli as update_cli  # noqa: E402
 
 PROVIDER_ENV_NAMES = [
-    "DEEPSEEK_API_KEY",
+    "AIPPOCAMPUS_DEEPSEEK_API_KEY",
     "AIPPOCAMPUS_OPENAI_COMPAT_ROUTE",
     "AIPPOCAMPUS_OPENAI_COMPAT_PROVIDER",
     "AIPPOCAMPUS_OPENAI_COMPAT_MODEL",

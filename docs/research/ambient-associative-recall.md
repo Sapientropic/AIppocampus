@@ -487,7 +487,7 @@ benchmark calibration are all in place. The runtime boundary is intentionally
 narrow: foreground hook decisions stay cache-first, while the 50-lane batch
 runs only in explicit warm CLI/evaluation paths or detached jobs. The installed
 foreground path now default-enqueues detached warming after non-skip cache
-misses when a thread id and `DEEPSEEK_API_KEY` are available; explicit opt-out
+misses when a thread id and `AIPPOCAMPUS_DEEPSEEK_API_KEY` are available; explicit opt-out
 remains available for shared machines and budget debugging. Detached jobs have
 their own default timeout (`AIPPOCAMPUS_DETACHED_WARM_TIMEOUT`, 45s) so the
 runtime loop does not inherit the short standalone foreground-style warm

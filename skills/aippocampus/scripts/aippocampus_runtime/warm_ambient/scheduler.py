@@ -276,7 +276,7 @@ def warm_status_payload(
         status = "complete"
     else:
         status = "idle"
-    agent_next_action: dict[str, Any]
+    foreground_action: dict[str, Any]
     safe_next_actions: list[dict[str, Any]]
     if status == "blocked":
         action_code = "provider_or_worker_unavailable_optional"
@@ -288,7 +288,7 @@ def warm_status_payload(
         action_code = "no_action"
         next_command = WARM_STATUS_COMMAND
     if status == "blocked":
-        agent_next_action = {
+        foreground_action = {
             "id": "inspect_provider_status",
             "label": "Inspect provider status",
             "command": WARM_REPAIR_COMMAND,
@@ -297,7 +297,7 @@ def warm_status_payload(
             "why": "Warm ambient has stale queued work; check whether the optional worker can see a provider before changing setup.",
         }
         safe_next_actions = [
-            agent_next_action,
+            foreground_action,
             {
                 "id": "recheck_warm_status",
                 "label": "Recheck warm status",
@@ -356,7 +356,7 @@ def warm_status_payload(
             },
         ]
     elif status == "pending":
-        agent_next_action = {
+        foreground_action = {
             "id": "check_warm_status",
             "label": "Check warm status",
             "command": WARM_STATUS_COMMAND,
@@ -364,9 +364,9 @@ def warm_status_payload(
             "claim_boundary": "queued_warm_work_is_not_worker_liveness",
             "why": "Recent warm jobs are queued; recheck status rather than assuming a worker is alive.",
         }
-        safe_next_actions = [agent_next_action]
+        safe_next_actions = [foreground_action]
     else:
-        agent_next_action = {
+        foreground_action = {
             "id": "no_warm_action_needed",
             "label": "No warm action needed",
             "command": WARM_STATUS_COMMAND,
@@ -374,13 +374,19 @@ def warm_status_payload(
             "claim_boundary": "warm_status_is_optional_background_readout",
             "why": "Warm ambient has no blocking foreground action.",
         }
-        safe_next_actions = [agent_next_action]
+        safe_next_actions = [foreground_action]
     action_fields = canonical_foreground_action_fields(
-        agent_next_action,
+        foreground_action,
         safe_next_actions=safe_next_actions,
     )
+    warm_ambient_ok = status != "blocked"
+    ordinary_recall_usable = True
     return {
         "kind": "aippocampus_warm_ambient_status",
+        "command_ok": True,
+        "warm_ambient_ok": warm_ambient_ok,
+        "foreground_recall_ready": ordinary_recall_usable,
+        "foreground_recall_blocked_by_warm_ambient": False,
         "ok": status != "blocked",
         "enabled": warm_background_enabled(enabled),
         "status": status,
@@ -388,7 +394,14 @@ def warm_status_payload(
         "action_code": action_code,
         "next_command": next_command,
         **action_fields,
-        "ordinary_recall_usable": True,
+        "ordinary_recall_usable": ordinary_recall_usable,
+        "readiness": {
+            "command_ok": True,
+            "warm_ambient_ok": warm_ambient_ok,
+            "ordinary_recall_usable": ordinary_recall_usable,
+            "warm_ambient_required_for_first_recall": False,
+            "strict_exit_code_still_reports_blocked_warm_queue": True,
+        },
         "ordinary_recall_note": "Warm ambient is optional; aippocampus search and agent recall can still use source-backed routes.",
         "privacy_boundary": {
             "raw_prompt_emitted": False,

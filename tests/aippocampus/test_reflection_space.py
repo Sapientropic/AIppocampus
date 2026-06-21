@@ -204,6 +204,17 @@ class ReflectionSpaceTests(unittest.TestCase):
             payload["topology"]["cannot_claim"],
         )
 
+    def test_default_entrypoint_is_operator_only_card_not_empty_fixture_claim(self) -> None:
+        payload = reflection.default_reflection_space_card()
+
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["status"], "operator_only_no_input")
+        self.assertTrue(payload["operator_only"])
+        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v2")
+        self.assertEqual(payload["foreground_action"]["id"], "run_reflection_fixture_smoke")
+        self.assertNotIn("agent_next_action", payload)
+        self.assertEqual(payload["safe_next_actions"], [])
+
 
 if __name__ == "__main__":
     unittest.main()
