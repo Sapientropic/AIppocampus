@@ -71,7 +71,7 @@ class KnownArtifactRecallDogfoodTests(unittest.TestCase):
             by_id["discussion_2127_natural_cue"]["evidence"]["pointer"]["url"],
             "https://github.com/Sapientropic/AIppocampus/discussions/2127",
         )
-        self.assertIn("registry_search_phrase_coverage", report["failing_owners"])
+        self.assertEqual(report["failing_owners"], [])
         self.assertFalse(report["privacy_boundary"]["discussion_bodies_serialized"])
 
     def test_observations_classify_manual_and_wrong_route_drag(self) -> None:
@@ -129,10 +129,10 @@ class KnownArtifactRecallDogfoodTests(unittest.TestCase):
             check=False,
         )
 
-        self.assertEqual(proc.returncode, 1)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
         payload = json.loads(proc.stdout)
-        self.assertGreaterEqual(payload["failed_count"], 1)
-        self.assertIn("registry_search_phrase_coverage", payload["failing_owners"])
+        self.assertEqual(payload["failed_count"], 0)
+        self.assertEqual(payload["failing_owners"], [])
         compat = {
             case["case_id"]: case for case in payload["cases"]
         }["compatibility_inventory_natural_cue"]

@@ -22,9 +22,10 @@ REQUIRED_READER_PATH_TERMS = {
     },
     "docs/start-here.md": {
         "aippocampus agent recall": "start-here missing executable first-recall command",
-        "aippocampus agent deepen --request 1 --last-recall --json": (
-            "start-here missing executable deepen command"
+        "aippocampus agent deepen --request 1 --recall-selector <emitted-selector> --json": (
+            "start-here missing selector-safe deepen command"
         ),
+        "`--last-recall` is a": "start-here missing last-recall fallback boundary",
         "guides/ten-minute-public-path.md": (
             "start-here missing 10-minute public path"
         ),

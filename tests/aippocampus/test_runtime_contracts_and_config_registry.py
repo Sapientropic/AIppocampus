@@ -234,7 +234,7 @@ class RuntimeContractsAndConfigRegistryTests(unittest.TestCase):
         primary = {
             "id": "open_detail",
             "label": "Open detail",
-            "command": "aippocampus agent deepen --request 1 --last-recall --json",
+            "command": "aippocampus agent deepen --request 1 --recall-selector sel_1234567890ab --json",
             "why": "Open the selected source before claims.",
             "mutation_risk": "read_only",
             "claim_boundary": "no_claim_before_reopen",

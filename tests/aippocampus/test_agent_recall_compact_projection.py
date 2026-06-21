@@ -196,7 +196,9 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
         self.assertEqual(first_route["claim_boundary"], "no_claim_before_reopen")
         self.assertEqual(first_route["action"]["route_choice_posture"], "labels_low_specificity")
         self.assertEqual(first_route["action"]["confidence"], "low_confidence_navigation")
-        self.assertEqual(first_route["action"]["arguments"], {"request_index": 1, "last_recall": True})
+        self.assertEqual(first_route["action"]["arguments"], {"request_index": 1})
+        self.assertIn("--recall-selector {recall_selector}", first_route["action"]["command_template"])
+        self.assertEqual(first_route["action"]["requires"], ["request_index", "recall_selector"])
         self.assertNotIn("route_selection", public["claim_boundary"]["can_use_for"])
         recovery = public["weak_route_recovery_card"]
         self.assertEqual(recovery["posture"], "labels_low_specificity")
@@ -673,12 +675,10 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
         self.assertNotEqual(action["id"], "use_opened_route_context")
         self.assertEqual(action["id"], "reopen_already_opened_route_context")
         self.assertEqual(action["tool_name"], "agent_deepen")
-        self.assertEqual(action["arguments"], {"request_index": 1, "last_recall": True})
-        assert_command_args(
-            self,
-            action["command"],
-            ["aippocampus", "agent", "deepen", "--request", "1", "--last-recall", "--json"],
-        )
+        self.assertEqual(action["arguments"], {"request_index": 1})
+        self.assertIn("--recall-selector {recall_selector}", action["command_template"])
+        self.assertEqual(action["requires"], ["request_index", "recall_selector"])
+        self.assertIn("--last-recall", action["last_recall_fallback_command"])
         self.assertIn("current compact payload has no source-window receipt", action["why"])
         self.assertEqual(action["claim_boundary"], "no_claim_before_reopen")
         self.assertEqual(public["routes"][0]["already_opened"], True)
@@ -784,12 +784,17 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
                 "last_recall_cache_available": False,
                 "foreground_action_card": {
                     "canonical_action": {
-                        "action_id": "agent_deepen_selected_route",
-                        "tool_name": "agent_deepen",
-                        "arguments": {"request_index": 1, "last_recall": True},
-                        "cli_command": "aippocampus agent deepen --request 1 --last-recall --json",
-                    }
-                },
+                    "action_id": "agent_deepen_selected_route",
+                    "tool_name": "agent_deepen",
+                    "arguments": {"request_index": 1},
+                    "cli_command_template": (
+                        "aippocampus agent deepen --request 1 "
+                        "--recall-selector {recall_selector} --json"
+                    ),
+                    "requires": ["recall_selector"],
+                    "template_only": True,
+                }
+            },
                 "memory_packets": [{"route_id": "route_missing_cache", "output_mode": "reopenable_route"}],
             },
             query="missing cache source cue",

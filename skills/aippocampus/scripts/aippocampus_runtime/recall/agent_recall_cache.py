@@ -210,6 +210,10 @@ def public_compact_route_receipts(routes: Any) -> list[dict[str, Any]]:
             "tool_name": action_map.get("tool_name"),
             "arguments": action_map.get("arguments"),
             "command": action_map.get("command") or action_map.get("cli_command"),
+            "command_template": action_map.get("command_template")
+            or action_map.get("cli_command_template"),
+            "requires": action_map.get("requires"),
+            "template_only": action_map.get("template_only"),
             "route_choice_posture": action_map.get("route_choice_posture"),
             "confidence": action_map.get("confidence"),
             "claim_boundary": action_map.get("claim_boundary"),

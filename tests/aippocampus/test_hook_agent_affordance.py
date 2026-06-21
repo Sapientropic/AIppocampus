@@ -131,10 +131,7 @@ class HookAgentAffordanceTests(unittest.TestCase):
         self.assertEqual(packet["suggested_agent_action"], "agent_deepen")
         self.assertIn("then call agent_deepen", text or "")
         self.assertIn('aippocampus agent recall "<short cue>" --json', text or "")
-        self.assertIn(
-            "aippocampus agent deepen --request 1 --last-recall --json",
-            text or "",
-        )
+        self.assertIn("follow the emitted --recall-selector deepen action", text or "")
         self.assertNotIn("handle", text or "")
 
     def test_distinctive_ambient_tiny_affordance_emits_agent_recall_action_only(

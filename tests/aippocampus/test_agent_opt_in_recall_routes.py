@@ -187,10 +187,14 @@ class AgentOptInRecallRoutesTests(unittest.TestCase):
         self.assertTrue(deepen_request["deepen_route_id_display_only"])
         self.assertEqual(deepen_request["callable_handle"], deepen_request["handle"])
         self.assertEqual(deepen_request["callable_handle_field"], "deepen_requests[].handle")
-        self.assertNotIn(deepen_request["handle"], deepen_request["copy_paste_command"])
-        self.assertIn("--request 1 --last-recall --json", deepen_request["copy_paste_command"])
+        self.assertNotIn("copy_paste_command", deepen_request)
+        self.assertIn(
+            "--request 1 --recall-selector {recall_selector} --json",
+            deepen_request["copy_paste_command_template"],
+        )
+        self.assertIn("--last-recall --json", deepen_request["last_recall_fallback_command"])
         self.assertIn(deepen_request["handle"], deepen_request["private_handle_command"])
-        self.assertEqual(report["suggested_next_command"], deepen_request["copy_paste_command"])
+        self.assertIsNone(report["suggested_next_command"])
         self.assertNotIn("source_refs", json.dumps(deepen_request, ensure_ascii=False))
 
         deepened = agent_continuity.deepen(
@@ -234,7 +238,8 @@ class AgentOptInRecallRoutesTests(unittest.TestCase):
         self.assertEqual(report["deepen_requests"][0]["handle"], long_handle)
         self.assertIn("handle_preview", report["deepen_requests"][0])
         self.assertIn("handle_sha256_12", report["deepen_requests"][0])
-        self.assertIn("aippocampus agent deepen --request 1 --last-recall --json", human)
+        self.assertIn("Next:", human)
+        self.assertNotIn("aippocampus agent deepen --request 1 --last-recall --json", human)
         self.assertIn("private_handle_command", report["deepen_requests"][0])
         self.assertNotIn(long_handle, human)
         self.assertNotIn("aippo-nav:", human)
@@ -256,7 +261,10 @@ class AgentOptInRecallRoutesTests(unittest.TestCase):
         self.assertEqual(public["surface"], "agent_cli_public_compact")
         self.assertEqual(action["tool_name"], "agent_deepen")
         self.assertEqual(action["arguments"]["request_index"], 1)
-        self.assertTrue(action["arguments"]["last_recall"])
+        self.assertNotIn("last_recall", action["arguments"])
+        self.assertIn("--recall-selector {recall_selector}", action["command_template"])
+        self.assertEqual(action["requires"], ["recall_selector"])
+        self.assertIn("--last-recall", action["last_recall_fallback_command"])
         self.assertNotIn("handle_boundary", public)
         self.assertNotIn("local_private_fields", public)
         self.assertNotIn("output_boundary", public)
@@ -679,7 +687,7 @@ class AgentOptInRecallRoutesTests(unittest.TestCase):
         human = agent_continuity_cli_support.render_recall_human(routed_report)
         self.assertIn("why: attention_router:top_route_changed", human)
         self.assertIn("Navigation:", human)
-        self.assertIn("aippocampus agent deepen --request 1 --last-recall --json", human)
+        self.assertNotIn("aippocampus agent deepen --request 1 --last-recall --json", human)
         self.assertTrue(routed_report["metrics"]["attention_router_applied"])
         self.assertEqual(routed_report["metrics"]["attention_router_ranked_route_count"], 2)
         self.assertEqual(routed_report["metrics"]["foreground_forbidden_key_count"], 0)
@@ -959,8 +967,13 @@ class AgentOptInRecallRoutesTests(unittest.TestCase):
                 "canonical_action": {
                     "action_id": "agent_deepen_selected_route",
                     "tool_name": "agent_deepen",
-                    "arguments": {"request_index": 1, "last_recall": True},
-                    "cli_command": "aippocampus agent deepen --request 1 --last-recall --json",
+                    "arguments": {"request_index": 1},
+                    "cli_command_template": (
+                        "aippocampus agent deepen --request 1 "
+                        "--recall-selector {recall_selector} --json"
+                    ),
+                    "requires": ["recall_selector"],
+                    "template_only": True,
                     "claim_boundary": "no_claim_before_reopen",
                 }
             },

@@ -20,7 +20,7 @@ _AGENT_CLI_FALLBACK_BY_ACTION = {
     "agent_recall": 'aippocampus agent recall "<short cue>" --json',
     "agent_deepen": (
         'aippocampus agent recall "<short cue>" --json; '
-        "aippocampus agent deepen --request 1 --last-recall --json"
+        "follow the emitted --recall-selector deepen action"
     ),
 }
 _STRONG_CLAIM_INTENTS = {

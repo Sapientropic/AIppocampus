@@ -24,10 +24,12 @@ First useful continuity move after AIppocampus is visible to an agent:
 
 ```sh
 aippocampus agent recall "old decision or handoff cue" --json
-aippocampus agent deepen --request 1 --last-recall --json
+aippocampus agent deepen --request 1 --recall-selector <emitted-selector> --json
 ```
 
 That turns an old cue into a route the agent can deepen before making claims.
+Use the `recall_selector` emitted by that recall; `--last-recall` is a mutable
+same-machine fallback, not the taught path.
 From a public source checkout, an exact-search demo can still show the source
 substrate without touching private history:
 
@@ -61,7 +63,7 @@ start here:
 ```sh
 aippocampus start --json
 aippocampus agent recall "old decision or handoff cue" --json
-aippocampus agent deepen --request 1 --last-recall --json
+aippocampus agent deepen --request 1 --recall-selector <emitted-selector> --json
 ```
 
 `start` is the foreground chooser. If it says source is missing or stale, stay
@@ -141,7 +143,7 @@ diagnostic tour:
 ```sh
 uvx aippocampus --help
 uvx aippocampus agent recall "old decision or handoff cue" --json
-uvx aippocampus agent deepen --request 1 --last-recall --json
+uvx aippocampus agent deepen --request 1 --recall-selector <emitted-selector> --json
 uvx aippocampus search "a distinctive old phrase"
 ```
 

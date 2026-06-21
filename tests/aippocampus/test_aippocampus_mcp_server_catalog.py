@@ -175,7 +175,7 @@ class AippocampusMcpServerCatalogTests(unittest.TestCase):
         )
         self.assertEqual(
             by_name["agent_recall"]["inputSchema"]["required_any"],
-            ["query", "intent"],
+            ["query", "intent", "cue"],
         )
         self.assertIn(
             {"required": ["query"]},
@@ -185,9 +185,13 @@ class AippocampusMcpServerCatalogTests(unittest.TestCase):
             {"required": ["intent"]},
             by_name["agent_recall"]["inputSchema"]["anyOf"],
         )
+        self.assertIn(
+            {"required": ["cue"]},
+            by_name["agent_recall"]["inputSchema"]["anyOf"],
+        )
         self.assertEqual(
             by_name["recall_context"]["inputSchema"]["required_any"],
-            ["intent", "query"],
+            ["intent", "query", "cue"],
         )
         self.assertIn("handle", by_name["agent_deepen"]["inputSchema"]["required_any"])
         self.assertIn("request_index", by_name["agent_deepen"]["inputSchema"]["required_any"])
@@ -275,7 +279,7 @@ class AippocampusMcpServerCatalogTests(unittest.TestCase):
             action_ids,
             [
                 "try_agent_recall",
-                "deepen_last_recall_route",
+                "deepen_recall_selector_route",
             ],
         )
         self.assertEqual(payload["cli_fallback_actions"][0]["id"], "record_route_feedback_cli_fallback")
@@ -590,7 +594,8 @@ class AippocampusMcpServerCatalogTests(unittest.TestCase):
                     f"aippocampus agent {tool_name.removeprefix('agent_')} --request",
                     payload["follow_up_action"]["command_template"],
                 )
-                self.assertEqual(payload["follow_up_action"]["requires"], ["last_recall_cache", "request_index"])
+                self.assertIn("--recall-selector {recall_selector}", payload["follow_up_action"]["command_template"])
+                self.assertEqual(payload["follow_up_action"]["requires"], ["recall_selector", "request_index"])
 
     def test_agent_recall_missing_query_returns_recovery_card(self) -> None:
         response = mcp.handle_request(

@@ -607,7 +607,7 @@ aippocampus agent recall "continue the old decision" --json
 aippocampus agent recall "continue the old decision" --attention-router --json
 aippocampus agent recall "continue the old decision" --attention-router-mode auto --json
 aippocampus agent aippo --task "coding issue closeout" --json
-aippocampus agent deepen --request 1 --last-recall --json
+aippocampus agent deepen --request 1 --recall-selector <emitted-selector> --json
 aippocampus agent recall "continue the old decision" --json --detail full
 aippocampus agent deepen "<opaque recall handle or deepen:aippo...>" --json
 aippocampus agent explain "<opaque recall handle or deepen:aippo...>" --json
@@ -655,8 +655,10 @@ For local diagnostic CLI recall output, pass `deepen_requests[].handle` to
 not the copy-pasteable recall handle. When available, prefer the emitted
 `deepen_requests[].copy_paste_command`; for compact public or MCP foreground
 output, prefer the request-index path such as
-`aippocampus agent deepen --request 1 --last-recall` or the MCP
-`foreground_action` object.
+`aippocampus agent deepen --request 1 --recall-selector <emitted-selector>
+--json` or the MCP `foreground_action` object. `--last-recall` remains a
+same-machine compatibility fallback, but it reads a mutable cache and should
+not be taught as the primary foreground path when a selector is available.
 When recall has narrowed the candidate route set but the user then remembers
 exact wording, use `aippocampus search --from-last-recall "<exact phrase>"
 --json` before broad `search --all`; the search remains route selection, and

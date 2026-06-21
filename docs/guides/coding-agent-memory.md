@@ -25,7 +25,7 @@ decision, rejected route, correction, or handoff, start here:
 
 ```sh
 aippocampus agent recall "old decision or handoff cue" --json
-aippocampus agent deepen --request 1 --last-recall --json
+aippocampus agent deepen --request 1 --recall-selector <emitted-selector> --json
 ```
 
 Useful success looks like a selected route plus a next source-open/deepen action,
@@ -131,7 +131,7 @@ If local source is already registered, make the demo a real recall route:
 
 ```sh
 uvx aippocampus agent recall "old decision or handoff cue" --json
-uvx aippocampus agent deepen --request 1 --last-recall --json
+uvx aippocampus agent deepen --request 1 --recall-selector <emitted-selector> --json
 uvx aippocampus search "a distinctive old phrase"
 ```
 
@@ -157,7 +157,7 @@ uvx aippocampus onboard --provider claude-code --cwd . --json
 uvx aippocampus import conversation --format generic-jsonl --input ./conversation.jsonl --dry-run --json
 uvx aippocampus import conversation --format generic-jsonl --input ./conversation.jsonl --json
 uvx aippocampus agent recall "old decision or handoff cue" --json
-uvx aippocampus agent deepen --request 1 --last-recall --json
+uvx aippocampus agent deepen --request 1 --recall-selector <emitted-selector> --json
 uvx aippocampus export --json
 uvx aippocampus sync --json
 ```

@@ -15,13 +15,14 @@ from aippocampus_runtime.mcp.agent_deepen_projection import compact_agent_deepen
 from aippocampus_runtime.mcp.agent_explain_projection import project_agent_explain_cli_payload
 from aippocampus_runtime.public_output import emit_public_text
 from aippocampus_runtime.recall import (
-    associative_path_fallback as apw_fallback,
-)
-from aippocampus_runtime.recall import (
+    agent_deepen_requests,
     attention_router_policy,
     background_findings,
     feedback_events,
     task_orientation,
+)
+from aippocampus_runtime.recall import (
+    associative_path_fallback as apw_fallback,
 )
 from aippocampus_runtime.recall.agent_continuity import (
     KIND,
@@ -88,7 +89,8 @@ def _parser() -> argparse.ArgumentParser:
         epilog=(
             "First useful loop:\n"
             '  aippocampus agent recall "old cue" --json\n'
-            "  aippocampus agent deepen --request 1 --last-recall --json\n"
+            "  follow the emitted deepen action; when a recall_selector is present, prefer:\n"
+            "  aippocampus agent deepen --request 1 --recall-selector <emitted-selector> --json\n"
             '  aippocampus agent aippo "task cue" --json\n'
             '  aippocampus agent background "task cue" --json\n'
             "  aippocampus agent feedback <route_id> --outcome source_reopen_success --json\n\n"
@@ -227,13 +229,17 @@ def _parser() -> argparse.ArgumentParser:
 
     deepen_parser = sub.add_parser(
         "deepen",
-        usage="aippocampus agent deepen --request 1 --last-recall --json [options]",
+        usage=(
+            "aippocampus agent deepen --request 1 "
+            "--recall-selector <emitted-selector> --json [options]"
+        ),
         description=(
             "Agent deepen task card:\n"
-            "  Ordinary path: run recall, then reopen a numbered request from the last-recall cache.\n"
-            "  Copy-paste: aippocampus agent deepen --request 1 --last-recall --json\n"
+            "  Ordinary path: run recall, then reopen a numbered request with the emitted recall_selector.\n"
+            "  Copy-paste: aippocampus agent deepen --request 1 --recall-selector <emitted-selector> --json\n"
+            "  Fallback: --last-recall reads a mutable same-machine cache; use only for compatibility.\n"
             "  Raw handles are local/private diagnostics; do not paste them into public output.\n"
-            "  If the cache is missing or stale, rerun agent recall or pass an explicit handle locally.\n"
+            "  If the selector/cache is missing or stale, rerun agent recall or pass an explicit handle locally.\n"
             "  Deepen opens source windows; use it before exact wording, disputed, or high-risk claims."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -261,11 +267,15 @@ def _parser() -> argparse.ArgumentParser:
 
     explain_parser = sub.add_parser(
         "explain",
-        usage="aippocampus agent explain --request 1 --last-recall --json [options]",
+        usage=(
+            "aippocampus agent explain --request 1 "
+            "--recall-selector <emitted-selector> --json [options]"
+        ),
         description=(
             "Agent explain task card:\n"
-            "  Ordinary path: explain a numbered route from the last-recall cache.\n"
-            "  Copy-paste: aippocampus agent explain --request 1 --last-recall --json\n"
+            "  Ordinary path: explain a numbered route with the emitted recall_selector.\n"
+            "  Copy-paste: aippocampus agent explain --request 1 --recall-selector <emitted-selector> --json\n"
+            "  Fallback: --last-recall reads a mutable same-machine cache; use only for compatibility.\n"
             "  Raw handles remain local/private diagnostics; prefer request numbers in foreground output.\n"
             "  Explanation is routing context, not source evidence."
         ),
@@ -392,6 +402,8 @@ def main(argv: list[str] | None = None) -> int:
             path=args.last_recall_path,
         )
         selector_id = write_recall_selector_snapshot(args.last_recall_path) if cache_written else None
+        if selector_id:
+            agent_deepen_requests.attach_recall_selector_to_payload(payload, selector_id)
         payload = {
             **payload,
             "last_recall_cache_available": cache_written,
@@ -645,7 +657,8 @@ def main(argv: list[str] | None = None) -> int:
                 print("Reason: " + str(error.get("code") or "malformed recall handle"))
                 print(
                     "Use: run `aippocampus agent recall --json --detail full ...` and pass "
-                    "`deepen_requests[].handle`, or use `agent deepen --request N --last-recall`."
+                    "`deepen_requests[].handle`, or use the emitted "
+                    "`agent deepen --request N --recall-selector ...` command."
                 )
             else:
                 print("AIppocampus agent explain: ok")

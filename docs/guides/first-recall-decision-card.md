@@ -29,7 +29,7 @@ then deepen the selected route:
 
 ```sh
 aippocampus agent recall "old decision or handoff cue" --json
-aippocampus agent deepen --request 1 --last-recall --json
+aippocampus agent deepen --request 1 --recall-selector <emitted-selector> --json
 ```
 
 ## Cold Start Versus Steady State
@@ -70,7 +70,7 @@ source reopen.
 
    ```sh
    aippocampus agent recall "old decision or handoff cue" --json
-   aippocampus agent deepen --request 1 --last-recall --json
+   aippocampus agent deepen --request 1 --recall-selector <emitted-selector> --json
    ```
 
 2. If the user remembers exact wording, search clean source directly:

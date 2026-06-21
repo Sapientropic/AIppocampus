@@ -79,6 +79,20 @@ class RecallIntegrationReadinessTests(unittest.TestCase):
             "agent_facing_cli_wired_but_mcp_unwired",
         )
 
+    def test_live_dogfood_failure_blocks_readiness(self) -> None:
+        report = readiness.build_recall_integration_readiness(
+            dogfood_report={
+                "ok": False,
+                "case_count": 3,
+                "passed_count": 2,
+                "failing_owners": ["registry_search_phrase_coverage"],
+            }
+        )
+
+        self.assertFalse(report["ok"])
+        self.assertEqual(report["failures"][0]["surface_id"], "known_artifact_recall_dogfood")
+        self.assertEqual(report["failures"][0]["reason"], "live known-artifact dogfood failed")
+
     def test_cli_json_report_is_machine_readable(self) -> None:
         proc = subprocess.run(
             [

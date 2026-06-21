@@ -5,7 +5,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
+import sys
 from collections.abc import Iterable, Mapping
+from pathlib import Path
 from typing import Any
 
 READY_STATUSES = {
@@ -125,10 +128,70 @@ def _clean_surfaces(extra_surfaces: Iterable[Mapping[str, Any]] | None) -> list[
     return surfaces
 
 
+def _repo_root() -> Path:
+    return Path(__file__).resolve().parents[2]
+
+
+def _dogfood_report(repo_root: Path) -> dict[str, Any]:
+    script = repo_root / "tools" / "aippocampus" / "smoke" / "known_artifact_recall_dogfood.py"
+    proc = subprocess.run(
+        [sys.executable, str(script), "--repo-root", str(repo_root), "--json"],
+        cwd=repo_root,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        capture_output=True,
+        check=False,
+    )
+    try:
+        payload = json.loads(proc.stdout) if proc.stdout.strip() else {}
+    except json.JSONDecodeError:
+        payload = {}
+    if not isinstance(payload, dict):
+        payload = {}
+    payload.setdefault("ok", False)
+    payload.setdefault("returncode", proc.returncode)
+    if proc.stderr.strip():
+        payload.setdefault("stderr_present", True)
+    return payload
+
+
+def _apply_dogfood_report(
+    surfaces: list[dict[str, Any]],
+    dogfood_report: Mapping[str, Any] | None,
+) -> None:
+    if dogfood_report is None:
+        return
+    dogfood_ok = bool(dogfood_report.get("ok"))
+    for surface in surfaces:
+        if surface.get("surface_id") != "known_artifact_recall_dogfood":
+            continue
+        surface["live_dogfood_ok"] = dogfood_ok
+        surface["live_failed_owners"] = list(dogfood_report.get("failing_owners") or [])
+        surface["live_case_count"] = dogfood_report.get("case_count")
+        surface["live_passed_count"] = dogfood_report.get("passed_count")
+        if dogfood_ok:
+            surface["status"] = "diagnostic_only"
+            surface["foreground_callable"] = False
+            surface["reason"] = "live known-artifact dogfood passed"
+        else:
+            surface["status"] = "blocked"
+            surface["foreground_callable"] = False
+            surface["reason"] = "live known-artifact dogfood failed"
+        break
+
+
 def build_recall_integration_readiness(
     extra_surfaces: Iterable[Mapping[str, Any]] | None = None,
+    *,
+    dogfood_report: Mapping[str, Any] | None = None,
+    run_live_checks: bool = False,
+    repo_root: Path | None = None,
 ) -> dict[str, Any]:
     surfaces = _clean_surfaces(extra_surfaces)
+    if run_live_checks and dogfood_report is None:
+        dogfood_report = _dogfood_report(repo_root or _repo_root())
+    _apply_dogfood_report(surfaces, dogfood_report)
     failures: list[dict[str, Any]] = []
     for surface in surfaces:
         surface_id = str(surface.get("surface_id") or "surface")
@@ -140,6 +203,16 @@ def build_recall_integration_readiness(
                     "surface_id": surface_id,
                     "reason": "unknown_readiness_status",
                     "status": status,
+                }
+            )
+            continue
+        if status == "blocked":
+            failures.append(
+                {
+                    "surface_id": surface_id,
+                    "reason": str(surface.get("reason") or "readiness_surface_blocked"),
+                    "owner_issue": surface.get("owner_issue"),
+                    "live_failed_owners": surface.get("live_failed_owners"),
                 }
             )
             continue
@@ -185,8 +258,13 @@ def build_recall_integration_readiness(
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--json", action="store_true")
+    parser.add_argument(
+        "--skip-live-checks",
+        action="store_true",
+        help="Skip dogfood/live readiness checks and report static wiring only.",
+    )
     args = parser.parse_args(argv)
-    report = build_recall_integration_readiness()
+    report = build_recall_integration_readiness(run_live_checks=not args.skip_live_checks)
     if args.json:
         print(json.dumps(report, ensure_ascii=False, indent=2))
     else:

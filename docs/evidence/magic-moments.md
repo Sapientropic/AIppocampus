@@ -158,7 +158,7 @@ the trusted local plugin path and then ask for one foreground continuity route:
 aippocampus plugin install --codex --verify
 aippocampus update status
 aippocampus agent recall "old decision or handoff cue" --json
-aippocampus agent deepen --request 1 --last-recall --json
+aippocampus agent deepen --request 1 --recall-selector <emitted-selector> --json
 ```
 
 The no-clone public-safe probe remains useful when the user is evaluating the
@@ -177,7 +177,7 @@ user remembers wording:
 uvx aippocampus onboard --provider codex --status --json
 # Then follow the explicit write recommendation after consent.
 uvx aippocampus agent recall "old decision or handoff cue" --json
-uvx aippocampus agent deepen --request 1 --last-recall --json
+uvx aippocampus agent deepen --request 1 --recall-selector <emitted-selector> --json
 uvx aippocampus search "a distinctive old phrase"
 ```
 

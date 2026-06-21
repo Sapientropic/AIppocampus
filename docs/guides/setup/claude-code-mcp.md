@@ -12,7 +12,7 @@ moment before host diagnostics:
 
 ```sh
 aippocampus agent recall "old decision or handoff cue" --json
-aippocampus agent deepen --request 1 --last-recall --json
+aippocampus agent deepen --request 1 --recall-selector <emitted-selector> --json
 aippocampus search "a distinctive old phrase" --cwd "$PWD"
 ```
 

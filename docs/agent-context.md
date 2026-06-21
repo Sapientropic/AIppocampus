@@ -22,8 +22,11 @@ CLI equivalent:
 
 ```sh
 aippocampus agent recall "old decision or handoff cue" --json
-aippocampus agent deepen --request 1 --last-recall --json
+aippocampus agent deepen --request 1 --recall-selector <emitted-selector> --json
 ```
+
+Use the `recall_selector` emitted by the recall output. `--last-recall` remains
+a mutable same-machine compatibility fallback, not the normal taught path.
 
 | Situation | First tool | Then |
 | --- | --- | --- |
@@ -192,7 +195,7 @@ remembers wording:
 
 ```sh
 uvx aippocampus agent recall "old decision or handoff cue" --json
-uvx aippocampus agent deepen --request 1 --last-recall --json
+uvx aippocampus agent deepen --request 1 --recall-selector <emitted-selector> --json
 uvx aippocampus search "a distinctive old phrase"
 ```
 

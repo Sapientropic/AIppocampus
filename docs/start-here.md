@@ -19,7 +19,7 @@ honestly ready.
   ```sh
   aippocampus start --json
   aippocampus agent recall "old decision or handoff cue" --json
-  aippocampus agent deepen --request 1 --last-recall --json
+  aippocampus agent deepen --request 1 --recall-selector <emitted-selector> --json
   ```
 
   If `start` reports no clean source, stay read-only first:
@@ -40,7 +40,7 @@ honestly ready.
   ```sh
   aippocampus start --json
   aippocampus agent recall "old decision or handoff cue" --json
-  aippocampus agent deepen --request 1 --last-recall --json
+  aippocampus agent deepen --request 1 --recall-selector <emitted-selector> --json
   ```
 
   If source is missing, check `aippocampus onboard --provider auto --status
@@ -64,7 +64,7 @@ honestly ready.
   ```sh
   aippocampus start --json
   aippocampus agent recall "old decision or handoff cue" --json
-  aippocampus agent deepen --request 1 --last-recall --json
+  aippocampus agent deepen --request 1 --recall-selector <emitted-selector> --json
   ```
 
   Use `aippocampus search "a distinctive old phrase"` when the user remembers
@@ -74,6 +74,8 @@ honestly ready.
 
 Use the recall output as a route. Deepen/reopen source before exact wording,
 public claims, sensitive facts, stale disputes, or high-risk action.
+Prefer the `recall_selector` emitted by that recall; `--last-recall` is a
+same-machine compatibility fallback for old clients.
 Use `aippocampus health` and `aippocampus onboard --provider auto --status` as
 read-only recovery cards when no source is registered or the first route is
 blocked.

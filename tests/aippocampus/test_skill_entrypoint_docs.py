@@ -57,12 +57,25 @@ class SkillEntrypointDocsTests(unittest.TestCase):
             agent_context.index("## What AIppocampus Is"),
         )
         recall_cmd = 'aippocampus agent recall "old decision or handoff cue" --json'
+        selector_deepen_cmd = (
+            "aippocampus agent deepen --request 1 "
+            "--recall-selector <emitted-selector> --json"
+        )
         repair_section = skill_text.index("Repair, setup, status, provider, storage")
         self.assertLess(
             skill_text.index(recall_cmd),
-            skill_text.index("aippocampus agent deepen --request 1 --last-recall --json"),
+            skill_text.index(selector_deepen_cmd),
         )
-        for phrase in (recall_cmd, "direct clean-source search", "Primary foreground loop"):
+        self.assertIn(
+            "`--last-recall` is a mutable",
+            skill_text,
+        )
+        for phrase in (
+            recall_cmd,
+            selector_deepen_cmd,
+            "direct clean-source search",
+            "Primary foreground loop",
+        ):
             self.assertLess(skill_text.index(phrase), repair_section)
         self.assertIn("## Runtime Posture For Agents", agent_context)
         self.assertIn("cheap orientation", agent_context.lower())

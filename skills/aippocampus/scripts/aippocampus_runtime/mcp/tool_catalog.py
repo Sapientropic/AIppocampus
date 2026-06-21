@@ -39,6 +39,7 @@ TOOLS: list[dict[str, Any]] = [
         "agent_recall",
         "Find source-backed continuity routes for the current task. When: prefer over recall_context for semantic, attention-router, macro-aware, or agent-native follow-up recall; use search_memory for exact wording. After: call agent_deepen on the selected route before claims.",
         {
+            "cue": {"type": "string"},
             "query": {"type": "string"},
             "intent": {"type": "string"},
             "cwd": {"type": "string"},
@@ -64,7 +65,7 @@ TOOLS: list[dict[str, Any]] = [
             "detail": {"type": "string", "enum": ["compact", "full"]},
             "include_private_paths": {"type": "boolean"},
         },
-        required_any=["query", "intent"],
+        required_any=["query", "intent", "cue"],
     ),
     tool_schema(
         "agent_aippo",
@@ -156,6 +157,7 @@ TOOLS: list[dict[str, Any]] = [
         {
             "intent": {"type": "string"},
             "query": {"type": "string"},
+            "cue": {"type": "string"},
             "cwd": {"type": "string"},
             "max": {"type": "integer", "minimum": 1, "maximum": 25},
             "clean_source_dir": {"type": "string"},
@@ -164,7 +166,7 @@ TOOLS: list[dict[str, Any]] = [
             "detail": {"type": "string", "enum": ["compact", "full"]},
             "include_private_paths": {"type": "boolean"},
         },
-        required_any=["intent", "query"],
+        required_any=["intent", "query", "cue"],
     ),
     tool_schema(
         "recall_deepen",
