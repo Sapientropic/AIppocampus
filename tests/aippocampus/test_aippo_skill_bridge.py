@@ -9,7 +9,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 from aippocampus_runtime.aippo import skill_bridge, skill_observed_use
 from aippocampus_runtime.recall import (
-    agent_continuity_cli_support,
+    agent_continuity,
     feedback_events,
 )
 
@@ -299,7 +299,7 @@ class AIppoSkillBridgeTests(unittest.TestCase):
         skill_path = REPO_ROOT / "skills" / "aippocampus" / "SKILL.md"
         markdown = skill_path.read_text(encoding="utf-8")
         clause_id = "skill_aippocampus_workflow_003"
-        receipt = agent_continuity_cli_support.capture_feedback(
+        receipt = agent_continuity.capture_feedback(
             route_id=f"skill_clause:{clause_id}",
             outcome="helped",
         )

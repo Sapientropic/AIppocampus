@@ -21,6 +21,7 @@ import _paths
 _paths.ensure_paths()
 
 from aippocampus_runtime.aippo import working_contract as aippo
+from aippocampus_runtime.aippo import working_contract_fixture_report as aippo_fixture_report
 from aippocampus_runtime.navigation import attention_hot_router, semantic_warm_route_producer
 from aippocampus_runtime.recall import (
     agent_facade_contract,
@@ -376,7 +377,7 @@ def _project_route_case(case: Mapping[str, Any]) -> dict[str, Any]:
 
 def _project_aippo_case(case: Mapping[str, Any]) -> dict[str, Any]:
     del case
-    report = aippo.build_aippo_working_contract_fixture_report()
+    report = aippo_fixture_report.build_aippo_working_contract_fixture_report()
     packet = dict(report["activation_packet"])
     red_lines = {
         "source_backed_claim_without_reopen": int(

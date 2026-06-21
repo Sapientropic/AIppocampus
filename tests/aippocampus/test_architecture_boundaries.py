@@ -595,7 +595,10 @@ class ArchitectureBoundaryTests(unittest.TestCase):
         self.assertIn("fresh_agent_load", system_weight)
         self.assertIn("archive_or_split_targets", system_weight)
         near_zero_queue = system_weight["near_zero_runtime_split_queue"]
-        self.assertTrue(near_zero_queue)
+        self.assertEqual(
+            len(near_zero_queue),
+            report["headroom_summary"]["runtime_split_queue_count"],
+        )
         self.assertTrue(all(row["margin"] <= 2 for row in near_zero_queue))
         self.assertTrue(all(row.get("next_split_boundary") for row in near_zero_queue))
         rel_path = "tests/aippocampus/test_subconscious_jobs_questions.py"

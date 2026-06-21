@@ -28,14 +28,13 @@ from aippocampus_runtime.question.source_refs import build_source_ref_index, sou
 from aippocampus_runtime.question.tracking import (
     DEFAULT_STRONG_THRESHOLD,
     ConfirmationFn,
-    QuestionCandidate,
-    axis_tokens,
     decide_pair,
     default_jobs_path,
     default_registry_path,
     load_tracking_inputs,
     pair_is_trackable,
 )
+from aippocampus_runtime.question.tracking_types import QuestionCandidate, axis_tokens
 from aippocampus_runtime.registry.api import unique_preserve
 
 SCHEMA_VERSION = 2

@@ -9,6 +9,7 @@ from unittest import mock
 
 from aippocampus_runtime.contracts import executable_command_violations
 from aippocampus_runtime.mcp import server as mcp
+from aippocampus_runtime.mcp import tool_handlers as mcp_handlers
 from aippocampus_runtime.mcp import tool_readiness
 from aippocampus_runtime.ops import provider_key_bridge
 from tests.aippocampus.mcp_server_fixtures import (
@@ -643,10 +644,10 @@ class AippocampusMcpServerCatalogTests(unittest.TestCase):
         try:
             with (
                 mock.patch.dict(os.environ, {"CODEX_HOME": str(codex_home)}, clear=False),
-                mock.patch.object(mcp, "recall_diagnostic_report", side_effect=fake_report),
+                mock.patch.object(mcp_handlers, "recall_diagnostic_report", side_effect=fake_report),
             ):
                 os.environ.pop(env_var, None)
-                response = mcp.call_recall_diagnostic(
+                response = mcp_handlers.call_recall_diagnostic(
                     {
                         "cwd": str(self.cwd),
                         "cue": "vague continuity cue",
@@ -704,10 +705,10 @@ class AippocampusMcpServerCatalogTests(unittest.TestCase):
         try:
             with (
                 mock.patch.dict(os.environ, {"CODEX_HOME": str(codex_home)}, clear=False),
-                mock.patch.object(mcp, "agent_continuity_module", return_value=FakeAgent),
+                mock.patch.object(mcp_handlers, "agent_continuity_module", return_value=FakeAgent),
             ):
                 os.environ.pop(env_var, None)
-                response = mcp.call_agent_recall(
+                response = mcp_handlers.call_agent_recall(
                     {
                         "cwd": str(self.cwd),
                         "query": "vague continuity cue",

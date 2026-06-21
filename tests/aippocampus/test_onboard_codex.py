@@ -705,6 +705,28 @@ class OnboardCodexTests(unittest.TestCase):
         self.assertNotIn("private frontier", encoded)
         self.assertNotIn(str(self.root), encoded)
 
+    def test_public_onboarding_projection_whitelists_status_and_provider(self) -> None:
+        private_result = {
+            "ok": True,
+            "data": {
+                "stats_after": {"thread_count": 1},
+                "boundary": {"frontier": {"status": "password=frontier-secret"}},
+            },
+            "meta": {"provider": "password-provider-secret", "duration_ms": 12},
+        }
+
+        public = onboard.public_onboarding_result(private_result)
+        encoded = json.dumps(public, ensure_ascii=False)
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            onboard.print_text(private_result)
+
+        self.assertEqual(public["data"]["frontier_status"], "unknown")
+        self.assertEqual(public["meta"]["provider"], "auto")
+        self.assertIn("frontier: unknown", stdout.getvalue())
+        self.assertNotIn("password", encoded)
+        self.assertNotIn("frontier-secret", stdout.getvalue())
+
     def test_public_dry_run_projection_keeps_explicit_write_next_action(self) -> None:
         result = {
             "ok": True,

@@ -18,7 +18,7 @@ from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from aippocampus_runtime.mcp import server as mcp_server
+from aippocampus_runtime.mcp import tool_handlers as mcp_tools
 from aippocampus_runtime.mcp.recall_navigation import NAVIGATION_SCHEMA_VERSION
 from aippocampus_runtime.ops import issue_route_quality, reopen_follow_through
 from aippocampus_runtime.ops.recall_navigation_attention import (
@@ -116,7 +116,7 @@ def _run_direct_search(
     match_count = 0
     for query in queries:
         attempts += 1
-        result = mcp_server.call_search_memory(
+        result = mcp_tools.call_search_memory(
             {
                 "query": query,
                 "cwd": str(cwd),
@@ -200,7 +200,7 @@ def _run_progressive_recall(
 ) -> dict[str, Any]:
     expected_source_id = str(case.get("expected_source_id") or "")
     start = time.perf_counter()
-    context_result = mcp_server.call_recall_context(
+    context_result = mcp_tools.call_recall_context(
         {
             "intent": str(case.get("intent") or ""),
             "cwd": str(cwd),
@@ -264,7 +264,7 @@ def _run_progressive_recall(
         after_context()
     suggested_next = _as_dict(selected_route.get("suggested_next"))
     context_source_ref_count = len(_as_list(selected_route.get("source_refs")))
-    deepen_result = mcp_server.call_recall_deepen(
+    deepen_result = mcp_tools.call_recall_deepen(
         {
             "handle": selected_route.get("handle"),
             "cwd": str(cwd),

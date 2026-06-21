@@ -19,7 +19,7 @@ from typing import Any
 from aippocampus_runtime.contracts import (
     canonical_foreground_action_fields,
 )
-from aippocampus_runtime.mcp import server as mcp_server
+from aippocampus_runtime.mcp import tool_handlers as mcp_tools
 from aippocampus_runtime.mcp.recall_navigation import NAVIGATION_SCHEMA_VERSION
 from aippocampus_runtime.ops.recall_funnel_live_agent_gate import (
     build_live_agent_usefulness_gate,
@@ -157,7 +157,7 @@ def build_recall_funnel_smoke(
         max_routes=max_routes,
         include_private_paths=include_private_paths,
     )
-    context_result = mcp_server.call_recall_context(context_args)
+    context_result = mcp_tools.call_recall_context(context_args)
     context_payload = _tool_payload(context_result)
     context_error = _safe_error(context_result, context_payload)
     routes = _as_list(context_payload.get("routes"))
@@ -176,7 +176,7 @@ def build_recall_funnel_smoke(
             deepen_args["clean_source_dir"] = str(clean_source_dir)
         if registry_dir is not None:
             deepen_args["registry_dir"] = str(registry_dir)
-        deepen_result = mcp_server.call_recall_deepen(deepen_args)
+        deepen_result = mcp_tools.call_recall_deepen(deepen_args)
         deepen_payload = _tool_payload(deepen_result)
         deepen_error = _safe_error(deepen_result, deepen_payload)
     elif context_error is None:

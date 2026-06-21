@@ -9,6 +9,7 @@ from unittest import mock
 
 from aippocampus_runtime.contracts import executable_command_violations
 from aippocampus_runtime.mcp import server as mcp
+from aippocampus_runtime.mcp import tool_handlers as mcp_tools
 
 
 class McpMemoryHealthRecoveryTests(unittest.TestCase):
@@ -109,7 +110,7 @@ class McpMemoryHealthRecoveryTests(unittest.TestCase):
         self.assertNotIn("result", deepen_payload)
 
         with mock.patch.object(
-            mcp.aippocampus_health,
+            mcp_tools.aippocampus_health,
             "health_report",
             side_effect=FileNotFoundError(f"no rollout found for cwd: {self.cwd}"),
         ):
@@ -173,7 +174,7 @@ class McpMemoryHealthRecoveryTests(unittest.TestCase):
         }
 
         with mock.patch.object(
-            mcp.aippocampus_health,
+            mcp_tools.aippocampus_health,
             "health_report",
             return_value=pessimistic_health,
         ):
@@ -213,12 +214,12 @@ class McpMemoryHealthRecoveryTests(unittest.TestCase):
     def test_memory_health_keeps_onboarding_recovery_when_recall_cannot_reopen(self) -> None:
         with (
             mock.patch.object(
-                mcp.aippocampus_health,
+                mcp_tools.aippocampus_health,
                 "health_report",
                 side_effect=FileNotFoundError(f"no rollout found for cwd: {self.cwd}"),
             ),
             mock.patch.object(
-                mcp.memory_health_recovery,
+                mcp_tools.memory_health_recovery,
                 "_recall_probe",
                 return_value={
                     "clean_source_available": False,

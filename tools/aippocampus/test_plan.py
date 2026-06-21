@@ -335,9 +335,6 @@ def _large_dirty_surface_warning(changed_test_modules: list[str]) -> dict[str, s
 def _is_benchmark_fast_lane_guard(module: str | None) -> bool:
     if module is None or not is_benchmark_shaped_module(module):
         return False
-    classification = TEST_MODULE_CLASSIFICATIONS.get(module)
-    if classification is None or classification.primary_tier not in {"quick", "pr"}:
-        return False
     return benchmark_fast_lane_profile_for(module) is not None
 
 

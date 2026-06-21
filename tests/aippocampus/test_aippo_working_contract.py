@@ -4,11 +4,12 @@ import json
 import unittest
 
 from aippocampus_runtime.aippo import working_contract as aippo
+from aippocampus_runtime.aippo import working_contract_fixture_report as aippo_fixtures
 
 
 class AIppoWorkingContractTests(unittest.TestCase):
     def test_extracts_partial_package_with_clause_level_lifecycle(self) -> None:
-        report = aippo.build_aippo_working_contract_fixture_report()
+        report = aippo_fixtures.build_aippo_working_contract_fixture_report()
         package = report["contract_package"]
         clauses = {clause["clause_id"]: clause for clause in package["clauses"]}
 
@@ -36,7 +37,7 @@ class AIppoWorkingContractTests(unittest.TestCase):
         self.assertNotIn(stale["clause_id"], report["activation_packet"]["active_clause_ids"])
 
     def test_candidate_surfaces_nominate_but_do_not_ripen_without_source_support(self) -> None:
-        report = aippo.build_aippo_working_contract_fixture_report()
+        report = aippo_fixtures.build_aippo_working_contract_fixture_report()
         by_id = {case["case_id"]: case for case in report["fixture_cases"]}
 
         self_note = by_id["self_note_candidate_without_source"]
@@ -75,7 +76,7 @@ class AIppoWorkingContractTests(unittest.TestCase):
         self.assertTrue(dream_readout["boundary"]["dream_only_candidates_stay_backstage"])
 
     def test_challenged_and_gappy_pathlets_degrade_to_reopenable_routes(self) -> None:
-        report = aippo.build_aippo_working_contract_fixture_report()
+        report = aippo_fixtures.build_aippo_working_contract_fixture_report()
         clauses = {clause["clause_id"]: clause for clause in report["contract_package"]["clauses"]}
 
         challenged = clauses["clause_issue_closeout_convention"]
@@ -92,7 +93,7 @@ class AIppoWorkingContractTests(unittest.TestCase):
         self.assertEqual(report["red_lines"]["gappy_pathlet_promoted_without_review"], 0)
 
     def test_foreground_activation_packet_is_compact_and_not_a_provenance_dump(self) -> None:
-        report = aippo.build_aippo_working_contract_fixture_report()
+        report = aippo_fixtures.build_aippo_working_contract_fixture_report()
         packet = report["activation_packet"]
         encoded = json.dumps(packet, ensure_ascii=False, sort_keys=True)
 
@@ -141,7 +142,7 @@ class AIppoWorkingContractTests(unittest.TestCase):
         self.assertNotIn("C:\\", encoded)
 
     def test_activation_packet_exposes_public_safe_contract_deepen_action(self) -> None:
-        report = aippo.build_aippo_working_contract_fixture_report()
+        report = aippo_fixtures.build_aippo_working_contract_fixture_report()
         packet = report["activation_packet"]
 
         action = packet["contract_action"]
@@ -277,7 +278,7 @@ class AIppoWorkingContractTests(unittest.TestCase):
         )
 
     def test_deepen_and_stability_surfaces_preserve_audit_without_foreground_leakage(self) -> None:
-        report = aippo.build_aippo_working_contract_fixture_report()
+        report = aippo_fixtures.build_aippo_working_contract_fixture_report()
         deepen = report["deepen_surface"]
 
         self.assertEqual(deepen["kind"], "aippocampus_aippo_deepen_surface")

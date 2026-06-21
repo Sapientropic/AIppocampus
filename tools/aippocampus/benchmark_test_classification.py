@@ -24,7 +24,16 @@ class BenchmarkFastLaneProfile:
         }
 
 
-BENCHMARK_FAST_LANE_PROFILES: dict[str, BenchmarkFastLaneProfile] = {}
+BENCHMARK_FAST_LANE_PROFILES: dict[str, BenchmarkFastLaneProfile] = {
+    "tests.aippocampus.test_benchmark_graph_extraction_boundary": BenchmarkFastLaneProfile(
+        module="tests.aippocampus.test_benchmark_graph_extraction_boundary",
+        category="benchmark_guard",
+        rationale=(
+            "Architecture import/coupling guard with benchmark-shaped fixtures; keep it in the "
+            "fast lane without treating every edit as benchmark evidence."
+        ),
+    ),
+}
 
 
 def is_benchmark_shaped_module(module: str) -> bool:

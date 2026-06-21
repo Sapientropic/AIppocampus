@@ -20,8 +20,8 @@ from aippocampus_runtime.contracts import (
     foreground_shell_action,
 )
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
+from aippocampus_runtime.recall.agent_continuity import capture_feedback
 from aippocampus_runtime.recall.agent_continuity_cli_support import (
-    capture_feedback,
     compact_feedback_receipt,
     feedback_lane_resolution,
     last_recall_route_choices,

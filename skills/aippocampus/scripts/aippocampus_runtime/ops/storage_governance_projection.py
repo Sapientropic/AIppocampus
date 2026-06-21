@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime import core
@@ -92,6 +93,142 @@ def _public_preconditions(preconditions: Any, *, include_private_identifiers: bo
     return summary
 
 
+def redact_report_sources(sources: dict[str, Any], *, include_paths: bool) -> dict[str, Any]:
+    def short_path_label(value: str) -> str:
+        parts = Path(value).parts
+        return "/".join(parts[-3:]) if len(parts) >= 3 else Path(value).name
+
+    if include_paths:
+        return sources
+    redacted: dict[str, Any] = {}
+    for name, source in sources.items():
+        redacted_source = dict(source)
+        if "path" in redacted_source:
+            redacted_source["path_label"] = Path(str(redacted_source.pop("path"))).name
+        if "attempted" in redacted_source:
+            redacted_source["attempted_labels"] = [
+                short_path_label(str(item)) for item in redacted_source.pop("attempted")
+            ]
+        redacted[name] = redacted_source
+    return redacted
+
+
+def render_text(plan: dict[str, Any]) -> str:
+    metrics = plan["metrics"]
+    sources = plan["report_sources"]
+    lines = [
+        "AIppocampus storage governance dry-run",
+        f"- Requested class: {plan['requested_class']}",
+        f"- Protected source: {metrics['protected_source_human']}",
+        f"- Reclaimable rebuildable cache: {metrics['reclaimable_rebuildable_human']}",
+        f"- Reclaimable review artifacts: {metrics['reclaimable_review_artifact_human']}",
+        f"- Generated index amplification: {metrics['generated_index_amplification_ratio']}x",
+        f"- Candidates: {metrics['eviction_candidate_count']}",
+        f"- Capacity report: {sources['capacity']['mode']}",
+        f"- Retention report: {sources['retention']['mode']}",
+        "",
+        "Candidates:",
+    ]
+    if not plan["candidates"]:
+        lines.append("- none")
+    for candidate in plan["candidates"]:
+        path = candidate.get("path") or {}
+        path_hint = path.get("relative_path") or path.get("path_label") or "path not shown"
+        lines.append(
+            f"- [{candidate['class']}] {candidate['label']}: {candidate['human_bytes']} "
+            f"({path_hint})"
+        )
+    if plan["warnings"]:
+        lines.extend(["", "Warnings:"])
+        lines.extend(f"- {warning}" for warning in plan["warnings"])
+    lines.extend(["", "Next steps:"])
+    lines.extend(f"- {step}" for step in plan["next_steps"])
+    lines.append("")
+    return "\n".join(lines)
+
+
+def render_apply_text(result: dict[str, Any]) -> str:
+    metrics = result["metrics"]
+    lines = [
+        "AIppocampus storage governance apply",
+        f"- Requested class: {result['requested_class']}",
+        f"- Applied: {metrics['eviction_applied_count']}",
+        f"- Blocked: {metrics['eviction_blocked_count']}",
+        f"- Reclaimed: {metrics['reclaimed_human']}",
+        "",
+        "Applied:",
+    ]
+    if not result["applied"]:
+        lines.append("- none")
+    for item in result["applied"]:
+        manifest = item.get("manifest") or item.get("manifest_label")
+        lines.append(f"- {item['candidate_id']}: {item['human_bytes']} (manifest: {manifest})")
+    if result["blocked"]:
+        lines.extend(["", "Blocked:"])
+        for item in result["blocked"]:
+            lines.append(f"- {item['candidate_id']}: {item['reason_code']}")
+    if result.get("skipped"):
+        lines.extend(["", "Skipped:"])
+        for item in result["skipped"]:
+            lines.append(f"- {item['candidate_id']}: {item['reason_code']}")
+    if result["warnings"]:
+        lines.extend(["", "Warnings:"])
+        lines.extend(f"- {warning}" for warning in result["warnings"])
+    lines.append("")
+    return "\n".join(lines)
+
+
+def deferred_summary_payload(*, class_filter: str, limit: int, schema_version: int) -> dict[str, Any]:
+    comparable_metrics = f"aippocampus storage gc --dry-run --json --top {max(1, int(limit))} --cwd ."
+    summary_actions = storage_gc_summary_actions(limit=limit, include_apply=False)
+    action_fields = canonical_foreground_action_fields(summary_actions[0], safe_next_actions=summary_actions)
+    return {
+        "kind": "aippocampus_storage_gc_summary",
+        "schema_version": schema_version,
+        "ok": True,
+        "status": "needs_full_scan",
+        "created_at": core.now_utc(),
+        "mode": "dry_run",
+        "read_only": True,
+        "requested_class": class_filter,
+        "needs_full_scan": True,
+        "candidate_count_total": None,
+        "sample_candidate_count": 0,
+        "candidate_detail_deferred": True,
+        "metrics_status": "not_computed_in_summary_mode",
+        "pressure_interpretation": "unknown_until_bounded_audit",
+        "metrics": {
+            "reclaimable_rebuildable_bytes": None,
+            "reclaimable_review_artifact_bytes": None,
+        },
+        "privacy": {
+            "local_private_identifiers_included": False,
+            "raw_session_like_ids_emitted": False,
+        },
+        "risk_boundary": {
+            "apply_requires_explicit_flag": True,
+            "summary_performs_writes": False,
+            "source_history_protected": True,
+            "full_candidate_preconditions_deferred": True,
+        },
+        **action_fields,
+        "safe_next_action": {
+            "decision": "continue without cleanup unless the user explicitly wants storage detail",
+            "continue_without_command": True,
+            "no_command_needed": True,
+            "instruction": "Continue the user's foreground work without running storage cleanup.",
+        },
+        "comparable_metrics_command": comparable_metrics,
+        "full_audit_available": True,
+        "full_audit_flag": "--json --full",
+        "operator_audit_command": "aippocampus storage gc --dry-run --json --full --cwd .",
+        "next_steps": [
+            "Run the bounded audit sample only when a foreground user asks for cleanup detail.",
+            "Use apply only for rebuildable cache candidates after deterministic checks pass.",
+        ],
+    }
+
+
 def _public_candidate(
     item: dict[str, Any],
     *,
@@ -148,7 +285,8 @@ def bounded_cli_projection(
 
     candidates = list(report.get("candidates") or [])
     sample, truncated = _bounded_items(candidates, limit=limit)
-    privacy = report.get("privacy") if isinstance(report.get("privacy"), dict) else {}
+    raw_privacy = report.get("privacy")
+    privacy: dict[str, Any] = raw_privacy if isinstance(raw_privacy, dict) else {}
     include_private_identifiers = bool(
         privacy.get("local_private_identifiers_included") or privacy.get("absolute_paths_included")
     )
