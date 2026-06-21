@@ -2,7 +2,7 @@
 
 Role: inventory.
 
-Last audited: 2026-06-09.
+Last audited: 2026-06-21.
 
 This inventory classifies runtime surfaces that mention Codex raw rollouts,
 Codex home helpers, or host hook configuration. The goal is not to erase the
@@ -31,7 +31,8 @@ facade commands.
 | `aippocampus_runtime/registry/api.py` | Provider-aware registry entrypoint | CLI accepts `--provider`; `register-source --provider/--format ... --input ...` is the explicit provider-neutral transcript import/register path, while `register-rollout` keeps Codex-era naming for compatibility. |
 | `aippocampus_runtime/registry/hook_seen_reconciliation.py` | Provider-aware hook-seen repair helper | Reconciles hash-only Codex hook-seen ledger rows through provider discovery and durable clean-source registration. CLI callers pass an explicit provider; the `provider or codex_provider(...)` fallback is only for legacy in-process repair callers. |
 | `aippocampus_runtime/registry/source_registration.py` | Provider-aware explicit source registration | Owns `register-source` helpers. Generic JSONL gets an input-path-backed provider; non-generic explicit providers use their existing provider implementations. The `provider or codex_provider(...)` fallback remains only for legacy in-process callers of `register_rollout_thread`. |
-| `aippocampus_runtime/mcp/server.py` | MCP over clean source/registry, with provider-aware registration | `search_memory`, `recall_context`, `recall_deepen`, `get_turn_context`, `list_threads`, `sync_status`, and `memory_health` consume clean source/registry. `register_thread` accepts `provider` as a control-plane registry operation, not a general memory-write API. |
+| `aippocampus_runtime/mcp/server.py` | MCP protocol shell | Owns JSON-RPC/stdio initialization, request validation, tool lookup, and runtime-recovery wrapping. It must not rediscover providers or grow tool-family behavior; those calls live in `aippocampus_runtime/mcp/tool_handlers.py`. |
+| `aippocampus_runtime/mcp/tool_handlers.py` | MCP over clean source/registry, with provider-aware registration | `search_memory`, `recall_context`, `recall_deepen`, `get_turn_context`, `list_threads`, `sync_status`, `latest_reply`, and `memory_health` consume clean source/registry. `register_thread` accepts `provider` as a control-plane registry operation, not a general memory-write API; `latest_reply` uses Codex rollout fallback only as a raw audit/debug bridge when clean source is unavailable. |
 | `aippocampus_runtime/vault/sync.py` | Provider-aware projection | Accepts `--provider`; vault output remains a local projection, not a provider truth source. |
 | `aippocampus_runtime/health.py` | Codex-current-thread health plus registry artifact health | Still uses raw Codex rollout discovery for current live thread freshness. Treat it as Codex host health until a provider-neutral health surface exists. |
 | `aippocampus_runtime/source/emergency_snapshot.py` | Codex-current-thread compaction bridge | Writes a bounded private PreCompact snapshot for the current Codex rollout when clean source may not have caught up. It is a lifecycle recovery bridge, not provider-neutral transcript ingestion or clean-source evidence. |

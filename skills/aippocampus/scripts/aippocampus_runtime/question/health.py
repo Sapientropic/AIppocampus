@@ -32,6 +32,8 @@ from aippocampus_runtime.question.tracking import (
     candidate_from_row,
     frontier_from_row,
     iter_jsonl,
+)
+from aippocampus_runtime.question.tracking_types import (
     parse_timestamp,
     stable_digest,
 )

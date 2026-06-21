@@ -4,6 +4,7 @@ import json
 import unittest
 
 from aippocampus_runtime.dream import worker as dream_worker
+from aippocampus_runtime.dream import worker_validation as dream_worker_validation
 from aippocampus_runtime.model.client import (
     DEEPSEEK_PREFIX_CACHE_CONTRACT,
     ChatClientConfig,
@@ -1354,7 +1355,7 @@ class DreamWorkerTests(unittest.TestCase):
             },
         ]
 
-        payload = dream_worker.retrospective_validate_prospective_findings(
+        payload = dream_worker_validation.retrospective_validate_prospective_findings(
             [supported, refuted, stale, unknown],
             later_rows,
             now="2026-05-30T00:00:00Z",
@@ -1402,7 +1403,7 @@ class DreamWorkerTests(unittest.TestCase):
             },
         ]
 
-        payload = dream_worker.retrospective_validate_prospective_findings(
+        payload = dream_worker_validation.retrospective_validate_prospective_findings(
             [invitation, ignored, still_unknown],
             later_rows,
             now="2026-05-30T00:00:00Z",

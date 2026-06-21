@@ -222,6 +222,10 @@ def walk_associative_paths(
                 "schema_version": SCHEMA_VERSION,
                 "route_id": route_id,
                 "thread_key": str(row.get("thread_key") or "")[:120] or None,
+                "candidate_source_kind": str(
+                    row.get("candidate_source_kind") or row.get("source") or ""
+                )[:80]
+                or None,
                 "score": round(score, 3),
                 "matched_terms": unique_preserve([*direct, *_bridge_to_terms_many(bridge_hits)], limit=8),
                 "bridge_ids": unique_preserve(

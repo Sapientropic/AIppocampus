@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import json
 import re
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import Any
+
+PathComponent = str | int
 
 COMPACT_DIAGNOSTIC_TOP_LEVEL_KEYS = {
     "cannot_claim",
@@ -21,6 +23,136 @@ PRIVATE_PATH_MARKERS = (
     "/Users/",
     "/home/",
 )
+
+COMPACT_DETAIL_AFFORDANCE_KEYS = {
+    "operator_detail_command",
+    "operator_detail_command_template",
+    "operator_detail_requires",
+    "operator_json_command_template",
+    "operator_json_requires",
+    "detail_available_with",
+    "detail_available_with_template",
+    "detail_requires",
+}
+
+COMPACT_DETAIL_AFFORDANCE_ALLOWLIST: dict[
+    str,
+    Mapping[tuple[PathComponent, ...], str],
+] = {
+    "agent_recall.safe_cue_detail": {
+        (
+            "operator_detail_command",
+        ): "A safe cue can offer one full-detail CLI reopen path without exposing diagnostics inline.",
+        (
+            "claim_boundary",
+            "detail_available_with",
+        ): "The claim boundary may point at the same full-detail command as the compact escape hatch.",
+    },
+    "agent_recall.template_detail": {
+        (
+            "operator_detail_command_template",
+        ): "No cue-specific command is executable yet, so compact JSON carries only a template.",
+        (
+            "operator_detail_requires",
+        ): "The template must name the missing cue instead of pretending to be executable.",
+        (
+            "claim_boundary",
+            "detail_available_with_template",
+        ): "Claim-boundary detail follows the same template-only rule.",
+        (
+            "claim_boundary",
+            "detail_requires",
+        ): "The claim-boundary template must also declare its missing cue.",
+    },
+    "cli.agent_aippo.needs_input": {
+        (
+            "operator_json_command_template",
+        ): "The AIppo parent card needs one operator JSON template for explicit diagnostic mode.",
+        (
+            "operator_json_requires",
+        ): "The operator JSON template must name the missing task cue.",
+        (
+            "claim_boundary",
+            "detail_available_with_template",
+        ): "The claim boundary may point at the same operator JSON template without serializing diagnostics.",
+        (
+            "claim_boundary",
+            "detail_requires",
+        ): "The claim-boundary template must also declare its missing task cue.",
+    },
+    "cli.navigate.needs_cue": {
+        (
+            "lanes",
+            0,
+            "operator_detail_command",
+        ): "The no-cue navigation card has no route to deepen, so one lane-level detail affordance is useful.",
+        (
+            "lanes",
+            1,
+            "operator_detail_command",
+        ): "Concept expansion is also operator-only until the user supplies a concrete navigation cue.",
+    },
+    "mcp.agent_deepen.missing_selector": {
+        (
+            "operator_detail_command",
+        ): "The MCP recovery card needs one full-detail CLI command for operators debugging selector state.",
+    },
+    "task_orientation.compact": {
+        (
+            "operator_detail_command",
+        ): "The compact orientation packet stays thin but keeps one explicit full-detail reopen command.",
+    },
+}
+
+
+def _format_path(path: tuple[PathComponent, ...]) -> str:
+    rendered = ""
+    for part in path:
+        if isinstance(part, int):
+            rendered = f"{rendered}[{part}]"
+        elif rendered:
+            rendered = f"{rendered}.{part}"
+        else:
+            rendered = part
+    return rendered
+
+
+def _detail_affordance_paths(value: Any, path: tuple[PathComponent, ...] = ()) -> set[tuple[PathComponent, ...]]:
+    paths: set[tuple[PathComponent, ...]] = set()
+    if isinstance(value, Mapping):
+        for key, child in value.items():
+            child_path = (*path, str(key))
+            if key in COMPACT_DETAIL_AFFORDANCE_KEYS:
+                paths.add(child_path)
+            paths.update(_detail_affordance_paths(child, child_path))
+    elif isinstance(value, Sequence) and not isinstance(value, str | bytes | bytearray):
+        for index, child in enumerate(value):
+            paths.update(_detail_affordance_paths(child, (*path, index)))
+    return paths
+
+
+def assert_compact_detail_affordances(
+    test: Any,
+    payload: Mapping[str, Any],
+    *,
+    surface: str,
+) -> None:
+    """Assert compact/default detail escape hatches are intentional and scoped."""
+
+    test.assertIn(surface, COMPACT_DETAIL_AFFORDANCE_ALLOWLIST)
+    allowed = set(COMPACT_DETAIL_AFFORDANCE_ALLOWLIST[surface])
+    actual = _detail_affordance_paths(payload)
+    test.assertEqual(
+        sorted(_format_path(path) for path in actual - allowed),
+        [],
+        f"unexpected compact detail affordance on {surface}",
+    )
+    test.assertEqual(
+        sorted(_format_path(path) for path in allowed - actual),
+        [],
+        f"missing expected compact detail affordance on {surface}",
+    )
+
 
 def assert_compact_frontstage_payload(
     test: Any,

@@ -125,7 +125,7 @@ class RecallFunnelSmokeTests(unittest.TestCase):
             "isError": True,
         }
         with mock.patch.object(
-            recall_funnel_smoke.mcp_server,
+            recall_funnel_smoke.mcp_tools,
             "call_recall_deepen",
             return_value=stale_response,
         ):
@@ -173,10 +173,10 @@ class RecallFunnelSmokeTests(unittest.TestCase):
             "isError": False,
         }
         with mock.patch.object(
-            recall_funnel_smoke.mcp_server,
+            recall_funnel_smoke.mcp_tools,
             "call_recall_context",
             return_value=context_response,
-        ), mock.patch.object(recall_funnel_smoke.mcp_server, "call_recall_deepen") as deepen:
+        ), mock.patch.object(recall_funnel_smoke.mcp_tools, "call_recall_deepen") as deepen:
             report = recall_funnel_smoke.build_recall_funnel_smoke(
                 "registry-only cue",
                 cwd=self.cwd,

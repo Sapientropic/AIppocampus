@@ -48,7 +48,6 @@ BENCHMARK_SMOKE_REVIEWED_NON_BENCHMARK_MODULES = {
 }
 
 PR_CRITICAL_MODULES = {
-    "tests.aippocampus.test_benchmark_graph_extraction_boundary",
     "tests.aippocampus.test_prompt_hook_anti_nag_behavior",
 }
 
@@ -292,6 +291,32 @@ class RunTestsTierTests(unittest.TestCase):
             "review_pr_tier_budget_drift",
         )
         self.assertIn("soft drift", budget["recommended_action"]["why"])
+
+    def test_broad_suite_growth_review_is_non_gating_telemetry(self) -> None:
+        review = run_tests.suite_growth_review_for_tier(
+            "broad-pr",
+            module_count=331,
+            test_count=2957,
+            top_modules=[
+                {"module": "tests.aippocampus.test_docs_health", "test_count": 85}
+            ],
+        )
+
+        self.assertIsNotNone(review)
+        assert review is not None
+        self.assertEqual(review["kind"], "non_gating_suite_growth_review")
+        self.assertEqual(review["status"], "review_recommended")
+        self.assertEqual(review["recommended_action"]["mutation_risk"], "planning_only")
+        self.assertIn("must not make broad coverage", review["recommended_action"]["why"])
+        self.assertIn("Non-gating", review["boundary"])
+        self.assertIsNone(
+            run_tests.suite_growth_review_for_tier(
+                "pr",
+                module_count=113,
+                test_count=913,
+                top_modules=[],
+            )
+        )
 
     def test_report_json_cli_prints_report_without_running_tests(self) -> None:
         report = {
@@ -578,6 +603,17 @@ class RunTestsTierTests(unittest.TestCase):
         self.assertEqual(report["timing_artifacts"][0]["status"], "current")
         self.assertEqual(report["timing_artifacts"][0]["path"], str(path))
 
+    def test_default_report_does_not_auto_discover_stale_local_timing_artifact(self) -> None:
+        legacy_path = (
+            run_tests.REPO_ROOT
+            / "benchmark_corpus"
+            / "reports"
+            / "local-pr-tier-timings.json"
+        )
+
+        self.assertNotIn(legacy_path, run_tests.DEFAULT_TIMING_ARTIFACTS)
+        self.assertEqual(run_tests.default_timing_artifact_paths(), ())
+
     def test_invalid_or_empty_shards_fail_before_running_tests(self) -> None:
         with (
             io.StringIO() as stderr,
@@ -735,24 +771,52 @@ class RunTestsTierTests(unittest.TestCase):
         quick_shape = report["tiers"]["quick"]["benchmark_shaped"]
         pr_shape = report["tiers"]["pr"]["benchmark_shaped"]
         benchmark_shape = report["tiers"]["benchmark"]["benchmark_shaped"]
-        fast_lane_modules = {
-            entry["module"]
-            for entry in quick_shape["fast_lane_modules"] + pr_shape["fast_lane_modules"]
-        }
 
-        self.assertIn(
-            "tests.aippocampus.test_benchmark_entrypoints",
-            fast_lane_modules,
-        )
-        self.assertTrue(
-            all(entry["category"] for entry in quick_shape["fast_lane_modules"])
-        )
-        self.assertTrue(
-            all(entry["rationale"] for entry in pr_shape["fast_lane_modules"])
-        )
+        self.assertEqual(quick_shape["fast_lane_module_count"], 0)
+        self.assertEqual(pr_shape["fast_lane_module_count"], 0)
         self.assertEqual(quick_shape["evidence_module_count"], 0)
         self.assertEqual(pr_shape["evidence_module_count"], 0)
         self.assertGreater(benchmark_shape["evidence_module_count"], 0)
+        replacement_lanes = report["tier_shrink_replacement_lanes"]
+        self.assertIn(
+            "tests.aippocampus.test_benchmark_entrypoints",
+            replacement_lanes,
+        )
+        self.assertIn(
+            "benchmark-smoke",
+            replacement_lanes["tests.aippocampus.test_benchmark_entrypoints"][
+                "replacement_lane"
+            ],
+        )
+
+    def test_cli_recovery_card_catalog_has_pr_core_replacement_lane(self) -> None:
+        report = run_tests.build_tier_report(tiers=("pr", "broad-pr"))
+        replacement_lanes = report["tier_shrink_replacement_lanes"]
+
+        self.assertIn(
+            "tests.aippocampus.test_cli_recovery_cards_core",
+            run_tests.modules_for_tier("pr"),
+        )
+        self.assertNotIn(
+            "tests.aippocampus.test_cli_recovery_cards",
+            run_tests.modules_for_tier("pr"),
+        )
+        self.assertIn(
+            "tests.aippocampus.test_cli_recovery_cards",
+            run_tests.modules_for_tier("broad-pr"),
+        )
+        self.assertEqual(
+            replacement_lanes["tests.aippocampus.test_cli_recovery_cards"][
+                "primary_tier"
+            ],
+            "broad",
+        )
+        self.assertIn(
+            "test_cli_recovery_cards_core",
+            replacement_lanes["tests.aippocampus.test_cli_recovery_cards"][
+                "replacement_lane"
+            ],
+        )
 
     def test_future_benchmark_shaped_fast_lane_module_requires_rationale(self) -> None:
         with self.assertRaisesRegex(ValueError, "benchmark-shaped fast-lane"):

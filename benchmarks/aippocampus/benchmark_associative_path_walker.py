@@ -5,7 +5,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import tempfile
 from collections.abc import Mapping, Sequence
+from pathlib import Path
 from typing import Any
 
 import _paths
@@ -13,7 +15,7 @@ import _paths
 _paths.ensure_paths()
 
 from aippocampus_runtime.core import now_utc
-from aippocampus_runtime.recall import associative_path_fallback
+from aippocampus_runtime.recall import agent_continuity, associative_path_fallback
 from aippocampus_runtime.recall.associative_path_inputs import build_associative_path_diagnostic
 from aippocampus_runtime.recall.associative_path_walker import walk_associative_paths
 
@@ -210,6 +212,115 @@ def fixture_path_walker_cases() -> list[dict[str, Any]]:
     ]
 
 
+def _write_jsonl(path: Path, rows: Sequence[Mapping[str, Any]]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8", newline="\n") as handle:
+        for row in rows:
+            handle.write(json.dumps(dict(row), ensure_ascii=False) + "\n")
+
+
+def evaluate_real_clean_source_parity_gate() -> dict[str, Any]:
+    """Check diagnostic-to-agent APW parity on a real clean-source fixture."""
+
+    cue = "黏菌 联想回忆 探索算法"
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        clean = root / ".aippocampus" / "clean-source"
+        registry = root / "registry"
+        registry.mkdir()
+        _write_jsonl(
+            clean / "messages.jsonl",
+            [
+                {
+                    "message_id": "msg-real-clean-apw",
+                    "turn_id": "turn-real-clean-apw",
+                    "turn_index": 3,
+                    "source_id": "src-real-clean-apw",
+                    "source_line": 9,
+                    "role": "assistant",
+                    "phase": "final_answer",
+                    "is_final": True,
+                    "text": "Public fixture: 黏菌 联想回忆 探索算法 should bridge APW diagnostics into agent fallback.",
+                }
+            ],
+        )
+        _write_jsonl(
+            clean / "turns.jsonl",
+            [
+                {
+                    "turn_id": "turn-real-clean-apw",
+                    "turn_index": 3,
+                    "message_ids": ["msg-real-clean-apw"],
+                    "assistant_phase": "final_answer",
+                }
+            ],
+        )
+        diagnostic = build_associative_path_diagnostic(
+            query=cue,
+            cwd=root,
+            clean_source_dir=clean,
+        )
+        agent_payload = agent_continuity.recall(
+            cue,
+            cwd=root,
+            clean_source_dir=clean,
+            registry_dir=registry,
+            include_associative_fallback=True,
+        )
+    diagnostic_reopenable = int(
+        (diagnostic.get("metrics") or {}).get("source_reopenable_candidate_count") or 0
+    )
+    policy = agent_payload.get("associative_path_policy")
+    policy = policy if isinstance(policy, Mapping) else {}
+    fallback = agent_payload.get("associative_path_fallback")
+    fallback = fallback if isinstance(fallback, Mapping) else {}
+    candidate_source_counts = dict((diagnostic.get("metrics") or {}).get("candidate_source_counts") or {})
+    fallback_route = fallback.get("status") == "route_candidate"
+    agent_candidate_input = bool(policy.get("apw_candidate_input_available"))
+    missing_input_mismatch = bool(diagnostic_reopenable and not agent_candidate_input)
+    source_kind = str(
+        fallback.get("candidate_source_kind")
+        or next(iter(candidate_source_counts), "")
+        or "unknown"
+    )
+    ok = bool(
+        diagnostic_reopenable
+        and agent_candidate_input
+        and fallback_route
+        and source_kind == "current_clean_source"
+    )
+    return {
+        "kind": "aippocampus_real_clean_source_apw_parity_gate",
+        "schema_version": SCHEMA_VERSION,
+        "ok": ok,
+        "evidence_mode": "real-clean-source fixture",
+        "query": cue,
+        "diagnostic_source_reopenable_candidate_count": diagnostic_reopenable,
+        "agent_candidate_input_available": agent_candidate_input,
+        "agent_fallback_status": fallback.get("status"),
+        "agent_run_reason": policy.get("run_reason"),
+        "candidate_source_counts": candidate_source_counts,
+        "candidate_source_kind": source_kind,
+        "missing_input_mismatch": missing_input_mismatch,
+        "foreground_recovery_available": bool(
+            fallback_route and agent_payload.get("deepen_requests")
+        ),
+        "reason_codes": {
+            "diagnostic": diagnostic.get("reason_codes") or [],
+            "fallback": fallback.get("reason_codes") or [],
+        },
+        "red_lines": {
+            "diagnostic_agent_fallback_parity_failure": not ok,
+            "diagnostic_reopenable_but_agent_input_missing": missing_input_mismatch,
+        },
+        "boundary": {
+            "live_model_calls": 0,
+            "default_ranking_influence_allowed": False,
+            "source_reopen_required_before_claim": True,
+        },
+    }
+
+
 def evaluate_path_walker_gate(
     cases: Sequence[Mapping[str, Any]] | None = None,
 ) -> dict[str, Any]:
@@ -310,10 +421,12 @@ def evaluate_path_walker_gate(
                 "candidate_reason_codes": list(candidate_reasons or []),
             }
         )
+    parity_gate = evaluate_real_clean_source_parity_gate()
     red_lines = {
         "wrong_hop_drag_count": sum(1 for row in rows if row["wrong_hop_drag"]),
         "source_truth_claim_count": sum(1 for row in rows if not row["navigation_only"]),
         "scope_violation_count": sum(1 for row in rows if row["scope_violation"]),
+        "diagnostic_agent_fallback_parity_failure_count": 0 if parity_gate["ok"] else 1,
         "default_ranking_influence_count": 0,
     }
     warnings = {
@@ -351,6 +464,9 @@ def evaluate_path_walker_gate(
         "decision_mismatch_count": warnings["decision_mismatch_count"],
         "default_ranking_influence_count": red_lines["default_ranking_influence_count"],
         "scope_violation_count": red_lines["scope_violation_count"],
+        "diagnostic_agent_fallback_parity_failure_count": red_lines[
+            "diagnostic_agent_fallback_parity_failure_count"
+        ],
     }
     promotion_thresholds = {
         "wrong_hop_drag_count": 0,
@@ -362,6 +478,7 @@ def evaluate_path_walker_gate(
         "decision_mismatch_count": 0,
         "default_ranking_influence_count": 0,
         "scope_violation_count": 0,
+        "diagnostic_agent_fallback_parity_failure_count": 0,
     }
     promotion_checklist = [
         {
@@ -382,6 +499,7 @@ def evaluate_path_walker_gate(
         "rows": rows,
         "metrics": {
             "case_count": len(rows),
+            "real_clean_source_parity_gate_ok": bool(parity_gate["ok"]),
             "route_existence_count": sum(1 for row in rows if row["route_count"] > 0),
             "baseline_route_existence_count": sum(1 for row in rows if row["baseline_route_count"] > 0),
             "apw_action_emitted_count": sum(1 for row in rows if row["apw_action_emitted"]),
@@ -402,6 +520,7 @@ def evaluate_path_walker_gate(
             "unsupported_cue_abstain_count": sum(1 for row in rows if row["unsupported_cue_abstain"]),
             "scope_violation_count": red_lines["scope_violation_count"],
         },
+        "real_clean_source_parity_gate": parity_gate,
         "promotion_gate": {
             "ok": promotion_gate_ok,
             "status": (
@@ -422,7 +541,7 @@ def evaluate_path_walker_gate(
                 f"{associative_path_fallback.PROMOTION_MODE_ENV}="
                 f"{associative_path_fallback.MODE_OFF}"
             ),
-            "evidence_mode": "public_fixture_proxy_with_chinese_dogfood_cue",
+            "evidence_mode": "public_fixture_proxy_plus_real_clean_source_fixture",
             "live_model_calls": 0,
             "requires_live_history_before_default_ranking": True,
             "semi_default_surface": "secondary_recovery_action_for_no_route_or_weak_recall",

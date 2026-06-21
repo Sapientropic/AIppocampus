@@ -14,8 +14,10 @@ class AssociativePathWalkerBenchmarkTests(unittest.TestCase):
         self.assertTrue(report["ok"], report)
         self.assertTrue(report["quality_gate_ok"])
         self.assertEqual(report["metrics"]["case_count"], 7)
+        self.assertTrue(report["metrics"]["real_clean_source_parity_gate_ok"])
         self.assertEqual(report["red_lines"]["wrong_hop_drag_count"], 0)
         self.assertEqual(report["red_lines"]["scope_violation_count"], 0)
+        self.assertEqual(report["red_lines"]["diagnostic_agent_fallback_parity_failure_count"], 0)
         self.assertEqual(report["red_lines"]["default_ranking_influence_count"], 0)
         self.assertGreaterEqual(report["metrics"]["top_action_specificity_ok_count"], 7)
         self.assertGreaterEqual(report["metrics"]["apw_action_emitted_count"], 3)
@@ -44,13 +46,24 @@ class AssociativePathWalkerBenchmarkTests(unittest.TestCase):
         self.assertEqual(promotion_gate["thresholds"]["irrelevant_drag_count"], 0)
         self.assertEqual(promotion_gate["thresholds"]["source_free_scent_projected_count"], 0)
         self.assertEqual(promotion_gate["observed"]["source_free_scent_projected_count"], 0)
+        self.assertEqual(promotion_gate["observed"]["diagnostic_agent_fallback_parity_failure_count"], 0)
         self.assertEqual(promotion_gate["observed"]["manual_search_before_apw_count"], 0)
         self.assertFalse(promotion_gate["default_ranking_influence_allowed"])
         self.assertIn("AIPPOCAMPUS_APW_PROMOTION_MODE=opt_in", promotion_gate["rollback_env"])
         self.assertEqual(
             promotion_gate["evidence_mode"],
-            "public_fixture_proxy_with_chinese_dogfood_cue",
+            "public_fixture_proxy_plus_real_clean_source_fixture",
         )
+        parity_gate = report["real_clean_source_parity_gate"]
+        self.assertTrue(parity_gate["ok"], parity_gate)
+        self.assertEqual(parity_gate["evidence_mode"], "real-clean-source fixture")
+        self.assertEqual(parity_gate["candidate_source_kind"], "current_clean_source")
+        self.assertEqual(
+            parity_gate["candidate_source_counts"]["current_clean_source"],
+            1,
+        )
+        self.assertTrue(parity_gate["agent_candidate_input_available"])
+        self.assertEqual(parity_gate["agent_fallback_status"], "route_candidate")
         self.assertTrue(report["boundary"]["navigation_lift_is_not_source_evidence"])
         self.assertEqual(report["boundary"]["follow_through_mode"], "proxy_action_path")
         self.assertFalse(report["boundary"]["default_recall_influence_allowed"])

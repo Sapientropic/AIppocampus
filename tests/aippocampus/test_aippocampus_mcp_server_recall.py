@@ -10,9 +10,11 @@ from unittest import mock
 from aippocampus_runtime import core
 from aippocampus_runtime.contracts import executable_command_violations
 from aippocampus_runtime.mcp import server as mcp
+from aippocampus_runtime.mcp import tool_handlers as mcp_handlers
 from aippocampus_runtime.recall.agent_recall_cache import write_last_recall_cache
 from aippocampus_runtime.registry import store as registry_store
 from conversation_sources import ConversationSourceRef
+from tests.aippocampus.frontstage_assertions import assert_compact_detail_affordances
 from tests.aippocampus.mcp_server_fixtures import (
     assert_recall_template_action,
     field_path_count,
@@ -87,7 +89,7 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
         return self.tool_payload(response)
 
     def test_register_thread_requires_explicit_write_shape(self) -> None:
-        with mock.patch.object(mcp.registry, "register_current_thread") as register:
+        with mock.patch.object(mcp_handlers.registry, "register_current_thread") as register:
             empty_response = mcp.handle_request(
                 {
                     "jsonrpc": "2.0",
@@ -127,7 +129,7 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
 
     def test_register_thread_passes_explicit_provider_to_registry(self) -> None:
         with mock.patch.object(
-            mcp.registry,
+            mcp_handlers.registry,
             "register_current_thread",
             return_value={"status": "registered"},
         ) as register:
@@ -155,7 +157,7 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
 
     def test_register_thread_default_response_is_compact_and_omits_session_meta(self) -> None:
         with mock.patch.object(
-            mcp.registry,
+            mcp_handlers.registry,
             "register_current_thread",
             return_value={
                 "status": "registered",
@@ -210,7 +212,7 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
 
     def test_register_thread_reports_retryable_registry_writer_busy(self) -> None:
         with mock.patch.object(
-            mcp.registry,
+            mcp_handlers.registry,
             "register_current_thread",
             side_effect=registry_store.RegistryWriteBusyError(
                 Path("threads.json"),
@@ -307,9 +309,9 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
                 errors.append(exc)
 
         with (
-            mock.patch.object(mcp, "create_conversation_provider", return_value=FixtureProvider()),
-            mock.patch.object(mcp.registry, "thread_key_for", side_effect=fake_thread_key),
-            mock.patch.object(mcp.aippocampus_health, "health_report", return_value={}),
+            mock.patch.object(mcp_handlers, "create_conversation_provider", return_value=FixtureProvider()),
+            mock.patch.object(mcp_handlers.registry, "thread_key_for", side_effect=fake_thread_key),
+            mock.patch.object(mcp_handlers.aippocampus_health, "health_report", return_value={}),
         ):
             threads = [
                 threading.Thread(target=call_register, args=(workspace_a, 41)),
@@ -1028,7 +1030,7 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
         )
 
         payload = self.tool_payload(response)
-        self.assertEqual(payload["source"], mcp.LOCAL_PATH_REDACTION)
+        self.assertEqual(payload["source"], mcp_handlers.LOCAL_PATH_REDACTION)
 
         private_response = mcp.handle_request(
             {
@@ -1167,7 +1169,7 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
         self.assertEqual(agent_payload["error"]["code"], "missing_recall_handle")
         self.assertNotIn("operator_detail", agent_payload)
         self.assertNotIn("boundary_detail", agent_payload)
-        self.assertIn("operator_detail_command", agent_payload)
+        assert_compact_detail_affordances(self, agent_payload, surface="mcp.agent_deepen.missing_selector")
         assert_recall_template_action(self, agent_payload["foreground_action"])
         self.assertIn("foreground_action", agent_payload)
         self.assertIn(
@@ -1227,7 +1229,7 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
         payload = self.tool_payload(response)
         self.assertEqual(payload["error"]["code"], "clean_source_unavailable")
         self.assertEqual(
-            payload["error"]["details"]["clean_source_dir"], mcp.LOCAL_PATH_REDACTION
+            payload["error"]["details"]["clean_source_dir"], mcp_handlers.LOCAL_PATH_REDACTION
         )
         self.assertIn("messages.jsonl", payload["error"]["details"]["missing_files"])
 

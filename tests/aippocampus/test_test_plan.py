@@ -99,7 +99,11 @@ class ChangedSurfaceTestPlanTests(unittest.TestCase):
 
     def test_test_runner_change_recommends_tier_contract_and_report(self) -> None:
         payload = test_plan.build_test_plan(
-            ["tools/aippocampus/run_tests.py", ".github/workflows/aippocampus-ci.yml"]
+            [
+                "tools/aippocampus/run_tests.py",
+                "tools/aippocampus/run_ci_parity.py",
+                ".github/workflows/aippocampus-ci.yml",
+            ]
         )
         commands = [str(command["command"]) for command in payload["commands"]]
 
@@ -187,6 +191,7 @@ class ChangedSurfaceTestPlanTests(unittest.TestCase):
 
         self.assertFalse(payload["python_environment"]["minor_matches_ci"])
         self.assertEqual(warnings[0]["kind"], "python_minor_mismatch")
+        self.assertIn("run_ci_parity.py --tier pr --json", warnings[0]["next_action"])
         self.assertIn("do not run a broad matrix", warnings[0]["next_action"])
         self.assertFalse(any("3.12" in command and "broad-pr" in command for command in commands))
 
@@ -294,6 +299,24 @@ class ChangedSurfaceTestPlanTests(unittest.TestCase):
                 "--tier benchmark-smoke --benchmark-suite-profile public-fast",
             ),
             commands,
+        )
+
+    def test_apw_fallback_changes_name_real_clean_source_parity_gate(self) -> None:
+        payload = test_plan.build_test_plan(
+            [
+                "skills/aippocampus/scripts/aippocampus_runtime/recall/"
+                "associative_path_fallback.py"
+            ]
+        )
+        commands = [command["command"] for command in payload["commands"]]
+
+        self.assertIn("apw_parity", payload["categories"])
+        self.assertTrue(
+            any(
+                "test_agent_recall_apw_fallback" in command
+                and "test_benchmark_associative_path_walker" in command
+                for command in commands
+            )
         )
 
     def test_no_changes_recommends_quick_sanity(self) -> None:

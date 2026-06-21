@@ -8,7 +8,7 @@ import sys
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, cast
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEBT_REPORT_SCRIPT = "tools/aippocampus/docs/debt_report.py"
@@ -32,6 +32,21 @@ CHECK_TOOLING_PATHS = {
     "tools/aippocampus/test_tier_manifest.py",
     "tools/aippocampus/test_plan.py",
 }
+APW_PARITY_SURFACES = frozenset(
+    {
+        "skills/aippocampus/scripts/aippocampus_runtime/recall/associative_path_inputs.py",
+        "skills/aippocampus/scripts/aippocampus_runtime/recall/associative_path_fallback.py",
+        "skills/aippocampus/scripts/aippocampus_runtime/recall/associative_path_walker.py",
+        "skills/aippocampus/scripts/aippocampus_runtime/recall/why_diagnostics.py",
+        "skills/aippocampus/scripts/aippocampus_runtime/recall/agent_continuity.py",
+        "skills/aippocampus/scripts/aippocampus_runtime/mcp/agent_recall_projection.py",
+    }
+)
+APW_PARITY_TEST_MODULES = (
+    "tests.aippocampus.test_associative_path_inputs",
+    "tests.aippocampus.test_agent_recall_apw_fallback",
+    "tests.aippocampus.test_benchmark_associative_path_walker",
+)
 DEBT_REGISTER_SOURCES = (
     REPO_ROOT / "docs" / "architecture" / "architecture-debt-register.md",
     REPO_ROOT / "docs" / "evidence" / "reports" / "architecture-debt-snapshot-2026-06-04.md",
@@ -197,8 +212,9 @@ def planner_warnings(environment: dict[str, object]) -> list[dict[str, str]]:
             ),
             "next_action": (
                 "Use Python "
-                f"{canonical_minor} for compatibility-sensitive failures; do not run a broad "
-                "matrix locally by default."
+                f"{canonical_minor} for compatibility-sensitive failures with "
+                "python tools/aippocampus/run_ci_parity.py --tier pr --json; do not run "
+                "a broad matrix locally by default."
             ),
         }
     ]
@@ -319,9 +335,6 @@ def _large_dirty_surface_warning(changed_test_modules: list[str]) -> dict[str, s
 def _is_benchmark_fast_lane_guard(module: str | None) -> bool:
     if module is None or not is_benchmark_shaped_module(module):
         return False
-    classification = TEST_MODULE_CLASSIFICATIONS.get(module)
-    if classification is None or classification.primary_tier not in {"quick", "pr"}:
-        return False
     return benchmark_fast_lane_profile_for(module) is not None
 
 
@@ -335,6 +348,7 @@ def classify_changed_files(changed_files: Iterable[str]) -> set[str]:
             categories.add("ci_workflow")
         if path in {
             "tools/aippocampus/run_tests.py",
+            "tools/aippocampus/run_ci_parity.py",
             "tools/aippocampus/test_tier_manifest.py",
             "tools/aippocampus/test_plan.py",
         }:
@@ -361,6 +375,8 @@ def classify_changed_files(changed_files: Iterable[str]) -> set[str]:
             categories.add("mcp")
         if path.startswith("skills/aippocampus/scripts/"):
             categories.add("runtime")
+        if path in APW_PARITY_SURFACES:
+            categories.add("apw_parity")
         if path.startswith("plugins/aippocampus/"):
             categories.add("plugin")
     return categories
@@ -619,6 +635,23 @@ def build_test_plan(
                 ),
                 reason="MCP edits need the split host-facing catalog, recall, and ops contract tests.",
                 scope="focused",
+            ),
+        )
+
+    if "apw_parity" in categories:
+        _add_command(
+            commands,
+            PlannedCommand(
+                command=py_command(
+                    f"-m unittest {' '.join(APW_PARITY_TEST_MODULES)} -v",
+                    local_executable=local_executable,
+                ),
+                reason=(
+                    "APW input/fallback/projection edits must prove diagnostic-to-agent "
+                    "parity on sidecar and real-clean-source fixtures; this is a contract "
+                    "gate, not a broad benchmark quality claim."
+                ),
+                scope="focused:apw-parity",
             ),
         )
 
@@ -937,11 +970,15 @@ def main(argv: list[str] | None = None) -> int:
         print("AIppocampus release preflight plan")
         print(plan["assumption"])
         print("Local required:")
-        for command in plan["local_required"]:
+        local_required = cast(list[dict[str, str]], plan["local_required"])
+        post_publish_required = cast(
+            list[dict[str, str]], plan["post_publish_required"]
+        )
+        for command in local_required:
             print(f"- {command['command']}")
             print(f"  {command['reason']}")
         print("Post-publish required:")
-        for command in plan["post_publish_required"]:
+        for command in post_publish_required:
             print(f"- {command['command']}")
             print(f"  {command['reason']}")
         return 0
@@ -958,17 +995,19 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     print("AIppocampus changed-surface verification plan")
-    environment = plan["python_environment"]
+    environment = cast(dict[str, object], plan["python_environment"])
     print(
         "Python: "
-        f"local {environment['local_python_version']} / "
-        f"CI {environment['canonical_ci_python_version']}"
+        f"local {str(environment['local_python_version'])} / "
+        f"CI {str(environment['canonical_ci_python_version'])}"
     )
-    for warning in plan["warnings"]:
+    warnings = cast(list[dict[str, str]], plan["warnings"])
+    commands = cast(list[dict[str, str]], plan["commands"])
+    for warning in warnings:
         print(f"Warning: {warning['message']}")
         print(f"Next: {warning['next_action']}")
     print(f"Changed files: {len(changed_files)}")
-    for command in plan["commands"]:
+    for command in commands:
         print(f"- {command['command']}")
         print(f"  {command['reason']}")
     return 0

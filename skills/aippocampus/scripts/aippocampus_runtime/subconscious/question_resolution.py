@@ -29,6 +29,8 @@ from aippocampus_runtime.question.tracking import (
     QUESTION_LINK_KIND,
     candidate_from_row,
     iter_jsonl,
+)
+from aippocampus_runtime.question.tracking_types import (
     normalize_tokens,
     parse_timestamp,
     stable_digest,

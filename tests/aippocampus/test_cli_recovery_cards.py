@@ -22,6 +22,7 @@ from aippocampus_runtime.recall.agent_continuity_cli_support import (
     render_recall_human,
 )
 from tests.aippocampus.frontstage_assertions import (
+    assert_compact_detail_affordances,
     assert_compact_frontstage_payload,
     assert_semantic_human_output,
 )
@@ -238,7 +239,8 @@ class AippocampusCliRecoveryCardTests(unittest.TestCase):
         self.assertIn("Weak-memory decision card", self_note.stdout)
         self.assertIn("direction_only", self_note.stdout)
         self.assertIn("weak scent", self_note.stdout)
-        self.assertIn("Do not use self-notes for factual claims", self_note.stdout)
+        self.assertIn("factual", self_note.stdout.casefold())
+        self.assertIn("aippocampus agent recall", self_note.stdout)
         self.assertLess(self_note.stdout.index("Weak-memory"), self_note.stdout.index("--notes-path"))
 
     def test_bare_self_note_is_action_card_not_argparse(self) -> None:
@@ -443,7 +445,7 @@ class AippocampusCliRecoveryCardTests(unittest.TestCase):
         self.assertEqual(compact_payload["detail"], "compact")
         self.assertEqual(compact_payload["status"], "needs_cue")
         self.assertNotIn("old cue", json.dumps(compact_payload, ensure_ascii=False))
-        self.assertIn("operator_detail_command", compact_payload["lanes"][0])
+        assert_compact_detail_affordances(self, compact_payload, surface="cli.navigate.needs_cue")
         self.assertNotIn("diagnostic_command", json.dumps(compact_payload))
 
         self.assertEqual(cued.returncode, 0, cued.stderr)
@@ -1187,7 +1189,7 @@ class AippocampusCliRecoveryCardTests(unittest.TestCase):
         self.assertNotIn("match_diagnostics", aippo_payload)
         self.assertNotIn("contract_action", aippo_payload)
         self.assertNotIn("operator_detail", aippo_payload)
-        self.assertIn("operator_json_command_template", aippo_payload)
+        assert_compact_detail_affordances(self, aippo_payload, surface="cli.agent_aippo.needs_input")
 
     def test_bare_parent_json_commands_return_recovery_or_chooser_cards(self) -> None:
         cases = {

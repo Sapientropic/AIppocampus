@@ -227,7 +227,7 @@ class AgentOptInRecallRoutesTests(unittest.TestCase):
                 max_routes=1,
             )
 
-        human = agent_continuity.render_recall_human(report)
+        human = agent_continuity_cli_support.render_recall_human(report)
         encoded = json.dumps(report, ensure_ascii=False, sort_keys=True)
 
         self.assertIn(long_handle, encoded)
@@ -247,7 +247,7 @@ class AgentOptInRecallRoutesTests(unittest.TestCase):
             clean_source_dir=self.clean,
             max_routes=1,
         )
-        public = agent_continuity.public_recall_projection(
+        public = agent_continuity_cli_support.public_recall_projection(
             {**report, "last_recall_cache_available": True}
         )
 
@@ -351,7 +351,7 @@ class AgentOptInRecallRoutesTests(unittest.TestCase):
             clean_source_dir=self.clean,
             max_routes=2,
         )
-        public = agent_continuity.public_recall_projection(
+        public = agent_continuity_cli_support.public_recall_projection(
             {**report, "last_recall_cache_available": False}
         )
         encoded = json.dumps(public, ensure_ascii=False)
@@ -377,7 +377,7 @@ class AgentOptInRecallRoutesTests(unittest.TestCase):
         )
 
     def test_public_recall_weak_route_without_deepen_request_gets_recovery_card(self) -> None:
-        public = agent_continuity.public_recall_projection(
+        public = agent_continuity_cli_support.public_recall_projection(
             {
                 "kind": "aippocampus_agent_continuity_path",
                 "schema_version": "agent-continuity-path-v1",
@@ -676,7 +676,7 @@ class AgentOptInRecallRoutesTests(unittest.TestCase):
             routed_report["navigation_signals"]["next_safe_action"],
             "deepen_selected_route",
         )
-        human = agent_continuity.render_recall_human(routed_report)
+        human = agent_continuity_cli_support.render_recall_human(routed_report)
         self.assertIn("why: attention_router:top_route_changed", human)
         self.assertIn("Navigation:", human)
         self.assertIn("aippocampus agent deepen --request 1 --last-recall --json", human)
@@ -976,7 +976,7 @@ class AgentOptInRecallRoutesTests(unittest.TestCase):
             "policy_boundary": agent_continuity.policy_boundary(),
         }
 
-        projected = agent_continuity.public_recall_projection(payload)
+        projected = agent_continuity_cli_support.public_recall_projection(payload)
         encoded = json.dumps(projected, ensure_ascii=False)
 
         self.assertFalse(projected["last_recall_cache_available"])

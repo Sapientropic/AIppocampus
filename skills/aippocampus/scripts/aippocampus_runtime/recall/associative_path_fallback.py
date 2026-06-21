@@ -79,12 +79,26 @@ def _ordinary_recall_needs_recovery(
     deepen_requests: list[dict[str, Any]],
     triage_metrics: Mapping[str, Any],
 ) -> bool:
+    specificity_floor = float(triage_metrics.get("route_label_specificity_floor") or 0.0)
     return (
         not memory_packets
         or not deepen_requests
-        or float(triage_metrics.get("route_label_specificity_floor") or 0.0) <= 0.0
+        # A single scope-bucket route can look "distinctive" only because there
+        # is nothing else to compare it against. Treat labels below 0.5 as weak
+        # so APW can surface matched anchors without changing ordinary ranking.
+        or specificity_floor < 0.5
         or float(triage_metrics.get("packet_triage_distinctiveness") or 0.0) < 0.5
     )
+
+
+def _ordinary_recall_needs_semidefault_recovery(
+    *,
+    memory_packets: list[dict[str, Any]],
+    deepen_requests: list[dict[str, Any]],
+) -> bool:
+    """Gate default APW recovery to silent or non-reopenable ordinary recall."""
+
+    return not memory_packets or not deepen_requests
 
 
 def _sidecar_root(cwd: str | Path | None, sidecar_dir: str | Path | None) -> Path:
@@ -115,8 +129,10 @@ def _root_has_rows(root: Path, filenames: tuple[str, ...]) -> bool:
 
 def has_associative_path_candidate_input(
     *,
+    query: str = "",
     cwd: str | Path | None = None,
     sidecar_dir: str | Path | None = None,
+    clean_source_dir: str | Path | None = None,
     navigation_path: str | Path | None = None,
     active_lock_path: str | Path | None = None,
 ) -> bool:
@@ -132,20 +148,30 @@ def has_associative_path_candidate_input(
     if _path_has_rows(navigation_path) or _path_has_rows(active_lock_path):
         return True
     root = _sidecar_root(cwd, sidecar_dir)
-    return _root_has_rows(root, apw_inputs.NAVIGATION_FILENAMES) or _root_has_rows(
+    if _root_has_rows(root, apw_inputs.NAVIGATION_FILENAMES) or _root_has_rows(
         root,
         apw_inputs.ACTIVE_LOCK_FILENAMES,
-    )
+    ):
+        return True
+    if str(query or "").strip():
+        return apw_inputs.has_clean_source_candidate_input(
+            query=query,
+            cwd=cwd,
+            clean_source_dir=clean_source_dir,
+        )
+    return False
 
 
 def recall_fallback_policy(
     *,
     include_associative_fallback: bool,
+    query: str = "",
     memory_packets: list[dict[str, Any]],
     deepen_requests: list[dict[str, Any]],
     triage_metrics: Mapping[str, Any],
     cwd: str | Path | None = None,
     sidecar_dir: str | Path | None = None,
+    clean_source_dir: str | Path | None = None,
     navigation_path: str | Path | None = None,
     active_lock_path: str | Path | None = None,
 ) -> dict[str, Any]:
@@ -157,9 +183,15 @@ def recall_fallback_policy(
         deepen_requests=deepen_requests,
         triage_metrics=triage_metrics,
     )
+    semidefault_recovery_needed = _ordinary_recall_needs_semidefault_recovery(
+        memory_packets=memory_packets,
+        deepen_requests=deepen_requests,
+    )
     candidate_input_available = has_associative_path_candidate_input(
+        query=query,
         cwd=cwd,
         sidecar_dir=sidecar_dir,
+        clean_source_dir=clean_source_dir,
         navigation_path=navigation_path,
         active_lock_path=active_lock_path,
     )
@@ -168,7 +200,7 @@ def recall_fallback_policy(
     semi_default_run = (
         not explicit_requested
         and mode == MODE_SEMI_DEFAULT_RECOVERY
-        and recovery_needed
+        and semidefault_recovery_needed
         and candidate_input_available
     )
     run_reason = ""
@@ -182,6 +214,8 @@ def recall_fallback_policy(
         run_reason = "ordinary_recall_not_weak_enough_for_apw_recovery"
     elif not explicit_requested and mode == MODE_OPT_IN:
         run_reason = "apw_fallback_requires_explicit_opt_in"
+    elif recovery_needed and not semidefault_recovery_needed:
+        run_reason = "apw_label_weakness_requires_explicit_opt_in"
     elif not candidate_input_available:
         run_reason = "apw_candidate_input_missing"
     else:
@@ -195,6 +229,7 @@ def recall_fallback_policy(
         "promotion_gate": "apw_source_shape_followthrough_gate",
         "explicit_requested": explicit_requested,
         "ordinary_recall_recovery_needed": recovery_needed,
+        "semidefault_recovery_needed": semidefault_recovery_needed,
         "apw_candidate_input_available": candidate_input_available,
         "run_fallback": bool(explicit_run or semi_default_run),
         "run_reason": run_reason,
@@ -236,9 +271,9 @@ def _candidate_refs(candidate: Mapping[str, Any]) -> list[dict[str, Any]]:
 def _route_label(candidate: Mapping[str, Any]) -> str:
     terms = [str(term) for term in candidate.get("matched_terms") or [] if str(term).strip()]
     if terms:
-        return "APW fallback: " + _text(", ".join(terms[:3]), 72)
+        return "APW source route: " + _text(" / ".join(terms[:3]), 90)
     route_id = _text(candidate.get("route_id"), 60)
-    return f"APW fallback: {route_id}" if route_id else "APW fallback route"
+    return f"APW source route: {route_id}" if route_id else "APW source route"
 
 
 def _source_shape_projection(candidate: Mapping[str, Any], refs: list[dict[str, Any]]) -> dict[str, Any]:
@@ -274,6 +309,11 @@ def _candidate_to_route(
         ],
         limit=5,
     )
+    matched_terms = unique_preserve(
+        [str(term) for term in candidate.get("matched_terms") or [] if str(term).strip()],
+        limit=5,
+    )
+    label = _route_label(candidate)
     return {
         "route_id": public_route_id,
         "kind": "associative_path",
@@ -282,9 +322,11 @@ def _candidate_to_route(
             "route_id": public_route_id,
             "source_refs": refs,
         },
-        "route_label": _route_label(candidate),
+        "route_label": label,
         "route_topic": "associative_path_recovery",
         "matched_cue_family": "associative_path_fallback",
+        "matched_cue_anchors": matched_terms,
+        "candidate_source_kind": candidate.get("candidate_source_kind"),
         "scope_bucket": "project_or_clean_source",
         "route_kind": "associative_path",
         "reopenable": True,
@@ -296,7 +338,7 @@ def _candidate_to_route(
             limit=6,
         ),
         "why_this_may_matter": (
-            "APW found a source-ref-backed association after ordinary recall was weak; "
+            "APW matched distinctive cue anchors after ordinary recall was weak; "
             "reopen the source before using it."
         ),
         "_selection_hint": {
@@ -350,6 +392,7 @@ def build_associative_path_agent_fallback(
     request_index: int,
     cwd: str | Path | None = None,
     sidecar_dir: str | Path | None = None,
+    clean_source_dir: str | Path | None = None,
     semantic_bridge_path: str | Path | None = None,
     navigation_path: str | Path | None = None,
     active_lock_path: str | Path | None = None,
@@ -362,11 +405,13 @@ def build_associative_path_agent_fallback(
     if not policy:
         policy = recall_fallback_policy(
             include_associative_fallback=True,
+            query=query,
             memory_packets=[],
             deepen_requests=[],
             triage_metrics={},
             cwd=cwd,
             sidecar_dir=sidecar_dir,
+            clean_source_dir=clean_source_dir,
             navigation_path=navigation_path,
             active_lock_path=active_lock_path,
         )
@@ -375,6 +420,7 @@ def build_associative_path_agent_fallback(
         query=query,
         cwd=cwd,
         sidecar_dir=sidecar_dir,
+        clean_source_dir=clean_source_dir,
         semantic_bridge_path=semantic_bridge_path,
         navigation_path=navigation_path,
         active_lock_path=active_lock_path,
@@ -436,6 +482,8 @@ def build_associative_path_agent_fallback(
             "request_index": request["request_index"],
             "label": route["route_label"],
             "why_this_route": route["why_this_may_matter"],
+            "matched_cue_anchors": route.get("matched_cue_anchors") or [],
+            "candidate_source_kind": route.get("candidate_source_kind"),
             "route_posture": projection.get("route_posture"),
             "action_grammar": projection.get("action_grammar"),
             "risk_flags": route.get("risk_flags") or [],
@@ -467,6 +515,7 @@ def maybe_append_associative_path_fallback(
     triage_metrics: Mapping[str, Any],
     cwd: str | Path | None = None,
     sidecar_dir: str | Path | None = None,
+    clean_source_dir: str | Path | None = None,
     semantic_bridge_path: str | Path | None = None,
     navigation_path: str | Path | None = None,
     active_lock_path: str | Path | None = None,
@@ -479,11 +528,13 @@ def maybe_append_associative_path_fallback(
         policy
         or recall_fallback_policy(
             include_associative_fallback=include_associative_fallback,
+            query=query,
             memory_packets=memory_packets,
             deepen_requests=deepen_requests,
             triage_metrics=triage_metrics,
             cwd=cwd,
             sidecar_dir=sidecar_dir,
+            clean_source_dir=clean_source_dir,
             navigation_path=navigation_path,
             active_lock_path=active_lock_path,
         )
@@ -496,6 +547,7 @@ def maybe_append_associative_path_fallback(
         request_index=len(deepen_requests) + 1,
         cwd=cwd,
         sidecar_dir=sidecar_dir,
+        clean_source_dir=clean_source_dir,
         semantic_bridge_path=semantic_bridge_path,
         navigation_path=navigation_path,
         active_lock_path=active_lock_path,
@@ -514,11 +566,13 @@ def maybe_append_associative_path_fallback_with_policy(
 
     policy = recall_fallback_policy(
         include_associative_fallback=bool(kwargs["include_associative_fallback"]),
+        query=str(kwargs.get("query") or ""),
         memory_packets=kwargs["memory_packets"],
         deepen_requests=kwargs["deepen_requests"],
         triage_metrics=kwargs["triage_metrics"],
         cwd=kwargs.get("cwd"),
         sidecar_dir=kwargs.get("sidecar_dir"),
+        clean_source_dir=kwargs.get("clean_source_dir"),
         navigation_path=kwargs.get("navigation_path"),
         active_lock_path=kwargs.get("active_lock_path"),
     )

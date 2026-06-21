@@ -401,6 +401,7 @@ def recall_diagnostic_report(
             query=cue,
             cwd=cwd_path,
             sidecar_dir=associative_path_sidecar_dir,
+            clean_source_dir=clean_dir,
             recall_context_payload=raw_recall_context_payload,
             active_lock_rows=[lock_payload] if isinstance(lock_payload, Mapping) else None,
             input_pack=associative_path_input_pack,

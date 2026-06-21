@@ -16,7 +16,10 @@ from repo_paths import ensure_repo_imports
 
 ensure_repo_imports(Path(__file__))
 
-from aippocampus_runtime.ops import recall_navigation_promotion  # noqa: E402
+from aippocampus_runtime.ops import (
+    recall_navigation_promotion,  # noqa: E402
+    recall_navigation_promotion_projection,  # noqa: E402
+)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -26,7 +29,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args(argv)
 
-    report = recall_navigation_promotion.fixture_recall_navigation_promotion_summary()
+    report = recall_navigation_promotion_projection.fixture_recall_navigation_promotion_summary()
     if args.json_output:
         print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
     else:

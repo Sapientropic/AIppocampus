@@ -14,6 +14,7 @@ from aippocampus_runtime.journey import live as journey_live
 from aippocampus_runtime.journey import sidecar_materializer
 from aippocampus_runtime.recall import task_orientation, understanding_state
 from tests.aippocampus.frontstage_assertions import (
+    assert_compact_detail_affordances,
     assert_compact_frontstage_payload,
 )
 
@@ -62,7 +63,7 @@ class TaskOrientationPacketTests(unittest.TestCase):
             "claim_boundary",
             {key for action in packet["safe_next_actions"] for key in action},
         )
-        self.assertIn("operator_detail_command", packet)
+        assert_compact_detail_affordances(self, packet, surface="task_orientation.compact")
         self.assertNotIn("cannot_claim", packet)
         self.assertNotIn("red_lines", packet)
         self.assertNotIn("metrics", packet)

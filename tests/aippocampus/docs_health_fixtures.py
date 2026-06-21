@@ -81,3 +81,23 @@ def write_classifier_release_checklist(repo: Path) -> None:
         "\n".join(classifier_policy_guard.CLASSIFIER_RELEASE_CHECKLIST_TERMS) + "\n",
         encoding="utf-8",
     )
+
+
+def write_legacy_alias_fixture(
+    repo: Path,
+    *,
+    inventory_text: str,
+    script_text: str,
+    script_name: str = "new_surface.py",
+    public_doc_text: str | None = None,
+) -> None:
+    inventory = repo / "docs" / "architecture" / "ops" / "legacy-alias-inventory.md"
+    inventory.parent.mkdir(parents=True)
+    inventory.write_text(inventory_text, encoding="utf-8")
+    script = repo / "skills" / "aippocampus" / "scripts" / script_name
+    script.parent.mkdir(parents=True)
+    script.write_text(script_text, encoding="utf-8")
+    if public_doc_text is not None:
+        install_doc = repo / "docs" / "guides" / "install-guide.md"
+        install_doc.parent.mkdir(parents=True)
+        install_doc.write_text(public_doc_text, encoding="utf-8")

@@ -8,7 +8,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from aippocampus_runtime.mcp import server as mcp_server
+from aippocampus_runtime.mcp import tool_handlers as mcp_tools
 from aippocampus_runtime.navigation import attention_hot_router
 from aippocampus_runtime.navigation.attention_route_projection import (
     attention_token_for_route,
@@ -120,7 +120,7 @@ def run_attention_router_navigation_only(
         }
 
     start = time.perf_counter()
-    context_result = mcp_server.call_recall_context(
+    context_result = mcp_tools.call_recall_context(
         {
             "intent": intent,
             "cwd": str(cwd),

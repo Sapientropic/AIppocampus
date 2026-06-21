@@ -204,6 +204,21 @@ def _with_recall_selector(action: Mapping[str, Any], recall_selector: str) -> di
 
 
 def _public_route_label(packet: Mapping[str, Any]) -> str:
+    if (
+        str(packet.get("route_kind") or "") == "associative_path"
+        or str(packet.get("matched_cue_family") or "") == "associative_path_fallback"
+        or str(packet.get("label_granularity") or "") == "associative_path_terms"
+    ):
+        raw = str(
+            packet.get("route_label")
+            or packet.get("route_topic")
+            or packet.get("display_hint")
+            or "APW source route"
+        )
+        label = raw.removeprefix("thread_candidate:")
+        label = label.replace("_", " ").replace("·", " ")
+        label = " ".join(label.split())
+        return core.compact_text(label[:1].upper() + label[1:] if label else "APW source route", 90)
     raw = str(
         packet.get("route_topic")
         or packet.get("route_label")
@@ -288,6 +303,8 @@ def _compact_associative_path_fallback_card(value: Any) -> dict[str, Any] | None
             "request_index": value.get("request_index"),
             "label": value.get("label"),
             "why_this_route": value.get("why_this_route"),
+            "matched_cue_anchors": value.get("matched_cue_anchors"),
+            "candidate_source_kind": value.get("candidate_source_kind"),
             "route_posture": value.get("route_posture"),
             "action_grammar": value.get("action_grammar"),
             "reason_codes": value.get("reason_codes"),
@@ -347,16 +364,43 @@ def _associative_path_fallback_action(
         return None
     action = route_deepen_action(request_index, recall_selector=recall_selector)
     action["id"] = "deepen_associative_path_fallback"
-    action["label"] = "Open APW fallback source"
-    action["why"] = str(
-        card.get("why_this_route")
-        or "APW found a source-ref-backed fallback; reopen it before using it."
+    route_label = core.compact_text(str(card.get("label") or ""), 96)
+    action["label"] = f"Open {route_label}" if route_label else "Open APW source route"
+    anchors = [
+        str(anchor)
+        for anchor in card.get("matched_cue_anchors") or []
+        if str(anchor).strip()
+    ]
+    action["why"] = (
+        "APW matched cue anchors: "
+        + " / ".join(anchors[:3])
+        + "; reopen before claims."
+        if anchors
+        else str(
+            card.get("why_this_route")
+            or "APW found a source-ref-backed fallback; reopen it before using it."
+        )
     )
     action["claim_boundary"] = "no_claim_before_reopen"
     action["route_choice_posture"] = str(
         card.get("route_choice_posture") or "associative_path_opt_in_fallback"
     )
     return action
+
+
+def _apw_should_replace_foreground_action(action: Mapping[str, Any]) -> bool:
+    """Return whether APW recovery should become the compact primary action."""
+
+    action_id = str(action.get("id") or action.get("action_id") or "")
+    route_posture = str(action.get("route_choice_posture") or "")
+    if route_posture == "labels_low_specificity":
+        return True
+    if action_id.startswith("recover_"):
+        return True
+    return action_id in {
+        "search_registry_sources_for_original_cue_anchors",
+        "refine_low_specificity_recall_cue",
+    }
 
 
 def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
@@ -573,13 +617,23 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
         ordinary_action_id = str(
             ordinary_recovery_action.get("id") or ordinary_recovery_action.get("action_id") or ""
         )
-        if ordinary_recovery_action:
-            safe_next_actions = [ordinary_recovery_action, *safe_next_actions]
-        foreground_action = associative_path_action
+        apw_primary = _apw_should_replace_foreground_action(foreground_action)
+        if apw_primary:
+            if ordinary_recovery_action:
+                safe_next_actions = [ordinary_recovery_action, *safe_next_actions]
+            foreground_action = associative_path_action
         if isinstance(associative_path_fallback, dict):
-            associative_path_fallback["primary_action"] = "deepen_associative_path_fallback"
-            if ordinary_action_id:
-                associative_path_fallback["ordinary_recovery_action_id"] = ordinary_action_id
+            if apw_primary:
+                associative_path_fallback["primary_action"] = "deepen_associative_path_fallback"
+                if ordinary_action_id:
+                    associative_path_fallback["ordinary_recovery_action_id"] = ordinary_action_id
+            else:
+                # APW is a foreground recovery surface, not a parallel route
+                # chooser. When ordinary recall already has a safe primary
+                # deepen action, keep the APW trail in detail/diagnostics so
+                # compact recall stays small and does not imply ranking influence.
+                associative_path_fallback = None
+                associative_path_policy = None
     detail_fields = _recall_detail_command_fields(recovery_cue)
     detail_command = str(detail_fields.get("operator_detail_command") or "")
     detail_command_template = str(detail_fields.get("operator_detail_command_template") or "")

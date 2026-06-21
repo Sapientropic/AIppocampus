@@ -5,8 +5,13 @@ import shlex
 import unittest
 
 from aippocampus_runtime.contracts import executable_command_violations
-from aippocampus_runtime.recall import agent_continuity, foreground_action_card
+from aippocampus_runtime.recall import (
+    agent_continuity,
+    agent_continuity_cli_support,
+    foreground_action_card,
+)
 from tests.aippocampus.frontstage_assertions import (
+    assert_compact_detail_affordances,
     assert_compact_frontstage_payload,
 )
 
@@ -16,7 +21,7 @@ def assert_command_args(test: unittest.TestCase, command: str, expected: list[st
 
 class AgentRecallCompactProjectionTests(unittest.TestCase):
     def test_compact_detail_command_uses_safe_recall_cue_or_template(self) -> None:
-        safe = agent_continuity.public_recall_projection(
+        safe = agent_continuity_cli_support.public_recall_projection(
             {
                 "kind": "aippocampus_agent_continuity_path",
                 "schema_version": "agent-continuity-path-v1",
@@ -63,9 +68,10 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
             safe["claim_boundary"]["detail_available_with"],
             safe["operator_detail_command"],
         )
+        assert_compact_detail_affordances(self, safe, surface="agent_recall.safe_cue_detail")
         self.assertNotIn("old decision or handoff cue", json.dumps(safe, ensure_ascii=False))
 
-        template_only = agent_continuity.public_recall_projection(
+        template_only = agent_continuity_cli_support.public_recall_projection(
             {
                 "kind": "aippocampus_agent_continuity_path",
                 "schema_version": "agent-continuity-path-v1",
@@ -84,18 +90,18 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
             'aippocampus agent recall "{cue}" --json --detail full',
         )
         self.assertEqual(template_only["operator_detail_requires"], ["cue"])
-        self.assertNotIn("detail_available_with", template_only["claim_boundary"])
         self.assertEqual(
             template_only["claim_boundary"]["detail_available_with_template"],
             'aippocampus agent recall "{cue}" --json --detail full',
         )
         self.assertEqual(template_only["claim_boundary"]["detail_requires"], ["cue"])
+        assert_compact_detail_affordances(self, template_only, surface="agent_recall.template_detail")
         self.assertEqual(executable_command_violations(template_only), [])
 
     def test_low_specificity_thread_candidate_choices_get_public_safe_differentiators(
         self,
     ) -> None:
-        public = agent_continuity.public_recall_projection(
+        public = agent_continuity_cli_support.public_recall_projection(
             {
                 "kind": "aippocampus_agent_continuity_path",
                 "schema_version": "agent-continuity-path-v1",
@@ -219,7 +225,7 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
             }
             for index in range(1, 6)
         ]
-        public = agent_continuity.public_recall_projection(
+        public = agent_continuity_cli_support.public_recall_projection(
             {
                 "kind": "aippocampus_agent_continuity_path",
                 "schema_version": "agent-continuity-path-v1",
@@ -287,7 +293,7 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
         assert_compact_frontstage_payload(self, public, max_top_level_diagnostics=1)
 
     def test_distinguishable_route_labels_keep_deepen_primary(self) -> None:
-        public = agent_continuity.public_recall_projection(
+        public = agent_continuity_cli_support.public_recall_projection(
             {
                 "kind": "aippocampus_agent_continuity_path",
                 "schema_version": "agent-continuity-path-v1",
@@ -349,7 +355,7 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
         self.assertNotIn("choice_reason", encoded_routes)
 
     def test_recall_selector_replaces_mutable_last_recall_in_compact_actions(self) -> None:
-        public = agent_continuity.public_recall_projection(
+        public = agent_continuity_cli_support.public_recall_projection(
             {
                 "kind": "aippocampus_agent_continuity_path",
                 "schema_version": "agent-continuity-path-v1",
@@ -393,7 +399,7 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
     def test_single_generic_route_with_distinctive_cue_anchors_refines_before_deepen(
         self,
     ) -> None:
-        public = agent_continuity.public_recall_projection(
+        public = agent_continuity_cli_support.public_recall_projection(
             {
                 "kind": "aippocampus_agent_continuity_path",
                 "schema_version": "agent-continuity-path-v1",
@@ -444,7 +450,7 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
     def test_already_opened_compact_without_source_receipt_reopens_read_only(
         self,
     ) -> None:
-        public = agent_continuity.public_recall_projection(
+        public = agent_continuity_cli_support.public_recall_projection(
             {
                 "kind": "aippocampus_agent_continuity_path",
                 "schema_version": "agent-continuity-path-v1",
@@ -497,7 +503,7 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
         self.assertEqual(executable_command_violations(public), [])
 
     def test_recovery_actions_fill_known_recall_query_commands(self) -> None:
-        no_route = agent_continuity.public_recall_projection(
+        no_route = agent_continuity_cli_support.public_recall_projection(
             {
                 "kind": "aippocampus_agent_continuity_path",
                 "schema_version": "agent-continuity-path-v1",
@@ -508,7 +514,7 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
             },
             query="unlikely-no-match-token-xyz-12345",
         )
-        weak_route = agent_continuity.public_recall_projection(
+        weak_route = agent_continuity_cli_support.public_recall_projection(
             {
                 "kind": "aippocampus_agent_continuity_path",
                 "schema_version": "agent-continuity-path-v1",
@@ -586,7 +592,7 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
         self.assertEqual(executable_command_violations(card), [])
 
     def test_missing_cache_recovery_uses_known_query_not_same_cue_placeholder(self) -> None:
-        projected = agent_continuity.public_recall_projection(
+        projected = agent_continuity_cli_support.public_recall_projection(
             {
                 "kind": agent_continuity.KIND,
                 "schema_version": agent_continuity.SCHEMA_VERSION,

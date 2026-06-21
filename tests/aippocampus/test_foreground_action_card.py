@@ -6,7 +6,11 @@ from pathlib import Path
 from unittest.mock import patch
 
 from aippocampus_runtime.mcp.public_projection import compact_health_payload
-from aippocampus_runtime.recall import agent_continuity, foreground_action_card
+from aippocampus_runtime.recall import (
+    agent_continuity,
+    agent_continuity_cli_support,
+    foreground_action_card,
+)
 
 
 class ForegroundActionCardTests(unittest.TestCase):
@@ -141,7 +145,7 @@ class ForegroundActionCardTests(unittest.TestCase):
             max_routes=1,
         )
         redacted_card = foreground_action_card.redact_public_card(report["foreground_action_card"])
-        public = agent_continuity.public_recall_projection(
+        public = agent_continuity_cli_support.public_recall_projection(
             {**report, "last_recall_cache_available": True}
         )
         encoded = json.dumps(public, ensure_ascii=False, sort_keys=True)

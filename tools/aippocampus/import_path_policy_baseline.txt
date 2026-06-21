@@ -20,13 +20,11 @@ tools/aippocampus/smoke/_paths.py
 tools/aippocampus/smoke/dashboard_mobile_viewports.py
 tools/aippocampus/smoke/known_artifact_recall_dogfood.py
 tools/aippocampus/smoke/run_stage_0_5_smoke.py
-tools/aippocampus/smoke/smoke_agency_host_timing.py
 tools/aippocampus/smoke/smoke_claude_code_history.py
 tools/aippocampus/smoke/smoke_claude_code_mcp_host.py
 tools/aippocampus/smoke/smoke_codex_long_session_continuity.py
 tools/aippocampus/smoke/smoke_cross_agent_continuity.py
 tools/aippocampus/smoke/smoke_generic_jsonl_integration.py
-tools/aippocampus/smoke/smoke_living_cue_cache.py
 tools/aippocampus/smoke/smoke_provider_key_bridge_os_store.py
 tools/aippocampus/smoke/smoke_question_confirmation_live.py
 tools/aippocampus/smoke/smoke_question_tracking_scale.py

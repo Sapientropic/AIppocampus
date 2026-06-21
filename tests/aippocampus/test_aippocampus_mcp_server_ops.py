@@ -12,6 +12,7 @@ from unittest import mock
 from aippocampus_runtime import core
 from aippocampus_runtime.contracts import executable_command_violations
 from aippocampus_runtime.mcp import server as mcp
+from aippocampus_runtime.mcp import tool_handlers as mcp_handlers
 from aippocampus_runtime.ops import telepathy_handoff_store
 from aippocampus_runtime.sync import bundle as sync_bundle
 
@@ -147,7 +148,7 @@ class AippocampusMcpServerOpsTests(unittest.TestCase):
 
     def test_sync_status_can_report_http_object_store_backend(self) -> None:
         with mock.patch.object(
-            mcp.sync_object_storage,
+            mcp_handlers.sync_object_storage,
             "status_object_storage_bundle",
             return_value={"ok": True, "backend": "http_object_store", "manifest_exists": True},
         ) as status:
@@ -243,7 +244,7 @@ class AippocampusMcpServerOpsTests(unittest.TestCase):
         encoded = json.dumps(payload, ensure_ascii=False)
         self.assertNotIn(str(self.cwd), encoded)
         self.assertNotIn("session:test", encoded)
-        self.assertEqual(payload["registry"], mcp.LOCAL_PATH_REDACTION)
+        self.assertEqual(payload["registry"], mcp_handlers.LOCAL_PATH_REDACTION)
         self.assertEqual(payload["detail"], "compact")
         self.assertEqual(
             payload["identifier_boundary"],
@@ -284,9 +285,9 @@ class AippocampusMcpServerOpsTests(unittest.TestCase):
         self.assertNotIn(str(self.cwd), full_encoded)
         self.assertEqual(
             full_payload["threads"][0]["paths"]["workspace"],
-            mcp.LOCAL_PATH_REDACTION,
+            mcp_handlers.LOCAL_PATH_REDACTION,
         )
-        self.assertIn(mcp.LOCAL_PATH_REDACTION, full_payload["threads"][0]["debug"]["command"])
+        self.assertIn(mcp_handlers.LOCAL_PATH_REDACTION, full_payload["threads"][0]["debug"]["command"])
 
     def test_unknown_tool_is_tool_error_not_protocol_crash(self) -> None:
         response = mcp.handle_request(
@@ -396,7 +397,7 @@ class AippocampusMcpServerOpsTests(unittest.TestCase):
         self.assertEqual(list_payload["cards"][0]["card_id"], card_id)
         self.assertEqual(deepen_payload["kind"], "aippocampus_telepathy_handoff_deepen")
         self.assertEqual(deepen_payload["source_reopen"]["source_refs"][0]["message_id"], "msg_user")
-        self.assertEqual(list_payload["store_path"], mcp.LOCAL_PATH_REDACTION)
+        self.assertEqual(list_payload["store_path"], mcp_handlers.LOCAL_PATH_REDACTION)
         self.assertNotIn(str(self.cwd), encoded)
         self.assertNotIn("source://private/raw-handle", encoded)
 
@@ -528,7 +529,7 @@ class AippocampusMcpServerOpsTests(unittest.TestCase):
             }
 
         with mock.patch.object(
-            mcp.aippocampus_health, "health_report", side_effect=fake_health_report
+            mcp_handlers.aippocampus_health, "health_report", side_effect=fake_health_report
         ):
             response = mcp.handle_request(
                 {
@@ -567,7 +568,7 @@ class AippocampusMcpServerOpsTests(unittest.TestCase):
             }
 
         with mock.patch.object(
-            mcp.aippocampus_health, "health_report", side_effect=fake_health_report
+            mcp_handlers.aippocampus_health, "health_report", side_effect=fake_health_report
         ):
             response = mcp.handle_request(
                 {
@@ -620,7 +621,7 @@ class AippocampusMcpServerOpsTests(unittest.TestCase):
             }
 
         with mock.patch.object(
-            mcp.aippocampus_health, "health_report", side_effect=fake_health_report
+            mcp_handlers.aippocampus_health, "health_report", side_effect=fake_health_report
         ):
             response = mcp.handle_request(
                 {
@@ -663,7 +664,7 @@ class AippocampusMcpServerOpsTests(unittest.TestCase):
 
     def test_memory_health_exception_returns_recovery_card_not_bare_tool_error(self) -> None:
         with mock.patch.object(
-            mcp.aippocampus_health,
+            mcp_handlers.aippocampus_health,
             "health_report",
             side_effect=FileNotFoundError(f"no rollout found for cwd: {self.cwd}"),
         ):
@@ -697,7 +698,7 @@ class AippocampusMcpServerOpsTests(unittest.TestCase):
 
     def test_agent_recall_import_failure_returns_foreground_runtime_recovery_card(self) -> None:
         with mock.patch.object(
-            mcp,
+            mcp_handlers,
             "agent_continuity_module",
             side_effect=ImportError(
                 f"cannot import name compact_aippo_guidance_card from {self.cwd}\\old.py"
