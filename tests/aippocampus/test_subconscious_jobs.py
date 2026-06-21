@@ -6,7 +6,6 @@ import os
 import sys
 import tempfile
 import threading
-import time
 import unittest
 from pathlib import Path
 from typing import Any
@@ -43,6 +42,7 @@ from redaction_fixtures import (
     FAKE_TEST_SECRET_VALUE,
     fake_test_windows_path,
 )
+from tests.aippocampus.timing_fixtures import host_timeout_sleep
 # isort: on
 
 
@@ -2250,7 +2250,10 @@ class SubconsciousJobsTests(unittest.TestCase):
                     call_count += 1
                     max_active = max(max_active, active)
                     current = call_count
-                time.sleep(0.05)
+                host_timeout_sleep(
+                    0.05,
+                    reason="keep concurrent job samples overlapping long enough to measure fanout",
+                )
                 with lock:
                     active -= 1
                 content = {
@@ -2455,7 +2458,10 @@ class SubconsciousJobsTests(unittest.TestCase):
                 with lock:
                     if sample_two and not sample1_finished.is_set():
                         sample2_started_before_warm = True
-                time.sleep(0.02)
+                host_timeout_sleep(
+                    0.02,
+                    reason="keep first sample active while testing prefix warmup ordering",
+                )
                 if not sample_two:
                     sample1_finished.set()
                 content = {

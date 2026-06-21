@@ -5,8 +5,8 @@ from tests.aippocampus.prompt_hook_fixtures import (
     hook,
     json,
     recall_cues,
-    time,
 )
+from tests.aippocampus.timing_fixtures import host_timeout_sleep
 
 
 class PromptHookSemanticEvidenceTests(AmbientRecallHookCase):
@@ -494,7 +494,10 @@ class PromptHookSemanticEvidenceTests(AmbientRecallHookCase):
 
     def test_semantic_budget_spend_still_requires_source_intent_for_evidence(self) -> None:
         def slow_semantic_gate(prompt: str, **kwargs) -> dict:
-            time.sleep(1.05)
+            host_timeout_sleep(
+                1.05,
+                reason="simulate a semantic gate spending most of the foreground budget",
+            )
             return {
                 "available": True,
                 "decision": "evidence",

@@ -224,6 +224,82 @@ class ChangedSurfaceTestPlanTests(unittest.TestCase):
             ),
         )
 
+    def test_large_changed_test_surface_is_grouped_into_copy_pasteable_slices(self) -> None:
+        payload = test_plan.build_test_plan(
+            [
+                "tests/aippocampus/test_active_recall.py",
+                "tests/aippocampus/test_active_path_packet.py",
+                "tests/aippocampus/test_agent_background.py",
+                "tests/aippocampus/test_benchmark_entrypoints.py",
+                "tests/aippocampus/test_benchmark_graph_extraction_boundary.py",
+                "tests/aippocampus/test_query_profile.py",
+                "tests/aippocampus/test_run_tests_tiers.py",
+                "tests/aippocampus/test_test_plan.py",
+            ]
+        )
+
+        warnings = payload["warnings"]
+        groups = payload["changed_test_groups"]
+        commands = [command["command"] for command in payload["commands"]]
+        grouped_commands = [
+            group["command"]
+            for group in groups
+        ]
+
+        self.assertEqual(warnings[-1]["kind"], "large_dirty_surface")
+        self.assertIn("pick the slice", warnings[-1]["next_action"])
+        self.assertGreaterEqual(len(groups), 2)
+        self.assertEqual(grouped_commands, sorted(grouped_commands))
+        self.assertEqual(len(grouped_commands), len(set(grouped_commands)))
+        self.assertTrue(all(command in commands for command in grouped_commands))
+        self.assertFalse(
+            any(
+                "test_active_recall" in command
+                and "test_agent_background" in command
+                and "test_benchmark_graph_extraction_boundary" in command
+                for command in commands
+            )
+        )
+        self.assertTrue(
+            any(
+                group["group"] == "quick"
+                and group["module_count"] >= 3
+                for group in groups
+            )
+        )
+        self.assertTrue(
+            any(
+                group["group"] == "pr"
+                and group["module_count"] >= 1
+                for group in groups
+            )
+        )
+
+    def test_benchmark_fast_lane_guard_does_not_force_benchmark_smoke(self) -> None:
+        payload = test_plan.build_test_plan(
+            ["tests/aippocampus/test_benchmark_graph_extraction_boundary.py"]
+        )
+        commands = [command["command"] for command in payload["commands"]]
+
+        self.assertIn("benchmark_fast_lane_guard", payload["categories"])
+        self.assertNotIn("benchmark", payload["categories"])
+        self.assertFalse(any("--tier benchmark-smoke" in command for command in commands))
+
+    def test_benchmark_evidence_change_still_recommends_benchmark_smoke(self) -> None:
+        payload = test_plan.build_test_plan(
+            ["tests/aippocampus/test_benchmark_longmemeval.py"]
+        )
+        commands = [command["command"] for command in payload["commands"]]
+
+        self.assertIn("benchmark", payload["categories"])
+        self.assertIn(
+            py_script(
+                "tools/aippocampus/run_tests.py",
+                "--tier benchmark-smoke --benchmark-suite-profile public-fast",
+            ),
+            commands,
+        )
+
     def test_no_changes_recommends_quick_sanity(self) -> None:
         payload = test_plan.build_test_plan([])
 

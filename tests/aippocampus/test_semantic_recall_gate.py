@@ -29,6 +29,7 @@ from aippocampus_runtime.recall import semantic_cue_cache as cues  # noqa: E402
 from aippocampus_runtime.recall import semantic_gate_response as response_stage  # noqa: E402
 from aippocampus_runtime.recall import semantic_recall_gate as gate  # noqa: E402
 from redaction_fixtures import FAKE_TEST_OPENAI_API_KEY, FAKE_TEST_SECRET_VALUE  # noqa: E402
+from tests.aippocampus.timing_fixtures import host_timeout_sleep  # noqa: E402
 
 
 def fake_response(payload: dict, usage: dict | None = None) -> dict:
@@ -1317,7 +1318,10 @@ class SemanticRecallGateTests(unittest.TestCase):
     def test_overall_deadline_returns_before_slow_workers_finish(self) -> None:
         def chat_fn(messages, api_key, model, base_url, max_tokens, timeout, temperature):
             del messages, api_key, model, base_url, max_tokens, timeout, temperature
-            time.sleep(0.35)
+            host_timeout_sleep(
+                0.35,
+                reason="simulate workers that exceed the semantic gate overall deadline",
+            )
             return fake_response(
                 {
                     "decision": "scent",

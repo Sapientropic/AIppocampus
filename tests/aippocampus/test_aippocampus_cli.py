@@ -2438,12 +2438,14 @@ class AippocampusCliTests(unittest.TestCase):
         raw = proc.stdout + proc.stderr
         self.assertEqual(proc.returncode, 0, raw)
         payload = json.loads(proc.stdout)
-        activity = payload["job_activity"]
-        self.assertEqual(payload["kind"], "aippocampus_warm_ambient_status")
+        activity = payload["summary"]
+        self.assertEqual(payload["kind"], "aippocampus_warm_ambient_status_card")
+        self.assertEqual(payload["detail"], "compact")
         self.assertEqual(payload["status"], "pending")
-        self.assertFalse(activity["worker_process_active"])
-        self.assertFalse(activity["pending_jobs_are_worker_evidence"])
-        self.assertFalse(payload["privacy_boundary"]["local_paths_included"])
+        self.assertEqual(activity["worker"], "not_available")
+        self.assertNotIn("job_activity", payload)
+        self.assertNotIn("action_code", payload)
+        self.assertNotIn("privacy_boundary", payload)
         self.assertNotIn(str(root), raw)
 
     def test_warm_status_human_keeps_optional_queue_from_blocking_recall(self) -> None:
@@ -2471,7 +2473,8 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertEqual(strict.returncode, 2, raw)
         self.assertIn("AIppocampus warm ambient", human.stdout)
         self.assertIn("ordinary recall: usable", human.stdout)
-        self.assertIn("next: provider_or_worker_unavailable_optional", human.stdout)
+        self.assertIn("next: Inspect provider status", human.stdout)
+        self.assertNotIn("provider_or_worker_unavailable_optional", human.stdout)
         self.assertIn("optional background warming", human.stdout)
         self.assertNotIn(str(root), raw)
 

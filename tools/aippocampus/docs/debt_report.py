@@ -24,6 +24,10 @@ BUDGET_ROW = re.compile(
     r"\|\s*(?P<first>\d+)\s*\|(?:\s*(?P<second>\d+)\s*\|)?",
     re.MULTILINE,
 )
+SMALL_DRIFT_LIMIT = 5
+STALE_ALLOWANCE_MIN_BUDGET = 1000
+STALE_ALLOWANCE_MAX_CURRENT = 300
+STALE_ALLOWANCE_MAX_RATIO = 0.25
 
 
 def script_line_count(path: Path) -> int:
@@ -203,6 +207,7 @@ def build_system_weight(
 
 def count_drift_entries(rows: list[dict[str, object]]) -> list[dict[str, object]]:
     current_by_path = {str(row["path"]): int(row["current_count"]) for row in rows}
+    budget_by_path = {str(row["path"]): int(row["guard_budget"]) for row in rows}
     drifts: list[dict[str, object]] = []
     for rel_path, registered_count in registered_current_counts().items():
         current_count = current_by_path.get(rel_path)
@@ -214,15 +219,96 @@ def count_drift_entries(rows: list[dict[str, object]]) -> list[dict[str, object]
                 "registered_current_count": registered_count,
                 "current_count": current_count,
                 "drift": current_count - registered_count,
+                "drift_class": drift_class(
+                    registered_count=registered_count,
+                    current_count=current_count,
+                    guard_budget=budget_by_path[rel_path],
+                ),
+                "recommended_action": drift_recommended_action(
+                    registered_count=registered_count,
+                    current_count=current_count,
+                ),
             }
         )
     return sorted(drifts, key=lambda row: (str(row["path"])))
+
+
+def drift_class(
+    *,
+    registered_count: int,
+    current_count: int,
+    guard_budget: int,
+) -> str:
+    drift = current_count - registered_count
+    if abs(drift) <= SMALL_DRIFT_LIMIT:
+        return "harmless_small_drift"
+    if drift > 0:
+        return "positive_drift"
+    if is_stale_allowance(current_count=current_count, guard_budget=guard_budget):
+        return "large_stale_allowance_after_shrink"
+    return "negative_drift"
+
+
+def drift_recommended_action(*, registered_count: int, current_count: int) -> str:
+    drift = current_count - registered_count
+    if abs(drift) <= SMALL_DRIFT_LIMIT:
+        return "refresh_registered_count_when_touching_row"
+    if drift > 0:
+        return "refresh_current_count_or_split_before_raising_budget"
+    return "refresh_current_count_and_check_for_stale_guard_allowance"
+
+
+def is_stale_allowance(*, current_count: int, guard_budget: int) -> bool:
+    if guard_budget < STALE_ALLOWANCE_MIN_BUDGET:
+        return False
+    return (
+        current_count <= STALE_ALLOWANCE_MAX_CURRENT
+        and current_count <= int(guard_budget * STALE_ALLOWANCE_MAX_RATIO)
+    )
+
+
+def stale_allowance_entries(rows: list[dict[str, object]]) -> list[dict[str, object]]:
+    stale_rows: list[dict[str, object]] = []
+    for row in rows:
+        current = int(row["current_count"])
+        budget = int(row["guard_budget"])
+        if not is_stale_allowance(current_count=current, guard_budget=budget):
+            continue
+        stale_rows.append(
+            {
+                "path": str(row["path"]),
+                "current_count": current,
+                "guard_budget": budget,
+                "margin": int(row["margin"]),
+                "budget_to_current_ratio": round(budget / max(current, 1), 2),
+                "drift_class": "large_stale_allowance_after_shrink",
+                "recommended_action": (
+                    "lower_guard_budget_or_archive_row_with_dated_owner_rationale"
+                ),
+            }
+        )
+    return sorted(stale_rows, key=lambda row: (str(row["path"])))
+
+
+def count_drift_summary(count_drifts: list[dict[str, object]]) -> dict[str, int]:
+    summary = {
+        "harmless_small_drift": 0,
+        "positive_drift": 0,
+        "negative_drift": 0,
+        "large_stale_allowance_after_shrink": 0,
+    }
+    for row in count_drifts:
+        drift_type = str(row.get("drift_class") or "")
+        if drift_type in summary:
+            summary[drift_type] += 1
+    return summary
 
 
 def report_warnings(
     *,
     headroom_summary: dict[str, object],
     count_drifts: list[dict[str, object]],
+    stale_allowances: list[dict[str, object]],
 ) -> list[dict[str, object]]:
     warnings: list[dict[str, object]] = []
     exact_zero = int(headroom_summary.get("runtime_exact_zero_count") or 0)
@@ -248,6 +334,7 @@ def report_warnings(
             }
         )
     if count_drifts:
+        drift_summary = count_drift_summary(count_drifts)
         warnings.append(
             {
                 "code": "architecture_debt_register_count_drift",
@@ -255,6 +342,18 @@ def report_warnings(
                     f"{len(count_drifts)} architecture debt register current-count row(s) drift from script_line_count()."
                 ),
                 "count": len(count_drifts),
+                "drift_summary": drift_summary,
+            }
+        )
+    if stale_allowances:
+        warnings.append(
+            {
+                "code": "architecture_debt_stale_allowance",
+                "message": (
+                    f"{len(stale_allowances)} guard budget row(s) look stale after a split; "
+                    "lower the budget or archive the row with a dated owner rationale."
+                ),
+                "count": len(stale_allowances),
             }
         )
     return warnings
@@ -284,17 +383,21 @@ def build_report() -> dict[str, object]:
     system_weight = build_system_weight(rows, split_boundaries=split_boundaries)
     headroom_summary = dict(system_weight["guard_headroom_summary"])
     count_drifts = count_drift_entries(rows)
+    stale_allowances = stale_allowance_entries(rows)
     return {
-        "ok": not missing_files and not over_budget,
+        "ok": not missing_files and not over_budget and not stale_allowances,
         "sources": [source.relative_to(REPO_ROOT).as_posix() for source in inventory_sources()],
         "entry_count": len(entries),
         "missing_files": missing_files,
         "over_budget": over_budget,
         "headroom_summary": headroom_summary,
         "count_drift": count_drifts,
+        "count_drift_summary": count_drift_summary(count_drifts),
+        "stale_allowances": stale_allowances,
         "warnings": report_warnings(
             headroom_summary=headroom_summary,
             count_drifts=count_drifts,
+            stale_allowances=stale_allowances,
         ),
         "system_weight": system_weight,
         "rows": rows,

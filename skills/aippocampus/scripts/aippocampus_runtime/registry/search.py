@@ -186,7 +186,10 @@ def deep_search_entry_result(
         except Exception as exc:
             warnings.append(_search_warning("clean_source", clean_messages, exc))
 
-    sqlite_path = Path(paths.get("sqlite") or "")
+    sqlite_value = str(paths.get("sqlite") or "").strip()
+    if not sqlite_value:
+        return {"score": 0.0, "hits": [], "warnings": warnings}
+    sqlite_path = Path(sqlite_value)
     if not sqlite_path.exists():
         return {"score": 0.0, "hits": [], "warnings": warnings}
     # Registry search is imported by low-level registry glue. Keep retrieval as

@@ -9,6 +9,52 @@ from aippocampus_runtime.core import compact_text
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 from aippocampus_runtime.update import status_actions as update_actions
 
+INTERNAL_STATUS_REASON_COPY = {
+    "host_live_probe_ok_foreground_probe_not_checked": (
+        "The host can launch AIppocampus, but this foreground thread has not yet "
+        "proved the recall/deepen tools are visible."
+    ),
+    "host_live_probe_ok_current_thread_unverified": (
+        "The host probe passed, but this foreground thread still needs a live "
+        "tool-visibility check."
+    ),
+    "host_registered_tools_unverified": (
+        "AIppocampus tools are registered with the host, but this thread has not "
+        "verified they are callable."
+    ),
+    "foreground_mcp_runtime_mismatch": (
+        "The current foreground MCP connection does not match the host probe; "
+        "use the CLI fallback or reload the host before trusting tool status."
+    ),
+    "host_live_probe_key_tools_failed": (
+        "The host probe reached AIppocampus, but key foreground tools failed and "
+        "the plugin cache likely needs repair."
+    ),
+    "with_missing_cache_file": (
+        "Action-time hints are installed, but their prepared cache file is missing."
+    ),
+    "with_empty_cache": (
+        "Action-time hints are installed, but the prepared cache has no records yet."
+    ),
+    "with_expired_records": (
+        "Action-time hints are installed, but the prepared records are expired."
+    ),
+    "with_fresh_records": "Action-time hints have fresh prepared records.",
+    "not_installed": "This foreground helper is not installed yet.",
+    "missing_provider_env_var": (
+        "A foreground ambient path is installed, but provider-key visibility is degraded."
+    ),
+    "child_process_missing_provider_env_var": (
+        "Provider keys are visible here, but the child-process path has not inherited them."
+    ),
+    "multiple_candidates": (
+        "The plugin cache refresh has multiple possible targets and needs an explicit choice."
+    ),
+    "plugin_cache_auto_resolution_blocked": (
+        "The plugin cache refresh cannot safely choose a target automatically."
+    ),
+}
+
 
 def agent_callable_host_probe_ok(item: dict[str, Any]) -> bool:
     return item.get("surface") == "agent_callable" and (
@@ -23,13 +69,44 @@ def _safe_int(value: Any) -> int:
         return 0
 
 
+def _looks_like_internal_code(value: str) -> bool:
+    text = value.strip()
+    if not text or " " in text:
+        return False
+    return "_" in text or ":" in text
+
+
+def _surface_label(surface: str) -> str:
+    return surface.replace("_", " ")
+
+
+def _readable_action_reason(surface: str, raw_reason: str) -> tuple[str, str | None]:
+    reason = raw_reason.strip()
+    if not reason:
+        return f"{_surface_label(surface).capitalize()} needs review.", None
+    if reason in INTERNAL_STATUS_REASON_COPY:
+        return INTERNAL_STATUS_REASON_COPY[reason], reason
+    if _looks_like_internal_code(reason):
+        return (
+            f"{_surface_label(surface).capitalize()} needs attention; run the linked "
+            "status command for the current setup detail.",
+            reason,
+        )
+    return reason, None
+
+
 def _compact_update_action(
     *,
     surface: str,
     reason: str,
     command: str | None = None,
     manual_instruction: str | None = None,
+    status_code: str | None = None,
+    diagnostic_code: str | None = None,
 ) -> dict[str, Any]:
+    readable_reason, inferred_code = _readable_action_reason(surface, reason)
+    status_code = (status_code or "").strip() or None
+    diagnostic_code = (diagnostic_code or inferred_code or "").strip() or None
     command_fields = update_actions.executable_update_action_fields(
         command,
         fallback_command=(
@@ -43,11 +120,15 @@ def _compact_update_action(
         "id": f"review_{surface}",
         "label": f"Review {surface.replace('_', ' ')}",
         "surface": surface,
-        "reason": compact_text(reason, 220),
-        "why": compact_text(reason, 220),
+        "reason": compact_text(readable_reason, 220),
+        "why": compact_text(readable_reason, 220),
         "claim_boundary": "update_status_not_source_evidence",
         **command_fields,
     }
+    if status_code:
+        result["status_code"] = status_code
+    if diagnostic_code and diagnostic_code != status_code:
+        result["diagnostic_code"] = diagnostic_code
     if not command_fields:
         result["command"] = "aippocampus update status --operator-json"
         result["manual_instruction"] = (
@@ -164,6 +245,7 @@ def compact_agent_status_report(
                 reason=str(agent.get("status") or "foreground tools not verified"),
                 command=str(foreground_action.get("command") or agent.get("next_command")),
                 manual_instruction=foreground_action.get("manual_instruction"),
+                status_code=str(agent.get("status") or ""),
             )
         )
         agent_action_added = True
@@ -181,6 +263,7 @@ def compact_agent_status_report(
                 surface="action_hints",
                 reason=str(action_hints.get("cache_status") or "action-time hints not ready"),
                 command=str(action_hint_primary_command),
+                status_code=str(action_hints.get("cache_status") or ""),
             )
         )
     plan_surface_filter = summary.get("plan_surface_filter") or []
@@ -188,8 +271,15 @@ def compact_agent_status_report(
         for surface in [item for item in needs_action if item != "plugin_cache"][:4]:
             item = surfaces.get(surface) or {}
             command = item.get("next_command") or item.get("documented_install_command")
-            reason = f"{surface} status is {item.get('status') or 'attention_needed'}"
-            actions.append(_compact_update_action(surface=surface, reason=reason, command=command))
+            status_code = str(item.get("status") or "attention_needed")
+            actions.append(
+                _compact_update_action(
+                    surface=surface,
+                    reason=status_code,
+                    command=command,
+                    status_code=status_code,
+                )
+            )
     if prompt_latency_risk and not foreground_partial:
         actions.append(
             _compact_update_action(
@@ -228,8 +318,15 @@ def compact_agent_status_report(
         for surface in [item for item in needs_action if item != "plugin_cache"][:4]:
             item = surfaces.get(surface) or {}
             command = item.get("next_command") or item.get("documented_install_command")
-            reason = f"{surface} status is {item.get('status') or 'attention_needed'}"
-            actions.append(_compact_update_action(surface=surface, reason=reason, command=command))
+            status_code = str(item.get("status") or "attention_needed")
+            actions.append(
+                _compact_update_action(
+                    surface=surface,
+                    reason=status_code,
+                    command=command,
+                    status_code=status_code,
+                )
+            )
     if agent_action_needed and not agent_action_added:
         actions.append(
             _compact_update_action(
@@ -237,24 +334,25 @@ def compact_agent_status_report(
                 reason=str(agent.get("status") or "foreground tools not verified"),
                 command=str(foreground_action.get("command") or agent.get("next_command")),
                 manual_instruction=foreground_action.get("manual_instruction"),
+                status_code=str(agent.get("status") or ""),
             )
         )
     cache_refresh = plugin.get("cache_refresh") if isinstance(plugin, dict) else None
     if isinstance(cache_refresh, dict) and cache_refresh.get("ok") is False:
-        reason = str(
+        reason_code = str(
             cache_refresh.get("blocked_reason")
             or cache_refresh.get("installed_cache_status")
             or "plugin cache refresh failed"
         )
-        if cache_refresh.get("candidate_count"):
-            reason = f"{reason}: {int(cache_refresh.get('candidate_count') or 0)} candidates"
-        actions.append(
-            _compact_update_action(
-                surface="plugin_cache",
-                reason=reason,
-                command=cache_refresh.get("next_command"),
-            )
+        action = _compact_update_action(
+            surface="plugin_cache",
+            reason=reason_code,
+            command=cache_refresh.get("next_command"),
+            status_code=reason_code if _looks_like_internal_code(reason_code) else None,
         )
+        if cache_refresh.get("candidate_count"):
+            action["candidate_count"] = int(cache_refresh.get("candidate_count") or 0)
+        actions.append(action)
     elif summary.get("plugin_cache_needs_action"):
         plugin_action = (plugin.get("plugin_cache_recommended_actions") or [None])[0]
         if plugin_action is None:

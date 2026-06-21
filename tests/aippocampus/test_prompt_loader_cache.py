@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import sys
 import tempfile
-import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -16,6 +15,7 @@ from aippocampus_runtime import io_mtime_cache  # noqa: E402
 from aippocampus_runtime.dream import working_memory_publication  # noqa: E402
 from aippocampus_runtime.navigation import associations, cognitive_map  # noqa: E402
 from aippocampus_runtime.registry import store as registry_store  # noqa: E402
+from tests.aippocampus.timing_fixtures import advance_file_mtime  # noqa: E402
 
 
 class PromptLoaderCacheTests(unittest.TestCase):
@@ -44,8 +44,8 @@ class PromptLoaderCacheTests(unittest.TestCase):
             self.assertEqual(io_mtime_cache.read_count(cmap), 1)
             self.assertEqual(io_mtime_cache.read_count(assoc), 1)
 
-            time.sleep(0.01)
             cmap.write_text(json.dumps({"routes": [{"route_id": "changed"}]}), encoding="utf-8")
+            advance_file_mtime(cmap)
             cognitive_map.load_cognitive_map(cmap)
             self.assertEqual(io_mtime_cache.read_count(cmap), 2)
 

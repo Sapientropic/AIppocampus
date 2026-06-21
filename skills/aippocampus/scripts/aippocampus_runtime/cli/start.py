@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -11,6 +12,7 @@ from aippocampus_runtime import core
 from aippocampus_runtime.contracts import (
     canonical_foreground_action_fields,
     foreground_shell_action,
+    shell_quote,
 )
 from aippocampus_runtime.first_recall_readiness import start_first_recall_readiness
 from aippocampus_runtime.onboarding.facade import provider_status_report
@@ -18,6 +20,22 @@ from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_v
 from aippocampus_runtime.public_output import emit_public_json, emit_public_text
 
 SCHEMA_VERSION = 1
+LOW_SPECIFICITY_TERMS = {
+    "agent",
+    "aippocampus",
+    "clean",
+    "continuity",
+    "deepen",
+    "memory",
+    "product",
+    "recall",
+    "refine",
+    "route",
+    "search",
+    "source",
+    "specificity",
+    "usability",
+}
 
 
 def _template_action(
@@ -72,6 +90,61 @@ def _clean_source_state(cwd: Path, explicit_dir: str | None = None) -> dict[str,
         "path_label": "thread-clean-source",
         "path_serialized": False,
     }
+
+
+def _cue_value(cue: str | None) -> str:
+    text = str(cue or "").strip()
+    if not text:
+        return ""
+    return core.compact_text(str(redact_sensitive_values(redact_private_paths(text))), 240)
+
+
+def _cue_specificity(cue: str) -> dict[str, Any]:
+    terms = [
+        term
+        for term in re.findall(r"[a-z0-9][a-z0-9_-]{2,}", cue.casefold())
+        if term not in LOW_SPECIFICITY_TERMS
+    ]
+    unique_terms = sorted(set(terms))
+    weak = len(unique_terms) < 2 or len(cue.strip()) < 12
+    return {
+        "status": "weak_cue_search_fallback_recommended" if weak else "callable_not_previewed",
+        "specific_term_count": len(unique_terms),
+        "bounded_recall_preview_run": False,
+        "usefulness_verified_for_cue": False,
+    }
+
+
+def _recall_cue_action(cue: str) -> dict[str, Any]:
+    return foreground_shell_action(
+        action_id="recall_supplied_cue",
+        label="Recall supplied cue",
+        command=f"aippocampus agent recall {shell_quote(cue)} --json",
+        why=(
+            "A cue was supplied, so start can hand the next agent a concrete recall command; "
+            "deepen or reopen source before claims."
+        ),
+        mutation_risk="read_only",
+        claim_boundary="cue_recall_action_not_cue_specific_success_proof",
+    )
+
+
+def _search_cue_action(cue: str, *, registry: bool = False) -> dict[str, Any]:
+    return foreground_shell_action(
+        action_id="search_all_for_supplied_cue" if registry else "search_current_source_for_supplied_cue",
+        label="Search all registered sources" if registry else "Search current source",
+        command=(
+            f"aippocampus search --all {shell_quote(cue)} --json"
+            if registry
+            else f"aippocampus search {shell_quote(cue)} --json"
+        ),
+        why=(
+            "Use this when compact recall looks low-specificity or refine-only; source search "
+            "can still find exact wording without treating navigation as evidence."
+        ),
+        mutation_risk="read_only",
+        claim_boundary="search_result_requires_source_reopen_before_claims",
+    )
 
 
 def _trusted_codex_candidate(cwd: Path) -> bool:
@@ -189,7 +262,7 @@ def _source_registration_actions(providers: list[str]) -> list[dict[str, Any]]:
     return ordered
 
 
-def _start_actions(cwd: Path, state: dict[str, Any]) -> tuple[str, list[dict[str, Any]]]:
+def _start_actions(cwd: Path, state: dict[str, Any], cue: str = "") -> tuple[str, list[dict[str, Any]]]:
     source = state["clean_source"]
     if source["exists"] and source["stale"]:
         return "repair_stale_source_before_continuity", [
@@ -203,13 +276,23 @@ def _start_actions(cwd: Path, state: dict[str, Any]) -> tuple[str, list[dict[str
             )
         ]
     if source["exists"]:
-        return "continue_from_existing_source", [
-            _template_action(
-                action_id="recall_continuity_cue",
-                label="Recall from existing source",
-                command_template='aippocampus agent recall "{continuity_cue}" --json',
-                requires=["continuity_cue"],
-                why="Existing clean source is available; start with route recall, then deepen before claims.",
+        cue_specificity = _cue_specificity(cue) if cue else {}
+        recall_action = _recall_cue_action(cue) if cue else _template_action(
+            action_id="recall_continuity_cue",
+            label="Recall from existing source",
+            command_template='aippocampus agent recall "{continuity_cue}" --json',
+            requires=["continuity_cue"],
+            why="Existing clean source is available; start with route recall, then deepen before claims.",
+        )
+        actions = [
+            recall_action,
+            *(
+                [
+                    _search_cue_action(cue),
+                    _search_cue_action(cue, registry=True),
+                ]
+                if cue
+                else []
             ),
             foreground_shell_action(
                 action_id="deepen_selected_route",
@@ -219,18 +302,26 @@ def _start_actions(cwd: Path, state: dict[str, Any]) -> tuple[str, list[dict[str
             ),
             *_carry_actions(),
         ]
+        if cue_specificity.get("status") == "weak_cue_search_fallback_recommended":
+            return "continue_from_existing_source_with_search_fallback", [
+                actions[1],
+                recall_action,
+                *actions[2:],
+            ]
+        return "continue_from_existing_source", actions
     if state["trusted_codex_candidate"]:
-        return "try_read_only_continuity_before_setup", [
-            _template_action(
-                action_id="try_first_recall",
-                label="Try first recall",
-                command_template='aippocampus agent recall "{continuity_cue}" --json',
-                requires=["continuity_cue"],
-                why=(
-                    "The packaged CLI is callable from a trusted checkout; try a read-only "
-                    "continuity route before changing plugin or hook state."
-                ),
+        read_only_recall = _recall_cue_action(cue) if cue else _template_action(
+            action_id="try_first_recall",
+            label="Try first recall",
+            command_template='aippocampus agent recall "{continuity_cue}" --json',
+            requires=["continuity_cue"],
+            why=(
+                "The packaged CLI is callable from a trusted checkout; try a read-only "
+                "continuity route before changing plugin or hook state."
             ),
+        )
+        return "try_read_only_continuity_before_setup", [
+            read_only_recall,
             _template_action(
                 action_id="public_safe_demo_search",
                 label="Try public-safe exact search",
@@ -278,13 +369,20 @@ def _start_actions(cwd: Path, state: dict[str, Any]) -> tuple[str, list[dict[str
     ]
 
 
-def build_start_card(cwd: Path, *, clean_source_dir: str | None = None, detail: str = "compact") -> dict[str, Any]:
+def build_start_card(
+    cwd: Path,
+    *,
+    clean_source_dir: str | None = None,
+    detail: str = "compact",
+    cue: str | None = None,
+) -> dict[str, Any]:
+    clean_cue = _cue_value(cue)
     state: dict[str, Any] = {
         "clean_source": _clean_source_state(cwd, clean_source_dir),
         "trusted_codex_candidate": _trusted_codex_candidate(cwd),
         "provider_registration_candidates": _provider_registration_candidates(cwd),
     }
-    decision, actions = _start_actions(cwd, state)
+    decision, actions = _start_actions(cwd, state, clean_cue)
     actions.append(
         _template_action(
             action_id="exact_search_fallback",
@@ -306,6 +404,32 @@ def build_start_card(cwd: Path, *, clean_source_dir: str | None = None, detail: 
         source_stale=bool(source_state.get("stale")),
         action_id=str(primary.get("id") or ""),
     )
+    cue_specific = _cue_specificity(clean_cue) if clean_cue else {
+        "status": "not_checked_no_cue_supplied",
+        "bounded_recall_preview_run": False,
+        "usefulness_verified_for_cue": False,
+    }
+    first_recall_readiness.update(
+        {
+            "ordinary_first_recall_usable_scope": (
+                "cue_action_callable_not_previewed"
+                if clean_cue
+                else "artifact_level_not_cue_specific"
+            ),
+            "source_artifacts_present": bool(source_state.get("exists")),
+            "exact_source_search_available": bool(source_state.get("exists")),
+            "compact_agent_recall_action_callable": bool(
+                clean_cue
+                and any(
+                    action.get("id") in {"recall_supplied_cue", "try_first_recall"}
+                    and str(action.get("command") or "").startswith("aippocampus ")
+                    for action in actions
+                )
+            ),
+            "cue_specific_route_usefulness": cue_specific,
+            "warm_or_ambient_degraded_is_optional": True,
+        }
+    )
     card: dict[str, Any] = {
         "kind": "aippocampus_start_card",
         "schema_version": SCHEMA_VERSION,
@@ -313,6 +437,8 @@ def build_start_card(cwd: Path, *, clean_source_dir: str | None = None, detail: 
         "status": "ready" if decision.startswith(("continue", "try_read_only")) else "needs_setup",
         "surface_class": "foreground_chooser_card",
         "decision": decision,
+        "cue_supplied": bool(clean_cue),
+        **({"cue": clean_cue} if clean_cue else {}),
         **canonical_foreground_action_fields(primary, safe_next_actions=actions),
         "first_recall_readiness": first_recall_readiness,
         "performance_expectation": first_recall_readiness.get("performance_expectation"),
@@ -373,12 +499,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--detail", choices=("compact", "full"), default="compact")
     parser.add_argument("--cwd", default=".")
     parser.add_argument("--clean-source-dir")
+    parser.add_argument("--cue")
+    parser.add_argument("cue_parts", nargs="*")
     args = parser.parse_args(argv)
     detail = "full" if args.operator_json else args.detail
+    cue = args.cue or " ".join(args.cue_parts)
     card = build_start_card(
         Path(args.cwd).resolve(),
         clean_source_dir=args.clean_source_dir,
         detail=detail,
+        cue=cue,
     )
     public_card = _public_start_card(card)
     if args.json_output or args.operator_json:

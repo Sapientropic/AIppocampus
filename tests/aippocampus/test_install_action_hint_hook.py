@@ -58,34 +58,42 @@ class InstallActionHintHookTests(unittest.TestCase):
         self.assertEqual(len(action_handlers), 1)
         self.assertIn("aippocampus_runtime.hooks.action_hint", action_handlers[0]["command"])
 
-    def test_status_redacts_paths_and_commands_by_default(self) -> None:
+    def test_status_default_is_compact_and_keeps_operator_fields_out(self) -> None:
         installer.install(self.hooks_json, timeout=3)
 
         result = installer.status(self.hooks_json)
         encoded = json.dumps(result, ensure_ascii=False)
 
         self.assertTrue(result["installed"])
-        self.assertEqual(result["path"], "hooks.json")
-        self.assertTrue(result["path_redacted"])
-        self.assertEqual(result["commands"], ["<redacted:hook-command>"])
-        self.assertTrue(result["commands_redacted"])
+        self.assertEqual(result["kind"], "aippocampus_action_hint_status_compact")
         self.assertEqual(result["cache_status"], "with_missing_cache_file")
         self.assertEqual(result["cache_record_count"], 0)
         self.assertEqual(result["support_status"], "supported_by_codex_hooks_json")
-        card = result["frontstage_card"]
-        self.assertEqual(card["authority"], "navigation_only")
-        self.assertTrue(card["fail_open"])
-        self.assertFalse(card["optional"])
-        self.assertFalse(card["recall_blocking"])
-        self.assertEqual(card["setup_role"], "cleanup_or_prepare_required")
-        self.assertEqual(card["cache_status"], "with_missing_cache_file")
-        self.assertEqual(card["cache_path_label"], DEFAULT_CACHE_LABEL)
-        self.assertEqual(card["cache_scope"], "current_workspace")
-        commands = [step["command"] for step in card["next_steps"]]
+        self.assertEqual(result["authority"], "navigation_only")
+        self.assertTrue(result["fail_open"])
+        self.assertFalse(result["optional"])
+        self.assertFalse(result["recall_blocking"])
+        self.assertEqual(result["setup_role"], "cleanup_or_prepare_required")
+        self.assertEqual(result["cache_path_label"], DEFAULT_CACHE_LABEL)
+        self.assertEqual(result["cache_scope"], "current_workspace")
+        self.assertTrue(result["operator_json_available"])
+        self.assertEqual(
+            result["operator_detail_command"],
+            "aippocampus hooks action status --operator-json",
+        )
+        self.assertNotIn("frontstage_card", result)
+        self.assertNotIn("path", result)
+        self.assertNotIn("commands", result)
+        self.assertNotIn("cache_path", result)
+        self.assertNotIn("provider_counts", result)
+        commands = [
+            action.get("command")
+            for action in [result["foreground_action"], *result["safe_next_actions"]]
+            if action.get("command")
+        ]
         self.assertTrue(any("refresh-cache" in command for command in commands))
         self.assertTrue(any("--write --json" in command for command in commands))
         self.assertTrue(any("uninstall" in command for command in commands))
-        self.assertNotIn("<local-cache.jsonl>", json.dumps(card, ensure_ascii=False))
         self.assertNotIn(str(self.codex_home), encoded)
         self.assertNotIn(str(SCRIPTS.resolve()), encoded)
 
@@ -142,29 +150,27 @@ class InstallActionHintHookTests(unittest.TestCase):
         self.assertEqual(result["cache_status"], "with_fresh_records")
         self.assertEqual(result["cache_record_count"], 1)
         self.assertEqual(result["fresh_record_count"], 1)
-        self.assertEqual(result["expired_record_count"], 0)
-        self.assertEqual(result["provider_counts"], {"learning_loop": 1})
-        self.assertEqual(result["cache_path"], "<redacted:cache-jsonl>")
         self.assertEqual(result["cache_path_label"], "explicit-cache-jsonl")
         self.assertEqual(result["cache_scope"], "explicit_override")
-        self.assertTrue(result["cache_path_redacted"])
-        self.assertEqual(result["frontstage_card"]["status"], "ready")
-        self.assertTrue(result["frontstage_card"]["ready"])
+        self.assertNotIn("expired_record_count", result)
+        self.assertNotIn("provider_counts", result)
+        self.assertNotIn("cache_path", result)
+        self.assertNotIn("frontstage_card", result)
+        self.assertEqual(result["status"], "ready")
+        self.assertTrue(result["ready"])
         self.assertEqual(result["foreground_action"]["id"], "check_action_hint_status")
         self.assertEqual(result["foreground_action"]["mutation_risk"], "read_only")
         self.assertIn("safe_next_actions", result)
         self.assertNotIn("check_action_hint_status", [action["id"] for action in result["safe_next_actions"]])
-        self.assertEqual(result["claim_boundary"], result["frontstage_card"]["claim_boundary"])
         self.assertNotIn(str(cache_path), encoded)
 
     def test_status_aliases_frontstage_next_steps_to_shared_action_contract(self) -> None:
         installer.install(self.hooks_json, timeout=3)
 
         result = installer.status(self.hooks_json)
-        card_steps = result["frontstage_card"]["next_steps"]
         action_ids = [action["id"] for action in result["safe_next_actions"]]
 
-        self.assertEqual(result["frontstage_card"]["status"], "with_missing_cache_file")
+        self.assertEqual(result["status"], "with_missing_cache_file")
         self.assertEqual(result["foreground_action"]["id"], "refresh_action_hint_cache")
         self.assertEqual(result["foreground_action"]["mutation_risk"], "explicit_local_cache_write")
         self.assertNotIn("refresh_action_hint_cache", action_ids)
@@ -182,26 +188,20 @@ class InstallActionHintHookTests(unittest.TestCase):
                 if action.get("command") and action["id"] != "check_action_hint_status"
             ),
         }
-        self.assertEqual(
-            {
-                step["command"]
-                for step in card_steps
-                if step.get("command") and step.get("label") != "check"
-            },
-            action_commands,
-        )
+        self.assertIn("aippocampus hooks action refresh-cache --write --json", action_commands)
+        self.assertIn("aippocampus hooks action uninstall --json", action_commands)
 
     def test_status_distinguishes_missing_empty_expired_and_malformed_cache(self) -> None:
         missing = self.codex_home / "missing-action-hints.jsonl"
         installer.install(self.hooks_json, cache_jsonl=missing, timeout=3)
-        missing_status = installer.status(self.hooks_json)
+        missing_status = installer.status(self.hooks_json, include_private_paths=True)
         self.assertEqual(missing_status["cache_status"], "with_missing_cache_file")
         self.assertFalse(missing_status["cache_exists"])
 
         empty = self.codex_home / "empty-action-hints.jsonl"
         empty.write_text("", encoding="utf-8")
         installer.install(self.hooks_json, cache_jsonl=empty, timeout=3)
-        empty_status = installer.status(self.hooks_json)
+        empty_status = installer.status(self.hooks_json, include_private_paths=True)
         self.assertEqual(empty_status["cache_status"], "with_empty_cache")
         self.assertTrue(empty_status["cache_exists"])
 
@@ -224,13 +224,13 @@ class InstallActionHintHookTests(unittest.TestCase):
             encoding="utf-8",
         )
         installer.install(self.hooks_json, cache_jsonl=expired, timeout=3)
-        expired_status = installer.status(self.hooks_json)
+        expired_status = installer.status(self.hooks_json, include_private_paths=True)
         self.assertEqual(expired_status["cache_status"], "with_expired_records")
         self.assertEqual(expired_status["cache_record_count"], 1)
         self.assertEqual(expired_status["fresh_record_count"], 0)
         self.assertEqual(expired_status["expired_record_count"], 1)
         self.assertEqual(expired_status["malformed_cache_line_count"], 1)
-        self.assertEqual(expired_status["cache_path"], "<redacted:cache-jsonl>")
+        self.assertEqual(expired_status["cache_path"], str(expired))
 
     def test_installed_empty_cache_warns_that_hot_hook_is_inactive(self) -> None:
         empty = self.codex_home / "empty-action-hints.jsonl"
@@ -238,14 +238,13 @@ class InstallActionHintHookTests(unittest.TestCase):
         installer.install(self.hooks_json, cache_jsonl=empty, timeout=3)
 
         result = installer.status(self.hooks_json)
-        card = result["frontstage_card"]
 
         self.assertTrue(result["installed"])
         self.assertEqual(result["cache_status"], "with_empty_cache")
         self.assertEqual(result["warning_state"], "installed_cache_not_ready")
         self.assertFalse(result["hot_path_active"])
-        self.assertFalse(card["hot_path_active"])
-        self.assertEqual(card["setup_role"], "cleanup_or_prepare_required")
+        self.assertEqual(result["setup_role"], "cleanup_or_prepare_required")
+        self.assertNotIn("frontstage_card", result)
         self.assertEqual(result["foreground_action"]["id"], "refresh_action_hint_cache")
         self.assertEqual(result["foreground_action"]["mutation_risk"], "explicit_local_cache_write")
         self.assertIn(
@@ -258,7 +257,7 @@ class InstallActionHintHookTests(unittest.TestCase):
         )
 
     def test_unsupported_host_status_does_not_pretend_installation(self) -> None:
-        result = installer.status(self.hooks_json, host="claude-code")
+        result = installer.status(self.hooks_json, host="claude-code", include_private_paths=True)
 
         self.assertFalse(result["installed"])
         self.assertFalse(result["event_supported"])
@@ -353,6 +352,59 @@ class InstallActionHintHookTests(unittest.TestCase):
         self.assertIn("aippocampus learning guidance --json", output)
         self.assertNotIn("aippocampus hooks action refresh-cache --write --json", output)
         self.assertNotIn("<local-cache.jsonl>", output)
+
+    def test_cli_status_json_is_compact_by_default_and_operator_json_keeps_detail(self) -> None:
+        empty = self.codex_home / "empty-action-hints.jsonl"
+        empty.write_text("", encoding="utf-8")
+        installer.install(self.hooks_json, cache_jsonl=empty, timeout=3)
+
+        stdout = StringIO()
+        with redirect_stdout(stdout):
+            code = installer.main(
+                [
+                    "status",
+                    "--codex-home",
+                    str(self.codex_home),
+                    "--json",
+                ]
+            )
+        payload = json.loads(stdout.getvalue())
+        encoded = json.dumps(payload, ensure_ascii=False)
+
+        self.assertEqual(code, 0, payload)
+        self.assertEqual(payload["kind"], "aippocampus_action_hint_status_compact")
+        self.assertEqual(payload["status"], "with_empty_cache")
+        self.assertEqual(payload["cache_status"], "with_empty_cache")
+        self.assertEqual(payload["foreground_action"]["id"], "refresh_action_hint_cache")
+        self.assertNotIn("frontstage_card", payload)
+        self.assertNotIn("commands", payload)
+        self.assertNotIn("cache_path", payload)
+        self.assertNotIn("cache_exists", payload)
+        self.assertNotIn("provider_counts", payload)
+        self.assertNotIn(str(empty), encoded)
+        self.assertNotIn("aippocampus_runtime.hooks.action_hint", encoded)
+
+        operator_stdout = StringIO()
+        with redirect_stdout(operator_stdout):
+            operator_code = installer.main(
+                [
+                    "status",
+                    "--codex-home",
+                    str(self.codex_home),
+                    "--operator-json",
+                    "--json",
+                ]
+            )
+        operator_payload = json.loads(operator_stdout.getvalue())
+        operator_encoded = json.dumps(operator_payload, ensure_ascii=False)
+
+        self.assertEqual(operator_code, 0, operator_payload)
+        self.assertEqual(operator_payload["cache_status"], "with_empty_cache")
+        self.assertTrue(operator_payload["cache_exists"])
+        self.assertEqual(operator_payload["cache_path"], str(empty))
+        self.assertIn("frontstage_card", operator_payload)
+        self.assertIn("commands", operator_payload)
+        self.assertIn("aippocampus_runtime.hooks.action_hint", operator_encoded)
 
     def test_cli_install_without_cache_uses_default_cache_path_not_inert_hook(self) -> None:
         stdout = StringIO()

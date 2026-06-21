@@ -16,6 +16,8 @@ from aippocampus_runtime.contracts import (
     foreground_shell_action,
     foreground_template_action,
 )
+from aippocampus_runtime.hooks.action_hint_cache import DEFAULT_ACTION_HINT_CACHE_LABEL
+from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 
 CLAIM_BOUNDARY = "host_setup_not_memory_evidence"
 OWNER_SURFACE = "codex_hooks_json"
@@ -557,3 +559,70 @@ def action_hint_status_contract(frontstage_card: Mapping[str, Any]) -> dict[str,
     )
     card["claim_boundary"] = claim_boundary
     return contract_fields(card)
+
+
+def compact_action_hint_status_result(
+    result: Mapping[str, Any],
+    *,
+    event: str,
+) -> dict[str, Any]:
+    """Project action-hint status into the default foreground card.
+
+    Full hook status keeps operator repair detail such as paths, commands,
+    cache-line diagnostics, and provider counts. The compact card deliberately
+    answers only whether action-time hints are usable and what the next safe
+    foreground action is, so status checks do not become a duplicate hooks
+    inventory.
+    """
+
+    raw_card = result.get("frontstage_card")
+    frontstage_card = raw_card if isinstance(raw_card, Mapping) else {}
+    public = action_hint_status_contract(frontstage_card)
+    privacy = dict(public.get("privacy_boundary") or {})
+    privacy.update(
+        {
+            "local_path_serialized": False,
+            "hook_command_serialized": False,
+            "cache_path_serialized": False,
+            "raw_cache_diagnostics_omitted": True,
+        }
+    )
+    public.update(
+        {
+            "kind": "aippocampus_action_hint_status_compact",
+            "title": "Action-time hints",
+            "ready": bool(frontstage_card.get("ready")),
+            "optional": bool(frontstage_card.get("optional")),
+            "fail_open": bool(frontstage_card.get("fail_open")),
+            "recall_blocking": bool(frontstage_card.get("recall_blocking")),
+            "hot_path_active": bool(frontstage_card.get("hot_path_active")),
+            "warning_state": str(frontstage_card.get("warning_state") or ""),
+            "setup_role": str(frontstage_card.get("setup_role") or ""),
+            "authority": "navigation_only",
+            "event": event,
+            "support_status": str(result.get("support_status") or ""),
+            "cache_status": str(frontstage_card.get("cache_status") or public.get("status") or ""),
+            "cache_record_count": int(frontstage_card.get("cache_record_count") or 0),
+            "fresh_record_count": int(frontstage_card.get("fresh_record_count") or 0),
+            "cache_path_label": str(
+                frontstage_card.get("cache_path_label") or DEFAULT_ACTION_HINT_CACHE_LABEL
+            ),
+            "cache_scope": str(frontstage_card.get("cache_scope") or "unknown"),
+            "operator_json_available": True,
+            "operator_detail_command": "aippocampus hooks action status --operator-json",
+            "diagnostic_fields_omitted": [
+                "path",
+                "commands",
+                "cache_path",
+                "cache_exists",
+                "expired_record_count",
+                "malformed_cache_line_count",
+                "provider_counts",
+                "frontstage_card",
+                "host_integration",
+            ],
+            "privacy_boundary": privacy,
+        }
+    )
+    public.pop("owner_path", None)
+    return redact_sensitive_values(redact_private_paths(public))

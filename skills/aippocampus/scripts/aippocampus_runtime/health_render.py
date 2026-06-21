@@ -59,7 +59,10 @@ def render_health_text(result: dict[str, Any]) -> None:
         print(f"readiness: {usable} ({readiness.get('status') or status})")
         print(f"can_continue_recall_now: {'yes' if can_continue else 'partial'}")
         print(f"blocks_exact_latest_claims: {'yes' if blocks_exact_latest else 'no'}")
-        if first_action:
+        if can_continue and blocks_exact_latest and first_action:
+            print("best next action: continue")
+            print("inspect: aippocampus maintenance plan --summary-json")
+        elif first_action:
             print(f"best next action: {first_action.get('id')}")
             command = _action_command(first_action)
             if command:

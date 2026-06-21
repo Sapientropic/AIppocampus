@@ -23,6 +23,11 @@ from aippocampus_runtime.source.query_match_gate import (
     query_match_gate,
 )
 from aippocampus_runtime.source.registry_search_actions import registry_search_actions
+from aippocampus_runtime.source.registry_search_skips import (
+    registry_entry_ref,
+    registry_entry_search_skip,
+    skipped_maintenance_actions,
+)
 from aippocampus_runtime.source.search_terms import search_query_terms
 
 DEFAULT_PUBLIC_SNIPPET_CHARS = 260
@@ -111,19 +116,6 @@ def _hit_selector(route: Mapping[str, Any]) -> str:
     )
 
 
-def _registry_entry_ref(entry: Mapping[str, Any]) -> dict[str, Any]:
-    return {
-        key: value
-        for key, value in {
-            "thread_key": entry.get("thread_key"),
-            "title": compact_text(str(entry.get("title") or ""), 90),
-            "workspace_name": compact_text(str(entry.get("workspace_name") or ""), 90),
-            "source_provider": entry.get("source_provider"),
-        }.items()
-        if value not in (None, "", [])
-    }
-
-
 def _registry_match(
     *,
     entry: Mapping[str, Any],
@@ -142,7 +134,7 @@ def _registry_match(
     }
     match = {
         "hit_selector": _hit_selector(source_route),
-        "thread": _registry_entry_ref(entry),
+        "thread": registry_entry_ref(entry),
         "source": hit.get("source"),
         "message_id": hit.get("message_id") or hit.get("id"),
         "turn_id": hit.get("turn_id"),
@@ -250,12 +242,22 @@ def search_registry_sources(
     suppressed_matches: list[dict[str, Any]] = []
     warnings: list[dict[str, Any]] = []
     searched_entry_count = 0
+    skipped_entries: list[dict[str, Any]] = []
+    skipped_reason_counts: dict[str, int] = {}
     unavailable_source_count = 0
 
     for entry in registry_payload.get("threads") or []:
         if not isinstance(entry, Mapping):
             continue
         searched_entry_count += 1
+        skip = registry_entry_search_skip(entry)
+        if skip:
+            skipped_entries.append(skip)
+            reason = str(skip.get("reason") or "not_searchable")
+            skipped_reason_counts[reason] = skipped_reason_counts.get(reason, 0) + 1
+            if reason == "configured_search_sources_missing":
+                unavailable_source_count += 1
+            continue
         result = deep_search_entry_result(
             dict(entry),
             terms,
@@ -342,6 +344,10 @@ def search_registry_sources(
         "suppressed_low_coverage_match_count": len(suppressed_matches),
         "suppressed_low_coverage_matches": suppressed_matches[:3] if diagnostic_output else None,
         "searched_entry_count": searched_entry_count,
+        "skipped_entry_count": len(skipped_entries),
+        "skipped_reason_counts": skipped_reason_counts or None,
+        "skipped_entries": skipped_entries[:20] if diagnostic_output else None,
+        "maintenance_actions": skipped_maintenance_actions(skipped_entries) or None,
         "unavailable_source_count": unavailable_source_count,
         "warnings": warnings,
         "diagnostic_fields_omitted": (
@@ -351,6 +357,7 @@ def search_registry_sources(
                 "matches[].score",
                 "matches[].query_match_profile",
                 "suppressed_low_coverage_matches",
+                "skipped_entries",
             ]
             if not diagnostic_output
             else None
@@ -597,7 +604,7 @@ def open_registry_source_window(
         "ok": True,
         "status": "ok",
         "registry": str(registry_json),
-        "thread": _registry_entry_ref(entry),
+        "thread": registry_entry_ref(entry),
         "source_route": {
             "kind": "registry_clean_source_hit",
             "thread_key": resolved_thread_key,

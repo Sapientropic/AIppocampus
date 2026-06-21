@@ -97,6 +97,19 @@ class UpdateAgentStatusTests(unittest.TestCase):
             "aippocampus update status --operator-json",
         )
         self.assertEqual(payload["foreground_action"]["surface"], "agent_callable")
+        self.assertEqual(
+            payload["foreground_action"]["status_code"],
+            "host_live_probe_ok_foreground_probe_not_checked",
+        )
+        self.assertNotEqual(
+            payload["foreground_action"]["reason"],
+            payload["foreground_action"]["status_code"],
+        )
+        self.assertNotEqual(
+            payload["foreground_action"]["why"],
+            payload["foreground_action"]["status_code"],
+        )
+        self.assertIn("foreground thread", payload["foreground_action"]["why"])
         self.assertIn(
             "--foreground-tools-visible --agent-json",
             payload["foreground_action"]["command"],

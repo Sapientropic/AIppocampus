@@ -4,6 +4,7 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 from collections.abc import Iterator
 from contextlib import contextmanager, redirect_stdout
 from io import StringIO
@@ -45,6 +46,12 @@ def provider_env(extra: dict[str, str] | None = None) -> Iterator[None]:
                 os.environ.pop(name, None)
             else:
                 os.environ[name] = value
+
+
+@contextmanager
+def update_workspace(extra_env: dict[str, str] | None = None) -> Iterator[Path]:
+    with tempfile.TemporaryDirectory() as tmp, provider_env(extra_env):
+        yield Path(tmp)
 
 
 @contextmanager

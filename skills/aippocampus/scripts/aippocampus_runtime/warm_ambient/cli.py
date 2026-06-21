@@ -15,6 +15,7 @@ from aippocampus_runtime.recall.ambient_cards import count_cards_by_field
 from aippocampus_runtime.subconscious.worker import DEFAULT_BASE_URL, DEFAULT_MODEL
 from aippocampus_runtime.warm_ambient import recall, scheduler
 from aippocampus_runtime.warm_ambient.config import warm_recall_config_from_env
+from aippocampus_runtime.warm_ambient.status_card import compact_warm_status_card
 
 PUBLIC_STATUSES = {
     "disabled",
@@ -333,6 +334,17 @@ def _status_main(argv: Sequence[str]) -> int:
     parser.add_argument("--registry-dir")
     parser.add_argument("--json", action="store_true", dest="json_output")
     parser.add_argument(
+        "--detail",
+        choices=["compact", "full"],
+        default="compact",
+        help="Choose compact foreground card or full operator diagnostics for JSON output.",
+    )
+    parser.add_argument(
+        "--operator-json",
+        action="store_true",
+        help="Emit full warm status diagnostics as JSON; equivalent to --detail full --json.",
+    )
+    parser.add_argument(
         "--strict-exit-code",
         action="store_true",
         help="Return non-zero when the optional warm queue is blocked.",
@@ -347,11 +359,25 @@ def _status_main(argv: Sequence[str]) -> int:
         )
     )
     payload = scheduler.warm_status_payload(job_dir=job_dir)
+    if args.operator_json:
+        args.json_output = True
+        args.detail = "full"
     if args.json_output:
-        json.dump(payload, sys.stdout, ensure_ascii=False, indent=2)
+        output_payload = (
+            payload
+            if args.detail == "full"
+            else compact_warm_status_card(payload)
+        )
+        json.dump(output_payload, sys.stdout, ensure_ascii=False, indent=2)
         print()
     else:
         activity = payload.get("job_activity") or {}
+        action = payload.get("foreground_action") if isinstance(payload, dict) else None
+        next_label = (
+            str(action.get("label"))
+            if isinstance(action, dict) and action.get("label")
+            else "Check warm status"
+        )
         print("AIppocampus warm ambient")
         print(f"status: {payload.get('status')}")
         print(f"ordinary recall: {'usable' if payload.get('ordinary_recall_usable') else 'degraded'}")
@@ -362,8 +388,7 @@ def _status_main(argv: Sequence[str]) -> int:
             f"completed={activity.get('completed_count', 0)}"
         )
         print(f"worker: {activity.get('worker_evidence')}")
-        print(f"next: {payload.get('action_code')}")
-        action = payload.get("foreground_action") if isinstance(payload, dict) else None
+        print(f"next: {next_label}")
         if isinstance(action, dict):
             print(f"action: {action.get('command')}")
         else:

@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import sys
 import tempfile
-import time
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -20,6 +19,7 @@ from benchmarks.aippocampus.builders import (
 )
 
 import benchmark_warm_ambient_recall as benchmark  # noqa: E402
+from tests.aippocampus.timing_fixtures import host_timeout_sleep  # noqa: E402
 
 
 class WarmAmbientRecallBenchmarkTests(unittest.TestCase):
@@ -110,7 +110,10 @@ class WarmAmbientRecallBenchmarkTests(unittest.TestCase):
             nonlocal active, max_active
             active += 1
             max_active = max(max_active, active)
-            time.sleep(0.02)
+            host_timeout_sleep(
+                0.02,
+                reason="make benchmark case-worker overlap observable without a live provider",
+            )
             active -= 1
             return original_scout(*args, **kwargs)
 

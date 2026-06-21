@@ -1,8 +1,17 @@
 from __future__ import annotations
 
+import tempfile
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
 import classifier_policy_guard
+
+
+@contextmanager
+def docs_health_repo() -> Iterator[Path]:
+    with tempfile.TemporaryDirectory() as tmp:
+        yield Path(tmp)
 
 
 def write_origin_essays(repo: Path) -> None:

@@ -24,6 +24,7 @@ from aippocampus_runtime.cli import facade as cli_facade  # noqa: E402
 from aippocampus_runtime.contracts import foreground_action_contract_violations  # noqa: E402
 from aippocampus_runtime.registry import api as registry  # noqa: E402
 from aippocampus_runtime.source import search as search  # noqa: E402
+from tests.aippocampus.frontstage_assertions import assert_semantic_human_output  # noqa: E402
 
 
 class SearchCleanSourceTests(unittest.TestCase):
@@ -183,7 +184,7 @@ class SearchCleanSourceTests(unittest.TestCase):
         output = stdout.getvalue()
         self.assertEqual(code, 0)
         self.assertIn("Source-backed action cards", output)
-        self.assertIn("boundary:", output)
+        assert_semantic_human_output(self, output, max_lines=8)
         self.assertNotIn("role=", output)
         self.assertNotIn("phase=", output)
         self.assertNotIn("score=", output)
@@ -277,7 +278,7 @@ class SearchCleanSourceTests(unittest.TestCase):
         self.assertIn("No source-backed snippet found", output)
         self.assertIn("current resolved thread clean-source directory only", output)
         self.assertIn("Next:", output)
-        self.assertIn("Boundary: a search miss is not proof", output)
+        assert_semantic_human_output(self, output, max_lines=8)
         self.assertNotIn("Possible routes, not yet evidence", output)
         self.assertNotIn("- exact phrase:", output)
         self.assertNotIn("- project cue:", output)
@@ -1057,6 +1058,120 @@ class SearchCleanSourceTests(unittest.TestCase):
             payload["matches"][0]["local_diagnostic"]["clean_source_messages_jsonl"],
             str(registry_clean / "messages.jsonl"),
         )
+
+    def test_search_all_registry_skips_workspace_only_entries_without_low_level_warning(self) -> None:
+        (self.cwd / "threads.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "threads": [
+                        {
+                            "thread_key": "workspace:scripts:abc",
+                            "title": "Workspace-only registration",
+                            "paths": {"workspace": str(self.cwd / "scripts")},
+                        }
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            code = search.main(
+                [
+                    "--all",
+                    "registry phrase",
+                    "--registry-dir",
+                    str(self.cwd),
+                    "--json",
+                ]
+            )
+        payload = json.loads(stdout.getvalue())
+        encoded = json.dumps(payload, ensure_ascii=False)
+
+        self.assertEqual(code, 1)
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["skipped_entry_count"], 1)
+        self.assertEqual(
+            payload["skipped_reason_counts"],
+            {"not_searchable_workspace_entry": 1},
+        )
+        self.assertEqual(payload["unavailable_source_count"], 0)
+        self.assertEqual(payload["warnings"], [])
+        self.assertNotIn("skipped_entries", payload)
+        self.assertNotIn("unable to open database file", encoded)
+        self.assertNotIn(str(self.cwd), encoded)
+
+        detail_stdout = io.StringIO()
+        with contextlib.redirect_stdout(detail_stdout):
+            detail_code = search.main(
+                [
+                    "--all",
+                    "registry phrase",
+                    "--registry-dir",
+                    str(self.cwd),
+                    "--search-budget",
+                    "deep",
+                    "--json",
+                ]
+            )
+        detail = json.loads(detail_stdout.getvalue())
+
+        self.assertEqual(detail_code, 1)
+        self.assertEqual(detail["skipped_entries"][0]["reason"], "not_searchable_workspace_entry")
+        self.assertEqual(detail["skipped_entries"][0]["thread"]["thread_key"], "workspace:scripts:abc")
+
+    def test_search_all_registry_reports_missing_search_artifacts_as_maintenance_action(self) -> None:
+        (self.cwd / "threads.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "threads": [
+                        {
+                            "thread_key": "session:missing-search-artifacts",
+                            "title": "Missing search artifacts",
+                            "paths": {
+                                "workspace": str(self.cwd / "workspace"),
+                                "clean_source_messages_jsonl": str(self.cwd / "missing-messages.jsonl"),
+                                "sqlite": str(self.cwd / "missing.sqlite"),
+                            },
+                        }
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            code = search.main(
+                [
+                    "--all",
+                    "missing artifact phrase",
+                    "--registry-dir",
+                    str(self.cwd),
+                    "--json",
+                ]
+            )
+        payload = json.loads(stdout.getvalue())
+        encoded = json.dumps(payload, ensure_ascii=False)
+
+        self.assertEqual(code, 1)
+        self.assertEqual(payload["skipped_entry_count"], 1)
+        self.assertEqual(
+            payload["skipped_reason_counts"],
+            {"configured_search_sources_missing": 1},
+        )
+        self.assertEqual(payload["unavailable_source_count"], 1)
+        self.assertEqual(payload["warnings"], [])
+        self.assertEqual(
+            payload["maintenance_actions"][0]["command"],
+            "aippocampus registry audit --json",
+        )
+        self.assertNotIn("unable to open database file", encoded)
 
     def test_search_all_phrase_like_absent_query_suppresses_low_coverage_noise(self) -> None:
         noisy_clean = self.cwd / "noisy-thread" / "clean-source"

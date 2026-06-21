@@ -25,6 +25,7 @@ from aippocampus_runtime.warm_ambient.hook_seen_threads import (  # noqa: E402
     hook_seen_thread_ref,
     record_hook_seen_thread,
 )
+from tests.aippocampus.health_fixtures import health_workspace  # noqa: E402
 
 
 class AippocampusHealthTests(unittest.TestCase):
@@ -332,10 +333,18 @@ class AippocampusHealthTests(unittest.TestCase):
         self.assertTrue(payload["readiness_card"]["usable_now"])
         self.assertFalse(payload["readiness_card"]["blocks_first_recall"])
         self.assertTrue(payload["readiness_card"]["blocks_exact_latest"])
-        self.assertEqual(
-            payload["foreground_action"]["before_exact_latest_claims"]["command"],
-            "aippocampus maintenance plan --summary-json",
+        action_ids = [action["id"] for action in payload["safe_next_actions"]]
+        self.assertIn("review_maintenance_plan", action_ids)
+        self.assertIn("apply_after_user_consent", action_ids)
+        review_action = next(
+            action for action in payload["safe_next_actions"] if action["id"] == "review_maintenance_plan"
         )
+        apply_action = next(
+            action for action in payload["safe_next_actions"] if action["id"] == "apply_after_user_consent"
+        )
+        self.assertEqual(review_action["command"], "aippocampus maintenance plan --summary-json")
+        self.assertEqual(apply_action["command"], "aippocampus maintenance apply --summary-json")
+        self.assertTrue(apply_action["write_boundary"]["explicit_user_consent_required"])
         self.assertTrue(payload["foreground_action"]["primary"]["ordinary_first_recall_usable"])
         self.assertTrue(payload["blocks_exact_latest_claims"])
         self.assertNotIn("freshness", payload)
@@ -403,10 +412,9 @@ class AippocampusHealthTests(unittest.TestCase):
         self.assertEqual(payload["kind"], "aippocampus_health_card")
         self.assertTrue(payload["ordinary_first_recall_usable"])
         self.assertTrue(payload["blocks_exact_latest_claims"])
-        self.assertEqual(
-            payload["foreground_action"]["before_exact_latest_claims"]["command"],
-            "aippocampus maintenance plan --summary-json",
-        )
+        action_ids = [action["id"] for action in payload["safe_next_actions"]]
+        self.assertIn("review_maintenance_plan", action_ids)
+        self.assertIn("apply_after_user_consent", action_ids)
         self.assertEqual(
             payload["foreground_action"]["when_idle"]["command"],
             "aippocampus storage gc --dry-run --summary-json --cwd .",
@@ -505,6 +513,45 @@ class AippocampusHealthTests(unittest.TestCase):
         self.assertIn("1. build_clean_source [repair]: aippocampus maintenance --cwd .", text)
         self.assertIn("2. build_index [repair]: aippocampus maintenance --cwd .", text)
         self.assertNotIn("python -m aippocampus_runtime", text)
+
+    def test_human_health_mentions_plan_when_freshness_degraded_but_recall_usable(self) -> None:
+        payload = {
+            "ok": True,
+            "rollout": {"path": "rollout.jsonl", "size": 10, "message_count": 2},
+            "index": {"stale": False, "message_delta": 0, "byte_delta": 0, "rag": {}},
+            "clean_source": {"stale": False, "exists": True},
+            "segments": {"exists": False, "needed": False},
+            "checkpoint": {"due": False},
+            "graphify": {"stale": False},
+            "storage": {},
+            "question_stats": {},
+            "background_cognition": {},
+            "logs": {},
+            "health_trajectory": {},
+            "product_readiness": {
+                "status": "ready_with_freshness_degraded",
+                "ready": True,
+                "ordinary_first_recall_usable": True,
+                "freshness_degraded": True,
+                "latest_current_thread_may_be_missing": True,
+            },
+            "recommended_actions": [
+                {
+                    "id": "build_clean_source",
+                    "severity": "warning",
+                    "reason": "latest visible clean-source messages are missing",
+                    "facade_command": "aippocampus maintenance --cwd .",
+                }
+            ],
+        }
+
+        with mock.patch("sys.stdout", new=StringIO()) as stdout:
+            health.render_health_text(payload)
+
+        text = stdout.getvalue()
+        self.assertIn("can_continue_recall_now: yes", text)
+        self.assertIn("blocks_exact_latest_claims: yes", text)
+        self.assertIn("inspect: aippocampus maintenance plan --summary-json", text)
 
     def write_rollout(
         self,
@@ -771,10 +818,7 @@ class AippocampusHealthTests(unittest.TestCase):
         self.assertFalse(report["privacy_boundary"]["paths_included"])
 
     def test_health_surfaces_generated_cache_pressure_as_safe_repair_action(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            workspace = root / "workspace"
-            workspace.mkdir()
+        with health_workspace() as (root, workspace):
             rollout = workspace / "rollout.jsonl"
             self.write_rollout(rollout, workspace)
             paths = self.write_current_artifacts(root, workspace, rollout)
@@ -834,10 +878,7 @@ class AippocampusHealthTests(unittest.TestCase):
         self.assertTrue(payload["product_readiness"]["storage_pressure_cleanup_recommended"])
 
     def test_health_reports_codex_host_state_confounds_without_paths_or_ids(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            workspace = root / "workspace"
-            workspace.mkdir()
+        with health_workspace() as (root, workspace):
             rollout = workspace / "rollout.jsonl"
             self.write_rollout(rollout, workspace)
             paths = self.write_current_artifacts(root, workspace, rollout)
@@ -877,10 +918,7 @@ class AippocampusHealthTests(unittest.TestCase):
         self.assertNotIn("private-thread-id", encoded)
 
     def test_health_keeps_small_latest_turn_gap_advisory_before_bulk_stale_threshold(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            workspace = root / "workspace"
-            workspace.mkdir()
+        with health_workspace() as (root, workspace):
             rollout, paths = self.write_latest_turn_gap_artifacts(root, workspace)
 
             with mock.patch.object(health, "locate_rollout", return_value=rollout):
@@ -906,10 +944,7 @@ class AippocampusHealthTests(unittest.TestCase):
         self.assertNotIn("build_clean_source", action_ids)
 
     def test_health_recommends_source_maintenance_at_bulk_stale_threshold(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            workspace = root / "workspace"
-            workspace.mkdir()
+        with health_workspace() as (root, workspace):
             rollout, paths = self.write_latest_turn_gap_artifacts(root, workspace)
 
             with mock.patch.object(health, "locate_rollout", return_value=rollout):
@@ -941,10 +976,7 @@ class AippocampusHealthTests(unittest.TestCase):
         )
 
     def test_health_treats_one_live_message_delta_as_product_ready(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            workspace = root / "workspace"
-            workspace.mkdir()
+        with health_workspace() as (root, workspace):
             rollout = workspace / "rollout.jsonl"
             self.write_rollout(rollout, workspace)
             paths = self.write_current_artifacts(root, workspace, rollout)

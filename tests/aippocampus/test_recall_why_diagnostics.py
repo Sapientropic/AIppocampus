@@ -17,6 +17,7 @@ from aippocampus_runtime.mcp import server as mcp  # noqa: E402
 from aippocampus_runtime.recall import why_diagnostics as why  # noqa: E402
 from aippocampus_runtime.recall import why_reason_codes as reason_codes  # noqa: E402
 from aippocampus_runtime.recall import why_surfaces as surfaces  # noqa: E402
+from tests.aippocampus.frontstage_assertions import assert_semantic_human_output  # noqa: E402
 
 
 class RecallWhyDiagnosticsTests(unittest.TestCase):
@@ -251,7 +252,7 @@ class RecallWhyDiagnosticsTests(unittest.TestCase):
         self.assertIn("AIppocampus why-recall", human.stdout)
         self.assertIn("what happened:", human.stdout)
         self.assertIn("next:", human.stdout)
-        self.assertIn("boundary:", human.stdout)
+        assert_semantic_human_output(self, human.stdout, max_lines=8)
         self.assertNotIn("cue_hash", human.stdout)
         self.assertNotIn("route_ids", human.stdout)
         self.assertNotIn("route_returned", human.stdout)
@@ -364,7 +365,7 @@ class RecallWhyDiagnosticsTests(unittest.TestCase):
                 self.assertIn("AIppocampus " + command, result.stdout)
                 self.assertIn("example cue:", result.stdout)
                 self.assertIn(f'aippocampus {command} "{{cue}}" --json', result.stdout)
-                self.assertIn("source evidence", result.stdout)
+                assert_semantic_human_output(self, result.stdout, max_lines=8)
 
     def test_bare_why_json_recovery_marks_deepen_as_dependent(self) -> None:
         for command in ("why-recall", "why-not-recall"):
@@ -427,7 +428,6 @@ class RecallWhyDiagnosticsTests(unittest.TestCase):
         self.assertIn("refine cue", why_not_help.stdout)
         self.assertIn('aippocampus why-recall "old decision about setup"', why_help.stdout)
         self.assertIn('aippocampus agent deepen --request 1 --last-recall --json', why_help.stdout)
-        self.assertIn("source evidence", why_help.stdout)
         self.assertNotIn("--semantic-result-json", why_help.stdout)
         self.assertNotIn("--lock-path", why_help.stdout)
         self.assertNotIn("--registry-dir", why_help.stdout)

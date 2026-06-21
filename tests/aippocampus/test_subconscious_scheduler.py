@@ -24,6 +24,7 @@ for _path in (
     sys.path.insert(0, str(_path))
 
 from aippocampus_runtime.subconscious import scheduler  # noqa: E402
+from tests.aippocampus.timing_fixtures import host_timeout_sleep  # noqa: E402
 
 
 class SubconsciousSchedulerTests(unittest.TestCase):
@@ -525,7 +526,10 @@ class SubconsciousSchedulerTests(unittest.TestCase):
             with launch_lock:
                 launches += 1
             release_second_thread.set()
-            time.sleep(0.1)
+            host_timeout_sleep(
+                0.1,
+                reason="keep the detached-start lease occupied while the peer thread enters",
+            )
             return 1234
 
         def call_maybe_start() -> None:

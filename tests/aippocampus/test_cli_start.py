@@ -60,6 +60,64 @@ class AippocampusStartCliTests(unittest.TestCase):
         self.assertIn("choose_export_for_next_thread", action_ids)
         self.assertIn("choose_sync_for_next_device", action_ids)
 
+    def test_start_json_accepts_cue_and_returns_executable_recall(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            clean = self.write_clean_source(root)
+            proc = self.run_cli(
+                "start",
+                "agent-native recall opt-in",
+                "--json",
+                "--cwd",
+                str(root),
+                "--clean-source-dir",
+                str(clean),
+            )
+
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        payload = json.loads(proc.stdout)
+        self.assertTrue(payload["cue_supplied"])
+        self.assertEqual(payload["foreground_action"]["id"], "recall_supplied_cue")
+        self.assertIn("agent-native recall opt-in", payload["foreground_action"]["command"])
+        self.assertNotIn("command_template", payload["foreground_action"])
+        readiness = payload["first_recall_readiness"]
+        self.assertEqual(
+            readiness["ordinary_first_recall_usable_scope"],
+            "cue_action_callable_not_previewed",
+        )
+        self.assertTrue(readiness["source_artifacts_present"])
+        self.assertTrue(readiness["exact_source_search_available"])
+        self.assertTrue(readiness["compact_agent_recall_action_callable"])
+        self.assertFalse(readiness["cue_specific_route_usefulness"]["usefulness_verified_for_cue"])
+
+    def test_start_json_routes_weak_cue_to_search_fallback(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            clean = self.write_clean_source(root)
+            proc = self.run_cli(
+                "start",
+                "--cue",
+                "recall",
+                "--json",
+                "--cwd",
+                str(root),
+                "--clean-source-dir",
+                str(clean),
+            )
+
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        payload = json.loads(proc.stdout)
+        self.assertEqual(payload["decision"], "continue_from_existing_source_with_search_fallback")
+        self.assertEqual(payload["foreground_action"]["id"], "search_current_source_for_supplied_cue")
+        self.assertIn("aippocampus search", payload["foreground_action"]["command"])
+        self.assertEqual(
+            payload["first_recall_readiness"]["cue_specific_route_usefulness"]["status"],
+            "weak_cue_search_fallback_recommended",
+        )
+        action_ids = [action["id"] for action in payload["safe_next_actions"]]
+        self.assertIn("recall_supplied_cue", action_ids)
+        self.assertIn("search_all_for_supplied_cue", action_ids)
+
     def test_start_json_redacts_operator_sensitive_fields(self) -> None:
         from aippocampus_runtime.cli import start as start_cli
 
