@@ -7,10 +7,8 @@ import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
 
-from aippocampus_runtime.ops import worker_hook_handoff  # noqa: E402
+from aippocampus_runtime.ops import worker_hook_handoff
 
 
 class WorkerHookHandoffSmokeTests(unittest.TestCase):
@@ -75,7 +73,6 @@ class WorkerHookHandoffSmokeTests(unittest.TestCase):
         payload = json.loads(proc.stdout)
         self.assertEqual(payload["kind"], "aippocampus_worker_hook_handoff_smoke")
         self.assertTrue(payload["ok"])
-
 
 if __name__ == "__main__":
     unittest.main()

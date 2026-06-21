@@ -7,15 +7,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from tests.aippocampus.import_path_helpers import import_benchmark_module
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BENCHMARKS = REPO_ROOT / "benchmarks" / "aippocampus"
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-for _path in (BENCHMARKS, SCRIPTS):
-    if str(_path) not in sys.path:
-        sys.path.insert(0, str(_path))
 
-import benchmark_state_dependent_preactivation as benchmark  # noqa: E402
-
+benchmark = import_benchmark_module("benchmark_state_dependent_preactivation")
 
 class StateDependentPreactivationBenchmarkTests(unittest.TestCase):
     def test_state_dependent_arm_beats_simple_baseline_without_source_truth(self) -> None:
@@ -122,7 +120,6 @@ class StateDependentPreactivationBenchmarkTests(unittest.TestCase):
         self.assertFalse(payload["privacy_boundary"]["source_refs_emitted_to_stdout"])
         self.assertEqual(written["kind"], payload["kind"])
         self.assertIn("cases", written)
-
 
 if __name__ == "__main__":
     unittest.main()

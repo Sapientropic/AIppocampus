@@ -9,26 +9,19 @@ from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-ROOT = REPO_ROOT / "skills" / "aippocampus"
-SCRIPTS = ROOT / "scripts"
-for _path in (
-    SCRIPTS,
-    REPO_ROOT / "benchmarks" / "aippocampus",
-    REPO_ROOT / "tools" / "aippocampus" / "smoke",
-    REPO_ROOT / "tools" / "aippocampus" / "docs",
-):
-    sys.path.insert(0, str(_path))
+from tests.aippocampus.import_path_helpers import import_benchmark_module
 
-import benchmark_family_promotion_candidates as family_promotion  # noqa: E402
-import benchmark_suite as suite  # noqa: E402
-from shared.benchmark_outcome_router import (  # noqa: E402
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+family_promotion = import_benchmark_module("benchmark_family_promotion_candidates")
+suite = import_benchmark_module("benchmark_suite")
+from shared.benchmark_outcome_router import (
     benchmark_outcome_digest,
     build_benchmark_issue_drafts,
     build_benchmark_outcome_card,
 )
-from shared.benchmark_report_contract import benchmark_report_contract_lint  # noqa: E402
-from shared.benchmark_suite_quality import track_quality_state  # noqa: E402
+from shared.benchmark_report_contract import benchmark_report_contract_lint
+from shared.benchmark_suite_quality import track_quality_state
 
 
 def fake_gate_payload() -> dict:
@@ -56,7 +49,6 @@ def fake_gate_payload() -> dict:
         "cannot_claim": ["real_history_gate_quality"],
     }
 
-
 def fake_payload_payload() -> dict:
     return {
         "kind": "aippocampus_payload_fidelity_benchmark",
@@ -73,7 +65,6 @@ def fake_payload_payload() -> dict:
         },
         "cannot_claim": ["real_history_payload_fidelity"],
     }
-
 
 def fake_retrieval_payload(*, ok: bool = False) -> dict:
     return {
@@ -118,7 +109,6 @@ def fake_retrieval_payload(*, ok: bool = False) -> dict:
         "cannot_claim": ["selected_source_evidence_recall"],
     }
 
-
 def fake_live_semantic_payload() -> dict:
     return {
         "kind": "aippocampus_live_semantic_gate_benchmark",
@@ -135,7 +125,6 @@ def fake_live_semantic_payload() -> dict:
         "cannot_claim": ["all_future_semantic_prompts_correct"],
     }
 
-
 def fake_compaction_payload() -> dict:
     return {
         "kind": "aippocampus_compaction_continuity_benchmark",
@@ -151,7 +140,6 @@ def fake_compaction_payload() -> dict:
         },
         "cannot_claim": ["runtime_correction_event_capture"],
     }
-
 
 class BenchmarkSuiteTests(unittest.TestCase):
     def test_suite_config_factory_maps_parser_args(self) -> None:
@@ -1420,7 +1408,6 @@ class BenchmarkSuiteTests(unittest.TestCase):
             "semantic",
         )
         self.assertEqual(retrieval_run.call_args.kwargs["standard_line_reranker_workers"], 4)
-
 
 if __name__ == "__main__":
     unittest.main()

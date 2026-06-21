@@ -12,7 +12,6 @@ from unittest.mock import patch
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PACKAGER = REPO_ROOT / "tools" / "aippocampus" / "package_windows_binary.py"
 
-
 def load_packager():
     spec = importlib.util.spec_from_file_location("package_windows_binary", PACKAGER)
     assert spec is not None
@@ -21,7 +20,6 @@ def load_packager():
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     return module
-
 
 class WindowsBinaryPackagingTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -242,7 +240,6 @@ class WindowsBinaryPackagingTests(unittest.TestCase):
         self.assertEqual(smoke_by_name["sync_empty_status"]["expected_returncodes"], [1])
         self.assertFalse(smoke_by_name["mcp_memory_health_jsonrpc"]["tool_is_error"])
         self.assertNotIn(str(repo), smoke_by_name["search_public_bundle"]["stdout_preview"])
-
 
 if __name__ == "__main__":
     unittest.main()

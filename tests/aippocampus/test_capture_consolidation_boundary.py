@@ -1,15 +1,9 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.ops.capture_consolidation_boundary import (  # noqa: E402
+from aippocampus_runtime.ops.capture_consolidation_boundary import (
     STATUS_ORDER,
     capture_consolidation_readout,
     fixture_capture_consolidation_readout,
@@ -42,7 +36,6 @@ class CaptureConsolidationBoundaryTests(unittest.TestCase):
 
         self.assertEqual(report["items"][0]["status"], "consolidated_sidecars_ready")
         self.assertEqual(report["metrics"]["source_reopenable_count"], 0)
-
 
 if __name__ == "__main__":
     unittest.main()

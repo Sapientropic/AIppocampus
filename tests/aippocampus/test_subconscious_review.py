@@ -2,21 +2,13 @@ from __future__ import annotations
 
 import json
 import os
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-ROOT = REPO_ROOT / "skills" / "aippocampus"
-SCRIPTS = ROOT / "scripts"
-TESTS = Path(__file__).resolve().parent
-sys.path.insert(0, str(TESTS))
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.subconscious import review, review_public_output  # noqa: E402
-from redaction_fixtures import (  # noqa: E402
+from aippocampus_runtime.subconscious import review, review_public_output
+from tests.aippocampus.redaction_fixtures import (
     FAKE_TEST_BEARER_TOKEN,
     FAKE_TEST_ESCAPED_WINDOWS_LOCAL_PATH_MARKER,
     FAKE_TEST_OPENAI_API_KEY,
@@ -513,7 +505,6 @@ class SubconsciousReviewTests(unittest.TestCase):
         self.assertEqual(len(result["promotion_candidates"]), 1)
         self.assertEqual(result["promotion_candidates"][0]["source_finding_ids"], ["sf_runtime"])
         self.assertEqual(result["weak_findings"][0]["finding_id"], "sf_pay")
-
 
 if __name__ == "__main__":
     unittest.main()

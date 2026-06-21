@@ -14,17 +14,9 @@ from tests.aippocampus.import_coupling_helpers import same_dir_import_edges
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ROOT = REPO_ROOT / "skills" / "aippocampus"
 SCRIPTS = ROOT / "scripts"
-for _path in (
-    REPO_ROOT,
-    SCRIPTS,
-    REPO_ROOT / "benchmarks" / "aippocampus",
-    REPO_ROOT / "tools" / "aippocampus" / "smoke",
-    REPO_ROOT / "tools" / "aippocampus" / "docs",
-):
-    sys.path.insert(0, str(_path))
 
-from aippocampus_runtime.hooks import prompt as prompt_hook  # noqa: E402
-from aippocampus_runtime.vault import sync as sync_vault  # noqa: E402
+from aippocampus_runtime.hooks import prompt as prompt_hook
+from aippocampus_runtime.vault import sync as sync_vault
 
 HIGH_RISK_MYPY_SCRIPTS = {
     "skills/aippocampus/scripts/aippocampus_runtime/mcp/server.py",
@@ -131,7 +123,6 @@ OPS_STRING_ONLY_RECALL_COMMAND_MODULES = {
     "aippocampus_runtime.ops.storage_governance_contract",
 }
 
-
 def debt_register_entries(*, prefixes: tuple[str, ...] | None = None) -> dict[str, int]:
     entries: dict[str, int] = {}
     for source in (DEBT_REGISTER, DEBT_SNAPSHOT):
@@ -147,7 +138,6 @@ def debt_register_entries(*, prefixes: tuple[str, ...] | None = None) -> dict[st
             entries[match.group("path")] = int(match.group("second") or match.group("first"))
     return entries
 
-
 def workflow_python_entrypoints() -> set[str]:
     entrypoints: set[str] = set()
     for workflow in (REPO_ROOT / ".github" / "workflows").glob("*.yml"):
@@ -158,14 +148,11 @@ def workflow_python_entrypoints() -> set[str]:
                 entrypoints.add(path)
     return entrypoints
 
-
 def source_text(module: object) -> str:
     return Path(module.__file__).read_text(encoding="utf-8")
 
-
 def line_count(module: object) -> int:
     return len(source_text(module).splitlines())
-
 
 def script_line_count(path: Path) -> int:
     return sum(
@@ -174,7 +161,6 @@ def script_line_count(path: Path) -> int:
         if line.strip() and not line.lstrip().startswith("#")
     )
 
-
 def runtime_python_files() -> list[Path]:
     return sorted(
         path
@@ -182,10 +168,8 @@ def runtime_python_files() -> list[Path]:
         if "__pycache__" not in path.parts
     )
 
-
 def test_python_files() -> list[Path]:
     return sorted((REPO_ROOT / "tests" / "aippocampus").glob("test_*.py"))
-
 
 def benchmark_python_files() -> list[Path]:
     return sorted(
@@ -194,14 +178,12 @@ def benchmark_python_files() -> list[Path]:
         if path.name != "_paths.py"
     )
 
-
 def tool_python_files() -> list[Path]:
     return sorted(
         path
         for path in (REPO_ROOT / "tools" / "aippocampus").rglob("*.py")
         if "__pycache__" not in path.parts
     )
-
 
 def claim_boundary_helper_files() -> list[Path]:
     files = [
@@ -221,14 +203,12 @@ def claim_boundary_helper_files() -> list[Path]:
             helper_files.append(path)
     return sorted(set(helper_files))
 
-
 def mypy_file_entries() -> set[str]:
     text = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
     match = re.search(r"(?ms)^\[tool\.mypy\].*?^files\s*=\s*\[(.*?)^\]", text)
     if not match:
         return set()
     return set(re.findall(r'"([^"]+\.py)"', match.group(1)))
-
 
 class ArchitectureBoundaryTests(unittest.TestCase):
     def test_skill_package_does_not_carry_repo_development_surfaces(self) -> None:
@@ -669,7 +649,6 @@ class ArchitectureBoundaryTests(unittest.TestCase):
 
         self.assertEqual(proc.returncode, 0, proc.stderr)
         self.assertNotIn("Traceback", proc.stderr)
-
 
 if __name__ == "__main__":
     unittest.main()

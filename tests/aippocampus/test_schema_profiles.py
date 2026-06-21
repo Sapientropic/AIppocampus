@@ -1,15 +1,9 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime import schema_profiles  # noqa: E402
+from aippocampus_runtime import schema_profiles
 
 
 class SchemaProfileTests(unittest.TestCase):
@@ -152,7 +146,6 @@ class SchemaProfileTests(unittest.TestCase):
         self.assertNotIn("metrics", projected)
         self.assertNotIn("red_lines", projected)
         self.assertIn("metrics", schema_profiles.FOREGROUND_ACTION_CARD_AUDIT_ONLY_KEYS)
-
 
 if __name__ == "__main__":
     unittest.main()

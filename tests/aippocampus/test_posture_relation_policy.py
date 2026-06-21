@@ -2,15 +2,9 @@ from __future__ import annotations
 
 import hashlib
 import json
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.subconscious import (  # noqa: E402
+from aippocampus_runtime.subconscious import (
     posture_relation_calibration,
     posture_relation_policy,
 )
@@ -96,7 +90,6 @@ class PostureRelationPolicyTests(unittest.TestCase):
 
         self.assertEqual(row["policy_id"], sha256_id)
         self.assertNotEqual(row["policy_id"], sha1_id)
-
 
 if __name__ == "__main__":
     unittest.main()

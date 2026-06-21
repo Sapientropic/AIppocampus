@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
@@ -10,12 +9,10 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
 
-from aippocampus_runtime.hooks import install_action_hint as installer  # noqa: E402
+from aippocampus_runtime.hooks import install_action_hint as installer
 
 DEFAULT_CACHE_LABEL = "registry/action-hints/<workspace-scope>/pretooluse-cache.jsonl"
-
 
 class InstallActionHintHookTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -450,7 +447,6 @@ class InstallActionHintHookTests(unittest.TestCase):
                     )
             self.assertEqual(raised.exception.code, 2)
             self.assertIn("at least 1", stderr.getvalue())
-
 
 if __name__ == "__main__":
     unittest.main()

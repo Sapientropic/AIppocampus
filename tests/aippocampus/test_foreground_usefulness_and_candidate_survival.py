@@ -1,16 +1,10 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.ops import foreground_output_audit  # noqa: E402
-from aippocampus_runtime.recall import candidate_survival, continuity_usefulness  # noqa: E402
+from aippocampus_runtime.ops import foreground_output_audit
+from aippocampus_runtime.recall import candidate_survival, continuity_usefulness
 
 
 class ContinuityUsefulnessAndCandidateSurvivalTests(unittest.TestCase):
@@ -176,7 +170,6 @@ class ContinuityUsefulnessAndCandidateSurvivalTests(unittest.TestCase):
         self.assertTrue(starved["safety_gate_ok"])
         self.assertFalse(starved["usefulness_gate_ok"])
         self.assertNotIn("PRIVATE_CANDIDATE_SENTINEL", encoded)
-
 
 if __name__ == "__main__":
     unittest.main()

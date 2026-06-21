@@ -1,25 +1,13 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 from typing import Any
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-ROOT = REPO_ROOT / "skills" / "aippocampus"
-SCRIPTS = ROOT / "scripts"
-for _path in (
-    SCRIPTS,
-    REPO_ROOT / "benchmarks" / "aippocampus",
-    REPO_ROOT / "tools" / "aippocampus" / "smoke",
-    REPO_ROOT / "tools" / "aippocampus" / "docs",
-):
-    sys.path.insert(0, str(_path))
-
-from aippocampus_runtime.navigation import concept_graph as concept_graph  # noqa: E402
-from aippocampus_runtime.subconscious import theme_emergence as themes  # noqa: E402
+from aippocampus_runtime.navigation import concept_graph as concept_graph
+from aippocampus_runtime.subconscious import theme_emergence as themes
 
 
 class ThemeEmergenceTests(unittest.TestCase):
@@ -268,7 +256,6 @@ class ThemeEmergenceTests(unittest.TestCase):
         self.assertEqual(second["fresh_theme_count"], 0)
         self.assertEqual(len(theme_rows), 1)
         self.assertEqual(theme_rows[0]["source"], "deterministic_theme_emergence")
-
 
 if __name__ == "__main__":
     unittest.main()

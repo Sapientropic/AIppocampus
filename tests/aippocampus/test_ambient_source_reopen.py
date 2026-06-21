@@ -2,17 +2,12 @@ from __future__ import annotations
 
 import json
 import os
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.hooks import prompt as hook  # noqa: E402
-from aippocampus_runtime.recall import ambient_cache as thread_cache  # noqa: E402
+from aippocampus_runtime.hooks import prompt as hook
+from aippocampus_runtime.recall import ambient_cache as thread_cache
 
 
 class AmbientSourceReopenTests(unittest.TestCase):
@@ -302,7 +297,6 @@ class AmbientSourceReopenTests(unittest.TestCase):
         self.assertEqual(ambient["source_reopen"]["success_count"], 1)
         self.assertEqual(evidence_cards[0]["provenance_class"], "source_backed_reopen")
         self.assertIn("bounded foreground context", evidence_cards[0]["key_line"])
-
 
 if __name__ == "__main__":
     unittest.main()

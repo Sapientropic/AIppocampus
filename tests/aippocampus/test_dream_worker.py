@@ -1,23 +1,10 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-ROOT = REPO_ROOT / "skills" / "aippocampus"
-SCRIPTS = ROOT / "scripts"
-for _path in (
-    SCRIPTS,
-    REPO_ROOT / "benchmarks" / "aippocampus",
-    REPO_ROOT / "tools" / "aippocampus" / "smoke",
-    REPO_ROOT / "tools" / "aippocampus" / "docs",
-):
-    sys.path.insert(0, str(_path))
-
-from aippocampus_runtime.dream import worker as dream_worker  # noqa: E402
-from aippocampus_runtime.model.client import (  # noqa: E402
+from aippocampus_runtime.dream import worker as dream_worker
+from aippocampus_runtime.model.client import (
     DEEPSEEK_PREFIX_CACHE_CONTRACT,
     ChatClientConfig,
 )
@@ -30,7 +17,6 @@ def source_ref(thread_key: str, message_id: str, line: int) -> dict[str, object]
         "line": line,
         "project_label": "AIppocampus",
     }
-
 
 def ready_pack() -> dict[str, object]:
     refs = [source_ref("session:a", "msg-a", 10), source_ref("session:b", "msg-b", 20)]
@@ -53,7 +39,6 @@ def ready_pack() -> dict[str, object]:
         "eligible_dream_functions": ["compensatory", "amplification"],
     }
 
-
 def single_thread_dense_pack() -> dict[str, object]:
     refs = [
         source_ref("session:long", "msg-a", 10),
@@ -74,7 +59,6 @@ def single_thread_dense_pack() -> dict[str, object]:
     )
     return pack
 
-
 def config() -> ChatClientConfig:
     return ChatClientConfig(
         api_key="test",
@@ -83,7 +67,6 @@ def config() -> ChatClientConfig:
         cache_contract=DEEPSEEK_PREFIX_CACHE_CONTRACT,
         timeout=11,
     )
-
 
 class DreamWorkerTests(unittest.TestCase):
     def test_compensatory_model_worker_orders_messages_and_reports_cache(self) -> None:
@@ -1451,7 +1434,6 @@ class DreamWorkerTests(unittest.TestCase):
         self.assertNotIn("source_refs", encoded)
         self.assertNotIn("message_id", encoded)
         self.assertNotIn("thread_key", encoded)
-
 
 if __name__ == "__main__":
     unittest.main()

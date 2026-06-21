@@ -1,17 +1,12 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.mcp import server as mcp  # noqa: E402
-from aippocampus_runtime.recall import background_findings  # noqa: E402
+from aippocampus_runtime.mcp import server as mcp
+from aippocampus_runtime.recall import background_findings
 
 
 def write_background_working_memory(path: Path) -> None:
@@ -39,7 +34,6 @@ def write_background_working_memory(path: Path) -> None:
         encoding="utf-8",
     )
 
-
 def write_generic_issue_working_memory(path: Path) -> None:
     path.write_text(
         json.dumps(
@@ -64,7 +58,6 @@ def write_generic_issue_working_memory(path: Path) -> None:
         + "\n",
         encoding="utf-8",
     )
-
 
 class AgentBackgroundTests(unittest.TestCase):
     def tool_payload(self, response: dict) -> dict:
@@ -289,7 +282,6 @@ class AgentBackgroundTests(unittest.TestCase):
         self.assertIn("operator_detail", payload)
         self.assertIn("mark_background_finding_helpful", encoded)
         self.assertNotIn(str(working_memory), encoded)
-
 
 if __name__ == "__main__":
     unittest.main()

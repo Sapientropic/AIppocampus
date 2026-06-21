@@ -13,8 +13,6 @@ from unittest.mock import patch
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
 
 class AippocampusStartCliTests(unittest.TestCase):
     def run_cli(self, *args: str) -> subprocess.CompletedProcess[str]:
@@ -324,7 +322,6 @@ class AippocampusStartCliTests(unittest.TestCase):
         self.assertFalse(payload["first_recall_readiness"]["ordinary_first_recall_usable"])
         self.assertTrue(payload["first_recall_readiness"]["cold_start_expected"])
         self.assertEqual(payload["first_recall_readiness"]["progress_signal"], "source_exists_but_stale")
-
 
 if __name__ == "__main__":
     unittest.main()

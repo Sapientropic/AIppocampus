@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import os
 import subprocess
-import sys
 import tempfile
 from collections.abc import Iterator
 from contextlib import contextmanager, redirect_stdout
@@ -11,10 +10,8 @@ from io import StringIO
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
 
-from aippocampus_runtime.update import cli as update_cli  # noqa: E402
+from aippocampus_runtime.update import cli as update_cli
 
 PROVIDER_ENV_NAMES = [
     "AIPPOCAMPUS_DEEPSEEK_API_KEY",
@@ -29,7 +26,6 @@ PROVIDER_ENV_NAMES = [
     "AIPPOCAMPUS_FOREGROUND_KEY_TOOLS_CALLABLE",
     "AIPPOCAMPUS_FOREGROUND_KEY_TOOL_FAILURE",
 ]
-
 
 @contextmanager
 def provider_env(extra: dict[str, str] | None = None) -> Iterator[None]:
@@ -47,12 +43,10 @@ def provider_env(extra: dict[str, str] | None = None) -> Iterator[None]:
             else:
                 os.environ[name] = value
 
-
 @contextmanager
 def update_workspace(extra_env: dict[str, str] | None = None) -> Iterator[Path]:
     with tempfile.TemporaryDirectory() as tmp, provider_env(extra_env):
         yield Path(tmp)
-
 
 @contextmanager
 def pushd(path: Path) -> Iterator[None]:
@@ -62,7 +56,6 @@ def pushd(path: Path) -> Iterator[None]:
         yield
     finally:
         os.chdir(old)
-
 
 def run_update(*args: str) -> tuple[int, dict]:
     stdout = StringIO()
@@ -77,7 +70,6 @@ def run_update(*args: str) -> tuple[int, dict]:
     payload = json.loads(stdout.getvalue())
     return code, payload
 
-
 def source_plugin_version() -> str:
     manifest = json.loads(
         (
@@ -90,7 +82,6 @@ def source_plugin_version() -> str:
     )
     return str(manifest["version"])
 
-
 def write_minimal_repo(repo: Path) -> None:
     repo.mkdir(parents=True)
     (repo / "pyproject.toml").write_text("[project]\nname='fixture'\n", encoding="utf-8")
@@ -98,7 +89,6 @@ def write_minimal_repo(repo: Path) -> None:
     (skill / "scripts").mkdir(parents=True)
     (skill / "SKILL.md").write_text("# AIppocampus fixture\n", encoding="utf-8")
     (skill / "scripts" / "runtime.py").write_text("print('ok')\n", encoding="utf-8")
-
 
 def init_git_fixture(repo: Path, *, message: str = "fixture") -> None:
     subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True, text=True)
@@ -118,7 +108,6 @@ def init_git_fixture(repo: Path, *, message: str = "fixture") -> None:
     )
     subprocess.run(["git", "add", "."], cwd=repo, check=True, capture_output=True, text=True)
     subprocess.run(["git", "commit", "-m", message], cwd=repo, check=True, capture_output=True, text=True)
-
 
 def write_plugin_package(
     root: Path,
@@ -154,7 +143,6 @@ def write_plugin_package(
             encoding="utf-8",
         )
 
-
 def aippocampus_hook_commands_by_event(hooks_path: Path) -> dict[str, list[str]]:
     data = json.loads(hooks_path.read_text(encoding="utf-8"))
     result: dict[str, list[str]] = {}
@@ -178,7 +166,6 @@ def aippocampus_hook_commands_by_event(hooks_path: Path) -> dict[str, list[str]]
                 ):
                     result.setdefault(str(event), []).append(command)
     return result
-
 
 def append_direct_aippocampus_hook_duplicates(hooks_path: Path) -> None:
     data = json.loads(hooks_path.read_text(encoding="utf-8"))

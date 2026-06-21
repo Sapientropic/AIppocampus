@@ -1,17 +1,15 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
+from tests.aippocampus.import_path_helpers import import_benchmark_module
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
-BENCHMARKS = REPO_ROOT / "benchmarks" / "aippocampus"
-sys.path.insert(0, str(BENCHMARKS))
 
-import benchmark_public_longitudinal_users as benchmark  # noqa: E402
-
+benchmark = import_benchmark_module("benchmark_public_longitudinal_users")
 
 class PublicLongitudinalUsersBenchmarkTests(unittest.TestCase):
     def test_checked_in_dataset_covers_coding_implicit_knowledge_families(self) -> None:
@@ -134,7 +132,6 @@ class PublicLongitudinalUsersBenchmarkTests(unittest.TestCase):
         self.assertEqual(by_case["plu-renderer-003"]["missing_source_event_ids"], ["renderer-e002"])
         self.assertTrue(by_case["plu-dream-005"]["anti_drift_violation"])
         self.assertGreater(payload["prediction_diagnostics"]["missing_prediction_count"], 0)
-
 
 if __name__ == "__main__":
     unittest.main()

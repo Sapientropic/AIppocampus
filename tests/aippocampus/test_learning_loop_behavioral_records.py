@@ -10,8 +10,6 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
 
 class LearningLoopBehavioralRecordsCliTests(unittest.TestCase):
     def run_cli_with_env(self, *args: str, env: dict[str, str]) -> subprocess.CompletedProcess[str]:
@@ -131,7 +129,6 @@ class LearningLoopBehavioralRecordsCliTests(unittest.TestCase):
         self.assertNotIn("write_next_actions", confirmed_payload)
         self.assertFalse(ledger.exists())
         self.assertFalse(outcome.exists())
-
 
 if __name__ == "__main__":
     unittest.main()

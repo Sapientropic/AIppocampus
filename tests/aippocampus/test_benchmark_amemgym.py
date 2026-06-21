@@ -1,24 +1,19 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-BENCHMARKS = REPO_ROOT / "benchmarks" / "aippocampus"
-if str(BENCHMARKS) not in sys.path:
-    sys.path.insert(0, str(BENCHMARKS))
+from tests.aippocampus.import_path_helpers import import_benchmark_module
 
-import benchmark_amemgym as benchmark  # noqa: E402
+benchmark = import_benchmark_module("benchmark_amemgym")
 
 RAW_PROFILE = "RAW PROFILE TEXT MUST NOT LEAK"
 RAW_QUERY = "RAW QUERY TEXT MUST NOT LEAK"
 RAW_ANSWER = "RAW ANSWER TEXT MUST NOT LEAK"
 RAW_UPDATE = "RAW UPDATE TEXT MUST NOT LEAK"
 LOCAL_PATH_SENTINEL = "LOCAL_PRIVATE_PATH_SENTINEL\\amemgym\\data.json"
-
 
 class AMemGymSmokeTests(unittest.TestCase):
     def test_missing_dataset_returns_public_safe_metadata_boundary(self) -> None:
@@ -104,7 +99,6 @@ class AMemGymSmokeTests(unittest.TestCase):
         dumped_template = json.dumps(template_rows, ensure_ascii=False)
         for forbidden in (RAW_PROFILE, RAW_QUERY, RAW_ANSWER, RAW_UPDATE):
             self.assertNotIn(forbidden, dumped_template)
-
 
 def _write_fixture(path: Path) -> None:
     path.write_text(
@@ -194,7 +188,6 @@ def _write_fixture(path: Path) -> None:
         encoding="utf-8",
     )
 
-
 def _write_predictions(path: Path) -> None:
     rows = [
         {
@@ -224,7 +217,6 @@ def _write_predictions(path: Path) -> None:
         "".join(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n" for row in rows),
         encoding="utf-8",
     )
-
 
 if __name__ == "__main__":
     unittest.main()

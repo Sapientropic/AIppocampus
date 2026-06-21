@@ -2,16 +2,11 @@ from __future__ import annotations
 
 import importlib.util
 import json
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SMOKE = REPO_ROOT / "tools" / "aippocampus" / "smoke"
-sys.path.insert(0, str(SMOKE))
+from tests.aippocampus.import_path_helpers import import_smoke_module
 
-import smoke_openai_agents_sdk_tool_contract as smoke  # noqa: E402
-
+smoke = import_smoke_module("smoke_openai_agents_sdk_tool_contract")
 
 class OpenAIAgentsSDKSmokeTests(unittest.TestCase):
     def test_sanitized_lookup_payload_excludes_private_locator_shapes(self) -> None:
@@ -34,7 +29,6 @@ class OpenAIAgentsSDKSmokeTests(unittest.TestCase):
         self.assertIn("query", result["tool_contract"]["schema_properties"])
         self.assertTrue(result["checks"]["sample_payload_private_locator_free"])
         self.assertIn("hosted Runner execution", result["cannot_claim"])
-
 
 if __name__ == "__main__":
     unittest.main()

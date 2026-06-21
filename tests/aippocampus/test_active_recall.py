@@ -10,18 +10,14 @@ from contextlib import redirect_stdout
 from pathlib import Path
 from unittest import mock
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.recall import active_recall as active_recall  # noqa: E402
-from aippocampus_runtime.recall import active_recall as packaged_active_recall  # noqa: E402
-from aippocampus_runtime.recall import active_recall_lock  # noqa: E402
-from aippocampus_runtime.recall import retrieval as retrieval  # noqa: E402
+from aippocampus_runtime.recall import active_recall as active_recall
+from aippocampus_runtime.recall import active_recall as packaged_active_recall
+from aippocampus_runtime.recall import active_recall_lock
+from aippocampus_runtime.recall import retrieval as retrieval
 from aippocampus_runtime.recall.continuity_domains import (
-    materialize_continuity_domains,  # noqa: E402
+    materialize_continuity_domains,
 )
-from aippocampus_runtime.runtime_recheck_events import build_runtime_recheck_event  # noqa: E402
+from aippocampus_runtime.runtime_recheck_events import build_runtime_recheck_event
 
 
 def _write_context_clean_source(clean: Path, rows: list[dict[str, object]]) -> None:
@@ -52,7 +48,6 @@ def _write_context_clean_source(clean: Path, rows: list[dict[str, object]]) -> N
                 + "\n"
             )
 
-
 def _write_context_domain_snapshot(
     root: Path,
     events: list[dict[str, object]],
@@ -69,7 +64,6 @@ def _write_context_domain_snapshot(
         encoding="utf-8",
     )
     return clean, snapshot_path
-
 
 class ActiveRecallTests(unittest.TestCase):
     def test_main_uses_package_apis_without_health_or_search_script_subprocess(self) -> None:
@@ -931,7 +925,6 @@ class ActiveRecallTests(unittest.TestCase):
         self.assertIsNone(result["fresh_thread_route_packet"])
         self.assertEqual(result["surface_counts"]["continuity_domains"], 0)
         self.assertEqual(result["surface_counts"]["continuity_pathlets"], 0)
-
 
 if __name__ == "__main__":
     unittest.main()

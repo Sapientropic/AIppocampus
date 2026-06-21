@@ -18,7 +18,6 @@ def field_path_count(value: object, prefix: str = "") -> int:
         return total
     return 0
 
-
 def assert_recall_template_action(
     test: unittest.TestCase,
     action: dict[str, object],

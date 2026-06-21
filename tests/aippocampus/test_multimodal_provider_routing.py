@@ -1,12 +1,10 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 FIXTURE = (
     REPO_ROOT
     / "tests"
@@ -14,14 +12,12 @@ FIXTURE = (
     / "multimodal_sources"
     / "public_safe_provider_routes.json"
 )
-sys.path.insert(0, str(SCRIPTS))
 
-from aippocampus_runtime.model import multimodal_routing  # noqa: E402
+from aippocampus_runtime.model import multimodal_routing
 
 
 def load_fixture() -> dict:
     return json.loads(FIXTURE.read_text(encoding="utf-8"))
-
 
 class MultimodalProviderRoutingTests(unittest.TestCase):
     def test_public_safe_provider_route_manifest_validates(self) -> None:
@@ -116,7 +112,6 @@ class MultimodalProviderRoutingTests(unittest.TestCase):
         self.assertNotIn("SYNTHETIC_RAW_IMAGE_BYTES_DO_NOT_EMIT", serialized)
         self.assertNotIn("SYNTHETIC_PRIVATE_PATH_TOKEN_DO_NOT_EMIT", serialized)
         self.assertNotIn("SYNTHETIC_PROVIDER_SECRET_TOKEN_DO_NOT_EMIT", serialized)
-
 
 if __name__ == "__main__":
     unittest.main()

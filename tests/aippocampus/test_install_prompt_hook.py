@@ -4,7 +4,6 @@ import contextlib
 import io
 import json
 import os
-import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -13,21 +12,14 @@ from unittest.mock import patch
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ROOT = REPO_ROOT / "skills" / "aippocampus"
 SCRIPTS = ROOT / "scripts"
-for _path in (
-    SCRIPTS,
-    REPO_ROOT / "benchmarks" / "aippocampus",
-    REPO_ROOT / "tools" / "aippocampus" / "smoke",
-    REPO_ROOT / "tools" / "aippocampus" / "docs",
-):
-    sys.path.insert(0, str(_path))
 
-from aippocampus_runtime.hooks import install_prompt as installer  # noqa: E402
-from aippocampus_runtime.hooks.debug_log import (  # noqa: E402
+from aippocampus_runtime.hooks import install_prompt as installer
+from aippocampus_runtime.hooks.debug_log import (
     write_debug_log,
     write_prompt_hook_audit_status,
 )
-from aippocampus_runtime.hooks.skip_telemetry import write_skip_telemetry  # noqa: E402
-from aippocampus_runtime.ops import provider_key_bridge  # noqa: E402
+from aippocampus_runtime.hooks.skip_telemetry import write_skip_telemetry
+from aippocampus_runtime.ops import provider_key_bridge
 
 
 class InstallAmbientRecallHookTests(unittest.TestCase):
@@ -599,7 +591,6 @@ class InstallAmbientRecallHookTests(unittest.TestCase):
         self.assertIn("other hosts: claude-code, generic-jsonl use onboarding/MCP/import routes", text)
         self.assertIn("not a failure", text)
         self.assertNotIn("unsupported host hooks", text)
-
 
 if __name__ == "__main__":
     unittest.main()

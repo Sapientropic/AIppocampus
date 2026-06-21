@@ -1,15 +1,9 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.source.source_texture import (  # noqa: E402
+from aippocampus_runtime.source.source_texture import (
     build_source_texture,
     build_source_texture_boundary_hints,
 )
@@ -202,7 +196,6 @@ class SourceTextureTests(unittest.TestCase):
         self.assertEqual(hints[0]["hint_id"].split("_", 1)[0], "sthint")
         self.assertEqual(hints[0]["boundary_reason"], "visible_user_correction")
         self.assertEqual(hints[0]["truth_boundary"], "texture_hint_read_model_not_source_fact")
-
 
 if __name__ == "__main__":
     unittest.main()

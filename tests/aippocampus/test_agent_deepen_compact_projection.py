@@ -11,11 +11,10 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ROOT = REPO_ROOT / "skills" / "aippocampus"
 SCRIPTS = ROOT / "scripts"
-sys.path.insert(0, str(SCRIPTS))
 
-from aippocampus_runtime.mcp import server as mcp  # noqa: E402
-from aippocampus_runtime.recall import agent_continuity  # noqa: E402
-from tests.aippocampus.frontstage_assertions import (  # noqa: E402
+from aippocampus_runtime.mcp import server as mcp
+from aippocampus_runtime.recall import agent_continuity
+from tests.aippocampus.frontstage_assertions import (
     assert_compact_frontstage_payload,
 )
 
@@ -384,7 +383,6 @@ class AgentDeepenCompactProjectionTests(unittest.TestCase):
         self.assertIn("source_window", full_payload["result"])
         self.assertIn("AIppocampus 使用 clean source", full_encoded)
         self.assertNotIn(str(self.cwd), full_encoded)
-
 
 if __name__ == "__main__":
     unittest.main()

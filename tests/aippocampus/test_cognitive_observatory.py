@@ -1,19 +1,15 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-if str(SCRIPTS) not in sys.path:
-    sys.path.insert(0, str(SCRIPTS))
 
-from aippocampus_runtime.cli import facade  # noqa: E402
-from aippocampus_runtime.ops import cognitive_observatory  # noqa: E402
-from aippocampus_runtime.ops.route_readiness import route_readiness_report  # noqa: E402
-from aippocampus_runtime.recall import cognitive_load_sidecar as sidecar  # noqa: E402
+from aippocampus_runtime.cli import facade
+from aippocampus_runtime.ops import cognitive_observatory
+from aippocampus_runtime.ops.route_readiness import route_readiness_report
+from aippocampus_runtime.recall import cognitive_load_sidecar as sidecar
 
 
 class RouteReadinessObservatoryTests(unittest.TestCase):
@@ -724,7 +720,6 @@ class RouteReadinessObservatoryTests(unittest.TestCase):
         self.assertIn("cognitive_load_calibration", payload["surfaces"])
         self.assertEqual(payload["metrics"]["cognitive_load_signal_event_count"], 4)
         self.assertNotIn("PRIVATE_CLI_SAMPLE_MUST_NOT_SURFACE", result.stdout)
-
 
 if __name__ == "__main__":
     unittest.main()

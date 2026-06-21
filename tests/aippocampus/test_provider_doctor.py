@@ -13,9 +13,8 @@ from unittest.mock import patch
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
 
-from aippocampus_runtime.ops import doctor_preflight, provider_doctor  # noqa: E402
+from aippocampus_runtime.ops import doctor_preflight, provider_doctor
 
 PROVIDER_ENV_NAMES = [
     "AIPPOCAMPUS_DEEPSEEK_API_KEY",
@@ -41,11 +40,9 @@ PROVIDER_ENV_NAMES = [
 DOTENV_PROVIDER_ENV_VAR = "PROVIDER_DOCTOR_TEST_VALUE"
 LOCAL_ROUTE_PROVIDER_ENV_VAR = "LOCAL_PROVIDER_ROUTE_VALUE"
 
-
 def fake_provider_doctor_value(label: str) -> str:
     prefix = "".join(chr(code) for code in (115, 107, 45))
     return prefix + f"FAKE_TEST_PROVIDER_DOCTOR_{label}_1234567890"
-
 
 @contextmanager
 def provider_env(extra: dict[str, str] | None = None) -> Iterator[None]:
@@ -62,7 +59,6 @@ def provider_env(extra: dict[str, str] | None = None) -> Iterator[None]:
                 os.environ.pop(name, None)
             else:
                 os.environ[name] = value
-
 
 class ProviderDoctorTests(unittest.TestCase):
     def test_preflight_reports_one_console_script_blocker_without_paths(self) -> None:
@@ -629,7 +625,6 @@ class ProviderDoctorTests(unittest.TestCase):
         self.assertEqual(payload["credential_discovery"]["candidates"][1]["source"], "explicit_dotenv")
         self.assertNotIn(fixture_value, proc.stdout)
         self.assertNotIn(str(dotenv), proc.stdout)
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,19 +1,12 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-TESTS = Path(__file__).resolve().parent
-sys.path.insert(0, str(TESTS))
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.subconscious import agent_fallback_materializer  # noqa: E402
-from redaction_fixtures import (  # noqa: E402
+from aippocampus_runtime.subconscious import agent_fallback_materializer
+from tests.aippocampus.redaction_fixtures import (
     FAKE_TEST_ESCAPED_WINDOWS_LOCAL_PATH_MARKER,
     fake_test_windows_path,
 )
@@ -23,11 +16,9 @@ def fake_redaction_probe_value(label: str) -> str:
     prefix = "".join(chr(code) for code in (115, 107, 45))
     return prefix + f"FAKE_TEST_AGENT_FALLBACK_{label}_1234567890"
 
-
 def fake_redaction_probe_header(label: str) -> str:
     scheme = "".join(chr(code) for code in (66, 101, 97, 114, 101, 114))
     return scheme + " " + f"FAKETESTAGENTFALLBACK{label}1234567890"
-
 
 class AgentFallbackMaterializerTests(unittest.TestCase):
     def test_rejects_fallback_candidates_without_source_backed_findings(self) -> None:
@@ -290,7 +281,6 @@ class AgentFallbackMaterializerTests(unittest.TestCase):
         self.assertNotIn(FAKE_TEST_ESCAPED_WINDOWS_LOCAL_PATH_MARKER, raw)
         self.assertNotIn(header_probe, raw)
         self.assertNotIn("Provider route", raw)
-
 
 if __name__ == "__main__":
     unittest.main()

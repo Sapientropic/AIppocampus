@@ -1,17 +1,12 @@
 import json
 import shlex
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.mcp.public_projection import compact_health_payload  # noqa: E402
-from aippocampus_runtime.recall import agent_continuity, foreground_action_card  # noqa: E402
+from aippocampus_runtime.mcp.public_projection import compact_health_payload
+from aippocampus_runtime.recall import agent_continuity, foreground_action_card
 
 
 class ForegroundActionCardTests(unittest.TestCase):

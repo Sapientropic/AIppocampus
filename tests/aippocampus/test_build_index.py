@@ -5,21 +5,16 @@ import io
 import json
 import os
 import sqlite3
-import sys
 import tempfile
 import time
 import unittest
 from pathlib import Path
 from unittest import mock
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.artifacts import publish as artifact_publish  # noqa: E402
-from aippocampus_runtime.recall import index_builder as build_index  # noqa: E402
-from aippocampus_runtime.recall import rollout_search as search_rollout  # noqa: E402
-from tests.aippocampus.redaction_fixtures import (  # noqa: E402
+from aippocampus_runtime.artifacts import publish as artifact_publish
+from aippocampus_runtime.recall import index_builder as build_index
+from aippocampus_runtime.recall import rollout_search as search_rollout
+from tests.aippocampus.redaction_fixtures import (
     fake_test_database_dsn,
     fake_test_email,
     fake_test_windows_path,
@@ -28,7 +23,6 @@ from tests.aippocampus.redaction_fixtures import (  # noqa: E402
 
 def canonical(path: str | Path) -> Path:
     return Path(path).resolve()
-
 
 def message(*, sha1: str, text: str) -> dict:
     return {
@@ -42,7 +36,6 @@ def message(*, sha1: str, text: str) -> dict:
         "sha1": sha1,
         "text": text,
     }
-
 
 TURN = {
     "id": 1,
@@ -59,7 +52,6 @@ TURN = {
     "end_line": 1,
 }
 
-
 def write_legacy_sqlite(path: Path, text: str) -> None:
     con = sqlite3.connect(path)
     try:
@@ -68,7 +60,6 @@ def write_legacy_sqlite(path: Path, text: str) -> None:
         con.commit()
     finally:
         con.close()
-
 
 class BuildIndexTests(unittest.TestCase):
     def test_make_sqlite_allows_duplicate_message_hashes(self) -> None:
@@ -690,7 +681,6 @@ class BuildIndexTests(unittest.TestCase):
                 self.assertNotIn(database_dsn, sqlite_text)
             finally:
                 con.close()
-
 
 if __name__ == "__main__":
     unittest.main()

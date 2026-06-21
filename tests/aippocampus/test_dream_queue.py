@@ -3,24 +3,12 @@ from __future__ import annotations
 import contextlib
 import io
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-ROOT = REPO_ROOT / "skills" / "aippocampus"
-SCRIPTS = ROOT / "scripts"
-for _path in (
-    SCRIPTS,
-    REPO_ROOT / "benchmarks" / "aippocampus",
-    REPO_ROOT / "tools" / "aippocampus" / "smoke",
-    REPO_ROOT / "tools" / "aippocampus" / "docs",
-):
-    sys.path.insert(0, str(_path))
-
-from aippocampus_runtime.dream import input_pack  # noqa: E402
-from aippocampus_runtime.dream import queue as dream_queue  # noqa: E402
+from aippocampus_runtime.dream import input_pack
+from aippocampus_runtime.dream import queue as dream_queue
 
 
 def source_ref(thread_key: str, message_id: str, line: int) -> dict[str, object]:
@@ -30,7 +18,6 @@ def source_ref(thread_key: str, message_id: str, line: int) -> dict[str, object]
         "line": line,
         "project_label": "AIppocampus",
     }
-
 
 def question_link_row() -> dict[str, object]:
     refs = [source_ref("session:q-a", "msg-a", 10), source_ref("session:q-b", "msg-b", 20)]
@@ -48,7 +35,6 @@ def question_link_row() -> dict[str, object]:
         ],
     }
 
-
 def correction_row() -> dict[str, object]:
     return {
         "kind": "correction_outcome_event",
@@ -59,7 +45,6 @@ def correction_row() -> dict[str, object]:
         "outcome_summary": "A source-backed correction changed the route.",
         "source_refs": [source_ref("session:corr", "msg-corr", 30)],
     }
-
 
 def recall_miss_row() -> dict[str, object]:
     return {
@@ -74,7 +59,6 @@ def recall_miss_row() -> dict[str, object]:
         ],
     }
 
-
 def ambient_residue_row() -> dict[str, object]:
     return {
         "kind": "aippocampus_ambient_residue",
@@ -83,7 +67,6 @@ def ambient_residue_row() -> dict[str, object]:
         "themes": ["quiet residue"],
         "source_ref_fingerprints": ["weak-src"],
     }
-
 
 def journey_row() -> dict[str, object]:
     return {
@@ -101,10 +84,8 @@ def journey_row() -> dict[str, object]:
         "active_questions": ["What should be appended as the next waypoint?"],
     }
 
-
 def ready_pack(*rows: dict[str, object]) -> dict[str, object]:
     return input_pack.build_dream_input_pack(rows or [question_link_row()])
-
 
 class DreamQueueTests(unittest.TestCase):
     def test_ready_pack_enqueues_bounded_detached_items(self) -> None:
@@ -415,7 +396,6 @@ class DreamQueueTests(unittest.TestCase):
         self.assertNotIn("source_refs", encoded)
         self.assertNotIn("message_id", encoded)
         self.assertNotIn("thread_key", encoded)
-
 
 if __name__ == "__main__":
     unittest.main()

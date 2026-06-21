@@ -8,12 +8,9 @@ import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 SMOKE = REPO_ROOT / "tools" / "aippocampus" / "smoke" / "smoke_agency_host_timing.py"
-if str(SCRIPTS) not in sys.path:
-    sys.path.insert(0, str(SCRIPTS))
 
-from aippocampus_runtime.coding import agency_host_timing  # noqa: E402
+from aippocampus_runtime.coding import agency_host_timing
 
 
 class AgencyHostTimingReplayTests(unittest.TestCase):
@@ -142,7 +139,6 @@ class AgencyHostTimingReplayTests(unittest.TestCase):
         self.assertTrue(payload["ok"])
         self.assertEqual(payload["aggregate"]["case_count"], 5)
         self.assertEqual(payload["host_surface"]["surface_id"], agency_host_timing.HOST_SURFACE_ID)
-
 
 if __name__ == "__main__":
     unittest.main()

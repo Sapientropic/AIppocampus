@@ -1,29 +1,22 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from io import StringIO
 from pathlib import Path
 from unittest import mock
 
+from tests.aippocampus.import_path_helpers import import_smoke_module
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ROOT = REPO_ROOT / "skills" / "aippocampus"
-SCRIPTS = ROOT / "scripts"
-for _path in (
-    SCRIPTS,
-    REPO_ROOT / "benchmarks" / "aippocampus",
-    REPO_ROOT / "tools" / "aippocampus" / "smoke",
-    REPO_ROOT / "tools" / "aippocampus" / "docs",
-):
-    sys.path.insert(0, str(_path))
 
-import smoke_alternate_runtime_sync  # noqa: E402
-import smoke_cross_device_sync  # noqa: E402
+smoke_alternate_runtime_sync = import_smoke_module("smoke_alternate_runtime_sync")
+smoke_cross_device_sync = import_smoke_module("smoke_cross_device_sync")
 
-from aippocampus_runtime.sync import bundle as sync_bundle  # noqa: E402
-from aippocampus_runtime.sync import contract as sync_contract  # noqa: E402
+from aippocampus_runtime.sync import bundle as sync_bundle
+from aippocampus_runtime.sync import contract as sync_contract
 
 
 class SyncBundleTests(unittest.TestCase):
@@ -696,7 +689,6 @@ class SyncBundleTests(unittest.TestCase):
         self.assertFalse(result["claims"]["alternate_runtime_executed"])
         self.assertTrue(result["runtimes"][0]["skipped"])
         self.assertIn("path translation failed", result["runtimes"][0]["reason"])
-
 
 if __name__ == "__main__":
     unittest.main()

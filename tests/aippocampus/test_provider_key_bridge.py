@@ -12,19 +12,16 @@ from unittest.mock import patch
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
 
-from aippocampus_runtime.hooks import provider_bridge as hook_provider_bridge  # noqa: E402
-from aippocampus_runtime.ops import provider_key_bridge  # noqa: E402
-from aippocampus_runtime.update import cli as update_cli  # noqa: E402
+from aippocampus_runtime.hooks import provider_bridge as hook_provider_bridge
+from aippocampus_runtime.ops import provider_key_bridge
+from aippocampus_runtime.update import cli as update_cli
 
 BRIDGE_PROVIDER_ENV_VAR = "PROVIDER_BRIDGE_TEST_VALUE"
-
 
 def fake_provider_bridge_value(label: str) -> str:
     prefix = "".join(chr(code) for code in (115, 107, 45))
     return prefix + f"FAKE_TEST_PROVIDER_BRIDGE_{label}_1234567890"
-
 
 class ProviderKeyBridgeTests(unittest.TestCase):
     def test_bridge_plan_selects_explicit_dotenv_candidate_without_secret_or_path(self) -> None:
@@ -508,7 +505,6 @@ class ProviderKeyBridgeTests(unittest.TestCase):
         self.assertIn("aippocampus_provider_bridge_hook.py", hooks_data)
         self.assertNotIn(fixture_value, proc.stdout)
         self.assertNotIn(str(dotenv), proc.stdout)
-
 
 if __name__ == "__main__":
     unittest.main()

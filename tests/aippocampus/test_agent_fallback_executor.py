@@ -1,16 +1,11 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.subconscious import (  # noqa: E402
+from aippocampus_runtime.subconscious import (
     agent_fallback_executor,
     agent_fallback_materializer,
 )
@@ -133,7 +128,6 @@ class AgentFallbackExecutorTests(unittest.TestCase):
         self.assertEqual(report["diagnostic_only_count"], 1)
         self.assertEqual(report["rejection_reasons"], {"source_finding_without_source_refs": 1})
         self.assertFalse(results.exists())
-
 
 if __name__ == "__main__":
     unittest.main()

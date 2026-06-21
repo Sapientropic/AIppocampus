@@ -1,20 +1,12 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
-from pathlib import Path
 from typing import Any
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-ROOT = REPO_ROOT / "skills" / "aippocampus"
-SCRIPTS = ROOT / "scripts"
-for _path in (SCRIPTS,):
-    sys.path.insert(0, str(_path))
-
-from aippocampus_runtime.dream import working_memory as wm  # noqa: E402
-from aippocampus_runtime.dream import working_memory_compaction as compaction  # noqa: E402
-from aippocampus_runtime.ops.activation_authority_audit import (  # noqa: E402
+from aippocampus_runtime.dream import working_memory as wm
+from aippocampus_runtime.dream import working_memory_compaction as compaction
+from aippocampus_runtime.ops.activation_authority_audit import (
     apply_dead_letter_candidate_manifest,
 )
 
@@ -26,7 +18,6 @@ def source_ref(thread_key: str, message_id: str, line: int) -> dict[str, Any]:
         "line": line,
         "project_label": "AIppocampus",
     }
-
 
 def adjudicated_finding(**overrides: Any) -> dict[str, Any]:
     refs = [source_ref("session:a", "msg-a", 10), source_ref("session:b", "msg-b", 20)]
@@ -46,7 +37,6 @@ def adjudicated_finding(**overrides: Any) -> dict[str, Any]:
     }
     finding.update(overrides)
     return finding
-
 
 def dead_letter_manifest_for_row(
     row: dict[str, Any],
@@ -69,7 +59,6 @@ def dead_letter_manifest_for_row(
         [surface],
         applied_at="2026-06-05T01:00:00Z",
     )
-
 
 class DreamWorkingMemoryCompactionTests(unittest.TestCase):
     def test_dead_letter_manifest_compacts_matching_working_memory_payload(self) -> None:
@@ -141,7 +130,6 @@ class DreamWorkingMemoryCompactionTests(unittest.TestCase):
         self.assertEqual(unsafe_report["metrics"]["payload_compacted_count"], 0)
         self.assertEqual(unsafe_report["metrics"]["unsafe_update_count"], 1)
         self.assertEqual(unsafe_report["skipped"][0]["skip_reason"], "unsafe_dead_letter_update")
-
 
 if __name__ == "__main__":
     unittest.main()

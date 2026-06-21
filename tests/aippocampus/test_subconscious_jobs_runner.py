@@ -23,7 +23,6 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 JOBS_RUNNER = SCRIPTS / "aippocampus_runtime" / "subconscious" / "jobs.py"
 
-
 class SubconsciousJobsRunnerTests(unittest.TestCase):
     def test_run_jobs_can_execute_samples_concurrently_without_parallel_writes(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -636,8 +635,6 @@ class SubconsciousJobsRunnerTests(unittest.TestCase):
             self.assertEqual(result["successful_job_count"], 1)
             self.assertEqual(result["failure_count"], 1)
             self.assertEqual(result["finding_count"], 1)
-
-
 
 if __name__ == "__main__":
     unittest.main()

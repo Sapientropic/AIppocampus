@@ -1,14 +1,8 @@
 from __future__ import annotations
 
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.macro import (  # noqa: E402
+from aippocampus_runtime.macro import (
     audit,
     cross_grain,
     hexagram,
@@ -234,7 +228,6 @@ class YiMacroRuntimeInterfaceAuditTests(unittest.TestCase):
         self.assertFalse(inventory["fact_claim_allowed"])
         self.assertNotIn("poem", inventory["non_goals"])
         self.assertFalse(inventory["raw_source_or_user_data_included"])
-
 
 if __name__ == "__main__":
     unittest.main()

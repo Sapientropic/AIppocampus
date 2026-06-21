@@ -1,15 +1,9 @@
 from __future__ import annotations
 
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.recall.ambient_cards import ambient_recall_from_decision  # noqa: E402
-from aippocampus_runtime.recall.query_profile import classify_query_profile  # noqa: E402
+from aippocampus_runtime.recall.ambient_cards import ambient_recall_from_decision
+from aippocampus_runtime.recall.query_profile import classify_query_profile
 
 
 class QueryProfileTests(unittest.TestCase):
@@ -64,7 +58,6 @@ class QueryProfileTests(unittest.TestCase):
             "generic_meta_terms_only",
             ambient["brief_precision"]["foreground_suppression_reasons"],
         )
-
 
 if __name__ == "__main__":
     unittest.main()

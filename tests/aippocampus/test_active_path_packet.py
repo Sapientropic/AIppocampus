@@ -1,17 +1,14 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-if str(SCRIPTS) not in sys.path:
-    sys.path.insert(0, str(SCRIPTS))
 
-from aippocampus_runtime.recall.active_path_packet import build_active_path_packet  # noqa: E402
-from aippocampus_runtime.recall.route_notes import extract_route_note_candidates  # noqa: E402
+from aippocampus_runtime.recall.active_path_packet import build_active_path_packet
+from aippocampus_runtime.recall.route_notes import extract_route_note_candidates
 
 
 class ActivePathPacketTests(unittest.TestCase):
@@ -434,7 +431,6 @@ class ActivePathPacketTests(unittest.TestCase):
         self.assertEqual(conflicted_path["action_grammar"], "ignore_or_blocked")
         self.assertIn("candidate_conflicted", conflicted_path["reason_codes"])
         self.assertFalse(conflicted_path["trust_contract"]["treat_as_fact"])
-
 
 if __name__ == "__main__":
     unittest.main()

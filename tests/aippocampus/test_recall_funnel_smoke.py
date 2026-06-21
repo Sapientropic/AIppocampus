@@ -10,9 +10,8 @@ from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
 
-from aippocampus_runtime.ops import recall_funnel_live_agent_gate, recall_funnel_smoke  # noqa: E402
+from aippocampus_runtime.ops import recall_funnel_live_agent_gate, recall_funnel_smoke
 
 
 class RecallFunnelSmokeTests(unittest.TestCase):
@@ -412,7 +411,6 @@ class RecallFunnelSmokeTests(unittest.TestCase):
         self.assertIn("diagnostic, not source evidence", proc.stdout)
         self.assertNotIn("usage:", proc.stdout.lower())
         self.assertNotIn("the following arguments are required", proc.stdout)
-
 
 if __name__ == "__main__":
     unittest.main()

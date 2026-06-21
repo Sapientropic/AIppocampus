@@ -1,16 +1,10 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.runtime_recheck_events import build_runtime_recheck_event  # noqa: E402
-from aippocampus_runtime.source_shape import (  # noqa: E402
+from aippocampus_runtime.runtime_recheck_events import build_runtime_recheck_event
+from aippocampus_runtime.source_shape import (
     build_source_shape_descriptor,
     explain_source_shape_descriptor,
     project_source_shape_for_foreground,
@@ -26,7 +20,6 @@ def source_ref(label: str) -> dict[str, object]:
         "source_line": 12,
     }
 
-
 def complete_temporal() -> dict[str, object]:
     return {
         "source_coverage_time": {"start": "2026-06-13T00:00:00Z", "end": "2026-06-13T01:00:00Z"},
@@ -37,7 +30,6 @@ def complete_temporal() -> dict[str, object]:
         "source_epoch": "source-v1",
         "topic_epoch": "topic-v1",
     }
-
 
 class SourceShapeRuntimeTests(unittest.TestCase):
     def test_descriptor_owner_returns_complete_incomplete_or_diagnostic_only(self) -> None:
@@ -217,7 +209,6 @@ class SourceShapeRuntimeTests(unittest.TestCase):
             self.assertIn("source_reopen_required", priority["risk_flags"])
         self.assertIn("runtime_recheck_event", priorities[0]["triage_rank_reason_codes"])
         self.assertIn("check_currentness", priorities[1]["risk_flags"])
-
 
 if __name__ == "__main__":
     unittest.main()

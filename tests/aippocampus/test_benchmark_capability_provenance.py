@@ -1,16 +1,8 @@
 from __future__ import annotations
 
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-BENCHMARKS = REPO_ROOT / "benchmarks" / "aippocampus"
-for _path in (REPO_ROOT, BENCHMARKS):
-    if str(_path) not in sys.path:
-        sys.path.insert(0, str(_path))
-
-from source_evidence.capability_provenance import (  # noqa: E402
+from benchmarks.aippocampus.source_evidence.capability_provenance import (
     benchmark_capability_provenance,
 )
 
@@ -67,7 +59,6 @@ class BenchmarkCapabilityProvenanceTests(unittest.TestCase):
         self.assertEqual(provenance["claim_level"], "aippocampus_capability_measurement")
         self.assertTrue(provenance["can_claim_retrieval_adapter_evidence"])
         self.assertIn("clean_source_adapter", provenance["aippocampus_capabilities_used"])
-
 
 if __name__ == "__main__":
     unittest.main()

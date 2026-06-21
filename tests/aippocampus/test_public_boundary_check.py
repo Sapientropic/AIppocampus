@@ -3,18 +3,17 @@ from __future__ import annotations
 import contextlib
 import io
 import json
-import sys
 import tempfile
 import unittest
 import zipfile
 from pathlib import Path
 
+from tests.aippocampus.import_path_helpers import import_release_tool_module
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 RELEASE_TOOLS = REPO_ROOT / "tools" / "aippocampus" / "release"
-sys.path.insert(0, str(RELEASE_TOOLS))
 
-import check_public_boundary as boundary  # noqa: E402
-
+boundary = import_release_tool_module("check_public_boundary")
 
 class PublicBoundaryCheckTests(unittest.TestCase):
     def test_scan_text_allows_fake_test_fixtures(self) -> None:
@@ -141,7 +140,6 @@ class PublicBoundaryCheckTests(unittest.TestCase):
         self.assertEqual(exit_code, 1)
         self.assertFalse(payload["ok"])
         self.assertEqual(payload["finding_count"], 1)
-
 
 if __name__ == "__main__":
     unittest.main()

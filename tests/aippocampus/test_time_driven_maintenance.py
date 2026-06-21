@@ -2,25 +2,13 @@ from __future__ import annotations
 
 import json
 import os
-import sys
 import tempfile
 import unittest
 from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-ROOT = REPO_ROOT / "skills" / "aippocampus"
-SCRIPTS = ROOT / "scripts"
-for _path in (
-    SCRIPTS,
-    REPO_ROOT / "benchmarks" / "aippocampus",
-    REPO_ROOT / "tools" / "aippocampus" / "smoke",
-    REPO_ROOT / "tools" / "aippocampus" / "docs",
-):
-    sys.path.insert(0, str(_path))
-
-from aippocampus_runtime.subconscious import time_maintenance  # noqa: E402
+from aippocampus_runtime.subconscious import time_maintenance
 
 
 def write_jsonl(path: Path, rows: list[dict[str, object]]) -> None:
@@ -28,7 +16,6 @@ def write_jsonl(path: Path, rows: list[dict[str, object]]) -> None:
         "".join(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n" for row in rows),
         encoding="utf-8",
     )
-
 
 class TimeDrivenMaintenanceTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -370,7 +357,6 @@ class TimeDrivenMaintenanceTests(unittest.TestCase):
         self.assertGreater(enabled["agent_fallback_task_count"], 0)
         self.assertEqual(queued[0]["kind"], "agent_fallback_time_maintenance_task")
         self.assertNotIn("RAW_PRIVATE_SENTINEL", json.dumps(queued, ensure_ascii=False))
-
 
 if __name__ == "__main__":
     unittest.main()

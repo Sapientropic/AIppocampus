@@ -1,15 +1,9 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.recall.prompt_recall_threshold import (  # noqa: E402
+from aippocampus_runtime.recall.prompt_recall_threshold import (
     scent_threshold_policy,
 )
 
@@ -20,7 +14,6 @@ def _reason_codes(policy: dict) -> set[str]:
         for item in policy.get("adjustments") or []
         if isinstance(item, dict)
     }
-
 
 class PromptRecallThresholdTests(unittest.TestCase):
     def test_topic_signal_accumulator_eases_after_repeated_weak_same_topic_turns(self) -> None:
@@ -141,7 +134,6 @@ class PromptRecallThresholdTests(unittest.TestCase):
         self.assertEqual(policy["risk_boundary"], "privacy_sensitive")
         self.assertEqual(policy["effective_threshold"], policy["base_threshold"])
         self.assertNotIn("topic_signal_accumulator_eased", _reason_codes(policy))
-
 
 if __name__ == "__main__":
     unittest.main()

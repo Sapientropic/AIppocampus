@@ -2,18 +2,13 @@ from __future__ import annotations
 
 import json
 import os
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.core import default_thread_clean_source_dir  # noqa: E402
-from aippocampus_runtime.source import emergency_snapshot  # noqa: E402
+from aippocampus_runtime.core import default_thread_clean_source_dir
+from aippocampus_runtime.source import emergency_snapshot
 
 
 def write_rollout(path: Path, cwd: Path, *, session_id: str = "snap-session") -> None:
@@ -73,7 +68,6 @@ def write_rollout(path: Path, cwd: Path, *, session_id: str = "snap-session") ->
         "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows),
         encoding="utf-8",
     )
-
 
 class EmergencySnapshotTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -217,7 +211,6 @@ class EmergencySnapshotTests(unittest.TestCase):
         rendered = json.dumps(latest, ensure_ascii=False)
         self.assertNotIn("first final", rendered)
         self.assertNotIn(str(self.rollout), rendered)
-
 
 if __name__ == "__main__":
     unittest.main()

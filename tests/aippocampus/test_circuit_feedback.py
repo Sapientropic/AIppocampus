@@ -1,16 +1,12 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-SCRIPTS = Path(__file__).resolve().parents[2] / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.subconscious import circuit_feedback as feedback  # noqa: E402
-from aippocampus_runtime.subconscious import jobs as job_runtime  # noqa: E402
+from aippocampus_runtime.subconscious import circuit_feedback as feedback
+from aippocampus_runtime.subconscious import jobs as job_runtime
 
 
 class CircuitFeedbackTests(unittest.TestCase):
@@ -113,7 +109,6 @@ class CircuitFeedbackTests(unittest.TestCase):
         self.assertIn("semantic_subregion_budget", result)
         self.assertTrue(result["dynamic_job_orchestration"]["cycle_prevention_ok"])
         self.assertGreater(result["semantic_subregion_budget"]["job_circuit_count"], 0)
-
 
 if __name__ == "__main__":
     unittest.main()

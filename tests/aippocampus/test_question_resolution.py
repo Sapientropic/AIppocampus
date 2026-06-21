@@ -1,18 +1,11 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-ROOT = REPO_ROOT / "skills" / "aippocampus"
-SCRIPTS = ROOT / "scripts"
-for _path in (SCRIPTS,):
-    sys.path.insert(0, str(_path))
-
-from aippocampus_runtime.subconscious import question_resolution as qr  # noqa: E402
+from aippocampus_runtime.subconscious import question_resolution as qr
 
 
 def write_jsonl(path: Path, rows: list[dict]) -> None:
@@ -20,7 +13,6 @@ def write_jsonl(path: Path, rows: list[dict]) -> None:
         "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows),
         encoding="utf-8",
     )
-
 
 class QuestionResolutionTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -221,7 +213,6 @@ class QuestionResolutionTests(unittest.TestCase):
         self.assertEqual(second["wrote_count"], 0)
         self.assertEqual(len(signal_rows), 1)
         self.assertEqual(signal_rows[0]["source"], "deterministic_question_resolution")
-
 
 if __name__ == "__main__":
     unittest.main()

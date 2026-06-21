@@ -1,14 +1,8 @@
 from __future__ import annotations
 
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.knowledge import capability_conflicts  # noqa: E402
+from aippocampus_runtime.knowledge import capability_conflicts
 
 
 class KnowledgeCapabilityConflictResolverTests(unittest.TestCase):
@@ -153,7 +147,6 @@ class KnowledgeCapabilityConflictResolverTests(unittest.TestCase):
         self.assertIn("source_truth_overrides_communication_style", report["reason_codes"])
         self.assertIn("style_preference_removes_uncertainty", report["cannot_claim"])
         self.assertIn("capability_text_is_not_fact_source", report["cannot_claim"])
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -24,7 +24,6 @@ from aippocampus_runtime.registry import api as registry_api
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 
-
 class AgentOptInRecallRoutesTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
@@ -1469,8 +1468,6 @@ class AgentOptInRecallRoutesTests(unittest.TestCase):
         self.assertIn("reopenable_route_available", explanation["explanation"]["reason_codes"])
         self.assertNotIn("source_refs", encoded)
         self.assertNotIn("msg_final", encoded)
-
-
 
 if __name__ == "__main__":
     unittest.main()

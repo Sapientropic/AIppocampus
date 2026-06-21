@@ -1,15 +1,9 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.navigation import semantic_warm_route_producer as producer  # noqa: E402
+from aippocampus_runtime.navigation import semantic_warm_route_producer as producer
 
 
 class SemanticWarmRouteProducerTests(unittest.TestCase):
@@ -77,7 +71,6 @@ class SemanticWarmRouteProducerTests(unittest.TestCase):
         self.assertNotIn("PRIVATE_SOURCE_SENTINEL", encoded)
         self.assertNotIn("C:\\", encoded)
         self.assertNotIn("RAW_MODEL_REASONING_SENTINEL", encoded)
-
 
 if __name__ == "__main__":
     unittest.main()

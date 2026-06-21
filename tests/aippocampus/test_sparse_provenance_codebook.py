@@ -1,17 +1,14 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
 
-from aippocampus_runtime.source import provenance_codebook as codebook  # noqa: E402
-from aippocampus_runtime.source import provenance_codebook_economics as economics  # noqa: E402
+from aippocampus_runtime.source import provenance_codebook as codebook
+from aippocampus_runtime.source import provenance_codebook_economics as economics
 
 FIXTURE = (
     REPO_ROOT
@@ -19,7 +16,6 @@ FIXTURE = (
     / "sparse_provenance"
     / "public_clean_source_like_events.jsonl"
 )
-
 
 class SparseProvenanceCodebookTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -572,7 +568,6 @@ class SparseProvenanceCodebookTests(unittest.TestCase):
         for control in report["negative_controls"].values():
             self.assertTrue(control["observed_failure"])
         self.assertIn("production_readiness", report["cannot_claim"])
-
 
 if __name__ == "__main__":
     unittest.main()

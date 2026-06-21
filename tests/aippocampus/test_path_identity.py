@@ -2,18 +2,15 @@ from __future__ import annotations
 
 import hashlib
 import os
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
 
-from aippocampus_runtime import core  # noqa: E402
-from aippocampus_runtime.registry import common as registry_common  # noqa: E402
-from aippocampus_runtime.registry import provider as registry_provider  # noqa: E402
+from aippocampus_runtime import core
+from aippocampus_runtime.registry import common as registry_common
+from aippocampus_runtime.registry import provider as registry_provider
 
 
 class PathIdentityTests(unittest.TestCase):
@@ -128,7 +125,6 @@ class PathIdentityTests(unittest.TestCase):
             self.assertIn(term, text)
         self.assertIn("architecture/source/path-identity.md", readme)
         self.assertIn("path-identity.md", docs_index)
-
 
 if __name__ == "__main__":
     unittest.main()

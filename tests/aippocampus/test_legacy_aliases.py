@@ -1,16 +1,11 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.legacy_aliases import legacy_alias_diagnostics  # noqa: E402
+from aippocampus_runtime.legacy_aliases import legacy_alias_diagnostics
 
 
 class LegacyAliasDiagnosticsTests(unittest.TestCase):
@@ -49,7 +44,6 @@ class LegacyAliasDiagnosticsTests(unittest.TestCase):
         self.assertNotIn("legacy-secret-key", encoded)
         self.assertNotIn('"0"', encoded)
         self.assertNotIn("canonical-style.css", encoded)
-
 
 if __name__ == "__main__":
     unittest.main()

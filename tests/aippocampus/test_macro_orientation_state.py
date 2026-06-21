@@ -1,16 +1,11 @@
 from __future__ import annotations
 
-import sys
 import tempfile
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.macro import (  # noqa: E402
+from aippocampus_runtime.macro import (
     perturbation,
     signal_scales,
     stage_tracker,
@@ -268,7 +263,6 @@ class MacroOrientationStateTests(unittest.TestCase):
 
         self.assertFalse(validation["ok"])
         self.assertIn("relation_position_active_layer_invalid", validation["errors"])
-
 
 if __name__ == "__main__":
     unittest.main()

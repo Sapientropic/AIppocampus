@@ -1,20 +1,15 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.recall.continuity_domain_producer import (  # noqa: E402
+from aippocampus_runtime.recall.continuity_domain_producer import (
     _clean_candidate_term,
     propose_continuity_domain_events_from_registry,
 )
-from aippocampus_runtime.recall.continuity_domains import (  # noqa: E402
+from aippocampus_runtime.recall.continuity_domains import (
     match_continuity_domain_pointers,
     materialize_continuity_domains,
 )
@@ -120,7 +115,6 @@ def _write_low_information_registry_fixture(root: Path) -> tuple[Path, Path]:
     )
     return registry_dir, clean
 
-
 def _write_lowercase_alias_registry_fixture(root: Path) -> tuple[Path, Path]:
     registry_dir = root / "registry"
     clean = registry_dir / "threads" / "alias-thread" / "clean-source"
@@ -168,7 +162,6 @@ def _write_lowercase_alias_registry_fixture(root: Path) -> tuple[Path, Path]:
         encoding="utf-8",
     )
     return registry_dir, clean
-
 
 class ContinuityDomainProducerTests(unittest.TestCase):
     def test_continuity_domain_producer_rejects_low_information_labels(self) -> None:
@@ -349,7 +342,6 @@ class ContinuityDomainProducerTests(unittest.TestCase):
         self.assertEqual(generic_matches, [])
         self.assertEqual(generic_multi_matches, [])
         self.assertTrue(specific_matches)
-
 
 if __name__ == "__main__":
     unittest.main()

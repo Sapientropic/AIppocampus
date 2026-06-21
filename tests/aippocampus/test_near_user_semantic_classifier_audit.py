@@ -1,14 +1,8 @@
 from __future__ import annotations
 
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.ops import near_user_semantic_classifier_audit as audit  # noqa: E402
+from aippocampus_runtime.ops import near_user_semantic_classifier_audit as audit
 
 
 class NearUserSemanticClassifierAuditTests(unittest.TestCase):
@@ -62,7 +56,6 @@ class NearUserSemanticClassifierAuditTests(unittest.TestCase):
             )
             if row["classification"] == "not_applicable":
                 self.assertTrue(row.get("justification"))
-
 
 if __name__ == "__main__":
     unittest.main()

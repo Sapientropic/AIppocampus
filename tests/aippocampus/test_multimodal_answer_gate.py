@@ -1,12 +1,10 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 FIXTURE = (
     REPO_ROOT
     / "tests"
@@ -14,14 +12,12 @@ FIXTURE = (
     / "multimodal_sources"
     / "public_safe_answer_gate.json"
 )
-sys.path.insert(0, str(SCRIPTS))
 
-from aippocampus_runtime.model import multimodal_answer_gate  # noqa: E402
+from aippocampus_runtime.model import multimodal_answer_gate
 
 
 def load_fixture() -> dict:
     return json.loads(FIXTURE.read_text(encoding="utf-8"))
-
 
 class MultimodalAnswerGateTests(unittest.TestCase):
     def test_public_safe_fixture_validates_candidate_packet_shape(self) -> None:
@@ -139,7 +135,6 @@ class MultimodalAnswerGateTests(unittest.TestCase):
         self.assertNotIn("SYNTHETIC_VISUAL_DETAIL_DO_NOT_EMIT", serialized)
         self.assertNotIn("SYNTHETIC_BACKGROUND_PATH_TOKEN_DO_NOT_EMIT", serialized)
         self.assertNotIn("SYNTHETIC_DURABLE_WRITE_PAYLOAD_DO_NOT_EMIT", serialized)
-
 
 if __name__ == "__main__":
     unittest.main()

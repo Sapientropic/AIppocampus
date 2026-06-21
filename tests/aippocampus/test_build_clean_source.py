@@ -2,30 +2,18 @@ from __future__ import annotations
 
 import json
 import os
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-ROOT = REPO_ROOT / "skills" / "aippocampus"
-SCRIPTS = ROOT / "scripts"
-for _path in (
-    SCRIPTS,
-    REPO_ROOT / "benchmarks" / "aippocampus",
-    REPO_ROOT / "tools" / "aippocampus" / "smoke",
-    REPO_ROOT / "tools" / "aippocampus" / "docs",
-):
-    sys.path.insert(0, str(_path))
-
-from aippocampus_runtime.source import clean_source as clean_source  # noqa: E402
-from aippocampus_runtime.source import material_sanitizer  # noqa: E402
-from conversation_sources import (  # noqa: E402
+from aippocampus_runtime.source import clean_source as clean_source
+from aippocampus_runtime.source import material_sanitizer
+from conversation_sources import (
     ClaudeCodeConversationProvider,
     ConversationSourceRef,
     GenericConversationProvider,
 )
-from tests.aippocampus.redaction_fixtures import (  # noqa: E402
+from tests.aippocampus.redaction_fixtures import (
     fake_test_database_dsn,
     fake_test_email,
     fake_test_windows_path,
@@ -109,7 +97,6 @@ class MemoryConversationProvider:
             }
         ]
         return messages, turns
-
 
 class BuildCleanSourceTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -1122,7 +1109,6 @@ class BuildCleanSourceTests(unittest.TestCase):
                 "canonical_source_replaced": False,
             },
         )
-
 
 if __name__ == "__main__":
     unittest.main()

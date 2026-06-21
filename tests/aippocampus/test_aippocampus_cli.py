@@ -15,9 +15,8 @@ from unittest.mock import patch
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
 
-from aippocampus_runtime.source import latest_reply as latest_reply_module  # noqa: E402
+from aippocampus_runtime.source import latest_reply as latest_reply_module
 
 
 class AippocampusCliTests(unittest.TestCase):
@@ -2477,7 +2476,6 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertNotIn("provider_or_worker_unavailable_optional", human.stdout)
         self.assertIn("optional background warming", human.stdout)
         self.assertNotIn(str(root), raw)
-
 
 if __name__ == "__main__":
     unittest.main()

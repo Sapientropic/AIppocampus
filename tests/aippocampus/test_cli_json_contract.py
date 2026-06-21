@@ -10,12 +10,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-ROOT = REPO_ROOT / "skills" / "aippocampus"
-SCRIPTS = ROOT / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.subconscious import agent, jobs, review, worker  # noqa: E402
+from aippocampus_runtime.subconscious import agent, jobs, review, worker
 
 
 class CliJsonContractTests(unittest.TestCase):
@@ -156,7 +151,6 @@ class CliJsonContractTests(unittest.TestCase):
         self.assertNotIn("output", payload)
         self.assertNotIn("private prompt", encoded)
         self.assertNotIn("PRIVATE_MODEL_KEY_ENV", encoded)
-
 
 if __name__ == "__main__":
     unittest.main()

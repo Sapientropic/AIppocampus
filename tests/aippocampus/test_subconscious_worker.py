@@ -11,24 +11,11 @@ from pathlib import Path
 from unittest.mock import patch
 from urllib.request import Request
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-ROOT = REPO_ROOT / "skills" / "aippocampus"
-SCRIPTS = ROOT / "scripts"
-TESTS = Path(__file__).resolve().parent
-sys.path.insert(0, str(TESTS))
-for _path in (
-    SCRIPTS,
-    REPO_ROOT / "benchmarks" / "aippocampus",
-    REPO_ROOT / "tools" / "aippocampus" / "smoke",
-    REPO_ROOT / "tools" / "aippocampus" / "docs",
-):
-    sys.path.insert(0, str(_path))
-
-from aippocampus_runtime.subconscious import worker as worker  # noqa: E402
-from aippocampus_runtime.subconscious.staging_maintenance import (  # noqa: E402
+from aippocampus_runtime.subconscious import worker as worker
+from aippocampus_runtime.subconscious.staging_maintenance import (
     StagingPressureThresholds,
 )
-from redaction_fixtures import (  # noqa: E402
+from tests.aippocampus.redaction_fixtures import (
     FAKE_TEST_BEARER_TOKEN,
     FAKE_TEST_ESCAPED_WINDOWS_LOCAL_PATH_MARKER,
     FAKE_TEST_OPENAI_API_KEY,
@@ -536,7 +523,6 @@ class SubconsciousWorkerTests(unittest.TestCase):
         rendered = stdout.getvalue()
         self.assertIn("dry run: 1 turn(s)", rendered)
         self.assertNotIn("private prompt preview", rendered)
-
 
 if __name__ == "__main__":
     unittest.main()

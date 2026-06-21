@@ -7,15 +7,10 @@ import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
-SKILL_SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-if str(SKILL_SCRIPTS) not in sys.path:
-    sys.path.insert(0, str(SKILL_SCRIPTS))
 
 from aippocampus_runtime.ops import (
-    cognitive_observatory,  # noqa: E402
-    observatory_completeness,  # noqa: E402
+    cognitive_observatory,
+    observatory_completeness,
 )
 
 
@@ -139,7 +134,6 @@ class CognitiveObservatoryCurrentCompletenessTests(unittest.TestCase):
         self.assertEqual(payload["summary"]["ranking_or_hook_mutation_count"], 0)
         self.assertNotIn("source_refs", result.stdout)
         self.assertNotIn("E:\\", result.stdout)
-
 
 if __name__ == "__main__":
     unittest.main()

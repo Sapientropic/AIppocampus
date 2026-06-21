@@ -1,22 +1,9 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-ROOT = REPO_ROOT / "skills" / "aippocampus"
-SCRIPTS = ROOT / "scripts"
-for _path in (
-    SCRIPTS,
-    REPO_ROOT / "benchmarks" / "aippocampus",
-    REPO_ROOT / "tools" / "aippocampus" / "smoke",
-    REPO_ROOT / "tools" / "aippocampus" / "docs",
-):
-    sys.path.insert(0, str(_path))
-
-from aippocampus_runtime.dream import retrospective_lifecycle as lifecycle  # noqa: E402
+from aippocampus_runtime.dream import retrospective_lifecycle as lifecycle
 
 
 def source_ref(thread_key: str, message_id: str, line: int) -> dict[str, object]:
@@ -26,7 +13,6 @@ def source_ref(thread_key: str, message_id: str, line: int) -> dict[str, object]
         "line": line,
         "project_label": "AIppocampus",
     }
-
 
 def probe(finding_id: str, **overrides: object) -> dict[str, object]:
     base: dict[str, object] = {
@@ -45,7 +31,6 @@ def probe(finding_id: str, **overrides: object) -> dict[str, object]:
     base.update(overrides)
     return base
 
-
 def validation_row(target: str, status: str, *, created_at: str = "2026-05-20T00:00:00Z", kind: str = "prospective_validation_event") -> dict[str, object]:
     return {
         "kind": kind,
@@ -54,7 +39,6 @@ def validation_row(target: str, status: str, *, created_at: str = "2026-05-20T00
         "created_at": created_at,
         "source_refs": [source_ref(f"session:{target}:{status}", f"msg-{target}-{status}", 30)],
     }
-
 
 class DreamRetrospectiveLifecycleTests(unittest.TestCase):
     def test_due_parked_probes_receive_retrospective_status_buckets(self) -> None:
@@ -151,7 +135,6 @@ class DreamRetrospectiveLifecycleTests(unittest.TestCase):
         self.assertNotIn("source_refs", encoded)
         self.assertNotIn("message_id", encoded)
         self.assertNotIn("thread_key", encoded)
-
 
 if __name__ == "__main__":
     unittest.main()

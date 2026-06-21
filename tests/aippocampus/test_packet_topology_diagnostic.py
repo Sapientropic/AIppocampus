@@ -8,11 +8,9 @@ import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
 
-from aippocampus_runtime.ops import packet_topology_diagnostic  # noqa: E402
-from aippocampus_runtime.topology import packet_preflight, primitive_registry  # noqa: E402
+from aippocampus_runtime.ops import packet_topology_diagnostic
+from aippocampus_runtime.topology import packet_preflight, primitive_registry
 
 
 class PacketTopologyDiagnosticTests(unittest.TestCase):
@@ -298,7 +296,6 @@ class PacketTopologyDiagnosticTests(unittest.TestCase):
         self.assertNotIn("PRIVATE_PACKET_TEXT", encoded)
         self.assertNotIn(str(root), encoded)
         self.assertNotIn("source://private/raw-handle", encoded)
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,15 +1,9 @@
 from __future__ import annotations
 
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.hooks import prompt as hook  # noqa: E402
-from aippocampus_runtime.recall import prompt_foreground_budget as budget  # noqa: E402
+from aippocampus_runtime.hooks import prompt as hook
+from aippocampus_runtime.recall import prompt_foreground_budget as budget
 
 
 class PromptForegroundBudgetTests(unittest.TestCase):
@@ -450,7 +444,6 @@ class PromptForegroundBudgetTests(unittest.TestCase):
         self.assertGreater(report["cognitive_load"]["secondary_action_count"], 2)
         self.assertIn("too_many_action_vocabularies", report["cognitive_load"]["violations"])
         self.assertIn("too_many_secondary_actions", report["cognitive_load"]["violations"])
-
 
 if __name__ == "__main__":
     unittest.main()

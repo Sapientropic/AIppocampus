@@ -6,7 +6,6 @@ from pathlib import Path
 
 MAX_HOST_TIMEOUT_SLEEP_SECONDS = 1.25
 
-
 def host_timeout_sleep(seconds: float, *, reason: str) -> None:
     """Bound the few tests that intentionally exercise real host-time timeout paths."""
     if not reason.strip():
@@ -16,7 +15,6 @@ def host_timeout_sleep(seconds: float, *, reason: str) -> None:
             f"host timeout sleep must be in (0, {MAX_HOST_TIMEOUT_SLEEP_SECONDS}], got {seconds}"
         )
     time.sleep(seconds)
-
 
 def advance_file_mtime(path: Path, *, seconds: float = 2.0) -> None:
     """Force a cache-visible mtime tick without waiting on filesystem resolution."""

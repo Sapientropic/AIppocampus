@@ -1,16 +1,10 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.recall import ambient_cards, authority, evidence_drawer  # noqa: E402
-from aippocampus_runtime.recall.active_path_packet import build_active_path_packet  # noqa: E402
+from aippocampus_runtime.recall import ambient_cards, authority, evidence_drawer
+from aippocampus_runtime.recall.active_path_packet import build_active_path_packet
 
 
 class MemoryEvidenceDrawerTests(unittest.TestCase):
@@ -177,7 +171,6 @@ class MemoryEvidenceDrawerTests(unittest.TestCase):
         self.assertFalse(item["can_support_factual_claim"])
         self.assertFalse(item["affordances"]["pin"])
         self.assertIn("blocked_or_insufficient_evidence_shapes_answer", item["cannot_claim"])
-
 
 if __name__ == "__main__":
     unittest.main()

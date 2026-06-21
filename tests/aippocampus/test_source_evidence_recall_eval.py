@@ -8,19 +8,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from tests.aippocampus.import_path_helpers import import_smoke_module
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
-ROOT = REPO_ROOT / "skills" / "aippocampus"
-SCRIPTS = ROOT / "scripts"
-for _path in (
-    SCRIPTS,
-    REPO_ROOT / "benchmarks" / "aippocampus",
-    REPO_ROOT / "tools" / "aippocampus" / "smoke",
-    REPO_ROOT / "tools" / "aippocampus" / "docs",
-):
-    sys.path.insert(0, str(_path))
 
-import smoke_source_evidence_recall_eval as recall_eval  # noqa: E402
-
+recall_eval = import_smoke_module("smoke_source_evidence_recall_eval")
 
 class SourceEvidenceRecallEvalTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -683,7 +675,6 @@ class SourceEvidenceRecallEvalTests(unittest.TestCase):
         self.assertNotIn("lighthouse", rendered)
         self.assertNotIn("msg_gold", rendered)
         self.assertNotIn("msg_decoy", rendered)
-
 
 if __name__ == "__main__":
     unittest.main()

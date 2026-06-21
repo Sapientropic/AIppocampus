@@ -1,16 +1,11 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.source.operation_integrity import diagnose_clean_source  # noqa: E402
+from aippocampus_runtime.source.operation_integrity import diagnose_clean_source
 
 
 class OperationIntegrityTests(unittest.TestCase):
@@ -509,7 +504,6 @@ class OperationIntegrityTests(unittest.TestCase):
 
         self.assertEqual(report["conflicts"][0]["code"], "malformed_event_timestamp")
         self.assertEqual(report["conflicts"][0]["event_id"], "evt_bad_time")
-
 
 if __name__ == "__main__":
     unittest.main()

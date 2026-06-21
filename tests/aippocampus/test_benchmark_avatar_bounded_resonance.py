@@ -8,13 +8,11 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+from tests.aippocampus.import_path_helpers import import_benchmark_module
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
-BENCHMARKS = REPO_ROOT / "benchmarks" / "aippocampus"
-if str(BENCHMARKS) not in sys.path:
-    sys.path.insert(0, str(BENCHMARKS))
 
-import benchmark_avatar_bounded_resonance as benchmark  # noqa: E402
-
+benchmark = import_benchmark_module("benchmark_avatar_bounded_resonance")
 
 class AvatarBoundedResonanceBenchmarkTests(unittest.TestCase):
     def test_default_fixture_runs_public_safe_proxy_arms(self) -> None:
@@ -197,7 +195,6 @@ class AvatarBoundedResonanceBenchmarkTests(unittest.TestCase):
         )
         self.assertNotIn("cases", payload)
         self.assertNotIn("model_output_excerpt", json.dumps(payload, ensure_ascii=False))
-
 
 if __name__ == "__main__":
     unittest.main()

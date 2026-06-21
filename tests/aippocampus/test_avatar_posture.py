@@ -1,14 +1,8 @@
 from __future__ import annotations
 
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.navigation import avatar_posture  # noqa: E402
+from aippocampus_runtime.navigation import avatar_posture
 
 
 class AvatarPostureTests(unittest.TestCase):
@@ -56,7 +50,6 @@ class AvatarPostureTests(unittest.TestCase):
         self.assertEqual(edge["edge_kind"], "posture_dependency_edge")
         self.assertFalse(edge["may_satisfy_glue"])
         self.assertFalse(edge["may_transfer_fact"])
-
 
 if __name__ == "__main__":
     unittest.main()

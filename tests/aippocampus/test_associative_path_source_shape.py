@@ -15,7 +15,6 @@ def source_ref(suffix: str = "one") -> dict[str, object]:
         "line": 12,
     }
 
-
 class AssociativePathSourceShapeTests(unittest.TestCase):
     def test_private_apw_candidate_blocks_before_foreground_projection(self) -> None:
         shaped = build_associative_path_source_shape(
@@ -51,7 +50,6 @@ class AssociativePathSourceShapeTests(unittest.TestCase):
         self.assertIn("freshness_unknown", projection["triage_rank_reason_codes"])
         self.assertIn("check_currentness", projection["risk_flags"])
         self.assertEqual(shaped["guard_inputs"]["freshness"], "unknown")
-
 
 if __name__ == "__main__":
     unittest.main()

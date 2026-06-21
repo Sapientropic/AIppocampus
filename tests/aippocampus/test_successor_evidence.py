@@ -722,6 +722,5 @@ class SuccessorEvidenceTests(unittest.TestCase):
             self.assertEqual(metrics["annoyance_or_noise_count"], 0)
             self.assertEqual(metrics["source_truth_overclaim_count"], 0)
 
-
 if __name__ == "__main__":
     unittest.main()

@@ -1,24 +1,19 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.cli import facade  # noqa: E402
-from aippocampus_runtime.contracts import (  # noqa: E402
+from aippocampus_runtime.cli import facade
+from aippocampus_runtime.contracts import (
     executable_command_violations,
     foreground_action_contract_violations,
 )
-from aippocampus_runtime.journey import live as journey_live  # noqa: E402
-from aippocampus_runtime.journey import sidecar_materializer  # noqa: E402
-from aippocampus_runtime.recall import task_orientation, understanding_state  # noqa: E402
-from tests.aippocampus.frontstage_assertions import (  # noqa: E402
+from aippocampus_runtime.journey import live as journey_live
+from aippocampus_runtime.journey import sidecar_materializer
+from aippocampus_runtime.recall import task_orientation, understanding_state
+from tests.aippocampus.frontstage_assertions import (
     assert_compact_frontstage_payload,
 )
 
@@ -29,7 +24,6 @@ def write_jsonl(path: Path, rows: list[dict]) -> None:
         "".join(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n" for row in rows),
         encoding="utf-8",
     )
-
 
 class TaskOrientationPacketTests(unittest.TestCase):
     def test_packet_is_thin_active_path_projection_without_private_source_dump(self) -> None:
@@ -539,7 +533,6 @@ class TaskOrientationPacketTests(unittest.TestCase):
         self.assertEqual(private_eval.exit_code, 0, private_eval.stderr)
         self.assertEqual(private_payload["private_replay"]["status"], "measured_public_safe_aggregate")
         self.assertEqual(executable_command_violations(private_payload), [])
-
 
 if __name__ == "__main__":
     unittest.main()

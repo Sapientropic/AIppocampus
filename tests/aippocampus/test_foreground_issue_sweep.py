@@ -7,18 +7,17 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from tests.aippocampus.import_path_helpers import import_doc_tool_module
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-DOC_TOOLS = REPO_ROOT / "tools" / "aippocampus" / "docs"
-for _path in (SCRIPTS, DOC_TOOLS):
-    sys.path.insert(0, str(_path))
 
-import check_docs_health as docs_health  # noqa: E402
-import ia_pressure_guard  # noqa: E402
+docs_health = import_doc_tool_module("check_docs_health")
+ia_pressure_guard = import_doc_tool_module("ia_pressure_guard")
 
-from aippocampus_runtime.cli import facade  # noqa: E402
-from aippocampus_runtime.update import agent_status_summary  # noqa: E402
-from aippocampus_runtime.update import cli as update_cli  # noqa: E402
+from aippocampus_runtime.cli import facade
+from aippocampus_runtime.update import agent_status_summary
+from aippocampus_runtime.update import cli as update_cli
 
 
 class ForegroundIssueSweepTests(unittest.TestCase):
@@ -241,7 +240,6 @@ class ForegroundIssueSweepTests(unittest.TestCase):
         self.assertTrue(
             any(action.get("surface") == "operator_detail" for action in payload["safe_next_actions"])
         )
-
 
 if __name__ == "__main__":
     unittest.main()

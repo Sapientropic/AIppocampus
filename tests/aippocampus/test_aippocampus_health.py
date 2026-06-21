@@ -8,24 +8,13 @@ from io import StringIO
 from pathlib import Path
 from unittest import mock
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-ROOT = REPO_ROOT / "skills" / "aippocampus"
-SCRIPTS = ROOT / "scripts"
-for _path in (
-    SCRIPTS,
-    REPO_ROOT / "benchmarks" / "aippocampus",
-    REPO_ROOT / "tools" / "aippocampus" / "smoke",
-    REPO_ROOT / "tools" / "aippocampus" / "docs",
-):
-    sys.path.insert(0, str(_path))
-
-from aippocampus_runtime import health as health  # noqa: E402
-from aippocampus_runtime.warm_ambient.hook_seen_threads import (  # noqa: E402
+from aippocampus_runtime import health as health
+from aippocampus_runtime.warm_ambient.hook_seen_threads import (
     hook_seen_ledger_path_for_registry,
     hook_seen_thread_ref,
     record_hook_seen_thread,
 )
-from tests.aippocampus.health_fixtures import health_workspace  # noqa: E402
+from tests.aippocampus.health_fixtures import health_workspace
 
 
 class AippocampusHealthTests(unittest.TestCase):
@@ -2076,7 +2065,6 @@ class AippocampusHealthTests(unittest.TestCase):
         self.assertFalse(payload["legacy_aliases"]["value_printed"])
         self.assertFalse(payload["legacy_aliases"]["local_paths_included"])
         self.assertNotIn(str(root), encoded_aliases)
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -2,21 +2,21 @@ from __future__ import annotations
 
 import json
 import shutil
-import sys
 import tempfile
 import tomllib
 import unittest
 from pathlib import Path
 from unittest import mock
 
+from tests.aippocampus.import_path_helpers import import_smoke_module
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PLUGIN_ROOT = REPO_ROOT / "plugins" / "aippocampus"
-sys.path.insert(0, str(PLUGIN_ROOT))
 
-import build_plugin_package  # noqa: E402
-import smoke_plugin_install  # noqa: E402
-import smoke_real_codex_host  # noqa: E402
+import build_plugin_package
 
+smoke_plugin_install = import_smoke_module("smoke_plugin_install")
+smoke_real_codex_host = import_smoke_module("smoke_real_codex_host")
 
 class PluginDistributionTests(unittest.TestCase):
     def test_manifest_exposes_ui_metadata_and_mcp_without_auto_enabling_hooks(self) -> None:
@@ -258,7 +258,6 @@ class PluginDistributionTests(unittest.TestCase):
 
         self.assertTrue(ok)
         self.assertEqual(failures, [])
-
 
 if __name__ == "__main__":
     unittest.main()

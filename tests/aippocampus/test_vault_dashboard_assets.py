@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from io import StringIO
@@ -12,18 +11,11 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 ROOT = REPO_ROOT / "skills" / "aippocampus"
 SCRIPTS = ROOT / "scripts"
 ASSETS = SCRIPTS / "aippocampus_runtime" / "vault" / "dashboard_assets"
-for _path in (
-    SCRIPTS,
-    REPO_ROOT / "benchmarks" / "aippocampus",
-    REPO_ROOT / "tools" / "aippocampus" / "smoke",
-    REPO_ROOT / "tools" / "aippocampus" / "docs",
-):
-    sys.path.insert(0, str(_path))
 
-from aippocampus_runtime.vault import dashboard as packaged_dashboard  # noqa: E402
-from aippocampus_runtime.vault import dashboard as vault_dashboard  # noqa: E402
-from aippocampus_runtime.vault import sync as vault_sync  # noqa: E402
-from aippocampus_runtime.vault import utils as vault_utils  # noqa: E402
+from aippocampus_runtime.vault import dashboard as packaged_dashboard
+from aippocampus_runtime.vault import dashboard as vault_dashboard
+from aippocampus_runtime.vault import sync as vault_sync
+from aippocampus_runtime.vault import utils as vault_utils
 
 
 class VaultDashboardAssetTests(unittest.TestCase):
@@ -271,7 +263,6 @@ class VaultDashboardAssetTests(unittest.TestCase):
         self.assertIsInstance(pages["now"]["body_nodes"], list)
         self.assertIsInstance(pages["health"]["body_nodes"], list)
         self.assertEqual(pages["now"]["body_nodes"][0]["tag"], "div")
-
 
 if __name__ == "__main__":
     unittest.main()

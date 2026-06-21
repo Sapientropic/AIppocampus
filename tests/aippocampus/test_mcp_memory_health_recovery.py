@@ -2,18 +2,13 @@ from __future__ import annotations
 
 import json
 import os
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.contracts import executable_command_violations  # noqa: E402
-from aippocampus_runtime.mcp import server as mcp  # noqa: E402
+from aippocampus_runtime.contracts import executable_command_violations
+from aippocampus_runtime.mcp import server as mcp
 
 
 class McpMemoryHealthRecoveryTests(unittest.TestCase):
@@ -263,7 +258,6 @@ class McpMemoryHealthRecoveryTests(unittest.TestCase):
         )
         self.assertEqual(executable_command_violations(payload), [])
         self.assertNotIn(str(self.cwd), encoded)
-
 
 if __name__ == "__main__":
     unittest.main()

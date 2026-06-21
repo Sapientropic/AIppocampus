@@ -1,22 +1,19 @@
 from __future__ import annotations
 
-import sys
 import unittest
 from pathlib import Path
+
+from tests.aippocampus.import_path_helpers import import_benchmark_module
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BENCHMARKS = REPO_ROOT / "benchmarks" / "aippocampus"
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-for _path in (REPO_ROOT, BENCHMARKS, SCRIPTS):
-    if str(_path) not in sys.path:
-        sys.path.insert(0, str(_path))
 
-from benchmarks.aippocampus.shared import benchmark_maturity as maturity  # noqa: E402
+from benchmarks.aippocampus.shared import benchmark_maturity as maturity
 
-import benchmark_agent_continuity_loop as agent_loop  # noqa: E402
-import benchmark_attention_navigation_quality as attention  # noqa: E402
-import benchmark_map_rot_lifecycle_debt as map_rot  # noqa: E402
-
+agent_loop = import_benchmark_module("benchmark_agent_continuity_loop")
+attention = import_benchmark_module("benchmark_attention_navigation_quality")
+map_rot = import_benchmark_module("benchmark_map_rot_lifecycle_debt")
 
 class BenchmarkMaturityTests(unittest.TestCase):
     def test_small_contract_smoke_does_not_become_quality_gate(self) -> None:
@@ -108,7 +105,6 @@ class BenchmarkMaturityTests(unittest.TestCase):
                     "contract_gate_passed_quality_gate_not_promoted",
                 )
                 self.assertIn("next_promotion_target", meta)
-
 
 if __name__ == "__main__":
     unittest.main()

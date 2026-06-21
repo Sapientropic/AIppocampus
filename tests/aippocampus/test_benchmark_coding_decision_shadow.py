@@ -1,19 +1,11 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-ROOT = REPO_ROOT / "skills" / "aippocampus"
-SCRIPTS = ROOT / "scripts"
-BENCHMARKS = REPO_ROOT / "benchmarks" / "aippocampus"
-for _path in (SCRIPTS, BENCHMARKS):
-    sys.path.insert(0, str(_path))
+from tests.aippocampus.import_path_helpers import import_benchmark_module
 
-import benchmark_coding_decision_shadow as benchmark  # noqa: E402
-
+benchmark = import_benchmark_module("benchmark_coding_decision_shadow")
 
 class CodingDecisionShadowBenchmarkTests(unittest.TestCase):
     def test_reports_tracks_a_to_e_and_negative_controls_without_raw_text(self) -> None:
@@ -59,7 +51,6 @@ class CodingDecisionShadowBenchmarkTests(unittest.TestCase):
         self.assertTrue(payload["privacy_boundary"]["raw_text_emitted"])
         self.assertIn("Do not replace", encoded)
         self.assertIn("private_text_debug_mode_not_public_evidence", payload["cannot_claim"])
-
 
 if __name__ == "__main__":
     unittest.main()

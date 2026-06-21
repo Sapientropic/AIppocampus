@@ -8,10 +8,8 @@ import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
 
-from aippocampus_runtime.ops import (  # noqa: E402
+from aippocampus_runtime.ops import (
     coordination_topology,
     telepathy_coordination_packet,
 )
@@ -158,7 +156,6 @@ class TelepathyCoordinationPacketTests(unittest.TestCase):
         self.assertNotIn("CHAIN_OF_THOUGHT_SENTINEL", encoded)
         self.assertNotIn(str(root), encoded)
         self.assertNotIn("source://private/raw-handle", encoded)
-
 
 if __name__ == "__main__":
     unittest.main()

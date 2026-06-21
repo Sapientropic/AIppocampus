@@ -7,10 +7,9 @@ from pathlib import Path
 from unittest import mock
 
 SCRIPTS = Path(__file__).resolve().parents[2] / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
 
-from aippocampus_runtime.ops import issue_work_guard  # noqa: E402
-from aippocampus_runtime.ops.issue_work_guard import (  # noqa: E402
+from aippocampus_runtime.ops import issue_work_guard
+from aippocampus_runtime.ops.issue_work_guard import (
     build_issue_active_pull_packet,
     build_issue_work_guard_fixture_report,
     render_issue_work_guard_text,
@@ -200,7 +199,6 @@ class IssueWorkGuardTests(unittest.TestCase):
             issue_reference_from_text("https://github.com/Sapientropic/AIppocampus/issues/1776"),
             "https://github.com/Sapientropic/AIppocampus/issues/1776",
         )
-
 
 if __name__ == "__main__":
     unittest.main()

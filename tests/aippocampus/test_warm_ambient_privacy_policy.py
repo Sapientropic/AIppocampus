@@ -1,14 +1,8 @@
 from __future__ import annotations
 
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.warm_ambient import recall as warm  # noqa: E402
+from aippocampus_runtime.warm_ambient import recall as warm
 
 
 class WarmAmbientPrivacyPolicyTests(unittest.TestCase):
@@ -188,7 +182,6 @@ class WarmAmbientPrivacyPolicyTests(unittest.TestCase):
         self.assertEqual(card["privacy_action"], "purpose_check")
         self.assertEqual(card["visibility"], warm.ACTIVE_GENTLE_NUDGE)
         self.assertIn("reopen clean source", card["suggested_use"])
-
 
 if __name__ == "__main__":
     unittest.main()

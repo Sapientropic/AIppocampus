@@ -1,16 +1,13 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-if str(SCRIPTS) not in sys.path:
-    sys.path.insert(0, str(SCRIPTS))
 
-from aippocampus_runtime.reflection.aar_v2 import (  # noqa: E402
+from aippocampus_runtime.reflection.aar_v2 import (
     AAR_V2_REPORT_KIND,
     build_aar_v2_report,
     match_action_time_nudges,
@@ -230,7 +227,6 @@ class AARV2ActionTimeNudgeTests(unittest.TestCase):
         self.assertAlmostEqual(metrics["false_positive_nudge_rate"], 1 / 3)
         self.assertFalse(metrics["clean_source_mutation"])
         self.assertFalse(metrics["truth_status_changed"])
-
 
 if __name__ == "__main__":
     unittest.main()

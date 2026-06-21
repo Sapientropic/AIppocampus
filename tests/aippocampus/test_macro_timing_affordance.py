@@ -1,14 +1,8 @@
 from __future__ import annotations
 
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.macro import timing_affordance  # noqa: E402
+from aippocampus_runtime.macro import timing_affordance
 
 
 class MacroTimingAffordanceTests(unittest.TestCase):
@@ -54,7 +48,6 @@ class MacroTimingAffordanceTests(unittest.TestCase):
         self.assertTrue(repeated["timing_affordance_falsified"])
         self.assertEqual(repeated["runtime_recheck_reason"], "timing_affordance_falsified")
         self.assertTrue(repeated["boundary"]["budget_recommendation_is_not_policy_mutation"])
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,17 +1,14 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-if str(SCRIPTS) not in sys.path:
-    sys.path.insert(0, str(SCRIPTS))
 
-from aippocampus_runtime.coding import episode_arcs  # noqa: E402
-from aippocampus_runtime.recall.narrative_packet import compile_narrative_packet  # noqa: E402
+from aippocampus_runtime.coding import episode_arcs
+from aippocampus_runtime.recall.narrative_packet import compile_narrative_packet
 
 
 def source_ref(line: int, message_id: str) -> dict[str, object]:
@@ -21,7 +18,6 @@ def source_ref(line: int, message_id: str) -> dict[str, object]:
         "turn_id": f"turn-{line}",
         "source_line": line,
     }
-
 
 def event(
     event_id: str,
@@ -43,7 +39,6 @@ def event(
         row["sequence_index"] = sequence_index
     return row
 
-
 def source_catalog_for_arc(arc: dict[str, object]) -> list[dict[str, object]]:
     event_ids = [str(item) for item in arc.get("source_event_ids", [])]
     source_hashes = [str(item) for item in arc.get("source_ref_hashes", [])]
@@ -57,7 +52,6 @@ def source_catalog_for_arc(arc: dict[str, object]) -> list[dict[str, object]]:
         }
         for event_id, source_hash, ref in zip(event_ids, source_hashes, refs, strict=False)
     ]
-
 
 class NarrativePacketTests(unittest.TestCase):
     def test_merges_pathlet_domain_sequence_and_active_route_without_becoming_evidence(self) -> None:
@@ -280,7 +274,6 @@ class NarrativePacketTests(unittest.TestCase):
         self.assertNotIn("secret-token", raw)
         self.assertIn("<redacted-sensitive-label>", raw)
         self.assertIn("<sensitive-value-redacted>", raw)
-
 
 if __name__ == "__main__":
     unittest.main()

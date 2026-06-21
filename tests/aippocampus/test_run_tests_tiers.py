@@ -13,15 +13,15 @@ from pathlib import Path
 from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-TOOLS = REPO_ROOT / "tools" / "aippocampus"
-sys.path.insert(0, str(TOOLS))
 
-import run_tests  # noqa: E402
-from test_tier_manifest import (  # noqa: E402
-    BROAD_PR_PRIMARY_TIERS,
-    PR_PRIMARY_TIERS,
-    PRIMARY_TIER_ORDER,
-)
+from tests.aippocampus.import_path_helpers import import_tool_root_module
+
+run_tests = import_tool_root_module("run_tests")
+test_tier_manifest = import_tool_root_module("test_tier_manifest")
+
+BROAD_PR_PRIMARY_TIERS = test_tier_manifest.BROAD_PR_PRIMARY_TIERS
+PR_PRIMARY_TIERS = test_tier_manifest.PR_PRIMARY_TIERS
+PRIMARY_TIER_ORDER = test_tier_manifest.PRIMARY_TIER_ORDER
 
 QUICK_FORBIDDEN_TAGS = {
     "browser",
@@ -55,7 +55,6 @@ PR_CRITICAL_MODULES = {
 PR_SIZE_DRIFT_SLACK = 10
 TESTS_ROOT = REPO_ROOT / "tests" / "aippocampus"
 
-
 def _raw_sleep_sites(path: Path) -> list[str]:
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     sites: list[str] = []
@@ -73,7 +72,6 @@ def _raw_sleep_sites(path: Path) -> list[str]:
         elif isinstance(func, ast.Name) and func.id == "sleep":
             sites.append(f"{path.relative_to(REPO_ROOT)}:{node.lineno}")
     return sites
-
 
 class RunTestsTierTests(unittest.TestCase):
     def test_main_preflights_tempdir_before_loading_tests(self) -> None:
@@ -882,7 +880,6 @@ class RunTestsTierTests(unittest.TestCase):
         self.assertIn("optional-dependencies", pyproject["project"])
         self.assertIn("benchmark", pyproject["project"]["optional-dependencies"])
         self.assertEqual(pyproject["project"]["optional-dependencies"]["benchmark"], [])
-
 
 if __name__ == "__main__":
     unittest.main()

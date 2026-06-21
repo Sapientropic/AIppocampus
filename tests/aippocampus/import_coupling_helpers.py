@@ -9,7 +9,6 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 ROOT = REPO_ROOT / "skills" / "aippocampus"
 SCRIPTS = ROOT / "scripts"
 
-
 def load_module_from_path(name: str, path: Path):
     spec = importlib.util.spec_from_file_location(name, path)
     if spec is None or spec.loader is None:
@@ -17,7 +16,6 @@ def load_module_from_path(name: str, path: Path):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
-
 
 def script_modules() -> dict[str, Path]:
     modules: dict[str, Path] = {}
@@ -30,14 +28,12 @@ def script_modules() -> dict[str, Path]:
             modules[".".join(parts)] = path
     return modules
 
-
 def pyproject_py_modules() -> set[str]:
     text = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
     match = re.search(r"(?ms)^py-modules\s*=\s*\[(.*?)^\]", text)
     if not match:
         return set()
     return set(re.findall(r'"([^"]+)"', match.group(1)))
-
 
 def import_targets_for_node(
     node: ast.AST,
@@ -72,7 +68,6 @@ def import_targets_for_node(
             add_if_known(".".join([*parent, alias.name]))
     return targets
 
-
 def same_dir_import_edges(*, top_level_only: bool = False) -> dict[str, set[str]]:
     modules = script_modules()
     edges = {name: set() for name in modules}
@@ -84,7 +79,6 @@ def same_dir_import_edges(*, top_level_only: bool = False) -> dict[str, set[str]
                 import_targets_for_node(node, current_module=name, modules=modules)
             )
     return edges
-
 
 def strongly_connected_components(edges: dict[str, set[str]]) -> list[list[str]]:
     index_by_node: dict[str, int] = {}

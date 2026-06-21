@@ -1,22 +1,9 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-ROOT = REPO_ROOT / "skills" / "aippocampus"
-SCRIPTS = ROOT / "scripts"
-for _path in (
-    SCRIPTS,
-    REPO_ROOT / "benchmarks" / "aippocampus",
-    REPO_ROOT / "tools" / "aippocampus" / "smoke",
-    REPO_ROOT / "tools" / "aippocampus" / "docs",
-):
-    sys.path.insert(0, str(_path))
-
-from aippocampus_runtime.dream import precision_policy as policy  # noqa: E402
+from aippocampus_runtime.dream import precision_policy as policy
 
 
 def source_ref(thread_key: str, message_id: str, line: int) -> dict[str, object]:
@@ -26,7 +13,6 @@ def source_ref(thread_key: str, message_id: str, line: int) -> dict[str, object]
         "line": line,
         "project_label": "AIppocampus",
     }
-
 
 def dream_finding(**overrides: object) -> dict[str, object]:
     refs = [source_ref("session:a", "msg-a", 10), source_ref("session:b", "msg-b", 20)]
@@ -55,7 +41,6 @@ def dream_finding(**overrides: object) -> dict[str, object]:
     base.update(overrides)
     return base
 
-
 def working_memory_row(**overrides: object) -> dict[str, object]:
     refs = [source_ref("session:a", "msg-a", 10), source_ref("session:b", "msg-b", 20)]
     base: dict[str, object] = {
@@ -74,7 +59,6 @@ def working_memory_row(**overrides: object) -> dict[str, object]:
     }
     base.update(overrides)
     return base
-
 
 class DreamPrecisionPolicyTests(unittest.TestCase):
     def test_retention_policy_separates_hard_gates_from_soft_pressure(self) -> None:
@@ -340,7 +324,6 @@ class DreamPrecisionPolicyTests(unittest.TestCase):
         self.assertNotIn("source_refs", encoded)
         self.assertNotIn("message_id", encoded)
         self.assertNotIn("thread_key", encoded)
-
 
 if __name__ == "__main__":
     unittest.main()

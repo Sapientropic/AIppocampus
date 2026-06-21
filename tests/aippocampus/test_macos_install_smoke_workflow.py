@@ -13,7 +13,6 @@ RELEASE_CHECKLIST = REPO_ROOT / "docs" / "guides" / "setup" / "release-checklist
 README = REPO_ROOT / "README.md"
 READINESS = REPO_ROOT / "docs" / "evidence" / "readiness" / "stage-0-5-readiness.md"
 
-
 class MacOSInstallSmokeWorkflowTests(unittest.TestCase):
     def test_workflow_is_manual_macos_install_smoke_without_secrets(self) -> None:
         text = WORKFLOW.read_text(encoding="utf-8")
@@ -153,7 +152,6 @@ class MacOSInstallSmokeWorkflowTests(unittest.TestCase):
         self.assertIn("Do not flatten them into one local marathon", flattened)
         self.assertIn("macOS", text)
         self.assertIn("TMPDIR", text)
-
 
 if __name__ == "__main__":
     unittest.main()

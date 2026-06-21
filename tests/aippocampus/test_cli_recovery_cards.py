@@ -15,14 +15,13 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
 
-from aippocampus_runtime.cli import facade  # noqa: E402
-from aippocampus_runtime.contracts import executable_command_violations  # noqa: E402
+from aippocampus_runtime.cli import facade
+from aippocampus_runtime.contracts import executable_command_violations
 from aippocampus_runtime.recall.agent_continuity_cli_support import (
-    render_recall_human,  # noqa: E402
+    render_recall_human,
 )
-from tests.aippocampus.frontstage_assertions import (  # noqa: E402
+from tests.aippocampus.frontstage_assertions import (
     assert_compact_frontstage_payload,
     assert_semantic_human_output,
 )

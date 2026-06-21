@@ -1,15 +1,10 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.macro import hexagram  # noqa: E402
+from aippocampus_runtime.macro import hexagram
 
 
 class MacroHexagramTests(unittest.TestCase):
@@ -175,7 +170,6 @@ class MacroHexagramTests(unittest.TestCase):
         self.assertEqual(len(hexagram.HEXAGRAMS), 64)
         self.assertEqual(len(hexagram.HEXAGRAMS_BY_NAME), 64)
         self.assertEqual(len(hexagram.HEXAGRAMS_BY_LINES), 64)
-
 
 if __name__ == "__main__":
     unittest.main()

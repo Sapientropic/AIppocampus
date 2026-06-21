@@ -3,16 +3,10 @@ from __future__ import annotations
 import contextlib
 import io
 import json
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.public_output import emit_public_json, emit_public_text  # noqa: E402
-from aippocampus_runtime.update import operator_output  # noqa: E402
+from aippocampus_runtime.public_output import emit_public_json, emit_public_text
+from aippocampus_runtime.update import operator_output
 
 
 class PublicOutputTests(unittest.TestCase):
@@ -74,7 +68,6 @@ class PublicOutputTests(unittest.TestCase):
         self.assertIn("token=<redacted:secret>", emitted["nested"]["message"])
         self.assertNotIn("hunter2", encoded)
         self.assertNotIn("token=abc123", encoded)
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -18,7 +18,6 @@ from aippocampus_runtime.sync import bundle as sync_bundle
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 
-
 class AippocampusMcpServerOpsTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
@@ -782,8 +781,6 @@ class AippocampusMcpServerOpsTests(unittest.TestCase):
         self.assertIn("search_memory", tool_names)
         payload = json.loads(responses[2]["result"]["content"][0]["text"])
         self.assertEqual(payload["matches"][0]["message_id"], "msg_final")
-
-
 
 if __name__ == "__main__":
     unittest.main()

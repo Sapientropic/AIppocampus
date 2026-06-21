@@ -1,28 +1,18 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from contextlib import redirect_stdout
 from io import StringIO
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-ROOT = REPO_ROOT / "skills" / "aippocampus"
-SCRIPTS = ROOT / "scripts"
-for _path in (
-    SCRIPTS,
-    REPO_ROOT / "benchmarks" / "aippocampus",
-    REPO_ROOT / "tools" / "aippocampus" / "smoke",
-    REPO_ROOT / "tools" / "aippocampus" / "docs",
-):
-    sys.path.insert(0, str(_path))
+from tests.aippocampus.import_path_helpers import import_benchmark_module
 
-import benchmark_fts5_recall as benchmark  # noqa: E402
-from aippocampus_runtime.recall.index_builder import make_sqlite  # noqa: E402
-from aippocampus_runtime.recall.query_policy import split_query_terms  # noqa: E402
-from aippocampus_runtime.recall.retrieval import search_hybrid_index  # noqa: E402
+benchmark = import_benchmark_module("benchmark_fts5_recall")
+from aippocampus_runtime.recall.index_builder import make_sqlite
+from aippocampus_runtime.recall.query_policy import split_query_terms
+from aippocampus_runtime.recall.retrieval import search_hybrid_index
 
 
 def write_jsonl(path: Path, rows: list[dict]) -> None:
@@ -31,7 +21,6 @@ def write_jsonl(path: Path, rows: list[dict]) -> None:
         "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows),
         encoding="utf-8",
     )
-
 
 class Fts5RecallBenchmarkTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -353,7 +342,6 @@ class Fts5RecallBenchmarkTests(unittest.TestCase):
         self.assertTrue(payload["ok"])
         self.assertEqual(payload["privacy_boundary"]["source_text"], "public_synthetic_fixture")
         self.assertNotIn("registry", payload)
-
 
 if __name__ == "__main__":
     unittest.main()

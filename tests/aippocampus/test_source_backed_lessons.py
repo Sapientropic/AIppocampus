@@ -1,13 +1,8 @@
 from __future__ import annotations
 
-import sys
 import unittest
-from pathlib import Path
 
-SCRIPTS = Path(__file__).resolve().parents[2] / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.recall.source_backed_lessons import (  # noqa: E402
+from aippocampus_runtime.recall.source_backed_lessons import (
     apply_lesson_constraints_to_packet,
     build_source_backed_lesson_fixture_report,
     extract_source_backed_lesson_candidates,
@@ -192,7 +187,6 @@ class SourceBackedLessonsTests(unittest.TestCase):
 
         self.assertEqual(candidates[0]["status"], "backstage")
         self.assertFalse(promote_lesson_candidate(candidates[0], independent_trail_count=3)["foreground_activation_allowed"])
-
 
 if __name__ == "__main__":
     unittest.main()

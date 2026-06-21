@@ -1,14 +1,9 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
-from pathlib import Path
 
-SCRIPTS = Path(__file__).resolve().parents[2] / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.learning_loop import (  # noqa: E402
+from aippocampus_runtime.learning_loop import (
     adapt_behavior_events_to_review_signals,
     adjudicate_semantic_learning_hypotheses,
     build_learning_action_time_packet,
@@ -24,7 +19,7 @@ from aippocampus_runtime.learning_loop import (  # noqa: E402
     project_action_time_guidance,
     surface_semantic_learning_guidance,
 )
-from aippocampus_runtime.learning_loop.semantic_learning import (  # noqa: E402
+from aippocampus_runtime.learning_loop.semantic_learning import (
     summarize_semantic_learning_guidance_outcomes,
 )
 
@@ -36,7 +31,6 @@ def source_ref(name: str) -> dict[str, object]:
         "message_id": f"msg:{name}",
         "line": 10,
     }
-
 
 def behavior_event(
     event_id: str,
@@ -77,7 +71,6 @@ def behavior_event(
         "output": "PUBLIC_FIXTURE_PAYLOAD_MARKER raw stack should not be copied",
         "command": "pytest tests/private_path.py",
     }
-
 
 class LearningLoopTests(unittest.TestCase):
     def test_behavior_adapter_outputs_review_rows_without_raw_payloads(self) -> None:
@@ -745,7 +738,6 @@ class LearningLoopTests(unittest.TestCase):
         self.assertNotIn("PUBLIC_FIXTURE_PAYLOAD_MARKER", encoded)
         self.assertNotIn("source_audit_payload_bytes", encoded)
         self.assertNotIn("tool_transcript_stream", encoded)
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,21 +1,15 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
-from pathlib import Path
 
-SCRIPTS = Path(__file__).resolve().parents[2] / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.dream import topology_scout  # noqa: E402
-from aippocampus_runtime.navigation import local_global_compatibility  # noqa: E402
-from aippocampus_runtime.navigation import source_shape_projection as projection  # noqa: E402
+from aippocampus_runtime.dream import topology_scout
+from aippocampus_runtime.navigation import local_global_compatibility
+from aippocampus_runtime.navigation import source_shape_projection as projection
 
 
 def source_ref(name: str) -> dict[str, str]:
     return {"source_id": f"source:{name}", "message_id": f"msg:{name}"}
-
 
 class SourceShapeProjectionTests(unittest.TestCase):
     def test_learning_finding_projects_across_layers_into_aippo_and_action_hint(self) -> None:
@@ -179,7 +173,6 @@ class SourceShapeProjectionTests(unittest.TestCase):
         )
         self.assertTrue(candidate["cross_layer_projection"]["does_not_raise_authority"])
         self.assertFalse(candidate["foreground_eligible"])
-
 
 if __name__ == "__main__":
     unittest.main()

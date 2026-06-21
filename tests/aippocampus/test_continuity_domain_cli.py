@@ -9,9 +9,8 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
 
-from aippocampus_runtime.recall import continuity_domain_cli  # noqa: E402
+from aippocampus_runtime.recall import continuity_domain_cli
 
 
 class ContinuityDomainCliTests(unittest.TestCase):
@@ -277,7 +276,6 @@ class ContinuityDomainCliTests(unittest.TestCase):
         self.assertNotIn("锚点", command)
         self.assertNotIn("Sapientropic", command)
         self.assertNotIn("--append", command)
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,19 +1,16 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
 from pathlib import Path
+
+from tests.aippocampus.import_path_helpers import import_benchmark_module
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BENCHMARKS = REPO_ROOT / "benchmarks" / "aippocampus"
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-for path in (BENCHMARKS, SCRIPTS):
-    if str(path) not in sys.path:
-        sys.path.insert(0, str(path))
 
-import benchmark_fresh_thread_recall_demo as benchmark  # noqa: E402
-
+benchmark = import_benchmark_module("benchmark_fresh_thread_recall_demo")
 
 class FreshThreadRecallDemoBenchmarkTests(unittest.TestCase):
     def test_runner_reports_public_safe_three_arm_demo(self) -> None:
@@ -96,7 +93,6 @@ class FreshThreadRecallDemoBenchmarkTests(unittest.TestCase):
         self.assertNotIn("private source", serialized)
         self.assertNotIn("E:\\", serialized)
         self.assertNotIn("C:\\", serialized)
-
 
 if __name__ == "__main__":
     unittest.main()

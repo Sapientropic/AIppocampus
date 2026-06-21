@@ -2,23 +2,11 @@ from __future__ import annotations
 
 import hashlib
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-ROOT = REPO_ROOT / "skills" / "aippocampus"
-SCRIPTS = ROOT / "scripts"
-for _path in (
-    SCRIPTS,
-    REPO_ROOT / "benchmarks" / "aippocampus",
-    REPO_ROOT / "tools" / "aippocampus" / "smoke",
-    REPO_ROOT / "tools" / "aippocampus" / "docs",
-):
-    sys.path.insert(0, str(_path))
-
-from aippocampus_runtime.recall import semantic_trigger_router as router  # noqa: E402
+from aippocampus_runtime.recall import semantic_trigger_router as router
 
 
 class SemanticTriggerRouterTests(unittest.TestCase):
@@ -331,7 +319,6 @@ class SemanticTriggerRouterTests(unittest.TestCase):
         self.assertEqual(result["trigger_count"], 0)
         self.assertEqual(result["promoted_candidate_count"], 0)
         self.assertEqual(self.output.read_text(encoding="utf-8"), "")
-
 
 if __name__ == "__main__":
     unittest.main()

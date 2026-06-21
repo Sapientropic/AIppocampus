@@ -1,14 +1,8 @@
 from __future__ import annotations
 
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.recall.foreground_confidence import (  # noqa: E402
+from aippocampus_runtime.recall.foreground_confidence import (
     foreground_recall_confidence_decision,
 )
 
@@ -106,7 +100,6 @@ class ForegroundRecallConfidenceTests(unittest.TestCase):
         self.assertTrue(decision["emit"])
         self.assertEqual(decision["decision"], "emit_confident_route")
         self.assertIn("reopenable_route_shape_present", decision["reason_codes"])
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -4,28 +4,22 @@ import contextlib
 import io
 import json
 import os
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.hooks import action_hint_cache as cache  # noqa: E402
-from aippocampus_runtime.learning_loop.core import project_action_time_guidance  # noqa: E402
-from aippocampus_runtime.learning_loop.effectiveness_ledger import (  # noqa: E402
+from aippocampus_runtime.hooks import action_hint_cache as cache
+from aippocampus_runtime.learning_loop.core import project_action_time_guidance
+from aippocampus_runtime.learning_loop.effectiveness_ledger import (
     append_ledger_rows,
     ledger_rows_from_guidance_outcomes,
 )
-from aippocampus_runtime.reflection.aar_v2 import build_aar_v2_report  # noqa: E402
+from aippocampus_runtime.reflection.aar_v2 import build_aar_v2_report
 
 
 def source_ref(name: str) -> dict[str, str]:
     return {"source_id": f"clean:{name}", "segment_id": f"msg-{name}"}
-
 
 class ActionHintCacheTests(unittest.TestCase):
     def test_materializes_two_existing_provider_families(self) -> None:
@@ -583,7 +577,6 @@ class ActionHintCacheTests(unittest.TestCase):
             result["foreground_action"]["id"],
             "review_semantic_guidance_before_cache",
         )
-
 
 if __name__ == "__main__":
     unittest.main()

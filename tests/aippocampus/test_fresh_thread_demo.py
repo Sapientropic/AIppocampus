@@ -1,20 +1,16 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
 from pathlib import Path
 
+from tests.aippocampus.import_path_helpers import import_benchmark_module
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-if str(SCRIPTS) not in sys.path:
-    sys.path.insert(0, str(SCRIPTS))
-BENCHMARKS = REPO_ROOT / "benchmarks" / "aippocampus"
-if str(BENCHMARKS) not in sys.path:
-    sys.path.insert(0, str(BENCHMARKS))
 
-import benchmark_fresh_thread_recall_demo as benchmark  # noqa: E402
-from aippocampus_runtime.recall import fresh_thread_demo as demo  # noqa: E402
+benchmark = import_benchmark_module("benchmark_fresh_thread_recall_demo")
+from aippocampus_runtime.recall import fresh_thread_demo as demo
 
 
 class FreshThreadDemoTests(unittest.TestCase):
@@ -201,7 +197,6 @@ class FreshThreadDemoTests(unittest.TestCase):
         self.assertEqual(readout["claim_level"], "public_safe_fixture_validation")
         self.assertEqual(readout["metrics"]["manual_query_invention_count"], 0)
         self.assertIn("real-history fresh-thread recall quality", payload["cannot_claim"])
-
 
 if __name__ == "__main__":
     unittest.main()

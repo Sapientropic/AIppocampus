@@ -1,25 +1,13 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
 from dataclasses import replace
-from pathlib import Path
 from unittest.mock import patch
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-ROOT = REPO_ROOT / "skills" / "aippocampus"
-SCRIPTS = ROOT / "scripts"
-for _path in (
-    SCRIPTS,
-    REPO_ROOT / "benchmarks" / "aippocampus",
-    REPO_ROOT / "tools" / "aippocampus" / "smoke",
-    REPO_ROOT / "tools" / "aippocampus" / "docs",
-):
-    sys.path.insert(0, str(_path))
+from tests.aippocampus.import_path_helpers import import_benchmark_module
 
-import benchmark_compaction_continuity as benchmark  # noqa: E402
-
+benchmark = import_benchmark_module("benchmark_compaction_continuity")
 
 class CompactionContinuityBenchmarkTests(unittest.TestCase):
     def test_track_d_runner_reports_coverage_without_private_text(self) -> None:
@@ -343,7 +331,6 @@ class CompactionContinuityBenchmarkTests(unittest.TestCase):
         self.assertNotIn("C:\\", encoded)
         self.assertNotIn("Bearer ", encoded)
         self.assertNotIn("thread:track-d-demo", encoded)
-
 
 if __name__ == "__main__":
     unittest.main()

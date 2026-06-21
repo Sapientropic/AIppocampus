@@ -12,9 +12,8 @@ from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
 
-from aippocampus_runtime.update import (  # noqa: E402
+from aippocampus_runtime.update import (
     codex_plugin_cli,
     host_probe_warnings,
     plugin_installer,
@@ -60,7 +59,6 @@ class FakeCodexRunner:
             return subprocess.CompletedProcess(command, 0, "marketplace removed", "")
         raise AssertionError(f"unexpected command: {command!r}")
 
-
 def successful_probe() -> dict:
     return {
         "validation_ok": True,
@@ -83,7 +81,6 @@ def successful_probe() -> dict:
         },
     }
 
-
 def successful_probe_with_noisy_stderr() -> dict:
     result = successful_probe()
     result["stderr_tail"] = "\n".join(
@@ -96,7 +93,6 @@ def successful_probe_with_noisy_stderr() -> dict:
         ]
     )
     return result
-
 
 class PluginInstallerTests(unittest.TestCase):
     def test_plugin_install_summary_surfaces_mcp_command_path_repair(self) -> None:

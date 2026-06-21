@@ -21,7 +21,6 @@ from tests.aippocampus.frontstage_assertions import assert_semantic_human_output
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 
-
 class AgentOptInAippoSemanticTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
@@ -607,8 +606,6 @@ class AgentOptInAippoSemanticTests(unittest.TestCase):
         )
         self.assertNotIn("activation_packet", proc.stdout)
         self.assertNotIn("policy_boundary", proc.stdout)
-
-
 
 if __name__ == "__main__":
     unittest.main()

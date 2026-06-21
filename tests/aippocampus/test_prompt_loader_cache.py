@@ -1,21 +1,16 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime import io_mtime_cache  # noqa: E402
-from aippocampus_runtime.dream import working_memory_publication  # noqa: E402
-from aippocampus_runtime.navigation import associations, cognitive_map  # noqa: E402
-from aippocampus_runtime.registry import store as registry_store  # noqa: E402
-from tests.aippocampus.timing_fixtures import advance_file_mtime  # noqa: E402
+from aippocampus_runtime import io_mtime_cache
+from aippocampus_runtime.dream import working_memory_publication
+from aippocampus_runtime.navigation import associations, cognitive_map
+from aippocampus_runtime.registry import store as registry_store
+from tests.aippocampus.timing_fixtures import advance_file_mtime
 
 
 class PromptLoaderCacheTests(unittest.TestCase):
@@ -101,7 +96,6 @@ class PromptLoaderCacheTests(unittest.TestCase):
 
         self.assertEqual(first, second)
         self.assertEqual(second[0]["route_id"], "route_target")
-
 
 if __name__ == "__main__":
     unittest.main()

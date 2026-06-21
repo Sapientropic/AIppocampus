@@ -6,14 +6,12 @@ import sys
 import unittest
 from pathlib import Path
 
+from tests.aippocampus.import_path_helpers import import_benchmark_module
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BENCHMARKS = REPO_ROOT / "benchmarks" / "aippocampus"
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-for _path in (SCRIPTS, BENCHMARKS):
-    sys.path.insert(0, str(_path))
 
-import benchmark_exact_source_search_flows as benchmark  # noqa: E402
-
+benchmark = import_benchmark_module("benchmark_exact_source_search_flows")
 
 class ExactSourceSearchFlowBenchmarkTests(unittest.TestCase):
     def test_registry_and_last_recall_search_flow_gate(self) -> None:
@@ -41,7 +39,6 @@ class ExactSourceSearchFlowBenchmarkTests(unittest.TestCase):
         payload = json.loads(result.stdout)
         self.assertEqual(payload["kind"], "aippocampus_exact_source_search_flow_benchmark")
         self.assertTrue(payload["ok"])
-
 
 if __name__ == "__main__":
     unittest.main()

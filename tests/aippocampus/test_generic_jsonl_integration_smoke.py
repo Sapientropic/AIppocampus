@@ -1,16 +1,11 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SMOKE = REPO_ROOT / "tools" / "aippocampus" / "smoke"
-sys.path.insert(0, str(SMOKE))
+from tests.aippocampus.import_path_helpers import import_smoke_module
 
-import smoke_generic_jsonl_integration as smoke  # noqa: E402
-
+smoke = import_smoke_module("smoke_generic_jsonl_integration")
 
 class GenericJsonlIntegrationSmokeTests(unittest.TestCase):
     def test_generic_jsonl_import_then_mcp_search_smoke_passes(self) -> None:
@@ -36,7 +31,6 @@ class GenericJsonlIntegrationSmokeTests(unittest.TestCase):
                 for ref in proof["mcp"]["source_refs"]
             )
         )
-
 
 if __name__ == "__main__":
     unittest.main()

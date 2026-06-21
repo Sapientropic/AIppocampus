@@ -1,18 +1,12 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.macro import three_powers  # noqa: E402
-from aippocampus_runtime.navigation import macro_router_interface  # noqa: E402
-from aippocampus_runtime.navigation import navigation_potential as nav  # noqa: E402
-from aippocampus_runtime.navigation.parallel_derivation_bundle import (  # noqa: E402
+from aippocampus_runtime.macro import three_powers
+from aippocampus_runtime.navigation import macro_router_interface
+from aippocampus_runtime.navigation import navigation_potential as nav
+from aippocampus_runtime.navigation.parallel_derivation_bundle import (
     build_parallel_derivation_bundle,
     dependency_dag,
     preflattening_gate_for_route_affordance,
@@ -22,7 +16,6 @@ from aippocampus_runtime.navigation.parallel_derivation_bundle import (  # noqa:
 def ref(label: str) -> dict[str, object]:
     return {"source_id": f"src-{label}", "message_id": f"msg-{label}", "source_line": 10}
 
-
 def snapshot() -> dict[str, object]:
     return {
         "snapshot_id": "snap-1316",
@@ -31,7 +24,6 @@ def snapshot() -> dict[str, object]:
         "topic_epoch": "topic-v1",
         "source_coverage_time": {"start": "2026-06-13T00:00:00Z", "end": "2026-06-13T01:00:00Z"},
     }
-
 
 def derivation(
     derivation_id: str,
@@ -52,7 +44,6 @@ def derivation(
         "shape": shape or {},
     }
 
-
 def route_candidates() -> list[dict[str, object]]:
     return [
         {
@@ -68,7 +59,6 @@ def route_candidates() -> list[dict[str, object]]:
             "source_refs": [ref("shared")],
         },
     ]
-
 
 class ParallelDerivationBundleTests(unittest.TestCase):
     def test_source_basis_alignment_shared_partial_and_no_overlap(self) -> None:
@@ -288,7 +278,6 @@ class ParallelDerivationBundleTests(unittest.TestCase):
         self.assertNotEqual(potential["affordance"], "offer_next_step")
         self.assertIn("parallel_derivation_recheck_required", potential["preconditions"])
         self.assertIn("parallel_derivation:latent_route_conflict", context["router_effects"]["recheck_triggers"])
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,14 +1,8 @@
 from __future__ import annotations
 
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.macro import hexagram, transform_orbit  # noqa: E402
+from aippocampus_runtime.macro import hexagram, transform_orbit
 
 
 class MacroGroupActionInvariantTests(unittest.TestCase):
@@ -61,7 +55,6 @@ class MacroGroupActionInvariantTests(unittest.TestCase):
 
         self.assertTrue(audit["orbit_oscillation_warning"])
         self.assertEqual(audit["runtime_recheck_reason"], "orbit_oscillation_warning")
-
 
 if __name__ == "__main__":
     unittest.main()

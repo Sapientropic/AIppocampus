@@ -9,7 +9,6 @@ PUBLIC_LONGITUDINAL_REPORTS = (
     REPO_ROOT / "docs" / "evidence" / "benchmarks" / "reports" / "public-longitudinal"
 )
 
-
 class PublishedBenchmarkReportsTests(unittest.TestCase):
     def test_react_vcs_report_exposes_ci_and_zero_violation_upper_bound(self) -> None:
         report = json.loads(
@@ -94,7 +93,6 @@ class PublishedBenchmarkReportsTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertIn("low-inference contract-smoke", markdown)
         self.assertIn("95% Wilson upper bound 56.15% (n=3)", markdown)
-
 
 if __name__ == "__main__":
     unittest.main()

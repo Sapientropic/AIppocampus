@@ -1,16 +1,10 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.macro import timing_affordance  # noqa: E402
-from aippocampus_runtime.navigation import macro_field_atlas  # noqa: E402
+from aippocampus_runtime.macro import timing_affordance
+from aippocampus_runtime.navigation import macro_field_atlas
 
 
 def _section(index: int, **overrides: object) -> dict[str, object]:
@@ -30,7 +24,6 @@ def _section(index: int, **overrides: object) -> dict[str, object]:
     }
     row.update(overrides)
     return row
-
 
 class MacroFieldAtlasTests(unittest.TestCase):
     def test_materializer_checks_only_selected_top_n_pairs(self) -> None:
@@ -174,7 +167,6 @@ class MacroFieldAtlasTests(unittest.TestCase):
         self.assertEqual(projection["primary_lane"]["attention_bandwidth"], "reopen_first")
         self.assertIn("timing_affordance_falsified", projection["warnings"])
         self.assertIn("source_reanchoring_required", projection["warnings"])
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,15 +1,9 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.navigation import attention_evidence_packager as packager  # noqa: E402
+from aippocampus_runtime.navigation import attention_evidence_packager as packager
 
 
 class AttentionEvidencePackagerTests(unittest.TestCase):
@@ -71,7 +65,6 @@ class AttentionEvidencePackagerTests(unittest.TestCase):
         self.assertEqual(report["metrics"]["wrong_source_span_promoted_count"], 0)
         self.assertEqual(report["metrics"]["stale_or_conflicted_claim_ready_count"], 0)
         self.assertIn("exact_line_quality_or_sota", report["cannot_claim"])
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,22 +1,17 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SMOKE = REPO_ROOT / "tools" / "aippocampus" / "smoke"
-sys.path.insert(0, str(SMOKE))
+from tests.aippocampus.import_path_helpers import import_smoke_module
 
-import smoke_codex_long_session_continuity as live_smoke  # noqa: E402
-
+live_smoke = import_smoke_module("smoke_codex_long_session_continuity")
 
 def read_jsonl(path: Path) -> list[dict[str, object]]:
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
-
 
 class CodexLongSessionSmokeTests(unittest.TestCase):
     def test_correction_survival_uses_hashes_without_raw_tokens(self) -> None:
@@ -262,7 +257,6 @@ class CodexLongSessionSmokeTests(unittest.TestCase):
         self.assertNotIn("raw-thread-for-compaction-failure", serialized)
         self.assertNotIn("Private", serialized)
         self.assertEqual(live_smoke.sensitive_string_issues(rows), [])
-
 
 if __name__ == "__main__":
     unittest.main()

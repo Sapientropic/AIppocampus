@@ -15,7 +15,6 @@ from aippocampus_runtime.recall.associative_path_walker import walk_associative_
 def source_ref() -> dict[str, object]:
     return {"thread_key": "thread:apw", "source_id": "src", "message_id": "msg"}
 
-
 def report_with_feedback(feedback: list[dict[str, object]]) -> dict[str, object]:
     return walk_associative_paths(
         query="slime mold exploratory recall",
@@ -39,7 +38,6 @@ def report_with_feedback(feedback: list[dict[str, object]]) -> dict[str, object]
         ],
         feedback_rows=feedback,
     )
-
 
 class AssociativePathFeedbackTests(unittest.TestCase):
     def test_positive_followthrough_reinforces_only_same_scope(self) -> None:
@@ -119,7 +117,6 @@ class AssociativePathFeedbackTests(unittest.TestCase):
         self.assertFalse(receipt["path_written"])
         self.assertEqual(row["signal"], "wrong_route_drag")
         self.assertEqual(row["claim_boundary"], "feedback_is_not_source_truth")
-
 
 if __name__ == "__main__":
     unittest.main()

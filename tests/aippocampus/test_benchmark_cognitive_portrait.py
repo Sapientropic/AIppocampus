@@ -1,22 +1,10 @@
 from __future__ import annotations
 
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-ROOT = REPO_ROOT / "skills" / "aippocampus"
-SCRIPTS = ROOT / "scripts"
-for _path in (
-    SCRIPTS,
-    REPO_ROOT / "benchmarks" / "aippocampus",
-    REPO_ROOT / "tools" / "aippocampus" / "smoke",
-    REPO_ROOT / "tools" / "aippocampus" / "docs",
-):
-    sys.path.insert(0, str(_path))
+from tests.aippocampus.import_path_helpers import import_benchmark_module
 
-import benchmark_cognitive_portrait as benchmark  # noqa: E402
-
+benchmark = import_benchmark_module("benchmark_cognitive_portrait")
 
 class CognitivePortraitBenchmarkTests(unittest.TestCase):
     def test_benchmark_compares_structured_portrait_to_full_source_context(self) -> None:
@@ -221,7 +209,6 @@ class CognitivePortraitBenchmarkTests(unittest.TestCase):
         self.assertIn("debug_contexts", payload)
         self.assertIn("structured_portrait", payload["debug_contexts"])
         self.assertIn("full_source_context", payload["debug_contexts"])
-
 
 if __name__ == "__main__":
     unittest.main()

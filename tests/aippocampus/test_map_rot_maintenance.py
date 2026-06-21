@@ -7,14 +7,12 @@ import tempfile
 import unittest
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-BENCHMARKS = REPO_ROOT / "benchmarks" / "aippocampus"
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-for _path in (BENCHMARKS, SCRIPTS):
-    sys.path.insert(0, str(_path))
+from tests.aippocampus.import_path_helpers import import_benchmark_module
 
-import benchmark_map_rot_lifecycle_debt as benchmark  # noqa: E402
-from aippocampus_runtime.ops import map_rot_maintenance as maintenance  # noqa: E402
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+benchmark = import_benchmark_module("benchmark_map_rot_lifecycle_debt")
+from aippocampus_runtime.ops import map_rot_maintenance as maintenance
 
 
 class MapRotMaintenanceTests(unittest.TestCase):
@@ -161,7 +159,6 @@ class MapRotMaintenanceTests(unittest.TestCase):
         self.assertNotIn(str(root), encoded)
         self.assertNotIn("PRIVATE source text", encoded)
         self.assertNotIn("private-thread-id", encoded)
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -14,20 +14,13 @@ from unittest.mock import patch
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ROOT = REPO_ROOT / "skills" / "aippocampus"
 SCRIPTS = ROOT / "scripts"
-for _path in (
-    SCRIPTS,
-    REPO_ROOT / "benchmarks" / "aippocampus",
-    REPO_ROOT / "tools" / "aippocampus" / "smoke",
-    REPO_ROOT / "tools" / "aippocampus" / "docs",
-):
-    sys.path.insert(0, str(_path))
 
-from aippocampus_runtime.contracts import executable_command_violations  # noqa: E402
-from aippocampus_runtime.onboarding import codex as onboard  # noqa: E402
-from aippocampus_runtime.onboarding import facade as onboard_facade  # noqa: E402
-from aippocampus_runtime.onboarding import frontier as onboard_frontier  # noqa: E402
-from aippocampus_runtime.registry import api as registry  # noqa: E402
-from conversation_sources import CodexConversationProvider  # noqa: E402
+from aippocampus_runtime.contracts import executable_command_violations
+from aippocampus_runtime.onboarding import codex as onboard
+from aippocampus_runtime.onboarding import facade as onboard_facade
+from aippocampus_runtime.onboarding import frontier as onboard_frontier
+from aippocampus_runtime.registry import api as registry
+from conversation_sources import CodexConversationProvider
 
 ONBOARD_CMD = [sys.executable, "-m", "aippocampus_runtime.onboarding.facade"]
 PROVIDER_ENV_NOISE = (
@@ -38,7 +31,6 @@ PROVIDER_ENV_NOISE = (
     "DEEPSEEK_PRO_MODEL",
     "AIIPPOCAMPUS_SUBCONSCIOUS_HOOK",
 )
-
 
 class OnboardCodexTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -953,7 +945,6 @@ class OnboardCodexTests(unittest.TestCase):
         self.assertEqual(
             result["data"]["boundary"]["frontier"]["status"], "blocked_missing_api_key"
         )
-
 
 if __name__ == "__main__":
     unittest.main()

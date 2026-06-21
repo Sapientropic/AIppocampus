@@ -1,17 +1,12 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.macro import state  # noqa: E402
-from aippocampus_runtime.recall import agent_continuity  # noqa: E402
+from aippocampus_runtime.macro import state
+from aippocampus_runtime.recall import agent_continuity
 
 
 def _write_macro_state(
@@ -31,7 +26,6 @@ def _write_macro_state(
         momentum={"basis": momentum_basis or {"support_delta": 0.20}},
     )
     state.append_macro_orientation_state(path, entry)
-
 
 class MacroAgentPacketTests(unittest.TestCase):
     def test_agent_macro_orientation_returns_compact_navigation_packet(self) -> None:
@@ -132,7 +126,6 @@ class MacroAgentPacketTests(unittest.TestCase):
         self.assertGreaterEqual(report["metrics"]["next_action_usefulness_count"], 1)
         self.assertNotIn("source_refs", encoded)
         self.assertNotIn("PRIVATE", encoded)
-
 
 if __name__ == "__main__":
     unittest.main()

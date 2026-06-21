@@ -2,22 +2,17 @@ from __future__ import annotations
 
 import json
 import shlex
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.cli import facade  # noqa: E402
-from aippocampus_runtime.contracts import foreground_action_contract_violations  # noqa: E402
-from aippocampus_runtime.mcp import server as mcp  # noqa: E402
-from aippocampus_runtime.recall import why_diagnostics as why  # noqa: E402
-from aippocampus_runtime.recall import why_reason_codes as reason_codes  # noqa: E402
-from aippocampus_runtime.recall import why_surfaces as surfaces  # noqa: E402
-from tests.aippocampus.frontstage_assertions import assert_semantic_human_output  # noqa: E402
+from aippocampus_runtime.cli import facade
+from aippocampus_runtime.contracts import foreground_action_contract_violations
+from aippocampus_runtime.mcp import server as mcp
+from aippocampus_runtime.recall import why_diagnostics as why
+from aippocampus_runtime.recall import why_reason_codes as reason_codes
+from aippocampus_runtime.recall import why_surfaces as surfaces
+from tests.aippocampus.frontstage_assertions import assert_semantic_human_output
 
 
 class RecallWhyDiagnosticsTests(unittest.TestCase):
@@ -588,7 +583,6 @@ class RecallWhyDiagnosticsTests(unittest.TestCase):
         self.assertNotIn('"<cue>"', encoded)
         self.assertNotIn(";", payload["action_card"]["next_command"])
         self.assertNotIn(str(self.cwd), encoded)
-
 
 if __name__ == "__main__":
     unittest.main()

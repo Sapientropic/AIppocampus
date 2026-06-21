@@ -12,9 +12,8 @@ from unittest.mock import patch
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
 
-from aippocampus_runtime.hooks import prompt as hook  # noqa: E402
+from aippocampus_runtime.hooks import prompt as hook
 
 
 def _dream_off() -> dict[str, object]:
@@ -25,7 +24,6 @@ def _dream_off() -> dict[str, object]:
         "dream_hypothesis_limit": 0,
         "reason": "off",
     }
-
 
 def _runtime_for_skip_result() -> dict[str, Any]:
     result = {
@@ -51,7 +49,6 @@ def _runtime_for_skip_result() -> dict[str, Any]:
         "hook_stdout_payload": lambda value: None,
         "hook_input_from_stdin": lambda: {},
     }
-
 
 class PromptHookHotPathTests(unittest.TestCase):
     def test_prompt_hook_cold_import_defers_debug_and_skip_telemetry_modules(self) -> None:
@@ -173,7 +170,6 @@ class PromptHookHotPathTests(unittest.TestCase):
                     "--strict",
                 ]
             )
-
 
 if __name__ == "__main__":
     unittest.main()

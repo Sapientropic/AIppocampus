@@ -3,25 +3,13 @@ from __future__ import annotations
 import io
 import json
 import os
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-ROOT = REPO_ROOT / "skills" / "aippocampus"
-SCRIPTS = ROOT / "scripts"
-for _path in (
-    SCRIPTS,
-    REPO_ROOT / "benchmarks" / "aippocampus",
-    REPO_ROOT / "tools" / "aippocampus" / "smoke",
-    REPO_ROOT / "tools" / "aippocampus" / "docs",
-):
-    sys.path.insert(0, str(_path))
-
-from aippocampus_runtime.dream import real_history_eval as dream_eval  # noqa: E402
-from aippocampus_runtime.model.client import (  # noqa: E402
+from aippocampus_runtime.dream import real_history_eval as dream_eval
+from aippocampus_runtime.model.client import (
     DEEPSEEK_PREFIX_CACHE_CONTRACT,
     ChatClientConfig,
 )
@@ -34,7 +22,6 @@ def source_ref(thread_key: str, message_id: str, line: int) -> dict[str, object]
         "line": line,
         "project_label": "AIppocampus",
     }
-
 
 def fixture_rows() -> tuple[list[dict[str, object]], list[dict[str, object]]]:
     job_rows = [
@@ -91,7 +78,6 @@ def fixture_rows() -> tuple[list[dict[str, object]], list[dict[str, object]]]:
     ]
     return job_rows, working_rows
 
-
 def coding_decision_fixture_rows() -> list[dict[str, object]]:
     return [
         {
@@ -122,13 +108,11 @@ def coding_decision_fixture_rows() -> list[dict[str, object]]:
         },
     ]
 
-
 def write_jsonl(path: Path, rows: list[dict[str, object]]) -> None:
     path.write_text(
         "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows),
         encoding="utf-8",
     )
-
 
 class DreamRealHistoryEvalTests(unittest.TestCase):
     def test_dream_model_config_uses_deepseek_thinking_contract_by_default(self) -> None:
@@ -611,7 +595,6 @@ class DreamRealHistoryEvalTests(unittest.TestCase):
         self.assertIn("prompt_cache_miss_tokens", contract["usage_fields"])
         self.assertIn("https://api-docs.deepseek.com/zh-cn/guides/kv_cache", contract["official_guide"])
         self.assertIn("do_not_claim_cache_hit_for_deterministic_worker", contract["cannot_claim"])
-
 
 if __name__ == "__main__":
     unittest.main()

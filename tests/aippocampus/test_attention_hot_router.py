@@ -1,15 +1,9 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.navigation import attention_hot_router as router  # noqa: E402
+from aippocampus_runtime.navigation import attention_hot_router as router
 
 
 class AttentionHotRouterTests(unittest.TestCase):
@@ -112,7 +106,6 @@ class AttentionHotRouterTests(unittest.TestCase):
         self.assertEqual(report["metrics"]["anti_nag_suppressed_count"], 1)
         self.assertEqual(report["metrics"]["masked_action_match_emission_count"], 0)
         self.assertNotIn("PRIVATE_TOOL_ARG_SENTINEL", encoded)
-
 
 if __name__ == "__main__":
     unittest.main()

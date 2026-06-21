@@ -1,20 +1,17 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
+from tests.aippocampus.import_path_helpers import import_smoke_module
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 TOOLS_SMOKE = REPO_ROOT / "tools" / "aippocampus" / "smoke"
-for path in (SCRIPTS, TOOLS_SMOKE):
-    if str(path) not in sys.path:
-        sys.path.insert(0, str(path))
 
-import smoke_fresh_thread_real_history as smoke  # noqa: E402
-
+smoke = import_smoke_module("smoke_fresh_thread_real_history")
 
 class FreshThreadRealHistorySmokeTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -161,7 +158,6 @@ class FreshThreadRealHistorySmokeTests(unittest.TestCase):
         self.assertEqual(result["cannot_claim"][0], "real-history fresh-thread recall boundary passed")
         self.assertEqual(result["registry"]["selected_reopenable_thread_count"], 0)
         self.assertEqual(result["sample_coverage_status"], "insufficient_real_history")
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,26 +1,20 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 from typing import Any
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.ops.activation_authority_audit import (  # noqa: E402
+from aippocampus_runtime.ops.activation_authority_audit import (
     apply_dead_letter_candidate_manifest,
 )
-from aippocampus_runtime.recall import semantic_recall_gate as gate  # noqa: E402
-from aippocampus_runtime.recall import semantic_trigger_compaction as compaction  # noqa: E402
+from aippocampus_runtime.recall import semantic_recall_gate as gate
+from aippocampus_runtime.recall import semantic_trigger_compaction as compaction
 
 
 def source_ref() -> dict[str, Any]:
     return {"thread_key": "session:semantic", "message_id": "msg-1", "line": 12}
-
 
 def semantic_trigger_row(**overrides: Any) -> dict[str, Any]:
     row: dict[str, Any] = {
@@ -40,7 +34,6 @@ def semantic_trigger_row(**overrides: Any) -> dict[str, Any]:
     }
     row.update(overrides)
     return row
-
 
 def dead_letter_manifest_for_trigger(
     row: dict[str, Any],
@@ -62,7 +55,6 @@ def dead_letter_manifest_for_trigger(
         [surface],
         applied_at="2026-06-05T03:00:00Z",
     )
-
 
 class SemanticTriggerCompactionTests(unittest.TestCase):
     def test_dead_letter_manifest_compacts_matching_semantic_trigger_payload(self) -> None:
@@ -153,7 +145,6 @@ class SemanticTriggerCompactionTests(unittest.TestCase):
             )
 
             self.assertEqual(gate.load_semantic_triggers(path), [])
-
 
 if __name__ == "__main__":
     unittest.main()

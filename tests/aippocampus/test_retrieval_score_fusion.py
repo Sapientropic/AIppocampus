@@ -1,16 +1,9 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-ROOT = REPO_ROOT / "skills" / "aippocampus"
-SCRIPTS = ROOT / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.recall import score_fusion as fusion  # noqa: E402
+from aippocampus_runtime.recall import score_fusion as fusion
 
 
 def source_ref(message_id: str, line: int) -> dict[str, object]:
@@ -19,7 +12,6 @@ def source_ref(message_id: str, line: int) -> dict[str, object]:
         "message_id": message_id,
         "source_line": line,
     }
-
 
 class RetrievalScoreFusionTests(unittest.TestCase):
     def test_exact_quote_context_keeps_text_priority_over_vector_and_graph(self) -> None:
@@ -257,7 +249,6 @@ class RetrievalScoreFusionTests(unittest.TestCase):
         self.assertFalse(report["privacy"]["absolute_paths_serialized"])
         self.assertNotIn("SECRET_TOKEN", encoded)
         self.assertNotIn("C:\\", encoded)
-
 
 if __name__ == "__main__":
     unittest.main()

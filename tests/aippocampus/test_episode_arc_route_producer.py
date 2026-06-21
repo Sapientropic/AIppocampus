@@ -1,15 +1,9 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.coding import episode_arc_route_producer as route_producer  # noqa: E402
+from aippocampus_runtime.coding import episode_arc_route_producer as route_producer
 
 
 class EpisodeArcRouteProducerTests(unittest.TestCase):
@@ -92,7 +86,6 @@ class EpisodeArcRouteProducerTests(unittest.TestCase):
         self.assertEqual(case["action_grammar"], "reopenable_route")
         self.assertEqual(case["next_action"], "reopen_unresolved_frontier")
         self.assertTrue(case["source_reopen_required_before_claim"])
-
 
 if __name__ == "__main__":
     unittest.main()

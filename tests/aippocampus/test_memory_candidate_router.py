@@ -1,24 +1,12 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-ROOT = REPO_ROOT / "skills" / "aippocampus"
-SCRIPTS = ROOT / "scripts"
-for _path in (
-    SCRIPTS,
-    REPO_ROOT / "benchmarks" / "aippocampus",
-    REPO_ROOT / "tools" / "aippocampus" / "smoke",
-    REPO_ROOT / "tools" / "aippocampus" / "docs",
-):
-    sys.path.insert(0, str(_path))
-
-from aippocampus_runtime.dream import working_memory_publication  # noqa: E402
-from aippocampus_runtime.subconscious import candidate_router as router  # noqa: E402
+from aippocampus_runtime.dream import working_memory_publication
+from aippocampus_runtime.subconscious import candidate_router as router
 
 
 class MemoryCandidateRouterTests(unittest.TestCase):
@@ -434,7 +422,6 @@ class MemoryCandidateRouterTests(unittest.TestCase):
         self.assertIn("rollback", use["unblock_condition"])
         self.assertIn("journey_bridge_hypothesis", hook_rows[0])
         self.assertEqual(hook_rows[0]["journey_bridge_hypothesis"]["status"], "dream_bridge_not_source_fact")
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,24 +1,13 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-ROOT = REPO_ROOT / "skills" / "aippocampus"
-SCRIPTS = ROOT / "scripts"
-for _path in (
-    SCRIPTS,
-    REPO_ROOT / "benchmarks" / "aippocampus",
-    REPO_ROOT / "tools" / "aippocampus" / "smoke",
-    REPO_ROOT / "tools" / "aippocampus" / "docs",
-):
-    sys.path.insert(0, str(_path))
+from tests.aippocampus.import_path_helpers import import_smoke_module
 
-import smoke_life_wide_registry as smoke  # noqa: E402
-
+smoke = import_smoke_module("smoke_life_wide_registry")
 
 class LifeWideRegistrySmokeTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -181,7 +170,6 @@ class LifeWideRegistrySmokeTests(unittest.TestCase):
         smoke.run_life_wide_registry_smoke(self.registry_path, compute_timeline=True)
 
         self.assertFalse((self.registry_dir / "project_timeline.json").exists())
-
 
 if __name__ == "__main__":
     unittest.main()

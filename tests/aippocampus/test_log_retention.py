@@ -9,11 +9,7 @@ from io import StringIO
 from pathlib import Path
 from unittest import mock
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.ops import log_retention  # noqa: E402
+from aippocampus_runtime.ops import log_retention
 
 
 class LogRetentionTests(unittest.TestCase):
@@ -211,7 +207,6 @@ class LogRetentionTests(unittest.TestCase):
             self.assertLessEqual(log.stat().st_size, 10)
             backups = sorted(log.parent.glob("build_associations_hook.log.*.gz"))
             self.assertLessEqual(len(backups), 2)
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,18 +1,14 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 from typing import Any
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SMOKE = REPO_ROOT / "tools" / "aippocampus" / "smoke"
-sys.path.insert(0, str(SMOKE))
+from tests.aippocampus.import_path_helpers import import_smoke_module
 
-import smoke_question_prefilter_parity as parity  # noqa: E402
-
+parity = import_smoke_module("smoke_question_prefilter_parity")
 
 def source_ref(suffix: str) -> dict[str, Any]:
     return {
@@ -21,7 +17,6 @@ def source_ref(suffix: str) -> dict[str, Any]:
         "turn_id": f"turn-private-{suffix}",
         "source_line": int(suffix) * 10,
     }
-
 
 def question_row(index: int, group: str) -> dict[str, Any]:
     return {
@@ -45,13 +40,11 @@ def question_row(index: int, group: str) -> dict[str, Any]:
         "concepts": [group, "source refs"],
     }
 
-
 def write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
     path.write_text(
         "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows),
         encoding="utf-8",
     )
-
 
 class QuestionPrefilterParitySmokeTests(unittest.TestCase):
     def test_smoke_reports_structural_parity_without_private_leakage(self) -> None:
@@ -112,7 +105,6 @@ class QuestionPrefilterParitySmokeTests(unittest.TestCase):
         self.assertEqual(payload["parity"]["baseline_strong_pair_coverage"], 0.0)
         self.assertFalse(payload["default_prefilter"]["enabled"])
         self.assertFalse(payload["default_prefilter"]["recommended"])
-
 
 if __name__ == "__main__":
     unittest.main()

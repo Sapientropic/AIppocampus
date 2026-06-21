@@ -1,20 +1,14 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
-from pathlib import Path
 
-SCRIPTS = Path(__file__).resolve().parents[2] / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.hooks import action_hint_cache  # noqa: E402
-from aippocampus_runtime.learning_loop import aippo_adapter  # noqa: E402
+from aippocampus_runtime.hooks import action_hint_cache
+from aippocampus_runtime.learning_loop import aippo_adapter
 
 
 def source_ref(name: str) -> dict[str, str]:
     return {"source_id": f"source:{name}", "message_id": f"msg:{name}"}
-
 
 class LearningLoopAIppoAdapterTests(unittest.TestCase):
     def test_learning_finding_becomes_aippo_clause_and_prepared_hint(self) -> None:
@@ -233,7 +227,6 @@ class LearningLoopAIppoAdapterTests(unittest.TestCase):
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["status"], "stale")
         self.assertEqual(rows[0]["freshness"], "stale")
-
 
 if __name__ == "__main__":
     unittest.main()

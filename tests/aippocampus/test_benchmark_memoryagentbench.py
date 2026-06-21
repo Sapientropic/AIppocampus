@@ -1,19 +1,15 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-BENCHMARKS = REPO_ROOT / "benchmarks" / "aippocampus"
-if str(BENCHMARKS) not in sys.path:
-    sys.path.insert(0, str(BENCHMARKS))
+from tests.aippocampus.import_path_helpers import import_benchmark_module
 
-import benchmark_memoryagentbench as benchmark  # noqa: E402
-from shared.provider_artifacts import public_provider_artifact  # noqa: E402
+benchmark = import_benchmark_module("benchmark_memoryagentbench")
+from shared.provider_artifacts import public_provider_artifact
 
 RAW_CONTEXT_AR = "SECRET AR CONTEXT SHOULD ONLY APPEAR IN EXPLICIT CASE PACKS"
 RAW_QUESTION_AR = "RAW AR QUESTION SHOULD NOT APPEAR IN DEFAULT REPORTS"
@@ -21,7 +17,6 @@ RAW_ANSWER_AR = "RAW AR ANSWER SHOULD NEVER BE MODEL INPUT"
 RAW_CONTEXT_TTL = "SECRET TTL CONTEXT SHOULD NOT APPEAR IN DEFAULT REPORTS"
 RAW_ANSWER_TTL = "RAW TTL ANSWER LABEL SHOULD NEVER BE MODEL INPUT"
 LOCAL_PATH_SENTINEL = "LOCAL_PRIVATE_PATH_SENTINEL\\memoryagentbench.parquet"
-
 
 class MemoryAgentBenchSmokeTests(unittest.TestCase):
     def test_public_provider_artifact_never_echoes_raw_prompt_or_local_paths(self) -> None:
@@ -584,7 +579,6 @@ class MemoryAgentBenchSmokeTests(unittest.TestCase):
                 "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows),
                 encoding="utf-8",
             )
-
 
 if __name__ == "__main__":
     unittest.main()

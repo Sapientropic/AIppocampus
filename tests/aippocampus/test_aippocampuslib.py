@@ -12,26 +12,19 @@ from unittest.mock import patch
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ROOT = REPO_ROOT / "skills" / "aippocampus"
 SCRIPTS = ROOT / "scripts"
-for _path in (
-    SCRIPTS,
-    REPO_ROOT / "benchmarks" / "aippocampus",
-    REPO_ROOT / "tools" / "aippocampus" / "smoke",
-    REPO_ROOT / "tools" / "aippocampus" / "docs",
-):
-    sys.path.insert(0, str(_path))
 
-from aippocampus_runtime import anchor_graph, safety  # noqa: E402
-from aippocampus_runtime import core as aippocampuslib  # noqa: E402
-from aippocampus_runtime.cli import errors as cli_errors  # noqa: E402
-from aippocampus_runtime.registry import api as registry  # noqa: E402
-from conversation_sources import (  # noqa: E402
+from aippocampus_runtime import anchor_graph, safety
+from aippocampus_runtime import core as aippocampuslib
+from aippocampus_runtime.cli import errors as cli_errors
+from aippocampus_runtime.registry import api as registry
+from conversation_sources import (
     ClaudeCodeConversationProvider,
     CodexConversationProvider,
     GenericConversationProvider,
     GenericJsonlValidationError,
     create_conversation_provider,
 )
-from tests.aippocampus.redaction_fixtures import (  # noqa: E402
+from tests.aippocampus.redaction_fixtures import (
     fake_test_credential_url,
     fake_test_database_dsn,
     fake_test_email,
@@ -39,10 +32,8 @@ from tests.aippocampus.redaction_fixtures import (  # noqa: E402
 
 LOCATE_ROLLOUT_CMD = [sys.executable, "-m", "aippocampus_runtime.source.locate_rollout"]
 
-
 def canonical(path: str | Path) -> Path:
     return Path(path).resolve()
-
 
 def write_rollout(path: Path, cwd: Path, session_id: str = "archived-session") -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -66,7 +57,6 @@ def write_rollout(path: Path, cwd: Path, session_id: str = "archived-session") -
         "\n".join(json.dumps(row, ensure_ascii=False) for row in rows) + "\n",
         encoding="utf-8",
     )
-
 
 def write_claude_transcript(
     path: Path,
@@ -105,7 +95,6 @@ def write_claude_transcript(
         "\n".join(json.dumps(row, ensure_ascii=False) for row in rows) + "\n",
         encoding="utf-8",
     )
-
 
 class AippocampusLibTests(unittest.TestCase):
     def test_deepseek_cache_metrics_from_usage(self) -> None:
@@ -769,7 +758,6 @@ class AippocampusLibTests(unittest.TestCase):
             provider = create_conversation_provider("claude_code", claude_home_dir=Path(tmp))
 
             self.assertEqual(provider.name, "claude-code")
-
 
 if __name__ == "__main__":
     unittest.main()

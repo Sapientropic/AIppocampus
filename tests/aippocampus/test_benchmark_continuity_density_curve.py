@@ -1,16 +1,12 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-BENCHMARKS = REPO_ROOT / "benchmarks" / "aippocampus"
-sys.path.insert(0, str(BENCHMARKS))
+from tests.aippocampus.import_path_helpers import import_benchmark_module
 
-import benchmark_continuity_density_curve as density_curve  # noqa: E402
-from shared.benchmark_report_contract import benchmark_report_contract_lint  # noqa: E402
+density_curve = import_benchmark_module("benchmark_continuity_density_curve")
+from shared.benchmark_report_contract import benchmark_report_contract_lint
 
 
 class ContinuityDensityCurveBenchmarkTests(unittest.TestCase):
@@ -147,7 +143,6 @@ class ContinuityDensityCurveBenchmarkTests(unittest.TestCase):
             report["review_next_actions"][0]["id"],
             "review_continuity_density_heldout_report",
         )
-
 
 if __name__ == "__main__":
     unittest.main()

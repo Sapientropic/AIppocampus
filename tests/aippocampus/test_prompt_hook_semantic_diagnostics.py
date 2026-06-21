@@ -1,17 +1,12 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.hooks import prompt as hook  # noqa: E402
-from tests.aippocampus.redaction_fixtures import FAKE_TEST_OPENAI_API_KEY  # noqa: E402
+from aippocampus_runtime.hooks import prompt as hook
+from tests.aippocampus.redaction_fixtures import FAKE_TEST_OPENAI_API_KEY
 
 
 class PromptHookSemanticDiagnosticsTests(unittest.TestCase):
@@ -295,7 +290,6 @@ class PromptHookSemanticDiagnosticsTests(unittest.TestCase):
             "worker_socket_timeout_half_of_overall_deadline",
         )
         self.assertEqual(budget["budget_clip_reason"], "foreground_post_semantic_reserve")
-
 
 if __name__ == "__main__":
     unittest.main()

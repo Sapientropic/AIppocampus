@@ -6,12 +6,11 @@ import sys
 import unittest
 from pathlib import Path
 
+from tests.aippocampus.import_path_helpers import import_benchmark_module
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
-BENCHMARKS = REPO_ROOT / "benchmarks" / "aippocampus"
-sys.path.insert(0, str(BENCHMARKS))
 
-import benchmark_learning_loop_public_companion as companion  # noqa: E402
-
+companion = import_benchmark_module("benchmark_learning_loop_public_companion")
 
 class LearningLoopPublicCompanionBenchmarkTests(unittest.TestCase):
     def test_public_companion_eval_separates_private_comparable_and_public_metrics(self) -> None:
@@ -127,7 +126,6 @@ class LearningLoopPublicCompanionBenchmarkTests(unittest.TestCase):
         self.assertIn("cannot prove workflow guidance lift by itself", result.stdout)
         self.assertIn("X_failed -> Y_preflight_or_reopen -> X_succeeded", result.stdout)
         self.assertIn("honest no-denominator result", result.stdout)
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,15 +1,9 @@
 from __future__ import annotations
 
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.recall.active_path_packet import build_active_path_packet  # noqa: E402
-from aippocampus_runtime.reflection import (  # noqa: E402
+from aippocampus_runtime.recall.active_path_packet import build_active_path_packet
+from aippocampus_runtime.reflection import (
     retrieval_reconsolidation,
     retrieval_reconsolidation_consumer,
 )
@@ -24,7 +18,6 @@ def _candidate(candidate_type: str, outcome: str, *, refs: bool = True) -> dict[
         "route": f"route:{candidate_type}",
         "source_refs": [{"source_id": "source:1"}] if refs else [],
     }
-
 
 class RetrievalReconsolidationConsumerTests(unittest.TestCase):
     def test_consumer_routes_reviewed_candidates_without_source_mutation(self) -> None:
@@ -79,7 +72,6 @@ class RetrievalReconsolidationConsumerTests(unittest.TestCase):
         self.assertNotIn("raw source", serialized.casefold())
         self.assertNotIn("conflicted", {row["currentness"] for row in paths})
         self.assertNotIn("source_open", {row["action_grammar"] for row in paths})
-
 
 if __name__ == "__main__":
     unittest.main()

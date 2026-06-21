@@ -1,17 +1,13 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-BENCHMARKS = REPO_ROOT / "benchmarks" / "aippocampus"
-sys.path.insert(0, str(BENCHMARKS))
+from tests.aippocampus.import_path_helpers import import_benchmark_module
 
-import benchmark_longmemeval_v2_context as benchmark  # noqa: E402
-
+benchmark = import_benchmark_module("benchmark_longmemeval_v2_context")
 
 class LongMemEvalV2ContextMappingTests(unittest.TestCase):
     def test_missing_files_return_skipped_payload_with_claim_boundary(self) -> None:
@@ -196,7 +192,6 @@ class LongMemEvalV2ContextMappingTests(unittest.TestCase):
             "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows),
             encoding="utf-8",
         )
-
 
 if __name__ == "__main__":
     unittest.main()

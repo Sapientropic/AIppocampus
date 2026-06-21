@@ -1,15 +1,9 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.recall import cross_agent_isolation as isolation  # noqa: E402
+from aippocampus_runtime.recall import cross_agent_isolation as isolation
 
 
 class CrossAgentIsolationTests(unittest.TestCase):
@@ -120,7 +114,6 @@ class CrossAgentIsolationTests(unittest.TestCase):
         self.assertEqual(result["cross_scope_recall_leak_count"], 1)
         self.assertEqual(result["cross_scope_route_leak_count"], 1)
         self.assertEqual(result["cross_scope_evidence_leak_count"], 1)
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -8,10 +8,8 @@ import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
 
-from aippocampus_runtime.ops import coordination_topology  # noqa: E402
+from aippocampus_runtime.ops import coordination_topology
 
 
 class CoordinationTopologyTests(unittest.TestCase):
@@ -118,7 +116,6 @@ class CoordinationTopologyTests(unittest.TestCase):
         self.assertNotIn("PRIVATE_COORDINATION_TEXT", encoded)
         self.assertNotIn(str(root), encoded)
         self.assertNotIn("source://private/raw-handle", encoded)
-
 
 if __name__ == "__main__":
     unittest.main()

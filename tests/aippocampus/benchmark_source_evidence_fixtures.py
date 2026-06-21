@@ -64,7 +64,6 @@ def fake_fts5_payload(*, ok: bool = True) -> dict:
         "ok": ok,
     }
 
-
 def fake_source_payload(*, ok: bool = True) -> dict:
     status = "sufficient" if ok else "insufficient_recall_hits"
     return {
@@ -131,7 +130,6 @@ def fake_source_payload(*, ok: bool = True) -> dict:
         },
     }
 
-
 def fake_sharegpt_public_payload(*, ok: bool = True) -> dict:
     status = "sufficient" if ok else "insufficient_message_recall"
     return {
@@ -170,7 +168,6 @@ def fake_sharegpt_public_payload(*, ok: bool = True) -> dict:
         "cannot_claim": ["private_real_history_source_evidence_quality"],
     }
 
-
 def fake_standard_public_payload(*, ok: bool = True) -> dict:
     status = "sufficient" if ok else "insufficient_session_recall"
     return {
@@ -205,7 +202,6 @@ def fake_standard_public_payload(*, ok: bool = True) -> dict:
         "cannot_claim": ["answer_generation_quality"],
     }
 
-
 def fake_skipped_standard_public_payload() -> dict:
     payload = fake_standard_public_payload()
     payload.update(
@@ -227,7 +223,6 @@ def fake_skipped_standard_public_payload() -> dict:
         }
     )
     return payload
-
 
 def fake_public_semantic_sidecar_payload(*, ok: bool = True) -> dict:
     status = "diagnostic_only" if ok else "insufficient_recall_hits"

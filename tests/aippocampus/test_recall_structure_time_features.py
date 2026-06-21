@@ -3,17 +3,14 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-if str(SCRIPTS) not in sys.path:
-    sys.path.insert(0, str(SCRIPTS))
 
-from aippocampus_runtime.recall import index_builder, retrieval  # noqa: E402
+from aippocampus_runtime.recall import index_builder, retrieval
 
 
 def _message(
@@ -36,7 +33,6 @@ def _message(
         "sha1": hashlib.sha1(text.encode("utf-8")).hexdigest(),
         "text": text,
     }
-
 
 class RecallStructureTimeFeatureTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -262,7 +258,6 @@ class RecallStructureTimeFeatureTests(unittest.TestCase):
         self.assertEqual(results[0]["id"], 4)
         self.assertNotIn("structure_match_score", results[0]["signals"])
         self.assertNotIn("temporal_affinity_score", results[0]["signals"])
-
 
 if __name__ == "__main__":
     unittest.main()

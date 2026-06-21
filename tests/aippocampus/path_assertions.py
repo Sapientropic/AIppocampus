@@ -9,7 +9,6 @@ from unittest import TestCase
 def assert_same_path(testcase: TestCase, actual: Path | str, expected: Path | str) -> None:
     testcase.assertEqual(Path(actual).resolve(), Path(expected).resolve())
 
-
 def assert_path_flag_points_to(
     testcase: TestCase,
     argv: Sequence[str],
@@ -20,7 +19,6 @@ def assert_path_flag_points_to(
     index = argv.index(flag)
     testcase.assertLess(index + 1, len(argv), f"{flag} missing path value")
     assert_same_path(testcase, argv[index + 1], expected_path)
-
 
 def assert_path_list_contains(
     testcase: TestCase,

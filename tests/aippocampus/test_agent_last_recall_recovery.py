@@ -1,16 +1,11 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.recall import agent_continuity, agent_continuity_cli_support  # noqa: E402
+from aippocampus_runtime.recall import agent_continuity, agent_continuity_cli_support
 
 
 class AgentLastRecallRecoveryTests(unittest.TestCase):
@@ -89,7 +84,6 @@ class AgentLastRecallRecoveryTests(unittest.TestCase):
         self.assertEqual(recovery["foreground_action"]["id"], "recall_with_cue_full_detail")
         self.assertIn("current task cue for this thread", recovery["foreground_action"]["command"])
         self.assertNotIn("previous_cached_cue", recovery["foreground_action"])
-
 
 if __name__ == "__main__":
     unittest.main()

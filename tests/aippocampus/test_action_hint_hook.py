@@ -10,14 +10,12 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
 
-from aippocampus_runtime.hooks import action_hint, action_hint_cache  # noqa: E402
+from aippocampus_runtime.hooks import action_hint, action_hint_cache
 
 
 def source_ref(name: str) -> dict[str, str]:
     return {"source_id": f"clean:{name}", "segment_id": f"msg-{name}"}
-
 
 class ActionHintHookTests(unittest.TestCase):
     def test_pre_tool_use_emits_tiny_hint_without_raw_tool_leak(self) -> None:
@@ -354,7 +352,6 @@ class ActionHintHookTests(unittest.TestCase):
         self.assertTrue(payload["diagnostics"]["hot_path_bailed"])
         self.assertEqual(payload["diagnostics"]["cache_status"], "with_empty_cache")
         self.assertNotIn("E:/Users/private", encoded)
-
 
 if __name__ == "__main__":
     unittest.main()

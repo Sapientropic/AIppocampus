@@ -1,24 +1,21 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-if str(SCRIPTS) not in sys.path:
-    sys.path.insert(0, str(SCRIPTS))
 
-from aippocampus_runtime.recall.fresh_thread_action import (  # noqa: E402
+from aippocampus_runtime.recall.fresh_thread_action import (
     fresh_thread_action_from_packet,
 )
-from aippocampus_runtime.recall.fresh_thread_activation import (  # noqa: E402
+from aippocampus_runtime.recall.fresh_thread_activation import (
     ACTIVATION_STATES,
     advance_fresh_thread_activation,
     fresh_thread_activation_context,
 )
-from aippocampus_runtime.recall.fresh_thread_scent import (  # noqa: E402
+from aippocampus_runtime.recall.fresh_thread_scent import (
     fresh_thread_scent_packet_from_decision,
 )
 
@@ -277,7 +274,6 @@ class FreshThreadActivationStateTests(unittest.TestCase):
                 "suppressed",
             }.issubset(ACTIVATION_STATES)
         )
-
 
 if __name__ == "__main__":
     unittest.main()

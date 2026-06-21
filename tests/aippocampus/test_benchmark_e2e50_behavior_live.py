@@ -2,18 +2,12 @@ from __future__ import annotations
 
 import json
 import os
-import sys
 import unittest
-from pathlib import Path
 from unittest import mock
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-BENCHMARKS = REPO_ROOT / "benchmarks" / "aippocampus"
-if str(BENCHMARKS) not in sys.path:
-    sys.path.insert(0, str(BENCHMARKS))
+from tests.aippocampus.import_path_helpers import import_benchmark_module
 
-import benchmark_e2e50_behavior_live as benchmark  # noqa: E402
-
+benchmark = import_benchmark_module("benchmark_e2e50_behavior_live")
 
 def _packet_from_prompt(prompt: str) -> dict[str, object]:
     if "AIppocampus packet:\n" not in prompt:
@@ -28,7 +22,6 @@ def _packet_from_prompt(prompt: str) -> dict[str, object]:
         1,
     )[0]
     return json.loads(packet_text)
-
 
 class E2E50LiveBehaviorBenchmarkTests(unittest.TestCase):
     def test_action_vocabulary_covers_fixture_expected_codes(self) -> None:
@@ -229,7 +222,6 @@ class E2E50LiveBehaviorBenchmarkTests(unittest.TestCase):
                     max_cases=1,
                     chat_fn=lambda messages, config: {},
                 )
-
 
 if __name__ == "__main__":
     unittest.main()

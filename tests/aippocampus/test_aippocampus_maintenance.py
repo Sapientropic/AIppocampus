@@ -1,18 +1,13 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from io import StringIO
 from pathlib import Path
 from unittest import mock
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.ops import maintenance as maintenance  # noqa: E402
+from aippocampus_runtime.ops import maintenance as maintenance
 
 
 class AippocampusMaintenanceTests(unittest.TestCase):
@@ -834,7 +829,6 @@ class AippocampusMaintenanceTests(unittest.TestCase):
                 }
             ],
         )
-
 
 if __name__ == "__main__":
     unittest.main()

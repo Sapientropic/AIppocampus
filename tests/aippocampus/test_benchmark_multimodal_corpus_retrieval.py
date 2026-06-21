@@ -1,20 +1,14 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
 from pathlib import Path
 
+from tests.aippocampus.import_path_helpers import import_benchmark_module
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-for _path in (
-    SCRIPTS,
-    REPO_ROOT / "benchmarks" / "aippocampus",
-):
-    sys.path.insert(0, str(_path))
 
-import benchmark_multimodal_corpus_retrieval as benchmark  # noqa: E402
-
+benchmark = import_benchmark_module("benchmark_multimodal_corpus_retrieval")
 
 class MultimodalCorpusRetrievalBenchmarkTests(unittest.TestCase):
     def test_fixture_declares_public_safe_sources_and_derived_artifact_provenance(self) -> None:
@@ -184,7 +178,6 @@ class MultimodalCorpusRetrievalBenchmarkTests(unittest.TestCase):
 
         self.assertFalse(report["ok"])
         self.assertIn("derived_artifact_unknown_parent_source", report["blocker_codes"])
-
 
 if __name__ == "__main__":
     unittest.main()

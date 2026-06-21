@@ -1,15 +1,9 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.coding import episode_arcs, sequence_packets, sequence_reopen  # noqa: E402
+from aippocampus_runtime.coding import episode_arcs, sequence_packets, sequence_reopen
 
 
 def source_ref(line: int, message_id: str) -> dict[str, object]:
@@ -19,7 +13,6 @@ def source_ref(line: int, message_id: str) -> dict[str, object]:
         "turn_id": f"turn-{line}",
         "source_line": line,
     }
-
 
 def event(
     event_id: str,
@@ -41,7 +34,6 @@ def event(
     if sequence_index is not None:
         row["sequence_index"] = sequence_index
     return row
-
 
 class EpisodeArcReadModelTests(unittest.TestCase):
     def source_catalog_for_arc(self, arc: dict[str, object]) -> list[dict[str, object]]:
@@ -403,7 +395,6 @@ class EpisodeArcReadModelTests(unittest.TestCase):
         self.assertTrue(evidence["sequence_contract_ok"])
         self.assertTrue(evidence["supersession_passed"])
         self.assertIn("episode_arc_as_truth_layer", packet["cannot_claim"])
-
 
 if __name__ == "__main__":
     unittest.main()

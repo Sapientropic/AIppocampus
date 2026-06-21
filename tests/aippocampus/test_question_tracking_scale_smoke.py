@@ -1,23 +1,10 @@
 from __future__ import annotations
 
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-ROOT = REPO_ROOT / "skills" / "aippocampus"
-SCRIPTS = ROOT / "scripts"
-SMOKE = REPO_ROOT / "tools" / "aippocampus" / "smoke"
-for _path in (
-    SCRIPTS,
-    REPO_ROOT / "benchmarks" / "aippocampus",
-    SMOKE,
-    REPO_ROOT / "tools" / "aippocampus" / "docs",
-):
-    sys.path.insert(0, str(_path))
+from tests.aippocampus.import_path_helpers import import_smoke_module
 
-import smoke_question_tracking_scale as scale_smoke  # noqa: E402
-
+scale_smoke = import_smoke_module("smoke_question_tracking_scale")
 
 class QuestionTrackingScaleSmokeTests(unittest.TestCase):
     def test_smoke_reports_quadratic_pair_cost_and_source_join_boundary(self) -> None:
@@ -90,7 +77,6 @@ class QuestionTrackingScaleSmokeTests(unittest.TestCase):
             payload["sidecar"]["adoption"]["decision"],
             "blocked_candidate_coverage_gap",
         )
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,18 +1,12 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-ROOT = REPO_ROOT / "skills" / "aippocampus"
-SCRIPTS = ROOT / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.navigation import concept_edge_utility as utility  # noqa: E402
-from aippocampus_runtime.navigation import concept_graph as graph  # noqa: E402
+from aippocampus_runtime.navigation import concept_edge_utility as utility
+from aippocampus_runtime.navigation import concept_graph as graph
 
 
 class ConceptEdgeUtilityTests(unittest.TestCase):
@@ -122,7 +116,6 @@ class ConceptEdgeUtilityTests(unittest.TestCase):
         self.assertNotIn("private", encoded)
         self.assertNotIn("source.md", encoded)
         self.assertIn(event["edge_type"], report["by_edge_type"])
-
 
 if __name__ == "__main__":
     unittest.main()

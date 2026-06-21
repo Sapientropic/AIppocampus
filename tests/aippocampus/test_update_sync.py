@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import os
 import shutil
-import sys
 import tempfile
 import unittest
 from contextlib import redirect_stdout
@@ -12,13 +11,11 @@ from pathlib import Path
 from unittest.mock import patch
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
 
-from aippocampus_runtime.contracts import executable_command_violations  # noqa: E402
-from aippocampus_runtime.update import cli as update_cli  # noqa: E402
-from aippocampus_runtime.update import plugin_installer  # noqa: E402
-from tests.aippocampus.update_sync_fixtures import (  # noqa: E402
+from aippocampus_runtime.contracts import executable_command_violations
+from aippocampus_runtime.update import cli as update_cli
+from aippocampus_runtime.update import plugin_installer
+from tests.aippocampus.update_sync_fixtures import (
     aippocampus_hook_commands_by_event,
     append_direct_aippocampus_hook_duplicates,
     init_git_fixture,
@@ -2296,7 +2293,6 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertIn("--foreground-tools-visible --agent-json", action["command"])
         self.assertNotIn("--foreground-key-tools-callable", action["command"])
         self.assertIn("caller assertion", action["manual_instruction"])
-
 
 if __name__ == "__main__":
     unittest.main()

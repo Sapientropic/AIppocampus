@@ -1,15 +1,13 @@
 from __future__ import annotations
 
-import sys
 import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
 
-from aippocampus_runtime.contracts import shell_quote  # noqa: E402
-from aippocampus_runtime.question import frontdoor as question_frontdoor  # noqa: E402
+from aippocampus_runtime.contracts import shell_quote
+from aippocampus_runtime.question import frontdoor as question_frontdoor
 
 
 class CommandQuotingContractTests(unittest.TestCase):
@@ -45,7 +43,6 @@ class CommandQuotingContractTests(unittest.TestCase):
                     offenders.append(str(path.relative_to(SCRIPTS)))
 
         self.assertEqual(offenders, [])
-
 
 if __name__ == "__main__":
     unittest.main()

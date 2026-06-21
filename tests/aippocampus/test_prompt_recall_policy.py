@@ -1,20 +1,17 @@
 from __future__ import annotations
 
 import ast
-import sys
 import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = ROOT / "skills" / "aippocampus" / "scripts"
-if str(SCRIPTS) not in sys.path:
-    sys.path.insert(0, str(SCRIPTS))
 
-from aippocampus_runtime.recall import prompt_context_render as render  # noqa: E402
-from aippocampus_runtime.recall import prompt_recall_ambiguity as ambiguity  # noqa: E402
-from aippocampus_runtime.recall import prompt_recall_core as core  # noqa: E402
-from aippocampus_runtime.recall import prompt_recall_evidence as evidence  # noqa: E402
-from aippocampus_runtime.recall.prompt_recall_policy import (  # noqa: E402
+from aippocampus_runtime.recall import prompt_context_render as render
+from aippocampus_runtime.recall import prompt_recall_ambiguity as ambiguity
+from aippocampus_runtime.recall import prompt_recall_core as core
+from aippocampus_runtime.recall import prompt_recall_evidence as evidence
+from aippocampus_runtime.recall.prompt_recall_policy import (
     PROMPT_EVIDENCE_POLICY,
     PROMPT_RECALL_GATE_POLICY,
     PromptRecallGatePolicy,
@@ -238,7 +235,6 @@ class PromptRecallPolicyTests(unittest.TestCase):
         self.assertIn("optional unblock probe", context)
         self.assertIn("define the rollback", context)
         self.assertIn("reopen source before any strong claim", context)
-
 
 if __name__ == "__main__":
     unittest.main()

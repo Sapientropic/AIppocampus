@@ -1,23 +1,13 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-ROOT = REPO_ROOT / "skills" / "aippocampus"
-SCRIPTS = ROOT / "scripts"
-for _path in (
-    SCRIPTS,
-    REPO_ROOT / "benchmarks" / "aippocampus",
-    REPO_ROOT / "tools" / "aippocampus" / "smoke",
-):
-    sys.path.insert(0, str(_path))
+from tests.aippocampus.import_path_helpers import import_benchmark_module
 
-import benchmark_source_evidence_retrieval as benchmark  # noqa: E402
-
+benchmark = import_benchmark_module("benchmark_source_evidence_retrieval")
 
 class StandardLineRerankerContractTests(unittest.TestCase):
     def test_semantic_line_reranker_prompt_excludes_gold_scoring_fields(self) -> None:
@@ -114,7 +104,6 @@ class StandardLineRerankerContractTests(unittest.TestCase):
         )
         self.assertEqual(metrics["line_reranker_error_kind_counts"]["timeout"], 1)
         self.assertEqual(metrics["evidence_hit_rate_top1"], 1.0)
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,15 +1,9 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.macro import stage_tracker  # noqa: E402
+from aippocampus_runtime.macro import stage_tracker
 
 
 def _source_event(
@@ -32,7 +26,6 @@ def _source_event(
         "route_success_delta": route_success_delta,
         "local_path": "C:\\private\\stage.json",
     }
-
 
 class MacroStageTrackerTests(unittest.TestCase):
     def test_king_wen_adjacency_classifies_project_movement_states(self) -> None:
@@ -159,7 +152,6 @@ class MacroStageTrackerTests(unittest.TestCase):
         self.assertIn(report["momentum_summary"]["phase_hint"], {"rising", "peaking"})
         self.assertNotIn("PRIVATE", encoded)
         self.assertNotIn("C:\\", encoded)
-
 
 if __name__ == "__main__":
     unittest.main()

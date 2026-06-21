@@ -2,29 +2,18 @@ from __future__ import annotations
 
 import json
 import os
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-ROOT = REPO_ROOT / "skills" / "aippocampus"
-SCRIPTS = ROOT / "scripts"
-for _path in (
-    SCRIPTS,
-    REPO_ROOT / "benchmarks" / "aippocampus",
-    REPO_ROOT / "tools" / "aippocampus" / "smoke",
-    REPO_ROOT / "tools" / "aippocampus" / "docs",
-):
-    sys.path.insert(0, str(_path))
 
-from aippocampus_runtime.model import cache_contract_guard as cache_guard  # noqa: E402
-from aippocampus_runtime.model import routing as routing  # noqa: E402
+from aippocampus_runtime.model import cache_contract_guard as cache_guard
+from aippocampus_runtime.model import routing as routing
 
 
 def json_dump_for_test(item: dict[str, str]) -> str:
     return json.dumps(item, ensure_ascii=False, sort_keys=True)
-
 
 class DeepSeekModelRoutingTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -338,7 +327,6 @@ class DeepSeekModelRoutingTests(unittest.TestCase):
         os.environ["AIPPOCAMPUS_OPENAI_COMPAT_CONCURRENCY"] = "many"
         with self.assertRaisesRegex(ValueError, "CONCURRENCY must be a positive integer"):
             routing.resolve_model_route("openai_compatible")
-
 
 if __name__ == "__main__":
     unittest.main()

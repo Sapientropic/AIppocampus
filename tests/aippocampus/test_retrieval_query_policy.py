@@ -1,26 +1,14 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-ROOT = REPO_ROOT / "skills" / "aippocampus"
-SCRIPTS = ROOT / "scripts"
-for _path in (
-    SCRIPTS,
-    REPO_ROOT / "benchmarks" / "aippocampus",
-    REPO_ROOT / "tools" / "aippocampus" / "smoke",
-    REPO_ROOT / "tools" / "aippocampus" / "docs",
-):
-    sys.path.insert(0, str(_path))
-
-from aippocampus_runtime.recall import index_builder  # noqa: E402
-from aippocampus_runtime.recall import query_policy as policy  # noqa: E402
-from aippocampus_runtime.recall.query_expansion import plan_query_expansion  # noqa: E402
-from aippocampus_runtime.recall.retrieval import (  # noqa: E402
+from aippocampus_runtime.recall import index_builder
+from aippocampus_runtime.recall import query_policy as policy
+from aippocampus_runtime.recall.query_expansion import plan_query_expansion
+from aippocampus_runtime.recall.retrieval import (
     extract_rag_terms,
     search_hybrid_index,
 )
@@ -38,7 +26,6 @@ def _message(*, line: int, text: str) -> dict:
         "sha1": f"sha-{line}",
         "text": text,
     }
-
 
 class RetrievalQueryPolicyTests(unittest.TestCase):
     def test_semantic_trigger_terms_extract_multilingual_aliases_without_static_aliases(self) -> None:
@@ -162,7 +149,6 @@ class RetrievalQueryPolicyTests(unittest.TestCase):
         self.assertEqual(plan["diagnostics"]["expansion_sources"]["source_factual_alias"], 1)
         self.assertEqual(plan["diagnostics"]["boundary"], "navigation_only_source_reopen_required")
         self.assertNotIn("desk drawer", json.dumps(plan["diagnostics"], ensure_ascii=False))
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,16 +1,11 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.source.factual_aliases import (  # noqa: E402
+from aippocampus_runtime.source.factual_aliases import (
     SOURCE_FACTUAL_ALIASES_FILENAME,
     materialize_source_factual_aliases,
 )
@@ -77,7 +72,6 @@ class SourceFactualAliasesTests(unittest.TestCase):
 
         self.assertNotIn("sk-test-secret", raw)
         self.assertNotIn("token=", raw)
-
 
 if __name__ == "__main__":
     unittest.main()

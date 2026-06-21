@@ -10,9 +10,8 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
 
-from aippocampus_runtime.macro import state as macro_state  # noqa: E402
+from aippocampus_runtime.macro import state as macro_state
 
 
 class AgentFeedbackMacroCliTests(unittest.TestCase):
@@ -334,7 +333,6 @@ class AgentFeedbackMacroCliTests(unittest.TestCase):
         )
         self.assertNotIn("source_refs", encoded)
         self.assertNotIn("macro-cli-source", encoded)
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,16 +1,14 @@
 from __future__ import annotations
 
-import sys
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
 ROOT = Path(__file__).resolve().parents[2]
-TOOLS = ROOT / "tools" / "aippocampus" / "docs"
-if str(TOOLS) not in sys.path:
-    sys.path.insert(0, str(TOOLS))
 
-import compat_shim_inventory as inventory  # noqa: E402
+from tests.aippocampus.import_path_helpers import import_doc_tool_module
+
+inventory = import_doc_tool_module("compat_shim_inventory")
 
 
 def write_fixture_script(repo_root: Path, script_name: str, source: str) -> None:
@@ -19,7 +17,6 @@ def write_fixture_script(repo_root: Path, script_name: str, source: str) -> None
     path = scripts_dir / script_name
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(source, encoding="utf-8")
-
 
 class CompatibilityShimInventoryTests(unittest.TestCase):
     def test_repository_has_no_top_level_compat_shims(self) -> None:
@@ -71,7 +68,6 @@ sys.modules[__name__] = _impl
             delete_now = {item.script: item for item in report.delete_now}
 
             self.assertIn("archived_helper.py", delete_now)
-
 
 if __name__ == "__main__":
     unittest.main()

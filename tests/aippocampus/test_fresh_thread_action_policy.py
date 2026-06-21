@@ -1,21 +1,18 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-if str(SCRIPTS) not in sys.path:
-    sys.path.insert(0, str(SCRIPTS))
 
-from aippocampus_runtime.recall import ambient_cards as cards  # noqa: E402
-from aippocampus_runtime.recall.fresh_thread_action import (  # noqa: E402
+from aippocampus_runtime.recall import ambient_cards as cards
+from aippocampus_runtime.recall.fresh_thread_action import (
     EXAMPLE_ACTION_DECISIONS,
     fresh_thread_action_from_packet,
 )
-from aippocampus_runtime.recall.fresh_thread_scent import (  # noqa: E402
+from aippocampus_runtime.recall.fresh_thread_scent import (
     fresh_thread_scent_packet_from_decision,
 )
 
@@ -454,7 +451,6 @@ class FreshThreadActionPolicyTests(unittest.TestCase):
         self.assertTrue(
             all(not item["decision"]["should_call_active_recall"] for item in negatives)
         )
-
 
 if __name__ == "__main__":
     unittest.main()

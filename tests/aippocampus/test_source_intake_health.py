@@ -1,16 +1,11 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.source import source_intake_health as intake  # noqa: E402
+from aippocampus_runtime.source import source_intake_health as intake
 
 
 class SourceIntakeHealthTests(unittest.TestCase):
@@ -230,7 +225,6 @@ class SourceIntakeHealthTests(unittest.TestCase):
         encoded = json.dumps(report, ensure_ascii=False)
         self.assertNotIn("C:\\", encoded)
         self.assertNotIn("messages.jsonl", encoded)
-
 
 if __name__ == "__main__":
     unittest.main()

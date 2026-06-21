@@ -13,7 +13,6 @@ SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 PUBLIC_CLEAN_SOURCE = REPO_ROOT / "examples" / "public-memory-bundle" / "clean-source"
 DEMO_CUE = "can an agent catch up without pretending it has innate memory?"
 
-
 class FirstUsefulRecallDemoSmokeTests(unittest.TestCase):
     def test_public_bundle_recall_cue_round_trips_to_deepen(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -104,7 +103,6 @@ class FirstUsefulRecallDemoSmokeTests(unittest.TestCase):
             self.assertEqual(second_payload["foreground_action"]["arguments"]["request_index"], 1)
             self.assertIn("--request 1", second_payload["foreground_action"]["command"])
             self.assertIn("--json", second_payload["foreground_action"]["command"])
-
 
 if __name__ == "__main__":
     unittest.main()

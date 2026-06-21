@@ -15,7 +15,6 @@ def write_clean_thread(root: Path, thread_key: str, rows: list[dict[str, Any]]) 
     )
     return messages_path
 
-
 def write_registry(root: Path, entries: list[dict[str, Any]]) -> Path:
     registry_path = root / "registry" / "threads.json"
     registry_path.parent.mkdir(parents=True, exist_ok=True)
@@ -24,7 +23,6 @@ def write_registry(root: Path, entries: list[dict[str, Any]]) -> Path:
         encoding="utf-8",
     )
     return registry_path
-
 
 def write_thread_registry(
     root: Path,

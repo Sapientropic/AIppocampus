@@ -1,21 +1,17 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 FIXTURE = REPO_ROOT / "tests" / "fixtures" / "multimodal_sources" / "public_safe_manifest.json"
-sys.path.insert(0, str(SCRIPTS))
 
-from aippocampus_runtime.source import multimodal_manifest  # noqa: E402
+from aippocampus_runtime.source import multimodal_manifest
 
 
 def load_fixture() -> dict:
     return json.loads(FIXTURE.read_text(encoding="utf-8"))
-
 
 class MultimodalSourceManifestTests(unittest.TestCase):
     def test_public_safe_fixture_defines_sources_origins_and_derived_artifacts(self) -> None:
@@ -129,7 +125,6 @@ class MultimodalSourceManifestTests(unittest.TestCase):
 
         self.assertFalse(report["ok"])
         self.assertIn("derived_artifact_missing_artifact_id", report["blocker_codes"])
-
 
 if __name__ == "__main__":
     unittest.main()

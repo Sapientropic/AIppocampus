@@ -2,20 +2,14 @@ from __future__ import annotations
 
 import copy
 import json
-import sys
 import unittest
 from pathlib import Path
 
+from tests.aippocampus.import_path_helpers import import_benchmark_module
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-for _path in (
-    SCRIPTS,
-    REPO_ROOT / "benchmarks" / "aippocampus",
-):
-    sys.path.insert(0, str(_path))
 
-import benchmark_multimodal_niah_evidence_pool as benchmark  # noqa: E402
-
+benchmark = import_benchmark_module("benchmark_multimodal_niah_evidence_pool")
 
 class MultimodalNiahEvidencePoolBenchmarkTests(unittest.TestCase):
     def test_fixture_declares_fixed_pools_with_ground_truth_and_distractors(self) -> None:
@@ -351,7 +345,6 @@ class MultimodalNiahEvidencePoolBenchmarkTests(unittest.TestCase):
 
         self.assertFalse(report["ok"])
         self.assertIn("pool_missing_ground_truth_evidence", report["blocker_codes"])
-
 
 if __name__ == "__main__":
     unittest.main()

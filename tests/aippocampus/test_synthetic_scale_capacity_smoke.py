@@ -1,18 +1,14 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
 from pathlib import Path
 
+from tests.aippocampus.import_path_helpers import import_smoke_module
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-SMOKE = REPO_ROOT / "tools" / "aippocampus" / "smoke"
-for _path in (SCRIPTS, SMOKE):
-    sys.path.insert(0, str(_path))
 
-import smoke_synthetic_scale_capacity as scale_smoke  # noqa: E402
-
+scale_smoke = import_smoke_module("smoke_synthetic_scale_capacity")
 
 class SyntheticScaleCapacitySmokeTests(unittest.TestCase):
     def test_default_smoke_models_gb_scale_without_private_artifacts(self) -> None:
@@ -58,7 +54,6 @@ class SyntheticScaleCapacitySmokeTests(unittest.TestCase):
         self.assertEqual(payload["status"], "simulated")
         self.assertEqual(payload["warnings"], [])
         self.assertEqual(payload["blockers"], [])
-
 
 if __name__ == "__main__":
     unittest.main()

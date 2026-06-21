@@ -14,26 +14,18 @@ from unittest import mock
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ROOT = REPO_ROOT / "skills" / "aippocampus"
 SCRIPTS = ROOT / "scripts"
-for _path in (
-    SCRIPTS,
-    REPO_ROOT / "benchmarks" / "aippocampus",
-    REPO_ROOT / "tools" / "aippocampus" / "smoke",
-    REPO_ROOT / "tools" / "aippocampus" / "docs",
-):
-    sys.path.insert(0, str(_path))
 
-from aippocampus_runtime import core as aippocampuslib  # noqa: E402
-from aippocampus_runtime.registry import api as registry  # noqa: E402
-from aippocampus_runtime.warm_ambient.hook_seen_threads import (  # noqa: E402
+from aippocampus_runtime import core as aippocampuslib
+from aippocampus_runtime.registry import api as registry
+from aippocampus_runtime.warm_ambient.hook_seen_threads import (
     hook_seen_ledger_path_for_registry,
     hook_seen_thread_ref,
     record_hook_seen_thread,
 )
-from conversation_sources import CodexConversationProvider  # noqa: E402
+from conversation_sources import CodexConversationProvider
 
 REGISTRY_CMD = [sys.executable, "-m", "aippocampus_runtime.registry.api"]
 AIPPOCAMPUS_CLI_CMD = [sys.executable, "-m", "aippocampus_runtime.cli.facade"]
-
 
 class RegisterRolloutTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -768,7 +760,6 @@ class RegisterRolloutTests(unittest.TestCase):
         self.assertEqual(hits[0]["message_id"], "msg-metaphor")
         self.assertEqual(hits[0]["semantic_scope_labels"], ["personal_reflection", "idea_seed"])
         self.assertEqual(hits[0]["scope_labels"], ["personal_reflection", "idea_seed"])
-
 
 if __name__ == "__main__":
     unittest.main()

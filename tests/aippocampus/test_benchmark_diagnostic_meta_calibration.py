@@ -1,18 +1,13 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-BENCHMARKS = REPO_ROOT / "benchmarks" / "aippocampus"
-if str(BENCHMARKS) not in sys.path:
-    sys.path.insert(0, str(BENCHMARKS))
+from tests.aippocampus.import_path_helpers import import_benchmark_module
 
-import benchmark_diagnostic_meta_calibration as benchmark  # noqa: E402
-
+benchmark = import_benchmark_module("benchmark_diagnostic_meta_calibration")
 
 class DiagnosticMetaCalibrationBenchmarkTests(unittest.TestCase):
     def test_fixture_report_separates_safety_quality_and_insufficient_denominators(self) -> None:
@@ -132,7 +127,6 @@ class DiagnosticMetaCalibrationBenchmarkTests(unittest.TestCase):
         self.assertNotIn(str(root), encoded)
         self.assertIn("diagnostic_meta_calibration_is_not_answer_truth", payload["cannot_claim"])
         self.assertFalse(payload["policy_boundary"]["runtime_weights_changed"])
-
 
 if __name__ == "__main__":
     unittest.main()

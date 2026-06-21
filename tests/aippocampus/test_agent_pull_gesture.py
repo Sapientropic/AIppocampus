@@ -1,15 +1,9 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.recall import agent_pull_gesture as gesture  # noqa: E402
+from aippocampus_runtime.recall import agent_pull_gesture as gesture
 
 
 class AgentPullGestureTests(unittest.TestCase):
@@ -97,7 +91,6 @@ class AgentPullGestureTests(unittest.TestCase):
         self.assertNotIn("PRIVATE_PROMPT_SENTINEL", encoded)
         self.assertNotIn("PRIVATE_SOURCE_SENTINEL", encoded)
         self.assertNotIn("C:\\", encoded)
-
 
 if __name__ == "__main__":
     unittest.main()

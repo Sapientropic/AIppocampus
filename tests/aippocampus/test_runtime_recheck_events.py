@@ -1,19 +1,13 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.dream import input_pack  # noqa: E402
+from aippocampus_runtime.dream import input_pack
 from aippocampus_runtime.recall.continuity_domains import (
-    materialize_continuity_domains,  # noqa: E402
+    materialize_continuity_domains,
 )
-from aippocampus_runtime.runtime_recheck_events import (  # noqa: E402
+from aippocampus_runtime.runtime_recheck_events import (
     build_runtime_recheck_event,
     macro_review_input_from_runtime_recheck_event,
     runtime_recheck_event_from_dream_finding,
@@ -29,7 +23,6 @@ def source_ref(label: str) -> dict[str, object]:
         "source_line": 10,
         "role": "user",
     }
-
 
 class RuntimeRecheckEventTests(unittest.TestCase):
     def test_shared_event_shape_dedupes_without_raising_authority(self) -> None:
@@ -269,7 +262,6 @@ class RuntimeRecheckEventTests(unittest.TestCase):
         self.assertEqual(compensatory["reason_code"], "dream_compensatory_probe_accepted")
         self.assertFalse(cut_point["macro_recheck_policy"]["may_update_three_powers"])
         self.assertFalse(compensatory["macro_recheck_policy"]["may_update_hexagram"])
-
 
 if __name__ == "__main__":
     unittest.main()

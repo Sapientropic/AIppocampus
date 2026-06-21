@@ -1,15 +1,12 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
 
-from aippocampus_runtime.macro import line_topology  # noqa: E402
+from aippocampus_runtime.macro import line_topology
 
 
 def _relation(report: dict[str, object], pair_id: str) -> dict[str, object]:
@@ -20,7 +17,6 @@ def _relation(report: dict[str, object], pair_id: str) -> dict[str, object]:
         if relation["pair_id"] == pair_id:
             return relation
     raise AssertionError(f"missing relation {pair_id!r}")
-
 
 class MacroLineTopologyTests(unittest.TestCase):
     def test_axis_mapping_names_one_explicit_six_line_fixture_map(self) -> None:
@@ -75,7 +71,6 @@ class MacroLineTopologyTests(unittest.TestCase):
         self.assertIn("#1219 可以作为 diagnostic-only V0 先 ship", doc)
         self.assertIn("factual support", doc)
         self.assertIn("默认排名权重", doc)
-
 
 if __name__ == "__main__":
     unittest.main()

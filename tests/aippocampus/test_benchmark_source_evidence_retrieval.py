@@ -10,19 +10,12 @@ from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-ROOT = REPO_ROOT / "skills" / "aippocampus"
-SCRIPTS = ROOT / "scripts"
-for _path in (
-    SCRIPTS,
-    REPO_ROOT / "benchmarks" / "aippocampus",
-    REPO_ROOT / "tools" / "aippocampus" / "smoke",
-    REPO_ROOT / "tools" / "aippocampus" / "docs",
-):
-    sys.path.insert(0, str(_path))
+from tests.aippocampus.import_path_helpers import import_benchmark_module
 
-import benchmark_source_evidence_retrieval as benchmark  # noqa: E402
-from tests.aippocampus.benchmark_source_evidence_fixtures import (  # noqa: E402
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+benchmark = import_benchmark_module("benchmark_source_evidence_retrieval")
+from tests.aippocampus.benchmark_source_evidence_fixtures import (
     fake_fts5_payload,
     fake_public_semantic_sidecar_payload,
     fake_sharegpt_public_payload,
@@ -1456,7 +1449,6 @@ class SourceEvidenceRetrievalBenchmarkTests(unittest.TestCase):
         self.assertEqual(metrics["wrong_stance_control_case_count"], 1)
         self.assertEqual(metrics["wrong_stance_rerank_top2"], 1)
         self.assertEqual(metrics["wrong_stance_rerank_rate_top2"], 1.0)
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -3,7 +3,6 @@ from __future__ import annotations
 import importlib
 import inspect
 import json
-import sys
 import tempfile
 import time
 import unittest
@@ -12,20 +11,13 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ROOT = REPO_ROOT / "skills" / "aippocampus"
 SCRIPTS = ROOT / "scripts"
-for _path in (
-    SCRIPTS,
-    REPO_ROOT / "benchmarks" / "aippocampus",
-    REPO_ROOT / "tools" / "aippocampus" / "smoke",
-    REPO_ROOT / "tools" / "aippocampus" / "docs",
-):
-    sys.path.insert(0, str(_path))
 
-from aippocampus_runtime.recall import (  # noqa: E402
+from aippocampus_runtime.recall import (
     prompt_context_render,
     prompt_cues,
     prompt_route_blocks,
 )
-from aippocampus_runtime.recall import prompt_recall_decision as decision  # noqa: E402
+from aippocampus_runtime.recall import prompt_recall_decision as decision
 
 
 class PromptRecallDecisionBoundaryTests(unittest.TestCase):
@@ -928,7 +920,6 @@ class PromptRecallDecisionBoundaryTests(unittest.TestCase):
         ):
             self.assertNotIn(f"def {function_name}(", decision_source)
             self.assertIn(f"def {function_name}(", boundary_source)
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,19 +1,15 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from contextlib import redirect_stdout
 from io import StringIO
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-BENCHMARKS = REPO_ROOT / "benchmarks" / "aippocampus"
-sys.path.insert(0, str(BENCHMARKS))
+from tests.aippocampus.import_path_helpers import import_benchmark_module
 
-import benchmark_run_history_diff as diff  # noqa: E402
-
+diff = import_benchmark_module("benchmark_run_history_diff")
 
 def suite_payload(
     *,
@@ -100,7 +96,6 @@ def suite_payload(
         "cannot_claim": ["real_history_gate_quality"],
         "elapsed_ms": elapsed_ms,
     }
-
 
 class BenchmarkRunHistoryDiffTests(unittest.TestCase):
     def test_comparable_runs_with_stable_metrics_report_no_regression(self) -> None:
@@ -377,7 +372,6 @@ class BenchmarkRunHistoryDiffTests(unittest.TestCase):
             self.assertEqual(exit_code, 0)
             payload = json.loads(output_path.read_text(encoding="utf-8"))
             self.assertEqual(payload["status"], "regression")
-
 
 if __name__ == "__main__":
     unittest.main()

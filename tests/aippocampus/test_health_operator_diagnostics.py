@@ -1,18 +1,13 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime import health as health  # noqa: E402
-from aippocampus_runtime import health_host_state as health_host_state  # noqa: E402
+from aippocampus_runtime import health as health
+from aippocampus_runtime import health_host_state as health_host_state
 
 
 def _write_minimal_health_inputs(root: Path) -> dict[str, Path]:
@@ -69,7 +64,6 @@ def _write_minimal_health_inputs(root: Path) -> dict[str, Path]:
         "graphify": graphify,
     }
 
-
 def _health_options(root: Path, paths: dict[str, Path], **overrides: object) -> health.HealthOptions:
     return health.HealthOptions(
         cwd=paths["workspace"],
@@ -82,7 +76,6 @@ def _health_options(root: Path, paths: dict[str, Path], **overrides: object) -> 
         registry_dir=root / "registry",
         **overrides,
     )
-
 
 class HealthOperatorDiagnosticsTests(unittest.TestCase):
     def test_health_json_detail_full_records_section_timing(self) -> None:
@@ -205,7 +198,6 @@ class HealthOperatorDiagnosticsTests(unittest.TestCase):
         self.assertFalse(payload["privacy_boundary"]["paths_included"])
         self.assertNotIn(str(root), encoded)
         self.assertNotIn("private-session", encoded)
-
 
 if __name__ == "__main__":
     unittest.main()

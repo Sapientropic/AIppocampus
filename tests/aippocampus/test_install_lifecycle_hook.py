@@ -4,7 +4,6 @@ import contextlib
 import io
 import json
 import os
-import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -12,16 +11,9 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ROOT = REPO_ROOT / "skills" / "aippocampus"
 SCRIPTS = ROOT / "scripts"
-for _path in (
-    SCRIPTS,
-    REPO_ROOT / "benchmarks" / "aippocampus",
-    REPO_ROOT / "tools" / "aippocampus" / "smoke",
-    REPO_ROOT / "tools" / "aippocampus" / "docs",
-):
-    sys.path.insert(0, str(_path))
 
-from aippocampus_runtime.hooks import install_lifecycle as installer  # noqa: E402
-from aippocampus_runtime.ops import provider_key_bridge  # noqa: E402
+from aippocampus_runtime.hooks import install_lifecycle as installer
+from aippocampus_runtime.ops import provider_key_bridge
 
 
 class InstallMemoryMaintenanceHookTests(unittest.TestCase):
@@ -241,7 +233,6 @@ class InstallMemoryMaintenanceHookTests(unittest.TestCase):
         self.assertIn("other hosts: claude-code, generic-jsonl use onboarding/MCP/import routes", text)
         self.assertIn("not a failure", text)
         self.assertNotIn("unsupported host hooks", text)
-
 
 if __name__ == "__main__":
     unittest.main()

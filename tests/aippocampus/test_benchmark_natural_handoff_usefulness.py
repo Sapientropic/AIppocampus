@@ -6,13 +6,12 @@ import sys
 import unittest
 from pathlib import Path
 
+from tests.aippocampus.import_path_helpers import import_benchmark_module
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BENCHMARKS = REPO_ROOT / "benchmarks" / "aippocampus"
-if str(BENCHMARKS) not in sys.path:
-    sys.path.insert(0, str(BENCHMARKS))
 
-import benchmark_natural_handoff_usefulness as benchmark  # noqa: E402
-
+benchmark = import_benchmark_module("benchmark_natural_handoff_usefulness")
 
 class NaturalHandoffUsefulnessBenchmarkTests(unittest.TestCase):
     def test_report_separates_wins_no_help_and_regressions(self) -> None:
@@ -97,7 +96,6 @@ class NaturalHandoffUsefulnessBenchmarkTests(unittest.TestCase):
         self.assertFalse(payload["promotion_readout"]["decision_impact_gate_ok"])
         self.assertNotIn("E:\\", serialized)
         self.assertNotIn("/Users/", serialized)
-
 
 if __name__ == "__main__":
     unittest.main()

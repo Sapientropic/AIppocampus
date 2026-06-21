@@ -1,17 +1,11 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-ROOT = REPO_ROOT / "skills" / "aippocampus"
-SCRIPTS = ROOT / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.coding import agency_affordance as agency  # noqa: E402
+from aippocampus_runtime.coding import agency_affordance as agency
 
 
 def source_ref(line: int = 10, *, message_id: str | None = None) -> dict[str, object]:
@@ -21,7 +15,6 @@ def source_ref(line: int = 10, *, message_id: str | None = None) -> dict[str, ob
         "source_line": line,
         "timestamp": "2026-05-30T00:00:00Z",
     }
-
 
 class AgencyAffordanceTests(unittest.TestCase):
     def test_should_stay_silent_for_weak_visible_or_repeated_cues(self) -> None:
@@ -360,7 +353,6 @@ class AgencyAffordanceTests(unittest.TestCase):
 
         self.assertEqual(len(lines), 2)
         self.assertEqual(first_snapshot.splitlines()[0], lines[0])
-
 
 if __name__ == "__main__":
     unittest.main()

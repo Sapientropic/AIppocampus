@@ -9,17 +9,13 @@ import types
 import unittest
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-BENCHMARKS = REPO_ROOT / "benchmarks" / "aippocampus"
-if str(BENCHMARKS) not in sys.path:
-    sys.path.insert(0, str(BENCHMARKS))
+from tests.aippocampus.import_path_helpers import import_benchmark_module
 
-import benchmark_state_bench_agent_learning as benchmark  # noqa: E402
+benchmark = import_benchmark_module("benchmark_state_bench_agent_learning")
 
 RAW_USER_TEXT = "SECRET STATEBENCH USER TEXT SHOULD NOT LEAK"
 RAW_ASSISTANT_TEXT = "SECRET STATEBENCH ASSISTANT TEXT SHOULD NOT LEAK"
 LOCAL_PATH_SENTINEL = "C:\\PRIVATE\\state-bench\\outputs"
-
 
 class StateBenchAgentLearningTests(unittest.TestCase):
     def test_missing_checkout_reports_no_go_without_claiming_scores(self) -> None:
@@ -333,7 +329,6 @@ class StateBenchAgentLearningTests(unittest.TestCase):
             "state_bench",
         ):
             sys.modules.pop(name, None)
-
 
 if __name__ == "__main__":
     unittest.main()

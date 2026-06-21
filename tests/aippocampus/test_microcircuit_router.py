@@ -1,14 +1,9 @@
 from __future__ import annotations
 
-import sys
 import unittest
-from pathlib import Path
 
-SCRIPTS = Path(__file__).resolve().parents[2] / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.navigation import microcircuit_router as router  # noqa: E402
-from aippocampus_runtime.navigation import navigation_potential  # noqa: E402
+from aippocampus_runtime.navigation import microcircuit_router as router
+from aippocampus_runtime.navigation import navigation_potential
 
 
 class MicrocircuitRouterTests(unittest.TestCase):
@@ -101,7 +96,6 @@ class MicrocircuitRouterTests(unittest.TestCase):
 
         self.assertEqual(projection["microcircuit_diagnostics"]["raw_pool_size"], 1)
         self.assertTrue(projection["rules"]["joint_transition_constraints_declared"])
-
 
 if __name__ == "__main__":
     unittest.main()
