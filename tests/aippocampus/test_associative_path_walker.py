@@ -10,11 +10,70 @@ SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 from aippocampus_runtime.recall.associative_path_walker import (  # noqa: E402
+    decide_associative_frontier_step,
     walk_associative_paths,
 )
 
 
 class AssociativePathWalkerTests(unittest.TestCase):
+    def test_frontier_policy_primitive_exposes_navigation_decisions(self) -> None:
+        self.assertEqual(
+            decide_associative_frontier_step(
+                direct_match=False,
+                bridge_hit_count=1,
+                has_source_signal=True,
+                has_route_handle=False,
+            )["action"],
+            "expand",
+        )
+        self.assertEqual(
+            decide_associative_frontier_step(
+                direct_match=True,
+                bridge_hit_count=0,
+                has_source_signal=True,
+                has_route_handle=False,
+            )["action"],
+            "deepen",
+        )
+        self.assertEqual(
+            decide_associative_frontier_step(
+                direct_match=False,
+                bridge_hit_count=0,
+                has_source_signal=False,
+                has_route_handle=True,
+            )["action"],
+            "hold",
+        )
+        self.assertEqual(
+            decide_associative_frontier_step(
+                direct_match=True,
+                bridge_hit_count=0,
+                has_source_signal=True,
+                has_route_handle=True,
+                private_or_stale=True,
+            )["action"],
+            "block",
+        )
+        self.assertEqual(
+            decide_associative_frontier_step(
+                direct_match=True,
+                bridge_hit_count=0,
+                has_source_signal=True,
+                has_route_handle=True,
+                negative_feedback=True,
+            )["action"],
+            "shadow",
+        )
+        self.assertEqual(
+            decide_associative_frontier_step(
+                direct_match=True,
+                bridge_hit_count=0,
+                has_source_signal=False,
+                has_route_handle=False,
+            )["action"],
+            "abstain",
+        )
+
     def test_distinctive_unsupported_anchor_does_not_select_generic_route(self) -> None:
         report = walk_associative_paths(
             query="slime mold exploratory recall",
@@ -59,6 +118,12 @@ class AssociativePathWalkerTests(unittest.TestCase):
         self.assertIn("source_backed_semantic_bridge", candidate["reason_codes"])
         self.assertEqual(candidate["authority_level"], "navigation_only")
         self.assertEqual(candidate["claim_permission"], "no_claim_before_reopen")
+        self.assertEqual(report["frontier_policy"]["name"], "bounded_associative_frontier")
+        self.assertIn("source_free_path", report["frontier_policy"]["evaporation_rules"])
+        self.assertIn(
+            "positive_feedback_lifts_same_safe_scope_only",
+            report["frontier_policy"]["feedback_rules"],
+        )
         self.assertNotIn("src_apw_private_text", json.dumps(report, ensure_ascii=False))
 
     def test_generic_query_is_not_overexpanded(self) -> None:

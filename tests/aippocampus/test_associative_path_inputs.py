@@ -101,7 +101,9 @@ class AssociativePathInputPackTests(unittest.TestCase):
                     "route_id": "route:apw",
                     "candidate_id": "bridge:apw",
                     "route_terms": ["associative path walker", "routing exploration"],
-                    "source_refs": [{"thread_key": "thread:apw", "message_id": "msg-1"}],
+                    "source_refs": [
+                        {"thread_key": "thread:apw", "message_id": "msg-1", "source_line": 12}
+                    ],
                     "scope_bucket": "project",
                 }
             ],
@@ -110,7 +112,9 @@ class AssociativePathInputPackTests(unittest.TestCase):
                     "candidate_id": "bridge:apw",
                     "from_terms": ["黏菌", "联想回忆"],
                     "to_terms": ["associative path walker", "routing exploration"],
-                    "source_refs": [{"thread_key": "thread:apw", "message_id": "msg-1"}],
+                    "source_refs": [
+                        {"thread_key": "thread:apw", "message_id": "msg-1", "source_line": 12}
+                    ],
                     "scope_bucket": "project",
                 }
             ],
@@ -154,6 +158,14 @@ class AssociativePathInputPackTests(unittest.TestCase):
         self.assertEqual(private_feedback["decision"], "route_candidates")
         self.assertFalse(private_feedback["applied_to_default_ranking"])
         self.assertIn("cross_scope_positive_feedback_ignored", private_feedback["reason_codes"])
+        action = private_feedback["next_actions"][0]
+        self.assertEqual(action["id"], "open_apw_source_candidate_1")
+        self.assertEqual(action["tool_name"], "search_memory")
+        self.assertIn("aippocampus search --open-source", action["command"])
+        self.assertEqual(
+            action["source_reopen_args"],
+            {"thread_key": "thread:apw", "message_id": "msg-1", "line": 12},
+        )
         self.assertNotIn(
             "positive_feedback_same_scope",
             private_feedback["top_candidates"][0]["reason_codes"],
@@ -162,6 +174,69 @@ class AssociativePathInputPackTests(unittest.TestCase):
             "positive_feedback_same_scope",
             project_feedback["top_candidates"][0]["reason_codes"],
         )
+
+    def test_diagnostic_emits_repair_action_for_blocked_or_source_free_routes(self) -> None:
+        cases = [
+            (
+                "private",
+                {
+                    "route_id": "route:private",
+                    "route_terms": ["associative path walker"],
+                    "source_refs": [{"thread_key": "thread:private", "message_id": "msg-1"}],
+                    "scope_bucket": "user_private",
+                },
+                ["private_or_stale_rows_visible_to_guard", "path_blocked_private_or_stale"],
+            ),
+            (
+                "stale",
+                {
+                    "route_id": "route:stale",
+                    "route_terms": ["associative path walker"],
+                    "source_refs": [{"thread_key": "thread:apw", "message_id": "msg-1"}],
+                    "scope_bucket": "project",
+                    "freshness": "stale",
+                },
+                ["private_or_stale_rows_visible_to_guard", "path_blocked_private_or_stale"],
+            ),
+            (
+                "source-free",
+                {
+                    "route_terms": ["slime mold", "associative path walker"],
+                    "scope_bucket": "project",
+                },
+                ["source_free_candidates_will_evaporate", "source_free_path_evaporated"],
+            ),
+        ]
+
+        for label, candidate, reason_codes in cases:
+            with self.subTest(label=label):
+                diagnostic = build_associative_path_diagnostic(
+                    query="slime mold exploratory recall",
+                    candidates=[candidate],
+                    semantic_bridge_rows=[
+                        {
+                            "candidate_id": f"bridge:{label}",
+                            "from_terms": ["slime mold", "exploratory recall"],
+                            "to_terms": ["associative path walker"],
+                            "scope_bucket": candidate.get("scope_bucket", "project"),
+                            "source_refs": candidate.get("source_refs", []),
+                        }
+                    ],
+                )
+
+                self.assertEqual(diagnostic["candidate_count"], 0)
+                self.assertEqual(diagnostic["next_actions"][0]["id"], "tighten_cue_or_continue_without_apw")
+                self.assertFalse(
+                    any(
+                        str(action.get("id", "")).startswith("open_apw_source_candidate")
+                        for action in diagnostic["next_actions"]
+                    )
+                )
+                for reason_code in reason_codes:
+                    self.assertIn(reason_code, diagnostic["reason_codes"])
+                if label == "source-free":
+                    self.assertNotIn("path_blocked_private_or_stale", diagnostic["reason_codes"])
+                self.assertGreaterEqual(diagnostic["metrics"]["blocked_or_evaporated_count"], 1)
 
     def test_diagnostic_does_not_count_materialized_navigation_sidecar_twice(self) -> None:
         bridge = {

@@ -43,6 +43,63 @@ STALE_STATUSES = {"stale", "superseded", "refuted", "retired", "archived", "expi
 NEGATIVE_OUTCOMES = {"wrong_route_drag", "wrong_route", "ignored", "blocked", "superseded", "expired"}
 POSITIVE_OUTCOMES = {"source_reopen_success", "reopened_deepened", "user_confirmed"}
 DEFAULT_SAFE_SCOPE = "public_default"
+FRONTIER_POLICY_NAME = "bounded_associative_frontier"
+
+
+def decide_associative_frontier_step(
+    *,
+    direct_match: bool,
+    bridge_hit_count: int,
+    has_source_signal: bool,
+    has_route_handle: bool,
+    private_or_stale: bool = False,
+    negative_feedback: bool = False,
+    generic_only: bool = False,
+) -> dict[str, Any]:
+    """Return the bounded APW exploration decision for one frontier candidate.
+
+    The policy is intentionally navigation-only. It decides whether a candidate
+    can keep exploring toward a source reopen, must stay diagnostic/shadowed, or
+    should abstain. Do not add factual confidence here; source truth starts only
+    after a source window is reopened.
+    """
+
+    if private_or_stale:
+        return {
+            "action": "block",
+            "route_posture": "blocked",
+            "reason_codes": ["path_blocked_private_or_stale"],
+        }
+    if negative_feedback:
+        return {
+            "action": "shadow",
+            "route_posture": "shadowed",
+            "reason_codes": ["negative_feedback_evaporated"],
+        }
+    if generic_only:
+        return {
+            "action": "abstain",
+            "route_posture": "diagnostic_only",
+            "reason_codes": ["generic_only_path_evaporated"],
+        }
+    if not (direct_match or bridge_hit_count):
+        return {
+            "action": "hold",
+            "route_posture": "diagnostic_only",
+            "reason_codes": ["path_no_frontier_overlap"],
+        }
+    if not has_source_signal and not has_route_handle:
+        return {
+            "action": "abstain",
+            "route_posture": "diagnostic_only",
+            "reason_codes": ["source_free_path_evaporated"],
+        }
+    action = "expand" if bridge_hit_count else "deepen"
+    return {
+        "action": action,
+        "route_posture": "reopenable_route",
+        "reason_codes": ["path_found_reopenable"],
+    }
 
 
 def walk_associative_paths(
@@ -84,8 +141,13 @@ def walk_associative_paths(
         status = str(bridge.get("status") or "").casefold()
         if status != "accepted":
             blocked_count += 1
+            bridge_reasons = {str(reason) for reason in bridge.get("reason_codes") or []}
             if status in {"blocked", "retired", "demoted", "local_only_scent", "rejected"}:
-                reason_codes.append("path_blocked_private_or_stale")
+                reason_codes.append(
+                    "source_free_path_evaporated"
+                    if "source_free_bridge_cannot_expand_public_query" in bridge_reasons
+                    else "path_blocked_private_or_stale"
+                )
             continue
         if not _bridge_overlaps(distinctive, bridge):
             continue
@@ -96,14 +158,30 @@ def walk_associative_paths(
     feedback_counts = _feedback_counts(feedback)
     feedback_by_id = _feedback_by_id(feedback)
     for row in candidate_rows:
-        if _private_or_stale(row):
+        private_or_stale = _private_or_stale(row)
+        private_policy = decide_associative_frontier_step(
+            direct_match=False,
+            bridge_hit_count=0,
+            has_source_signal=False,
+            has_route_handle=False,
+            private_or_stale=private_or_stale,
+        )
+        if private_policy["action"] == "block":
             blocked_count += 1
-            reason_codes.append("path_blocked_private_or_stale")
+            reason_codes.extend(private_policy["reason_codes"])
             continue
         route_id = _route_id(row)
-        if _negative_feedback(route_id, row, feedback_counts):
+        negative_feedback = _negative_feedback(route_id, row, feedback_counts)
+        negative_policy = decide_associative_frontier_step(
+            direct_match=False,
+            bridge_hit_count=0,
+            has_source_signal=False,
+            has_route_handle=False,
+            negative_feedback=negative_feedback,
+        )
+        if negative_policy["action"] == "shadow":
             evaporated_count += 1
-            reason_codes.append("negative_feedback_evaporated")
+            reason_codes.extend(negative_policy["reason_codes"])
             continue
         candidate_terms = _candidate_terms(row)
         direct = _overlap(distinctive, candidate_terms)
@@ -113,21 +191,24 @@ def walk_associative_paths(
             if _overlap(_bridge_to_terms(bridge), candidate_terms)
         ]
         generic_only = bool(_overlap(query_terms, candidate_terms)) and not direct and not bridge_hits
-        if generic_only:
-            evaporated_count += 1
-            reason_codes.append("generic_only_path_evaporated")
-            continue
-        if not (direct or bridge_hits):
-            continue
         refs = _safe_refs(row.get("source_refs")) + _safe_refs(
             [ref for bridge in bridge_hits for ref in bridge.get("source_refs") or []]
         )
         event_refs = _safe_refs(row.get("event_refs")) + _safe_refs(
             [ref for bridge in bridge_hits for ref in bridge.get("event_refs") or []]
         )
-        if not refs and not event_refs and not _has_route_handle(row):
+        frontier = decide_associative_frontier_step(
+            direct_match=bool(direct),
+            bridge_hit_count=len(bridge_hits),
+            has_source_signal=bool(refs or event_refs),
+            has_route_handle=_has_route_handle(row),
+            generic_only=generic_only,
+        )
+        if frontier["action"] == "hold":
+            continue
+        if frontier["action"] == "abstain":
             evaporated_count += 1
-            reason_codes.append("source_free_path_evaporated")
+            reason_codes.extend(frontier["reason_codes"])
             continue
         positive, ignored_positive = _positive_feedback(route_id, row, feedback_by_id)
         if ignored_positive:
@@ -149,6 +230,19 @@ def walk_associative_paths(
                 ),
                 "source_refs": _dedupe_refs(refs, limit=4),
                 "event_refs": _dedupe_refs(event_refs, limit=4),
+                "scope_bucket": _scope_bucket(row),
+                "freshness": str(
+                    row.get("freshness")
+                    or row.get("currentness")
+                    or row.get("status")
+                    or "current"
+                )[:80],
+                "visibility": str(row.get("visibility") or "")[:80],
+                "source_epoch": row.get("source_epoch"),
+                "invalidation_epoch": row.get("invalidation_epoch"),
+                "invalidation_reasons": row.get("invalidation_reasons"),
+                "source_coverage_time": row.get("source_coverage_time"),
+                "source_shape_completeness": row.get("source_shape_completeness") or "complete",
                 "authority_level": authority.AUTHORITY_NAVIGATION_ONLY,
                 "action_grammar": authority.ACTION_REOPENABLE_ROUTE,
                 "claim_permission": authority.CLAIM_NO_CLAIM_BEFORE_REOPEN,
@@ -202,10 +296,32 @@ def _report(
     evaporated_count: int,
     max_depth: int,
 ) -> dict[str, Any]:
+    distinctive_terms = [term for term in query_terms if not _generic(term)]
     return {
         "kind": "aippocampus_associative_path_walk",
         "schema_version": SCHEMA_VERSION,
         "decision": decision,
+        "frontier_policy": {
+            "name": FRONTIER_POLICY_NAME,
+            "max_depth": max(1, min(2, int(max_depth or 1))),
+            "distinctive_term_count": len(distinctive_terms),
+            "expansion_rules": [
+                "distinctive_query_term_overlap",
+                "accepted_semantic_bridge_overlap",
+                "navigation_and_active_lock_candidates_only",
+            ],
+            "evaporation_rules": [
+                "generic_only_path",
+                "private_or_stale_path",
+                "source_free_path",
+                "negative_feedback_path",
+            ],
+            "feedback_rules": [
+                "positive_feedback_lifts_same_safe_scope_only",
+                "cross_scope_positive_feedback_is_ignored",
+            ],
+            "authority": "navigation_only_no_claim_before_reopen",
+        },
         "authority_level": authority.AUTHORITY_NAVIGATION_ONLY,
         "claim_permission": authority.CLAIM_NO_CLAIM_BEFORE_REOPEN,
         "action_grammar": (

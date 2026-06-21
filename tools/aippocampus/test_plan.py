@@ -603,14 +603,21 @@ def build_test_plan(
         )
 
     if "mcp" in categories:
+        mcp_contract_modules = " ".join(
+            [
+                "tests.aippocampus.test_aippocampus_mcp_server_catalog",
+                "tests.aippocampus.test_aippocampus_mcp_server_recall",
+                "tests.aippocampus.test_aippocampus_mcp_server_ops",
+            ]
+        )
         _add_command(
             commands,
             PlannedCommand(
                 command=py_command(
-                    "-m unittest tests.aippocampus.test_aippocampus_mcp_server -v",
+                    f"-m unittest {mcp_contract_modules} -v",
                     local_executable=local_executable,
                 ),
-                reason="MCP edits need the host-facing tool contract test.",
+                reason="MCP edits need the split host-facing catalog, recall, and ops contract tests.",
                 scope="focused",
             ),
         )

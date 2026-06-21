@@ -221,7 +221,7 @@ def _candidate_from_row(row: Mapping[str, Any], *, source: str) -> dict[str, Any
     if not route_id and not terms and not source_refs:
         return None
     candidate: dict[str, Any] = {
-        "route_id": route_id or "route:sidecar",
+        "route_id": route_id,
         "candidate_id": _compact(row.get("candidate_id") or row.get("bridge_id") or "", 120),
         "thread_key": _compact(row.get("thread_key") or "", 120),
         "route_terms": terms,
@@ -254,6 +254,68 @@ def _dedupe_rows(rows: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
         seen.add(marker)
         result.append(dict(row))
     return result
+
+
+def _candidate_source_refs(candidate: Mapping[str, Any]) -> list[dict[str, Any]]:
+    return _safe_refs(candidate.get("source_refs")) or _safe_refs(candidate.get("event_refs"))
+
+
+def _safe_line(value: Any) -> int | None:
+    try:
+        line = int(value)
+    except (TypeError, ValueError):
+        return None
+    return line if line > 0 else None
+
+
+def _source_reopen_action(candidate: Mapping[str, Any], index: int) -> dict[str, Any]:
+    refs = _candidate_source_refs(candidate)
+    ref = refs[0] if refs else {}
+    route_id = _compact(candidate.get("route_id"), 120)
+    base: dict[str, Any] = {
+        "id": f"open_apw_source_candidate_{index}",
+        "label": "Open APW source",
+        "route_id": route_id,
+        "mutation_risk": "read_only",
+        "claim_boundary": "no_claim_before_reopen",
+        "why": "APW found a navigation route; reopen this source before using it.",
+    }
+    thread_key = _compact(ref.get("thread_key"), 160)
+    message_id = _compact(ref.get("message_id"), 160)
+    line = _safe_line(ref.get("line") or ref.get("source_line"))
+    if thread_key and message_id:
+        command = (
+            "aippocampus search --open-source "
+            f"--thread-key {json.dumps(thread_key, ensure_ascii=False)} "
+            f"--message-id {json.dumps(message_id, ensure_ascii=False)}"
+        )
+        if line is not None:
+            command += f" --line {line}"
+        base.update(
+            {
+                "command": f"{command} --json",
+                "source_reopen_args": {
+                    "thread_key": thread_key,
+                    "message_id": message_id,
+                    **({"line": line} if line is not None else {}),
+                },
+                "tool_name": "search_memory",
+            }
+        )
+    else:
+        base.update(
+            {
+                "command_template": "aippocampus agent recall \"{tighter_cue}\" --json --apw-fallback",
+                "requires": ["tighter_cue"],
+                "template_only": True,
+                "source_reopen_args": ref,
+                "why": (
+                    "APW found refs, but they are not enough for a direct source-open command; "
+                    "run opt-in recall with a tighter cue or use the same candidate through agent deepen."
+                ),
+            }
+        )
+    return base
 
 
 def build_associative_path_input_pack(
@@ -411,17 +473,7 @@ def build_associative_path_diagnostic(
         limit=max_routes,
     )
     candidates = [row for row in walk.get("candidates") or [] if isinstance(row, Mapping)]
-    next_actions = [
-        {
-            "id": "deepen_associative_path_candidate",
-            "label": "Deepen APW route candidate",
-            "route_id": candidate.get("route_id"),
-            "mutation_risk": "read_only",
-            "claim_boundary": "no_claim_before_reopen",
-            "why": "APW found a navigation route; reopen source before using it.",
-        }
-        for candidate in candidates[:3]
-    ]
+    next_actions = [_source_reopen_action(candidate, index) for index, candidate in enumerate(candidates[:3], 1)]
     if not next_actions:
         next_actions.append(
             {

@@ -61,7 +61,12 @@ class AgentRecallApwFallbackTests(unittest.TestCase):
             for row in rows:
                 handle.write(json.dumps(row, ensure_ascii=False) + "\n")
 
-    def _write_apw_sidecars(self, *, with_source_refs: bool = True) -> None:
+    def _write_apw_sidecars(
+        self,
+        *,
+        with_source_refs: bool = True,
+        freshness: str = "current",
+    ) -> None:
         refs = (
             [
                 {
@@ -95,6 +100,7 @@ class AgentRecallApwFallbackTests(unittest.TestCase):
                     "route_terms": ["associative path walker"],
                     "source_refs": refs,
                     "scope_bucket": "project",
+                    "freshness": freshness,
                 }
             ],
         )
@@ -176,6 +182,19 @@ class AgentRecallApwFallbackTests(unittest.TestCase):
         )
         self.assertEqual(deepened["status"], "ok")
         self.assertGreater(deepened["result"]["source_window"]["message_count"], 0)
+
+    def test_opt_in_apw_fallback_preserves_shadowed_source_shape_posture(self) -> None:
+        self._write_apw_sidecars(freshness="unknown")
+
+        payload = self._recall(include_apw=True)
+
+        fallback = payload["associative_path_fallback"]
+
+        self.assertEqual(fallback["status"], "route_candidate")
+        self.assertEqual(fallback["route_posture"], "shadowed")
+        self.assertEqual(fallback["action_grammar"], "direction_with_ref")
+        self.assertIn("freshness_unknown", fallback["source_shape_guard_reasons"])
+        self.assertIn("check_currentness", fallback["risk_flags"])
 
     def test_cli_apw_fallback_flag_returns_compact_action(self) -> None:
         self._write_apw_sidecars()

@@ -95,9 +95,13 @@ class ChangedSurfaceTestPlanTests(unittest.TestCase):
             ["skills/aippocampus/scripts/aippocampus_runtime/mcp/server.py"]
         )
 
-        self.assertIn(
-            py_command("-m unittest tests.aippocampus.test_aippocampus_mcp_server -v"),
-            commands,
+        self.assertTrue(
+            any(
+                "test_aippocampus_mcp_server_catalog" in command
+                and "test_aippocampus_mcp_server_recall" in command
+                and "test_aippocampus_mcp_server_ops" in command
+                for command in commands
+            )
         )
         self.assertIn(py_script("tools/aippocampus/run_tests.py", "--tier pr"), commands)
 

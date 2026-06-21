@@ -618,9 +618,10 @@ class ArchitectureBoundaryTests(unittest.TestCase):
         self.assertTrue(near_zero_queue)
         self.assertTrue(all(row["margin"] <= 2 for row in near_zero_queue))
         self.assertTrue(all(row.get("next_split_boundary") for row in near_zero_queue))
+        rel_path = "tests/aippocampus/test_subconscious_jobs_questions.py"
         self.assertEqual(
-            rows["tests/aippocampus/test_subconscious_jobs.py"]["current_count"],
-            script_line_count(REPO_ROOT / "tests/aippocampus/test_subconscious_jobs.py"),
+            rows[rel_path]["current_count"],
+            script_line_count(REPO_ROOT / rel_path),
         )
 
     def test_codex_default_call_sites_are_classified_in_provider_inventory(self) -> None:

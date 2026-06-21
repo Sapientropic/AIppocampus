@@ -20,12 +20,31 @@ class AssociativePathWalkerBenchmarkTests(unittest.TestCase):
 
         self.assertTrue(report["ok"], report)
         self.assertTrue(report["quality_gate_ok"])
-        self.assertEqual(report["metrics"]["case_count"], 5)
+        self.assertEqual(report["metrics"]["case_count"], 7)
         self.assertEqual(report["red_lines"]["wrong_hop_drag_count"], 0)
         self.assertEqual(report["red_lines"]["scope_violation_count"], 0)
         self.assertEqual(report["red_lines"]["default_ranking_influence_count"], 0)
-        self.assertGreaterEqual(report["metrics"]["top_action_specificity_ok_count"], 5)
+        self.assertGreaterEqual(report["metrics"]["top_action_specificity_ok_count"], 7)
+        self.assertGreaterEqual(report["metrics"]["apw_action_emitted_count"], 3)
+        self.assertEqual(
+            report["metrics"]["agent_followed_apw_action_count"],
+            report["metrics"]["apw_action_emitted_count"],
+        )
+        self.assertEqual(
+            report["metrics"]["source_reopen_success_count"],
+            report["metrics"]["apw_action_emitted_count"],
+        )
+        self.assertGreaterEqual(report["metrics"]["task_usefulness_outcome_count"], 3)
+        self.assertIn("stale_route_stays_shadowed", {row["case_id"] for row in report["rows"]})
+        self.assertIn(
+            "source_free_semantic_bridge_evaporates",
+            {row["case_id"] for row in report["rows"]},
+        )
+        self.assertEqual(report["warnings"]["route_count_without_executable_action_count"], 0)
+        self.assertEqual(report["warnings"]["action_without_source_reopen_success_count"], 0)
+        self.assertEqual(report["warnings"]["decision_mismatch_count"], 0)
         self.assertTrue(report["boundary"]["navigation_lift_is_not_source_evidence"])
+        self.assertEqual(report["boundary"]["follow_through_mode"], "proxy_action_path")
         self.assertFalse(report["boundary"]["default_recall_influence_allowed"])
         self.assertIn("broad_live_recall_quality", report["cannot_claim"])
 
