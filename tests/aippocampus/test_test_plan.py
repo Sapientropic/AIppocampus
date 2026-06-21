@@ -46,8 +46,23 @@ class ChangedSurfaceTestPlanTests(unittest.TestCase):
         self.assertIn(test_plan.CI_MYPY_COMMAND, commands)
         self.assertIn(py_script("tools/aippocampus/docs/debt_report.py", "--json"), commands)
         self.assertTrue(any("headroom preflight" in reason for reason in reasons))
+        self.assertTrue(any("count refresh" in reason for reason in reasons))
         self.assertTrue(any("not a substitute for functional tests" in reason for reason in reasons))
         self.assertIn(py_script("tools/aippocampus/run_tests.py", "--tier pr"), commands)
+
+    def test_low_margin_architecture_debt_touch_names_guard_pressure(self) -> None:
+        changed = "skills/aippocampus/scripts/aippocampus_runtime/dream/input_pack.py"
+        with mock.patch.object(
+            test_plan,
+            "architecture_debt_low_margin_paths",
+            return_value={changed},
+        ):
+            payload = test_plan.build_test_plan([changed])
+        reasons = [command["reason"] for command in payload["commands"]]
+
+        self.assertIn("architecture_debt", payload["categories"])
+        self.assertTrue(any("Low-margin guard pressure touched" in reason for reason in reasons))
+        self.assertTrue(any("split/trim decision" in reason for reason in reasons))
 
     def test_red_debt_report_surfaces_even_for_untracked_changes(self) -> None:
         with mock.patch.object(test_plan, "_debt_report_is_red", return_value=True):
@@ -58,6 +73,7 @@ class ChangedSurfaceTestPlanTests(unittest.TestCase):
         self.assertIn("architecture_debt", payload["categories"])
         self.assertIn(py_script("tools/aippocampus/docs/debt_report.py", "--json"), commands)
         self.assertTrue(any("already red" in reason for reason in reasons))
+        self.assertTrue(any("count-only drift" in reason for reason in reasons))
         self.assertIn(py_script("tools/aippocampus/docs/check_docs_health.py", "--json"), commands)
 
     def test_benchmark_change_recommends_public_fast_benchmark_smoke(self) -> None:
@@ -96,6 +112,16 @@ class ChangedSurfaceTestPlanTests(unittest.TestCase):
             )
         )
         self.assertIn(py_script("tools/aippocampus/run_tests.py", "--tier pr"), commands)
+
+    def test_recall_integration_surface_recommends_readiness_gate(self) -> None:
+        commands = commands_for(
+            ["tools/aippocampus/smoke/known_artifact_recall_dogfood.py"]
+        )
+
+        self.assertIn(
+            py_script("tools/aippocampus/recall_integration_readiness.py", "--json"),
+            commands,
+        )
 
     def test_test_runner_change_recommends_tier_contract_and_report(self) -> None:
         payload = test_plan.build_test_plan(
@@ -264,13 +290,31 @@ class ChangedSurfaceTestPlanTests(unittest.TestCase):
         self.assertTrue(
             any(
                 group["group"] == "quick"
-                and group["module_count"] >= 3
+                and "tests.aippocampus.test_active_path_packet" in group["modules"]
+                and "tests.aippocampus.test_query_profile" in group["modules"]
                 for group in groups
             )
         )
         self.assertTrue(
             any(
-                group["group"] == "pr"
+                group["group"] == "broad-runtime"
+                and "tests.aippocampus.test_active_recall" in group["modules"]
+                and "tests.aippocampus.test_agent_background" in group["modules"]
+                for group in groups
+            )
+        )
+        self.assertTrue(
+            any(
+                group["group"] == "broad-benchmark-guard"
+                and group["modules"] == [
+                    "tests.aippocampus.test_benchmark_graph_extraction_boundary"
+                ]
+                for group in groups
+            )
+        )
+        self.assertTrue(
+            any(
+                group["group"] == "broad-test-tooling"
                 and group["module_count"] >= 1
                 for group in groups
             )

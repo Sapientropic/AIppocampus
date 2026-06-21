@@ -418,6 +418,10 @@ class AgentOptInAippoSemanticTests(unittest.TestCase):
         self.assertEqual(payload["foreground_action"]["tool_name"], "agent_recall")
         self.assertIn("no_task_family_match", payload["reason_codes"])
         self.assertEqual(len(payload["reason_codes"]), len(set(payload["reason_codes"])))
+        self.assertNotIn(
+            "deepen_aippo_working_contract",
+            {action.get("id") for action in payload["safe_next_actions"]},
+        )
 
     def test_cli_agent_aippo_no_task_returns_needs_input_action_card(self) -> None:
         proc = subprocess.run(

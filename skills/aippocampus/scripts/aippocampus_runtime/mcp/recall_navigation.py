@@ -22,11 +22,15 @@ from typing import Any
 from aippocampus_runtime.core import compact_text, sanitize_external_model_text
 from aippocampus_runtime.mcp.continuity_routes import continuity_routes_for_context
 from aippocampus_runtime.mcp.handle_inputs import nested_navigation_handle_value
+from aippocampus_runtime.mcp.source_ref_matching import (
+    message_matches_ref,
+    public_source_message,
+    turn_messages,
+)
 from aippocampus_runtime.mcp.source_ref_registry import (
     registry_source_fingerprint_invalidations,
     source_candidate_dirs_for_ref,
 )
-from aippocampus_runtime.privacy import redact_private_paths
 from aippocampus_runtime.recall.active_recall_lock import (
     default_active_recall_lock_path,
     reopen_lock_sources,
@@ -43,18 +47,13 @@ from aippocampus_runtime.recall.continuity_domains import (
 from aippocampus_runtime.recall.query_policy import split_query_terms
 from aippocampus_runtime.registry import api as registry
 from aippocampus_runtime.registry.search import entry_search_score
-from aippocampus_runtime.source.search import (
-    iter_clean_messages,
-    process_noise_reason,
-    search_clean_source,
-)
+from aippocampus_runtime.source.search import iter_clean_messages, search_clean_source
 
 HANDLE_PREFIX = "aippo-nav:"
 HANDLE_SCHEMA_VERSION = 1
 NAVIGATION_SCHEMA_VERSION = 1
 DEFAULT_MAX_ROUTES = 5
 MAX_HANDLE_REFS = 3
-MAX_SOURCE_WINDOW_MESSAGES = 8
 MAX_INTENT_CHARS = 280
 DEFAULT_TTL_SECONDS = 30 * 60
 _ROUTE_TOPIC_RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
@@ -680,70 +679,6 @@ def normalize_handle(handle: Any) -> dict[str, Any]:
     )
 
 
-def _message_matches_ref(message: dict[str, Any], ref: dict[str, Any]) -> bool:
-    if (
-        ref.get("thread_key")
-        and not any(ref.get(key) for key in ("message_id", "turn_id", "turn_index", "line"))
-    ):
-        message_thread = str(message.get("thread_key") or "")
-        return not message_thread or message_thread == str(ref.get("thread_key"))
-    if ref.get("message_id") and str(message.get("message_id") or message.get("id") or "") == str(
-        ref.get("message_id")
-    ):
-        return True
-    if ref.get("turn_id") and str(message.get("turn_id") or "") == str(ref.get("turn_id")):
-        return True
-    if ref.get("turn_index") and str(message.get("turn_index") or "") == str(
-        ref.get("turn_index")
-    ):
-        return True
-    if ref.get("line") and str(message.get("source_line") or "") == str(ref.get("line")):
-        return True
-    return False
-
-
-def _turn_messages(messages: list[dict[str, Any]], selected: dict[str, Any]) -> list[dict[str, Any]]:
-    turn_id = selected.get("turn_id")
-    turn_index = selected.get("turn_index")
-    if not turn_id and turn_index is None:
-        return [selected]
-    window = [
-        message
-        for message in messages
-        if (turn_id and message.get("turn_id") == turn_id)
-        or (turn_index is not None and message.get("turn_index") == turn_index)
-    ]
-    window.sort(key=lambda item: int(item.get("clean_ordinal") or item.get("source_line") or 0))
-    return window[:MAX_SOURCE_WINDOW_MESSAGES]
-
-
-def _source_use_class(message: dict[str, Any]) -> str:
-    """Classify reopened source so audit material is not mistaken for continuity."""
-
-    text = str(message.get("text") or "")
-    phase = str(message.get("phase") or "").casefold()
-    role = str(message.get("role") or "").casefold()
-    if process_noise_reason(text) or phase in {"commentary", "analysis", "tool", "debug"}:
-        return "audit_or_commentary_source"
-    if role in {"tool", "system", "developer"}:
-        return "audit_or_commentary_source"
-    if role == "user" or message.get("is_final") or phase == "final_answer":
-        return "foreground_continuity_source"
-    return "clean_source_context"
-
-
-def _public_source_message(message: dict[str, Any]) -> dict[str, Any]:
-    clean = dict(message)
-    source_use_class = _source_use_class(message)
-    if "text" in clean:
-        clean["text"] = redact_private_paths(_safe_text(clean.get("text"), 1200))
-    clean["source_use_class"] = source_use_class
-    if source_use_class == "audit_or_commentary_source":
-        clean["claim_boundary"] = "audit_or_commentary_source_reopen_only"
-        clean["ordinary_continuity_priority"] = "low"
-    return clean
-
-
 def _source_ref_deepen_payload(
     handle: dict[str, Any],
     *,
@@ -776,7 +711,7 @@ def _source_ref_deepen_payload(
         for candidate_dir in candidate_dirs:
             messages = iter_clean_messages(candidate_dir / "messages.jsonl")
             selected = next(
-                (message for message in messages if _message_matches_ref(message, ref)),
+                (message for message in messages if message_matches_ref(message, ref)),
                 None,
             )
             if not selected:
@@ -792,8 +727,8 @@ def _source_ref_deepen_payload(
             "No clean-source message matched the recall navigation handle.",
         )
     source_window = [
-        _public_source_message(item)
-        for item in _turn_messages(selected_messages, selected)
+        public_source_message(item)
+        for item in turn_messages(selected_messages, selected)
     ]
     source_refs = [selected_ref or _clean_ref(selected)]
     source_ref = source_refs[0]
@@ -883,7 +818,7 @@ def _active_lock_deepen_payload(
         "source_refs": matches,
         "source_window": {
             "messages": [
-                _public_source_message(item)
+                public_source_message(item)
                 for item in reopened.get("matches") or []
                 if isinstance(item, dict)
             ]

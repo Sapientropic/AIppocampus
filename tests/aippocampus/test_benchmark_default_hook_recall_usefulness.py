@@ -116,6 +116,7 @@ class DefaultHookRecallUsefulnessBenchmarkTests(unittest.TestCase):
         tiny = report["tiny_agent_recall_affordance_readout"]
         replay = report["tiny_agent_recall_host_faithful_replay"]
         decision = report["decision"]
+        integration = report["hook_integration_status"]
         issue = report["issue_readouts"]["github_1449"]
 
         self.assertTrue(issue["tiny_affordance_eval_separated"])
@@ -140,6 +141,18 @@ class DefaultHookRecallUsefulnessBenchmarkTests(unittest.TestCase):
             decision["tiny_agent_recall_affordance_decision"],
             "default_tiny_agent_recall_affordance_host_replay_ready_action_only",
         )
+        self.assertEqual(
+            integration["ambient_tiny_agent_recall_affordance"],
+            "wired_secondary_action",
+        )
+        self.assertTrue(integration["foreground_callable"])
+        self.assertTrue(integration["action_only"])
+        self.assertTrue(integration["not_source_evidence"])
+        self.assertEqual(
+            integration["default_foreground_evidence_adoption"],
+            "diagnostic_only",
+        )
+        self.assertEqual(integration["blockers_still_reported"], decision["adoption_blockers"])
         self.assertEqual(
             decision["eligible_tiny_agent_recall_affordance_surfaces"],
             ["default_hook_tiny_agent_recall_affordance"],

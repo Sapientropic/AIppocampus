@@ -14,6 +14,7 @@ from aippocampus_runtime.core import compact_text, now_utc, sanitize_external_mo
 from aippocampus_runtime.recall.authority import with_trust_fields
 from aippocampus_runtime.recall.query_policy import split_query_terms
 from aippocampus_runtime.registry.api import registry_paths, unique_preserve
+from aippocampus_runtime.source.jsonl_reader import load_jsonl_dict_rows
 
 AGENT_SELF_NOTE_SCHEMA_VERSION = 1
 AGENT_SELF_NOTE_KIND = "agent_self_note"
@@ -142,20 +143,15 @@ def project_scope_id(project_root: str | Path | None) -> str:
 
 
 def _load_jsonl(path: Path) -> list[dict[str, Any]]:
-    if not path.exists():
-        return []
-    rows: list[dict[str, Any]] = []
-    with path.open("r", encoding="utf-8") as handle:
-        for line in handle:
-            if not line.strip():
-                continue
-            try:
-                item = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if isinstance(item, dict):
-                rows.append(item)
-    return rows
+    return load_jsonl_dict_rows(path).rows
+
+
+def load_agent_self_notes_diagnostics(path: Path) -> dict[str, Any]:
+    result = load_jsonl_dict_rows(path)
+    return {
+        "row_count": len([row for row in result.rows if row.get("kind") == AGENT_SELF_NOTE_KIND]),
+        "jsonl_loss": result.loss,
+    }
 
 
 def write_agent_self_notes(path: Path, rows: list[dict[str, Any]]) -> None:

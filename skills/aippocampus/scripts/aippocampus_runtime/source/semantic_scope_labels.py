@@ -16,6 +16,7 @@ from typing import Any
 
 from aippocampus_runtime.core import compact_text
 from aippocampus_runtime.source.clean_source import SCOPE_LABEL_ORDER
+from aippocampus_runtime.source.jsonl_reader import load_jsonl_dict_rows
 
 SEMANTIC_SCOPE_LABELS_FILENAME = "semantic-scope-labels.jsonl"
 SEMANTIC_SCOPE_LABEL_FINDING_KIND = "semantic_scope_labels"
@@ -163,34 +164,30 @@ def load_semantic_scope_labels(clean_source_dir: Path) -> dict[str, dict[str, An
         return {}
     messages_by_id = clean_messages_by_id(clean_source_dir)
     by_message_id: dict[str, dict[str, Any]] = {}
-    with path.open("r", encoding="utf-8") as fh:
-        for line in fh:
-            try:
-                item = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if not isinstance(item, dict):
-                continue
-            message_id = str(item.get("message_id") or item.get("id") or "").strip()
-            if messages_by_id and message_id not in messages_by_id:
-                continue
-            if not message_id:
-                continue
-            confidence = clamp_confidence(item.get("confidence"))
-            if confidence < 0.45:
-                continue
-            labels = filtered_semantic_scope_labels(item, list(item.get("scope_labels") or []))
-            if not labels:
-                continue
-            if not matching_source_refs(item, message_id):
-                continue
-            by_message_id[message_id] = {
-                **item,
-                "message_id": message_id,
-                "scope_labels": labels,
-                "confidence": round(confidence, 4),
-                "label_evidence": label_evidence_for_labels(item, labels),
-            }
+    result = load_jsonl_dict_rows(path)
+    for item in result.rows:
+        message_id = str(item.get("message_id") or item.get("id") or "").strip()
+        if messages_by_id and message_id not in messages_by_id:
+            continue
+        if not message_id:
+            continue
+        confidence = clamp_confidence(item.get("confidence"))
+        if confidence < 0.45:
+            continue
+        labels = filtered_semantic_scope_labels(item, list(item.get("scope_labels") or []))
+        if not labels:
+            continue
+        if not matching_source_refs(item, message_id):
+            continue
+        by_message_id[message_id] = {
+            **item,
+            "message_id": message_id,
+            "scope_labels": labels,
+            "confidence": round(confidence, 4),
+            "label_evidence": label_evidence_for_labels(item, labels),
+        }
+    if result.loss["total_loss_count"]:
+        by_message_id["_jsonl_loss"] = {"jsonl_loss": result.loss}
     return by_message_id
 
 
@@ -207,18 +204,7 @@ def merged_scope_labels(base_labels: list[Any], semantic_labels: list[Any]) -> l
 
 
 def iter_jsonl(path: Path) -> list[dict[str, Any]]:
-    if not path.exists():
-        return []
-    rows: list[dict[str, Any]] = []
-    with path.open("r", encoding="utf-8") as fh:
-        for line in fh:
-            try:
-                item = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if isinstance(item, dict):
-                rows.append(item)
-    return rows
+    return load_jsonl_dict_rows(path).rows
 
 
 def clean_messages_by_id(clean_source_dir: Path) -> dict[str, dict[str, Any]]:

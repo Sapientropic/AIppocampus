@@ -7,7 +7,10 @@ from pathlib import Path
 
 from aippocampus_runtime.recall import index_builder
 from aippocampus_runtime.recall import query_policy as policy
-from aippocampus_runtime.recall.query_expansion import plan_query_expansion
+from aippocampus_runtime.recall.query_expansion import (
+    load_source_factual_alias_rows_diagnostics,
+    plan_query_expansion,
+)
 from aippocampus_runtime.recall.retrieval import (
     extract_rag_terms,
     search_hybrid_index,
@@ -149,6 +152,29 @@ class RetrievalQueryPolicyTests(unittest.TestCase):
         self.assertEqual(plan["diagnostics"]["expansion_sources"]["source_factual_alias"], 1)
         self.assertEqual(plan["diagnostics"]["boundary"], "navigation_only_source_reopen_required")
         self.assertNotIn("desk drawer", json.dumps(plan["diagnostics"], ensure_ascii=False))
+
+    def test_source_factual_alias_loader_diagnostics_reports_jsonl_loss(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "source-factual-aliases.jsonl"
+            path.write_text(
+                "{bad-json}\n"
+                + json.dumps(
+                    {
+                        "kind": "aippocampus_source_factual_alias",
+                        "row_id": "sfa_valid",
+                        "query_aliases": ["keepsake"],
+                        "route_terms": ["shelf"],
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            diagnostics = load_source_factual_alias_rows_diagnostics(path)
+
+        self.assertEqual(diagnostics["row_count"], 1)
+        self.assertEqual(diagnostics["jsonl_loss"]["invalid_json_line_count"], 1)
 
 if __name__ == "__main__":
     unittest.main()

@@ -708,9 +708,8 @@ def build_tier_report(
             for path in timing_artifact_paths
         ],
         "known_limitations": [
-            "fast is a compatibility alias for the fast local pr gate; "
-            "deterministic and ci remain broad-pr aliases for the old broad "
-            "deterministic surface.",
+            "Use canonical tiers directly: quick for inner-loop checks, pr for "
+            "local closeout, and broad-pr for old broad deterministic coverage.",
             "Benchmark-shaped modules should stay in benchmark evidence lanes by "
             "default. If one returns to quick/pr, it must carry an explicit "
             "fast-lane category and rationale.",

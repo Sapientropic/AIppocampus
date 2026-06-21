@@ -15,7 +15,11 @@ import _paths
 _paths.ensure_paths()
 
 from aippocampus_runtime.core import now_utc
-from aippocampus_runtime.recall import agent_continuity, associative_path_fallback
+from aippocampus_runtime.recall import (
+    agent_continuity,
+    agent_continuity_cli_support,
+    associative_path_fallback,
+)
 from aippocampus_runtime.recall.associative_path_inputs import build_associative_path_diagnostic
 from aippocampus_runtime.recall.associative_path_walker import walk_associative_paths
 
@@ -219,6 +223,37 @@ def _write_jsonl(path: Path, rows: Sequence[Mapping[str, Any]]) -> None:
             handle.write(json.dumps(dict(row), ensure_ascii=False) + "\n")
 
 
+def _opened_source_matches_ref(deepened: Mapping[str, Any], expected_ref: Mapping[str, Any]) -> bool:
+    result = deepened.get("result") if isinstance(deepened.get("result"), Mapping) else {}
+    for ref in result.get("source_refs") or []:
+        if not isinstance(ref, Mapping):
+            continue
+        for key in ("message_id", "turn_id", "source_id"):
+            expected = str(expected_ref.get(key) or "").strip()
+            if expected and str(ref.get(key) or "").strip() != expected:
+                return False
+        return True
+    return False
+
+
+def _source_window_contains_anchors(deepened: Mapping[str, Any], anchors: Sequence[str]) -> bool:
+    result = deepened.get("result") if isinstance(deepened.get("result"), Mapping) else {}
+    source_window = result.get("source_window") if isinstance(result.get("source_window"), Mapping) else {}
+    text = "\n".join(
+        str(message.get("text") or "")
+        for message in source_window.get("messages") or []
+        if isinstance(message, Mapping)
+    )
+    return all(str(anchor) in text for anchor in anchors)
+
+
+def _opened_source_primary_message_id(deepened: Mapping[str, Any]) -> str:
+    result = deepened.get("result") if isinstance(deepened.get("result"), Mapping) else {}
+    refs = result.get("source_refs") if isinstance(result.get("source_refs"), list) else []
+    first = refs[0] if refs and isinstance(refs[0], Mapping) else {}
+    return str(first.get("message_id") or "")
+
+
 def evaluate_real_clean_source_parity_gate() -> dict[str, Any]:
     """Check diagnostic-to-agent APW parity on a real clean-source fixture."""
 
@@ -231,6 +266,17 @@ def evaluate_real_clean_source_parity_gate() -> dict[str, Any]:
         _write_jsonl(
             clean / "messages.jsonl",
             [
+                {
+                    "message_id": "msg-real-clean-control",
+                    "turn_id": "turn-real-clean-apw",
+                    "turn_index": 3,
+                    "source_id": "src-real-clean-control",
+                    "source_line": 8,
+                    "role": "developer",
+                    "phase": "commentary",
+                    "source_use_class": "control_only",
+                    "text": "<goal_context> 黏菌 联想回忆 探索算法 is a control fixture and must not bind the APW foreground action.",
+                },
                 {
                     "message_id": "msg-real-clean-apw",
                     "turn_id": "turn-real-clean-apw",
@@ -250,7 +296,7 @@ def evaluate_real_clean_source_parity_gate() -> dict[str, Any]:
                 {
                     "turn_id": "turn-real-clean-apw",
                     "turn_index": 3,
-                    "message_ids": ["msg-real-clean-apw"],
+                    "message_ids": ["msg-real-clean-control", "msg-real-clean-apw"],
                     "assistant_phase": "final_answer",
                 }
             ],
@@ -267,28 +313,95 @@ def evaluate_real_clean_source_parity_gate() -> dict[str, Any]:
             registry_dir=registry,
             include_associative_fallback=True,
         )
-    diagnostic_reopenable = int(
-        (diagnostic.get("metrics") or {}).get("source_reopenable_candidate_count") or 0
-    )
-    policy = agent_payload.get("associative_path_policy")
-    policy = policy if isinstance(policy, Mapping) else {}
-    fallback = agent_payload.get("associative_path_fallback")
-    fallback = fallback if isinstance(fallback, Mapping) else {}
-    candidate_source_counts = dict((diagnostic.get("metrics") or {}).get("candidate_source_counts") or {})
-    fallback_route = fallback.get("status") == "route_candidate"
-    agent_candidate_input = bool(policy.get("apw_candidate_input_available"))
-    missing_input_mismatch = bool(diagnostic_reopenable and not agent_candidate_input)
-    source_kind = str(
-        fallback.get("candidate_source_kind")
-        or next(iter(candidate_source_counts), "")
-        or "unknown"
-    )
-    ok = bool(
-        diagnostic_reopenable
-        and agent_candidate_input
-        and fallback_route
-        and source_kind == "current_clean_source"
-    )
+        diagnostic_candidates = [
+            row for row in diagnostic.get("top_candidates") or [] if isinstance(row, Mapping)
+        ]
+        expected_ref = (
+            diagnostic_candidates[0].get("source_refs", [{}])[0]
+            if diagnostic_candidates and diagnostic_candidates[0].get("source_refs")
+            else {}
+        )
+        cache_path = root / "last-recall.json"
+        cache_written = agent_continuity_cli_support.write_last_recall_cache(
+            agent_payload.get("deepen_requests") or [],
+            query=cue,
+            cwd=root,
+            clean_source_dir=clean,
+            registry_dir=registry,
+            macro_state_path=None,
+            project="AIppocampus",
+            max_matches=5,
+            schema_version=agent_continuity.SCHEMA_VERSION,
+            path=cache_path,
+        )
+        selector_id = agent_continuity_cli_support.write_recall_selector_snapshot(cache_path)
+        agent_payload["last_recall_cache_available"] = cache_written
+        agent_payload["recall_selector_id"] = selector_id
+        public_payload = agent_continuity_cli_support.public_recall_projection(
+            agent_payload,
+            query=cue,
+        )
+        foreground_action = public_payload.get("foreground_action")
+        foreground_action = foreground_action if isinstance(foreground_action, Mapping) else {}
+        action_args = foreground_action.get("arguments")
+        action_args = action_args if isinstance(action_args, Mapping) else {}
+        try:
+            action_request_index = int(action_args.get("request_index") or 0)
+        except (TypeError, ValueError):
+            action_request_index = 0
+        try:
+            handle, context = agent_continuity_cli_support.handle_from_last_recall_cache(
+                request_index=action_request_index,
+                path=cache_path,
+            )
+            deepened = agent_continuity.deepen(
+                handle,
+                cwd=context.get("cwd") or root,
+                clean_source_dir=context.get("clean_source_dir") or clean,
+                registry_dir=context.get("registry_dir") or registry,
+            )
+        except Exception as exc:  # pragma: no cover - returned as gate diagnostics
+            deepened = {"status": "cannot_verify", "error": {"type": type(exc).__name__, "message": str(exc)}}
+        diagnostic_reopenable = int(
+            (diagnostic.get("metrics") or {}).get("source_reopenable_candidate_count") or 0
+        )
+        policy = agent_payload.get("associative_path_policy")
+        policy = policy if isinstance(policy, Mapping) else {}
+        fallback = agent_payload.get("associative_path_fallback")
+        fallback = fallback if isinstance(fallback, Mapping) else {}
+        candidate_source_counts = dict((diagnostic.get("metrics") or {}).get("candidate_source_counts") or {})
+        fallback_route = fallback.get("status") == "route_candidate"
+        agent_candidate_input = bool(policy.get("apw_candidate_input_available"))
+        missing_input_mismatch = bool(diagnostic_reopenable and not agent_candidate_input)
+        source_kind = str(
+            fallback.get("candidate_source_kind")
+            or next(iter(candidate_source_counts), "")
+            or "unknown"
+        )
+        action_binds_fallback = bool(
+            foreground_action.get("id") == "deepen_associative_path_fallback"
+            and action_request_index == int(fallback.get("request_index") or 0)
+        )
+        opened_source_matches_apw_candidate = _opened_source_matches_ref(deepened, expected_ref)
+        opened_source_contains_safe_cue_anchors = _source_window_contains_anchors(
+            deepened,
+            ["黏菌", "联想回忆", "探索算法"],
+        )
+        foreground_action_roundtrip_ok = bool(
+            action_binds_fallback
+            and opened_source_matches_apw_candidate
+            and opened_source_contains_safe_cue_anchors
+        )
+        apw_label_opened_source_mismatch_count = 0 if foreground_action_roundtrip_ok else 1
+        opened_source_primary_message_id = _opened_source_primary_message_id(deepened)
+        expected_apw_candidate_message_id = str(expected_ref.get("message_id") or "")
+        ok = bool(
+            diagnostic_reopenable
+            and agent_candidate_input
+            and fallback_route
+            and source_kind == "current_clean_source"
+            and foreground_action_roundtrip_ok
+        )
     return {
         "kind": "aippocampus_real_clean_source_apw_parity_gate",
         "schema_version": SCHEMA_VERSION,
@@ -302,6 +415,15 @@ def evaluate_real_clean_source_parity_gate() -> dict[str, Any]:
         "candidate_source_counts": candidate_source_counts,
         "candidate_source_kind": source_kind,
         "missing_input_mismatch": missing_input_mismatch,
+        "foreground_action_roundtrip_ok": foreground_action_roundtrip_ok,
+        "opened_source_matches_apw_candidate": opened_source_matches_apw_candidate,
+        "opened_source_contains_safe_cue_anchors": opened_source_contains_safe_cue_anchors,
+        "opened_source_primary_message_id": opened_source_primary_message_id,
+        "expected_apw_candidate_message_id": expected_apw_candidate_message_id,
+        "foreground_action_request_index": action_request_index,
+        "foreground_action_recall_selector_present": bool(action_args.get("recall_selector")),
+        "foreground_action_binds_fallback_request": action_binds_fallback,
+        "source_ref_digest": fallback.get("source_ref_digest"),
         "foreground_recovery_available": bool(
             fallback_route and agent_payload.get("deepen_requests")
         ),
@@ -312,6 +434,8 @@ def evaluate_real_clean_source_parity_gate() -> dict[str, Any]:
         "red_lines": {
             "diagnostic_agent_fallback_parity_failure": not ok,
             "diagnostic_reopenable_but_agent_input_missing": missing_input_mismatch,
+            "foreground_action_roundtrip_failure": not foreground_action_roundtrip_ok,
+            "apw_label_opened_source_mismatch_count": apw_label_opened_source_mismatch_count,
         },
         "boundary": {
             "live_model_calls": 0,
@@ -427,6 +551,12 @@ def evaluate_path_walker_gate(
         "source_truth_claim_count": sum(1 for row in rows if not row["navigation_only"]),
         "scope_violation_count": sum(1 for row in rows if row["scope_violation"]),
         "diagnostic_agent_fallback_parity_failure_count": 0 if parity_gate["ok"] else 1,
+        "foreground_action_roundtrip_failure_count": (
+            0 if parity_gate.get("foreground_action_roundtrip_ok") else 1
+        ),
+        "apw_label_opened_source_mismatch_count": int(
+            (parity_gate.get("red_lines") or {}).get("apw_label_opened_source_mismatch_count") or 0
+        ),
         "default_ranking_influence_count": 0,
     }
     warnings = {
@@ -467,6 +597,12 @@ def evaluate_path_walker_gate(
         "diagnostic_agent_fallback_parity_failure_count": red_lines[
             "diagnostic_agent_fallback_parity_failure_count"
         ],
+        "foreground_action_roundtrip_failure_count": red_lines[
+            "foreground_action_roundtrip_failure_count"
+        ],
+        "apw_label_opened_source_mismatch_count": red_lines[
+            "apw_label_opened_source_mismatch_count"
+        ],
     }
     promotion_thresholds = {
         "wrong_hop_drag_count": 0,
@@ -479,6 +615,8 @@ def evaluate_path_walker_gate(
         "default_ranking_influence_count": 0,
         "scope_violation_count": 0,
         "diagnostic_agent_fallback_parity_failure_count": 0,
+        "foreground_action_roundtrip_failure_count": 0,
+        "apw_label_opened_source_mismatch_count": 0,
     }
     promotion_checklist = [
         {
@@ -500,6 +638,12 @@ def evaluate_path_walker_gate(
         "metrics": {
             "case_count": len(rows),
             "real_clean_source_parity_gate_ok": bool(parity_gate["ok"]),
+            "foreground_action_roundtrip_ok": bool(
+                parity_gate.get("foreground_action_roundtrip_ok")
+            ),
+            "opened_source_matches_apw_candidate": bool(
+                parity_gate.get("opened_source_matches_apw_candidate")
+            ),
             "route_existence_count": sum(1 for row in rows if row["route_count"] > 0),
             "baseline_route_existence_count": sum(1 for row in rows if row["baseline_route_count"] > 0),
             "apw_action_emitted_count": sum(1 for row in rows if row["apw_action_emitted"]),

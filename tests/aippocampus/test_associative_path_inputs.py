@@ -5,6 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from aippocampus_runtime.recall import apw_route_identity
 from aippocampus_runtime.recall import why_diagnostics as why
 from aippocampus_runtime.recall.associative_path_inputs import (
     build_associative_path_diagnostic,
@@ -178,6 +179,181 @@ class AssociativePathInputPackTests(unittest.TestCase):
             "positive_feedback_same_scope",
             project_feedback["top_candidates"][0]["reason_codes"],
         )
+
+    def test_current_clean_source_filters_goal_context_unless_explicitly_requested(self) -> None:
+        clean = self._write_clean_messages(
+            [
+                {
+                    "message_id": "msg-goal-control",
+                    "turn_id": "turn-shared",
+                    "turn_index": 7,
+                    "source_id": "src-goal-control",
+                    "source_line": 20,
+                    "role": "developer",
+                    "phase": "commentary",
+                    "source_use_class": "control_only",
+                    "text": "<goal_context> 黏菌 联想回忆 探索算法 is control scaffolding, not the memory route.",
+                },
+                {
+                    "message_id": "msg-real-cue",
+                    "turn_id": "turn-shared",
+                    "turn_index": 7,
+                    "source_id": "src-real-cue",
+                    "source_line": 21,
+                    "role": "assistant",
+                    "phase": "final_answer",
+                    "is_final": True,
+                    "text": "公开 fixture 锚点：黏菌 联想回忆 探索算法，真实可打开的连续性来源。",
+                },
+            ]
+        )
+
+        diagnostic = build_associative_path_diagnostic(
+            query="黏菌 联想回忆 探索算法",
+            cwd=self.root,
+            clean_source_dir=clean,
+        )
+
+        self.assertEqual(diagnostic["decision"], "route_candidates")
+        top_ref = diagnostic["top_candidates"][0]["source_refs"][0]
+        self.assertEqual(top_ref["message_id"], "msg-real-cue")
+        self.assertEqual(diagnostic["metrics"]["goal_context_filtered_count"], 1)
+        self.assertEqual(diagnostic["metrics"]["control_source_filtered_count"], 1)
+        self.assertIn(
+            "control_source_filtered_from_foreground_apw",
+            diagnostic["reason_codes"],
+        )
+
+        explicit = build_associative_path_diagnostic(
+            query="goal_context 黏菌 联想回忆 探索算法",
+            cwd=self.root,
+            clean_source_dir=clean,
+        )
+        explicit_refs = [
+            ref.get("message_id")
+            for candidate in explicit["top_candidates"]
+            for ref in candidate.get("source_refs", [])
+        ]
+
+        self.assertIn("msg-goal-control", explicit_refs)
+        self.assertEqual(explicit["metrics"]["control_source_explicitly_allowed_count"], 1)
+
+    def test_current_clean_source_filters_task_echo_without_enough_anchors(self) -> None:
+        clean = self._write_clean_messages(
+            [
+                {
+                    "message_id": "msg-cn-echo",
+                    "turn_id": "turn-echo",
+                    "turn_index": 11,
+                    "source_id": "src-cn-echo",
+                    "source_line": 40,
+                    "role": "user",
+                    "text": "继续开 source-shape issues，下一阶段验收一下就好。",
+                },
+                {
+                    "message_id": "msg-en-echo",
+                    "turn_id": "turn-echo",
+                    "turn_index": 12,
+                    "source_id": "src-en-echo",
+                    "source_line": 41,
+                    "role": "assistant",
+                    "phase": "final_answer",
+                    "is_final": True,
+                    "text": "Done; please verify the narrative issue in the next stage.",
+                },
+                {
+                    "message_id": "msg-real-apw",
+                    "turn_id": "turn-real",
+                    "turn_index": 2,
+                    "source_id": "src-real-apw",
+                    "source_line": 9,
+                    "role": "assistant",
+                    "phase": "final_answer",
+                    "is_final": True,
+                    "text": (
+                        "The source-shape narrative mesh slime mold pathlet route "
+                        "is the real APW continuity source."
+                    ),
+                },
+            ]
+        )
+
+        diagnostic = build_associative_path_diagnostic(
+            query="source-shape narrative mesh slime mold pathlet",
+            cwd=self.root,
+            clean_source_dir=clean,
+        )
+
+        self.assertEqual(diagnostic["decision"], "route_candidates")
+        self.assertEqual(diagnostic["top_candidates"][0]["source_refs"][0]["message_id"], "msg-real-apw")
+        self.assertEqual(diagnostic["metrics"]["same_thread_task_echo_filtered_count"], 2)
+        self.assertIn("same_thread_task_echo_no_anchor", diagnostic["reason_codes"])
+
+    def test_current_clean_source_keeps_tasky_source_when_anchors_are_real(self) -> None:
+        clean = self._write_clean_messages(
+            [
+                {
+                    "message_id": "msg-current-real",
+                    "turn_id": "turn-current-real",
+                    "turn_index": 13,
+                    "source_id": "src-current-real",
+                    "source_line": 42,
+                    "role": "assistant",
+                    "phase": "final_answer",
+                    "is_final": True,
+                    "text": (
+                        "Verification note: source-shape narrative mesh slime mold pathlet "
+                        "is a genuine current-source APW route, not issue chatter."
+                    ),
+                }
+            ]
+        )
+
+        diagnostic = build_associative_path_diagnostic(
+            query="source-shape narrative mesh slime mold pathlet",
+            cwd=self.root,
+            clean_source_dir=clean,
+        )
+
+        self.assertEqual(diagnostic["decision"], "route_candidates")
+        self.assertEqual(diagnostic["top_candidates"][0]["source_refs"][0]["message_id"], "msg-current-real")
+        self.assertEqual(diagnostic["metrics"]["same_thread_task_echo_filtered_count"], 0)
+
+    def test_wrong_route_feedback_aliases_suppress_same_apw_identity(self) -> None:
+        source_refs = [
+            {
+                "source_id": "src-shared-apw",
+                "message_id": "msg-shared-apw",
+                "turn_id": "turn-shared-apw",
+                "turn_index": 3,
+            }
+        ]
+        digest = apw_route_identity.source_ref_digest(source_refs)
+        candidate = {
+            "route_id": "current-clean-source:msg-shared-apw",
+            "candidate_id": "candidate:shared-apw",
+            "route_terms": ["source-shape", "narrative", "mesh", "slime", "mold", "pathlet"],
+            "source_refs": source_refs,
+            "scope_bucket": "project",
+        }
+
+        for alias in (
+            "apw:current-clean-source:msg-shared-apw",
+            "current-clean-source:msg-shared-apw",
+            "candidate:shared-apw",
+            "src-shared-apw",
+            digest,
+        ):
+            with self.subTest(alias=alias):
+                diagnostic = build_associative_path_diagnostic(
+                    query="source-shape narrative mesh slime mold pathlet",
+                    candidates=[candidate],
+                    feedback_rows=[{"route_id": alias, "signal": "wrong_route_drag"}],
+                )
+
+                self.assertEqual(diagnostic["decision"], "abstain")
+                self.assertEqual(diagnostic["candidate_count"], 0)
+                self.assertIn("negative_feedback_evaporated", diagnostic["reason_codes"])
 
     def test_diagnostic_emits_repair_action_for_blocked_or_source_free_routes(self) -> None:
         cases = [

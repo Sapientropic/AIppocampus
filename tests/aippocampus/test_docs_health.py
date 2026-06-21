@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import tempfile
 import unittest
 from pathlib import Path
 
@@ -20,6 +19,7 @@ from tests.aippocampus.docs_health_fixtures import (
     write_classifier_policy,
     write_classifier_release_checklist,
     write_development_status_pyproject,
+    write_minimal_public_repo_shape,
     write_origin_essays,
 )
 
@@ -379,8 +379,7 @@ class DocsHealthTests(unittest.TestCase):
         self.assertEqual(result, [])
 
     def test_source_kernel_contract_blocks_generated_findings_as_truth(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            repo = Path(tmp)
+        with docs_health_repo() as repo:
             overview = repo / "docs" / "architecture" / "architecture-overview.md"
             overview.parent.mkdir(parents=True)
             overview.write_text(
@@ -434,8 +433,7 @@ class DocsHealthTests(unittest.TestCase):
         )
 
     def test_architecture_index_reports_missing_doc_and_bad_role(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            repo = Path(tmp)
+        with docs_health_repo() as repo:
             architecture = repo / "docs" / "architecture"
             architecture.mkdir(parents=True)
             (architecture / "contract.md").write_text(
@@ -487,8 +485,7 @@ class DocsHealthTests(unittest.TestCase):
         )
 
     def test_architecture_index_reports_missing_doc_role(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            repo = Path(tmp)
+        with docs_health_repo() as repo:
             architecture = repo / "docs" / "architecture"
             architecture.mkdir(parents=True)
             (architecture / "contract.md").write_text("# Contract\n", encoding="utf-8")
@@ -528,8 +525,7 @@ class DocsHealthTests(unittest.TestCase):
         self.assertEqual(result, [])
 
     def test_llm_call_contract_reports_missing_cache_contract_keyword(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            repo = Path(tmp)
+        with docs_health_repo() as repo:
             scripts = repo / "skills" / "aippocampus" / "scripts"
             scripts.mkdir(parents=True)
             (scripts / "new_worker.py").write_text(
@@ -579,8 +575,7 @@ class DocsHealthTests(unittest.TestCase):
         self.assertEqual(result, [])
 
     def test_public_api_contract_reports_missing_env_matrix(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            repo = Path(tmp)
+        with docs_health_repo() as repo:
             guides = repo / "docs" / "guides"
             guides.mkdir(parents=True)
             (guides / "public-api.md").write_text(
@@ -594,8 +589,7 @@ class DocsHealthTests(unittest.TestCase):
         self.assertIn("public API doc missing Python import stability layers", issues)
 
     def test_public_api_contract_reports_missing_mcp_control_plane_boundary(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            repo = Path(tmp)
+        with docs_health_repo() as repo:
             guides = repo / "docs" / "guides"
             guides.mkdir(parents=True)
             (guides / "public-api.md").write_text(
@@ -620,8 +614,7 @@ class DocsHealthTests(unittest.TestCase):
         self.assertIn("public API doc missing future MCP write review bar", issues)
 
     def test_public_api_contract_reports_missing_cli_json_error_contract(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            repo = Path(tmp)
+        with docs_health_repo() as repo:
             guides = repo / "docs" / "guides"
             guides.mkdir(parents=True)
             (guides / "public-api.md").write_text(
@@ -659,8 +652,7 @@ class DocsHealthTests(unittest.TestCase):
         self.assertEqual(result, [])
 
     def test_public_core_schema_contract_reports_missing_metadata_namespace_rules(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            repo = Path(tmp)
+        with docs_health_repo() as repo:
             guides = repo / "docs" / "guides"
             guides.mkdir(parents=True)
             (guides / "public-core-boundary.md").write_text(
@@ -683,8 +675,7 @@ class DocsHealthTests(unittest.TestCase):
         self.assertEqual(result, [])
 
     def test_agent_facing_ux_charter_reports_missing_discovery_links(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            repo = Path(tmp)
+        with docs_health_repo() as repo:
             charter = repo / docs_health.AGENT_FACING_UX_CHARTER
             charter.parent.mkdir(parents=True)
             charter.write_text("# UX charter\n", encoding="utf-8")
@@ -713,8 +704,7 @@ class DocsHealthTests(unittest.TestCase):
         self.assertEqual(result, [])
 
     def test_public_core_product_profile_reports_missing_terms(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            repo = Path(tmp)
+        with docs_health_repo() as repo:
             guides = repo / "docs" / "guides"
             guides.mkdir(parents=True)
             (guides / "public-core-boundary.md").write_text(
@@ -742,8 +732,7 @@ class DocsHealthTests(unittest.TestCase):
         self.assertEqual(result, [])
 
     def test_python_version_contract_reports_stale_contributing_floor(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            repo = Path(tmp)
+        with docs_health_repo() as repo:
             (repo / "README.md").write_text(
                 "AIppocampus supports Python 3.12 and newer. Homebrew Python 3.12\n",
                 encoding="utf-8",
@@ -815,8 +804,7 @@ class DocsHealthTests(unittest.TestCase):
         self.assertEqual(result, [])
 
     def test_development_status_classifier_contract_requires_policy_doc(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            repo = Path(tmp)
+        with docs_health_repo() as repo:
             write_development_status_pyproject(repo)
             write_classifier_release_checklist(repo)
 
@@ -828,8 +816,7 @@ class DocsHealthTests(unittest.TestCase):
         )
 
     def test_development_status_classifier_contract_blocks_unapproved_beta(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            repo = Path(tmp)
+        with docs_health_repo() as repo:
             write_development_status_pyproject(
                 repo,
                 classifier=classifier_policy_guard.BETA_CLASSIFIER,
@@ -862,8 +849,7 @@ class DocsHealthTests(unittest.TestCase):
         self.assertEqual(result, [])
 
     def test_dependency_contract_reports_floating_dev_tools(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            repo = Path(tmp)
+        with docs_health_repo() as repo:
             (repo / "pyproject.toml").write_text(
                 "\n".join(
                     [
@@ -938,8 +924,7 @@ class DocsHealthTests(unittest.TestCase):
         self.assertNotIn("feature_or_benchmark_proposal", "\n".join(path.name for path in issue_dir.glob("*.md")))
 
     def test_safe_environment_contract_reports_secret_values_and_plugin_env_block(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            repo = Path(tmp)
+        with docs_health_repo() as repo:
             (repo / ".gitignore").write_text(".env\n.env.*\n!.env.example\n", encoding="utf-8")
             (repo / ".env.example").write_text(
                 "\n".join(
@@ -991,8 +976,7 @@ class DocsHealthTests(unittest.TestCase):
         self.assertEqual(result, [])
 
     def test_host_hook_boundary_reports_missing_boundary_docs_and_code_markers(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            repo = Path(tmp)
+        with docs_health_repo() as repo:
             (repo / "docs" / "architecture" / "host").mkdir(parents=True)
             (repo / "docs" / "guides" / "setup").mkdir(parents=True)
             (repo / ".claude" / "skills" / "aippocampus").mkdir(parents=True)
@@ -1038,8 +1022,7 @@ class DocsHealthTests(unittest.TestCase):
         )
 
     def test_benchmark_evidence_map_reports_missing_runner(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            repo = Path(tmp)
+        with docs_health_repo() as repo:
             docs = repo / "docs"
             evidence = docs / "evidence"
             evidence.mkdir(parents=True)
@@ -1067,8 +1050,7 @@ class DocsHealthTests(unittest.TestCase):
         )
 
     def test_benchmark_evidence_map_requires_current_claims_snapshot(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            repo = Path(tmp)
+        with docs_health_repo() as repo:
             docs = repo / "docs"
             evidence = docs / "evidence"
             evidence.mkdir(parents=True)
@@ -1097,8 +1079,7 @@ class DocsHealthTests(unittest.TestCase):
         self.assertEqual(docs_health.evidence_index_issues(repo_root), [])
 
     def test_evidence_index_reports_missing_lanes_and_docs_readme_pointer(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            repo = Path(tmp)
+        with docs_health_repo() as repo:
             docs = repo / "docs"
             evidence = docs / "evidence"
             evidence.mkdir(parents=True)
@@ -1115,8 +1096,7 @@ class DocsHealthTests(unittest.TestCase):
         self.assertIn("docs README missing evidence README pointer", issues)
 
     def test_reader_path_guard_requires_start_here_entrypoints(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            repo = Path(tmp)
+        with docs_health_repo() as repo:
             docs = repo / "docs"
             docs.mkdir(parents=True)
             (repo / "README.md").write_text("# Project\n", encoding="utf-8")
@@ -1134,8 +1114,7 @@ class DocsHealthTests(unittest.TestCase):
         self.assertIn("start-here missing first-recall install path", issues)
 
     def test_current_claims_guard_reports_stale_evidence_wording(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            repo = Path(tmp)
+        with docs_health_repo() as repo:
             write_origin_essays(repo)
             readiness = repo / "docs" / "evidence" / "readiness"
             readiness.mkdir(parents=True)
@@ -1174,8 +1153,7 @@ class DocsHealthTests(unittest.TestCase):
     def test_current_claims_guard_requires_actionable_owner_and_retirement(
         self,
     ) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            repo = Path(tmp)
+        with docs_health_repo() as repo:
             evidence = repo / "docs" / "evidence"
             evidence.mkdir(parents=True)
             (evidence / "current-claims.md").write_text(
@@ -1221,8 +1199,7 @@ class DocsHealthTests(unittest.TestCase):
         self.assertEqual(docs_health.proof_slice_maturity_board_issues(repo_root), [])
 
     def test_proof_slice_maturity_board_reports_missing_terms_and_pointers(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            repo = Path(tmp)
+        with docs_health_repo() as repo:
             write_origin_essays(repo)
             readiness = repo / "docs" / "evidence" / "readiness"
             readiness.mkdir(parents=True)
@@ -1263,8 +1240,7 @@ class DocsHealthTests(unittest.TestCase):
 
         self.assertEqual(docs_health.proof_slice_maturity_board_issues(repo_root), [])
 
-        with tempfile.TemporaryDirectory() as tmp:
-            repo = Path(tmp)
+        with docs_health_repo() as repo:
             write_origin_essays(repo)
             readiness = repo / "docs" / "evidence" / "readiness"
             readiness.mkdir(parents=True)
@@ -1301,8 +1277,7 @@ class DocsHealthTests(unittest.TestCase):
         )
 
     def test_public_docs_cognitive_mechanism_guard_flags_premature_default_claims(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            repo = Path(tmp)
+        with docs_health_repo() as repo:
             (repo / "docs" / "guides").mkdir(parents=True)
             (repo / "README.md").write_text(
                 "AIppocampus implements Awake SWR as default behavior.\n",
@@ -1324,8 +1299,7 @@ class DocsHealthTests(unittest.TestCase):
     def test_benchmark_evidence_map_requires_hippocampal_private_annotation_protocol(
         self,
     ) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            repo = Path(tmp)
+        with docs_health_repo() as repo:
             docs = repo / "docs"
             evidence = docs / "evidence"
             evidence.mkdir(parents=True)
@@ -1352,8 +1326,7 @@ class DocsHealthTests(unittest.TestCase):
         )
 
     def test_hippocampal_private_annotation_protocol_reports_missing_terms(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            repo = Path(tmp)
+        with docs_health_repo() as repo:
             write_origin_essays(repo)
             benchmark_docs = repo / "docs" / "evidence" / "benchmarks"
             benchmark_docs.mkdir(parents=True)
@@ -1382,8 +1355,7 @@ class DocsHealthTests(unittest.TestCase):
         )
 
     def test_runtime_script_map_reports_missing_required_script(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            repo = Path(tmp)
+        with docs_health_repo() as repo:
             architecture = repo / "docs" / "architecture"
             architecture.mkdir(parents=True)
             (architecture / "runtime-script-map.md").write_text(
@@ -1399,8 +1371,7 @@ class DocsHealthTests(unittest.TestCase):
         )
 
     def test_runtime_script_map_reports_missing_navigation_sections(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            repo = Path(tmp)
+        with docs_health_repo() as repo:
             architecture = repo / "docs" / "architecture"
             architecture.mkdir(parents=True)
             (architecture / "runtime-script-map.md").write_text(
@@ -1414,8 +1385,7 @@ class DocsHealthTests(unittest.TestCase):
         self.assertIn("runtime script map missing recall decision test map", issues)
 
     def test_dream_phase1_contract_reports_missing_schema_pointer(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            repo = Path(tmp)
+        with docs_health_repo() as repo:
             research = repo / "docs" / "research"
             research.mkdir(parents=True)
             (research / "dream-task-design.md").write_text(
@@ -1429,8 +1399,7 @@ class DocsHealthTests(unittest.TestCase):
         self.assertIn("dream task design missing executable contract test pointer", issues)
 
     def test_research_index_reports_unlinked_top_level_notes(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            repo = Path(tmp)
+        with docs_health_repo() as repo:
             research = repo / "docs" / "research"
             research.mkdir(parents=True)
             (research / "README.md").write_text("# Research Notes\n", encoding="utf-8")
@@ -1441,8 +1410,7 @@ class DocsHealthTests(unittest.TestCase):
         self.assertIn("research index does not link docs/research/unlisted.md", issues)
 
     def test_research_index_reports_unindexed_subdirectories(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            repo = Path(tmp)
+        with docs_health_repo() as repo:
             research = repo / "docs" / "research"
             subdir = research / "topic-pack"
             subdir.mkdir(parents=True)
@@ -1460,8 +1428,7 @@ class DocsHealthTests(unittest.TestCase):
         )
 
     def test_docs_root_reports_unclassified_markdown(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            repo = Path(tmp)
+        with docs_health_repo() as repo:
             docs = repo / "docs"
             docs.mkdir(parents=True)
             (docs / "loose-status-report.md").write_text("# Loose\n", encoding="utf-8")
@@ -1476,8 +1443,7 @@ class DocsHealthTests(unittest.TestCase):
         )
 
     def test_docs_root_reports_unclassified_directories(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            repo = Path(tmp)
+        with docs_health_repo() as repo:
             docs = repo / "docs"
             (docs / "misc").mkdir(parents=True)
 
@@ -1491,8 +1457,7 @@ class DocsHealthTests(unittest.TestCase):
         )
 
     def test_ia_diagnostics_warn_for_missing_folder_index(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            repo = Path(tmp)
+        with docs_health_repo() as repo:
             guides = repo / "docs" / "guides"
             guides.mkdir(parents=True)
             for index in range(ia_pressure_guard.MISSING_INDEX_MARKDOWN_THRESHOLD):
@@ -1516,8 +1481,7 @@ class DocsHealthTests(unittest.TestCase):
         self.assertEqual(report["failures"], [])
 
     def test_ia_diagnostics_report_top_level_docs_sprawl_as_failure(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            repo = Path(tmp)
+        with docs_health_repo() as repo:
             docs = repo / "docs"
             docs.mkdir(parents=True)
             (docs / "loose-status-report.md").write_text("# Loose\n", encoding="utf-8")
@@ -1543,8 +1507,7 @@ class DocsHealthTests(unittest.TestCase):
         )
 
     def test_ia_diagnostics_warn_for_active_doc_missing_role_status(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            repo = Path(tmp)
+        with docs_health_repo() as repo:
             planning = repo / "docs" / "planning"
             planning.mkdir(parents=True)
             (planning / "next-slice.md").write_text(
@@ -1569,8 +1532,7 @@ class DocsHealthTests(unittest.TestCase):
         )
 
     def test_ia_diagnostics_warn_for_archive_without_current_pointer(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            repo = Path(tmp)
+        with docs_health_repo() as repo:
             archive = repo / "docs" / "archive"
             archive.mkdir(parents=True)
             (archive / "old-plan.md").write_text(
@@ -1658,15 +1620,8 @@ class DocsHealthTests(unittest.TestCase):
         self.assertNotIn("<local-cache.jsonl>", card)
 
     def test_repo_markdown_scan_ignores_tmp_prompts(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            repo = Path(tmp)
-            (repo / "README.md").write_text("# Test\n", encoding="utf-8")
-            (repo / "skills" / "aippocampus").mkdir(parents=True)
-            (repo / ".gitignore").write_text(
-                ".aippocampus/\naippocampus-registry/\nthread-anchors.md\n",
-                encoding="utf-8",
-            )
-            write_origin_essays(repo)
+        with docs_health_repo() as repo:
+            write_minimal_public_repo_shape(repo)
             (repo / ".tmp").mkdir()
             (repo / ".tmp" / "review-prompt.md").write_text(
                 "生命还能变成什么，而我能不能在变化后仍然是我。",
@@ -1678,15 +1633,8 @@ class DocsHealthTests(unittest.TestCase):
         self.assertFalse(any("origin phrase should live only" in issue for issue in issues), issues)
 
     def test_public_readiness_guard_reports_missing_docs_in_repo_shape(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            repo = Path(tmp)
-            (repo / "README.md").write_text("# Test\n", encoding="utf-8")
-            (repo / "skills" / "aippocampus").mkdir(parents=True)
-            (repo / ".gitignore").write_text(
-                ".aippocampus/\naippocampus-registry/\nthread-anchors.md\n",
-                encoding="utf-8",
-            )
-            write_origin_essays(repo)
+        with docs_health_repo() as repo:
+            write_minimal_public_repo_shape(repo)
 
             issues, _ = docs_health.check_repo_docs(repo)
 
@@ -1703,15 +1651,8 @@ class DocsHealthTests(unittest.TestCase):
         self.assertIn("missing public example memory bundle", issues)
 
     def test_public_example_guard_requires_scope_label_metadata(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            repo = Path(tmp)
-            (repo / "README.md").write_text("# Test\n", encoding="utf-8")
-            (repo / "skills" / "aippocampus").mkdir(parents=True)
-            (repo / ".gitignore").write_text(
-                ".aippocampus/\naippocampus-registry/\nthread-anchors.md\n",
-                encoding="utf-8",
-            )
-            write_origin_essays(repo)
+        with docs_health_repo() as repo:
+            write_minimal_public_repo_shape(repo)
             for rel_path in docs_health.REQUIRED_PUBLIC_READINESS_DOCS:
                 path = repo / rel_path
                 path.parent.mkdir(parents=True, exist_ok=True)
@@ -1735,15 +1676,8 @@ class DocsHealthTests(unittest.TestCase):
         self.assertTrue(any("missing scope_labels" in issue for issue in issues), issues)
 
     def test_public_example_guard_rejects_extra_files_and_stale_labels(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            repo = Path(tmp)
-            (repo / "README.md").write_text("# Test\n", encoding="utf-8")
-            (repo / "skills" / "aippocampus").mkdir(parents=True)
-            (repo / ".gitignore").write_text(
-                ".aippocampus/\naippocampus-registry/\nthread-anchors.md\n",
-                encoding="utf-8",
-            )
-            write_origin_essays(repo)
+        with docs_health_repo() as repo:
+            write_minimal_public_repo_shape(repo)
             for rel_path in docs_health.REQUIRED_PUBLIC_READINESS_DOCS:
                 path = repo / rel_path
                 path.parent.mkdir(parents=True, exist_ok=True)

@@ -54,6 +54,18 @@ INTERNAL_STATUS_REASON_COPY = {
         "The plugin cache refresh cannot safely choose a target automatically."
     ),
 }
+TRUE_FOREGROUND_TOOL_FAILURE_STATUSES = {
+    "foreground_mcp_runtime_mismatch",
+    "host_live_probe_key_tools_failed",
+}
+STATUS_ACTION_PRIORITY = {
+    "prompt_hook_latency": 10,
+    "warm_ambient": 20,
+    "provider": 30,
+    "action_hints": 40,
+    "plugin_cache": 50,
+    "operator_detail": 90,
+}
 
 
 def agent_callable_host_probe_ok(item: dict[str, Any]) -> bool:
@@ -139,6 +151,34 @@ def _compact_update_action(
     if "manual_instruction" in result:
         result["manual_instruction"] = compact_text(str(result["manual_instruction"]), 220)
     return {key: value for key, value in result.items() if value not in (None, "")}
+
+
+def _status_action_priority(action: dict[str, Any]) -> int:
+    surface = str(action.get("surface") or "")
+    if surface == "agent_callable":
+        status_code = str(action.get("status_code") or action.get("diagnostic_code") or "")
+        if status_code in TRUE_FOREGROUND_TOOL_FAILURE_STATUSES:
+            return 0
+        # A host-ok-but-current-thread-unverified probe is important, but it is
+        # not allowed to bury measured foreground friction such as prompt hook
+        # latency or a blocked warm queue. Otherwise status cards teach agents
+        # to repeat the generic "verify tools" step while the user still feels
+        # every prompt stalling.
+        return 60
+    return STATUS_ACTION_PRIORITY.get(surface, 55)
+
+
+def _prioritize_status_actions(actions: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        action
+        for _priority, _index, action in sorted(
+            (
+                (_status_action_priority(action), index, action)
+                for index, action in enumerate(actions)
+            ),
+            key=lambda item: (item[0], item[1]),
+        )
+    ]
 
 
 def compact_agent_status_report(
@@ -439,10 +479,7 @@ def compact_agent_status_report(
         if hook_status in {"missing", "not_checked", "deferred"} and not (prompt_installed or lifecycle_installed)
         else "attention_needed"
     )
-    if action_hints_installed and not action_hints_ready:
-        ambient_next_command = action_hint_primary_command
-        ambient_next_action = "refresh_or_inspect_action_hints"
-    elif prompt_latency_risk:
+    if prompt_latency_risk:
         ambient_next_command = "aippocampus hooks prompt status --last --json"
         ambient_next_action = "inspect_prompt_hook_latency"
     elif warm_stale_queue:
@@ -453,6 +490,9 @@ def compact_agent_status_report(
     elif provider_degraded and ambient_installed_for_provider:
         ambient_next_command = "aippocampus doctor provider --json"
         ambient_next_action = "inspect_provider"
+    elif action_hints_installed and not action_hints_ready:
+        ambient_next_command = action_hint_primary_command
+        ambient_next_action = "refresh_or_inspect_action_hints"
     elif ambient_state == "ready":
         ambient_next_command = ""
         ambient_next_action = "continue_with_ordinary_recall"
@@ -500,6 +540,7 @@ def compact_agent_status_report(
         if bool(summary.get("core_ready")) and not needs_action
         else "attention_needed"
     )
+    actions = _prioritize_status_actions(actions)
     primary_action = actions[0] if actions else {
         "id": "continue_after_update_status",
         "label": "Continue after update status",

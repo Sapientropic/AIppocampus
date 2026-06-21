@@ -107,6 +107,43 @@ class PromptContextRenderTests(unittest.TestCase):
         self.assertIsNone(render.context_for_hook(result))
         self.assertIsNone(render.hook_stdout_payload(result))
 
+    def test_skip_result_with_tiny_recall_affordance_emits_action_only_context(self) -> None:
+        result = {
+            "decision": "skip",
+            "score": 0.2,
+            "confidence": "medium",
+            "query_terms": ["old", "continuity"],
+            "cognitive_map": [],
+            "concept_expansions": [],
+            "candidates": [],
+            "working_memory": [],
+            "evidence": [],
+            "ambient_recall": {
+                "tiny_agent_recall_affordance": {
+                    "status": "host_replay_ready_action_only",
+                    "suggested_agent_action": "agent_recall",
+                    "cue_shape": "relationship continuity / old UX review",
+                    "source_open_gates_passed": True,
+                    "safety_blockers": [],
+                    "not_evidence": True,
+                }
+            },
+        }
+
+        public = render.public_hook_debug_payload(result)
+        affordance = public["agent_recall_affordance"]
+        context = render.context_for_hook(result) or ""
+
+        self.assertTrue(affordance["usable_continuity_lead"])
+        self.assertEqual(affordance["suggested_agent_action"], "agent_recall")
+        self.assertIn("ambient_tiny_agent_recall", affordance["lead_kinds"])
+        self.assertIn("AIppocampus: prior context may matter.", context)
+        self.assertIn("Next: call agent_recall with this cue before broad search.", context)
+        self.assertIn("Use as route only", context)
+        self.assertNotIn("source_refs", context)
+        self.assertNotIn("source_ref", context)
+        self.assertNotIn("PRIVATE_SOURCE_SENTINEL", context)
+
     def test_generic_meta_suppression_hides_legacy_candidate_summary(self) -> None:
         result = {
             "decision": "scent",

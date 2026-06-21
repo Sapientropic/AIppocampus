@@ -2,24 +2,25 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.source.jsonl_reader import load_jsonl_dict_rows
+
+
+def load_clean_messages_with_loss(path: Path) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    result = load_jsonl_dict_rows(path)
+    return [item for item in result.rows if item.get("text")], result.loss
+
 
 def iter_clean_messages(path: Path) -> list[dict[str, Any]]:
-    messages: list[dict[str, Any]] = []
-    if not path.exists():
-        return messages
-    with path.open("r", encoding="utf-8") as f:
-        for line in f:
-            try:
-                item = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if isinstance(item, dict) and item.get("text"):
-                messages.append(item)
+    messages, _ = load_clean_messages_with_loss(path)
     return messages
+
+
+def clean_messages_jsonl_loss(path: Path) -> dict[str, Any]:
+    _, loss = load_clean_messages_with_loss(path)
+    return loss
 
 
 def score_message(message: dict[str, Any], terms: list[str]) -> float:

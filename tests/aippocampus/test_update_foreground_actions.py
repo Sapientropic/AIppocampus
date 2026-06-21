@@ -70,7 +70,10 @@ class UpdateForegroundActionTests(unittest.TestCase):
         self.assertEqual(compact["summary"]["plan_surface_filter"], ["hooks"])
         self.assertEqual(compact["summary"]["plan_scope"], "selected_surfaces")
         self.assertNotIn("foreground_status_cards", compact)
-        surfaces = {action.get("surface") for action in compact["safe_next_actions"]}
+        surfaces = {
+            action.get("surface")
+            for action in [compact["foreground_action"], *compact["safe_next_actions"]]
+        }
         self.assertIn("action_hints", surfaces)
         self.assertIn("hooks", surfaces)
         self.assertEqual(compact["ambient_recall"]["state"], "not_installed")

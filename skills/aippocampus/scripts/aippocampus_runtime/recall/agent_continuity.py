@@ -30,7 +30,7 @@ from aippocampus_runtime.mcp.recall_navigation import (
     recall_context_packet,
     recall_deepen_packet,
 )
-from aippocampus_runtime.navigation import attention_route_projection
+from aippocampus_runtime.navigation import attention_route_projection, repo_familiarity
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 from aippocampus_runtime.recall import (
     agent_deepen_requests,
@@ -93,6 +93,68 @@ def _clean_source_dir(cwd: Path, explicit: str | Path | None = None) -> Path:
     if (global_dir / "messages.jsonl").exists() or not (legacy_dir / "messages.jsonl").exists():
         return global_dir
     return legacy_dir
+
+
+def _repo_familiarity_root(cwd: Path) -> Path | None:
+    for path in (cwd, *cwd.parents):
+        if (
+            (path / "skills" / "aippocampus" / "scripts" / "aippocampus_runtime").is_dir()
+            and (path / "docs" / "architecture").is_dir()
+        ):
+            return path
+    return None
+
+
+def _repo_familiarity_fallback_card(query: str, cwd: Path) -> dict[str, Any] | None:
+    repo_root = _repo_familiarity_root(cwd)
+    if repo_root is None:
+        return None
+    packet = repo_familiarity.select_current_checkout_packet(
+        repo_root,
+        task=query,
+        max_cards=1,
+    )
+    cards = [card for card in packet.get("selected_cards") or [] if isinstance(card, Mapping)]
+    if not cards:
+        report = packet.get("cost_delta_report") if isinstance(packet, Mapping) else {}
+        return {
+            "kind": "aippocampus_repo_familiarity_fallback",
+            "schema_version": repo_familiarity.SCHEMA_VERSION,
+            "status": "no_current_repo_card",
+            "current_checkout_checked": True,
+            "rejected_card_count": len(
+                [item for item in packet.get("rejected_cards") or [] if isinstance(item, Mapping)]
+            ),
+            "stale_fast_reject_count": (
+                int(report.get("fast_reject_count") or 0) if isinstance(report, Mapping) else 0
+            ),
+            "irrelevant_reject_count": (
+                int(report.get("irrelevant_reject_count") or 0)
+                if isinstance(report, Mapping)
+                else 0
+            ),
+            "claim_boundary": "repo_familiarity_unselected_no_source_claim",
+        }
+    card = cards[0]
+    refs = [ref for ref in card.get("source_refs") or [] if isinstance(ref, Mapping)]
+    return {
+        "kind": "aippocampus_repo_familiarity_fallback",
+        "schema_version": repo_familiarity.SCHEMA_VERSION,
+        "status": "route_candidate",
+        "route_choice_posture": "repo_familiarity_current_checkout_fallback",
+        "landmark": card.get("landmark"),
+        "category": card.get("category"),
+        "why_now": card.get("why_now"),
+        "action_delta_required": card.get("action_delta_required"),
+        "first_source_to_reopen": card.get("first_source_to_reopen"),
+        "source_line": (refs[0].get("line") if refs else None),
+        "source_ref_count": len(refs),
+        "selected_card_count": len(cards),
+        "current_checkout_checked": True,
+        "invalidation_present": bool(card.get("invalidation")),
+        "source_reopen_required_before_claim": True,
+        "claim_boundary": "repo_familiarity_navigation_only_until_source_opened",
+    }
 
 
 def _public_payload(payload: Any) -> Any:
@@ -1028,6 +1090,7 @@ def recall(
         query=str(query or ""),
         source_registered=_clean_source_has_messages(source_dir),
     )
+    repo_familiarity_fallback = _repo_familiarity_fallback_card(str(query or ""), cwd_path)
     navigation_signals = architecture_navigation_affordance.navigation_signals_for_recall(
         query=str(query or ""),
         macro_navigation=macro_navigation,
@@ -1062,6 +1125,7 @@ def recall(
         "semantic_gate_diagnostics": semantic_diagnostics,
         "associative_path_policy": associative_path_policy,
         "associative_path_fallback": associative_path_fallback,
+        "repo_familiarity_fallback": repo_familiarity_fallback,
         "suggested_next": "agent deepen" if deepen_requests else "search_memory",
         "suggested_next_command": deepen_requests[0].get("copy_paste_command") if deepen_requests else None,
         **handle_boundary_fields(),

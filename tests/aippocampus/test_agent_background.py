@@ -84,12 +84,14 @@ class AgentBackgroundTests(unittest.TestCase):
         self.assertNotIn("operator_detail", payload)
         self.assertNotIn("reader_diagnostic", payload)
         self.assertNotIn(payload["best_finding"], payload.get("finding_summaries", []))
-        action_ids = [action["id"] for action in finding["next_actions"]]
-        self.assertEqual(
-            action_ids,
-            ["reopen_background_finding_source_route"],
-        )
-        self.assertEqual(finding["next_actions"][0]["mutation_risk"], "read_only")
+        self.assertNotIn("boundary", finding)
+        self.assertNotIn("source_summary", finding)
+        self.assertNotIn("next_actions", finding)
+        self.assertEqual(payload["foreground_action"]["id"], "reopen_background_finding_source_route")
+        self.assertEqual(payload["foreground_action"]["mutation_risk"], "read_only")
+        self.assertEqual(finding["source_ref_count"], 0)
+        self.assertEqual(finding["use_boundary"]["use"], "navigation_only")
+        self.assertEqual(finding["use_boundary"]["before_claiming"], "reopen_source_route")
         self.assertNotIn("durable_low_authority_feedback_write", encoded)
         self.assertNotIn("materialize_action_hint_from_finding", encoded)
         self.assertEqual(finding["shape_label"], "action_hint_candidate")
@@ -249,6 +251,10 @@ class AgentBackgroundTests(unittest.TestCase):
         self.assertEqual(payload["finding_count"], 1)
         self.assertEqual(payload["best_finding"]["shape_label"], "action_hint_candidate")
         self.assertIn("Action-time learning", payload["best_finding"]["match_reason"])
+        self.assertNotIn("boundary", payload["best_finding"])
+        self.assertNotIn("source_summary", payload["best_finding"])
+        self.assertNotIn("next_actions", payload["best_finding"])
+        self.assertIn("use_boundary", payload["best_finding"])
         self.assertNotIn("findings", payload)
         self.assertNotIn("reader_diagnostic", payload)
         self.assertNotIn(str(working_memory), encoded)

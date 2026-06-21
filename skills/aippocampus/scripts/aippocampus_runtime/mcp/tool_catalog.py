@@ -60,6 +60,7 @@ TOOLS: list[dict[str, Any]] = [
             "apw_navigation_path": {"type": "string"},
             "apw_active_lock_path": {"type": "string"},
             "apw_feedback_path": {"type": "string"},
+            "last_recall_path": {"type": "string"},
             "detail": {"type": "string", "enum": ["compact", "full"]},
             "include_private_paths": {"type": "boolean"},
         },

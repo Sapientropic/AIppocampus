@@ -727,6 +727,7 @@ def compact_aippo_guidance_card(payload: Mapping[str, Any], *, task: str = "") -
     )
     deepen_route_id = str(packet.get("deepen_route_id") or "").strip()
     contract_action_raw = packet.get("contract_action")
+    contract_action: dict[str, Any] | None
     contract_action = (
         dict(contract_action_raw)
         if isinstance(contract_action_raw, Mapping)
@@ -799,6 +800,14 @@ def compact_aippo_guidance_card(payload: Mapping[str, Any], *, task: str = "") -
                 "why": "Re-run AIppo only if the task wording has changed or the card needs refreshing.",
             }
         )
+    no_task_family_match = bool(not families and task_text)
+    contract_action_allowed = bool(
+        contract_action
+        and task_text
+        and status != "no_active_contract"
+        and not no_task_family_match
+        and (families or guidance or active_clause_count > 0 or available_active_clause_count > 0)
+    )
     if not task_text:
         safe_next_actions.append(
             {
@@ -832,7 +841,7 @@ def compact_aippo_guidance_card(payload: Mapping[str, Any], *, task: str = "") -
                 "why": "Open the full activation packet only for local operator diagnostics.",
             }
         )
-    elif contract_action:
+    elif contract_action is not None and contract_action_allowed:
         safe_next_actions.append(dict(contract_action))
     reason_codes: list[str] = []
     no_contract_reason = str(packet.get("no_active_contract_reason") or "").strip()
@@ -840,7 +849,7 @@ def compact_aippo_guidance_card(payload: Mapping[str, Any], *, task: str = "") -
         reason_codes.append(no_contract_reason)
     if families and not guidance:
         reason_codes.append("related_task_needs_reopen_or_contract_ripening")
-    elif not families and task_text:
+    elif no_task_family_match:
         reason_codes.append("no_task_family_match")
     if next_action == "use_hint" and guidance and available_active_clause_count <= 0:
         reason_codes.append("use_hint_blocked_no_available_active_clause")

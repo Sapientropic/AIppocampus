@@ -495,11 +495,13 @@ def call_agent_recall(arguments: dict[str, Any]) -> dict[str, Any]:
         )
         return text_result(public_payload(arguments, payload), is_error=True)
     agent = agent_continuity_module()
+    cwd_path = cwd_arg(arguments)
+    source_dir = clean_source_dir_for(arguments)
     provider_bridge_report = maybe_apply_provider_key_bridge_for_semantic_diagnostic(arguments)
     payload = agent.recall(
         query,
-        cwd=arguments.get("cwd"),
-        clean_source_dir=arguments.get("clean_source_dir"),
+        cwd=cwd_path,
+        clean_source_dir=source_dir,
         registry_dir=arguments.get("registry_dir"),
         macro_state_path=arguments.get("macro_state_jsonl"),
         project=str(arguments.get("project") or "AIppocampus"),
@@ -530,8 +532,8 @@ def call_agent_recall(arguments: dict[str, Any]) -> dict[str, Any]:
     cache_written = write_last_recall_cache(
         payload.get("deepen_requests") or [],
         query=query,
-        cwd=arguments.get("cwd"),
-        clean_source_dir=arguments.get("clean_source_dir"),
+        cwd=cwd_path,
+        clean_source_dir=source_dir,
         registry_dir=arguments.get("registry_dir"),
         macro_state_path=arguments.get("macro_state_jsonl"),
         project=str(arguments.get("project") or "AIppocampus"),
@@ -626,6 +628,12 @@ def call_agent_deepen(arguments: dict[str, Any]) -> dict[str, Any]:
             default=agent.MAX_ROUTES,
         ),
     )
+    apw_identity = cached_context.get("apw_route_identity")
+    if isinstance(apw_identity, dict):
+        payload["apw_route_identity"] = dict(apw_identity)
+        result = payload.get("result")
+        if isinstance(result, dict):
+            result["apw_route_identity"] = dict(apw_identity)
     if request_index_arg is not None and payload.get("status") == "ok":
         try:
             mark_last_recall_request_opened(
@@ -732,11 +740,13 @@ def call_recall_diagnostic(arguments: dict[str, Any]) -> dict[str, Any]:
             ],
         )
     provider_bridge_report = maybe_apply_provider_key_bridge_for_semantic_diagnostic(arguments)
+    cwd_path = cwd_arg(arguments)
+    source_dir = clean_source_dir_for(arguments)
     payload = recall_diagnostic_report(
         cue=cue,
         mode=str(arguments.get("mode") or "why-recall"),
-        cwd=cwd_arg(arguments),
-        clean_source_dir=arguments.get("clean_source_dir"),
+        cwd=cwd_path,
+        clean_source_dir=source_dir,
         registry_dir=arguments.get("registry_dir"),
         max_routes=route_limit_arg(arguments.get("max"), default=5),
         handle=arguments.get("handle"),

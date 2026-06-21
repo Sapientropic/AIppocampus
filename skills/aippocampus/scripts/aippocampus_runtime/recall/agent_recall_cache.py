@@ -221,6 +221,9 @@ def public_compact_route_receipts(routes: Any) -> list[dict[str, Any]]:
                     "index": route.get("index") or route.get("route_index"),
                     "label": route.get("label") or route.get("route_label"),
                     "why_this_route": route.get("why_this_route"),
+                    "route_choice_posture": route.get("route_choice_posture"),
+                    "confidence": route.get("confidence"),
+                    "claim_boundary": route.get("claim_boundary"),
                     "already_opened": route.get("already_opened"),
                     "action": {
                         key: value
@@ -331,6 +334,14 @@ def write_last_recall_cache(
                 "request_index": request.get("request_index"),
                 "route_id": request.get("route_id"),
                 "handle_sha256_12": handle_digest,
+                "matched_cue_family": request.get("matched_cue_family"),
+                "matched_cue_anchors": request.get("matched_cue_anchors"),
+                "candidate_source_kind": request.get("candidate_source_kind"),
+                "source_ref_digest": request.get("source_ref_digest"),
+                "selected_source_ref_count": request.get("selected_source_ref_count"),
+                "apw_candidate_route_id": request.get("apw_candidate_route_id"),
+                "apw_candidate_id": request.get("apw_candidate_id"),
+                "apw_route_identity": request.get("apw_route_identity"),
                 "local_reopen_token": _encode_local_reopen_token(request.get("handle")),
                 "opened": bool(opened_entry),
                 "opened_at": opened_entry.get("opened_at") if opened_entry else None,
@@ -521,6 +532,29 @@ def handle_from_last_recall_cache(
                 handle = str(request.get("handle") or "")
             context = dict(cache.get("context") or {})
             context.update(_decode_local_reopen_context(context.pop("local_reopen_context_token", None)))
+            identity = request.get("apw_route_identity")
+            if isinstance(identity, Mapping):
+                context["apw_route_identity"] = dict(identity)
+            else:
+                compact_identity = {
+                    "kind": "aippocampus_apw_route_identity",
+                    "schema_version": 1,
+                    "public_route_id": request.get("route_id"),
+                    "apw_candidate_route_id": request.get("apw_candidate_route_id"),
+                    "apw_candidate_id": request.get("apw_candidate_id"),
+                    "source_ref_digest": request.get("source_ref_digest"),
+                    "selected_source_ref_count": request.get("selected_source_ref_count"),
+                    "matched_cue_anchors": request.get("matched_cue_anchors"),
+                    "candidate_source_kind": request.get("candidate_source_kind"),
+                    "raw_refs_redacted_from_compact_output": True,
+                }
+                compact_identity = {
+                    key: value
+                    for key, value in compact_identity.items()
+                    if value not in (None, "", [], {})
+                }
+                if compact_identity.get("source_ref_digest"):
+                    context["apw_route_identity"] = compact_identity
             return handle, context
     raise ValueError(f"last recall cache does not contain request {request_index}")
 

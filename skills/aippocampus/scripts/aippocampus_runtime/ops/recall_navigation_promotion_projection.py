@@ -48,6 +48,14 @@ def public_smoke_summary(report: Mapping[str, Any]) -> dict[str, Any]:
         "promotion_gate_ok": promotion_gate_ok,
         "default_adoption_allowed": default_allowed,
         "promotion_decision": "promoted" if promotion_gate_ok else "not_promoted",
+        "active_promotion_owner_issue": str(
+            report.get("active_promotion_owner_issue") or promotion.ACTIVE_PROMOTION_OWNER_ISSUE
+        ),
+        "historical_promotion_issues": dict(
+            _as_dict(report.get("historical_promotion_issues"))
+            or promotion.HISTORICAL_PROMOTION_ISSUES
+        ),
+        "blocker_owner_issue_map": dict(_as_dict(report.get("blocker_owner_issue_map"))),
         "promotion_blocker_count": len(list(report.get("promotion_blockers") or [])),
         "preregistration": {
             "arms": list(promotion.PROMOTION_ARMS),
@@ -69,7 +77,12 @@ def public_smoke_summary(report: Mapping[str, Any]) -> dict[str, Any]:
         "macro_navigation_readout": {
             "measured": bool(macro_readout.get("measured")),
             "status": str(macro_readout.get("status") or ""),
-            "promotion_issue": str(macro_readout.get("promotion_issue") or "#1300"),
+            "promotion_issue": str(
+                macro_readout.get("promotion_issue") or promotion.ACTIVE_PROMOTION_OWNER_ISSUE
+            ),
+            "historical_promotion_issues": list(
+                macro_readout.get("historical_promotion_issues") or ["#1300"]
+            ),
             "active_layer_order_delta_count": _int(
                 macro_readout.get("active_layer_order_delta_count")
             ),

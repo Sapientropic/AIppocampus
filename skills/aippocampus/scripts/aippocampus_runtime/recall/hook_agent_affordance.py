@@ -32,6 +32,19 @@ _STRONG_CLAIM_INTENTS = {
     "numeric_claim",
 }
 _TOOL_VISIBILITY_VALUES = {"visible", "unknown", "cli_fallback_only"}
+_TINY_AFFORDANCE_READY_STATUSES = {
+    "ready_action_only",
+    "host_replay_ready_action_only",
+    "wired_secondary_action",
+}
+_TINY_AFFORDANCE_BLOCKERS = {
+    "wrong_route_drag_present",
+    "irrelevant_memory_drag_present",
+    "source_truth_from_affordance",
+    "source_truth_overclaim",
+    "raw_handle_or_provenance_dump",
+    "broad_manual_search_before_recall",
+}
 
 
 def _as_list(value: Any) -> list[Any]:
@@ -54,6 +67,51 @@ def _reason_contains(result: Mapping[str, Any], needle: str) -> bool:
 def _ambient_cards(result: Mapping[str, Any]) -> list[dict[str, Any]]:
     ambient = _as_dict(result.get("ambient_recall"))
     return [card for card in _as_list(ambient.get("cards")) if isinstance(card, dict)]
+
+
+def _ambient_tiny_agent_recall_affordance(result: Mapping[str, Any]) -> dict[str, Any]:
+    ambient = _as_dict(result.get("ambient_recall"))
+    raw = (
+        _as_dict(ambient.get("tiny_agent_recall_affordance"))
+        or _as_dict(ambient.get("agent_recall_affordance"))
+        or _as_dict(result.get("tiny_agent_recall_affordance"))
+    )
+    if not raw:
+        return {}
+    status = str(
+        raw.get("status")
+        or raw.get("gate_status")
+        or raw.get("decision")
+        or ""
+    ).strip()
+    if status not in _TINY_AFFORDANCE_READY_STATUSES:
+        return {}
+    if str(raw.get("suggested_agent_action") or "agent_recall") != "agent_recall":
+        return {}
+    blockers = {
+        str(item)
+        for key in ("safety_blockers", "blockers", "adoption_blockers")
+        for item in _as_list(raw.get(key))
+    }
+    if blockers & _TINY_AFFORDANCE_BLOCKERS:
+        return {}
+    if raw.get("source_truth_from_affordance") or raw.get("source_truth_overclaim"):
+        return {}
+    if raw.get("source_open_gates_passed") is False:
+        return {}
+    return raw
+
+
+def _tiny_affordance_public_cue(result: Mapping[str, Any]) -> str | None:
+    raw = _ambient_tiny_agent_recall_affordance(result)
+    for key in ("query_seed", "public_cue_shape", "cue_shape"):
+        cue = str(raw.get(key) or "").strip()
+        if not cue:
+            continue
+        if ":\\" in cue or "source_ref" in cue.casefold():
+            continue
+        return cue[:96]
+    return None
 
 
 def _is_aippo_working_contract(item: Mapping[str, Any]) -> bool:
@@ -124,6 +182,8 @@ def _lead_kinds(result: Mapping[str, Any]) -> list[str]:
     # the user explicitly asked for an agent-native AIppocampus surface.
     if not skip_without_explicit_agent_surface and (candidates or evidence or cards):
         kinds.append("memory_route")
+    if _ambient_tiny_agent_recall_affordance(result):
+        kinds.append("ambient_tiny_agent_recall")
     if (
         not skip_without_explicit_agent_surface
         and not kinds
@@ -223,7 +283,7 @@ def _suggested_action(result: Mapping[str, Any], lead_kinds: list[str]) -> str:
     return "agent_recall"
 
 
-def _query_seed(action: str, lead_kinds: list[str]) -> str:
+def _query_seed(action: str, lead_kinds: list[str], result: Mapping[str, Any]) -> str:
     if action == "read_current_repo_first":
         return "current repository state"
     if action == "agent_aippo":
@@ -232,6 +292,8 @@ def _query_seed(action: str, lead_kinds: list[str]) -> str:
         return "source-required route"
     if action == "agent_recall" and "architecture_navigation" in lead_kinds:
         return "architecture navigation / route diagnostics"
+    if action == "agent_recall" and "ambient_tiny_agent_recall" in lead_kinds:
+        return _tiny_affordance_public_cue(result) or "distinctive continuity cue"
     if action == "agent_recall":
         return "continuity cue / route lookup"
     return "none"
@@ -294,6 +356,8 @@ def _reason_codes(action: str, lead_kinds: list[str], result: Mapping[str, Any])
         codes.append("work_task_may_need_context")
     if "memory_route" in lead_kinds:
         codes.append("warm_route_available")
+    if "ambient_tiny_agent_recall" in lead_kinds:
+        codes.append("ambient_tiny_agent_recall_ready")
     if "source_required" in lead_kinds:
         codes.append("source_required_route_available")
     if "avatar_posture" in lead_kinds:
@@ -337,7 +401,7 @@ def build_hook_agent_affordance(result: Mapping[str, Any]) -> dict[str, Any]:
         "lead_confidence_bucket": _controlled_confidence(result.get("confidence")),
         "lead_kinds": lead_kinds,
         "suggested_agent_action": action,
-        "suggested_query_seed": _query_seed(action, lead_kinds),
+        "suggested_query_seed": _query_seed(action, lead_kinds, result),
         "budget_hint": _budget_hint(action),
         "tool_visibility": _tool_visibility(result),
         "reason_codes": _reason_codes(action, lead_kinds, result),

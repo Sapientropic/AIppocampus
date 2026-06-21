@@ -318,9 +318,17 @@ output.write_bytes(b"FAKEAGE\\n" + base64.b64encode(data))
         self.assertEqual(
             missing_payload["issues"][0]["path"], "<object-path-redacted>"
         )
+        self.assertNotIn(
+            missing_payload["foreground_action"],
+            missing_payload["safe_next_actions"],
+        )
+        self.assertEqual(
+            missing_payload["foreground_action"]["command"],
+            "aippocampus object-sync push --plan --json",
+        )
         self.assertEqual(
             missing_payload["safe_next_actions"][0]["command"],
-            "aippocampus object-sync push --plan --json",
+            "aippocampus object-sync pull --plan --json",
         )
         self.assertNotIn(self.endpoint, missing_encoded)
         self.assertNotIn(self.prefix, missing_encoded)

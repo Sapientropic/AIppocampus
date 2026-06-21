@@ -77,7 +77,14 @@ class RepoFamiliarityForegroundExperimentTests(unittest.TestCase):
         self.assertEqual(readout["no_card_vs_selected_card"], "deterministic_proxy_only")
         self.assertEqual(readout["live_cost_reduction"], "not_measured")
         self.assertEqual(readout["live_answer_quality_lift"], "not_measured")
-        self.assertEqual(readout["default_foreground_integration"], "not_implemented")
+        self.assertEqual(
+            readout["default_foreground_integration"],
+            "agent_recall_weak_route_repo_familiarity_fallback",
+        )
+        self.assertEqual(
+            readout["default_foreground_limits"],
+            "current_checkout_repo_docs_only_source_reopen_required",
+        )
         self.assertEqual(readout["multi_agent_persistence"], "not_implemented")
         self.assertFalse(readout["closeout_eligible"])
 

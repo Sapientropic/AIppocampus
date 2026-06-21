@@ -21,6 +21,7 @@ from aippocampus_runtime.coding import episode_arcs as episode_runtime
 from aippocampus_runtime.ops.route_readiness import safe_source_refs
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 from aippocampus_runtime.recall import background_findings
+from aippocampus_runtime.source.jsonl_reader import load_jsonl_dict_rows
 
 KIND = "aippocampus_orientation_sidecar_load"
 SCHEMA_VERSION = 1
@@ -76,6 +77,7 @@ def _component(
     item_count: int = 0,
     next_action: str = "",
     source: str = "default_project_sidecar",
+    jsonl_loss: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "component": component,
@@ -86,27 +88,18 @@ def _component(
     }
     if next_action:
         payload["next_action"] = next_action
+    if jsonl_loss and int(jsonl_loss.get("total_loss_count") or 0):
+        payload["jsonl_loss_count"] = int(jsonl_loss.get("total_loss_count") or 0)
+        payload["jsonl_warning_codes"] = list(jsonl_loss.get("warning_codes") or [])
     return payload
 
 
 def _read_jsonl(path: Path) -> list[dict[str, Any]]:
-    if not path.is_file():
-        return []
-    rows: list[dict[str, Any]] = []
-    try:
-        lines = path.read_text(encoding="utf-8").splitlines()
-    except OSError:
-        return rows
-    for line in lines:
-        if not line.strip():
-            continue
-        try:
-            item = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(item, dict):
-            rows.append(item)
-    return rows
+    return load_jsonl_dict_rows(path).rows
+
+
+def _read_jsonl_result(path: Path):
+    return load_jsonl_dict_rows(path)
 
 
 def _first_existing(root: Path, filenames: Iterable[str]) -> Path | None:
@@ -147,8 +140,9 @@ def _journey_rows(
             status="missing",
             next_action="materialize source-backed live Journey candidates into .aippocampus/journeys.jsonl when this task depends on a long-running frontier",
         )
+    result = _read_jsonl_result(path)
     rows = []
-    for row in _read_jsonl(path):
+    for row in result.rows:
         status = str(row.get("status") or "").casefold()
         if row.get("kind") != "aippocampus_journey":
             continue
@@ -170,6 +164,7 @@ def _journey_rows(
         status="projected" if rows else "no_relevant_route",
         item_count=len(rows),
         next_action="" if rows else "continue without Journey hint or tighten the task cue",
+        jsonl_loss=result.loss,
     )
 
 
@@ -182,16 +177,21 @@ def _episode_arc_rows(
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     path = Path(explicit_path).expanduser().resolve() if explicit_path else _first_existing(root, EPISODE_ARC_FILENAMES)
     rows = []
+    jsonl_loss: dict[str, Any] | None = None
     if path is not None:
+        result = _read_jsonl_result(path)
+        jsonl_loss = result.loss
         rows = [
             row
-            for row in _read_jsonl(path)
+            for row in result.rows
             if row.get("kind") == episode_runtime.EPISODE_ARC_KIND
         ]
     else:
         event_path = _first_existing(root, EPISODE_EVENT_FILENAMES)
         if event_path is not None:
-            rows = episode_runtime.build_episode_arcs(_read_jsonl(event_path))
+            result = _read_jsonl_result(event_path)
+            jsonl_loss = result.loss
+            rows = episode_runtime.build_episode_arcs(result.rows)
     if not rows:
         return [], _component(
             "episode_arc_sidecar",
@@ -223,6 +223,7 @@ def _episode_arc_rows(
         status="projected" if selected else "no_relevant_route",
         item_count=len(selected),
         next_action="" if selected else "reopen normally; no relevant sequence packet matched this task",
+        jsonl_loss=jsonl_loss,
     )
 
 
@@ -244,8 +245,9 @@ def _reflection_adjustments(
             status="missing",
             next_action="write reviewed Reflection adjustment rows only after source-backed feedback exists",
         )
+    result = _read_jsonl_result(path)
     selected: list[dict[str, Any]] = []
-    for row in _read_jsonl(path):
+    for row in result.rows:
         if row.get("kind") != "aippocampus_reflection_adjustment":
             continue
         if not _has_source_refs(row):
@@ -260,6 +262,7 @@ def _reflection_adjustments(
         status="projected" if selected else "no_relevant_route",
         item_count=len(selected),
         next_action="" if selected else "continue without Reflection adjustment; no reviewed feedback matched",
+        jsonl_loss=result.loss,
     )
 
 

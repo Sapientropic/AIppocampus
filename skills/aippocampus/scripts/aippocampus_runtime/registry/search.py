@@ -118,8 +118,9 @@ def deep_search_entry_result(
     clean_messages = paths.get("clean_source_messages_jsonl")
     if clean_messages:
         try:
+            from aippocampus_runtime.source.jsonl_reader import jsonl_loss_warning
             from aippocampus_runtime.source.search_core import (
-                iter_clean_messages,
+                load_clean_messages_with_loss,
                 score_message,
             )
             from aippocampus_runtime.source.semantic_scope_labels import (
@@ -129,8 +130,17 @@ def deep_search_entry_result(
             )
 
             clean_hits = []
-            semantic_sidecar = load_semantic_scope_labels(Path(clean_messages).parent)
-            for message in iter_clean_messages(Path(clean_messages)):
+            messages_path = Path(clean_messages)
+            semantic_sidecar = load_semantic_scope_labels(messages_path.parent)
+            messages, jsonl_loss = load_clean_messages_with_loss(messages_path)
+            warning = jsonl_loss_warning(
+                jsonl_loss,
+                stage="clean_source",
+                path_label=str(clean_messages),
+            )
+            if warning:
+                warnings.append(warning)
+            for message in messages:
                 semantic_scope_labels = semantic_labels_for_message(message, semantic_sidecar)
                 if semantic_scope_labels:
                     message = dict(message)

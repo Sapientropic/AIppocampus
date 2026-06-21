@@ -19,6 +19,7 @@ from aippocampus_runtime.recall.semantic_bridge_map import (
     SEMANTIC_BRIDGE_SOURCE,
     semantic_bridge_expansion_terms,
 )
+from aippocampus_runtime.source.jsonl_reader import empty_jsonl_loss, load_jsonl_dict_rows
 
 SOURCE_FACTUAL_ALIAS_SOURCE = "source_factual_alias"
 QUERY_EXPANSION_BOUNDARY = "navigation_only_source_reopen_required"
@@ -78,23 +79,14 @@ def load_source_factual_alias_rows(path: str | Path | None) -> list[dict[str, An
     if not path:
         return []
     alias_path = Path(path)
-    if not alias_path.exists():
-        return []
-    rows: list[dict[str, Any]] = []
-    try:
-        with alias_path.open("r", encoding="utf-8") as handle:
-            for line in handle:
-                if not line.strip():
-                    continue
-                try:
-                    item = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                if isinstance(item, dict):
-                    rows.append(item)
-    except OSError:
-        return []
-    return rows
+    return load_jsonl_dict_rows(alias_path).rows
+
+
+def load_source_factual_alias_rows_diagnostics(path: str | Path | None) -> dict[str, Any]:
+    if not path:
+        return {"row_count": 0, "jsonl_loss": empty_jsonl_loss()}
+    result = load_jsonl_dict_rows(Path(path))
+    return {"row_count": len(result.rows), "jsonl_loss": result.loss}
 
 
 def plan_query_expansion(

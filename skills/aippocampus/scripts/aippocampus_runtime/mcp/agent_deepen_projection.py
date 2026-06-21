@@ -225,6 +225,9 @@ def compact_agent_deepen_payload(
     primary_snippet = _primary_source_snippet(messages)
     why = core.compact_text(str(result.get("why_this_may_matter") or ""), 180)
     route_id = result.get("route_id")
+    apw_identity = result.get("apw_route_identity") or source.get("apw_route_identity")
+    apw_identity = dict(apw_identity) if isinstance(apw_identity, Mapping) else {}
+    feedback_route_id = apw_identity.get("feedback_target_id") or route_id
     primary_action = {
         "id": "use_opened_source_window",
         "label": "Use the opened source window",
@@ -232,7 +235,7 @@ def compact_agent_deepen_payload(
         "claim_boundary": "source_open_within_returned_window",
         "why": "Source has been reopened; use only the returned window unless you deepen or request full detail.",
     }
-    feedback = _feedback_actions(route_id)
+    feedback = _feedback_actions(feedback_route_id)
     carry_actions = _carry_next_actions()
     foreground_fields = canonical_foreground_action_fields(
         primary_action,
@@ -249,6 +252,7 @@ def compact_agent_deepen_payload(
             "ok": True,
             "evidence_level": result.get("evidence_level") or result.get("support_level"),
             "route_id": result.get("route_id"),
+            "apw_route_identity": apw_identity,
             "summary": why,
             "source_window_summary": {
                 "message_count": message_count,
@@ -271,7 +275,7 @@ def compact_agent_deepen_payload(
                 "source_summary_is_not_quote": True,
             },
             **foreground_fields,
-            "feedback_id": route_id,
+            "feedback_id": feedback_route_id,
             "feedback_actions": feedback,
             "carry_next_actions": carry_actions,
             "feedback_boundary": {

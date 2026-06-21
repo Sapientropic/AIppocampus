@@ -193,6 +193,45 @@ class EmergencySnapshotTests(unittest.TestCase):
         payload = json.loads(Path(result["snapshot_path"]).read_text(encoding="utf-8"))
         self.assertEqual([item["text"] for item in payload["messages"]], ["second user visible"])
 
+    def test_snapshot_reports_clean_source_loss_while_skipping_valid_represented_turns(self) -> None:
+        provider = emergency_snapshot.codex_provider(emergency_snapshot.codex_home())
+        messages, _ = provider.read_normalized_messages(self.rollout, include_tools=False)
+        represented = [
+            item
+            for item in messages
+            if item.get("turn_index") == 1 and (item.get("role") == "user" or item.get("is_final"))
+        ]
+        clean_dir = default_thread_clean_source_dir(self.cwd, self.rollout)
+        clean_dir.mkdir(parents=True, exist_ok=True)
+        with (clean_dir / "messages.jsonl").open("w", encoding="utf-8", newline="\n") as f:
+            f.write("{bad-json}\n")
+            for item in represented:
+                f.write(
+                    json.dumps(
+                        {
+                            "role": item["role"],
+                            "source_ref": item["source_ref"],
+                            "source_line": item["line"],
+                            "text_sha1": item["sha1"],
+                        },
+                        ensure_ascii=False,
+                    )
+                    + "\n"
+                )
+
+        result = emergency_snapshot.create_emergency_snapshot(
+            self.cwd,
+            rollout=self.rollout,
+            max_messages=4,
+            max_bytes=10_000,
+        )
+        diagnostic = emergency_snapshot.public_snapshot_diagnostic(result)
+
+        self.assertEqual(result["clean_source_jsonl_loss"]["invalid_json_line_count"], 1)
+        self.assertEqual(diagnostic["clean_source_jsonl_loss"]["invalid_json_line_count"], 1)
+        payload = json.loads(Path(result["snapshot_path"]).read_text(encoding="utf-8"))
+        self.assertEqual([item["text"] for item in payload["messages"]], ["second user visible"])
+
     def test_latest_snapshot_diagnostic_reports_existing_pointer_without_raw_text(self) -> None:
         created = emergency_snapshot.create_emergency_snapshot(
             self.cwd,

@@ -13,7 +13,7 @@ from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
 from typing import Any
 
-from aippocampus_runtime.recall import authority
+from aippocampus_runtime.recall import apw_route_identity, authority
 from aippocampus_runtime.recall.query_policy import normalize_term, unique_preserve
 from aippocampus_runtime.recall.semantic_bridge_map import reduce_semantic_bridge_candidates
 
@@ -197,6 +197,8 @@ def walk_associative_paths(
         event_refs = _safe_refs(row.get("event_refs")) + _safe_refs(
             [ref for bridge in bridge_hits for ref in bridge.get("event_refs") or []]
         )
+        selected_refs = _dedupe_refs(refs or event_refs, limit=4)
+        source_ref_digest = apw_route_identity.source_ref_digest(selected_refs)
         frontier = decide_associative_frontier_step(
             direct_match=bool(direct),
             bridge_hit_count=len(bridge_hits),
@@ -216,24 +218,27 @@ def walk_associative_paths(
         score = len(direct) * 2.0 + len(bridge_hits) * 2.5 + (1.0 if refs or event_refs else 0.5)
         if positive:
             score += 1.0
+        matched_terms = unique_preserve([*direct, *_bridge_to_terms_many(bridge_hits)], limit=8)
+        candidate_source_kind = str(
+            row.get("candidate_source_kind") or row.get("source") or ""
+        )[:80] or None
         scored.append(
             {
                 "kind": "aippocampus_associative_path_candidate",
                 "schema_version": SCHEMA_VERSION,
                 "route_id": route_id,
                 "thread_key": str(row.get("thread_key") or "")[:120] or None,
-                "candidate_source_kind": str(
-                    row.get("candidate_source_kind") or row.get("source") or ""
-                )[:80]
-                or None,
+                "candidate_id": str(row.get("candidate_id") or "")[:120] or None,
+                "candidate_source_kind": candidate_source_kind,
                 "score": round(score, 3),
-                "matched_terms": unique_preserve([*direct, *_bridge_to_terms_many(bridge_hits)], limit=8),
+                "matched_terms": matched_terms,
                 "bridge_ids": unique_preserve(
                     [str(bridge.get("candidate_id") or "") for bridge in bridge_hits],
                     limit=4,
                 ),
                 "source_refs": _dedupe_refs(refs, limit=4),
                 "event_refs": _dedupe_refs(event_refs, limit=4),
+                "source_ref_digest": source_ref_digest,
                 "scope_bucket": _scope_bucket(row),
                 "freshness": str(
                     row.get("freshness")
@@ -252,6 +257,16 @@ def walk_associative_paths(
                 "claim_permission": authority.CLAIM_NO_CLAIM_BEFORE_REOPEN,
                 "source_reopen_required_before_claim": True,
                 "claim_boundary": "navigation_only_no_claim_before_reopen",
+                "apw_route_identity": apw_route_identity.route_identity_envelope(
+                    public_route_id=route_id,
+                    apw_candidate_route_id=route_id,
+                    apw_candidate_id=row.get("candidate_id"),
+                    source_refs=selected_refs,
+                    source_ref_digest_value=source_ref_digest,
+                    matched_cue_anchors=matched_terms,
+                    candidate_source_kind=candidate_source_kind,
+                    source_shape_posture="reopenable_route",
+                ),
                 "reason_codes": unique_preserve(
                     [
                         "path_found_reopenable",
@@ -520,19 +535,11 @@ def _feedback_signal(row: Mapping[str, Any]) -> str:
 
 
 def _feedback_keys(row: Mapping[str, Any]) -> set[str]:
-    return {
-        str(row.get(key) or "").strip()
-        for key in ("route_id", "candidate_id", "bridge_id", "id")
-        if str(row.get(key) or "").strip()
-    }
+    return apw_route_identity.identity_keys(row.get("route_id"), row)
 
 
 def _candidate_feedback_keys(route_id: str, row: Mapping[str, Any]) -> set[str]:
-    return {
-        key
-        for key in {route_id, str(row.get("candidate_id") or ""), str(row.get("bridge_id") or "")}
-        if key
-    }
+    return apw_route_identity.identity_keys(route_id, row)
 
 
 def _feedback_counts(rows: Iterable[Mapping[str, Any]]) -> dict[str, Counter[str]]:

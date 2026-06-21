@@ -14,6 +14,7 @@ from aippocampus_runtime.contracts import (
     shell_quote,
 )
 from aippocampus_runtime.mcp import agent_recall_compact_choices as recall_choices
+from aippocampus_runtime.mcp import agent_recall_recovery_projection as recovery_projection
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 
 
@@ -285,69 +286,6 @@ def route_deepen_action(
     return action
 
 
-def _compact_associative_path_fallback_card(value: Any) -> dict[str, Any] | None:
-    if not isinstance(value, Mapping):
-        return None
-    return _without_empty(
-        {
-            "kind": value.get("kind"),
-            "schema_version": value.get("schema_version"),
-            "status": value.get("status"),
-            "decision": value.get("decision"),
-            "ordinary_recall_status": value.get("ordinary_recall_status"),
-            "current_build_posture": value.get("current_build_posture"),
-            "policy_mode": value.get("policy_mode"),
-            "promotion_surface": value.get("promotion_surface"),
-            "promotion_gate": value.get("promotion_gate"),
-            "route_choice_posture": value.get("route_choice_posture"),
-            "request_index": value.get("request_index"),
-            "label": value.get("label"),
-            "why_this_route": value.get("why_this_route"),
-            "matched_cue_anchors": value.get("matched_cue_anchors"),
-            "candidate_source_kind": value.get("candidate_source_kind"),
-            "route_posture": value.get("route_posture"),
-            "action_grammar": value.get("action_grammar"),
-            "reason_codes": value.get("reason_codes"),
-            "risk_flags": value.get("risk_flags"),
-            "summary": value.get("summary"),
-            "opt_in_required": value.get("opt_in_required"),
-            "applied_to_default_ranking": False,
-            "rollback_env": value.get("rollback_env"),
-            "rollback_behavior": value.get("rollback_behavior"),
-            "source_shape_guarded": value.get("source_shape_guarded"),
-            "source_reopen_required_before_claim": True,
-        }
-    )
-
-
-def _compact_associative_path_policy(value: Any) -> dict[str, Any] | None:
-    if not isinstance(value, Mapping):
-        return None
-    return _without_empty(
-        {
-            "kind": value.get("kind"),
-            "schema_version": value.get("schema_version"),
-            "current_build_posture": value.get("current_build_posture"),
-            "promotion_mode": value.get("promotion_mode"),
-            "promotion_surface": value.get("promotion_surface"),
-            "promotion_gate": value.get("promotion_gate"),
-            "explicit_requested": value.get("explicit_requested"),
-            "ordinary_recall_recovery_needed": value.get("ordinary_recall_recovery_needed"),
-            "apw_candidate_input_available": value.get("apw_candidate_input_available"),
-            "run_fallback": value.get("run_fallback"),
-            "run_reason": value.get("run_reason"),
-            "opt_in_required_for_this_run": value.get("opt_in_required_for_this_run"),
-            "applied_to_default_ranking": False,
-            "default_ranking_influence_allowed": False,
-            "default_mode_allowed": False,
-            "rollback_env": value.get("rollback_env"),
-            "hard_off_env": value.get("hard_off_env"),
-            "rollback_behavior": value.get("rollback_behavior"),
-            "source_reopen_required_before_claim": True,
-        }
-    )
-
-
 def _associative_path_fallback_action(
     card: Mapping[str, Any] | None,
     *,
@@ -362,45 +300,12 @@ def _associative_path_fallback_action(
         request_index = 0
     if request_index <= 0 or not cache_available:
         return None
-    action = route_deepen_action(request_index, recall_selector=recall_selector)
-    action["id"] = "deepen_associative_path_fallback"
-    route_label = core.compact_text(str(card.get("label") or ""), 96)
-    action["label"] = f"Open {route_label}" if route_label else "Open APW source route"
-    anchors = [
-        str(anchor)
-        for anchor in card.get("matched_cue_anchors") or []
-        if str(anchor).strip()
-    ]
-    action["why"] = (
-        "APW matched cue anchors: "
-        + " / ".join(anchors[:3])
-        + "; reopen before claims."
-        if anchors
-        else str(
-            card.get("why_this_route")
-            or "APW found a source-ref-backed fallback; reopen it before using it."
-        )
+    return recovery_projection.associative_path_fallback_action(
+        card,
+        recall_selector=recall_selector,
+        cache_available=cache_available,
+        deepen_action_builder=route_deepen_action,
     )
-    action["claim_boundary"] = "no_claim_before_reopen"
-    action["route_choice_posture"] = str(
-        card.get("route_choice_posture") or "associative_path_opt_in_fallback"
-    )
-    return action
-
-
-def _apw_should_replace_foreground_action(action: Mapping[str, Any]) -> bool:
-    """Return whether APW recovery should become the compact primary action."""
-
-    action_id = str(action.get("id") or action.get("action_id") or "")
-    route_posture = str(action.get("route_choice_posture") or "")
-    if route_posture == "labels_low_specificity":
-        return True
-    if action_id.startswith("recover_"):
-        return True
-    return action_id in {
-        "search_registry_sources_for_original_cue_anchors",
-        "refine_low_specificity_recall_cue",
-    }
 
 
 def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
@@ -526,8 +431,16 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
         )
     suppressed_low_confidence_route_count = 0
     if labels_low_specificity and route_receipts:
-        suppressed_low_confidence_route_count = len(memory_packets)
-        route_receipts = []
+        # Low-specificity labels are not evidence, but hiding every reopenable
+        # choice strands the next agent. Keep a few cue-bearing receipts as
+        # navigation-only choices and let the primary action remain search/refine.
+        # This preserves the source-backed boundary without turning compact
+        # recall into a dead end when the cache can still reopen routes.
+        suppressed_low_confidence_route_count = max(0, len(memory_packets) - len(route_receipts))
+        for receipt in route_receipts:
+            receipt["route_choice_posture"] = "labels_low_specificity"
+            receipt["confidence"] = "low_confidence_navigation"
+            receipt["claim_boundary"] = "no_claim_before_reopen"
     semantic = payload.get("semantic_gate_diagnostics")
     semantic_compact = None
     if isinstance(semantic, dict):
@@ -601,10 +514,10 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
         and memory_packets
     ):
         foreground_action = _opened_route_reopen_action(1, recall_selector=recall_selector)
-    associative_path_fallback = _compact_associative_path_fallback_card(
+    associative_path_fallback = recovery_projection.compact_associative_path_fallback_card(
         payload.get("associative_path_fallback")
     )
-    associative_path_policy = _compact_associative_path_policy(
+    associative_path_policy = recovery_projection.compact_associative_path_policy(
         payload.get("associative_path_policy")
     )
     associative_path_action = _associative_path_fallback_action(
@@ -617,7 +530,7 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
         ordinary_action_id = str(
             ordinary_recovery_action.get("id") or ordinary_recovery_action.get("action_id") or ""
         )
-        apw_primary = _apw_should_replace_foreground_action(foreground_action)
+        apw_primary = recovery_projection.apw_should_replace_foreground_action(foreground_action)
         if apw_primary:
             if ordinary_recovery_action:
                 safe_next_actions = [ordinary_recovery_action, *safe_next_actions]
@@ -634,17 +547,49 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
                 # compact recall stays small and does not imply ranking influence.
                 associative_path_fallback = None
                 associative_path_policy = None
+    else:
+        associative_policy_action = recovery_projection.associative_path_policy_recovery_action(
+            associative_path_policy,
+            recovery_cue=recovery_cue,
+        )
+        if associative_policy_action and "secondary_action" not in foreground_action:
+            foreground_action["secondary_action"] = associative_policy_action
+            if isinstance(associative_path_policy, dict):
+                associative_path_policy["secondary_action"] = associative_policy_action["id"]
+    repo_familiarity_fallback = recovery_projection.compact_repo_familiarity_fallback_card(
+        payload.get("repo_familiarity_fallback")
+    )
+    repo_familiarity_action = recovery_projection.repo_familiarity_fallback_action(
+        repo_familiarity_fallback
+    )
+    if repo_familiarity_action and recovery_projection.repo_familiarity_should_replace_foreground_action(
+        foreground_action
+    ):
+        ordinary_recovery_action = _without_empty(normalize_foreground_action(foreground_action))
+        ordinary_action_id = str(
+            ordinary_recovery_action.get("id") or ordinary_recovery_action.get("action_id") or ""
+        )
+        if ordinary_recovery_action:
+            safe_next_actions = [ordinary_recovery_action, *safe_next_actions]
+        foreground_action = repo_familiarity_action
+        if isinstance(repo_familiarity_fallback, dict):
+            repo_familiarity_fallback["primary_action"] = "open_repo_familiarity_source"
+            if ordinary_action_id:
+                repo_familiarity_fallback["ordinary_recovery_action_id"] = ordinary_action_id
+    elif repo_familiarity_fallback:
+        repo_familiarity_fallback = None
     detail_fields = _recall_detail_command_fields(recovery_cue)
     detail_command = str(detail_fields.get("operator_detail_command") or "")
     detail_command_template = str(detail_fields.get("operator_detail_command_template") or "")
     displayed_route_count = len(route_receipts)
     hidden_route_count_fields: dict[str, int] = {}
     omitted_route_count = max(0, len(memory_packets) - displayed_route_count)
-    if omitted_route_count:
+    if omitted_route_count or labels_low_specificity:
         hidden_route_count_fields = {
             "displayed_route_count": displayed_route_count,
-            "omitted_route_count": omitted_route_count,
         }
+        if omitted_route_count:
+            hidden_route_count_fields["omitted_route_count"] = omitted_route_count
     duplicate_omission_rows = sorted(
         duplicate_label_omissions.values(),
         key=lambda row: (int(row["kept_route_index"]), str(row["route_label"])),
@@ -667,7 +612,7 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
                 **(weak_route_recovery_card or {}),
                 "posture": "labels_low_specificity",
                 "route_count": len(memory_packets),
-                "displayed_as_choices": 0,
+                "displayed_as_choices": displayed_route_count,
                 "primary_action": foreground_action.get("id") or foreground_action.get("action_id"),
                 "source_search_fallback_action_id": foreground_action.get("id")
                 or foreground_action.get("action_id"),
@@ -703,6 +648,7 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "semantic_gate_diagnostics": semantic_compact,
         "associative_path_policy": associative_path_policy,
         "associative_path_fallback": associative_path_fallback,
+        "repo_familiarity_fallback": repo_familiarity_fallback,
         "provider_key_bridge": payload.get("provider_key_bridge"),
         "claim_boundary": _compact_claim_boundary(
             can_use_for=can_use_for,

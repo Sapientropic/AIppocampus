@@ -246,8 +246,8 @@ def _recall_task_action(task: str) -> dict[str, Any]:
 def _orientation_route_action(task: str, route: Mapping[str, Any]) -> dict[str, Any]:
     clean_task = str(redact_sensitive_values(redact_private_paths(str(task or "").strip())) or "")
     action: dict[str, Any] = {
-        "id": "inspect_first_orientation_source_route",
-        "label": "Inspect first orientation source route",
+        "id": "open_orientation_detail",
+        "label": "Open orientation detail",
         "target": {
             key: value
             for key, value in {
@@ -257,10 +257,10 @@ def _orientation_route_action(task: str, route: Mapping[str, Any]) -> dict[str, 
             if value not in (None, "", [], {})
         },
         "mutation_risk": "read_only",
-        "claim_boundary": "orientation_route_is_navigation_reopen_source_before_claims",
+        "claim_boundary": "orientation_detail_is_navigation_not_source_evidence",
         "why": (
-            "Task Orientation already found a first source route; inspect route detail "
-            "before broad recall or manual search."
+            "Task Orientation found a route-shaped hint, but compact output does not carry "
+            "a callable source-open handle; open detail or run recall before making claims."
         ),
     }
     if clean_task and not command_value_needs_input(clean_task):
@@ -288,13 +288,13 @@ def _safe_next_actions(
             "id": "deepen_selected_recall_route",
             "label": "Deepen a selected recall route",
             "command_template": (
-                "aippocampus agent deepen --request {request_index} --last-recall --json"
+                "aippocampus agent deepen --request {request_index} --recall-selector {recall_selector} --json"
             ),
-            "requires": ["request_index"],
+            "requires": ["request_index", "recall_selector"],
             "mutation_risk": "read_only",
             "template_only": True,
             "claim_boundary": "source_reopen_required_before_claims",
-            "why": "Use after recall selects a route that needs source context.",
+            "why": "Use the selector emitted by agent recall to reopen the chosen source route.",
         },
     ]
 

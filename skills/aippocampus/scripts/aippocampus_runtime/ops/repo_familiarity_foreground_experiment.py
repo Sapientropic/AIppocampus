@@ -235,7 +235,8 @@ def _issue_readouts() -> dict[str, Any]:
             "no_card_vs_selected_card": "deterministic_proxy_only",
             "live_cost_reduction": "not_measured",
             "live_answer_quality_lift": "not_measured",
-            "default_foreground_integration": "not_implemented",
+            "default_foreground_integration": "agent_recall_weak_route_repo_familiarity_fallback",
+            "default_foreground_limits": "current_checkout_repo_docs_only_source_reopen_required",
             "multi_agent_persistence": "not_implemented",
             "closeout_eligible": False,
         }

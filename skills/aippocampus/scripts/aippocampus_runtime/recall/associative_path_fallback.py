@@ -21,7 +21,7 @@ from typing import Any
 
 from aippocampus_runtime import core
 from aippocampus_runtime.mcp import recall_navigation
-from aippocampus_runtime.recall import agent_deepen_requests
+from aippocampus_runtime.recall import agent_deepen_requests, apw_route_identity
 from aippocampus_runtime.recall import associative_path_inputs as apw_inputs
 from aippocampus_runtime.recall.associative_path_inputs import build_associative_path_diagnostic
 from aippocampus_runtime.recall.associative_path_source_shape import (
@@ -51,6 +51,10 @@ def _code(value: Any, *, fallback: str = "", limit: int = 80) -> str:
 def _stable_id(prefix: str, *parts: Any) -> str:
     raw = json.dumps(parts, ensure_ascii=False, sort_keys=True, default=str)
     return f"{prefix}_{hashlib.sha256(raw.encode('utf-8')).hexdigest()[:16]}"
+
+
+def _source_ref_digest(refs: list[dict[str, Any]]) -> str:
+    return apw_route_identity.source_ref_digest(refs)
 
 
 def _promotion_mode() -> str:
@@ -196,7 +200,15 @@ def recall_fallback_policy(
         active_lock_path=active_lock_path,
     )
     explicit_requested = bool(include_associative_fallback)
-    explicit_run = explicit_requested and mode != MODE_OFF and recovery_needed
+    explicit_run = (
+        explicit_requested
+        and mode != MODE_OFF
+        # An explicit APW request is a diagnostic/recovery ask from the
+        # foreground agent. If current clean source has APW candidates, run the
+        # source-shape gate even when ordinary recall produced a route-shaped
+        # packet; the result still does not reorder default recall ranking.
+        and (recovery_needed or candidate_input_available)
+    )
     semi_default_run = (
         not explicit_requested
         and mode == MODE_SEMI_DEFAULT_RECOVERY
@@ -314,6 +326,17 @@ def _candidate_to_route(
         limit=5,
     )
     label = _route_label(candidate)
+    source_ref_digest = _source_ref_digest(refs)
+    apw_identity = apw_route_identity.route_identity_envelope(
+        public_route_id=public_route_id,
+        apw_candidate_route_id=route_id,
+        apw_candidate_id=_text(candidate.get("candidate_id"), 120),
+        source_refs=refs,
+        source_ref_digest_value=source_ref_digest,
+        matched_cue_anchors=matched_terms,
+        candidate_source_kind=candidate.get("candidate_source_kind"),
+        source_shape_posture=projection.get("route_posture"),
+    )
     return {
         "route_id": public_route_id,
         "kind": "associative_path",
@@ -326,6 +349,11 @@ def _candidate_to_route(
         "route_topic": "associative_path_recovery",
         "matched_cue_family": "associative_path_fallback",
         "matched_cue_anchors": matched_terms,
+        "apw_candidate_route_id": route_id,
+        "apw_candidate_id": _text(candidate.get("candidate_id"), 120),
+        "source_ref_digest": source_ref_digest,
+        "selected_source_ref_count": len(refs),
+        "apw_route_identity": apw_identity,
         "candidate_source_kind": candidate.get("candidate_source_kind"),
         "scope_bucket": "project_or_clean_source",
         "route_kind": "associative_path",
@@ -460,6 +488,18 @@ def build_associative_path_agent_fallback(
             },
             request_index=max(1, int(request_index or 1)),
         )
+        request.update(
+            {
+                "matched_cue_family": "associative_path_fallback",
+                "matched_cue_anchors": route.get("matched_cue_anchors") or [],
+                "candidate_source_kind": route.get("candidate_source_kind"),
+                "source_ref_digest": route.get("source_ref_digest"),
+                "selected_source_ref_count": route.get("selected_source_ref_count"),
+                "apw_candidate_route_id": route.get("apw_candidate_route_id"),
+                "apw_candidate_id": route.get("apw_candidate_id"),
+                "apw_route_identity": route.get("apw_route_identity"),
+            }
+        )
         card = {
             "kind": KIND,
             "schema_version": SCHEMA_VERSION,
@@ -480,6 +520,12 @@ def build_associative_path_agent_fallback(
             "rollback_env": policy.get("rollback_env"),
             "rollback_behavior": policy.get("rollback_behavior"),
             "request_index": request["request_index"],
+            "route_id": route["route_id"],
+            "apw_candidate_route_id": route.get("apw_candidate_route_id"),
+            "apw_candidate_id": route.get("apw_candidate_id"),
+            "source_ref_digest": route.get("source_ref_digest"),
+            "selected_source_ref_count": route.get("selected_source_ref_count"),
+            "apw_route_identity": route.get("apw_route_identity"),
             "label": route["route_label"],
             "why_this_route": route["why_this_may_matter"],
             "matched_cue_anchors": route.get("matched_cue_anchors") or [],

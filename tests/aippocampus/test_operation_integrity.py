@@ -71,6 +71,33 @@ class OperationIntegrityTests(unittest.TestCase):
             report["gaps"],
         )
 
+    def test_events_jsonl_loss_is_reported_without_blocking_valid_events(self) -> None:
+        (self.clean_source / "events.jsonl").write_text(
+            "{bad-json}\n"
+            + json.dumps(
+                {
+                    "event_id": "evt_constraint",
+                    "source_ref": "codex:session:demo#L31",
+                    "source_line": 31,
+                    "critical_operation_family": "explicit_user_constraint",
+                    "constraint_kind": "stay_within_issue_scope",
+                    "scope": "active_task",
+                    "expiry_or_supersession": "until_next_user_override",
+                    "status": "active",
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        report = diagnose_clean_source(self.clean_source)
+
+        self.assertEqual(report["event_count"], 1)
+        self.assertEqual(report["events_jsonl_loss"]["invalid_json_line_count"], 1)
+        self.assertEqual(report["coverage_summary"]["jsonl_loss_count"], 1)
+        self.assertEqual(self.family(report, "explicit_user_constraint")["status"], "covered")
+
     def test_test_check_fact_report_is_source_backed_and_sanitized(self) -> None:
         self.write_events(
             {

@@ -37,22 +37,56 @@ APW_PARITY_SURFACES = frozenset(
         "skills/aippocampus/scripts/aippocampus_runtime/recall/associative_path_inputs.py",
         "skills/aippocampus/scripts/aippocampus_runtime/recall/associative_path_fallback.py",
         "skills/aippocampus/scripts/aippocampus_runtime/recall/associative_path_walker.py",
+        "skills/aippocampus/scripts/aippocampus_runtime/recall/apw_route_identity.py",
         "skills/aippocampus/scripts/aippocampus_runtime/recall/why_diagnostics.py",
         "skills/aippocampus/scripts/aippocampus_runtime/recall/agent_continuity.py",
+        "skills/aippocampus/scripts/aippocampus_runtime/recall/agent_recall_cache.py",
+        "skills/aippocampus/scripts/aippocampus_runtime/recall/agent_continuity_cli.py",
+        "skills/aippocampus/scripts/aippocampus_runtime/recall/agent_continuity_cli_support.py",
+        "skills/aippocampus/scripts/aippocampus_runtime/mcp/tool_catalog.py",
+        "skills/aippocampus/scripts/aippocampus_runtime/mcp/tool_handlers.py",
         "skills/aippocampus/scripts/aippocampus_runtime/mcp/agent_recall_projection.py",
+        "skills/aippocampus/scripts/aippocampus_runtime/mcp/agent_deepen_projection.py",
+        "skills/aippocampus/scripts/aippocampus_runtime/mcp/recall_navigation.py",
     }
 )
 APW_PARITY_TEST_MODULES = (
     "tests.aippocampus.test_associative_path_inputs",
     "tests.aippocampus.test_agent_recall_apw_fallback",
+    "tests.aippocampus.test_aippocampus_mcp_server_recall",
     "tests.aippocampus.test_benchmark_associative_path_walker",
+)
+RECALL_INTEGRATION_READINESS_SURFACES = frozenset(
+    {
+        "tools/aippocampus/recall_integration_readiness.py",
+        "tools/aippocampus/smoke/known_artifact_recall_dogfood.py",
+        "tools/aippocampus/smoke/smoke_repo_familiarity.py",
+        "tools/aippocampus/smoke/smoke_repo_familiarity_foreground_experiment.py",
+        "skills/aippocampus/scripts/aippocampus_runtime/navigation/repo_familiarity.py",
+        "skills/aippocampus/scripts/aippocampus_runtime/ops/repo_familiarity_foreground_experiment.py",
+        "skills/aippocampus/scripts/aippocampus_runtime/ops/repo_familiarity_foreground_experiment_fixtures.py",
+        "skills/aippocampus/scripts/aippocampus_runtime/recall/agent_continuity.py",
+        "skills/aippocampus/scripts/aippocampus_runtime/recall/agent_recall_cache.py",
+        "skills/aippocampus/scripts/aippocampus_runtime/mcp/agent_recall_projection.py",
+        "skills/aippocampus/scripts/aippocampus_runtime/mcp/agent_deepen_projection.py",
+        "skills/aippocampus/scripts/aippocampus_runtime/mcp/tool_handlers.py",
+        "skills/aippocampus/scripts/aippocampus_runtime/mcp/tool_catalog.py",
+        "skills/aippocampus/scripts/aippocampus_runtime/recall/hook_agent_affordance.py",
+        "skills/aippocampus/scripts/aippocampus_runtime/recall/feedback_events.py",
+    }
 )
 DEBT_REGISTER_SOURCES = (
     REPO_ROOT / "docs" / "architecture" / "architecture-debt-register.md",
     REPO_ROOT / "docs" / "evidence" / "reports" / "architecture-debt-snapshot-2026-06-04.md",
 )
 BUDGET_ROW_RE = re.compile(r"^\|\s*`(?P<path>[^`]+\.py)`\s*\|", re.MULTILINE)
+REGISTER_BUDGET_ROW_RE = re.compile(
+    r"^\|\s*`(?P<path>[^`]+\.py)`\s*"
+    r"\|\s*(?P<current>\d+)\s*\|\s*(?P<budget>\d+)\s*\|",
+    re.MULTILINE,
+)
 LARGE_CHANGED_TEST_MODULE_THRESHOLD = 5
+LOW_MARGIN_GUARD_LIMIT = 9
 
 from benchmark_test_classification import (
     benchmark_fast_lane_profile_for,
@@ -114,6 +148,20 @@ def architecture_debt_tracked_paths() -> set[str]:
     return paths
 
 
+def architecture_debt_low_margin_paths() -> set[str]:
+    paths: set[str] = set()
+    for source in DEBT_REGISTER_SOURCES:
+        if not source.is_file():
+            continue
+        text = source.read_text(encoding="utf-8")
+        for match in REGISTER_BUDGET_ROW_RE.finditer(text):
+            current = int(match.group("current"))
+            budget = int(match.group("budget"))
+            if budget - current <= LOW_MARGIN_GUARD_LIMIT:
+                paths.add(match.group("path"))
+    return paths
+
+
 def _debt_report_is_red() -> bool:
     completed = subprocess.run(
         [sys.executable, str(REPO_ROOT / DEBT_REPORT_SCRIPT), "--json"],
@@ -128,17 +176,34 @@ def _debt_report_is_red() -> bool:
 def architecture_debt_plan_reason(changed_files: Iterable[str]) -> str:
     tracked = architecture_debt_tracked_paths()
     changed_tracked = sorted(path for path in changed_files if path in tracked)
+    low_margin = architecture_debt_low_margin_paths()
+    changed_low_margin = sorted(path for path in changed_tracked if path in low_margin)
     if changed_tracked:
         preview = ", ".join(changed_tracked[:3])
         suffix = "" if len(changed_tracked) <= 3 else f", +{len(changed_tracked) - 3} more"
+        pressure = ""
+        if changed_low_margin:
+            low_preview = ", ".join(changed_low_margin[:2])
+            low_suffix = (
+                "" if len(changed_low_margin) <= 2 else f", +{len(changed_low_margin) - 2} more"
+            )
+            pressure = (
+                f" Low-margin guard pressure touched: {low_preview}{low_suffix}; "
+                "start with a split/trim decision before growing these owners."
+            )
         return (
             f"Architecture-debt tracked file(s) changed: {preview}{suffix}. "
-            "Run the headroom preflight early; this is not a substitute for functional tests."
+            "Run the headroom preflight early; use the register count refresh command "
+            "only for count-only drift, not for over-budget owner growth. This is not "
+            "a substitute for functional tests."
+            f"{pressure}"
         )
     if _debt_report_is_red():
         return (
             "Architecture debt report is already red. Run the headroom preflight "
-            "before late closeout; this is not a substitute for functional tests."
+            "before late closeout; if the failure is count-only drift, refresh the "
+            "register counts with debt_report.py, but split or justify real over-budget "
+            "owner growth. This is not a substitute for functional tests."
         )
     return ""
 
@@ -284,7 +349,18 @@ def _changed_test_modules(changed_files: Iterable[str]) -> list[str]:
 
 def _changed_test_group_name(module: str) -> str:
     classification = TEST_MODULE_CLASSIFICATIONS.get(module)
-    return classification.primary_tier if classification else "unclassified"
+    if classification is None:
+        return "unclassified"
+    if classification.primary_tier != "broad":
+        return classification.primary_tier
+    if "benchmark" in classification.tags:
+        return "broad-benchmark-guard"
+    if module in {
+        "tests.aippocampus.test_run_tests_tiers",
+        "tests.aippocampus.test_test_plan",
+    }:
+        return "broad-test-tooling"
+    return "broad-runtime"
 
 
 def _changed_test_module_groups(
@@ -309,7 +385,7 @@ def _changed_test_module_groups(
                 "modules": group_modules,
                 "command": command,
                 "reason": (
-                    "Large dirty test surface slice grouped by tier ownership; "
+                    "Large dirty test surface slice grouped by tier and owner surface; "
                     "run the slice that matches your changed surface first."
                 ),
             }
@@ -377,6 +453,8 @@ def classify_changed_files(changed_files: Iterable[str]) -> set[str]:
             categories.add("runtime")
         if path in APW_PARITY_SURFACES:
             categories.add("apw_parity")
+        if path in RECALL_INTEGRATION_READINESS_SURFACES:
+            categories.add("recall_integration_readiness")
         if path.startswith("plugins/aippocampus/"):
             categories.add("plugin")
     return categories
@@ -652,6 +730,23 @@ def build_test_plan(
                     "gate, not a broad benchmark quality claim."
                 ),
                 scope="focused:apw-parity",
+            ),
+        )
+
+    if "recall_integration_readiness" in categories:
+        _add_command(
+            commands,
+            PlannedCommand(
+                command=py_script(
+                    "tools/aippocampus/recall_integration_readiness.py",
+                    "--json",
+                    local_executable=local_executable,
+                ),
+                reason=(
+                    "Recall integration surfaces changed; verify designed/proxy paths are "
+                    "classified separately from foreground-callable agent actions."
+                ),
+                scope="focused:recall-integration-readiness",
             ),
         )
 

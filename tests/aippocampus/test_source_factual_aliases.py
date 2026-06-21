@@ -73,5 +73,33 @@ class SourceFactualAliasesTests(unittest.TestCase):
         self.assertNotIn("sk-test-secret", raw)
         self.assertNotIn("token=", raw)
 
+    def test_materializer_reports_messages_jsonl_loss(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            clean = Path(tmp) / "clean-source"
+            clean.mkdir()
+            (clean / "messages.jsonl").write_text(
+                "{bad-json}\n"
+                + json.dumps(
+                    {
+                        "message_id": "msg-keepsake",
+                        "source_line": 12,
+                        "role": "user",
+                        "text": "I kept the travel keepsake on the shelf.",
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            result = materialize_source_factual_aliases(clean)
+            manifest = json.loads(
+                (clean / "source-factual-aliases.manifest.json").read_text(encoding="utf-8")
+            )
+
+        self.assertEqual(result["row_count"], 1)
+        self.assertEqual(result["source_messages_jsonl_loss"]["invalid_json_line_count"], 1)
+        self.assertEqual(manifest["source_messages_jsonl_loss"]["invalid_json_line_count"], 1)
+
 if __name__ == "__main__":
     unittest.main()
