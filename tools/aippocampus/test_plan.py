@@ -32,6 +32,21 @@ CHECK_TOOLING_PATHS = {
     "tools/aippocampus/test_tier_manifest.py",
     "tools/aippocampus/test_plan.py",
 }
+APW_PARITY_SURFACES = frozenset(
+    {
+        "skills/aippocampus/scripts/aippocampus_runtime/recall/associative_path_inputs.py",
+        "skills/aippocampus/scripts/aippocampus_runtime/recall/associative_path_fallback.py",
+        "skills/aippocampus/scripts/aippocampus_runtime/recall/associative_path_walker.py",
+        "skills/aippocampus/scripts/aippocampus_runtime/recall/why_diagnostics.py",
+        "skills/aippocampus/scripts/aippocampus_runtime/recall/agent_continuity.py",
+        "skills/aippocampus/scripts/aippocampus_runtime/mcp/agent_recall_projection.py",
+    }
+)
+APW_PARITY_TEST_MODULES = (
+    "tests.aippocampus.test_associative_path_inputs",
+    "tests.aippocampus.test_agent_recall_apw_fallback",
+    "tests.aippocampus.test_benchmark_associative_path_walker",
+)
 DEBT_REGISTER_SOURCES = (
     REPO_ROOT / "docs" / "architecture" / "architecture-debt-register.md",
     REPO_ROOT / "docs" / "evidence" / "reports" / "architecture-debt-snapshot-2026-06-04.md",
@@ -361,6 +376,8 @@ def classify_changed_files(changed_files: Iterable[str]) -> set[str]:
             categories.add("mcp")
         if path.startswith("skills/aippocampus/scripts/"):
             categories.add("runtime")
+        if path in APW_PARITY_SURFACES:
+            categories.add("apw_parity")
         if path.startswith("plugins/aippocampus/"):
             categories.add("plugin")
     return categories
@@ -619,6 +636,23 @@ def build_test_plan(
                 ),
                 reason="MCP edits need the split host-facing catalog, recall, and ops contract tests.",
                 scope="focused",
+            ),
+        )
+
+    if "apw_parity" in categories:
+        _add_command(
+            commands,
+            PlannedCommand(
+                command=py_command(
+                    f"-m unittest {' '.join(APW_PARITY_TEST_MODULES)} -v",
+                    local_executable=local_executable,
+                ),
+                reason=(
+                    "APW input/fallback/projection edits must prove diagnostic-to-agent "
+                    "parity on sidecar and real-clean-source fixtures; this is a contract "
+                    "gate, not a broad benchmark quality claim."
+                ),
+                scope="focused:apw-parity",
             ),
         )
 

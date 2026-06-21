@@ -296,6 +296,24 @@ class ChangedSurfaceTestPlanTests(unittest.TestCase):
             commands,
         )
 
+    def test_apw_fallback_changes_name_real_clean_source_parity_gate(self) -> None:
+        payload = test_plan.build_test_plan(
+            [
+                "skills/aippocampus/scripts/aippocampus_runtime/recall/"
+                "associative_path_fallback.py"
+            ]
+        )
+        commands = [command["command"] for command in payload["commands"]]
+
+        self.assertIn("apw_parity", payload["categories"])
+        self.assertTrue(
+            any(
+                "test_agent_recall_apw_fallback" in command
+                and "test_benchmark_associative_path_walker" in command
+                for command in commands
+            )
+        )
+
     def test_no_changes_recommends_quick_sanity(self) -> None:
         payload = test_plan.build_test_plan([])
 

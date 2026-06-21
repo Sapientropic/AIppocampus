@@ -31,6 +31,15 @@ class AssociativePathInputPackTests(unittest.TestCase):
                 fh.write("{not-json\n")
         return path
 
+    def _write_clean_messages(self, rows: list[dict[str, object]]) -> Path:
+        clean = self.sidecars / "clean-source"
+        clean.mkdir(parents=True, exist_ok=True)
+        path = clean / "messages.jsonl"
+        with path.open("w", encoding="utf-8", newline="\n") as fh:
+            for row in rows:
+                fh.write(json.dumps(row, ensure_ascii=False) + "\n")
+        return clean
+
     def test_builds_read_only_pack_from_sidecars_without_raw_paths(self) -> None:
         self._write_jsonl(
             "semantic-bridges.jsonl",
@@ -267,6 +276,79 @@ class AssociativePathInputPackTests(unittest.TestCase):
             [candidate.get("route_id") for candidate in diagnostic["top_candidates"]],
             ["route:apw-cn"],
         )
+
+    def test_current_clean_source_candidates_feed_diagnostic_direct_reopen_action(self) -> None:
+        clean = self._write_clean_messages(
+            [
+                {
+                    "message_id": "msg-clean-apw",
+                    "turn_id": "turn-clean-apw",
+                    "turn_index": 7,
+                    "source_id": "src-clean-apw",
+                    "source_line": 31,
+                    "role": "assistant",
+                    "phase": "final_answer",
+                    "is_final": True,
+                    "text": "那条黏菌联想回忆探索算法路线需要通过 APW reopen clean source 才能使用。",
+                }
+            ]
+        )
+
+        diagnostic = build_associative_path_diagnostic(
+            query="黏菌 联想回忆 探索算法",
+            cwd=self.root,
+            clean_source_dir=clean,
+        )
+        encoded = json.dumps(diagnostic, ensure_ascii=False, sort_keys=True)
+
+        self.assertEqual(diagnostic["decision"], "route_candidates")
+        self.assertEqual(diagnostic["metrics"]["source_reopenable_candidate_count"], 1)
+        self.assertEqual(
+            diagnostic["metrics"]["candidate_source_counts"]["current_clean_source"],
+            1,
+        )
+        candidate = diagnostic["top_candidates"][0]
+        self.assertEqual(candidate["candidate_source_kind"], "current_clean_source")
+        self.assertEqual(candidate["matched_terms"], ["黏菌", "联想回忆", "探索算法"])
+        action = diagnostic["next_actions"][0]
+        self.assertEqual(action["id"], "open_apw_source_candidate_1")
+        self.assertEqual(action["tool_name"], "get_turn_context")
+        self.assertIn("aippocampus search --open-current-source", action["command"])
+        self.assertEqual(
+            action["source_reopen_args"],
+            {
+                "message_id": "msg-clean-apw",
+                "turn_id": "turn-clean-apw",
+                "turn_index": 7,
+                "line": 31,
+            },
+        )
+        self.assertNotIn("thread_key", action["source_reopen_args"])
+        self.assertNotIn(str(self.root), encoded)
+
+    def test_private_current_clean_source_candidates_stay_guarded(self) -> None:
+        clean = self._write_clean_messages(
+            [
+                {
+                    "message_id": "msg-private-apw",
+                    "turn_id": "turn-private-apw",
+                    "source_line": 11,
+                    "scope_labels": ["user_private"],
+                    "text": "黏菌 联想回忆 探索算法 private note",
+                }
+            ]
+        )
+
+        diagnostic = build_associative_path_diagnostic(
+            query="黏菌 联想回忆 探索算法",
+            cwd=self.root,
+            clean_source_dir=clean,
+        )
+
+        self.assertEqual(diagnostic["decision"], "abstain")
+        self.assertEqual(diagnostic["candidate_count"], 0)
+        self.assertIn("path_blocked_private_or_stale", diagnostic["reason_codes"])
+        self.assertEqual(diagnostic["next_actions"][0]["id"], "tighten_cue_or_continue_without_apw")
 
     def test_why_recall_apw_sidecar_is_opt_in(self) -> None:
         pack = build_associative_path_input_pack(

@@ -1024,9 +1024,7 @@ def recall(
     memory_packets = [_memory_packet_for_route(route) for route in routes]
     triage_metrics = _memory_packet_triage_metrics(memory_packets)
     deepen_requests = [
-        agent_deepen_requests.deepen_request_for_route(
-            route, memory_packet, request_index=index
-        )
+        agent_deepen_requests.deepen_request_for_route(route, memory_packet, request_index=index)
         for index, (route, memory_packet) in enumerate(
             zip(routes, memory_packets, strict=True),
             start=1,
@@ -1043,6 +1041,7 @@ def recall(
             triage_metrics=triage_metrics,
             cwd=cwd_path,
             sidecar_dir=associative_path_sidecar_dir,
+            clean_source_dir=source_dir,
             semantic_bridge_path=associative_path_bridge_path,
             navigation_path=associative_path_navigation_path,
             active_lock_path=associative_path_active_lock_path,
