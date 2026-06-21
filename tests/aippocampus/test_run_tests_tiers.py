@@ -293,6 +293,32 @@ class RunTestsTierTests(unittest.TestCase):
         )
         self.assertIn("soft drift", budget["recommended_action"]["why"])
 
+    def test_broad_suite_growth_review_is_non_gating_telemetry(self) -> None:
+        review = run_tests.suite_growth_review_for_tier(
+            "broad-pr",
+            module_count=331,
+            test_count=2957,
+            top_modules=[
+                {"module": "tests.aippocampus.test_docs_health", "test_count": 85}
+            ],
+        )
+
+        self.assertIsNotNone(review)
+        assert review is not None
+        self.assertEqual(review["kind"], "non_gating_suite_growth_review")
+        self.assertEqual(review["status"], "review_recommended")
+        self.assertEqual(review["recommended_action"]["mutation_risk"], "planning_only")
+        self.assertIn("must not make broad coverage", review["recommended_action"]["why"])
+        self.assertIn("Non-gating", review["boundary"])
+        self.assertIsNone(
+            run_tests.suite_growth_review_for_tier(
+                "pr",
+                module_count=113,
+                test_count=913,
+                top_modules=[],
+            )
+        )
+
     def test_report_json_cli_prints_report_without_running_tests(self) -> None:
         report = {
             "kind": "aippocampus_test_tier_report",
@@ -577,6 +603,17 @@ class RunTestsTierTests(unittest.TestCase):
 
         self.assertEqual(report["timing_artifacts"][0]["status"], "current")
         self.assertEqual(report["timing_artifacts"][0]["path"], str(path))
+
+    def test_default_report_does_not_auto_discover_stale_local_timing_artifact(self) -> None:
+        legacy_path = (
+            run_tests.REPO_ROOT
+            / "benchmark_corpus"
+            / "reports"
+            / "local-pr-tier-timings.json"
+        )
+
+        self.assertNotIn(legacy_path, run_tests.DEFAULT_TIMING_ARTIFACTS)
+        self.assertEqual(run_tests.default_timing_artifact_paths(), ())
 
     def test_invalid_or_empty_shards_fail_before_running_tests(self) -> None:
         with (

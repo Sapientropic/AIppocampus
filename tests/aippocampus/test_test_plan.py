@@ -99,7 +99,11 @@ class ChangedSurfaceTestPlanTests(unittest.TestCase):
 
     def test_test_runner_change_recommends_tier_contract_and_report(self) -> None:
         payload = test_plan.build_test_plan(
-            ["tools/aippocampus/run_tests.py", ".github/workflows/aippocampus-ci.yml"]
+            [
+                "tools/aippocampus/run_tests.py",
+                "tools/aippocampus/run_ci_parity.py",
+                ".github/workflows/aippocampus-ci.yml",
+            ]
         )
         commands = [str(command["command"]) for command in payload["commands"]]
 
@@ -187,6 +191,7 @@ class ChangedSurfaceTestPlanTests(unittest.TestCase):
 
         self.assertFalse(payload["python_environment"]["minor_matches_ci"])
         self.assertEqual(warnings[0]["kind"], "python_minor_mismatch")
+        self.assertIn("run_ci_parity.py --tier pr --json", warnings[0]["next_action"])
         self.assertIn("do not run a broad matrix", warnings[0]["next_action"])
         self.assertFalse(any("3.12" in command and "broad-pr" in command for command in commands))
 

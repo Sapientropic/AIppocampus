@@ -8,7 +8,7 @@ import sys
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, cast
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEBT_REPORT_SCRIPT = "tools/aippocampus/docs/debt_report.py"
@@ -212,8 +212,9 @@ def planner_warnings(environment: dict[str, object]) -> list[dict[str, str]]:
             ),
             "next_action": (
                 "Use Python "
-                f"{canonical_minor} for compatibility-sensitive failures; do not run a broad "
-                "matrix locally by default."
+                f"{canonical_minor} for compatibility-sensitive failures with "
+                "python tools/aippocampus/run_ci_parity.py --tier pr --json; do not run "
+                "a broad matrix locally by default."
             ),
         }
     ]
@@ -350,6 +351,7 @@ def classify_changed_files(changed_files: Iterable[str]) -> set[str]:
             categories.add("ci_workflow")
         if path in {
             "tools/aippocampus/run_tests.py",
+            "tools/aippocampus/run_ci_parity.py",
             "tools/aippocampus/test_tier_manifest.py",
             "tools/aippocampus/test_plan.py",
         }:
@@ -971,11 +973,15 @@ def main(argv: list[str] | None = None) -> int:
         print("AIppocampus release preflight plan")
         print(plan["assumption"])
         print("Local required:")
-        for command in plan["local_required"]:
+        local_required = cast(list[dict[str, str]], plan["local_required"])
+        post_publish_required = cast(
+            list[dict[str, str]], plan["post_publish_required"]
+        )
+        for command in local_required:
             print(f"- {command['command']}")
             print(f"  {command['reason']}")
         print("Post-publish required:")
-        for command in plan["post_publish_required"]:
+        for command in post_publish_required:
             print(f"- {command['command']}")
             print(f"  {command['reason']}")
         return 0
@@ -992,17 +998,19 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     print("AIppocampus changed-surface verification plan")
-    environment = plan["python_environment"]
+    environment = cast(dict[str, object], plan["python_environment"])
     print(
         "Python: "
-        f"local {environment['local_python_version']} / "
-        f"CI {environment['canonical_ci_python_version']}"
+        f"local {str(environment['local_python_version'])} / "
+        f"CI {str(environment['canonical_ci_python_version'])}"
     )
-    for warning in plan["warnings"]:
+    warnings = cast(list[dict[str, str]], plan["warnings"])
+    commands = cast(list[dict[str, str]], plan["commands"])
+    for warning in warnings:
         print(f"Warning: {warning['message']}")
         print(f"Next: {warning['next_action']}")
     print(f"Changed files: {len(changed_files)}")
-    for command in plan["commands"]:
+    for command in commands:
         print(f"- {command['command']}")
         print(f"  {command['reason']}")
     return 0

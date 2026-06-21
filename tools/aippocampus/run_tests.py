@@ -41,9 +41,11 @@ RUNTIME_SOURCE_ROOT = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 FALLBACK_TEST_TMPDIR = REPO_ROOT / ".aippocampus" / "test-tmp"
 TEMP_ENV_NAMES = ("TMPDIR", "TEMP", "TMP")
 TEMP_PROBE_PREFIX = "aippocampus-test-runner-"
-DEFAULT_TIMING_ARTIFACTS = (
-    REPO_ROOT / "benchmark_corpus" / "reports" / "local-pr-tier-timings.json",
-)
+# Timing artifacts are local evidence, not a default truth source. Keep default
+# reports empty unless the operator explicitly passes --timing-artifact; stale
+# ignored files under benchmark_corpus/reports must not masquerade as current PR
+# speed evidence.
+DEFAULT_TIMING_ARTIFACTS: tuple[Path, ...] = ()
 
 TIER_REPORT_TOP_LIMIT = 10
 RUNNER_VERSION = "aippocampus-run-tests-v2"
@@ -57,6 +59,18 @@ PR_BUDGET = {
     "module_count_target": 70,
     "test_count_target": 500,
     "elapsed_seconds_target": 180.0,
+}
+BROAD_SUITE_REVIEW_TARGETS: dict[str, BroadSuiteReviewTarget] = {
+    "broad-pr": {
+        "module_count_review_threshold": 300,
+        "test_count_review_threshold": 2500,
+        "label": "Broad PR",
+    },
+    "full": {
+        "module_count_review_threshold": 400,
+        "test_count_review_threshold": 3500,
+        "label": "Full",
+    },
 }
 
 
@@ -76,6 +90,12 @@ class ModuleTimingRow(TypedDict):
     test_count: int
     duration_seconds: float
     ok: bool
+
+
+class BroadSuiteReviewTarget(TypedDict):
+    module_count_review_threshold: int
+    test_count_review_threshold: int
+    label: str
 
 
 def _target_status(actual: int | float, target: int | float) -> str:
@@ -138,6 +158,52 @@ def count_budget_for_tier(
         ),
         "note": note,
         "tier_label": label,
+    }
+
+
+def suite_growth_review_for_tier(
+    tier: str,
+    *,
+    module_count: int,
+    test_count: int,
+    top_modules: list[TierModuleRow],
+) -> dict[str, object] | None:
+    """Return non-gating broad-suite growth telemetry."""
+
+    normalized_tier = TIER_ALIASES.get(tier, tier)
+    target = BROAD_SUITE_REVIEW_TARGETS.get(normalized_tier)
+    if target is None:
+        return None
+    module_threshold = int(target["module_count_review_threshold"])
+    test_threshold = int(target["test_count_review_threshold"])
+    over_threshold = module_count > module_threshold or test_count > test_threshold
+    return {
+        "kind": "non_gating_suite_growth_review",
+        "status": "review_recommended" if over_threshold else "within_review_threshold",
+        "module_count_review_threshold": module_threshold,
+        "test_count_review_threshold": test_threshold,
+        "module_count_status": _target_status(module_count, module_threshold),
+        "test_count_status": _target_status(test_count, test_threshold),
+        "top_contributors": top_modules[:5],
+        "recommended_action": (
+            {
+                "id": f"review_{normalized_tier.replace('-', '_')}_suite_growth",
+                "label": f"Review {target['label']} suite growth",
+                "mutation_risk": "planning_only",
+                "why": (
+                    "Review broad-suite growth, split heavy modules, or refresh dated "
+                    "rationale; this is telemetry only and must not make broad coverage "
+                    "the default local agent ritual."
+                ),
+            }
+            if over_threshold
+            else None
+        ),
+        "boundary": (
+            "Non-gating observability for CI/pre-merge/release lanes; ordinary "
+            "changed-surface planning should not add broad-pr/full solely because "
+            "this hint exists."
+        ),
     }
 
 
@@ -615,6 +681,12 @@ def build_tier_report(
                 tier,
                 module_count=len(modules),
                 test_count=sum(row["test_count"] for row in module_rows),
+            ),
+            "growth_review": suite_growth_review_for_tier(
+                tier,
+                module_count=len(modules),
+                test_count=sum(row["test_count"] for row in module_rows),
+                top_modules=top_modules,
             ),
             "manifest": manifest,
             "benchmark_shaped": benchmark_shaped_tier_summary(tier, modules),
