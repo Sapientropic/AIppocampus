@@ -1208,7 +1208,8 @@ def render_recall_human(payload: Mapping[str, Any]) -> str:
     if isinstance(apw_fallback, Mapping):
         if apw_fallback.get("status") == "route_candidate":
             label = core.compact_text(str(apw_fallback.get("label") or "APW fallback route"), 90)
-            lines.append(f"APW fallback: {label} -> reopen_source")
+            posture = str(apw_fallback.get("route_choice_posture") or "associative_path_fallback")
+            lines.append(f"APW fallback: {label} -> reopen_source ({posture})")
         elif apw_fallback.get("status") == "abstained":
             summary = core.compact_text(str(apw_fallback.get("summary") or "no source-reopenable route"), 120)
             lines.append(f"APW fallback: {summary}")

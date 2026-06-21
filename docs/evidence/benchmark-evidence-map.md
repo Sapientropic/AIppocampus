@@ -904,10 +904,12 @@ empty output. The PR-tier guard for this contract is
 
 - **Entrypoint:** `benchmarks/aippocampus/benchmark_associative_path_walker.py`
 - **Reads / updates:** `docs/architecture/recall/source-backed-product-discipline.md`,
-  #2355, #2356, #2392, #2393, #2394; public-safe opt-in/proxy gate for
-  navigation lift, specificity, source-reopenability, cross-scope feedback
-  suppression, Chinese dogfood cues, and wrong-hop drag without claiming live
-  recall quality or default ranking influence.
+  #2355, #2356, #2392, #2393, #2394, #2475, #2483; public-safe promotion gate
+  for semi-default APW recovery. The report includes a `promotion_gate`
+  checklist for source-reopenability, wrong-hop/irrelevant drag, projected
+  source-free scent, manual-search-before-APW, cross-scope feedback suppression,
+  Chinese dogfood cues, and default ranking non-influence without claiming live
+  recall quality.
 
 ### Conversation orientation usefulness gate
 

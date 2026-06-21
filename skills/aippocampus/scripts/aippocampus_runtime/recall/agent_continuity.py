@@ -1025,9 +1025,7 @@ def recall(
     triage_metrics = _memory_packet_triage_metrics(memory_packets)
     deepen_requests = [
         agent_deepen_requests.deepen_request_for_route(
-            route,
-            memory_packet,
-            request_index=index,
+            route, memory_packet, request_index=index
         )
         for index, (route, memory_packet) in enumerate(
             zip(routes, memory_packets, strict=True),
@@ -1035,20 +1033,21 @@ def recall(
         )
         if route.get("handle")
     ]
-    ordinary_status = "ok" if memory_packets else "no_routes"
-    associative_path_fallback = apw_fallback.maybe_append_associative_path_fallback(
-        include_associative_fallback=include_associative_fallback,
-        query=str(query or ""),
-        ordinary_status=ordinary_status,
-        memory_packets=memory_packets,
-        deepen_requests=deepen_requests,
-        triage_metrics=triage_metrics,
-        cwd=cwd_path,
-        sidecar_dir=associative_path_sidecar_dir,
-        semantic_bridge_path=associative_path_bridge_path,
-        navigation_path=associative_path_navigation_path,
-        active_lock_path=associative_path_active_lock_path,
-        feedback_path=associative_path_feedback_path or feedback_path,
+    associative_path_policy, associative_path_fallback = (
+        apw_fallback.maybe_append_associative_path_fallback_with_policy(
+            include_associative_fallback=include_associative_fallback,
+            query=str(query or ""),
+            ordinary_status="ok" if memory_packets else "no_routes",
+            memory_packets=memory_packets,
+            deepen_requests=deepen_requests,
+            triage_metrics=triage_metrics,
+            cwd=cwd_path,
+            sidecar_dir=associative_path_sidecar_dir,
+            semantic_bridge_path=associative_path_bridge_path,
+            navigation_path=associative_path_navigation_path,
+            active_lock_path=associative_path_active_lock_path,
+            feedback_path=associative_path_feedback_path or feedback_path,
+        )
     )
     already_opened_count = _mark_already_opened_routes(
         memory_packets,
@@ -1094,11 +1093,10 @@ def recall(
         "attention_router_navigation": attention_navigation,
         "navigation_signals": navigation_signals,
         "semantic_gate_diagnostics": semantic_diagnostics,
+        "associative_path_policy": associative_path_policy,
         "associative_path_fallback": associative_path_fallback,
         "suggested_next": "agent deepen" if deepen_requests else "search_memory",
-        "suggested_next_command": (
-            deepen_requests[0].get("copy_paste_command") if deepen_requests else None
-        ),
+        "suggested_next_command": deepen_requests[0].get("copy_paste_command") if deepen_requests else None,
         **handle_boundary_fields(),
         "policy_boundary": policy_boundary(),
         "metrics": {
@@ -1115,8 +1113,11 @@ def recall(
             **macro_metrics,
             "source_reopen_success_rate_observed": None,
             "wrong_or_stale_handle_rate_observed": None,
-            "associative_path_fallback_requested": bool(include_associative_fallback),
-            "associative_path_fallback_route_count": apw_fallback.route_count(associative_path_fallback),
+            **apw_fallback.recall_fallback_metrics(
+                include_associative_fallback,
+                associative_path_policy,
+                associative_path_fallback,
+            ),
         },
         "red_lines": {
             "foreground_source_dump_count": forbidden_count,
