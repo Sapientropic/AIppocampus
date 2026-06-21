@@ -10,8 +10,6 @@ from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
 
 class ClaudeCodeHooksTests(unittest.TestCase):
     def run_module(self, *args: str, input_text: str | None = None) -> subprocess.CompletedProcess[str]:
@@ -348,7 +346,6 @@ class ClaudeCodeHooksTests(unittest.TestCase):
         self.assertTrue(payload["ok"])
         self.assertTrue(payload["privacy"]["raw_prompt_omitted"])
         self.assertNotIn("synthetic prompt marker must not leak", proc.stdout)
-
 
 if __name__ == "__main__":
     unittest.main()

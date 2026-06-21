@@ -1,24 +1,19 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.navigation.semantic_candidate_context import (  # noqa: E402
+from aippocampus_runtime.navigation.semantic_candidate_context import (
     build_semantic_candidate_context,
 )
-from aippocampus_runtime.recall.query_expansion import plan_query_expansion  # noqa: E402
-from aippocampus_runtime.recall.semantic_bridge_map import (  # noqa: E402
+from aippocampus_runtime.recall.query_expansion import plan_query_expansion
+from aippocampus_runtime.recall.semantic_bridge_map import (
     materialize_semantic_bridge_rows,
     reduce_semantic_bridge_candidates,
 )
-from aippocampus_runtime.recall.semantic_effectiveness import (  # noqa: E402
+from aippocampus_runtime.recall.semantic_effectiveness import (
     append_semantic_effectiveness_rows,
     apply_semantic_effectiveness_to_candidates,
     load_semantic_effectiveness_rows,
@@ -29,7 +24,6 @@ from aippocampus_runtime.recall.semantic_effectiveness import (  # noqa: E402
 
 def source_ref(label: str) -> dict[str, object]:
     return {"source_id": f"public:{label}", "message_id": f"msg-{label}", "line": 12}
-
 
 class SemanticCandidateContextBridgeEffectivenessTests(unittest.TestCase):
     def test_source_shaped_context_beats_misleading_generic_keyword(self) -> None:
@@ -318,7 +312,6 @@ class SemanticCandidateContextBridgeEffectivenessTests(unittest.TestCase):
         self.assertEqual(projected[0]["status"], "demoted")
         self.assertNotIn("effectiveness_recommendation", projected[1])
         self.assertEqual(rows[0]["producer_kind"], "dream_probe")
-
 
 if __name__ == "__main__":
     unittest.main()

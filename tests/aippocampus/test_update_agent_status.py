@@ -18,7 +18,6 @@ PROVIDER_KEY_ENV_NAMES = (
     "AIPPOCAMPUS_OPENAI_COMPAT_API_KEY_ENV",
 )
 
-
 class UpdateAgentStatusTests(unittest.TestCase):
     def test_agent_json_returns_partial_card_before_slow_probes(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, provider_env({"AIPPOCAMPUS_DEEPSEEK_API_KEY": "test"}):

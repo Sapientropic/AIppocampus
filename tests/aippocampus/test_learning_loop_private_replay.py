@@ -1,30 +1,25 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
 from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.learning_loop import (  # noqa: E402
+from aippocampus_runtime.learning_loop import (
     adapt_behavior_events_to_review_signals,
     detect_workflow_order_findings,
     project_action_time_guidance,
 )
-from aippocampus_runtime.learning_loop.effectiveness_ledger import (  # noqa: E402
+from aippocampus_runtime.learning_loop.effectiveness_ledger import (
     LEDGER_ROW_KIND,
     load_ledger_rows,
 )
 from aippocampus_runtime.learning_loop.private_export import (
     load_behavior_event_rows,
-    sanitize_events_for_private_replay,  # noqa: E402
+    sanitize_events_for_private_replay,
 )
-from aippocampus_runtime.learning_loop.private_replay import (  # noqa: E402
+from aippocampus_runtime.learning_loop.private_replay import (
     build_private_history_replay_report,
     private_replay_fixture_events,
 )
@@ -205,7 +200,6 @@ class LearningLoopPrivateReplayTests(unittest.TestCase):
         self.assertFalse(event_rows[0]["origin"]["verified_origin"])
         self.assertFalse(ledger_rows[0]["verified_origin"])
         self.assertFalse(ledger_rows[0]["origin"]["verified_origin"])
-
 
 if __name__ == "__main__":
     unittest.main()

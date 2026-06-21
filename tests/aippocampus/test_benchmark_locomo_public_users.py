@@ -1,19 +1,17 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from contextlib import redirect_stdout
 from io import StringIO
 from pathlib import Path
 
+from tests.aippocampus.import_path_helpers import import_benchmark_module
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
-BENCHMARKS = REPO_ROOT / "benchmarks" / "aippocampus"
-sys.path.insert(0, str(BENCHMARKS))
 
-import benchmark_locomo_public_users as benchmark  # noqa: E402
-
+benchmark = import_benchmark_module("benchmark_locomo_public_users")
 
 def write_fixture(path: Path) -> None:
     rows = [
@@ -64,7 +62,6 @@ def write_fixture(path: Path) -> None:
         }
     ]
     path.write_text(json.dumps(rows), encoding="utf-8")
-
 
 class LocomoPublicUsersBenchmarkTests(unittest.TestCase):
     def test_gold_baseline_scores_and_stays_sanitized(self) -> None:
@@ -247,7 +244,6 @@ class LocomoPublicUsersBenchmarkTests(unittest.TestCase):
         self.assertIn("public_longitudinal_user_score", payload["cannot_claim"])
         dumped = json.dumps(payload, ensure_ascii=False)
         self.assertNotIn(str(REPO_ROOT), dumped)
-
 
 if __name__ == "__main__":
     unittest.main()

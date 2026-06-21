@@ -1,21 +1,16 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SMOKE = REPO_ROOT / "tools" / "aippocampus" / "smoke"
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-for _path in (SMOKE, SCRIPTS):
-    sys.path.insert(0, str(_path))
+import simulate_prompt_hook as smoke
 
-import simulate_prompt_hook as smoke  # noqa: E402
-import smoke_prompt_hook_latency as latency_smoke  # noqa: E402
+from tests.aippocampus.import_path_helpers import import_smoke_module
 
+latency_smoke = import_smoke_module("smoke_prompt_hook_latency")
 
 class SimulatePromptHookSmokeTests(unittest.TestCase):
     def test_default_cases_use_public_synthetic_project_fixture(self) -> None:
@@ -158,7 +153,6 @@ class SimulatePromptHookSmokeTests(unittest.TestCase):
         self.assertEqual(kwargs["hook_budget_ms"], 3000.0)
         self.assertEqual(kwargs["host_timeout_ms"], 4800.0)
         self.assertEqual(kwargs["subjective_prompt_p95_target_ms"], 600.0)
-
 
 if __name__ == "__main__":
     unittest.main()

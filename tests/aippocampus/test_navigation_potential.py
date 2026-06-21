@@ -1,18 +1,11 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-ROOT = REPO_ROOT / "skills" / "aippocampus"
-SCRIPTS = ROOT / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.coding import agency_affordance as agency  # noqa: E402
-from aippocampus_runtime.navigation import navigation_potential as nav  # noqa: E402
-from aippocampus_runtime.navigation import repo_familiarity  # noqa: E402
+from aippocampus_runtime.coding import agency_affordance as agency
+from aippocampus_runtime.navigation import navigation_potential as nav
+from aippocampus_runtime.navigation import repo_familiarity
 
 
 def source_ref(line: int, *, thread_key: str = "session:navigation") -> dict[str, object]:
@@ -22,7 +15,6 @@ def source_ref(line: int, *, thread_key: str = "session:navigation") -> dict[str
         "source_line": line,
         "timestamp": "2026-06-07T00:00:00Z",
     }
-
 
 def repo_row(
     *,
@@ -60,12 +52,10 @@ def repo_row(
         "do_not_use_for": ["current code claims without reopening source"],
     }
 
-
 def repo_cards(*rows: dict[str, object]) -> list[dict[str, object]]:
     return repo_familiarity.build_repo_familiarity_cards(
         {"source_rows": list(rows), "repo_commit": "abc123"}
     )
-
 
 class NavigationPotentialTests(unittest.TestCase):
     def test_superseded_route_is_suppressed_not_resurfaced(self) -> None:
@@ -316,7 +306,6 @@ class NavigationPotentialTests(unittest.TestCase):
         self.assertEqual(packet["selected_cards"], [])
         self.assertEqual(projection["potential_count"], 0)
         self.assertEqual(projection["agency_affordance_inputs"], [])
-
 
 if __name__ == "__main__":
     unittest.main()

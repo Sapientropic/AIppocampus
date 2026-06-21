@@ -8,15 +8,10 @@ import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
-BENCHMARKS = REPO_ROOT / "benchmarks" / "aippocampus"
-if str(BENCHMARKS) not in sys.path:
-    sys.path.insert(0, str(BENCHMARKS))
 
-from benchmarks.aippocampus import (
-    benchmark_episode_arc_sequence_usefulness as benchmark,  # noqa: E402
-)
+from tests.aippocampus.import_path_helpers import import_benchmark_module
+
+benchmark = import_benchmark_module("benchmark_episode_arc_sequence_usefulness")
 
 
 class EpisodeArcSequenceUsefulnessBenchmarkTests(unittest.TestCase):
@@ -76,7 +71,6 @@ class EpisodeArcSequenceUsefulnessBenchmarkTests(unittest.TestCase):
 
         self.assertEqual(payload["kind"], benchmark.REPORT_KIND)
         self.assertEqual(written["kind"], benchmark.REPORT_KIND)
-
 
 if __name__ == "__main__":
     unittest.main()

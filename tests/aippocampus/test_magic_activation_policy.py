@@ -1,17 +1,14 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-if str(SCRIPTS) not in sys.path:
-    sys.path.insert(0, str(SCRIPTS))
 
-from aippocampus_runtime.warm_ambient import scout_profiles  # noqa: E402
-from aippocampus_runtime.warm_ambient.activation_policy import (  # noqa: E402
+from aippocampus_runtime.warm_ambient import scout_profiles
+from aippocampus_runtime.warm_ambient.activation_policy import (
     activation_policy_report,
     fixture_magic_activation_policy_report,
 )
@@ -125,7 +122,6 @@ class MagicActivationPolicyTests(unittest.TestCase):
         self.assertNotIn("SECRET_TOKEN", encoded)
         self.assertNotIn("raw private source text", encoded)
         self.assertNotIn("E:\\private", encoded)
-
 
 if __name__ == "__main__":
     unittest.main()

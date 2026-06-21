@@ -1,15 +1,9 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.recall import hook_agent_affordance as affordance  # noqa: E402
+from aippocampus_runtime.recall import hook_agent_affordance as affordance
 
 
 class HookAgentAffordanceTests(unittest.TestCase):
@@ -228,7 +222,6 @@ class HookAgentAffordanceTests(unittest.TestCase):
                 packet["privacy_boundary"],
                 "no raw source, no local paths, no source refs in hook",
             )
-
 
 if __name__ == "__main__":
     unittest.main()

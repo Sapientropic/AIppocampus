@@ -1,21 +1,11 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-ROOT = REPO_ROOT / "skills" / "aippocampus"
-SCRIPTS = ROOT / "scripts"
-for _path in (
-    SCRIPTS,
-    REPO_ROOT / "benchmarks" / "aippocampus",
-):
-    sys.path.insert(0, str(_path))
+from tests.aippocampus.import_path_helpers import import_benchmark_module
 
-import benchmark_question_tracking_calibration as benchmark  # noqa: E402
-
+benchmark = import_benchmark_module("benchmark_question_tracking_calibration")
 
 class QuestionTrackingCalibrationBenchmarkTests(unittest.TestCase):
     def test_selected_fixtures_cover_threshold_boundary_claims(self) -> None:
@@ -96,7 +86,6 @@ class QuestionTrackingCalibrationBenchmarkTests(unittest.TestCase):
         self.assertNotIn("message_id", rendered)
         self.assertNotIn("source_line", rendered)
         self.assertNotIn("session:", rendered)
-
 
 if __name__ == "__main__":
     unittest.main()

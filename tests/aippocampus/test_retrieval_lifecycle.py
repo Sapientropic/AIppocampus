@@ -3,21 +3,13 @@ from __future__ import annotations
 import contextlib
 import io
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-ROOT = REPO_ROOT / "skills" / "aippocampus"
-SCRIPTS = ROOT / "scripts"
-TESTS = Path(__file__).resolve().parent
-sys.path.insert(0, str(TESTS))
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.reflection import retrieval_lifecycle as lifecycle  # noqa: E402
-from aippocampus_runtime.reflection import retrieval_reconsolidation as recon  # noqa: E402
-from redaction_fixtures import (  # noqa: E402
+from aippocampus_runtime.reflection import retrieval_lifecycle as lifecycle
+from aippocampus_runtime.reflection import retrieval_reconsolidation as recon
+from tests.aippocampus.redaction_fixtures import (
     FAKE_TEST_ESCAPED_WINDOWS_LOCAL_PATH_MARKER,
     FAKE_TEST_SECRET_VALUE,
     fake_test_windows_path,
@@ -32,7 +24,6 @@ def source_ref(line: int = 10) -> dict[str, object]:
         "source_line": line,
         "timestamp": "2026-06-09T00:00:00Z",
     }
-
 
 class RetrievalLifecycleTests(unittest.TestCase):
     def test_retrieval_event_requires_source_anchor_and_sanitizes_boundaries(self) -> None:
@@ -402,7 +393,6 @@ class RetrievalLifecycleTests(unittest.TestCase):
         self.assertEqual(candidates, [])
         self.assertEqual(report["candidate_count"], 0)
         self.assertEqual(report["reconsolidation_counts"]["blocked_missing_source_refs"], 1)
-
 
 if __name__ == "__main__":
     unittest.main()

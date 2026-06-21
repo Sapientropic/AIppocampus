@@ -1,17 +1,12 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.warm_ambient import scheduler as warm_scheduler  # noqa: E402
-from aippocampus_runtime.warm_ambient import scout_profiles  # noqa: E402
+from aippocampus_runtime.warm_ambient import scheduler as warm_scheduler
+from aippocampus_runtime.warm_ambient import scout_profiles
 
 
 class WarmAmbientSchedulerPolicyTests(unittest.TestCase):
@@ -169,7 +164,6 @@ class WarmAmbientSchedulerPolicyTests(unittest.TestCase):
                 source_ref_count=1,
             )
         )
-
 
 if __name__ == "__main__":
     unittest.main()

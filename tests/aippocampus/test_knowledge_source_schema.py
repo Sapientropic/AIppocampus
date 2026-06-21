@@ -1,29 +1,23 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 FIXTURE = REPO_ROOT / "tests" / "fixtures" / "knowledge_sources" / "public_safe_registry.json"
-sys.path.insert(0, str(SCRIPTS))
 
-from aippocampus_runtime.knowledge import schema as knowledge_schema  # noqa: E402
+from aippocampus_runtime.knowledge import schema as knowledge_schema
 
 
 def load_fixture() -> dict:
     return json.loads(FIXTURE.read_text(encoding="utf-8"))
 
-
 def source_by_id(payload: dict, source_id: str) -> dict:
     return next(item for item in payload["sources"] if item["source_id"] == source_id)
 
-
 def claim_by_id(payload: dict, claim_id: str) -> dict:
     return next(item for item in payload["claims"] if item["claim_id"] == claim_id)
-
 
 class KnowledgeSourceSchemaTests(unittest.TestCase):
     def test_public_safe_fixture_keeps_navigation_artifacts_candidate_only(self) -> None:
@@ -339,7 +333,6 @@ class KnowledgeSourceSchemaTests(unittest.TestCase):
         self.assertFalse(report["activation_eligible"])
         self.assertIn("missing_reviewer", report["blocker_codes"])
         self.assertIn("missing_review_signed_at", report["blocker_codes"])
-
 
 if __name__ == "__main__":
     unittest.main()

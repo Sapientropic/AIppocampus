@@ -21,7 +21,6 @@ closeout_audit = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = closeout_audit
 SPEC.loader.exec_module(closeout_audit)
 
-
 class CloseoutAuditTests(unittest.TestCase):
     def test_simple_bugfix_closeout_passes_without_extra_ceremony(self) -> None:
         report = closeout_audit.audit_pr_body(
@@ -482,7 +481,6 @@ class CloseoutAuditTests(unittest.TestCase):
         payload = json.loads(completed.stdout)
         self.assertEqual(payload["kind"], "aippocampus_closed_issue_traceability_audit")
         self.assertEqual(payload["window"]["start"], "2026-06-13T18:33:49Z")
-
 
 if __name__ == "__main__":
     unittest.main()

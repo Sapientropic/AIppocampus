@@ -8,7 +8,6 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
-
 class PublicHandoffHygieneTests(unittest.TestCase):
     def test_codeowners_routes_public_review_surfaces(self) -> None:
         codeowners = REPO_ROOT / ".github" / "CODEOWNERS"
@@ -79,7 +78,6 @@ class PublicHandoffHygieneTests(unittest.TestCase):
         self.assertFalse(payload["external_api_required"])
         self.assertIn("docs/guides/public-api.md", payload["source_refs"])
         self.assertNotIn(str(REPO_ROOT), completed.stdout)
-
 
 if __name__ == "__main__":
     unittest.main()

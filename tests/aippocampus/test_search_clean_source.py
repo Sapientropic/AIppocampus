@@ -9,22 +9,11 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-ROOT = REPO_ROOT / "skills" / "aippocampus"
-SCRIPTS = ROOT / "scripts"
-for _path in (
-    SCRIPTS,
-    REPO_ROOT / "benchmarks" / "aippocampus",
-    REPO_ROOT / "tools" / "aippocampus" / "smoke",
-    REPO_ROOT / "tools" / "aippocampus" / "docs",
-):
-    sys.path.insert(0, str(_path))
-
-from aippocampus_runtime.cli import facade as cli_facade  # noqa: E402
-from aippocampus_runtime.contracts import foreground_action_contract_violations  # noqa: E402
-from aippocampus_runtime.registry import api as registry  # noqa: E402
-from aippocampus_runtime.source import search as search  # noqa: E402
-from tests.aippocampus.frontstage_assertions import assert_semantic_human_output  # noqa: E402
+from aippocampus_runtime.cli import facade as cli_facade
+from aippocampus_runtime.contracts import foreground_action_contract_violations
+from aippocampus_runtime.registry import api as registry
+from aippocampus_runtime.source import search as search
+from tests.aippocampus.frontstage_assertions import assert_semantic_human_output
 
 
 class SearchCleanSourceTests(unittest.TestCase):
@@ -1309,7 +1298,6 @@ class SearchCleanSourceTests(unittest.TestCase):
         self.assertEqual(payload["match_count"], 1)
         self.assertTrue(payload["matches"][0]["query_match_profile"]["exact_phrase_match"])
         self.assertEqual(payload["matches"][0]["message_id"], "msg_exact")
-
 
 if __name__ == "__main__":
     unittest.main()

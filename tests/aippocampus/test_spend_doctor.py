@@ -11,23 +11,20 @@ from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
 
-from aippocampus_runtime.cli import facade  # noqa: E402
-from aippocampus_runtime.ops import spend_doctor  # noqa: E402
-from aippocampus_runtime.ops.spend_doctor_card import compact_spend_doctor_card  # noqa: E402
-from aippocampus_runtime.warm_ambient import recall as warm_recall  # noqa: E402
+from aippocampus_runtime.cli import facade
+from aippocampus_runtime.ops import spend_doctor
+from aippocampus_runtime.ops.spend_doctor_card import compact_spend_doctor_card
+from aippocampus_runtime.warm_ambient import recall as warm_recall
 
 FAKE_PRIVATE_MARKER = "spend-doctor-private-marker"
 FAKE_LOCAL_PATH = "C:\\Users\\Private\\AIppocampus\\source.txt"
-
 
 def write_jsonl(path: Path, rows: list[dict[str, object]]) -> None:
     path.write_text(
         "\n".join(json.dumps(row, ensure_ascii=False) for row in rows) + "\n",
         encoding="utf-8",
     )
-
 
 class SpendDoctorTests(unittest.TestCase):
     def test_subconscious_operator_switch_defaults_disabled_without_explicit_hook(self) -> None:
@@ -643,7 +640,6 @@ class SpendDoctorTests(unittest.TestCase):
         payload = json.loads(proc.stdout)
         self.assertEqual(payload["kind"], "aippocampus_spend_doctor")
         self.assertIn("routes", payload)
-
 
 if __name__ == "__main__":
     unittest.main()

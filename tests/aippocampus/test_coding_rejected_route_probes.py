@@ -1,19 +1,10 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-ROOT = REPO_ROOT / "skills" / "aippocampus"
-SCRIPTS = ROOT / "scripts"
-TESTS = Path(__file__).resolve().parent
-sys.path.insert(0, str(TESTS))
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.coding import decision_events as decisions  # noqa: E402
-from aippocampus_runtime.coding import rejected_route_probes as probes  # noqa: E402
+from aippocampus_runtime.coding import decision_events as decisions
+from aippocampus_runtime.coding import rejected_route_probes as probes
 
 
 def message(*, text: str, line: int, message_id: str = "m1") -> dict[str, object]:
@@ -27,7 +18,6 @@ def message(*, text: str, line: int, message_id: str = "m1") -> dict[str, object
         "timestamp": "2026-05-01T00:00:00Z",
         "text": text,
     }
-
 
 def validation_row(target: str, status: str, *, created_at: str = "2026-05-20T00:00:00Z") -> dict[str, object]:
     return {
@@ -46,7 +36,6 @@ def validation_row(target: str, status: str, *, created_at: str = "2026-05-20T00
         ],
     }
 
-
 def rejected_event(text: str, line: int, *, created_at: str = "2026-05-01T00:00:00Z") -> dict[str, object]:
     event = decisions.review_decision_candidates(
         decisions.extract_decision_candidates(
@@ -57,7 +46,6 @@ def rejected_event(text: str, line: int, *, created_at: str = "2026-05-01T00:00:
     )[0]
     event["created_at"] = created_at
     return event
-
 
 class CodingRejectedRouteProbeTests(unittest.TestCase):
     def test_rejected_route_event_creates_source_anchored_prospective_probe(self) -> None:
@@ -147,7 +135,6 @@ class CodingRejectedRouteProbeTests(unittest.TestCase):
         generated = probes.build_rejected_route_probes([accepted])
 
         self.assertEqual(generated, [])
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,25 +1,13 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-ROOT = REPO_ROOT / "skills" / "aippocampus"
-SCRIPTS = ROOT / "scripts"
-for _path in (
-    SCRIPTS,
-    REPO_ROOT / "benchmarks" / "aippocampus",
-    REPO_ROOT / "tools" / "aippocampus" / "smoke",
-    REPO_ROOT / "tools" / "aippocampus" / "docs",
-):
-    sys.path.insert(0, str(_path))
-
-from aippocampus_runtime.question import health as qh  # noqa: E402
-from aippocampus_runtime.question.source_refs import build_source_ref_index  # noqa: E402
+from aippocampus_runtime.question import health as qh
+from aippocampus_runtime.question.source_refs import build_source_ref_index
 
 
 class QuestionHealthTests(unittest.TestCase):
@@ -337,7 +325,6 @@ class QuestionHealthTests(unittest.TestCase):
 
         self.assertFalse(payload["available"])
         self.assertEqual(payload["reason"], "no_source_backed_question_rows")
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -2,17 +2,11 @@ from __future__ import annotations
 
 import copy
 import json
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-BENCHMARKS = REPO_ROOT / "benchmarks" / "aippocampus"
-if str(BENCHMARKS) not in sys.path:
-    sys.path.insert(0, str(BENCHMARKS))
+from tests.aippocampus.import_path_helpers import import_benchmark_module
 
-import benchmark_field_continuity as benchmark  # noqa: E402
-
+benchmark = import_benchmark_module("benchmark_field_continuity")
 
 class FieldContinuityBenchmarkTests(unittest.TestCase):
     def assert_fixture_blocker(self, fixture: dict, expected_code: str) -> None:
@@ -238,7 +232,6 @@ class FieldContinuityBenchmarkTests(unittest.TestCase):
         self.assertNotIn("SyntaxError: f-string", serialized)
         self.assertNotIn("E:\\", serialized)
         self.assertNotIn("C:\\", serialized)
-
 
 if __name__ == "__main__":
     unittest.main()

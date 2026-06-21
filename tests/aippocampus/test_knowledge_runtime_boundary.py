@@ -7,7 +7,6 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 RUNTIME_ROOT = REPO_ROOT / "skills" / "aippocampus" / "scripts" / "aippocampus_runtime"
 
-
 def runtime_modules_importing_knowledge() -> list[str]:
     importers: list[str] = []
     for path in RUNTIME_ROOT.rglob("*.py"):
@@ -28,7 +27,6 @@ def runtime_modules_importing_knowledge() -> list[str]:
                     ):
                         importers.append(rel)
     return sorted(set(importers))
-
 
 class KnowledgeRuntimeBoundaryTests(unittest.TestCase):
     def test_knowledge_package_is_staged_until_runtime_caller_exists(self) -> None:
@@ -54,7 +52,6 @@ class KnowledgeRuntimeBoundaryTests(unittest.TestCase):
         self.assertIn("not live high-risk answer coverage", high_risk_doc)
         self.assertIn("staged deterministic contract prototype", public_api)
         self.assertIn("high-risk-answer-gates.md#adoption-status", capability_doc)
-
 
 if __name__ == "__main__":
     unittest.main()

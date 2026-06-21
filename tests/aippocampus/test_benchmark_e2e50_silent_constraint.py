@@ -2,17 +2,11 @@ from __future__ import annotations
 
 import copy
 import json
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-BENCHMARKS = REPO_ROOT / "benchmarks" / "aippocampus"
-if str(BENCHMARKS) not in sys.path:
-    sys.path.insert(0, str(BENCHMARKS))
+from tests.aippocampus.import_path_helpers import import_benchmark_module
 
-import benchmark_e2e50_silent_constraint as benchmark  # noqa: E402
-
+benchmark = import_benchmark_module("benchmark_e2e50_silent_constraint")
 
 class E2E50SilentConstraintBenchmarkTests(unittest.TestCase):
     def test_default_fixture_scores_behavior_metrics_without_private_payloads(self) -> None:
@@ -372,7 +366,6 @@ class E2E50SilentConstraintBenchmarkTests(unittest.TestCase):
         self.assertEqual(payload["metrics"]["overpersonalization_from_load_signal_count"], 1)
         self.assertNotIn("PRIVATE_OVERCLAIM_CASE", encoded)
         self.assertNotIn("PRIVATE_EVENT_ID", encoded)
-
 
 if __name__ == "__main__":
     unittest.main()

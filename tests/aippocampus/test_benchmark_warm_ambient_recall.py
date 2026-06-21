@@ -1,25 +1,23 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from tests.aippocampus.import_path_helpers import import_benchmark_module
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BENCHMARKS = REPO_ROOT / "benchmarks" / "aippocampus"
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-for _path in (REPO_ROOT, BENCHMARKS, SCRIPTS):
-    if str(_path) not in sys.path:
-        sys.path.insert(0, str(_path))
 
 from benchmarks.aippocampus.builders import (
-    build_warm_ambient_trace_cases as trace_builder,  # noqa: E402
+    build_warm_ambient_trace_cases as trace_builder,
 )
 
-import benchmark_warm_ambient_recall as benchmark  # noqa: E402
-from tests.aippocampus.timing_fixtures import host_timeout_sleep  # noqa: E402
+benchmark = import_benchmark_module("benchmark_warm_ambient_recall")
+from tests.aippocampus.timing_fixtures import host_timeout_sleep
 
 
 class WarmAmbientRecallBenchmarkTests(unittest.TestCase):
@@ -1726,7 +1724,6 @@ class WarmAmbientRecallBenchmarkTests(unittest.TestCase):
                     )
 
         self.assertEqual(run.call_args.kwargs["max_tokens"], 1536)
-
 
 if __name__ == "__main__":
     unittest.main()

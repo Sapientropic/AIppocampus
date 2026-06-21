@@ -1,18 +1,15 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
+from tests.aippocampus.import_path_helpers import import_benchmark_module
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
-BENCHMARKS = REPO_ROOT / "benchmarks" / "aippocampus"
-for _path in (BENCHMARKS,):
-    sys.path.insert(0, str(_path))
 
-import benchmark_longmemeval_rerank_analysis as analysis  # noqa: E402
-
+analysis = import_benchmark_module("benchmark_longmemeval_rerank_analysis")
 
 def _fixture_report() -> dict[str, object]:
     return {
@@ -150,7 +147,6 @@ def _fixture_report() -> dict[str, object]:
         "cannot_claim": ["answer_generation_quality"],
     }
 
-
 def _structural_report() -> dict[str, object]:
     report = _fixture_report()
     report["evaluation"] = {
@@ -225,7 +221,6 @@ def _structural_report() -> dict[str, object]:
     ]
     return report
 
-
 def _lexical_baseline_report() -> dict[str, object]:
     report = _structural_report()
     report["evaluation"] = {
@@ -248,7 +243,6 @@ def _lexical_baseline_report() -> dict[str, object]:
     cases[0] = first_case
     report["cases"] = cases
     return report
-
 
 def _source_factual_alias_report() -> dict[str, object]:
     report = _structural_report()
@@ -357,7 +351,6 @@ def _source_factual_alias_report() -> dict[str, object]:
         },
     ]
     return report
-
 
 class LongMemEvalRerankAnalysisTests(unittest.TestCase):
     def test_analysis_adds_ladder_taxonomy_and_budget_boundary(self) -> None:
@@ -631,7 +624,6 @@ class LongMemEvalRerankAnalysisTests(unittest.TestCase):
         self.assertIn("#1437 closed", closeout["no_open_followup_reason"])
         self.assertEqual(payload["review_next_actions"][0]["issue_state"], "closed_historical")
         self.assertIn("#1437 closed", payload["review_next_actions"][0]["no_open_followup_reason"])
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -2,20 +2,14 @@ from __future__ import annotations
 
 import json
 import os
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-SMOKE = REPO_ROOT / "tools" / "aippocampus" / "smoke"
-for _path in (SCRIPTS, SMOKE):
-    sys.path.insert(0, str(_path))
+from tests.aippocampus.import_path_helpers import import_smoke_module
 
-import smoke_question_confirmation_live as smoke  # noqa: E402
-
+smoke = import_smoke_module("smoke_question_confirmation_live")
 
 class QuestionConfirmationLiveSmokeTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -135,7 +129,6 @@ class QuestionConfirmationLiveSmokeTests(unittest.TestCase):
         self.assertNotIn(str(self.root), rendered)
         self.assertNotIn('"source_refs":', rendered)
         self.assertNotIn("sf_question_", rendered)
-
 
 if __name__ == "__main__":
     unittest.main()

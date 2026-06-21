@@ -1,16 +1,11 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.question import feedback_policy as feedback  # noqa: E402
+from aippocampus_runtime.question import feedback_policy as feedback
 
 
 class QuestionFeedbackPolicyTests(unittest.TestCase):
@@ -93,7 +88,6 @@ class QuestionFeedbackPolicyTests(unittest.TestCase):
             rows = feedback.load_question_pair_feedback(path)
 
         self.assertEqual(rows, ())
-
 
 if __name__ == "__main__":
     unittest.main()

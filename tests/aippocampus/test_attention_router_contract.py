@@ -1,15 +1,9 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.navigation import attention_router_contract as contract  # noqa: E402
+from aippocampus_runtime.navigation import attention_router_contract as contract
 
 
 class AttentionRouterContractTests(unittest.TestCase):
@@ -82,7 +76,6 @@ class AttentionRouterContractTests(unittest.TestCase):
         self.assertIn("summary_stale", stale["summary_fallback_reason_codes"])
         self.assertIn("summary_coverage_weak", stale["summary_fallback_reason_codes"])
         self.assertEqual(report["metrics"]["bounded_summary_fallback_count"], 1)
-
 
 if __name__ == "__main__":
     unittest.main()

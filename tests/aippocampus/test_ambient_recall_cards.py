@@ -2,18 +2,12 @@ from __future__ import annotations
 
 import hashlib
 import json
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.recall import ambient_cards as cards  # noqa: E402
+from aippocampus_runtime.recall import ambient_cards as cards
 from aippocampus_runtime.recall import (
-    authority,  # noqa: E402
-    prompt_context_render,  # noqa: E402
+    authority,
+    prompt_context_render,
 )
 
 
@@ -989,7 +983,6 @@ class AmbientRecallCardTests(unittest.TestCase):
 
         self.assertIn("<redacted:local-path>", payload["cards"][0]["key_line"])
         self.assertNotIn(local_path[:10], payload["cards"][0]["key_line"])
-
 
 if __name__ == "__main__":
     unittest.main()

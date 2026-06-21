@@ -1,16 +1,12 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-ROOT = REPO_ROOT / "skills" / "aippocampus"
-SCRIPTS = ROOT / "scripts"
-sys.path.insert(0, str(SCRIPTS))
 
-from aippocampus_runtime.recall import feedback_events as feedback  # noqa: E402
+from aippocampus_runtime.recall import feedback_events as feedback
 
 
 class RecallFeedbackEventTests(unittest.TestCase):
@@ -203,7 +199,6 @@ class RecallFeedbackEventTests(unittest.TestCase):
         self.assertTrue(by_route["route:conflict"]["conflicting_feedback_fallback"])
         self.assertFalse(report["policy_boundary"]["clean_source_mutation_allowed"])
         self.assertIn("feedback_calibration_can_emit_source_open", report["cannot_claim"])
-
 
 if __name__ == "__main__":
     unittest.main()

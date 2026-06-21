@@ -21,7 +21,6 @@ from tests.aippocampus.mcp_server_fixtures import (
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 
-
 class AippocampusMcpServerRecallTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
@@ -1253,8 +1252,6 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
 
         payload = self.tool_payload(response)
         self.assertEqual(payload["error"]["details"]["clean_source_dir"], str(missing_clean))
-
-
 
 if __name__ == "__main__":
     unittest.main()

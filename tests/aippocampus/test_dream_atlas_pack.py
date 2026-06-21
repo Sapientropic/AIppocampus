@@ -9,11 +9,9 @@ import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
 
-from aippocampus_runtime.dream import atlas_pack  # noqa: E402
-from aippocampus_runtime.model.client import (  # noqa: E402
+from aippocampus_runtime.dream import atlas_pack
+from aippocampus_runtime.model.client import (
     DEEPSEEK_PREFIX_CACHE_CONTRACT,
     ChatClientConfig,
 )
@@ -27,7 +25,6 @@ def config() -> ChatClientConfig:
         cache_contract=DEEPSEEK_PREFIX_CACHE_CONTRACT,
         timeout=11,
     )
-
 
 class DreamAtlasPackTests(unittest.TestCase):
     def test_fixture_builds_cache_friendly_public_safe_atlas(self) -> None:
@@ -405,7 +402,6 @@ class DreamAtlasPackTests(unittest.TestCase):
             report["live_pilot"]["comparison"]["live_atlas"]["source_ref_validity_rate"],
             1.0,
         )
-
 
 if __name__ == "__main__":
     unittest.main()

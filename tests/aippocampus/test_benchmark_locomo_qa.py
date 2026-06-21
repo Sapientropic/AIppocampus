@@ -1,20 +1,15 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 from typing import Any
 from unittest.mock import patch
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-BENCHMARKS = REPO_ROOT / "benchmarks" / "aippocampus"
-for _path in (BENCHMARKS, REPO_ROOT / "tools" / "aippocampus" / "smoke"):
-    sys.path.insert(0, str(_path))
+from tests.aippocampus.import_path_helpers import import_benchmark_module
 
-import benchmark_locomo_qa as benchmark  # noqa: E402
-
+benchmark = import_benchmark_module("benchmark_locomo_qa")
 
 def write_fixture(path: Path) -> None:
     rows = [
@@ -65,7 +60,6 @@ def write_fixture(path: Path) -> None:
         }
     ]
     path.write_text(json.dumps(rows), encoding="utf-8")
-
 
 class LocomoQABenchmarkTests(unittest.TestCase):
     def test_missing_dataset_returns_answer_claim_boundary(self) -> None:
@@ -352,7 +346,6 @@ class LocomoQABenchmarkTests(unittest.TestCase):
         self.assertIn("absolute_path_leak", kinds)
         self.assertIn("raw_text_leak", kinds)
         self.assertIn("credential_like_string", kinds)
-
 
 if __name__ == "__main__":
     unittest.main()

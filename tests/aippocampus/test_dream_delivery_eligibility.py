@@ -2,19 +2,14 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.dream import delivery_policy  # noqa: E402
-from aippocampus_runtime.hooks import prompt as hook  # noqa: E402
-from aippocampus_runtime.recall import prompt_recall_context  # noqa: E402
+from aippocampus_runtime.dream import delivery_policy
+from aippocampus_runtime.hooks import prompt as hook
+from aippocampus_runtime.recall import prompt_recall_context
 
 
 class DreamDeliveryEligibilityTests(unittest.TestCase):
@@ -188,7 +183,6 @@ class DreamDeliveryEligibilityTests(unittest.TestCase):
         self.assertEqual(delivery["dream_hypothesis_limit"], 1)
         self.assertEqual(delivery["prefilter_reason"], "eligible_task_mode")
         self.assertIn(delivery["task_mode"], {"life_wide_reflection", "explicit_dream"})
-
 
 if __name__ == "__main__":
     unittest.main()

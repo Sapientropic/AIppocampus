@@ -5,14 +5,14 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
-import classifier_policy_guard
+from tests.aippocampus.import_path_helpers import import_doc_tool_module
 
+classifier_policy_guard = import_doc_tool_module("classifier_policy_guard")
 
 @contextmanager
 def docs_health_repo() -> Iterator[Path]:
     with tempfile.TemporaryDirectory() as tmp:
         yield Path(tmp)
-
 
 def write_origin_essays(repo: Path) -> None:
     docs = repo / "docs"
@@ -25,7 +25,6 @@ def write_origin_essays(repo: Path) -> None:
         "What else can life become, and can I still be myself after the change?",
         encoding="utf-8",
     )
-
 
 def write_development_status_pyproject(
     repo: Path,
@@ -45,7 +44,6 @@ def write_development_status_pyproject(
         ),
         encoding="utf-8",
     )
-
 
 def write_classifier_policy(repo: Path) -> None:
     path = repo / "docs" / "evidence" / "readiness" / "classifier-policy.md"
@@ -75,7 +73,6 @@ def write_classifier_policy(repo: Path) -> None:
         ),
         encoding="utf-8",
     )
-
 
 def write_classifier_release_checklist(repo: Path) -> None:
     path = repo / "docs" / "guides" / "setup" / "release-checklist.md"

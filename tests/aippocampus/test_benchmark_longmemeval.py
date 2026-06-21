@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from contextlib import contextmanager
@@ -9,16 +8,15 @@ from pathlib import Path
 from typing import Any, Iterator
 from unittest.mock import patch
 
+from tests.aippocampus.import_path_helpers import import_benchmark_module
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BENCHMARKS = REPO_ROOT / "benchmarks" / "aippocampus"
-for _path in (REPO_ROOT, BENCHMARKS, REPO_ROOT / "tools" / "aippocampus" / "smoke"):
-    if str(_path) not in sys.path:
-        sys.path.insert(0, str(_path))
 
-from benchmarks.aippocampus.shared import provider_execution_budget  # noqa: E402
+from benchmarks.aippocampus.shared import provider_execution_budget
 
-import benchmark_longmemeval as benchmark  # noqa: E402
-from source_evidence import standard_public  # noqa: E402
+benchmark = import_benchmark_module("benchmark_longmemeval")
+from source_evidence import standard_public
 
 
 def write_oracle_fixture(path: Path, *, question_count: int = 1) -> None:
@@ -56,7 +54,6 @@ def write_oracle_fixture(path: Path, *, question_count: int = 1) -> None:
         )
     path.write_text(json.dumps(fixture, ensure_ascii=False), encoding="utf-8")
 
-
 def write_context_visible_miss_fixture(path: Path) -> None:
     fixture = [
         {
@@ -84,7 +81,6 @@ def write_context_visible_miss_fixture(path: Path) -> None:
         }
     ]
     path.write_text(json.dumps(fixture, ensure_ascii=False), encoding="utf-8")
-
 
 def write_full_source_sidecar_fixture(path: Path) -> None:
     distractors = [
@@ -121,7 +117,6 @@ def write_full_source_sidecar_fixture(path: Path) -> None:
     ]
     path.write_text(json.dumps(fixture, ensure_ascii=False), encoding="utf-8")
 
-
 @contextmanager
 def patched_oracle_split(path: Path) -> Iterator[None]:
     split = benchmark.LONGMEMEVAL_SPLITS["longmemeval-v1-oracle"]
@@ -139,7 +134,6 @@ def patched_oracle_split(path: Path) -> Iterator[None]:
         yield
     finally:
         benchmark.LONGMEMEVAL_SPLITS["longmemeval-v1-oracle"] = original
-
 
 class LongMemEvalBenchmarkTests(unittest.TestCase):
     def test_provider_execution_budget_schema_requires_live_run_controls(self) -> None:
@@ -1653,7 +1647,6 @@ class LongMemEvalBenchmarkTests(unittest.TestCase):
         dumped = json.dumps(partial, ensure_ascii=False)
         self.assertNotIn("secret fixture answer marker", dumped)
         self.assertNotIn(str(path), dumped)
-
 
 if __name__ == "__main__":
     unittest.main()

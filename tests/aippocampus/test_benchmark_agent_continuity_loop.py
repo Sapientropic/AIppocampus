@@ -1,18 +1,11 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-BENCHMARKS = REPO_ROOT / "benchmarks" / "aippocampus"
-for _path in (SCRIPTS, BENCHMARKS):
-    sys.path.insert(0, str(_path))
+from tests.aippocampus.import_path_helpers import import_benchmark_module
 
-import benchmark_agent_continuity_loop as benchmark  # noqa: E402
-
+benchmark = import_benchmark_module("benchmark_agent_continuity_loop")
 
 class AgentContinuityLoopBenchmarkTests(unittest.TestCase):
     def test_public_safe_loop_composes_router_facade_aippo_and_budgets(self) -> None:
@@ -185,7 +178,6 @@ class AgentContinuityLoopBenchmarkTests(unittest.TestCase):
         self.assertTrue(report["quality_gate"]["holdout_no_tuning_leak_ok"])
         self.assertFalse(report["privacy_boundary"]["raw_private_text_serialized"])
         self.assertIn("live_host_behavior_lift", report["cannot_claim"])
-
 
 if __name__ == "__main__":
     unittest.main()

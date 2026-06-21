@@ -1,21 +1,16 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SMOKE = REPO_ROOT / "tools" / "aippocampus" / "smoke"
-if str(SMOKE) not in sys.path:
-    sys.path.insert(0, str(SMOKE))
+from tests.aippocampus.import_path_helpers import import_smoke_module
 
-import smoke_claude_code_history  # noqa: E402
-import smoke_claude_code_mcp_host  # noqa: E402
-import smoke_cross_agent_continuity  # noqa: E402
-
+smoke_claude_code_history = import_smoke_module("smoke_claude_code_history")
+smoke_claude_code_mcp_host = import_smoke_module("smoke_claude_code_mcp_host")
+smoke_cross_agent_continuity = import_smoke_module("smoke_cross_agent_continuity")
 
 class CrossAgentContinuitySmokeTests(unittest.TestCase):
     def test_synthetic_cross_agent_smoke_passes_without_private_paths(self) -> None:
@@ -659,7 +654,6 @@ class CrossAgentContinuitySmokeTests(unittest.TestCase):
         self.assertEqual(result["status"], "persistent_config_healthy")
         self.assertEqual(result["persistent_config_status"], "healthy")
         self.assertTrue(result["persistent_config_diagnostic"]["memory_health_listed"])
-
 
 if __name__ == "__main__":
     unittest.main()

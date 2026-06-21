@@ -3,18 +3,13 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import sys
 import tempfile
 import time
 import unittest
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.recall import ambient_cache as cache  # noqa: E402
-from aippocampus_runtime.recall import ambient_cache_compaction as compaction  # noqa: E402
+from aippocampus_runtime.recall import ambient_cache as cache
+from aippocampus_runtime.recall import ambient_cache_compaction as compaction
 
 
 class AmbientThreadCacheTests(unittest.TestCase):
@@ -560,7 +555,6 @@ class AmbientThreadCacheTests(unittest.TestCase):
         self.assertEqual(result["skipped"][0]["skip_reason"], "unsafe_dead_letter_update")
         self.assertEqual(entry["cards"][0]["card_id"], card_id)
         self.assertEqual(entry["cards"][0]["theme"], "still needed for review")
-
 
 if __name__ == "__main__":
     unittest.main()

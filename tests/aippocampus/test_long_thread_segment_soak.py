@@ -1,20 +1,17 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
+from tests.aippocampus.import_path_helpers import import_smoke_module
+
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = ROOT / "skills" / "aippocampus" / "scripts"
 SMOKE = ROOT / "tools" / "aippocampus" / "smoke"
-for _path in (SCRIPTS, SMOKE):
-    if str(_path) not in sys.path:
-        sys.path.insert(0, str(_path))
 
-import smoke_long_thread_segment_soak as soak  # noqa: E402
-
+soak = import_smoke_module("smoke_long_thread_segment_soak")
 
 class LongThreadSegmentSoakTests(unittest.TestCase):
     def test_soak_builds_real_segments_and_reports_quality_without_private_output(self) -> None:
@@ -86,7 +83,6 @@ class LongThreadSegmentSoakTests(unittest.TestCase):
             payload["quality_metrics"]["full_fanout_hit_rate"],
         )
         self.assertIn("budgeted_fanout_is_not_full_quality_claim", payload["cannot_claim"])
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,27 +1,24 @@
 import json
 import sqlite3
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = ROOT / "skills" / "aippocampus" / "scripts"
-if str(SCRIPTS) not in sys.path:
-    sys.path.insert(0, str(SCRIPTS))
 
-from aippocampus_runtime.recall import retrieval, score_fusion, segment_search  # noqa: E402
-from aippocampus_runtime.recall.before_commitment import (  # noqa: E402
+from aippocampus_runtime.recall import retrieval, score_fusion, segment_search
+from aippocampus_runtime.recall.before_commitment import (
     before_commitment_surface_map,
     build_before_commitment_fixture,
 )
-from aippocampus_runtime.recall.candidate_planning import plan_candidates  # noqa: E402
-from aippocampus_runtime.recall.outcome_feedback import (  # noqa: E402
+from aippocampus_runtime.recall.candidate_planning import plan_candidates
+from aippocampus_runtime.recall.outcome_feedback import (
     build_recall_outcome_event,
     recall_outcome_report,
     write_recall_outcome_event,
 )
-from aippocampus_runtime.recall.scoring_policy import (  # noqa: E402
+from aippocampus_runtime.recall.scoring_policy import (
     ACTIVE_RECALL_POLICY,
     PHASE_WEIGHT_POLICY,
     RAG_CHUNK_TEXT_POLICY,
@@ -29,7 +26,7 @@ from aippocampus_runtime.recall.scoring_policy import (  # noqa: E402
     RETRIEVAL_TEXT_POLICY,
     SEGMENT_MERGE_POLICY,
 )
-from aippocampus_runtime.recall.strategy_planner import select_recall_strategy  # noqa: E402
+from aippocampus_runtime.recall.strategy_planner import select_recall_strategy
 
 
 class RecallScoringPolicyTests(unittest.TestCase):
@@ -338,7 +335,6 @@ class RecallScoringPolicyTests(unittest.TestCase):
 
         self.assertEqual(silent["negative_control"]["decision"], "silent")
         self.assertIn("masked_or_blocked", silent["negative_control"]["reason_codes"])
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -2,16 +2,9 @@ from __future__ import annotations
 
 import copy
 import json
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-ROOT = REPO_ROOT / "skills" / "aippocampus"
-SCRIPTS = ROOT / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.coding import host_contract  # noqa: E402
+from aippocampus_runtime.coding import host_contract
 
 
 def source_ref(line: int = 10) -> dict[str, object]:
@@ -21,7 +14,6 @@ def source_ref(line: int = 10) -> dict[str, object]:
         "source_line": line,
         "timestamp": "2026-05-31T00:00:00Z",
     }
-
 
 def coding_ticket(
     case_id: str,
@@ -57,7 +49,6 @@ def coding_ticket(
         "preconditions": ["host confirms the source is not already visible"],
         "outcome_feedback_expected": ["accepted", "ignored", "dismissed", "corrected"],
     }
-
 
 class CodingTicketHostContractTests(unittest.TestCase):
     def test_host_decisions_cover_the_visibility_ladder(self) -> None:
@@ -244,7 +235,6 @@ class CodingTicketHostContractTests(unittest.TestCase):
         self.assertEqual(decision["host_action"], "no_action")
         self.assertEqual(decision["safe_degradation"], "no_host")
         self.assertFalse(decision["user_visible"])
-
 
 if __name__ == "__main__":
     unittest.main()

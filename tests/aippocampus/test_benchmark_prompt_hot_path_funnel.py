@@ -7,12 +7,12 @@ import sys
 import unittest
 from pathlib import Path
 
+from tests.aippocampus.import_path_helpers import import_benchmark_module
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BENCHMARKS = REPO_ROOT / "benchmarks" / "aippocampus"
-sys.path.insert(0, str(BENCHMARKS))
 
-import benchmark_prompt_hot_path_funnel as benchmark  # noqa: E402
-
+benchmark = import_benchmark_module("benchmark_prompt_hot_path_funnel")
 
 class PromptHotPathFunnelBenchmarkTests(unittest.TestCase):
     def test_script_runs_from_repo_root_without_pythonpath(self) -> None:
@@ -53,7 +53,6 @@ class PromptHotPathFunnelBenchmarkTests(unittest.TestCase):
         self.assertIn("source_reopen_promotion_rate", report["metrics"])
         self.assertEqual(report["metrics"]["false_evidence_count"], 0)
         self.assertIn("speed alone", " ".join(report["cannot_claim"]))
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,17 +1,13 @@
 from __future__ import annotations
 
-import sys
 import unittest
 from pathlib import Path
 
+from tests.aippocampus.import_path_helpers import import_smoke_module
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SMOKE = REPO_ROOT / "tools" / "aippocampus" / "smoke"
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SMOKE))
-sys.path.insert(0, str(SCRIPTS))
 
-import smoke_semantic_paraphrase_reuse as smoke  # noqa: E402
-
+smoke = import_smoke_module("smoke_semantic_paraphrase_reuse")
 
 class SemanticParaphraseReuseSmokeTests(unittest.TestCase):
     def test_smoke_tracks_exact_single_warm_repeated_and_forced_paths(self) -> None:
@@ -39,7 +35,6 @@ class SemanticParaphraseReuseSmokeTests(unittest.TestCase):
         self.assertTrue(rows["forced_live_calibration"]["semantic_reuse"]["semantic_cue_hit"])
         self.assertTrue(rows["forced_live_calibration"]["semantic_reuse"]["cold_model_call"])
         self.assertEqual(rows["forced_live_calibration"]["gate_calls"], 1)
-
 
 if __name__ == "__main__":
     unittest.main()

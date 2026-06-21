@@ -1,15 +1,12 @@
 from __future__ import annotations
 
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(REPO_ROOT / "tools" / "aippocampus" / "release"))
+from tests.aippocampus.import_path_helpers import import_release_tool_module
 
-import check_agent_discovery_release as release_check  # noqa: E402
-
+release_check = import_release_tool_module("check_agent_discovery_release")
 
 def write_minimal_repo(repo: Path, *, marker: str | None = None, version: str = "0.1.0") -> None:
     marker = marker if marker is not None else "<!-- mcp-name: io.github.Sapientropic/aippocampus -->"
@@ -123,7 +120,6 @@ def write_minimal_repo(repo: Path, *, marker: str | None = None, version: str = 
 """,
         encoding="utf-8",
     )
-
 
 class AgentDiscoveryReleaseCheckTests(unittest.TestCase):
     def test_offline_minimal_repo_passes_local_contract(self) -> None:
@@ -326,7 +322,6 @@ class AgentDiscoveryReleaseCheckTests(unittest.TestCase):
         self.assertEqual(calls, 1)
         self.assertEqual(result["wait"]["attempts"], 1)
         self.assertFalse(result["wait"]["timed_out"])
-
 
 if __name__ == "__main__":
     unittest.main()

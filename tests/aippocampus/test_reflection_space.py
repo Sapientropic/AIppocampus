@@ -1,21 +1,8 @@
 from __future__ import annotations
 
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-ROOT = REPO_ROOT / "skills" / "aippocampus"
-SCRIPTS = ROOT / "scripts"
-for _path in (
-    SCRIPTS,
-    REPO_ROOT / "benchmarks" / "aippocampus",
-    REPO_ROOT / "tools" / "aippocampus" / "smoke",
-    REPO_ROOT / "tools" / "aippocampus" / "docs",
-):
-    sys.path.insert(0, str(_path))
-
-from aippocampus_runtime.reflection import space as reflection  # noqa: E402
+from aippocampus_runtime.reflection import space as reflection
 
 
 class ReflectionSpaceTests(unittest.TestCase):
@@ -214,7 +201,6 @@ class ReflectionSpaceTests(unittest.TestCase):
         self.assertEqual(payload["foreground_action"]["id"], "run_reflection_fixture_smoke")
         self.assertNotIn("agent_next_action", payload)
         self.assertEqual(payload["safe_next_actions"], [])
-
 
 if __name__ == "__main__":
     unittest.main()

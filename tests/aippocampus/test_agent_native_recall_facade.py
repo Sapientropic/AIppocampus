@@ -1,15 +1,9 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.recall import agent_facade_contract as facade  # noqa: E402
+from aippocampus_runtime.recall import agent_facade_contract as facade
 
 
 class AgentNativeRecallFacadeTests(unittest.TestCase):
@@ -141,7 +135,6 @@ class AgentNativeRecallFacadeTests(unittest.TestCase):
         )
         self.assertNotIn("source_handles", encoded)
         self.assertNotIn("PRIVATE_SOURCE_SENTINEL", encoded)
-
 
 if __name__ == "__main__":
     unittest.main()

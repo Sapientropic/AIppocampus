@@ -1,21 +1,13 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 from typing import Any
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-ROOT = REPO_ROOT / "skills" / "aippocampus"
-SCRIPTS = ROOT / "scripts"
-TESTS = Path(__file__).resolve().parent
-sys.path.insert(0, str(TESTS))
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.subconscious import agent, job_circuits, runtime  # noqa: E402
-from redaction_fixtures import (  # noqa: E402
+from aippocampus_runtime.subconscious import agent, job_circuits, runtime
+from tests.aippocampus.redaction_fixtures import (
     FAKE_TEST_ESCAPED_WINDOWS_LOCAL_PATH_MARKER,
     FAKE_TEST_OPENAI_API_KEY,
     FAKE_TEST_SECRET_VALUE,
@@ -660,7 +652,6 @@ class SubconsciousAgentTests(unittest.TestCase):
         self.assertNotIn(FAKE_TEST_ESCAPED_WINDOWS_LOCAL_PATH_MARKER, second_call)
         self.assertIn("<redacted:api-key>", second_call)
         self.assertIn("<redacted:local-path>", second_call)
-
 
 if __name__ == "__main__":
     unittest.main()

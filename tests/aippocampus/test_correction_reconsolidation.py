@@ -1,21 +1,13 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-ROOT = REPO_ROOT / "skills" / "aippocampus"
-SCRIPTS = ROOT / "scripts"
-TESTS = Path(__file__).resolve().parent
-sys.path.insert(0, str(TESTS))
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.reflection import host_capture  # noqa: E402
-from aippocampus_runtime.reflection import reconsolidation as corr  # noqa: E402
-from redaction_fixtures import (  # noqa: E402
+from aippocampus_runtime.reflection import host_capture
+from aippocampus_runtime.reflection import reconsolidation as corr
+from tests.aippocampus.redaction_fixtures import (
     FAKE_TEST_BEARER_TOKEN,
     FAKE_TEST_ESCAPED_WINDOWS_LOCAL_PATH_MARKER,
     FAKE_TEST_SECRET_VALUE,
@@ -31,7 +23,6 @@ def source_ref(line: int = 10) -> dict[str, object]:
         "timestamp": "2026-05-30T00:00:00Z",
     }
 
-
 def activation_for(status: str) -> dict[str, object]:
     return corr.build_activation_event(
         event_id=f"act_{status}",
@@ -43,7 +34,6 @@ def activation_for(status: str) -> dict[str, object]:
         target_type="route",
         provisional_importance="active_task",
     )
-
 
 def outcome_for(status: str, *, activation_id: str | None = None) -> dict[str, object]:
     signal = {
@@ -67,7 +57,6 @@ def outcome_for(status: str, *, activation_id: str | None = None) -> dict[str, o
         changed_files=["docs/research/correction-reconsolidation.md"],
         verification_evidence=[{"kind": "test", "status": "passed", "summary": "fixture passed"}],
     )
-
 
 class CorrectionReconsolidationTests(unittest.TestCase):
     def test_activation_event_is_source_backed_and_privacy_scanned(self) -> None:
@@ -463,7 +452,6 @@ class CorrectionReconsolidationTests(unittest.TestCase):
         self.assertEqual(expected_red["events"][0]["activation_status"], "review_only_expected_red")
         self.assertFalse(missing_source["created"])
         self.assertEqual(missing_source["reason"], "missing_source_refs")
-
 
 if __name__ == "__main__":
     unittest.main()

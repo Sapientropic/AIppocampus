@@ -1,18 +1,13 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import threading
 import time
 import unittest
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.recall import active_recall_lock as locks  # noqa: E402
+from aippocampus_runtime.recall import active_recall_lock as locks
 
 
 class ActiveRecallLockTests(unittest.TestCase):
@@ -402,7 +397,6 @@ class ActiveRecallLockTests(unittest.TestCase):
         self.assertEqual(stale["state"], "superseded")
         self.assertEqual(stale["errors"][0]["code"], "lock_generation_superseded")
         self.assertTrue(current["ok"])
-
 
 if __name__ == "__main__":
     unittest.main()

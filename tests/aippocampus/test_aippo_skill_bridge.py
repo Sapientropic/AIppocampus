@@ -1,19 +1,16 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
 
-from aippocampus_runtime.aippo import skill_bridge, skill_observed_use  # noqa: E402
+from aippocampus_runtime.aippo import skill_bridge, skill_observed_use
 from aippocampus_runtime.recall import (
-    agent_continuity_cli_support,  # noqa: E402
-    feedback_events,  # noqa: E402
+    agent_continuity_cli_support,
+    feedback_events,
 )
 
 
@@ -361,7 +358,6 @@ class AIppoSkillBridgeTests(unittest.TestCase):
 
         self.assertEqual(report["metrics"]["trace_backed_observed_use_count"], 0)
         self.assertFalse(report["metrics"]["usefulness_gate_ok"])
-
 
 if __name__ == "__main__":
     unittest.main()

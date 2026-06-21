@@ -1,17 +1,12 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.source.operation_claim_gate import evaluate_operation_claim  # noqa: E402
-from aippocampus_runtime.source.operation_integrity import diagnose_clean_source  # noqa: E402
+from aippocampus_runtime.source.operation_claim_gate import evaluate_operation_claim
+from aippocampus_runtime.source.operation_integrity import diagnose_clean_source
 
 
 class OperationClaimGateTests(unittest.TestCase):
@@ -263,7 +258,6 @@ class OperationClaimGateTests(unittest.TestCase):
             return f"operation_{gate['support_level']}"
 
         self.assertEqual(host_ticket_wording(self.report()), "operation_candidate")
-
 
 if __name__ == "__main__":
     unittest.main()

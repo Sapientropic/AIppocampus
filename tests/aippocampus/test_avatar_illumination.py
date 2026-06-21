@@ -1,14 +1,8 @@
 from __future__ import annotations
 
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.navigation import avatar_illumination  # noqa: E402
+from aippocampus_runtime.navigation import avatar_illumination
 
 
 def fixture_card() -> dict[str, object]:
@@ -50,7 +44,6 @@ def fixture_card() -> dict[str, object]:
             "repo_commit": "abc123",
         },
     }
-
 
 class AvatarIlluminationTests(unittest.TestCase):
     def test_valid_card_produces_source_backed_avatar_state_and_compact_packet(self) -> None:
@@ -233,7 +226,6 @@ class AvatarIlluminationTests(unittest.TestCase):
         self.assertFalse(guidance["emitted"])
         self.assertEqual(guidance["reason"], "irrelevant_to_task")
         self.assertEqual(guidance["claim_permission"], "none")
-
 
 if __name__ == "__main__":
     unittest.main()

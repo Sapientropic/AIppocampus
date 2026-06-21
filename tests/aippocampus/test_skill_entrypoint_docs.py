@@ -6,7 +6,6 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ROOT = REPO_ROOT / "skills" / "aippocampus"
 
-
 class SkillEntrypointDocsTests(unittest.TestCase):
     def test_agent_entrypoints_frame_early_route_first_continuity(self) -> None:
         skill_text = (ROOT / "SKILL.md").read_text(encoding="utf-8")
@@ -95,7 +94,6 @@ class SkillEntrypointDocsTests(unittest.TestCase):
             self.assertIn(phrase, decoder_flat)
         self.assertLessEqual(decoder.count("| `"), 8)
         self.assertNotIn("full packet schema", decoder.lower())
-
 
 if __name__ == "__main__":
     unittest.main()

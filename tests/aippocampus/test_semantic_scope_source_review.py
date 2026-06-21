@@ -2,24 +2,13 @@ from __future__ import annotations
 
 import json
 import os
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-ROOT = REPO_ROOT / "skills" / "aippocampus"
-SCRIPTS = ROOT / "scripts"
-for _path in (
-    SCRIPTS,
-    REPO_ROOT / "benchmarks" / "aippocampus",
-    REPO_ROOT / "tools" / "aippocampus" / "smoke",
-    REPO_ROOT / "tools" / "aippocampus" / "docs",
-):
-    sys.path.insert(0, str(_path))
+from tests.aippocampus.import_path_helpers import import_smoke_module
 
-import smoke_semantic_scope_source_review as review  # noqa: E402
-
+review = import_smoke_module("smoke_semantic_scope_source_review")
 
 class SemanticScopeSourceReviewTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -825,7 +814,6 @@ class SemanticScopeSourceReviewTests(unittest.TestCase):
         self.assertEqual(result["status"], "public_shadow_missing_required_cases")
         self.assertEqual(result["claim_level"], "diagnostic_only")
         self.assertIn(False, result["public_shadow_requirements"].values())
-
 
 if __name__ == "__main__":
     unittest.main()

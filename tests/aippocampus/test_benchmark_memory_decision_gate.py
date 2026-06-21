@@ -1,25 +1,14 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from collections import Counter
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-ROOT = REPO_ROOT / "skills" / "aippocampus"
-SCRIPTS = ROOT / "scripts"
-for _path in (
-    SCRIPTS,
-    REPO_ROOT / "benchmarks" / "aippocampus",
-    REPO_ROOT / "tools" / "aippocampus" / "smoke",
-    REPO_ROOT / "tools" / "aippocampus" / "docs",
-):
-    sys.path.insert(0, str(_path))
+from tests.aippocampus.import_path_helpers import import_benchmark_module
 
-import benchmark_memory_decision_gate as benchmark  # noqa: E402
-
+benchmark = import_benchmark_module("benchmark_memory_decision_gate")
 
 class MemoryDecisionGateBenchmarkTests(unittest.TestCase):
     def test_summarize_results_counts_three_class_errors(self) -> None:
@@ -968,7 +957,6 @@ class MemoryDecisionGateBenchmarkTests(unittest.TestCase):
         self.assertEqual(sampling["method"], "first_n")
         self.assertFalse(sampling["population_scan_complete"])
         self.assertIn("seeded_stratified_population_sampling", payload["cannot_claim"])
-
 
 if __name__ == "__main__":
     unittest.main()

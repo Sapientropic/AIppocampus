@@ -7,6 +7,8 @@ import sys
 import unittest
 from pathlib import Path
 
+from tests.aippocampus.import_path_helpers import import_benchmark_module
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BENCHMARKS = REPO_ROOT / "benchmarks" / "aippocampus"
 EVIDENCE_MAP = REPO_ROOT / "docs" / "evidence" / "benchmark-evidence-map.md"
@@ -27,17 +29,14 @@ CONTINUOUS_MEMORY_ARMS_DOC = (
     / "memory-decision"
     / "continuous-memory-arms.md"
 )
-sys.path.insert(0, str(BENCHMARKS))
 
-import benchmark_continuous_memory_arms as benchmark  # noqa: E402
-
+benchmark = import_benchmark_module("benchmark_continuous_memory_arms")
 
 def slice_by_id(payload: dict, slice_id: str) -> dict:
     for readout in payload["preregistered_slices"]:
         if readout["slice_id"] == slice_id:
             return readout
     raise AssertionError(f"missing preregistered slice {slice_id}")
-
 
 class ContinuousMemoryArmsBenchmarkTests(unittest.TestCase):
     def test_common_specs_uses_typed_config_instead_of_wide_kwargs(self) -> None:
@@ -808,7 +807,6 @@ class ContinuousMemoryArmsBenchmarkTests(unittest.TestCase):
         file_payload = json.loads(output.read_text(encoding="utf-8"))
         self.assertEqual(stdout_payload["kind"], "aippocampus_continuous_memory_arms_benchmark")
         self.assertEqual(file_payload["metrics"], stdout_payload["metrics"])
-
 
 if __name__ == "__main__":
     unittest.main()

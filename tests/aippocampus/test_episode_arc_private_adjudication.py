@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from io import StringIO
@@ -10,16 +9,13 @@ from unittest.mock import patch
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-if str(SCRIPTS) not in sys.path:
-    sys.path.insert(0, str(SCRIPTS))
 
-from aippocampus_runtime.cli import facade  # noqa: E402
+from aippocampus_runtime.cli import facade
 from aippocampus_runtime.coding import (
-    episode_arc_private_adjudication as private_arcs,  # noqa: E402
+    episode_arc_private_adjudication as private_arcs,
 )
 
 PRIVATE_SENTINEL = "PRIVATE_EPISODE_ARC_TEXT_MUST_NOT_SURFACE"
-
 
 def write_jsonl(path: Path, rows: list[dict[str, object]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -27,7 +23,6 @@ def write_jsonl(path: Path, rows: list[dict[str, object]]) -> None:
         "\n".join(json.dumps(row, ensure_ascii=False) for row in rows) + "\n",
         encoding="utf-8",
     )
-
 
 def registry_entry(root: Path, thread_key: str, *, rows: list[dict[str, object]], events: list[dict[str, object]]) -> dict[str, object]:
     slug = thread_key.replace(":", "-")
@@ -44,7 +39,6 @@ def registry_entry(root: Path, thread_key: str, *, rows: list[dict[str, object]]
         },
     }
 
-
 def rejected_message(line: int, *, thread_key: str, text: str) -> dict[str, object]:
     return {
         "message_id": f"msg-{line}",
@@ -58,7 +52,6 @@ def rejected_message(line: int, *, thread_key: str, text: str) -> dict[str, obje
         "text": text,
         "thread_key": thread_key,
     }
-
 
 def behavior_event(
     line: int,
@@ -87,7 +80,6 @@ def behavior_event(
     if exit_code is not None:
         row["exit_code"] = exit_code
     return row
-
 
 class EpisodeArcPrivateAdjudicationTests(unittest.TestCase):
     def test_private_history_adjudication_reports_aggregate_without_private_material(self) -> None:
@@ -374,7 +366,6 @@ class EpisodeArcPrivateAdjudicationTests(unittest.TestCase):
         self.assertEqual(summary_payload["safe_next_actions"], [])
         self.assertNotIn("cannot_claim", summary_payload)
         self.assertIn("current_validity", summary_payload["claim_boundary"]["must_reopen_for"])
-
 
 if __name__ == "__main__":
     unittest.main()

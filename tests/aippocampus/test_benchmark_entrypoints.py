@@ -7,11 +7,10 @@ import sys
 import unittest
 from pathlib import Path
 
+from benchmarks.aippocampus.shared.benchmark_entrypoints import benchmark_entrypoint_manifest
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BENCHMARKS = REPO_ROOT / "benchmarks" / "aippocampus"
-sys.path.insert(0, str(BENCHMARKS))
-
-from shared.benchmark_entrypoints import benchmark_entrypoint_manifest  # noqa: E402
 
 
 def run_repo_python(*args: str) -> subprocess.CompletedProcess[str]:
@@ -23,7 +22,6 @@ def run_repo_python(*args: str) -> subprocess.CompletedProcess[str]:
         timeout=30,
         check=False,
     )
-
 
 def run_repo_python_without_provider_keys(*args: str) -> subprocess.CompletedProcess[str]:
     env = os.environ.copy()
@@ -39,7 +37,6 @@ def run_repo_python_without_provider_keys(*args: str) -> subprocess.CompletedPro
         check=False,
         env=env,
     )
-
 
 class BenchmarkEntrypointTests(unittest.TestCase):
     def test_benchmark_readme_starts_with_task_first_run_choices(self) -> None:
@@ -170,7 +167,6 @@ class BenchmarkEntrypointTests(unittest.TestCase):
         by_name = {row["script"]: row for row in payload["entrypoints"]}
         self.assertEqual(payload["kind"], "aippocampus_benchmark_entrypoint_manifest")
         self.assertEqual(by_name["benchmark_suite.py"]["entrypoint_class"], "heavy_local_eval")
-
 
 if __name__ == "__main__":
     unittest.main()

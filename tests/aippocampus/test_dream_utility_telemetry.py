@@ -1,22 +1,15 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-ROOT = REPO_ROOT / "skills" / "aippocampus"
-SCRIPTS = ROOT / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.dream import utility_telemetry as telemetry  # noqa: E402
+from aippocampus_runtime.dream import utility_telemetry as telemetry
 
 RAW_PRIVATE_PROMPT = "PRIVATE DREAM PROMPT TEXT SHOULD NOT LEAK"
 RAW_SOURCE_EXCERPT = "SECRET SOURCE EXCERPT SHOULD NOT LEAK"
 RAW_MODEL_PAYLOAD = "MODEL PAYLOAD SHOULD NOT LEAK"
-
 
 def retention_policy(
     *,
@@ -41,7 +34,6 @@ def retention_policy(
         },
         "aggregate": {"retention_pressure": 0.56},
     }
-
 
 class DreamUtilityTelemetryTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -205,7 +197,6 @@ class DreamUtilityTelemetryTests(unittest.TestCase):
         self.assertTrue(event["source_family"].startswith("custom:sha256:"))
         self.assertNotIn("candidate-kind", encoded)
         self.assertNotIn("private source family", encoded)
-
 
 if __name__ == "__main__":
     unittest.main()

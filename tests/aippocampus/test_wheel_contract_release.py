@@ -1,23 +1,22 @@
 from __future__ import annotations
 
 import json
-import sys
 import tomllib
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(REPO_ROOT / "tools" / "aippocampus" / "release"))
+from tests.aippocampus.import_path_helpers import import_release_tool_module
 
-import check_wheel_contract as wheel_contract  # noqa: E402
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+wheel_contract = import_release_tool_module("check_wheel_contract")
 
 PYPROJECT = REPO_ROOT / "pyproject.toml"
 RELEASE_CHECKLIST = REPO_ROOT / "docs" / "guides" / "setup" / "release-checklist.md"
 PUBLISH_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "publish-agent-discovery.yml"
 CI_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "aippocampus-ci.yml"
-
 
 class WheelContractReleaseTests(unittest.TestCase):
     def test_public_import_matrix_covers_documented_runtime_owners(self) -> None:
@@ -152,7 +151,6 @@ class WheelContractReleaseTests(unittest.TestCase):
             self.assertIn("tools/aippocampus/release/check_wheel_contract.py", text)
         self.assertIn("--wheel dist/*.whl --json", publish_workflow)
         self.assertIn("--wheel dist/*.whl --json", ci_workflow)
-
 
 if __name__ == "__main__":
     unittest.main()

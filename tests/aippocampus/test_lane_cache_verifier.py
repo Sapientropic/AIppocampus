@@ -1,14 +1,8 @@
 from __future__ import annotations
 
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.recall import lane_cache_verifier  # noqa: E402
+from aippocampus_runtime.recall import lane_cache_verifier
 
 
 class LaneCacheVerifierTests(unittest.TestCase):
@@ -183,7 +177,6 @@ class LaneCacheVerifierTests(unittest.TestCase):
         self.assertEqual(report["metrics"]["masked_source_resurrection_count"], 0)
         self.assertEqual(report["metrics"]["source_backed_claim_without_reopen"], 0)
         self.assertEqual(report["metrics"]["stale_as_current_count"], 0)
-
 
 if __name__ == "__main__":
     unittest.main()

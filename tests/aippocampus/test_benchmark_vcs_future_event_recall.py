@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
+from tests.aippocampus.import_path_helpers import import_benchmark_module
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
-BENCHMARKS = REPO_ROOT / "benchmarks" / "aippocampus"
 ROLLOUT_DATASET = (
     REPO_ROOT
     / "benchmark_corpus"
@@ -20,10 +20,8 @@ ROLLOUT_V2_DATASET = (
     / "public_longitudinal_users"
     / "rollout_behavior_events_v2.json"
 )
-sys.path.insert(0, str(BENCHMARKS))
 
-import benchmark_vcs_future_event_recall as benchmark  # noqa: E402
-
+benchmark = import_benchmark_module("benchmark_vcs_future_event_recall")
 
 class VcsFutureEventRecallBenchmarkTests(unittest.TestCase):
     def test_checked_in_dataset_has_hard_future_events_and_negatives(self) -> None:
@@ -936,7 +934,6 @@ class VcsFutureEventRecallBenchmarkTests(unittest.TestCase):
             refactor_passed["route_actionability"]["reason"],
             "successful_current_event",
         )
-
 
 if __name__ == "__main__":
     unittest.main()

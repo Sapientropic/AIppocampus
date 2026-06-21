@@ -9,18 +9,17 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
 
-from aippocampus_runtime.mcp import server as mcp  # noqa: E402
-from aippocampus_runtime.recall import (  # noqa: E402
+from aippocampus_runtime.mcp import server as mcp
+from aippocampus_runtime.recall import (
     active_recall,
     ambient_cards,
     prompt_context_render,
 )
-from aippocampus_runtime.recall.continuity_domain_producer import (  # noqa: E402
+from aippocampus_runtime.recall.continuity_domain_producer import (
     propose_continuity_domain_events_from_registry,
 )
-from aippocampus_runtime.recall.continuity_domains import (  # noqa: E402
+from aippocampus_runtime.recall.continuity_domains import (
     ACTION_DIRECTION_ONLY,
     ACTION_IGNORE_OR_BLOCKED,
     DERIVED_ONLY_STATUS,
@@ -84,7 +83,6 @@ def _write_clean_source(clean: Path) -> None:
                 + "\n"
             )
 
-
 def _write_registry_clean_source_fixture(root: Path) -> tuple[Path, Path]:
     registry_dir = root / "registry"
     clean = registry_dir / "threads" / "little-thread" / "clean-source"
@@ -133,7 +131,6 @@ def _write_registry_clean_source_fixture(root: Path) -> tuple[Path, Path]:
     )
     return registry_dir, clean
 
-
 def _domain_events() -> list[dict]:
     return [
         {
@@ -178,7 +175,6 @@ def _domain_events() -> list[dict]:
             "ordered_source_refs": [{"message_id": "msg-a"}, {"message_id": "msg-b"}],
         },
     ]
-
 
 class ContinuityDomainTests(unittest.TestCase):
     def test_materializer_keeps_source_trail_and_rejects_unresolved_refs(self) -> None:
@@ -1601,7 +1597,6 @@ class ContinuityDomainTests(unittest.TestCase):
         self.assertIn("glyph_is_fact", first["cannot_claim"])
         self.assertNotEqual(first["glyph_id"], second["glyph_id"])
         self.assertEqual(blocked["action_grammar"], ACTION_IGNORE_OR_BLOCKED)
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -5,7 +5,6 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
-
 class CodeqlWorkflowTests(unittest.TestCase):
     def test_python_codeql_pr_filter_keeps_runtime_paths_scanned(self) -> None:
         workflow = (REPO_ROOT / ".github" / "workflows" / "codeql.yml").read_text(

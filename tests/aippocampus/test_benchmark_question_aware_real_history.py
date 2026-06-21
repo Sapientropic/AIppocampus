@@ -1,25 +1,16 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 from typing import Any
 
+from tests.aippocampus.import_path_helpers import import_benchmark_module
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
-ROOT = REPO_ROOT / "skills" / "aippocampus"
-SCRIPTS = ROOT / "scripts"
-for _path in (
-    SCRIPTS,
-    REPO_ROOT / "benchmarks" / "aippocampus",
-    REPO_ROOT / "tools" / "aippocampus" / "smoke",
-    REPO_ROOT / "tools" / "aippocampus" / "docs",
-):
-    sys.path.insert(0, str(_path))
 
-import benchmark_question_aware_real_history as benchmark  # noqa: E402
-
+benchmark = import_benchmark_module("benchmark_question_aware_real_history")
 
 def source_ref(suffix: str) -> dict[str, Any]:
     return {
@@ -28,7 +19,6 @@ def source_ref(suffix: str) -> dict[str, Any]:
         "turn_id": f"turn-private-{suffix}",
         "source_line": int(suffix) * 10,
     }
-
 
 def fixture_rows() -> list[dict[str, Any]]:
     ref_1 = source_ref("1")
@@ -106,7 +96,6 @@ def fixture_rows() -> list[dict[str, Any]]:
         },
     ]
 
-
 def answer_quality_review_rows() -> list[dict[str, Any]]:
     return [
         {
@@ -161,7 +150,6 @@ def answer_quality_review_rows() -> list[dict[str, Any]]:
             "extra_verification_steps": 1,
         },
     ]
-
 
 class QuestionAwareRealHistoryBenchmarkTests(unittest.TestCase):
     def test_benchmark_builds_sanitized_structural_pack(self) -> None:
@@ -700,7 +688,6 @@ class QuestionAwareRealHistoryBenchmarkTests(unittest.TestCase):
         self.assertFalse(payload["privacy"]["local_path_emitted"])
         self.assertNotIn("PUBLIC_SOURCE_TEXT_SENTINEL", rendered)
         self.assertNotIn(str(REPO_ROOT), rendered)
-
 
 if __name__ == "__main__":
     unittest.main()

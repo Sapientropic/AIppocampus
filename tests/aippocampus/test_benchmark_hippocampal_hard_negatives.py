@@ -7,13 +7,12 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from tests.aippocampus.import_path_helpers import import_benchmark_module
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BENCHMARKS = REPO_ROOT / "benchmarks" / "aippocampus"
-if str(BENCHMARKS) not in sys.path:
-    sys.path.insert(0, str(BENCHMARKS))
 
-import benchmark_hippocampal_hard_negatives as benchmark  # noqa: E402
-
+benchmark = import_benchmark_module("benchmark_hippocampal_hard_negatives")
 
 class HippocampalHardNegativeBenchmarkTests(unittest.TestCase):
     def _write_locomo_smoke_dataset(self, directory: Path) -> Path:
@@ -365,7 +364,6 @@ class HippocampalHardNegativeBenchmarkTests(unittest.TestCase):
         self.assertEqual(payload["config"]["cohort"], "public_currentness")
         self.assertEqual(payload["metrics"]["public_currentness_case_count"], 4)
         self.assertFalse(payload["metrics"]["full_p1_matrix_claimed"])
-
 
 if __name__ == "__main__":
     unittest.main()

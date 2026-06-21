@@ -4,7 +4,6 @@ import json
 import os
 import re
 import shlex
-import sys
 import unittest
 from io import StringIO
 from pathlib import Path
@@ -12,16 +11,15 @@ from unittest.mock import patch
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
 
-from aippocampus_runtime.config.registry import (  # noqa: E402
+from aippocampus_runtime.config.registry import (
     CONFIG_BY_NAME,
     CONFIG_STABILITY_BUCKETS,
     config_registry_names,
     config_report,
     config_summary_report,
 )
-from aippocampus_runtime.contracts import (  # noqa: E402
+from aippocampus_runtime.contracts import (
     PUBLIC_CONTRACT_SUBPACKAGES,
     PUBLIC_RUNTIME_ENVELOPE_FIELDS,
     PUBLIC_RUNTIME_STATUSES,
@@ -34,11 +32,10 @@ from aippocampus_runtime.contracts import (  # noqa: E402
     public_envelope,
     shell_quote,
 )
-from aippocampus_runtime.mcp.public_projection import compact_health_payload  # noqa: E402
-from aippocampus_runtime.registry import store as registry_store  # noqa: E402
+from aippocampus_runtime.mcp.public_projection import compact_health_payload
+from aippocampus_runtime.registry import store as registry_store
 
 ENV_PATTERN = re.compile(r"\bAIPPOCAMPUS_[A-Z0-9_]+\b")
-
 
 def aippocampus_env_names_from(paths: list[Path]) -> set[str]:
     names: set[str] = set()
@@ -51,7 +48,6 @@ def aippocampus_env_names_from(paths: list[Path]) -> set[str]:
             text = file.read_text(encoding="utf-8")
             names.update(name for name in ENV_PATTERN.findall(text) if not name.endswith("_"))
     return names
-
 
 class RuntimeContractsAndConfigRegistryTests(unittest.TestCase):
     def test_thread_registry_rejects_future_schema_instead_of_silent_downgrade(self) -> None:

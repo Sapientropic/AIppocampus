@@ -1,12 +1,10 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 MANIFEST = (
     REPO_ROOT
     / "tests"
@@ -15,9 +13,8 @@ MANIFEST = (
     / "public_safe_capability_manifest.json"
 )
 REGISTRY = REPO_ROOT / "tests" / "fixtures" / "knowledge_sources" / "public_safe_registry.json"
-sys.path.insert(0, str(SCRIPTS))
 
-from aippocampus_runtime.knowledge import capability_types  # noqa: E402
+from aippocampus_runtime.knowledge import capability_types
 
 EXPECTED_SKILL_TYPES = {
     "declarative_knowledge",
@@ -34,10 +31,8 @@ HIGH_RISK_CAPABILITY_ID = "knowledge.contract_review.risk_flag.high.v1"
 LOW_RISK_CAPABILITY_ID = "knowledge.claim_lookup.low.v1"
 TOOL_ID = "knowledge.claim_lookup"
 
-
 def load_json(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
-
 
 class KnowledgeCapabilityManifestTests(unittest.TestCase):
     def test_public_safe_manifest_validates_typed_sections(self) -> None:
@@ -175,7 +170,6 @@ class KnowledgeCapabilityManifestTests(unittest.TestCase):
         self.assertNotIn("IGNORE_PREVIOUS_INSTRUCTIONS", serialized)
         self.assertNotIn(str(REPO_ROOT), serialized)
         self.assertIn("Synthetic SecretCo", manifest_text)
-
 
 if __name__ == "__main__":
     unittest.main()

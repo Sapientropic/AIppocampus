@@ -1,18 +1,13 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import threading
 import unittest
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.registry import store as store  # noqa: E402
-from tests.aippocampus.timing_fixtures import host_timeout_sleep  # noqa: E402
+from aippocampus_runtime.registry import store as store
+from tests.aippocampus.timing_fixtures import host_timeout_sleep
 
 
 class RegistryStoreTests(unittest.TestCase):
@@ -103,7 +98,6 @@ class RegistryStoreTests(unittest.TestCase):
             )
             self.assertIn("thread-1", md_path.read_text(encoding="utf-8"))
             self.assertIn("thread-2", md_path.read_text(encoding="utf-8"))
-
 
 if __name__ == "__main__":
     unittest.main()

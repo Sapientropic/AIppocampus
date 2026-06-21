@@ -3,17 +3,12 @@ from __future__ import annotations
 import contextlib
 import io
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.recall import authority  # noqa: E402
-from aippocampus_runtime.source import agent_self_note_cli  # noqa: E402
+from aippocampus_runtime.recall import authority
+from aippocampus_runtime.source import agent_self_note_cli
 
 
 class AgentSelfNoteTests(unittest.TestCase):
@@ -312,7 +307,6 @@ class AgentSelfNoteTests(unittest.TestCase):
         )
         self.assertEqual(payload["choices"][2]["id"], "append_direction_only_note")
         self.assertIn("write", payload["choices"][2]["mutation_risk"])
-
 
 if __name__ == "__main__":
     unittest.main()

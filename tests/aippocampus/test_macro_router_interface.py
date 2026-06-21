@@ -1,22 +1,17 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.macro import orientation_producer  # noqa: E402
+from aippocampus_runtime.macro import orientation_producer
 from aippocampus_runtime.macro import state as macro_state
-from aippocampus_runtime.navigation import macro_field_atlas  # noqa: E402
-from aippocampus_runtime.navigation import macro_router_interface as interface  # noqa: E402
+from aippocampus_runtime.navigation import macro_field_atlas
+from aippocampus_runtime.navigation import macro_router_interface as interface
 from aippocampus_runtime.recall import (
-    agent_continuity,  # noqa: E402
-    macro_live_recall,  # noqa: E402
+    agent_continuity,
+    macro_live_recall,
 )
 
 
@@ -281,7 +276,6 @@ class MacroRouterInterfaceTests(unittest.TestCase):
         self.assertEqual(report["metrics"]["hot_path_macro_state_write_count"], 0)
         self.assertIn("macro_context_as_evidence", report["cannot_claim"])
         self.assertNotIn("PRIVATE", encoded)
-
 
 if __name__ == "__main__":
     unittest.main()

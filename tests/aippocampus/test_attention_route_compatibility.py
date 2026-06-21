@@ -1,20 +1,14 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.navigation import (  # noqa: E402
+from aippocampus_runtime.navigation import (
     attention_hot_router,
     attention_route_projection,
     route_compatibility_diagnostics,
 )
-from aippocampus_runtime.recall import feedback_events  # noqa: E402
+from aippocampus_runtime.recall import feedback_events
 
 
 def _route(route_id: str, *, semantic_score: float, source_id: str) -> dict[str, object]:
@@ -32,7 +26,6 @@ def _route(route_id: str, *, semantic_score: float, source_id: str) -> dict[str,
             }
         },
     }
-
 
 class AttentionRouteCompatibilityTests(unittest.TestCase):
     def test_local_global_obstruction_is_visible_and_demotes_route(self) -> None:
@@ -198,7 +191,6 @@ class AttentionRouteCompatibilityTests(unittest.TestCase):
             ]
             is False
         )
-
 
 if __name__ == "__main__":
     unittest.main()

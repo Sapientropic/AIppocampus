@@ -2,25 +2,13 @@ from __future__ import annotations
 
 import json
 import sqlite3
-import sys
 import tempfile
 import unittest
 from contextlib import closing
 from pathlib import Path
 from typing import Any
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-ROOT = REPO_ROOT / "skills" / "aippocampus"
-SCRIPTS = ROOT / "scripts"
-for _path in (
-    SCRIPTS,
-    REPO_ROOT / "benchmarks" / "aippocampus",
-    REPO_ROOT / "tools" / "aippocampus" / "smoke",
-    REPO_ROOT / "tools" / "aippocampus" / "docs",
-):
-    sys.path.insert(0, str(_path))
-
-from aippocampus_runtime.question import index_sidecar as sidecar  # noqa: E402
+from aippocampus_runtime.question import index_sidecar as sidecar
 
 
 class QuestionIndexSidecarTests(unittest.TestCase):
@@ -256,7 +244,6 @@ class QuestionIndexSidecarTests(unittest.TestCase):
         )
         self.assertEqual(result["sidecar_adoption"]["decision"], "blocked_candidate_coverage_gap")
         self.assertFalse(result["sidecar_adoption"]["default_prefilter_recommended"])
-
 
 if __name__ == "__main__":
     unittest.main()

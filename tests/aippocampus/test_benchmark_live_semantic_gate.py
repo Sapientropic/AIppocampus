@@ -2,25 +2,14 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-ROOT = REPO_ROOT / "skills" / "aippocampus"
-SCRIPTS = ROOT / "scripts"
-for _path in (
-    SCRIPTS,
-    REPO_ROOT / "benchmarks" / "aippocampus",
-    REPO_ROOT / "tools" / "aippocampus" / "smoke",
-    REPO_ROOT / "tools" / "aippocampus" / "docs",
-):
-    sys.path.insert(0, str(_path))
+from tests.aippocampus.import_path_helpers import import_benchmark_module
 
-import benchmark_live_semantic_gate as live_benchmark  # noqa: E402
-
+live_benchmark = import_benchmark_module("benchmark_live_semantic_gate")
 
 class LiveSemanticGateBenchmarkTests(unittest.TestCase):
     def _write_corpus(self, corpus: Path) -> None:
@@ -476,7 +465,6 @@ class LiveSemanticGateBenchmarkTests(unittest.TestCase):
         self.assertGreaterEqual(metrics["source_missing_or_budget_block_count"], 1)
         self.assertGreaterEqual(metrics["stale_conflict_privacy_high_risk_block_count"], 1)
         self.assertIn("model_only_semantic_output_as_evidence", payload["cannot_claim"])
-
 
 if __name__ == "__main__":
     unittest.main()

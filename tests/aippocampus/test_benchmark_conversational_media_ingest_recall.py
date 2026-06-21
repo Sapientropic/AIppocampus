@@ -1,20 +1,14 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
 from pathlib import Path
 
+from tests.aippocampus.import_path_helpers import import_benchmark_module
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-for _path in (
-    SCRIPTS,
-    REPO_ROOT / "benchmarks" / "aippocampus",
-):
-    sys.path.insert(0, str(_path))
 
-import benchmark_conversational_media_ingest_recall as benchmark  # noqa: E402
-
+benchmark = import_benchmark_module("benchmark_conversational_media_ingest_recall")
 
 class ConversationalMediaIngestRecallBenchmarkTests(unittest.TestCase):
     def test_fixture_declares_media_anchors_inside_conversation_sources(self) -> None:
@@ -189,7 +183,6 @@ class ConversationalMediaIngestRecallBenchmarkTests(unittest.TestCase):
         args = parser.parse_args(["--source-open-replay", "--json"])
 
         self.assertTrue(args.source_open_replay)
-
 
 if __name__ == "__main__":
     unittest.main()

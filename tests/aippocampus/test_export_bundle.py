@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 import zipfile
@@ -10,13 +9,9 @@ from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.artifacts import export_bundle as export_bundle  # noqa: E402
-from aippocampus_runtime.artifacts import export_bundle as packaged_export_bundle  # noqa: E402
-from aippocampus_runtime.contracts import executable_command_violations  # noqa: E402
+from aippocampus_runtime.artifacts import export_bundle as export_bundle
+from aippocampus_runtime.artifacts import export_bundle as packaged_export_bundle
+from aippocampus_runtime.contracts import executable_command_violations
 
 
 class ExportBundleTests(unittest.TestCase):
@@ -446,7 +441,6 @@ class ExportBundleTests(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "public-metadata.*--no-raw"):
             packaged_export_bundle.export_bundle(args)
-
 
 if __name__ == "__main__":
     unittest.main()

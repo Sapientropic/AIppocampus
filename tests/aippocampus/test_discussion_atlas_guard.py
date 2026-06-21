@@ -1,19 +1,16 @@
 from __future__ import annotations
 
-import sys
 import unittest
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-DOC_TOOLS = REPO_ROOT / "tools" / "aippocampus" / "docs"
-sys.path.insert(0, str(DOC_TOOLS))
+from tests.aippocampus.import_path_helpers import import_doc_tool_module
 
-from discussion_atlas_guard import (  # noqa: E402
-    discussion_atlas_drift_report,
-    discussion_atlas_navigation_pointer,
-    discussion_atlas_static_issues,
-    parse_discussion_atlas_rows,
-)
+REPO_ROOT = Path(__file__).resolve().parents[2]
+discussion_atlas_guard = import_doc_tool_module("discussion_atlas_guard")
+discussion_atlas_drift_report = discussion_atlas_guard.discussion_atlas_drift_report
+discussion_atlas_navigation_pointer = discussion_atlas_guard.discussion_atlas_navigation_pointer
+discussion_atlas_static_issues = discussion_atlas_guard.discussion_atlas_static_issues
+parse_discussion_atlas_rows = discussion_atlas_guard.parse_discussion_atlas_rows
 
 
 class DiscussionAtlasGuardTests(unittest.TestCase):
@@ -141,7 +138,6 @@ Last checked: 2026-06-16 through GitHub GraphQL; 2 discussions found.
         codes = {finding["code"] for finding in report["findings"]}
 
         self.assertIn("active_design_execution_gap", codes)
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -9,19 +9,8 @@ from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-ROOT = REPO_ROOT / "skills" / "aippocampus"
-SCRIPTS = ROOT / "scripts"
-for _path in (
-    SCRIPTS,
-    REPO_ROOT / "benchmarks" / "aippocampus",
-    REPO_ROOT / "tools" / "aippocampus" / "smoke",
-    REPO_ROOT / "tools" / "aippocampus" / "docs",
-):
-    sys.path.insert(0, str(_path))
-
-from aippocampus_runtime.source import semantic_scope_builder as builder  # noqa: E402
-from aippocampus_runtime.source import semantic_scope_labels as semantic  # noqa: E402
+from aippocampus_runtime.source import semantic_scope_builder as builder
+from aippocampus_runtime.source import semantic_scope_labels as semantic
 
 
 class SemanticScopeLabelsTests(unittest.TestCase):
@@ -484,7 +473,6 @@ class SemanticScopeLabelsTests(unittest.TestCase):
         rendered = stdout.getvalue()
         self.assertIn("semantic scope-label rows: 1", rendered)
         self.assertIn("targets: 1", rendered)
-
 
 if __name__ == "__main__":
     unittest.main()

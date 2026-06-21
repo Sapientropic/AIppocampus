@@ -1,23 +1,11 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-ROOT = REPO_ROOT / "skills" / "aippocampus"
-SCRIPTS = ROOT / "scripts"
-for _path in (
-    SCRIPTS,
-    REPO_ROOT / "benchmarks" / "aippocampus",
-    REPO_ROOT / "tools" / "aippocampus" / "smoke",
-    REPO_ROOT / "tools" / "aippocampus" / "docs",
-):
-    sys.path.insert(0, str(_path))
-
-from aippocampus_runtime.subconscious import staging_archive, staging_maintenance  # noqa: E402
+from aippocampus_runtime.subconscious import staging_archive, staging_maintenance
 
 
 def write_jsonl(path: Path, rows: list[dict[str, object]]) -> None:
@@ -25,7 +13,6 @@ def write_jsonl(path: Path, rows: list[dict[str, object]]) -> None:
         "".join(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n" for row in rows),
         encoding="utf-8",
     )
-
 
 class SubconsciousStagingMaintenanceTests(unittest.TestCase):
     def test_dry_run_report_classifies_active_review_and_archive_rows(self) -> None:
@@ -395,7 +382,6 @@ class SubconsciousStagingMaintenanceTests(unittest.TestCase):
                 for row in staging_maintenance.iter_jsonl_rows(edges_path)
             ]
             self.assertEqual(remaining_ids, ["sf_active"])
-
 
 if __name__ == "__main__":
     unittest.main()

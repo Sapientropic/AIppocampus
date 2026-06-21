@@ -9,16 +9,11 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-ROOT = REPO_ROOT / "skills" / "aippocampus"
-SCRIPTS = ROOT / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.sync import bundle as sync_bundle  # noqa: E402
-from aippocampus_runtime.sync import contract as sync_contract  # noqa: E402
-from aippocampus_runtime.sync.encrypted import bundle as encrypted_sync_bundle  # noqa: E402
-from aippocampus_runtime.sync.encrypted import keys as encrypted_sync_keys  # noqa: E402
-from aippocampus_runtime.sync.encrypted import migration as encrypted_sync_migration  # noqa: E402
+from aippocampus_runtime.sync import bundle as sync_bundle
+from aippocampus_runtime.sync import contract as sync_contract
+from aippocampus_runtime.sync.encrypted import bundle as encrypted_sync_bundle
+from aippocampus_runtime.sync.encrypted import keys as encrypted_sync_keys
+from aippocampus_runtime.sync.encrypted import migration as encrypted_sync_migration
 
 
 class EncryptedSyncBundleTests(unittest.TestCase):
@@ -1232,7 +1227,6 @@ raise SystemExit(0)
                 / "partial.age"
             ).is_file()
         )
-
 
 if __name__ == "__main__":
     unittest.main()

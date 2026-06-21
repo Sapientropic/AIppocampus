@@ -9,9 +9,8 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
 
-from aippocampus_runtime.ops import telepathy_handoff_store  # noqa: E402
+from aippocampus_runtime.ops import telepathy_handoff_store
 
 
 class TelepathyHandoffStoreTests(unittest.TestCase):
@@ -509,7 +508,6 @@ class TelepathyHandoffStoreTests(unittest.TestCase):
         self.assertEqual(deepened["card"]["scope_visibility"], "redacted_hash_only")
         self.assertNotIn("private-scope.jsonl", encoded)
         self.assertNotIn(private_scope, encoded)
-
 
 if __name__ == "__main__":
     unittest.main()

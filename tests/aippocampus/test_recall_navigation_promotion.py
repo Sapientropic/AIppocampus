@@ -7,12 +7,9 @@ import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 SMOKE = REPO_ROOT / "tools" / "aippocampus" / "smoke" / "smoke_recall_navigation_promotion.py"
-if str(SCRIPTS) not in sys.path:
-    sys.path.insert(0, str(SCRIPTS))
 
-from aippocampus_runtime.ops import recall_navigation_promotion  # noqa: E402
+from aippocampus_runtime.ops import recall_navigation_promotion
 
 
 class RecallNavigationPromotionTests(unittest.TestCase):
@@ -187,7 +184,6 @@ class RecallNavigationPromotionTests(unittest.TestCase):
         self.assertFalse(payload["default_adoption_allowed"])
         self.assertNotIn("cases", payload)
         self.assertNotIn("cases_by_id", payload)
-
 
 if __name__ == "__main__":
     unittest.main()

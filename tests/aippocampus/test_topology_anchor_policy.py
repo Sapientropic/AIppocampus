@@ -1,14 +1,8 @@
 from __future__ import annotations
 
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.ops.topology_anchor_policy import (  # noqa: E402
+from aippocampus_runtime.ops.topology_anchor_policy import (
     fixture_topology_anchor_report,
     topology_anchor_report,
 )
@@ -93,7 +87,6 @@ class TopologyAnchorPolicyTests(unittest.TestCase):
         self.assertFalse(node["protected_by_topology"])
         self.assertIn("external_payload_blocked", node["reasons"])
         self.assertNotIn("local_route_handle_only", node["reasons"])
-
 
 if __name__ == "__main__":
     unittest.main()

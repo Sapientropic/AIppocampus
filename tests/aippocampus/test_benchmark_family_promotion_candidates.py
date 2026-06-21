@@ -1,16 +1,14 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
 from pathlib import Path
 
+from tests.aippocampus.import_path_helpers import import_benchmark_module
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
-BENCHMARKS = REPO_ROOT / "benchmarks" / "aippocampus"
-sys.path.insert(0, str(BENCHMARKS))
 
-import benchmark_family_promotion_candidates as promotion  # noqa: E402
-
+promotion = import_benchmark_module("benchmark_family_promotion_candidates")
 
 class BenchmarkFamilyPromotionCandidateTests(unittest.TestCase):
     def test_decision_report_distinguishes_promoted_attention_from_remaining_candidates(
@@ -166,7 +164,6 @@ class BenchmarkFamilyPromotionCandidateTests(unittest.TestCase):
         self.assertNotIn(".aippocampus", dumped)
         self.assertNotIn("BEGIN", dumped)
         self.assertNotIn("api_key", dumped.lower())
-
 
 if __name__ == "__main__":
     unittest.main()

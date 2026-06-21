@@ -31,7 +31,6 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 JOBS_RUNNER = SCRIPTS / "aippocampus_runtime" / "subconscious" / "jobs.py"
 
-
 class SubconsciousJobsCoreTests(unittest.TestCase):
     def test_job_storage_writes_sanitized_private_staging_findings(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -494,8 +493,6 @@ class SubconsciousJobsCoreTests(unittest.TestCase):
         self.assertIn("心理地图", findings[0]["landmarks"])
         self.assertIn("位置细胞", findings[0]["route_cues"])
         self.assertEqual(findings[0]["target_thread_keys"], ["session:map"])
-
-
 
 if __name__ == "__main__":
     unittest.main()

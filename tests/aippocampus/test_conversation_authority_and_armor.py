@@ -1,15 +1,9 @@
 from __future__ import annotations
 
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.recall import authority  # noqa: E402
-from aippocampus_runtime.recall.foreground_armor import (  # noqa: E402
+from aippocampus_runtime.recall import authority
+from aippocampus_runtime.recall.foreground_armor import (
     compact_surface_armor_report,
     foreground_armor_budget,
 )
@@ -68,7 +62,6 @@ class ConversationAuthorityAndArmorTests(unittest.TestCase):
         self.assertFalse(armored["ok"], armored)
         self.assertEqual(armored["red_lines"]["cannot_claim_visible_in_compact"], 1)
         self.assertEqual(armored["red_lines"]["guidance_signal_deficit"], 1)
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,14 +1,8 @@
 from __future__ import annotations
 
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.privacy import LOCAL_PATH_REDACTION, redact_private_paths  # noqa: E402
+from aippocampus_runtime.privacy import LOCAL_PATH_REDACTION, redact_private_paths
 
 
 class PrivacyProjectionTests(unittest.TestCase):

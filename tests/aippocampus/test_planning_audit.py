@@ -15,7 +15,6 @@ planning_audit = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = planning_audit
 SPEC.loader.exec_module(planning_audit)
 
-
 def issue(
     number: int,
     title: str,
@@ -44,7 +43,6 @@ def issue(
         closed_by_pull_request_urls=closed_by_pull_request_urls,
     )
 
-
 def discussion(
     number: int,
     title: str,
@@ -65,10 +63,8 @@ def discussion(
         node_id=node_id,
     )
 
-
 def kinds(items: list[dict[str, object]]) -> set[str]:
     return {str(item["kind"]) for item in items}
-
 
 class PlanningAuditClosureEvidenceTests(unittest.TestCase):
     def report_for(self, *issues: Any) -> dict[str, Any]:
@@ -257,7 +253,6 @@ class PlanningAuditClosureEvidenceTests(unittest.TestCase):
         self.assertTrue(planning_audit.closure_has_evidence(enriched[0]))
         self.assertEqual(client.variables["owner"], "Sapientropic")
 
-
 def test_missing_milestone_high_confidence_issue_becomes_safe_repair() -> None:
     report = planning_audit.audit_issues(
         [
@@ -277,7 +272,6 @@ def test_missing_milestone_high_confidence_issue_becomes_safe_repair() -> None:
     assert report["safe_repairs"][0]["milestone"] == "Architecture Debt Slice 2026-06"
     assert report["safe_repairs"][0]["milestone_number"] == 5
 
-
 def test_existing_human_milestone_is_preserved() -> None:
     report = planning_audit.audit_issues(
         [
@@ -293,7 +287,6 @@ def test_existing_human_milestone_is_preserved() -> None:
 
     assert report["summary"]["open_without_milestone"] == 0
     assert report["safe_repairs"] == []
-
 
 def test_design_issue_without_source_docs_is_human_review_only() -> None:
     report = planning_audit.audit_issues(
@@ -311,7 +304,6 @@ def test_design_issue_without_source_docs_is_human_review_only() -> None:
     assert report["summary"]["missing_source_refs"] == 1
     assert report["safe_repairs"] == []
 
-
 def test_closed_child_checklist_exact_pattern_is_safe_repair() -> None:
     report = planning_audit.audit_issues(
         [
@@ -327,7 +319,6 @@ def test_closed_child_checklist_exact_pattern_is_safe_repair() -> None:
     assert "- [x] #10 Closed child" in str(repair["updated_body"])
     assert "- [ ] #12 Still open" in str(repair["updated_body"])
 
-
 def test_closed_issue_without_evidence_is_reported_not_reopened() -> None:
     report = planning_audit.audit_issues(
         [issue(44, "Close me somehow", state="CLOSED")],
@@ -337,7 +328,6 @@ def test_closed_issue_without_evidence_is_reported_not_reopened() -> None:
     assert "weak_closed_issue_evidence" in kinds(report["needs_human_review"])
     assert report["summary"]["suspicious_recent_closures"] == 1
     assert all(item["kind"] != "reopen_issue" for item in report["safe_repairs"])
-
 
 def test_github_rest_comment_count_is_not_treated_as_comment_body() -> None:
     parsed = planning_audit.parse_github_issue(
@@ -354,7 +344,6 @@ def test_github_rest_comment_count_is_not_treated_as_comment_body() -> None:
     assert parsed is not None
     assert parsed.comments == ()
 
-
 def test_docs_unresolved_hit_needs_owner_issue(tmp_path: Path) -> None:
     note = tmp_path / "docs" / "research" / "note.md"
     note.parent.mkdir(parents=True)
@@ -364,7 +353,6 @@ def test_docs_unresolved_hit_needs_owner_issue(tmp_path: Path) -> None:
 
     assert "docs_unowned_design_hit" in kinds(report["needs_human_review"])
     assert report["summary"]["docs_unowned_design_hits"] == 1
-
 
 def test_docs_unresolved_hit_with_owner_issue_is_not_reported(tmp_path: Path) -> None:
     note = tmp_path / "docs" / "research" / "note.md"
@@ -380,7 +368,6 @@ def test_docs_unresolved_hit_with_owner_issue_is_not_reported(tmp_path: Path) ->
     assert "docs_unowned_design_hit" not in kinds(report["needs_human_review"])
     assert report["summary"]["docs_unowned_design_hits"] == 0
 
-
 def test_docs_claim_boundary_is_not_reported_as_unresolved_work(tmp_path: Path) -> None:
     note = tmp_path / "docs" / "evidence" / "report.md"
     note.parent.mkdir(parents=True)
@@ -393,7 +380,6 @@ def test_docs_claim_boundary_is_not_reported_as_unresolved_work(tmp_path: Path) 
 
     assert "docs_unowned_design_hit" not in kinds(report["needs_human_review"])
     assert report["summary"]["docs_unowned_design_hits"] == 0
-
 
 def test_archived_state_doc_is_not_reported_as_current_unresolved_work(tmp_path: Path) -> None:
     note = tmp_path / "docs" / "planning" / "old-state.md"
@@ -408,7 +394,6 @@ def test_archived_state_doc_is_not_reported_as_current_unresolved_work(tmp_path:
 
     assert "docs_unowned_design_hit" not in kinds(report["needs_human_review"])
     assert report["summary"]["docs_unowned_design_hits"] == 0
-
 
 def test_discussion_without_issue_refs_or_docs_is_reported() -> None:
     report = planning_audit.audit_issues(
@@ -426,7 +411,6 @@ def test_discussion_without_issue_refs_or_docs_is_reported() -> None:
     assert "discussion_orphan" in kinds(report["needs_human_review"])
     assert report["summary"]["orphan_discussions"] == 1
 
-
 def test_discussion_with_issue_ref_is_not_orphan() -> None:
     report = planning_audit.audit_issues(
         [issue(381, "Prototype a local search-decision memory adapter")],
@@ -442,7 +426,6 @@ def test_discussion_with_issue_ref_is_not_orphan() -> None:
 
     assert "discussion_orphan" not in kinds(report["needs_human_review"])
     assert report["summary"]["orphan_discussions"] == 0
-
 
 def test_discussion_atlas_row_supplies_owner_route_without_body_mirror() -> None:
     atlas_rows = {
@@ -471,7 +454,6 @@ def test_discussion_atlas_row_supplies_owner_route_without_body_mirror() -> None
     assert report["owner_routes"][0]["execution"] == "#2489, #2490"
     assert "body" not in report["owner_routes"][0]
 
-
 def test_discussion_stale_doc_link_is_reported(tmp_path: Path) -> None:
     (tmp_path / "docs").mkdir()
 
@@ -493,7 +475,6 @@ def test_discussion_stale_doc_link_is_reported(tmp_path: Path) -> None:
     assert item["discussion"] == 76
     assert item["doc"] == "docs/guides/missing-public-api.md"
     assert report["summary"]["stale_discussion_links"] == 1
-
 
 def test_discussion_missing_map_generates_single_compact_comment() -> None:
     report = planning_audit.audit_issues(
@@ -527,7 +508,6 @@ def test_discussion_missing_map_generates_single_compact_comment() -> None:
     assert "#382 Improve agent-facing discoverability without hollow marketing" in repair["body"]
     assert "Follow-up work now lives" not in repair["body"]
 
-
 def test_discussion_existing_map_avoids_duplicate_comment() -> None:
     report = planning_audit.audit_issues(
         [
@@ -548,7 +528,6 @@ def test_discussion_existing_map_avoids_duplicate_comment() -> None:
 
     assert "discussion_missing_implementation_map" not in kinds(report["needs_human_review"])
     assert report["safe_repairs"] == []
-
 
 def test_planning_audit_cli_reports_discussion_fixture(tmp_path: Path) -> None:
     issues_file = tmp_path / "issues.json"

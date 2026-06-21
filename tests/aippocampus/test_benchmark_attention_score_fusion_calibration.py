@@ -2,18 +2,11 @@ from __future__ import annotations
 
 import copy
 import json
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-BENCHMARKS = REPO_ROOT / "benchmarks" / "aippocampus"
-for _path in (SCRIPTS, BENCHMARKS):
-    sys.path.insert(0, str(_path))
+from tests.aippocampus.import_path_helpers import import_benchmark_module
 
-import benchmark_attention_score_fusion_calibration as calibration  # noqa: E402
-
+calibration = import_benchmark_module("benchmark_attention_score_fusion_calibration")
 
 class AttentionScoreFusionCalibrationTests(unittest.TestCase):
     def test_report_exports_sanitized_features_and_improves_anti_nag_precision(self) -> None:
@@ -111,7 +104,6 @@ class AttentionScoreFusionCalibrationTests(unittest.TestCase):
         self.assertEqual(evaluated["red_lines"]["privacy_bypass_count"], 0)
         self.assertEqual(evaluated["red_lines"]["hard_mask_override_count"], 0)
         self.assertGreater(evaluated["metrics"]["masked_high_score_suppressed_count"], 0)
-
 
 if __name__ == "__main__":
     unittest.main()

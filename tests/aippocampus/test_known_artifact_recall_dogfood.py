@@ -8,9 +8,8 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SMOKE_TOOLS = REPO_ROOT / "tools" / "aippocampus" / "smoke"
-sys.path.insert(0, str(SMOKE_TOOLS))
 
-import known_artifact_recall_dogfood as dogfood  # noqa: E402
+import known_artifact_recall_dogfood as dogfood
 
 
 class KnownArtifactRecallDogfoodTests(unittest.TestCase):
@@ -72,7 +71,6 @@ class KnownArtifactRecallDogfoodTests(unittest.TestCase):
         payload = json.loads(proc.stdout)
         self.assertEqual(payload["failed_count"], 1)
         self.assertIn("registry_search_phrase_coverage", payload["failing_owners"])
-
 
 if __name__ == "__main__":
     unittest.main()

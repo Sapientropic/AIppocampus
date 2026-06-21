@@ -1,14 +1,9 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
-from pathlib import Path
 
-SCRIPTS = Path(__file__).resolve().parents[2] / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.aippo import clause_lifecycle as lifecycle  # noqa: E402
+from aippocampus_runtime.aippo import clause_lifecycle as lifecycle
 
 
 def clause(clause_id: str, *, status: str = "growing", kind: str = "workflow_order_clause") -> dict[str, object]:
@@ -23,7 +18,6 @@ def clause(clause_id: str, *, status: str = "growing", kind: str = "workflow_ord
         "lifecycle": {"status": status},
         "activation": {"foreground_eligible": status == "ripe"},
     }
-
 
 class AIppoClauseLifecycleTests(unittest.TestCase):
     def test_growing_clause_emits_probe_and_ripens_only_from_source_backed_outcome(self) -> None:
@@ -105,7 +99,6 @@ class AIppoClauseLifecycleTests(unittest.TestCase):
         self.assertTrue(report["ok"], encoded)
         self.assertNotIn("pytest tests/private", encoded)
         self.assertEqual(report["red_lines"]["raw_command_or_path_leak_count"], 0)
-
 
 if __name__ == "__main__":
     unittest.main()

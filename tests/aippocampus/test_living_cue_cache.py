@@ -1,16 +1,13 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-if str(SCRIPTS) not in sys.path:
-    sys.path.insert(0, str(SCRIPTS))
 
-from aippocampus_runtime.recall import living_cue_cache as cues  # noqa: E402
+from aippocampus_runtime.recall import living_cue_cache as cues
 
 
 class LivingCueCacheTests(unittest.TestCase):
@@ -161,7 +158,6 @@ class LivingCueCacheTests(unittest.TestCase):
         self.assertEqual(report["output_boundary"], "living_cue_cache_report_counts_only")
         self.assertNotIn("旧路线", encoded_packet + encoded_report)
         self.assertNotIn("old route", encoded_packet + encoded_report)
-
 
 if __name__ == "__main__":
     unittest.main()

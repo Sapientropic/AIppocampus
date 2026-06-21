@@ -1,16 +1,9 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-if str(SCRIPTS) not in sys.path:
-    sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.warm_ambient.prewarm_planner import (  # noqa: E402
+from aippocampus_runtime.warm_ambient.prewarm_planner import (
     cognitive_state_vector,
     fixture_prewarm_planner_report,
     prewarm_planner_report,
@@ -184,7 +177,6 @@ class PrewarmPlannerTests(unittest.TestCase):
         self.assertNotIn("source_reopen_path", row)
         self.assertGreaterEqual(report["metrics"]["false_preactivation_cost_proxy"], 1)
         self.assertIn("prepared_route_is_source_open_evidence", report["cannot_claim"])
-
 
 if __name__ == "__main__":
     unittest.main()

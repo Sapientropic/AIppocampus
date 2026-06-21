@@ -10,9 +10,8 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 FIXTURE = REPO_ROOT / "tests" / "fixtures" / "learning_loop" / "second_user_dogfood_cases.jsonl"
-sys.path.insert(0, str(SCRIPTS))
 
-from aippocampus_runtime.learning_loop.dogfood_cases import (  # noqa: E402
+from aippocampus_runtime.learning_loop.dogfood_cases import (
     build_sanitized_repro_package,
     build_second_user_dogfood_report,
     load_second_user_cases,
@@ -352,7 +351,6 @@ class LearningLoopSecondUserDogfoodTests(unittest.TestCase):
         self.assertIn("missing required repro fields", payload["error"]["malformed_error"])
         self.assertIn("expected_input_schema", payload)
         self.assertFalse(payload["privacy_boundary"]["raw_prompt_or_stdout_serialized"])
-
 
 if __name__ == "__main__":
     unittest.main()

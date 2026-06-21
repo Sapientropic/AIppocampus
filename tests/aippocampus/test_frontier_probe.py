@@ -1,19 +1,13 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.navigation import concept_graph, frontier_probe  # noqa: E402
+from aippocampus_runtime.navigation import concept_graph, frontier_probe
 
 _TEMP_DIRS: list[tempfile.TemporaryDirectory[str]] = []
-
 
 def source_ref(line: int, *, thread_key: str = "session:frontier") -> dict[str, object]:
     return {
@@ -22,7 +16,6 @@ def source_ref(line: int, *, thread_key: str = "session:frontier") -> dict[str, 
         "source_line": line,
         "timestamp": "2026-06-07T00:00:00Z",
     }
-
 
 def journey_row(
     journey_id: str = "journey-frontier",
@@ -47,7 +40,6 @@ def journey_row(
         ],
     }
 
-
 def make_graph(rows: list[tuple[str, str, str, float, str]]) -> Path:
     tmp = tempfile.TemporaryDirectory()
     _TEMP_DIRS.append(tmp)
@@ -70,7 +62,6 @@ def make_graph(rows: list[tuple[str, str, str, float, str]]) -> Path:
     con.commit()
     con.close()
     return path
-
 
 class FrontierProbeTests(unittest.TestCase):
     def test_frontier_probe_expands_to_adjacent_unexplored_concept(self) -> None:
@@ -199,7 +190,6 @@ class FrontierProbeTests(unittest.TestCase):
         )
 
         self.assertEqual(probes, [])
-
 
 if __name__ == "__main__":
     unittest.main()

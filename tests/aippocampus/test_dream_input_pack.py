@@ -3,23 +3,11 @@ from __future__ import annotations
 import contextlib
 import io
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-ROOT = REPO_ROOT / "skills" / "aippocampus"
-SCRIPTS = ROOT / "scripts"
-for _path in (
-    SCRIPTS,
-    REPO_ROOT / "benchmarks" / "aippocampus",
-    REPO_ROOT / "tools" / "aippocampus" / "smoke",
-    REPO_ROOT / "tools" / "aippocampus" / "docs",
-):
-    sys.path.insert(0, str(_path))
-
-from aippocampus_runtime.dream import input_pack, working_memory  # noqa: E402
+from aippocampus_runtime.dream import input_pack, working_memory
 
 
 def source_ref(thread_key: str, message_id: str, line: int) -> dict[str, object]:
@@ -29,7 +17,6 @@ def source_ref(thread_key: str, message_id: str, line: int) -> dict[str, object]
         "line": line,
         "project_label": "AIppocampus",
     }
-
 
 def question_link_row() -> dict[str, object]:
     refs = [source_ref("session:q-a", "msg-a", 10), source_ref("session:q-b", "msg-b", 20)]
@@ -64,7 +51,6 @@ def question_link_row() -> dict[str, object]:
         ],
     }
 
-
 def journey_row() -> dict[str, object]:
     refs = [
         source_ref("session:j-a", "msg-ja", 30),
@@ -83,7 +69,6 @@ def journey_row() -> dict[str, object]:
         "status": "traveling",
     }
 
-
 def ambient_residue_row() -> dict[str, object]:
     return {
         "kind": "aippocampus_ambient_residue",
@@ -97,7 +82,6 @@ def ambient_residue_row() -> dict[str, object]:
         "downstream_use": ["dream_task_seed"],
     }
 
-
 def concept_edge_row() -> dict[str, object]:
     return {
         "kind": "concept_edge",
@@ -108,7 +92,6 @@ def concept_edge_row() -> dict[str, object]:
         "why": "Compaction repeatedly raises continuity as a design pressure.",
         "source_refs": [source_ref("session:concept", "msg-concept", 60)],
     }
-
 
 def theme_candidate_row(*, source_backed: bool = True) -> dict[str, object]:
     row: dict[str, object] = {
@@ -123,7 +106,6 @@ def theme_candidate_row(*, source_backed: bool = True) -> dict[str, object]:
         row["source_ref_fingerprints"] = ["weak-theme-ref"]
     return row
 
-
 def correction_row() -> dict[str, object]:
     return {
         "kind": "correction_outcome_event",
@@ -134,7 +116,6 @@ def correction_row() -> dict[str, object]:
         "outcome_summary": "The later answer adopted the source-backed correction.",
         "source_refs": [source_ref("session:correction", "msg-correction", 80)],
     }
-
 
 def recall_miss_row(
     *,
@@ -159,7 +140,6 @@ def recall_miss_row(
             source_ref("session:recall-miss-b", "msg-rm-b", 140),
         ]
     return row
-
 
 def texture_row(
     signal_kind: str,
@@ -188,7 +168,6 @@ def texture_row(
         ],
     }
 
-
 def reflection_feedback_row() -> dict[str, object]:
     return {
         "kind": "aippocampus_reflection_adjustment",
@@ -198,7 +177,6 @@ def reflection_feedback_row() -> dict[str, object]:
         "reason": "A recall card changed the next question.",
         "source_refs": [source_ref("session:reflection", "msg-reflection", 90)],
     }
-
 
 def agency_ticket_row() -> dict[str, object]:
     return {
@@ -210,7 +188,6 @@ def agency_ticket_row() -> dict[str, object]:
         "source_refs": [source_ref("session:agency", "msg-agency", 100)],
     }
 
-
 def coding_decision_row() -> dict[str, object]:
     return {
         "kind": "aippocampus_coding_decision_candidate",
@@ -221,7 +198,6 @@ def coding_decision_row() -> dict[str, object]:
         "trigger_terms": ["source refs", "continuity"],
         "source_refs": [source_ref("session:coding", "msg-coding", 110)],
     }
-
 
 def line_topology_row(*, broken: bool = True) -> dict[str, object]:
     return {
@@ -263,7 +239,6 @@ def line_topology_row(*, broken: bool = True) -> dict[str, object]:
         "claim_permission": "no_claim_before_reopen",
         "ranking_weight_changes": False,
     }
-
 
 class DreamInputPackTests(unittest.TestCase):
     def test_cross_thread_pack_combines_question_journey_and_residue_seed(self) -> None:
@@ -598,7 +573,6 @@ class DreamInputPackTests(unittest.TestCase):
         self.assertIn("bridge_claims_source_refs", adjudicated["adjudication_result"]["failed_checks"])
         self.assertEqual(working_memory.adjudicated_dream_findings_to_working_memory([adjudicated]), [])
         self.assertEqual(working_memory.adjudicated_dream_findings_to_working_memory([forced]), [])
-
 
 if __name__ == "__main__":
     unittest.main()

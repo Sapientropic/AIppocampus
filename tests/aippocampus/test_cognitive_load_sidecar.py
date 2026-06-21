@@ -1,16 +1,13 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-if str(SCRIPTS) not in sys.path:
-    sys.path.insert(0, str(SCRIPTS))
 
-from aippocampus_runtime.recall import (  # noqa: E402
+from aippocampus_runtime.recall import (
     cognitive_load_private_calibration as private_calibration,
 )
 from aippocampus_runtime.recall import (
@@ -458,7 +455,6 @@ class CognitiveLoadSidecarTests(unittest.TestCase):
         readout = payload["issue_readouts"]["github_575"]
         self.assertEqual(readout["private_real_history_calibration"], "measured_no_signals")
         self.assertFalse(readout["closeout_eligible"])
-
 
 if __name__ == "__main__":
     unittest.main()

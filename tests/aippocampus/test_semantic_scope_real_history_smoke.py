@@ -11,20 +11,11 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-ROOT = REPO_ROOT / "skills" / "aippocampus"
-SCRIPTS = ROOT / "scripts"
-for _path in (
-    SCRIPTS,
-    REPO_ROOT / "benchmarks" / "aippocampus",
-    REPO_ROOT / "tools" / "aippocampus" / "smoke",
-    REPO_ROOT / "tools" / "aippocampus" / "docs",
-):
-    sys.path.insert(0, str(_path))
+from tests.aippocampus.import_path_helpers import import_smoke_module
 
-import smoke_semantic_scope_real_history as smoke  # noqa: E402
+smoke = import_smoke_module("smoke_semantic_scope_real_history")
 
-from aippocampus_runtime.navigation.project_timeline import (  # noqa: E402
+from aippocampus_runtime.navigation.project_timeline import (
     build_project_timeline,
     save_project_timeline,
 )
@@ -954,7 +945,6 @@ class SemanticScopeRealHistorySmokeTests(unittest.TestCase):
         self.assertEqual(diagnostic["claim_level"], "blocked_live_model")
         self.assertIn("fresh_live_model_run", diagnostic["cannot_claim"])
         self.assertFalse(strict["ok"])
-
 
 if __name__ == "__main__":
     unittest.main()

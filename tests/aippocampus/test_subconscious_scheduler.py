@@ -12,19 +12,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-ROOT = REPO_ROOT / "skills" / "aippocampus"
-SCRIPTS = ROOT / "scripts"
-for _path in (
-    SCRIPTS,
-    REPO_ROOT / "benchmarks" / "aippocampus",
-    REPO_ROOT / "tools" / "aippocampus" / "smoke",
-    REPO_ROOT / "tools" / "aippocampus" / "docs",
-):
-    sys.path.insert(0, str(_path))
-
-from aippocampus_runtime.subconscious import scheduler  # noqa: E402
-from tests.aippocampus.timing_fixtures import host_timeout_sleep  # noqa: E402
+from aippocampus_runtime.subconscious import scheduler
+from tests.aippocampus.timing_fixtures import host_timeout_sleep
 
 
 class SubconsciousSchedulerTests(unittest.TestCase):
@@ -776,7 +765,6 @@ class SubconsciousSchedulerTests(unittest.TestCase):
         encoded = json.dumps(payload, ensure_ascii=False)
         self.assertEqual(payload["projects"][0]["reason"], "missing_api_key")
         self.assertNotIn("PRIVATE_TOKEN", encoded)
-
 
 if __name__ == "__main__":
     unittest.main()

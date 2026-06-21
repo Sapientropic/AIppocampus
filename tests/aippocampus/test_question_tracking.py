@@ -1,25 +1,13 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 from typing import Any
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-ROOT = REPO_ROOT / "skills" / "aippocampus"
-SCRIPTS = ROOT / "scripts"
-for _path in (
-    SCRIPTS,
-    REPO_ROOT / "benchmarks" / "aippocampus",
-    REPO_ROOT / "tools" / "aippocampus" / "smoke",
-    REPO_ROOT / "tools" / "aippocampus" / "docs",
-):
-    sys.path.insert(0, str(_path))
-
-from aippocampus_runtime.question import tracking  # noqa: E402
-from aippocampus_runtime.question.confirmation import load_confirmation_decisions  # noqa: E402
+from aippocampus_runtime.question import tracking
+from aippocampus_runtime.question.confirmation import load_confirmation_decisions
 
 
 class QuestionTrackingTests(unittest.TestCase):
@@ -803,7 +791,6 @@ class QuestionTrackingTests(unittest.TestCase):
         self.assertGreater(policy["strong_threshold"], tracking.DEFAULT_STRONG_THRESHOLD)
         self.assertGreater(policy["separation_pressure"], 0)
         self.assertIn("intent_orientation_conflict", policy["reasons"])
-
 
 if __name__ == "__main__":
     unittest.main()

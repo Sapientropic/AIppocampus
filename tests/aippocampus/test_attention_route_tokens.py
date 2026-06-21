@@ -1,15 +1,9 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.navigation import attention_route_tokens as tokens  # noqa: E402
+from aippocampus_runtime.navigation import attention_route_tokens as tokens
 
 
 class AttentionRouteTokenTests(unittest.TestCase):
@@ -107,7 +101,6 @@ class AttentionRouteTokenTests(unittest.TestCase):
         self.assertNotIn("PRIVATE_UNKNOWN_SENTINEL", encoded)
         self.assertNotIn("C:\\", encoded)
         self.assertNotIn("ranking_weight_changes", encoded)
-
 
 if __name__ == "__main__":
     unittest.main()

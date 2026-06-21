@@ -1,19 +1,10 @@
 from __future__ import annotations
 
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-for _path in (
-    SCRIPTS,
-    REPO_ROOT / "benchmarks" / "aippocampus",
-):
-    sys.path.insert(0, str(_path))
+from tests.aippocampus.import_path_helpers import import_benchmark_module
 
-import benchmark_source_evidence_retrieval as benchmark  # noqa: E402
-
+benchmark = import_benchmark_module("benchmark_source_evidence_retrieval")
 
 class GraphExtractionBoundaryBenchmarkTests(unittest.TestCase):
     def test_graph_extraction_boundary_track_models_scale_and_invalid_structure(self) -> None:
@@ -49,7 +40,6 @@ class GraphExtractionBoundaryBenchmarkTests(unittest.TestCase):
         self.assertTrue(payload["privacy_boundary"]["graph_payload_emitted"])
         self.assertTrue(any("sentinel" in case for case in payload["cases"]))
         self.assertTrue(any("graph_sidecar_payload" in case for case in payload["cases"]))
-
 
 if __name__ == "__main__":
     unittest.main()

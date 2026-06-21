@@ -1,17 +1,12 @@
 from __future__ import annotations
 
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.recall import retrieval as retrieval_impl  # noqa: E402
-from aippocampus_runtime.registry import search as registry_search  # noqa: E402
+from aippocampus_runtime.recall import retrieval as retrieval_impl
+from aippocampus_runtime.registry import search as registry_search
 
 
 class RegistrySearchBudgetTests(unittest.TestCase):
@@ -130,7 +125,6 @@ class RegistrySearchBudgetTests(unittest.TestCase):
             kwargs["context_radius"],
             registry_search.REGISTRY_SEARCH_DEEP_BUDGET.context_radius,
         )
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -12,26 +12,20 @@ from pathlib import Path
 from unittest.mock import patch
 from urllib.parse import unquote
 
+from tests.aippocampus.import_path_helpers import import_smoke_module
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ROOT = REPO_ROOT / "skills" / "aippocampus"
-SCRIPTS = ROOT / "scripts"
-for _path in (
-    SCRIPTS,
-    REPO_ROOT / "benchmarks" / "aippocampus",
-    REPO_ROOT / "tools" / "aippocampus" / "smoke",
-    REPO_ROOT / "tools" / "aippocampus" / "docs",
-):
-    sys.path.insert(0, str(_path))
 
-import smoke_cross_device_sync  # noqa: E402
-import smoke_object_storage_sync  # noqa: E402
-import smoke_real_provider_encrypted_sync  # noqa: E402
+smoke_cross_device_sync = import_smoke_module("smoke_cross_device_sync")
+smoke_object_storage_sync = import_smoke_module("smoke_object_storage_sync")
+smoke_real_provider_encrypted_sync = import_smoke_module("smoke_real_provider_encrypted_sync")
 
-from aippocampus_runtime.sync import bundle as sync_bundle  # noqa: E402
-from aippocampus_runtime.sync import contract as sync_contract  # noqa: E402
-from aippocampus_runtime.sync.encrypted import bundle as encrypted_sync_bundle  # noqa: E402
-from aippocampus_runtime.sync.encrypted import migration as encrypted_sync_migration  # noqa: E402
-from aippocampus_runtime.sync.object_storage import cli as sync_object_storage  # noqa: E402
+from aippocampus_runtime.sync import bundle as sync_bundle
+from aippocampus_runtime.sync import contract as sync_contract
+from aippocampus_runtime.sync.encrypted import bundle as encrypted_sync_bundle
+from aippocampus_runtime.sync.encrypted import migration as encrypted_sync_migration
+from aippocampus_runtime.sync.object_storage import cli as sync_object_storage
 
 
 class RecordingObjectHandler(BaseHTTPRequestHandler):
@@ -95,13 +89,11 @@ class RecordingObjectHandler(BaseHTTPRequestHandler):
     def log_message(self, format: str, *args: object) -> None:
         return
 
-
 class RecordingObjectServer(ThreadingHTTPServer):
     def __init__(self, bucket_root: Path) -> None:
         super().__init__(("127.0.0.1", 0), RecordingObjectHandler)
         self.bucket_root = bucket_root
         self.requests: list[dict[str, object]] = []
-
 
 class ObjectStorageSyncTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -1143,7 +1135,6 @@ output.write_bytes(b"FAKEAGE\\n" + base64.b64encode(data))
         self.assertIn("PUT", result["observed"]["http_methods"])
         self.assertIn("GET", result["observed"]["http_methods"])
         self.assertFalse(result["observed"]["raw_rollout_synced_without_opt_in"])
-
 
 if __name__ == "__main__":
     unittest.main()

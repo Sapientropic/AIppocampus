@@ -11,10 +11,9 @@ from unittest.mock import patch
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
 
-from aippocampus_runtime.contracts import executable_command_violations  # noqa: E402
-from aippocampus_runtime.recall import (  # noqa: E402
+from aippocampus_runtime.contracts import executable_command_violations
+from aippocampus_runtime.recall import (
     agent_continuity,
     agent_continuity_cli_support,
     associative_path_fallback,
@@ -353,7 +352,6 @@ class AgentRecallApwFallbackTests(unittest.TestCase):
         self.assertIn("apw_no_route_candidate", fallback["reason_codes"])
         self.assertIn("source_free_candidates_will_evaporate", fallback["reason_codes"])
         self.assertEqual(payload["deepen_requests"], [])
-
 
 if __name__ == "__main__":
     unittest.main()

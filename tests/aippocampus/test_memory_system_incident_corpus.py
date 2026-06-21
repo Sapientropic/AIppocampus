@@ -5,7 +5,6 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 TAXONOMY = REPO_ROOT / "docs" / "research" / "memory-system-pain-taxonomy.md"
 
-
 def test_memory_system_taxonomy_records_rolling_public_incident_corpus() -> None:
     text = TAXONOMY.read_text(encoding="utf-8")
 

@@ -1,21 +1,18 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-if str(SCRIPTS) not in sys.path:
-    sys.path.insert(0, str(SCRIPTS))
 
-from aippocampus_runtime.warm_ambient.query_pattern_enrichment import (  # noqa: E402
+from aippocampus_runtime.warm_ambient.query_pattern_enrichment import (
     fixture_query_pattern_enrichment_report,
     query_pattern_enrichment_report,
 )
-from aippocampus_runtime.warm_ambient.query_pattern_routes import (  # noqa: E402
+from aippocampus_runtime.warm_ambient.query_pattern_routes import (
     load_query_pattern_routes,
     publish_query_pattern_routes,
     publish_registry_query_pattern_routes,
@@ -689,7 +686,6 @@ class QueryPatternEnrichmentTests(unittest.TestCase):
         self.assertEqual(packet["diagnostics"]["cache_hit_count"], 1)
         self.assertEqual(packet["diagnostics"]["privacy_suppressed_count"], 1)
         self.assertEqual(packet["candidate_refs"], [])
-
 
 if __name__ == "__main__":
     unittest.main()

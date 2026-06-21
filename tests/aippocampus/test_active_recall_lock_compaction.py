@@ -1,26 +1,20 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 from typing import Any
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.ops.activation_authority_audit import (  # noqa: E402
+from aippocampus_runtime.ops.activation_authority_audit import (
     apply_dead_letter_candidate_manifest,
 )
-from aippocampus_runtime.recall import active_recall_lock as locks  # noqa: E402
-from aippocampus_runtime.recall import active_recall_lock_compaction as compaction  # noqa: E402
+from aippocampus_runtime.recall import active_recall_lock as locks
+from aippocampus_runtime.recall import active_recall_lock_compaction as compaction
 
 
 def source_ref() -> dict[str, Any]:
     return {"thread_key": "session:active-lock", "message_id": "msg-1", "line": 12}
-
 
 def dead_letter_manifest_for_lock(
     lock: dict[str, Any],
@@ -42,7 +36,6 @@ def dead_letter_manifest_for_lock(
         [surface],
         applied_at="2026-06-05T04:00:00Z",
     )
-
 
 class ActiveRecallLockCompactionTests(unittest.TestCase):
     def test_dead_letter_manifest_compacts_matching_active_recall_lock_payload(self) -> None:
@@ -153,7 +146,6 @@ class ActiveRecallLockCompactionTests(unittest.TestCase):
             self.assertEqual(unsafe_report["metrics"]["payload_compacted_count"], 0)
             self.assertEqual(unsafe_report["metrics"]["unsafe_update_count"], 1)
             self.assertEqual(unsafe_report["skipped"][0]["skip_reason"], "unsafe_dead_letter_update")
-
 
 if __name__ == "__main__":
     unittest.main()

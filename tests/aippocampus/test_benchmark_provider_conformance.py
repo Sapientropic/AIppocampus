@@ -7,13 +7,12 @@ import sys
 import unittest
 from pathlib import Path
 
+from tests.aippocampus.import_path_helpers import import_benchmark_module
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BENCHMARKS = REPO_ROOT / "benchmarks" / "aippocampus"
-if str(BENCHMARKS) not in sys.path:
-    sys.path.insert(0, str(BENCHMARKS))
 
-import benchmark_provider_conformance as benchmark  # noqa: E402
-
+benchmark = import_benchmark_module("benchmark_provider_conformance")
 
 class ProviderConformanceBenchmarkTests(unittest.TestCase):
     def assert_fixture_blocker(self, fixture: dict, expected_code: str) -> None:
@@ -300,7 +299,6 @@ class ProviderConformanceBenchmarkTests(unittest.TestCase):
             payload["metrics"]["live_or_sanitized_replay_case_count"],
             6,
         )
-
 
 if __name__ == "__main__":
     unittest.main()

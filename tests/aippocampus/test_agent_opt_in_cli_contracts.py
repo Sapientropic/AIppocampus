@@ -20,7 +20,6 @@ from tests.aippocampus.frontstage_assertions import assert_semantic_human_output
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 
-
 class AgentOptInCliContractsTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
@@ -765,8 +764,6 @@ class AgentOptInCliContractsTests(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stderr)
         self.assertIn("--detail {compact,full}", proc.stdout)
         self.assertIn("--json", proc.stdout)
-
-
 
 if __name__ == "__main__":
     unittest.main()

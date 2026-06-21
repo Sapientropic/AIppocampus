@@ -1,19 +1,15 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-BENCHMARKS = REPO_ROOT / "benchmarks" / "aippocampus"
-SMOKE = REPO_ROOT / "tools" / "aippocampus" / "smoke"
-for _path in (SCRIPTS, BENCHMARKS, SMOKE):
-    sys.path.insert(0, str(_path))
+from tests.aippocampus.import_path_helpers import import_benchmark_module
 
-import benchmark_public_reliability_gauntlet as gauntlet  # noqa: E402
-from shared.benchmark_report_contract import benchmark_report_contract_lint  # noqa: E402
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+gauntlet = import_benchmark_module("benchmark_public_reliability_gauntlet")
+from shared.benchmark_report_contract import benchmark_report_contract_lint
 
 
 class PublicReliabilityGauntletTests(unittest.TestCase):
@@ -128,7 +124,6 @@ class PublicReliabilityGauntletTests(unittest.TestCase):
         self.assertGreaterEqual(lint["explicit_no_open_followup_route_count"], 1)
         self.assertGreaterEqual(lint["no_action_reason_count"], 1)
         self.assertGreaterEqual(lint["owner_route_count"], 1)
-
 
 if __name__ == "__main__":
     unittest.main()

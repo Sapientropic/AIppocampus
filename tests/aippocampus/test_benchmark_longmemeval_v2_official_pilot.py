@@ -1,23 +1,20 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
+from tests.aippocampus.import_path_helpers import import_benchmark_module
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BENCHMARKS = REPO_ROOT / "benchmarks" / "aippocampus"
-for _path in (REPO_ROOT, BENCHMARKS):
-    if str(_path) not in sys.path:
-        sys.path.insert(0, str(_path))
 
 from benchmarks.aippocampus.adapters import (
-    longmemeval_v2_aippocampus_adapter as adapter,  # noqa: E402
+    longmemeval_v2_aippocampus_adapter as adapter,
 )
 
-import benchmark_longmemeval_v2_official_pilot as decision  # noqa: E402
-
+decision = import_benchmark_module("benchmark_longmemeval_v2_official_pilot")
 
 class LongMemEvalV2OfficialPilotTests(unittest.TestCase):
     def test_help_names_decision_report_not_score_boundary(self) -> None:
@@ -211,7 +208,6 @@ class LongMemEvalV2OfficialPilotTests(unittest.TestCase):
         kinds = {error["kind"] for error in result["errors"]}
         self.assertIn("absolute_path_leak", kinds)
         self.assertIn("credential_like_string", kinds)
-
 
 if __name__ == "__main__":
     unittest.main()

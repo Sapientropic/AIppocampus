@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -9,10 +8,8 @@ from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = ROOT / "skills" / "aippocampus" / "scripts"
-if str(SCRIPTS) not in sys.path:
-    sys.path.insert(0, str(SCRIPTS))
 
-from aippocampus_runtime.recall import segment_search  # noqa: E402
+from aippocampus_runtime.recall import segment_search
 
 
 class SegmentSearchTests(unittest.TestCase):
@@ -1129,7 +1126,6 @@ class SegmentSearchTests(unittest.TestCase):
         self.assertEqual(deep["stop_reason"], "candidate_budget")
         self.assertEqual(deep["skipped_expansions"][0]["reason"], "candidate_budget")
         self.assertEqual(deep["completed_hops"], 0)
-
 
 if __name__ == "__main__":
     unittest.main()

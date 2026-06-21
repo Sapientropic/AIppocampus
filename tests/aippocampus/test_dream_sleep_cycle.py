@@ -2,26 +2,14 @@ from __future__ import annotations
 
 import json
 import os
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-ROOT = REPO_ROOT / "skills" / "aippocampus"
-SCRIPTS = ROOT / "scripts"
-for _path in (
-    SCRIPTS,
-    REPO_ROOT / "benchmarks" / "aippocampus",
-    REPO_ROOT / "tools" / "aippocampus" / "smoke",
-    REPO_ROOT / "tools" / "aippocampus" / "docs",
-):
-    sys.path.insert(0, str(_path))
-
-from aippocampus_runtime.dream import sleep_cycle as dream_sleep_cycle  # noqa: E402
-from aippocampus_runtime.dream import working_memory_publication  # noqa: E402
-from aippocampus_runtime.model.client import (  # noqa: E402
+from aippocampus_runtime.dream import sleep_cycle as dream_sleep_cycle
+from aippocampus_runtime.dream import working_memory_publication
+from aippocampus_runtime.model.client import (
     DEEPSEEK_PREFIX_CACHE_CONTRACT,
     ChatClientConfig,
 )
@@ -34,7 +22,6 @@ def source_ref(thread_key: str, message_id: str, line: int) -> dict[str, object]
         "line": line,
         "project_label": "AIppocampus",
     }
-
 
 def ready_pack() -> dict[str, object]:
     refs = [source_ref("session:a", "msg-a", 10), source_ref("session:b", "msg-b", 20)]
@@ -57,7 +44,6 @@ def ready_pack() -> dict[str, object]:
         "eligible_dream_functions": ["compensatory", "amplification"],
     }
 
-
 def config() -> ChatClientConfig:
     return ChatClientConfig(
         api_key="test",
@@ -66,7 +52,6 @@ def config() -> ChatClientConfig:
         cache_contract=DEEPSEEK_PREFIX_CACHE_CONTRACT,
         timeout=11,
     )
-
 
 def accepted_content(dream_function: str) -> str:
     if dream_function == "amplification":
@@ -95,7 +80,6 @@ def accepted_content(dream_function: str) -> str:
             ]
         }
     )
-
 
 class DreamSleepCycleTests(unittest.TestCase):
     def test_config_from_args_uses_deepseek_thinking_contract_by_default(self) -> None:
@@ -490,7 +474,6 @@ class DreamSleepCycleTests(unittest.TestCase):
         self.assertEqual(payload["counts"]["queue_items"], 1)
         self.assertEqual(payload["counts"]["skipped_duplicate"], 1)
         self.assertEqual(payload["counts"]["accepted"], 1)
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -6,16 +6,12 @@ import sys
 import unittest
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-for _path in (
-    SCRIPTS,
-    REPO_ROOT / "benchmarks" / "aippocampus",
-):
-    sys.path.insert(0, str(_path))
+from tests.aippocampus.import_path_helpers import import_benchmark_module
 
-import benchmark_knowledge_pollution as benchmark  # noqa: E402
-from aippocampus_runtime.knowledge import capability_contract  # noqa: E402
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+benchmark = import_benchmark_module("benchmark_knowledge_pollution")
+from aippocampus_runtime.knowledge import capability_contract
 
 
 class KnowledgePollutionBenchmarkTests(unittest.TestCase):
@@ -229,7 +225,6 @@ class KnowledgePollutionBenchmarkTests(unittest.TestCase):
         payload = json.loads(result.stdout)
         self.assertEqual(payload["metrics"]["governed_runtime_replay_case_count"], 8)
         self.assertEqual(payload["metrics"]["knowledge_runtime_caller_count"], 1)
-
 
 if __name__ == "__main__":
     unittest.main()

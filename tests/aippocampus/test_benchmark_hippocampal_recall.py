@@ -2,26 +2,22 @@ from __future__ import annotations
 
 import copy
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
+from tests.aippocampus.import_path_helpers import import_benchmark_module
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BENCHMARKS = REPO_ROOT / "benchmarks" / "aippocampus"
-for _path in (REPO_ROOT, BENCHMARKS):
-    if str(_path) not in sys.path:
-        sys.path.insert(0, str(_path))
 
-from benchmarks.aippocampus.builders import build_hippocampal_fixture as builder  # noqa: E402
-from benchmarks.aippocampus.families import hippocampal_fixture_schema as schema  # noqa: E402
+from benchmarks.aippocampus.builders import build_hippocampal_fixture as builder
+from benchmarks.aippocampus.families import hippocampal_fixture_schema as schema
 
-import benchmark_hippocampal_recall as benchmark  # noqa: E402
-
+benchmark = import_benchmark_module("benchmark_hippocampal_recall")
 
 def _by_case(rows: list[dict[str, object]]) -> dict[str, dict[str, object]]:
     return {str(row["case_id"]): row for row in rows}
-
 
 class HippocampalRecallP1BenchmarkTests(unittest.TestCase):
     def test_builder_produces_public_safe_diagnostic_seed(self) -> None:
@@ -471,7 +467,6 @@ class HippocampalRecallP1BenchmarkTests(unittest.TestCase):
         self.assertEqual(distractor_only["scent_layer"], "scent_distractor")
         self.assertEqual(underconfident["outcome"], "underconfident_scent")
         self.assertEqual(underconfident["calibration_category"], "underconfident_scent")
-
 
 if __name__ == "__main__":
     unittest.main()

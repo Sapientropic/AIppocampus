@@ -3,30 +3,22 @@ from __future__ import annotations
 import contextlib
 import io
 import json
-import sys
 import unittest
-from pathlib import Path
 from unittest import mock
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-TOOLS = REPO_ROOT / "tools" / "aippocampus"
-sys.path.insert(0, str(TOOLS))
+from tests.aippocampus.import_path_helpers import import_tool_root_module
 
-import test_plan  # noqa: E402
-
+test_plan = import_tool_root_module("test_plan")
 
 def commands_for(paths: list[str]) -> list[str]:
     payload = test_plan.build_test_plan(paths)
     return [str(command["command"]) for command in payload["commands"]]
 
-
 def py_command(args: str) -> str:
     return test_plan.py_command(args)
 
-
 def py_script(script: str, args: str = "") -> str:
     return test_plan.py_script(script, args)
-
 
 class ChangedSurfaceTestPlanTests(unittest.TestCase):
     def test_docs_only_change_recommends_docs_health_without_pr_reflex(self) -> None:
@@ -390,7 +382,6 @@ class ChangedSurfaceTestPlanTests(unittest.TestCase):
             changed = test_plan.collect_changed_files(base="origin/main")
 
         self.assertEqual(changed, ["tools/aippocampus/test_plan.py"])
-
 
 if __name__ == "__main__":
     unittest.main()

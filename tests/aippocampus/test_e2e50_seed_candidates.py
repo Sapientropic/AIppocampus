@@ -1,18 +1,13 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-TOOLS_SMOKE = REPO_ROOT / "tools" / "aippocampus" / "smoke"
-if str(TOOLS_SMOKE) not in sys.path:
-    sys.path.insert(0, str(TOOLS_SMOKE))
+from tests.aippocampus.import_path_helpers import import_smoke_module
 
-import smoke_e2e50_seed_candidates as scanner  # noqa: E402
-
+scanner = import_smoke_module("smoke_e2e50_seed_candidates")
 
 def write_jsonl(path: Path, rows: list[dict[str, object]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -20,7 +15,6 @@ def write_jsonl(path: Path, rows: list[dict[str, object]]) -> None:
         "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows),
         encoding="utf-8",
     )
-
 
 class E2E50SeedCandidateScannerTests(unittest.TestCase):
     def test_scanner_selects_long_compacted_thread_without_leaking_source_text(self) -> None:
@@ -242,7 +236,6 @@ class E2E50SeedCandidateScannerTests(unittest.TestCase):
         self.assertEqual(summary["retained_case_count"], 20)
         self.assertEqual(summary["annotation_category_counts"]["negative_control"], 1)
         self.assertEqual(summary["blocker_status"]["retained_case_shortfall"], 0)
-
 
 if __name__ == "__main__":
     unittest.main()

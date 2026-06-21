@@ -63,7 +63,6 @@ def write_index(path: Path, messages: list[tuple[int, str, str]]) -> None:
     finally:
         con.close()
 
-
 class PromptHotPathFunnelTests(unittest.TestCase):
     def test_thread_profile_hit_returns_stage_trace_without_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -301,7 +300,6 @@ class PromptHotPathFunnelTests(unittest.TestCase):
         self.assertEqual(result["decision"], "skip")
         self.assertEqual(alias_stage["status"], "skip")
         self.assertEqual(alias_stage["fallback_reason"], "prompt_lacks_factual_route_intent")
-
 
 if __name__ == "__main__":
     unittest.main()

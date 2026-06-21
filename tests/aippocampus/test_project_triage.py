@@ -12,10 +12,8 @@ project_triage = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = project_triage
 SPEC.loader.exec_module(project_triage)
 
-
 def issue(number: int, title: str, body: str = "", labels: tuple[str, ...] = ()):
     return project_triage.IssueContext(number=number, title=title, body=body, labels=labels)
-
 
 def test_github_token_prefers_explicit_project_token(monkeypatch) -> None:
     monkeypatch.setenv("AIPPOCAMPUS_PROJECTS_TOKEN", "project-token")
@@ -27,7 +25,6 @@ def test_github_token_prefers_explicit_project_token(monkeypatch) -> None:
     monkeypatch.setattr(project_triage.subprocess, "run", fail_if_called)
 
     assert project_triage.github_token() == "project-token"
-
 
 def test_github_token_uses_gh_cli_when_env_missing(monkeypatch) -> None:
     monkeypatch.delenv("AIPPOCAMPUS_PROJECTS_TOKEN", raising=False)
@@ -43,7 +40,6 @@ def test_github_token_uses_gh_cli_when_env_missing(monkeypatch) -> None:
 
     assert project_triage.github_token() == "local-token"
 
-
 def test_github_token_returns_none_when_gh_cli_unavailable(monkeypatch) -> None:
     monkeypatch.delenv("AIPPOCAMPUS_PROJECTS_TOKEN", raising=False)
     monkeypatch.delenv("GH_TOKEN", raising=False)
@@ -54,7 +50,6 @@ def test_github_token_returns_none_when_gh_cli_unavailable(monkeypatch) -> None:
     monkeypatch.setattr(project_triage.subprocess, "run", missing_gh)
 
     assert project_triage.github_token() is None
-
 
 def test_sync_child_issue_gets_full_ready_fields() -> None:
     result = project_triage.infer_triage(
@@ -73,7 +68,6 @@ def test_sync_child_issue_gets_full_ready_fields() -> None:
     assert result.priority == "P0"
     assert result.source.startswith("GitHub issue #36; parent issue #21")
 
-
 def test_life_wide_source_review_issue_is_p0_implementation() -> None:
     result = project_triage.infer_triage(
         issue(
@@ -89,7 +83,6 @@ def test_life_wide_source_review_issue_is_p0_implementation() -> None:
     assert result.stage == "Stage 2"
     assert result.priority == "P0"
 
-
 def test_ambiguous_issue_stays_in_inbox_without_false_track() -> None:
     result = project_triage.infer_triage(issue(99, "Something vague"))
 
@@ -100,7 +93,6 @@ def test_ambiguous_issue_stays_in_inbox_without_false_track() -> None:
     assert result.evidence == "None"
     assert result.priority == "P2"
     assert result.source == "GitHub issue #99"
-
 
 def test_source_ignores_backticked_command_bullets() -> None:
     result = project_triage.infer_triage(
@@ -120,7 +112,6 @@ def test_source_ignores_backticked_command_bullets() -> None:
     assert result.source == (
         "GitHub issue #53; docs/roadmap.md; tools/aippocampus/smoke/example.py"
     )
-
 
 def test_planned_updates_preserve_manual_values_but_promote_inbox() -> None:
     triage = project_triage.infer_triage(
@@ -144,7 +135,6 @@ def test_planned_updates_preserve_manual_values_but_promote_inbox() -> None:
     assert updates["Priority"] == "P0"
     assert updates["Source"].startswith("GitHub issue #38")
 
-
 def test_benchmark_parent_overrides_semantic_sidecar_life_wide_keywords() -> None:
     result = project_triage.infer_triage(
         issue(
@@ -164,7 +154,6 @@ def test_benchmark_parent_overrides_semantic_sidecar_life_wide_keywords() -> Non
         "docs/... or skills/aippocampus/references/... context before implementation",
     )
 
-
 def test_design_benchmark_issue_with_source_docs_has_no_warning() -> None:
     result = project_triage.infer_triage(
         issue(
@@ -177,13 +166,11 @@ def test_design_benchmark_issue_with_source_docs_has_no_warning() -> None:
     assert result.track == "Benchmarks & Research"
     assert result.warnings == ()
 
-
 def test_ordinary_ambiguous_issue_without_docs_does_not_warn() -> None:
     result = project_triage.infer_triage(issue(99, "Something vague"))
 
     assert result.status == "Inbox"
     assert result.warnings == ()
-
 
 def test_hard_negative_issue_does_not_treat_later_as_priority_later() -> None:
     result = project_triage.infer_triage(
@@ -199,7 +186,6 @@ def test_hard_negative_issue_does_not_treat_later_as_priority_later() -> None:
     assert result.kind == "Implementation"
     assert result.stage == "Research"
     assert result.priority == "P1"
-
 
 def test_topic_epoch_fragmentation_routes_to_life_wide_not_external_models() -> None:
     result = project_triage.infer_triage(
@@ -219,7 +205,6 @@ def test_topic_epoch_fragmentation_routes_to_life_wide_not_external_models() -> 
     assert result.priority == "P1"
     assert result.milestone == "Ambient Recall Warmth Pass"
 
-
 def test_hippocampal_child_issue_gets_benchmark_mvp_milestone() -> None:
     result = project_triage.infer_triage(
         issue(
@@ -230,7 +215,6 @@ def test_hippocampal_child_issue_gets_benchmark_mvp_milestone() -> None:
     )
 
     assert result.milestone == "Hippocampal Benchmark MVP"
-
 
 def test_external_benchmark_adapter_gets_evidence_hardening_milestone() -> None:
     result = project_triage.infer_triage(
@@ -243,7 +227,6 @@ def test_external_benchmark_adapter_gets_evidence_hardening_milestone() -> None:
 
     assert result.milestone == "Benchmark Evidence Hardening"
 
-
 def test_architecture_debt_issue_gets_architecture_slice_milestone() -> None:
     result = project_triage.infer_triage(
         issue(
@@ -255,7 +238,6 @@ def test_architecture_debt_issue_gets_architecture_slice_milestone() -> None:
     )
 
     assert result.milestone == "Architecture Debt Slice 2026-06"
-
 
 def test_public_readiness_issue_gets_distribution_milestone() -> None:
     result = project_triage.infer_triage(
@@ -272,7 +254,6 @@ def test_public_readiness_issue_gets_distribution_milestone() -> None:
     assert result.kind == "Docs"
     assert result.stage == "Stage 1"
     assert result.milestone == "Public Readiness & Distribution"
-
 
 def test_open_source_infrastructure_umbrella_stays_public_readiness_despite_benchmark_refs() -> None:
     result = project_triage.infer_triage(
@@ -291,7 +272,6 @@ def test_open_source_infrastructure_umbrella_stays_public_readiness_despite_benc
     assert result.stage == "Stage 1"
     assert result.milestone == "Public Readiness & Distribution"
 
-
 def test_project_planning_automation_gets_distribution_milestone() -> None:
     result = project_triage.infer_triage(
         issue(
@@ -307,7 +287,6 @@ def test_project_planning_automation_gets_distribution_milestone() -> None:
     assert result.kind == "Implementation"
     assert result.stage == "Stage 1"
     assert result.milestone == "Public Readiness & Distribution"
-
 
 def test_github_live_category_check_routes_as_public_readiness_smoke() -> None:
     result = project_triage.infer_triage(
@@ -325,7 +304,6 @@ def test_github_live_category_check_routes_as_public_readiness_smoke() -> None:
     assert result.stage == "Stage 1"
     assert result.milestone == "Public Readiness & Distribution"
 
-
 def test_public_schema_privacy_issue_stays_in_distribution_milestone() -> None:
     result = project_triage.infer_triage(
         issue(
@@ -338,7 +316,6 @@ def test_public_schema_privacy_issue_stays_in_distribution_milestone() -> None:
 
     assert result.track == "Public readiness"
     assert result.milestone == "Public Readiness & Distribution"
-
 
 def test_web_chat_import_issue_gets_public_distribution_milestone() -> None:
     result = project_triage.infer_triage(
@@ -356,7 +333,6 @@ def test_web_chat_import_issue_gets_public_distribution_milestone() -> None:
     assert result.stage == "Stage 1"
     assert result.milestone == "Public Readiness & Distribution"
 
-
 def test_cognitive_runtime_issue_gets_runtime_continuity_milestone() -> None:
     result = project_triage.infer_triage(
         issue(
@@ -372,7 +348,6 @@ def test_cognitive_runtime_issue_gets_runtime_continuity_milestone() -> None:
     assert result.kind == "Implementation"
     assert result.stage == "Stage 2"
     assert result.milestone == "Cognitive Runtime Continuity"
-
 
 def test_active_recall_lock_issue_stays_runtime_despite_benchmark_source_docs() -> None:
     result = project_triage.infer_triage(
@@ -391,7 +366,6 @@ def test_active_recall_lock_issue_stays_runtime_despite_benchmark_source_docs() 
     assert result.stage == "Stage 2"
     assert result.milestone == "Ambient Recall Warmth Pass"
 
-
 def test_segmented_index_issue_gets_sync_scale_milestone() -> None:
     result = project_triage.infer_triage(
         issue(
@@ -407,7 +381,6 @@ def test_segmented_index_issue_gets_sync_scale_milestone() -> None:
     assert result.kind == "Implementation"
     assert result.stage == "Cross-stage"
     assert result.milestone == "Sync & Scale Infrastructure"
-
 
 def test_security_privacy_issue_gets_hardening_milestone() -> None:
     result = project_triage.infer_triage(
@@ -425,7 +398,6 @@ def test_security_privacy_issue_gets_hardening_milestone() -> None:
     assert result.stage == "Stage 6"
     assert result.milestone == "Security & Privacy Hardening"
 
-
 def test_codeql_raw_private_issue_gets_security_milestone() -> None:
     result = project_triage.infer_triage(
         issue(
@@ -437,7 +409,6 @@ def test_codeql_raw_private_issue_gets_security_milestone() -> None:
     )
 
     assert result.milestone == "Security & Privacy Hardening"
-
 
 def test_benchmark_privacy_issue_keeps_benchmark_milestone() -> None:
     result = project_triage.infer_triage(
@@ -451,7 +422,6 @@ def test_benchmark_privacy_issue_keeps_benchmark_milestone() -> None:
 
     assert result.track == "Benchmarks & Research"
     assert result.milestone == "Benchmark Evidence Hardening"
-
 
 def test_architecture_debt_issue_routes_to_cross_stage_implementation() -> None:
     result = project_triage.infer_triage(
@@ -469,7 +439,6 @@ def test_architecture_debt_issue_routes_to_cross_stage_implementation() -> None:
     assert result.stage == "Cross-stage"
     assert result.priority == "P1"
 
-
 def test_benchmark_parent_beats_hippocampal_keyword_for_external_adapter() -> None:
     result = project_triage.infer_triage(
         issue(
@@ -480,7 +449,6 @@ def test_benchmark_parent_beats_hippocampal_keyword_for_external_adapter() -> No
     )
 
     assert result.milestone == "Benchmark Evidence Hardening"
-
 
 def test_continuous_memory_benchmark_child_routes_to_benchmark_evidence() -> None:
     result = project_triage.infer_triage(
@@ -497,7 +465,6 @@ def test_continuous_memory_benchmark_child_routes_to_benchmark_evidence() -> Non
     assert result.milestone == "Benchmark Evidence Hardening"
     assert result.warnings == ()
 
-
 def test_infrastructure_umbrella_child_routes_to_public_readiness() -> None:
     result = project_triage.infer_triage(
         issue(
@@ -511,7 +478,6 @@ def test_infrastructure_umbrella_child_routes_to_public_readiness() -> None:
     assert result.track == "Public readiness"
     assert result.stage == "Stage 1"
     assert result.milestone == "Public Readiness & Distribution"
-
 
 def test_milestone_update_only_fills_missing_open_issue_milestone() -> None:
     triage = project_triage.infer_triage(
@@ -532,7 +498,6 @@ def test_milestone_update_only_fills_missing_open_issue_milestone() -> None:
         "planned": "Architecture Debt Slice 2026-06",
         "milestone_number": 5,
     }
-
 
 def test_milestone_update_preserves_existing_manual_milestone() -> None:
     triage = project_triage.infer_triage(
@@ -560,7 +525,6 @@ def test_milestone_update_preserves_existing_manual_milestone() -> None:
         "skipped": "existing_milestone",
     }
 
-
 def test_milestone_update_skips_low_confidence_inferred_milestone() -> None:
     triage = project_triage.infer_triage(
         issue(
@@ -587,7 +551,6 @@ def test_milestone_update_skips_low_confidence_inferred_milestone() -> None:
         "planned": "Security & Privacy Hardening",
         "skipped": "low_confidence",
     }
-
 
 def test_single_issue_milestone_permission_error_is_reported(monkeypatch) -> None:
     class MilestoneDeniedClient:
@@ -629,7 +592,6 @@ def test_single_issue_milestone_permission_error_is_reported(monkeypatch) -> Non
         "error": "milestone_permission_denied",
     }
 
-
 def test_external_benchmark_adapter_assessment_is_research_not_smoke() -> None:
     result = project_triage.infer_triage(
         issue(
@@ -645,7 +607,6 @@ def test_external_benchmark_adapter_assessment_is_research_not_smoke() -> None:
     assert result.kind == "Research"
     assert result.stage == "Research"
     assert result.priority == "P1"
-
 
 def test_default_planned_updates_do_not_repair_existing_wrong_fields() -> None:
     triage = project_triage.infer_triage(
@@ -671,7 +632,6 @@ def test_default_planned_updates_do_not_repair_existing_wrong_fields() -> None:
     )
 
     assert updates == {}
-
 
 def test_repair_managed_fields_fixes_high_confidence_script_owned_misroutes() -> None:
     triage = project_triage.infer_triage(
@@ -705,7 +665,6 @@ def test_repair_managed_fields_fixes_high_confidence_script_owned_misroutes() ->
         "Priority": "P1",
     }
 
-
 def test_repair_managed_fields_does_not_overwrite_human_sourced_triage() -> None:
     triage = project_triage.infer_triage(
         issue(
@@ -732,7 +691,6 @@ def test_repair_managed_fields_does_not_overwrite_human_sourced_triage() -> None
 
     assert updates == {}
 
-
 def test_repair_managed_fields_treats_ownership_source_text_as_script_owned() -> None:
     triage = project_triage.infer_triage(
         issue(
@@ -756,7 +714,6 @@ def test_repair_managed_fields_treats_ownership_source_text_as_script_owned() ->
 
     assert updates["Kind"] == "Implementation"
     assert updates["Priority"] == "P1"
-
 
 def test_repair_managed_fields_repairs_ready_script_owned_items() -> None:
     triage = project_triage.infer_triage(
@@ -788,7 +745,6 @@ def test_repair_managed_fields_repairs_ready_script_owned_items() -> None:
         "Priority": "P1",
     }
 
-
 def test_repair_managed_fields_does_not_move_active_human_work_status() -> None:
     triage = project_triage.infer_triage(
         issue(
@@ -814,7 +770,6 @@ def test_repair_managed_fields_does_not_move_active_human_work_status() -> None:
     )
 
     assert updates == {}
-
 
 def test_repair_dry_run_report_marks_managed_items_and_updates() -> None:
     item = {
@@ -854,7 +809,6 @@ def test_repair_dry_run_report_marks_managed_items_and_updates() -> None:
     assert report["updates"]["Track"] == "Life-wide memory"
     assert report["updates"]["Kind"] == "Implementation"
     assert report["updates"]["Status"] == "Ready"
-
 
 def test_repair_mode_without_all_missing_does_not_fill_historical_missing_fields() -> None:
     triage = project_triage.infer_triage(

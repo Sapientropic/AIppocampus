@@ -16,9 +16,8 @@ from tests.aippocampus.redaction_fixtures import (
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
 
-from conversation_sources import GenericConversationProvider  # noqa: E402
+from conversation_sources import GenericConversationProvider
 
 USERSCRIPT = (
     REPO_ROOT
@@ -28,7 +27,6 @@ USERSCRIPT = (
 )
 REGISTRY_CMD = [sys.executable, "-m", "aippocampus_runtime.registry.api"]
 FAKE_TEST_WINDOWS_PATH_JS = fake_test_windows_path("note.txt").replace("\\", "\\\\")
-
 
 def run_node(script: str) -> dict:
     proc = subprocess.run(
@@ -42,7 +40,6 @@ def run_node(script: str) -> dict:
     if proc.returncode != 0:
         raise AssertionError(f"node failed\nSTDOUT:\n{proc.stdout}\nSTDERR:\n{proc.stderr}")
     return json.loads(proc.stdout)
-
 
 def browser_export_payload() -> dict:
     script = textwrap.dedent(
@@ -82,7 +79,6 @@ def browser_export_payload() -> dict:
         """
     )
     return run_node(script)
-
 
 class BrowserMemoryCompanionTests(unittest.TestCase):
     def test_userscript_has_visible_controls_and_boundary_notes(self) -> None:
@@ -361,7 +357,6 @@ class BrowserMemoryCompanionTests(unittest.TestCase):
         self.assertEqual(data["error"]["code"], "unknown_turn_id")
         self.assertEqual(data["error"]["class"], "validation_error")
         self.assertEqual(data["error"]["line"], 1)
-
 
 if __name__ == "__main__":
     unittest.main()

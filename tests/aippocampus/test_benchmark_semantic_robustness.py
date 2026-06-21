@@ -1,19 +1,17 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
 from pathlib import Path
+
+from tests.aippocampus.import_path_helpers import import_benchmark_module
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BENCHMARKS = REPO_ROOT / "benchmarks" / "aippocampus"
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-for _path in (BENCHMARKS, SCRIPTS):
-    if str(_path) not in sys.path:
-        sys.path.insert(0, str(_path))
 
-import benchmark_semantic_robustness as benchmark  # noqa: E402
-from shared.benchmark_report_contract import benchmark_report_contract_lint  # noqa: E402
+benchmark = import_benchmark_module("benchmark_semantic_robustness")
+from shared.benchmark_report_contract import benchmark_report_contract_lint
 
 
 class SemanticRobustnessBenchmarkTests(unittest.TestCase):
@@ -135,7 +133,6 @@ class SemanticRobustnessBenchmarkTests(unittest.TestCase):
             private_payload["tracks"]["s4_offline_proxy_alignment"]["status"],
             "skipped_missing_local_model",
         )
-
 
 if __name__ == "__main__":
     unittest.main()

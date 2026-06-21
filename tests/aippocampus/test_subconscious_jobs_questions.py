@@ -22,7 +22,6 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 JOBS_RUNNER = SCRIPTS / "aippocampus_runtime" / "subconscious" / "jobs.py"
 
-
 class SubconsciousJobsQuestionsTests(unittest.TestCase):
     def test_question_extraction_preserves_question_and_frontier_fields(self) -> None:
         parsed = {
@@ -1712,8 +1711,6 @@ class SubconsciousJobsQuestionsTests(unittest.TestCase):
             self.assertEqual(
                 sidecar["scope_labels"], ["personal_reflection", "idea_seed", "life_context"]
             )
-
-
 
 if __name__ == "__main__":
     unittest.main()

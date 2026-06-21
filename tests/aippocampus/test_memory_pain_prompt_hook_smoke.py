@@ -1,24 +1,17 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-SMOKE = REPO_ROOT / "tools" / "aippocampus" / "smoke"
-BENCHMARKS = REPO_ROOT / "benchmarks" / "aippocampus"
-sys.path.insert(0, str(SCRIPTS))
-sys.path.insert(0, str(SMOKE))
-sys.path.insert(0, str(BENCHMARKS))
+from tests.aippocampus.import_path_helpers import import_smoke_module
 
-import smoke_memory_pain_prompt_hook as smoke  # noqa: E402
+smoke = import_smoke_module("smoke_memory_pain_prompt_hook")
 
-from aippocampus_runtime.hooks import prompt as hook  # noqa: E402
-from aippocampus_runtime.recall.index_builder import make_sqlite  # noqa: E402
+from aippocampus_runtime.hooks import prompt as hook
+from aippocampus_runtime.recall.index_builder import make_sqlite
 
 
 class MemoryPainPromptHookSmokeTests(unittest.TestCase):
@@ -210,7 +203,6 @@ class MemoryPainPromptHookSmokeTests(unittest.TestCase):
             "source evidence withheld: vague cross-project referent",
             result["reasons"],
         )
-
 
 if __name__ == "__main__":
     unittest.main()

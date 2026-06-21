@@ -1,15 +1,9 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.recall import macro_field_live  # noqa: E402
+from aippocampus_runtime.recall import macro_field_live
 
 
 def route(handle: str, posture: str, **overrides: object) -> dict[str, object]:
@@ -25,7 +19,6 @@ def route(handle: str, posture: str, **overrides: object) -> dict[str, object]:
     }
     row.update(overrides)
     return row
-
 
 class MacroFieldLiveTests(unittest.TestCase):
     def test_recall_routes_feed_declared_edges_posture_lifts_and_timing_warnings(self) -> None:
@@ -102,7 +95,6 @@ class MacroFieldLiveTests(unittest.TestCase):
         self.assertEqual(merged["macro_field_live"]["source_reopen_required_before_claim"], True)
         self.assertEqual(merged["foreground_projection"]["authority_level"], "direction_only")
         self.assertEqual(merged["foreground_projection"]["claim_permission"], "none")
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,15 +1,9 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.aippo import working_contract as aippo  # noqa: E402
+from aippocampus_runtime.aippo import working_contract as aippo
 
 
 class AIppoWorkingContractTests(unittest.TestCase):
@@ -294,7 +288,6 @@ class AIppoWorkingContractTests(unittest.TestCase):
         self.assertIn("clause_benchmark_default_claim", report["stability"]["changed_clause_ids"])
         self.assertEqual(report["red_lines"]["masked_or_private_source_in_activation_packet"], 0)
         self.assertEqual(report["red_lines"]["source_backed_claim_without_reopen"], 0)
-
 
 if __name__ == "__main__":
     unittest.main()

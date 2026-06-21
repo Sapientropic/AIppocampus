@@ -1,17 +1,14 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
 from pathlib import Path
 
+from tests.aippocampus.import_path_helpers import import_benchmark_module
+
 ROOT = Path(__file__).resolve().parents[2]
-BENCHMARKS = ROOT / "benchmarks" / "aippocampus"
-if str(BENCHMARKS) not in sys.path:
-    sys.path.insert(0, str(BENCHMARKS))
 
-import benchmark_segmented_merge_policy as benchmark  # noqa: E402
-
+benchmark = import_benchmark_module("benchmark_segmented_merge_policy")
 
 class SegmentedMergePolicyBenchmarkTests(unittest.TestCase):
     def test_default_policy_passes_required_calibration_patterns(self) -> None:
@@ -118,7 +115,6 @@ class SegmentedMergePolicyBenchmarkTests(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "at least 4"):
             benchmark.evaluate_fixture(fixture)
-
 
 if __name__ == "__main__":
     unittest.main()

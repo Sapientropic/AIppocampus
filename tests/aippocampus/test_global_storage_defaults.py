@@ -11,7 +11,6 @@ ROOT = REPO_ROOT / "skills" / "aippocampus"
 SCRIPTS = ROOT / "scripts"
 BUILD_INDEX_CMD = [sys.executable, "-m", "aippocampus_runtime.recall.index_builder"]
 
-
 class GlobalStorageDefaultTests(unittest.TestCase):
     def write_rollout(self, cwd: Path, rollout: Path) -> None:
         rows = [
@@ -106,7 +105,6 @@ class GlobalStorageDefaultTests(unittest.TestCase):
             manifest = json.loads(proc.stdout)
             self.assertEqual(manifest["artifact_scope"], "explicit_output_dir")
             self.assertTrue((cwd / ".aippocampus" / "source_index.sqlite").exists())
-
 
 if __name__ == "__main__":
     unittest.main()

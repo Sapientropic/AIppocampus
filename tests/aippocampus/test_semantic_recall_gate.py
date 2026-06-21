@@ -12,24 +12,11 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-ROOT = REPO_ROOT / "skills" / "aippocampus"
-SCRIPTS = ROOT / "scripts"
-TESTS = Path(__file__).resolve().parent
-sys.path.insert(0, str(TESTS))
-for _path in (
-    SCRIPTS,
-    REPO_ROOT / "benchmarks" / "aippocampus",
-    REPO_ROOT / "tools" / "aippocampus" / "smoke",
-    REPO_ROOT / "tools" / "aippocampus" / "docs",
-):
-    sys.path.insert(0, str(_path))
-
-from aippocampus_runtime.recall import semantic_cue_cache as cues  # noqa: E402
-from aippocampus_runtime.recall import semantic_gate_response as response_stage  # noqa: E402
-from aippocampus_runtime.recall import semantic_recall_gate as gate  # noqa: E402
-from redaction_fixtures import FAKE_TEST_OPENAI_API_KEY, FAKE_TEST_SECRET_VALUE  # noqa: E402
-from tests.aippocampus.timing_fixtures import host_timeout_sleep  # noqa: E402
+from aippocampus_runtime.recall import semantic_cue_cache as cues
+from aippocampus_runtime.recall import semantic_gate_response as response_stage
+from aippocampus_runtime.recall import semantic_recall_gate as gate
+from tests.aippocampus.redaction_fixtures import FAKE_TEST_OPENAI_API_KEY, FAKE_TEST_SECRET_VALUE
+from tests.aippocampus.timing_fixtures import host_timeout_sleep
 
 
 def fake_response(payload: dict, usage: dict | None = None) -> dict:
@@ -43,7 +30,6 @@ def fake_response(payload: dict, usage: dict | None = None) -> dict:
         ],
         "usage": usage or {"total_tokens": 12},
     }
-
 
 class SemanticRecallGateTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -1427,7 +1413,6 @@ class SemanticRecallGateTests(unittest.TestCase):
         self.assertEqual(result["model_route"]["provider"], "local-test")
         self.assertEqual(result["cache"], {"available": False, "kind": "none"})
         self.assertEqual(result["cache_diagnostics"]["lookup"], "disabled")
-
 
 if __name__ == "__main__":
     unittest.main()

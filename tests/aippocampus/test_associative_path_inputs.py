@@ -1,17 +1,12 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.recall import why_diagnostics as why  # noqa: E402
-from aippocampus_runtime.recall.associative_path_inputs import (  # noqa: E402
+from aippocampus_runtime.recall import why_diagnostics as why
+from aippocampus_runtime.recall.associative_path_inputs import (
     build_associative_path_diagnostic,
     build_associative_path_input_pack,
 )
@@ -315,7 +310,6 @@ class AssociativePathInputPackTests(unittest.TestCase):
         self.assertIn("associative_path_walker", opt_in["searched_surfaces"])
         self.assertEqual(opt_in["associative_path_diagnostics"]["decision"], "route_candidates")
         self.assertFalse(opt_in["privacy_boundary"]["associative_path_walker_changed_default_ranking"])
-
 
 if __name__ == "__main__":
     unittest.main()

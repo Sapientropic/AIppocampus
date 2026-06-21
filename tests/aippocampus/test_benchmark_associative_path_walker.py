@@ -1,18 +1,11 @@
 from __future__ import annotations
 
 import copy
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-BENCHMARKS = REPO_ROOT / "benchmarks" / "aippocampus"
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-for _path in (SCRIPTS, BENCHMARKS):
-    sys.path.insert(0, str(_path))
+from tests.aippocampus.import_path_helpers import import_benchmark_module
 
-import benchmark_associative_path_walker as benchmark  # noqa: E402
-
+benchmark = import_benchmark_module("benchmark_associative_path_walker")
 
 class AssociativePathWalkerBenchmarkTests(unittest.TestCase):
     def test_gate_reports_navigation_lift_separately_from_source_evidence(self) -> None:
@@ -70,7 +63,6 @@ class AssociativePathWalkerBenchmarkTests(unittest.TestCase):
 
         self.assertFalse(report["ok"], report)
         self.assertGreater(report["warnings"]["route_count_lift_without_usefulness_count"], 0)
-
 
 if __name__ == "__main__":
     unittest.main()

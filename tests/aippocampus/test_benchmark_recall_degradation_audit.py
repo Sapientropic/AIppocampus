@@ -1,18 +1,11 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-BENCHMARKS = REPO_ROOT / "benchmarks" / "aippocampus"
-for _path in (SCRIPTS, BENCHMARKS):
-    sys.path.insert(0, str(_path))
+from tests.aippocampus.import_path_helpers import import_benchmark_module
 
-import benchmark_recall_degradation_audit as benchmark  # noqa: E402
-
+benchmark = import_benchmark_module("benchmark_recall_degradation_audit")
 
 class RecallDegradationAuditBenchmarkTests(unittest.TestCase):
     def test_clean_source_routes_derive_distinct_safe_triage_without_prefilled_labels(self) -> None:
@@ -71,7 +64,6 @@ class RecallDegradationAuditBenchmarkTests(unittest.TestCase):
         ):
             with self.subTest(forbidden=forbidden):
                 self.assertNotIn(forbidden, encoded)
-
 
 if __name__ == "__main__":
     unittest.main()

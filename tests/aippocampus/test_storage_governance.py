@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import os
-import sys
 import tempfile
 import time
 import unittest
@@ -10,13 +9,9 @@ from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime import health  # noqa: E402
-from aippocampus_runtime.ops import storage_eviction, storage_governance  # noqa: E402
-from aippocampus_runtime.recall import index_builder, rollout_search  # noqa: E402
+from aippocampus_runtime import health
+from aippocampus_runtime.ops import storage_eviction, storage_governance
+from aippocampus_runtime.recall import index_builder, rollout_search
 
 
 class StorageGovernanceTests(unittest.TestCase):
@@ -1204,7 +1199,6 @@ class StorageGovernanceTests(unittest.TestCase):
         self.assertTrue(payload["ok"])
         self.assertEqual(payload["mode"], "apply")
         self.assertEqual(payload["metrics"]["eviction_applied_count"], 1)
-
 
 if __name__ == "__main__":
     unittest.main()

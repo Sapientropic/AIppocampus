@@ -1,16 +1,8 @@
 from __future__ import annotations
 
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-BENCHMARKS = REPO_ROOT / "benchmarks" / "aippocampus"
-for _path in (REPO_ROOT, BENCHMARKS):
-    if str(_path) not in sys.path:
-        sys.path.insert(0, str(_path))
-
-from benchmarks.aippocampus.shared import benchmark_statistics as stats  # noqa: E402
+from benchmarks.aippocampus.shared import benchmark_statistics as stats
 
 
 class BenchmarkStatisticsTests(unittest.TestCase):

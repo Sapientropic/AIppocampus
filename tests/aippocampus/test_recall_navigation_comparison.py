@@ -7,16 +7,13 @@ import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 SMOKE = REPO_ROOT / "tools" / "aippocampus" / "smoke" / "smoke_recall_navigation_comparison.py"
-if str(SCRIPTS) not in sys.path:
-    sys.path.insert(0, str(SCRIPTS))
 
-from aippocampus_runtime.navigation import attention_route_projection  # noqa: E402
+from aippocampus_runtime.navigation import attention_route_projection
 from aippocampus_runtime.ops import (
-    recall_navigation_comparison,  # noqa: E402
-    recall_navigation_comparison_fixtures,  # noqa: E402
-    reopen_follow_through,  # noqa: E402
+    recall_navigation_comparison,
+    recall_navigation_comparison_fixtures,
+    reopen_follow_through,
 )
 
 
@@ -525,7 +522,6 @@ class RecallNavigationComparisonTests(unittest.TestCase):
         payload = json.loads(proc.stdout)
         self.assertEqual(payload["kind"], recall_navigation_comparison.COMPARISON_KIND)
         self.assertTrue(payload["ok"])
-
 
 if __name__ == "__main__":
     unittest.main()

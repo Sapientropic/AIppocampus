@@ -10,9 +10,6 @@ from pathlib import Path
 from types import ModuleType
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
 
 def _compat_module() -> ModuleType:
     try:
@@ -21,7 +18,6 @@ def _compat_module() -> ModuleType:
         )
     except ModuleNotFoundError as exc:
         raise AssertionError("missing local/global compatibility helper") from exc
-
 
 def _source_shape_section(
     case_id: str,
@@ -46,7 +42,6 @@ def _source_shape_section(
     }
     payload.update(updates)
     return payload
-
 
 class LocalGlobalCompatibilityTests(unittest.TestCase):
     def test_fixture_covers_glue_partial_obstruction_and_blocked_boundaries(self) -> None:
@@ -573,7 +568,6 @@ class LocalGlobalCompatibilityTests(unittest.TestCase):
         self.assertNotIn("PRIVATE_LOCAL_GLOBAL_TEXT", encoded)
         self.assertNotIn(str(root), encoded)
         self.assertNotIn("source://private/raw-handle", encoded)
-
 
 if __name__ == "__main__":
     unittest.main()

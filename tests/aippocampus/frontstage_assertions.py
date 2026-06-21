@@ -22,7 +22,6 @@ PRIVATE_PATH_MARKERS = (
     "/home/",
 )
 
-
 def assert_compact_frontstage_payload(
     test: Any,
     payload: Mapping[str, Any],
@@ -50,7 +49,6 @@ def assert_compact_frontstage_payload(
     test.assertNotIn("red_lines", payload)
     for marker in PRIVATE_PATH_MARKERS:
         test.assertNotIn(marker, encoded)
-
 
 def assert_semantic_human_output(
     test: Any,

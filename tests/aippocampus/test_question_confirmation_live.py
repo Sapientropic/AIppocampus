@@ -10,14 +10,9 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-ROOT = REPO_ROOT / "skills" / "aippocampus"
-SCRIPTS = ROOT / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.question import confirmation_live as live  # noqa: E402
-from aippocampus_runtime.question import confirmation_live as live_owner  # noqa: E402
-from aippocampus_runtime.question.confirmation import (  # noqa: E402
+from aippocampus_runtime.question import confirmation_live as live
+from aippocampus_runtime.question import confirmation_live as live_owner
+from aippocampus_runtime.question.confirmation import (
     load_confirmation_decisions,
     normalize_confirmation,
 )
@@ -257,7 +252,6 @@ class QuestionConfirmationLiveTests(unittest.TestCase):
         self.assertEqual(artifact["invalid_reason"], "non_json_model_response")
         normalized = normalize_confirmation(artifact, payload=self.request())
         self.assertEqual(normalized["decision"], "invalid")
-
 
 if __name__ == "__main__":
     unittest.main()

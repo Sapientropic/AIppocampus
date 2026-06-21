@@ -1,21 +1,16 @@
 import json
 import os
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.recall.continuity_domains import (  # noqa: E402
+from aippocampus_runtime.recall.continuity_domains import (
     load_continuity_domain_events,
     load_continuity_domains_snapshot,
 )
-from aippocampus_runtime.subconscious import event_salience_gate as salience  # noqa: E402
-from aippocampus_runtime.subconscious import jobs  # noqa: E402
+from aippocampus_runtime.subconscious import event_salience_gate as salience
+from aippocampus_runtime.subconscious import jobs
 
 
 def fixture_turn(
@@ -41,7 +36,6 @@ def fixture_turn(
             }
         ],
     }
-
 
 class SubconsciousEventSalienceGateTests(unittest.TestCase):
     def test_event_salience_schema_covers_signal_and_noise_families(self) -> None:
@@ -424,7 +418,6 @@ class SubconsciousEventSalienceGateTests(unittest.TestCase):
         self.assertEqual(public["event_salience_gate"]["candidate_reduction_count"], 1)
         self.assertNotIn("msg_private", serialized)
         self.assertNotIn("private text", serialized)
-
 
 if __name__ == "__main__":
     unittest.main()

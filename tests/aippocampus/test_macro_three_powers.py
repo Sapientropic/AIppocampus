@@ -1,15 +1,9 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.macro import hexagram, perturbation, three_powers  # noqa: E402
+from aippocampus_runtime.macro import hexagram, perturbation, three_powers
 
 
 def _route_candidates() -> list[dict[str, object]]:
@@ -42,7 +36,6 @@ def _route_candidates() -> list[dict[str, object]]:
             "claim_permission": "no_claim_before_reopen",
         },
     ]
-
 
 class MacroThreePowersTests(unittest.TestCase):
     def test_same_query_prioritizes_different_routes_by_active_layer(self) -> None:
@@ -288,7 +281,6 @@ class MacroThreePowersTests(unittest.TestCase):
         self.assertEqual(with_topology["topology_diagnostics"]["authority_level"], "navigation_only")
         self.assertFalse(with_topology["topology_diagnostics"]["fact_claim_allowed"])
         self.assertFalse(with_topology["topology_diagnostics"]["ranking_weight_changes"])
-
 
 if __name__ == "__main__":
     unittest.main()

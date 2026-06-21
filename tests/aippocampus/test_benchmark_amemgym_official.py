@@ -10,6 +10,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+from tests.aippocampus.import_path_helpers import import_benchmark_module
 from tests.aippocampus.path_assertions import (
     assert_path_flag_points_to,
     assert_path_list_contains,
@@ -17,24 +18,20 @@ from tests.aippocampus.path_assertions import (
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BENCHMARKS = REPO_ROOT / "benchmarks" / "aippocampus"
-for _path in (REPO_ROOT, BENCHMARKS):
-    if str(_path) not in sys.path:
-        sys.path.insert(0, str(_path))
 
 from benchmarks.aippocampus.adapters import (
-    amemgym_aippocampus_adapter as aippocampus_adapter,  # noqa: E402
+    amemgym_aippocampus_adapter as aippocampus_adapter,
 )
 from benchmarks.aippocampus.adapters import (
-    amemgym_official_local_provider as local_provider,  # noqa: E402
+    amemgym_official_local_provider as local_provider,
 )
 
-import benchmark_amemgym_official as benchmark  # noqa: E402
+benchmark = import_benchmark_module("benchmark_amemgym_official")
 
 RAW_QUERY = "RAW AMEMGYM QUERY MUST NOT LEAK"
 LOCAL_PATH_SENTINEL = "LOCAL_PRIVATE_PATH_SENTINEL\\amemgym-official"
 AMEMGYM_AUTH_CONFIG_FIELD = "_".join(("api", "key"))
 FAKE_PROVIDER_VALUE = "".join(("s", "k", "-", "FAKE_TEST_OPENROUTER_123456"))
-
 
 class AMemGymOfficialBridgeTests(unittest.TestCase):
     def test_semantic_sidecar_agent_materializes_worker_surfaces_before_saved_state(
@@ -1022,7 +1019,6 @@ class AMemGymOfficialBridgeTests(unittest.TestCase):
             ),
             encoding="utf-8",
         )
-
 
 if __name__ == "__main__":
     unittest.main()

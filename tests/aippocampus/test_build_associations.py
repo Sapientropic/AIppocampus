@@ -2,24 +2,12 @@ from __future__ import annotations
 
 import json
 import sqlite3
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-ROOT = REPO_ROOT / "skills" / "aippocampus"
-SCRIPTS = ROOT / "scripts"
-for _path in (
-    SCRIPTS,
-    REPO_ROOT / "benchmarks" / "aippocampus",
-    REPO_ROOT / "tools" / "aippocampus" / "smoke",
-    REPO_ROOT / "tools" / "aippocampus" / "docs",
-):
-    sys.path.insert(0, str(_path))
-
-from aippocampus_runtime.navigation import associations as assoc  # noqa: E402
+from aippocampus_runtime.navigation import associations as assoc
 
 
 class BuildAssociationsTests(unittest.TestCase):
@@ -344,7 +332,6 @@ class BuildAssociationsTests(unittest.TestCase):
             terms["进入被动联想范围"]["threads"][0]["source"], "clean_source_final_answer"
         )
         self.assertEqual(terms["进入被动联想范围"]["threads"][0]["line"], 30)
-
 
 if __name__ == "__main__":
     unittest.main()

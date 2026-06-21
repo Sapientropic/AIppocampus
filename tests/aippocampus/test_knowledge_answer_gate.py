@@ -1,25 +1,20 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 FIXTURE = REPO_ROOT / "tests" / "fixtures" / "knowledge_sources" / "public_safe_registry.json"
-sys.path.insert(0, str(SCRIPTS))
 
-from aippocampus_runtime.knowledge import answer_gate  # noqa: E402
+from aippocampus_runtime.knowledge import answer_gate
 
 
 def load_fixture() -> dict:
     return json.loads(FIXTURE.read_text(encoding="utf-8"))
 
-
 def claim_by_id(payload: dict, claim_id: str) -> dict:
     return next(item for item in payload["claims"] if item["claim_id"] == claim_id)
-
 
 def valid_context() -> dict:
     return {
@@ -31,7 +26,6 @@ def valid_context() -> dict:
         "external_model_route": False,
     }
 
-
 def reopened_evidence(payload: dict, claim_id: str) -> dict:
     claim = claim_by_id(payload, claim_id)
     return {
@@ -40,7 +34,6 @@ def reopened_evidence(payload: dict, claim_id: str) -> dict:
         "source_id": claim["source_id"],
         "source_anchor": claim["source_anchor"],
     }
-
 
 class KnowledgeAnswerGateTests(unittest.TestCase):
     def test_embedding_hit_without_source_reopen_cannot_emit_high_risk_answer(self) -> None:
@@ -188,7 +181,6 @@ class KnowledgeAnswerGateTests(unittest.TestCase):
         self.assertEqual(report["output_state"], "human_review_required")
         self.assertIn("private_source_permission_required", report["gate_codes"])
         self.assertFalse(report["privacy"]["source_text_allowed_external"])
-
 
 if __name__ == "__main__":
     unittest.main()

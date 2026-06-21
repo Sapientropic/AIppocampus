@@ -1,17 +1,8 @@
 from __future__ import annotations
 
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-for _path in (
-    REPO_ROOT / "skills" / "aippocampus" / "scripts",
-    REPO_ROOT / "tools" / "aippocampus" / "smoke",
-):
-    sys.path.insert(0, str(_path))
-
-import simulate_multilingual_prompt_hook as smoke  # noqa: E402
+import simulate_multilingual_prompt_hook as smoke
 
 
 class MultilingualPromptHookSmokeTests(unittest.TestCase):
@@ -42,7 +33,6 @@ class MultilingualPromptHookSmokeTests(unittest.TestCase):
             "live_semantic_gate_quality",
             unseeded["cannot_claim"],
         )
-
 
 if __name__ == "__main__":
     unittest.main()

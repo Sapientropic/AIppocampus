@@ -1,16 +1,11 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.ops import storage_capacity_report  # noqa: E402
+from aippocampus_runtime.ops import storage_capacity_report
 
 
 class StorageCapacityReportTests(unittest.TestCase):
@@ -288,7 +283,6 @@ class StorageCapacityReportTests(unittest.TestCase):
         self.assertEqual(report["top_threads"][0]["segment_sqlite_count"], 1)
         self.assertEqual(report["top_threads"][0]["segment_sqlite_bytes"], 41)
         self.assertNotIn(str(self.root), payload)
-
 
 if __name__ == "__main__":
     unittest.main()

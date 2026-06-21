@@ -1,19 +1,13 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
-from pathlib import Path
 
-SCRIPTS = Path(__file__).resolve().parents[2] / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.learning_loop import effectiveness_ledger as ledger  # noqa: E402
+from aippocampus_runtime.learning_loop import effectiveness_ledger as ledger
 
 
 def source_ref(name: str) -> dict[str, str]:
     return {"source_id": f"source:{name}", "message_id": f"msg:{name}"}
-
 
 class LearningLoopEffectivenessLedgerTests(unittest.TestCase):
     def test_effectiveness_rows_cover_useful_ignored_stale_and_self_report_only(self) -> None:
@@ -48,7 +42,6 @@ class LearningLoopEffectivenessLedgerTests(unittest.TestCase):
         self.assertEqual({row["guidance_id"]: row.get("status") for row in projected}["stale"], "archived")
         self.assertNotIn("pytest tests/private", encoded)
         self.assertNotIn("C:/", encoded)
-
 
 if __name__ == "__main__":
     unittest.main()

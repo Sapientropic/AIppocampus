@@ -1,15 +1,8 @@
 from __future__ import annotations
 
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-ROOT = REPO_ROOT / "skills" / "aippocampus"
-SCRIPTS = ROOT / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.dream import one_sidedness  # noqa: E402
+from aippocampus_runtime.dream import one_sidedness
 
 
 def source_ref(line: int) -> dict[str, object]:
@@ -19,7 +12,6 @@ def source_ref(line: int) -> dict[str, object]:
         "source_line": line,
     }
 
-
 def waypoint(line: int, *, upper: str = "乾", lower: str = "震", refs: bool = True) -> dict[str, object]:
     return {
         "waypoint_id": f"wp-{line}",
@@ -28,7 +20,6 @@ def waypoint(line: int, *, upper: str = "乾", lower: str = "震", refs: bool = 
         "source_refs": [source_ref(line)] if refs else [],
         "frontier_hint": "The route keeps stressing source survival from one side.",
     }
-
 
 class DreamOneSidednessTests(unittest.TestCase):
     def test_gate_on_builds_source_backed_opposite_voice_probe(self) -> None:
@@ -157,7 +148,6 @@ class DreamOneSidednessTests(unittest.TestCase):
         self.assertFalse(gate["gate_open"])
         self.assertEqual(probe, None)
         self.assertIn("insufficient_source_backed_one_sidedness", gate["suppression_reasons"])
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,17 +1,11 @@
 from __future__ import annotations
 
 import os
-import sys
 import unittest
 from contextlib import contextmanager
-from pathlib import Path
 from typing import Iterator
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime import cognitive_worker_mode  # noqa: E402
+from aippocampus_runtime import cognitive_worker_mode
 
 MODE_ENV_NAMES = [
     "AIPPOCAMPUS_DEEPSEEK_API_KEY",
@@ -19,7 +13,6 @@ MODE_ENV_NAMES = [
     "AIPPOCAMPUS_COGNITIVE_WORKER_MODE",
     "AIPPOCAMPUS_AGENT_FALLBACK_AVAILABLE",
 ]
-
 
 @contextmanager
 def mode_env(extra: dict[str, str] | None = None) -> Iterator[None]:
@@ -36,7 +29,6 @@ def mode_env(extra: dict[str, str] | None = None) -> Iterator[None]:
                 os.environ.pop(name, None)
             else:
                 os.environ[name] = value
-
 
 class CognitiveWorkerModeTests(unittest.TestCase):
     def test_auto_prefers_external_model_when_provider_key_visible(self) -> None:
@@ -90,7 +82,6 @@ class CognitiveWorkerModeTests(unittest.TestCase):
         self.assertFalse(legacy["provider_key_visible"])
         self.assertEqual(canonical["resolved_mode"], "external_model")
         self.assertTrue(canonical["provider_key_visible"])
-
 
 if __name__ == "__main__":
     unittest.main()

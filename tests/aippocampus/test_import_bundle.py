@@ -15,10 +15,9 @@ from unittest.mock import patch
 REPO_ROOT = Path(__file__).resolve().parents[2]
 IMPORT_BUNDLE_MODULE = "aippocampus_runtime.artifacts.import_bundle"
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
 
-from aippocampus_runtime.artifacts import import_bundle as import_bundle  # noqa: E402
-from aippocampus_runtime.artifacts import import_bundle as packaged_import_bundle  # noqa: E402
+from aippocampus_runtime.artifacts import import_bundle as import_bundle
+from aippocampus_runtime.artifacts import import_bundle as packaged_import_bundle
 
 
 class ImportBundleTests(unittest.TestCase):
@@ -501,7 +500,6 @@ class ImportBundleTests(unittest.TestCase):
         self.assertNotIn(payload["foreground_action"], payload["safe_next_actions"])
         self.assertEqual(payload["foreground_action"]["mutation_risk"], "read_only")
         self.assertNotIn(str(missing.parent), encoded)
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -2,16 +2,10 @@ from __future__ import annotations
 
 import copy
 import json
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.aippo import eval_environment, feedback, ficus  # noqa: E402
-from aippocampus_runtime.aippo import working_contract as aippo  # noqa: E402
+from aippocampus_runtime.aippo import eval_environment, feedback, ficus
+from aippocampus_runtime.aippo import working_contract as aippo
 
 
 class AIppoFeedbackEvalFicusTests(unittest.TestCase):
@@ -95,7 +89,6 @@ class AIppoFeedbackEvalFicusTests(unittest.TestCase):
         self.assertIn("PersonaMem", report["benchmark_readiness"]["next_benchmark_gate"])
         self.assertNotIn("PRIVATE_FICUS_SENTINEL", encoded)
         self.assertNotIn("source_refs", json.dumps(packet, ensure_ascii=False))
-
 
 if __name__ == "__main__":
     unittest.main()

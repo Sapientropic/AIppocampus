@@ -1,13 +1,8 @@
 from __future__ import annotations
 
-import sys
 import unittest
-from pathlib import Path
 
-SCRIPTS = Path(__file__).resolve().parents[2] / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.subconscious import semantic_subregion_budget as budget  # noqa: E402
+from aippocampus_runtime.subconscious import semantic_subregion_budget as budget
 
 
 class SemanticSubregionBudgetTests(unittest.TestCase):
@@ -48,7 +43,6 @@ class SemanticSubregionBudgetTests(unittest.TestCase):
             rows["foreground_no_timeout"]["violations"],
         )
         self.assertTrue(report["contract"]["output_is_routing_scent_until_source_reopen"])
-
 
 if __name__ == "__main__":
     unittest.main()

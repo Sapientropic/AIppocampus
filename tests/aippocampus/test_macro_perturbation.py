@@ -1,15 +1,9 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.macro import hexagram, perturbation  # noqa: E402
+from aippocampus_runtime.macro import hexagram, perturbation
 
 
 class MacroPerturbationTests(unittest.TestCase):
@@ -123,7 +117,6 @@ class MacroPerturbationTests(unittest.TestCase):
         self.assertNotIn("爻辞", encoded)
         self.assertNotIn("commentary", encoded)
         self.assertNotIn("interpretation", encoded)
-
 
 if __name__ == "__main__":
     unittest.main()

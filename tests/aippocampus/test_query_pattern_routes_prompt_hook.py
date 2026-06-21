@@ -2,18 +2,15 @@ from __future__ import annotations
 
 import json
 import os
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-if str(SCRIPTS) not in sys.path:
-    sys.path.insert(0, str(SCRIPTS))
 
-from aippocampus_runtime.hooks import prompt as hook  # noqa: E402
-from tests.aippocampus.redaction_fixtures import fake_test_windows_path  # noqa: E402
+from aippocampus_runtime.hooks import prompt as hook
+from tests.aippocampus.redaction_fixtures import fake_test_windows_path
 
 
 class QueryPatternRoutesPromptHookTests(unittest.TestCase):
@@ -123,7 +120,6 @@ class QueryPatternRoutesPromptHookTests(unittest.TestCase):
         self.assertNotIn(private_alias, encoded_public + encoded_context)
         self.assertNotIn("raw private source text", encoded_public + encoded_context)
         self.assertNotIn("private-query-pattern", encoded_public + encoded_context)
-
 
 if __name__ == "__main__":
     unittest.main()

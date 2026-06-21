@@ -1,25 +1,19 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 from typing import Any
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.ops import activation_payload_compaction as runner  # noqa: E402
-from aippocampus_runtime.ops.activation_authority_audit import (  # noqa: E402
+from aippocampus_runtime.ops import activation_payload_compaction as runner
+from aippocampus_runtime.ops.activation_authority_audit import (
     apply_dead_letter_candidate_manifest,
 )
 
 
 def source_ref(label: str) -> dict[str, Any]:
     return {"thread_key": f"session:{label}", "message_id": "msg-1", "line": 7}
-
 
 def dead_letter_manifest() -> dict[str, Any]:
     surfaces: list[dict[str, Any]] = []
@@ -45,17 +39,14 @@ def dead_letter_manifest() -> dict[str, Any]:
         applied_at="2026-06-05T06:00:00Z",
     )
 
-
 def write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
     path.write_text(
         "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows),
         encoding="utf-8",
     )
 
-
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line]
-
 
 def write_owner_fixtures(root: Path) -> tuple[Path, Path, Path, Path, Path]:
     manifest_path = root / "dead-letter-manifest.json"
@@ -151,7 +142,6 @@ def write_owner_fixtures(root: Path) -> tuple[Path, Path, Path, Path, Path]:
         encoding="utf-8",
     )
     return manifest_path, ambient_cache, working_memory, semantic_triggers, active_recall_locks
-
 
 class ActivationPayloadCompactionRunnerTests(unittest.TestCase):
     def test_dry_run_reports_all_owner_compactions_without_writing_payloads(self) -> None:
@@ -283,7 +273,6 @@ class ActivationPayloadCompactionRunnerTests(unittest.TestCase):
             self.assertEqual(report["owners"]["ambient_cache"]["skip_reason"], "owner_path_missing")
             self.assertEqual(report["metrics"]["owner_count_run"], 3)
             self.assertNotIn(str(root), json.dumps(report, ensure_ascii=False, sort_keys=True))
-
 
 if __name__ == "__main__":
     unittest.main()

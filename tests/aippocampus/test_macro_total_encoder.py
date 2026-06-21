@@ -1,20 +1,14 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
-from pathlib import Path
 
-SCRIPTS = Path(__file__).resolve().parents[2] / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.macro import total_encoder  # noqa: E402
-from aippocampus_runtime.recall import macro_live_recall  # noqa: E402
+from aippocampus_runtime.macro import total_encoder
+from aippocampus_runtime.recall import macro_live_recall
 
 
 def ref(name: str) -> dict[str, str]:
     return {"source_id": f"macro-source:{name}", "message_id": f"msg:{name}"}
-
 
 class MacroTotalEncoderTests(unittest.TestCase):
     def test_total_encoder_derives_complete_state_with_per_line_provenance(self) -> None:
@@ -122,7 +116,6 @@ class MacroTotalEncoderTests(unittest.TestCase):
         self.assertIsNone(degraded)
         self.assertEqual(macro_live_recall.effective_route_limit(requested_limit=2, context=degraded), 2)
         self.assertIn("macro_state_degraded", diagnostics["reason_codes"])
-
 
 if __name__ == "__main__":
     unittest.main()

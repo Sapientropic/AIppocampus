@@ -1,15 +1,9 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.navigation import repo_familiarity  # noqa: E402
+from aippocampus_runtime.navigation import repo_familiarity
 
 
 def fixture_rows() -> list[dict[str, object]]:
@@ -109,7 +103,6 @@ def fixture_rows() -> list[dict[str, object]]:
         },
     ]
 
-
 class RepoFamiliarityTests(unittest.TestCase):
     def test_builds_source_backed_cards_with_action_delta_contract(self) -> None:
         cards = repo_familiarity.build_repo_familiarity_cards(
@@ -197,7 +190,6 @@ class RepoFamiliarityTests(unittest.TestCase):
         self.assertTrue(
             any(item["reason"] == "irrelevant_to_task" for item in readme_packet["rejected_cards"])
         )
-
 
 if __name__ == "__main__":
     unittest.main()

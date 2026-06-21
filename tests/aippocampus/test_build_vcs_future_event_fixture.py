@@ -1,21 +1,18 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
+from tests.aippocampus.import_path_helpers import import_benchmark_module
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BENCHMARKS = REPO_ROOT / "benchmarks" / "aippocampus"
-for _path in (REPO_ROOT, BENCHMARKS):
-    if str(_path) not in sys.path:
-        sys.path.insert(0, str(_path))
 
-from benchmarks.aippocampus.builders import build_vcs_future_event_fixture as builder  # noqa: E402
+from benchmarks.aippocampus.builders import build_vcs_future_event_fixture as builder
 
-import benchmark_vcs_future_event_recall as recall  # noqa: E402
-
+recall = import_benchmark_module("benchmark_vcs_future_event_recall")
 
 class VcsFutureEventFixtureBuilderTests(unittest.TestCase):
     def test_builds_grouped_fixture_from_nested_and_flat_rows(self) -> None:
@@ -258,7 +255,6 @@ class VcsFutureEventFixtureBuilderTests(unittest.TestCase):
         self.assertNotIn("SECRET_TOKEN", serialized)
         self.assertNotIn("C:\\Users", serialized)
         self.assertNotIn("test_secret.py", serialized)
-
 
 if __name__ == "__main__":
     unittest.main()

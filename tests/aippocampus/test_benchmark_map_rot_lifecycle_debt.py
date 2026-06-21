@@ -6,14 +6,12 @@ import sys
 import unittest
 from pathlib import Path
 
+from tests.aippocampus.import_path_helpers import import_benchmark_module
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BENCHMARKS = REPO_ROOT / "benchmarks" / "aippocampus"
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-for _path in (BENCHMARKS, SCRIPTS):
-    sys.path.insert(0, str(_path))
 
-import benchmark_map_rot_lifecycle_debt as benchmark  # noqa: E402
-
+benchmark = import_benchmark_module("benchmark_map_rot_lifecycle_debt")
 
 class MapRotLifecycleDebtBenchmarkTests(unittest.TestCase):
     def test_fixture_reports_map_health_pressure_without_red_line_leaks(self) -> None:
@@ -133,7 +131,6 @@ class MapRotLifecycleDebtBenchmarkTests(unittest.TestCase):
         self.assertFalse(report["quality_gate"]["cleanup_write_adoption_gate_ok"])
         self.assertFalse(report["privacy_boundary"]["maintenance_writes_executed"])
         self.assertIn("cleanup_write_runtime_adoption", report["cannot_claim"])
-
 
 if __name__ == "__main__":
     unittest.main()

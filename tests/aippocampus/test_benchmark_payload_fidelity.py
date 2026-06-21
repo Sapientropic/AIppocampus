@@ -1,22 +1,10 @@
 from __future__ import annotations
 
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-ROOT = REPO_ROOT / "skills" / "aippocampus"
-SCRIPTS = ROOT / "scripts"
-for _path in (
-    SCRIPTS,
-    REPO_ROOT / "benchmarks" / "aippocampus",
-    REPO_ROOT / "tools" / "aippocampus" / "smoke",
-    REPO_ROOT / "tools" / "aippocampus" / "docs",
-):
-    sys.path.insert(0, str(_path))
+from tests.aippocampus.import_path_helpers import import_benchmark_module
 
-import benchmark_payload_fidelity as benchmark  # noqa: E402
-
+benchmark = import_benchmark_module("benchmark_payload_fidelity")
 
 class PayloadFidelityBenchmarkTests(unittest.TestCase):
     def test_summarize_results_counts_payload_failures(self) -> None:
@@ -104,7 +92,6 @@ class PayloadFidelityBenchmarkTests(unittest.TestCase):
         self.assertFalse(any("prompt" in row for row in rows))
         self.assertFalse(any("context" in row for row in rows))
         self.assertTrue(all(row.get("public_sources") for row in rows))
-
 
 if __name__ == "__main__":
     unittest.main()

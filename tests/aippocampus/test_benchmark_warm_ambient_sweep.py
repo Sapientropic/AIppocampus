@@ -1,17 +1,13 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-BENCHMARKS = REPO_ROOT / "benchmarks" / "aippocampus"
-sys.path.insert(0, str(BENCHMARKS))
+from tests.aippocampus.import_path_helpers import import_benchmark_module
 
-import benchmark_warm_ambient_sweep as sweep  # noqa: E402
-
+sweep = import_benchmark_module("benchmark_warm_ambient_sweep")
 
 class WarmAmbientSweepTests(unittest.TestCase):
     def test_sweep_expands_matrix_and_keeps_output_sanitized(self) -> None:
@@ -371,7 +367,6 @@ class WarmAmbientSweepTests(unittest.TestCase):
         self.assertEqual(analysis["failure_distribution"]["failed_gate_counts"]["false_evidence_count"], 2)
         self.assertEqual(analysis["failure_distribution"]["scout_error_kinds"]["read_timeout"], 4)
         self.assertIn("foreground", analysis["recommendation_notes"][0])
-
 
 if __name__ == "__main__":
     unittest.main()

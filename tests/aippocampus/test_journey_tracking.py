@@ -1,23 +1,10 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-ROOT = REPO_ROOT / "skills" / "aippocampus"
-SCRIPTS = ROOT / "scripts"
-for _path in (
-    SCRIPTS,
-    REPO_ROOT / "benchmarks" / "aippocampus",
-    REPO_ROOT / "tools" / "aippocampus" / "smoke",
-    REPO_ROOT / "tools" / "aippocampus" / "docs",
-):
-    sys.path.insert(0, str(_path))
-
-from aippocampus_runtime.journey import live as journey_live  # noqa: E402
-from aippocampus_runtime.journey import tracking as journey  # noqa: E402
+from aippocampus_runtime.journey import live as journey_live
+from aippocampus_runtime.journey import tracking as journey
 
 
 class JourneyTrackingTests(unittest.TestCase):
@@ -453,7 +440,6 @@ class JourneyTrackingTests(unittest.TestCase):
         self.assertEqual(payload["status"], "skipped_missing_journey_data")
         self.assertEqual(payload["matches"], [])
         self.assertIn("source_text_comparison", payload["cannot_claim"])
-
 
 if __name__ == "__main__":
     unittest.main()

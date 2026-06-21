@@ -10,15 +10,8 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 ROOT = REPO_ROOT / "skills" / "aippocampus"
 CHECKPOINT_MODULE = "aippocampus_runtime.artifacts.checkpoint"
 SCRIPTS = ROOT / "scripts"
-for _path in (
-    SCRIPTS,
-    REPO_ROOT / "benchmarks" / "aippocampus",
-    REPO_ROOT / "tools" / "aippocampus" / "smoke",
-    REPO_ROOT / "tools" / "aippocampus" / "docs",
-):
-    sys.path.insert(0, str(_path))
 
-from aippocampus_runtime.core import default_thread_index_dir  # noqa: E402
+from aippocampus_runtime.core import default_thread_index_dir
 
 
 def module_env() -> dict[str, str]:
@@ -26,7 +19,6 @@ def module_env() -> dict[str, str]:
     existing = env.get("PYTHONPATH")
     env["PYTHONPATH"] = str(SCRIPTS) if not existing else str(SCRIPTS) + os.pathsep + existing
     return env
-
 
 class CheckpointTests(unittest.TestCase):
     def test_append_anchor_uses_portable_source_path(self):
@@ -120,7 +112,6 @@ class CheckpointTests(unittest.TestCase):
                     os.environ.pop("CODEX_HOME", None)
                 else:
                     os.environ["CODEX_HOME"] = old_codex_home
-
 
 if __name__ == "__main__":
     unittest.main()

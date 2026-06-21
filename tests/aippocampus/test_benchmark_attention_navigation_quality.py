@@ -7,14 +7,11 @@ import sys
 import unittest
 from pathlib import Path
 
+from tests.aippocampus.import_path_helpers import import_benchmark_module
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-BENCHMARKS = REPO_ROOT / "benchmarks" / "aippocampus"
-for _path in (SCRIPTS, BENCHMARKS):
-    sys.path.insert(0, str(_path))
 
-import benchmark_attention_navigation_quality as benchmark  # noqa: E402
-
+benchmark = import_benchmark_module("benchmark_attention_navigation_quality")
 
 class AttentionNavigationQualityBenchmarkTests(unittest.TestCase):
     def test_report_measures_navigation_quality_and_red_lines_separately(self) -> None:
@@ -159,7 +156,6 @@ class AttentionNavigationQualityBenchmarkTests(unittest.TestCase):
         self.assertGreater(payload["hard_red_lines"]["masked_source_resurrection_count"], 0)
         self.assertGreater(payload["metrics"]["route_precision_at_1"]["rate"], 0.8)
         self.assertNotIn("aggregate_score", payload)
-
 
 if __name__ == "__main__":
     unittest.main()

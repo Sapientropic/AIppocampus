@@ -1,16 +1,11 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.warm_ambient import recall as warm  # noqa: E402
+from aippocampus_runtime.warm_ambient import recall as warm
 
 
 class WarmAmbientTopicEpochPolicyTests(unittest.TestCase):
@@ -115,7 +110,6 @@ class WarmAmbientTopicEpochPolicyTests(unittest.TestCase):
             result["suppression_diagnostics"]["topic_epoch_vote_counts_by_family"],
             {"deep_theme_matcher": {"suppress": 1}},
         )
-
 
 if __name__ == "__main__":
     unittest.main()

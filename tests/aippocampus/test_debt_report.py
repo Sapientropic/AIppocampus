@@ -12,7 +12,6 @@ assert spec is not None and spec.loader is not None
 debt_report = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(debt_report)
 
-
 class DebtReportTests(unittest.TestCase):
     def test_headroom_summary_counts_exact_near_and_over_budget_runtime(self) -> None:
         system_weight = debt_report.build_system_weight(
@@ -156,7 +155,6 @@ class DebtReportTests(unittest.TestCase):
             "architecture_debt_stale_allowance",
             [warning["code"] for warning in warnings],
         )
-
 
 if __name__ == "__main__":
     unittest.main()

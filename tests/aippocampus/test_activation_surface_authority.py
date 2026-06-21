@@ -2,16 +2,13 @@ from __future__ import annotations
 
 import hashlib
 import json
-import sys
 import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-if str(SCRIPTS) not in sys.path:
-    sys.path.insert(0, str(SCRIPTS))
 
-from aippocampus_runtime.ops.activation_authority_audit import (  # noqa: E402
+from aippocampus_runtime.ops.activation_authority_audit import (
     AUTHORITY_AUDIT_KIND,
     activation_dead_letter_candidate_report,
     activation_surface_authority_audit,
@@ -639,7 +636,6 @@ class ActivationSurfaceAuthorityTests(unittest.TestCase):
         self.assertNotIn("raw prompt text", serialized)
         self.assertNotIn("raw activation payload", serialized)
         self.assertNotIn("protected_wrong_route", serialized)
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,21 +1,8 @@
 from __future__ import annotations
 
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-ROOT = REPO_ROOT / "skills" / "aippocampus"
-SCRIPTS = ROOT / "scripts"
-for _path in (
-    SCRIPTS,
-    REPO_ROOT / "benchmarks" / "aippocampus",
-    REPO_ROOT / "tools" / "aippocampus" / "smoke",
-    REPO_ROOT / "tools" / "aippocampus" / "docs",
-):
-    sys.path.insert(0, str(_path))
-
-from aippocampus_runtime.dream import working_memory as wm  # noqa: E402
+from aippocampus_runtime.dream import working_memory as wm
 
 
 def source_ref(thread_key: str, message_id: str, line: int) -> dict[str, object]:
@@ -26,10 +13,8 @@ def source_ref(thread_key: str, message_id: str, line: int) -> dict[str, object]
         "project_label": "AIppocampus",
     }
 
-
 def bridge_claim(refs: list[dict[str, object]]) -> dict[str, object]:
     return {"claim": "This is a hypothesis over selected source refs.", "source_refs": refs}
-
 
 def adjudicated_finding(**overrides: object) -> dict[str, object]:
     refs = [source_ref("session:a", "msg-a", 10), source_ref("session:b", "msg-b", 20)]
@@ -46,7 +31,6 @@ def adjudicated_finding(**overrides: object) -> dict[str, object]:
     }
     finding.update(overrides)
     return finding
-
 
 class DreamWorkingMemoryTests(unittest.TestCase):
     def test_adjudicated_dream_row_defaults_to_quiet_substrate_use(self) -> None:
@@ -484,7 +468,6 @@ class DreamWorkingMemoryTests(unittest.TestCase):
         self.assertEqual(adjudicated["adjudication_result"]["status"], "parked")
         self.assertIn("sensitive_use_gate", adjudicated["adjudication_result"]["failed_checks"])
         self.assertEqual(wm.adjudicated_dream_findings_to_working_memory([adjudicated]), [])
-
 
 if __name__ == "__main__":
     unittest.main()

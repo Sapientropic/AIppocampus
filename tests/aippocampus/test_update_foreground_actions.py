@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from contextlib import redirect_stdout
@@ -9,18 +8,14 @@ from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.contracts import executable_command_violations  # noqa: E402
+from aippocampus_runtime.contracts import executable_command_violations
 from aippocampus_runtime.update import (
-    agent_status_summary,  # noqa: E402
-    plugin_cache,  # noqa: E402
-    status_actions,  # noqa: E402
+    agent_status_summary,
+    plugin_cache,
+    status_actions,
 )
-from aippocampus_runtime.update import cli as update_cli  # noqa: E402
-from tests.aippocampus.test_update_sync import (  # noqa: E402
+from aippocampus_runtime.update import cli as update_cli
+from tests.aippocampus.test_update_sync import (
     provider_env,
     run_update,
     write_minimal_repo,

@@ -1,15 +1,9 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.hooks.action_hint_replay import (  # noqa: E402
+from aippocampus_runtime.hooks.action_hint_replay import (
     public_replay_cases,
     run_action_hint_replay,
 )
@@ -60,7 +54,6 @@ class ActionHintReplayTests(unittest.TestCase):
         self.assertNotIn("sk-REPLAY", serialized)
         self.assertNotIn("E:/private", serialized)
         self.assertNotIn("test_secret.py --token", serialized)
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -9,22 +9,10 @@ import unittest
 from pathlib import Path
 from typing import Any
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-ROOT = REPO_ROOT / "skills" / "aippocampus"
-SCRIPTS = ROOT / "scripts"
-for _path in (
-    SCRIPTS,
-    REPO_ROOT / "benchmarks" / "aippocampus",
-    REPO_ROOT / "tools" / "aippocampus" / "smoke",
-    REPO_ROOT / "tools" / "aippocampus" / "docs",
-):
-    sys.path.insert(0, str(_path))
-
-from aippocampus_runtime.hooks import diagnose as diagnose_shim  # noqa: E402
-from aippocampus_runtime.hooks import diagnose as packaged_diagnose  # noqa: E402
+from aippocampus_runtime.hooks import diagnose as diagnose_shim
+from aippocampus_runtime.hooks import diagnose as packaged_diagnose
 
 diagnose: Any = diagnose_shim
-
 
 class HookDiagnosticsTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -392,7 +380,6 @@ class HookDiagnosticsTests(unittest.TestCase):
                 "unsupported_hosts": ["claude-code", "generic-jsonl"],
             },
         )
-
 
 if __name__ == "__main__":
     unittest.main()

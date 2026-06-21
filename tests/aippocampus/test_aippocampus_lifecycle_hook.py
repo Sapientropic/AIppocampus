@@ -6,18 +6,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-ROOT = REPO_ROOT / "skills" / "aippocampus"
-SCRIPTS = ROOT / "scripts"
-for _path in (
-    SCRIPTS,
-    REPO_ROOT / "benchmarks" / "aippocampus",
-    REPO_ROOT / "tools" / "aippocampus" / "smoke",
-    REPO_ROOT / "tools" / "aippocampus" / "docs",
-):
-    sys.path.insert(0, str(_path))
-
-from aippocampus_runtime.hooks import lifecycle as hook  # noqa: E402
+from aippocampus_runtime.hooks import lifecycle as hook
 
 
 class MemoryMaintenanceHookTests(unittest.TestCase):
@@ -626,7 +615,6 @@ class MemoryMaintenanceHookTests(unittest.TestCase):
         rendered = str(result["emergency_snapshot"])
         self.assertEqual(result["emergency_snapshot"]["snapshot_id"], "snap-latest")
         self.assertNotIn("must not leak", rendered)
-
 
 if __name__ == "__main__":
     unittest.main()

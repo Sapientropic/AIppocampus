@@ -1,23 +1,11 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-ROOT = REPO_ROOT / "skills" / "aippocampus"
-SCRIPTS = ROOT / "scripts"
-for _path in (
-    SCRIPTS,
-    REPO_ROOT / "benchmarks" / "aippocampus",
-    REPO_ROOT / "tools" / "aippocampus" / "smoke",
-    REPO_ROOT / "tools" / "aippocampus" / "docs",
-):
-    sys.path.insert(0, str(_path))
-
-from aippocampus_runtime.navigation import project_timeline as timeline  # noqa: E402
+from aippocampus_runtime.navigation import project_timeline as timeline
 
 
 class ProjectTimelineTests(unittest.TestCase):
@@ -418,7 +406,6 @@ class ProjectTimelineTests(unittest.TestCase):
         self.assertEqual(shared_tmp.read_text(encoding="utf-8"), "sentinel")
         leftovers = sorted(path.parent.glob(f".{path.name}.*.tmp"))
         self.assertEqual(leftovers, [])
-
 
 if __name__ == "__main__":
     unittest.main()

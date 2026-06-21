@@ -1,17 +1,11 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
 from contextlib import redirect_stdout
 from io import StringIO
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.recall import search_decision_adapter as adapter  # noqa: E402
+from aippocampus_runtime.recall import search_decision_adapter as adapter
 
 SOURCE_BACKED_SEARCH_DECISION = {
     "title": "Local search-decision memory adapter",
@@ -32,7 +26,6 @@ SOURCE_BACKED_SEARCH_DECISION = {
     "support_level": "candidate",
     "confidence": 0.86,
 }
-
 
 class SearchDecisionAdapterTests(unittest.TestCase):
     def test_degraded_search_cue_produces_source_backed_query_expansion_packet(self) -> None:
@@ -121,7 +114,6 @@ class SearchDecisionAdapterTests(unittest.TestCase):
         self.assertEqual(payload["during_search"]["phase"], "during_search")
         self.assertEqual(payload["after_search"]["phase"], "after_search")
         self.assertTrue(payload["source_boundary"]["local_first"])
-
 
 if __name__ == "__main__":
     unittest.main()

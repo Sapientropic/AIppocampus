@@ -5,14 +5,11 @@ import io
 import sys
 import tempfile
 import unittest
-from pathlib import Path
 from unittest import mock
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(REPO_ROOT))
+from tests.aippocampus.import_path_helpers import import_repo_root_module
 
-from benchmark_corpus import convert_to_aippocampus as converter  # noqa: E402
-
+converter = import_repo_root_module("benchmark_corpus.convert_to_aippocampus")
 
 class BenchmarkCorpusConverterTests(unittest.TestCase):
     def test_missing_datasets_dependency_has_targeted_message(self) -> None:
@@ -56,7 +53,6 @@ class BenchmarkCorpusConverterTests(unittest.TestCase):
         self.assertIn("Error:", output)
         self.assertIn("install `datasets`", output)
         self.assertNotIn("Traceback", output)
-
 
 if __name__ == "__main__":
     unittest.main()

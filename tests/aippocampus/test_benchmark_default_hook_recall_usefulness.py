@@ -8,15 +8,10 @@ import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
-BENCHMARKS = REPO_ROOT / "benchmarks" / "aippocampus"
-if str(BENCHMARKS) not in sys.path:
-    sys.path.insert(0, str(BENCHMARKS))
 
-from benchmarks.aippocampus import (
-    benchmark_default_hook_recall_usefulness as benchmark,  # noqa: E402
-)
+from tests.aippocampus.import_path_helpers import import_benchmark_module
+
+benchmark = import_benchmark_module("benchmark_default_hook_recall_usefulness")
 
 
 class DefaultHookRecallUsefulnessBenchmarkTests(unittest.TestCase):
@@ -250,7 +245,6 @@ class DefaultHookRecallUsefulnessBenchmarkTests(unittest.TestCase):
             written["issue_readouts"]["github_1439"]["default_foreground_adoption_recommended"]
         )
         self.assertTrue(written["issue_readouts"]["github_1449"]["fixture_gate_passed"])
-
 
 if __name__ == "__main__":
     unittest.main()

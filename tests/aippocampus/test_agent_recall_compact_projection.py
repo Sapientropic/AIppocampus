@@ -2,24 +2,17 @@ from __future__ import annotations
 
 import json
 import shlex
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.contracts import executable_command_violations  # noqa: E402
-from aippocampus_runtime.recall import agent_continuity, foreground_action_card  # noqa: E402
-from tests.aippocampus.frontstage_assertions import (  # noqa: E402
+from aippocampus_runtime.contracts import executable_command_violations
+from aippocampus_runtime.recall import agent_continuity, foreground_action_card
+from tests.aippocampus.frontstage_assertions import (
     assert_compact_frontstage_payload,
 )
 
 
 def assert_command_args(test: unittest.TestCase, command: str, expected: list[str]) -> None:
     test.assertEqual(shlex.split(command), expected)
-
 
 class AgentRecallCompactProjectionTests(unittest.TestCase):
     def test_compact_detail_command_uses_safe_recall_cue_or_template(self) -> None:
@@ -628,7 +621,6 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
             ],
         )
         self.assertEqual(executable_command_violations(projected), [])
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -2,23 +2,11 @@ from __future__ import annotations
 
 import hashlib
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-ROOT = REPO_ROOT / "skills" / "aippocampus"
-SCRIPTS = ROOT / "scripts"
-for _path in (
-    SCRIPTS,
-    REPO_ROOT / "benchmarks" / "aippocampus",
-    REPO_ROOT / "tools" / "aippocampus" / "smoke",
-    REPO_ROOT / "tools" / "aippocampus" / "docs",
-):
-    sys.path.insert(0, str(_path))
-
-from aippocampus_runtime.recall import semantic_cue_cache as cues  # noqa: E402
+from aippocampus_runtime.recall import semantic_cue_cache as cues
 
 
 class SemanticCueCacheTests(unittest.TestCase):
@@ -163,7 +151,6 @@ class SemanticCueCacheTests(unittest.TestCase):
             self.assertIn("net_hit_buckets", report)
             self.assertNotIn("private cue text", encoded)
             self.assertNotIn("private prompt text", encoded)
-
 
 if __name__ == "__main__":
     unittest.main()

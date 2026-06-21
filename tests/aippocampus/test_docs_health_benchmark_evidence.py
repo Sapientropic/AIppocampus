@@ -1,15 +1,12 @@
 from __future__ import annotations
 
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(REPO_ROOT / "tools" / "aippocampus" / "docs"))
+from tests.aippocampus.import_path_helpers import import_doc_tool_module
 
-import check_docs_health as docs_health  # noqa: E402
-
+docs_health = import_doc_tool_module("check_docs_health")
 
 class DocsHealthBenchmarkEvidenceTests(unittest.TestCase):
     def test_recall_navigation_readme_requires_current_state_card(self) -> None:
@@ -35,7 +32,6 @@ class DocsHealthBenchmarkEvidenceTests(unittest.TestCase):
             issues = docs_health.benchmark_evidence_map_issues(repo)
 
         self.assertIn("recall-navigation README missing current-state card", issues)
-
 
 if __name__ == "__main__":
     unittest.main()

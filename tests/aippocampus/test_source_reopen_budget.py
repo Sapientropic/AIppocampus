@@ -1,15 +1,9 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.recall import source_reopen_budget as budget  # noqa: E402
+from aippocampus_runtime.recall import source_reopen_budget as budget
 
 
 class SourceReopenBudgetTests(unittest.TestCase):
@@ -74,7 +68,6 @@ class SourceReopenBudgetTests(unittest.TestCase):
         self.assertTrue(timeout["timeout_fail_open"])
         self.assertEqual(timeout["next_action"], "fail_open_no_claim")
         self.assertEqual(timeout["source_backed_claim_without_reopen"], 0)
-
 
 if __name__ == "__main__":
     unittest.main()

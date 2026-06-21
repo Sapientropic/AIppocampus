@@ -11,24 +11,20 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.recall import prompt_recall_ambient  # noqa: E402
-from aippocampus_runtime.warm_ambient import cli as warm_cli  # noqa: E402
-from aippocampus_runtime.warm_ambient import recall as warm  # noqa: E402
-from aippocampus_runtime.warm_ambient import scheduler as warm_scheduler  # noqa: E402
-from aippocampus_runtime.warm_ambient import source_validation  # noqa: E402
-from aippocampus_runtime.warm_ambient.hook_seen_threads import (  # noqa: E402
+from aippocampus_runtime.recall import prompt_recall_ambient
+from aippocampus_runtime.warm_ambient import cli as warm_cli
+from aippocampus_runtime.warm_ambient import recall as warm
+from aippocampus_runtime.warm_ambient import scheduler as warm_scheduler
+from aippocampus_runtime.warm_ambient import source_validation
+from aippocampus_runtime.warm_ambient.hook_seen_threads import (
     hook_seen_ledger_path_for_cache,
     hook_seen_thread_ref,
     load_hook_seen_rows,
 )
-from aippocampus_runtime.warm_ambient.scout_attribution import merge_scout_origins  # noqa: E402
-from aippocampus_runtime.warm_ambient.status_card import compact_warm_status_card  # noqa: E402
-from tests.aippocampus.timing_fixtures import host_timeout_sleep  # noqa: E402
-from tests.aippocampus.warm_ambient_fixtures import (  # noqa: E402
+from aippocampus_runtime.warm_ambient.scout_attribution import merge_scout_origins
+from aippocampus_runtime.warm_ambient.status_card import compact_warm_status_card
+from tests.aippocampus.timing_fixtures import host_timeout_sleep
+from tests.aippocampus.warm_ambient_fixtures import (
     write_registry,
     write_thread_registry,
 )
@@ -2497,7 +2493,6 @@ class WarmAmbientRecallTests(unittest.TestCase):
         self.assertNotIn("cards", summary)
         self.assertIn("intent mode continuity", themes)
         self.assertIn("metaphor key-line resonance", themes)
-
 
 if __name__ == "__main__":
     unittest.main()

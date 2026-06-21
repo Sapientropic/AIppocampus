@@ -11,18 +11,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-ROOT = REPO_ROOT / "skills" / "aippocampus"
-SCRIPTS = ROOT / "scripts"
-for _path in (
-    SCRIPTS,
-    REPO_ROOT / "benchmarks" / "aippocampus",
-    REPO_ROOT / "tools" / "aippocampus" / "smoke",
-    REPO_ROOT / "tools" / "aippocampus" / "docs",
-):
-    sys.path.insert(0, str(_path))
-
-from aippocampus_runtime.recall import segment_builder as build_segments  # noqa: E402
+from aippocampus_runtime.recall import segment_builder as build_segments
 
 
 class BuildSegmentsTests(unittest.TestCase):
@@ -348,7 +337,6 @@ class BuildSegmentsTests(unittest.TestCase):
             self.assertEqual(manifest["generation_id"], "gen_old")
             self.assertEqual(pointer["current_generation"], "gen_old")
             self.assertFalse(generation_dir.exists())
-
 
 if __name__ == "__main__":
     unittest.main()

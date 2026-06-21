@@ -13,24 +13,13 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-ROOT = REPO_ROOT / "skills" / "aippocampus"
-SCRIPTS = ROOT / "scripts"
-for _path in (
-    SCRIPTS,
-    REPO_ROOT / "benchmarks" / "aippocampus",
-    REPO_ROOT / "tools" / "aippocampus" / "smoke",
-    REPO_ROOT / "tools" / "aippocampus" / "docs",
-):
-    sys.path.insert(0, str(_path))
-
-from aippocampus_runtime.dream import live_shadow_ab as dream_shadow  # noqa: E402
-from aippocampus_runtime.hooks import prompt as hook  # noqa: E402
-from aippocampus_runtime.navigation import concept_graph as concept_graph  # noqa: E402
-from aippocampus_runtime.recall import ambient_cache as thread_cache  # noqa: E402
-from aippocampus_runtime.recall import prompt_cues as recall_cues  # noqa: E402
-from aippocampus_runtime.recall import semantic_cue_cache as cue_cache  # noqa: E402
-from tests.aippocampus.redaction_fixtures import (  # noqa: E402
+from aippocampus_runtime.dream import live_shadow_ab as dream_shadow
+from aippocampus_runtime.hooks import prompt as hook
+from aippocampus_runtime.navigation import concept_graph as concept_graph
+from aippocampus_runtime.recall import ambient_cache as thread_cache
+from aippocampus_runtime.recall import prompt_cues as recall_cues
+from aippocampus_runtime.recall import semantic_cue_cache as cue_cache
+from tests.aippocampus.redaction_fixtures import (
     FAKE_TEST_BEARER_TOKEN,
     FAKE_TEST_ESCAPED_WINDOWS_LOCAL_PATH_MARKER,
     FAKE_TEST_OPENAI_API_KEY,
@@ -59,7 +48,6 @@ __all__ = [
     "FAKE_TEST_OPENAI_API_KEY",
     "fake_test_windows_path",
 ]
-
 
 class AmbientRecallHookCase(unittest.TestCase):
     def setUp(self) -> None:

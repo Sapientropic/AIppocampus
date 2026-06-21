@@ -1,14 +1,9 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
-from pathlib import Path
 
-SCRIPTS = Path(__file__).resolve().parents[2] / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.macro import loadbearing_fixture  # noqa: E402
+from aippocampus_runtime.macro import loadbearing_fixture
 
 
 class MacroTopologyLoadbearingTests(unittest.TestCase):
@@ -108,7 +103,6 @@ class MacroTopologyLoadbearingTests(unittest.TestCase):
         self.assertFalse(by_id["healthy_packet_unchanged"]["foreground_noise_added"])
         self.assertFalse(by_id["annotation_vocabulary_guard"]["useful_action_delta"])
         self.assertTrue(by_id["annotation_vocabulary_guard"]["annotation_vocabulary_guard"])
-
 
 if __name__ == "__main__":
     unittest.main()

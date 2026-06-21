@@ -1,20 +1,15 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.recall.continuity_domain_salience_adapter import (  # noqa: E402
+from aippocampus_runtime.recall.continuity_domain_salience_adapter import (
     adapt_salience_sidecar_to_continuity_domains,
     salience_rows_to_continuity_domain_events,
 )
-from aippocampus_runtime.recall.continuity_domains import (  # noqa: E402
+from aippocampus_runtime.recall.continuity_domains import (
     load_continuity_domain_events,
     load_continuity_domains_snapshot,
 )
@@ -29,7 +24,6 @@ def _source_ref(index: int = 1) -> dict[str, object]:
         "source_line": index,
         "role": "user",
     }
-
 
 def _salience_row(
     event_kind: str,
@@ -50,7 +44,6 @@ def _salience_row(
         "reason_codes": reason_codes or [f"{event_kind}_cue"],
         "source_refs": refs if refs is not None else [_source_ref(index)],
     }
-
 
 def _write_clean_source(root: Path, *, message_count: int = 6) -> Path:
     clean = root / "clean-source"
@@ -73,7 +66,6 @@ def _write_clean_source(root: Path, *, message_count: int = 6) -> Path:
             )
     (clean / "turns.jsonl").write_text("", encoding="utf-8")
     return clean
-
 
 class ContinuityDomainSalienceAdapterTests(unittest.TestCase):
     def test_salience_rows_map_conservative_event_families_and_defer_unsafe_rows(self) -> None:
@@ -238,7 +230,6 @@ class ContinuityDomainSalienceAdapterTests(unittest.TestCase):
         self.assertEqual(events[0]["event_kind"], "counter_source_added")
         self.assertIsNotNone(snapshot)
         self.assertEqual(len((snapshot or {}).get("domains") or []), 1)
-
 
 if __name__ == "__main__":
     unittest.main()

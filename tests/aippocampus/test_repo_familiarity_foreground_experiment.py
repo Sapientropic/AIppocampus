@@ -7,7 +7,6 @@ import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 SMOKE = (
     REPO_ROOT
     / "tools"
@@ -15,10 +14,8 @@ SMOKE = (
     / "smoke"
     / "smoke_repo_familiarity_foreground_experiment.py"
 )
-if str(SCRIPTS) not in sys.path:
-    sys.path.insert(0, str(SCRIPTS))
 
-from aippocampus_runtime.ops import (  # noqa: E402
+from aippocampus_runtime.ops import (
     repo_familiarity_foreground_experiment,
     repo_familiarity_foreground_experiment_fixtures,
 )
@@ -142,7 +139,6 @@ class RepoFamiliarityForegroundExperimentTests(unittest.TestCase):
             payload["aggregate"]["arms"]["selected_card"]["case_count"],
             len(payload["cases"]),
         )
-
 
 if __name__ == "__main__":
     unittest.main()

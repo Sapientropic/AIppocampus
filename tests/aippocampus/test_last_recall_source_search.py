@@ -9,17 +9,12 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-ROOT = REPO_ROOT / "skills" / "aippocampus"
-SCRIPTS = ROOT / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-
-from aippocampus_runtime.contracts import foreground_action_contract_violations  # noqa: E402
-from aippocampus_runtime.recall import agent_continuity  # noqa: E402
-from aippocampus_runtime.recall.agent_recall_cache import write_last_recall_cache  # noqa: E402
-from aippocampus_runtime.recall.continuity_domains import clean_source_fingerprint  # noqa: E402
-from aippocampus_runtime.registry import api as registry  # noqa: E402
-from aippocampus_runtime.source import search  # noqa: E402
+from aippocampus_runtime.contracts import foreground_action_contract_violations
+from aippocampus_runtime.recall import agent_continuity
+from aippocampus_runtime.recall.agent_recall_cache import write_last_recall_cache
+from aippocampus_runtime.recall.continuity_domains import clean_source_fingerprint
+from aippocampus_runtime.registry import api as registry
+from aippocampus_runtime.source import search
 
 
 class LastRecallSourceSearchTests(unittest.TestCase):
@@ -546,7 +541,6 @@ class LastRecallSourceSearchTests(unittest.TestCase):
             "registry-backed recall deepen smoke phrase",
             json.dumps(deepen_payload["result"]["source_window"], ensure_ascii=False),
         )
-
 
 if __name__ == "__main__":
     unittest.main()

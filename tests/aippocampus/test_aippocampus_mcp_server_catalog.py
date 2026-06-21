@@ -19,7 +19,6 @@ from tests.aippocampus.mcp_server_fixtures import (
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 
-
 class AippocampusMcpServerCatalogTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
@@ -743,8 +742,6 @@ class AippocampusMcpServerCatalogTests(unittest.TestCase):
 
         self.assertEqual(resources["result"], {"resources": []})
         self.assertEqual(templates["result"], {"resourceTemplates": []})
-
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,28 +1,21 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
+from tests.aippocampus.import_path_helpers import import_doc_tool_module
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ROOT = REPO_ROOT / "skills" / "aippocampus"
-SCRIPTS = ROOT / "scripts"
-for _path in (
-    SCRIPTS,
-    REPO_ROOT / "benchmarks" / "aippocampus",
-    REPO_ROOT / "tools" / "aippocampus" / "smoke",
-    REPO_ROOT / "tools" / "aippocampus" / "docs",
-):
-    sys.path.insert(0, str(_path))
 
-import architecture_index_guard  # noqa: E402
-import check_docs_health as docs_health  # noqa: E402
-import classifier_policy_guard  # noqa: E402
-import ia_pressure_guard  # noqa: E402
+architecture_index_guard = import_doc_tool_module("architecture_index_guard")
+docs_health = import_doc_tool_module("check_docs_health")
+classifier_policy_guard = import_doc_tool_module("classifier_policy_guard")
+ia_pressure_guard = import_doc_tool_module("ia_pressure_guard")
 
-from tests.aippocampus.docs_health_fixtures import (  # noqa: E402
+from tests.aippocampus.docs_health_fixtures import (
     docs_health_repo,
     write_classifier_policy,
     write_classifier_release_checklist,
@@ -1926,7 +1919,6 @@ class DocsHealthTests(unittest.TestCase):
             any("message scope_labels do not match current generator" in issue for issue in issues),
             issues,
         )
-
 
 if __name__ == "__main__":
     unittest.main()

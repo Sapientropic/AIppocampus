@@ -26,14 +26,12 @@ IMPORT_POLICY_ROOTS = (
     REPO_ROOT / "benchmarks" / "aippocampus",
 )
 
-
 def _policy_baseline(path: str) -> set[str]:
     return {
         line.strip()
         for line in (REPO_ROOT / path).read_text(encoding="utf-8").splitlines()
         if line.strip() and not line.startswith("#")
     }
-
 
 def _python_files_matching(pattern: str) -> set[str]:
     regex = re.compile(pattern)
@@ -45,7 +43,6 @@ def _python_files_matching(pattern: str) -> set[str]:
             if regex.search(path.read_text(encoding="utf-8")):
                 matches.add(path.relative_to(REPO_ROOT).as_posix())
     return matches
-
 
 def _python_files_with_e402_comments() -> set[str]:
     matches: set[str] = set()
@@ -61,7 +58,6 @@ def _python_files_with_e402_comments() -> set[str]:
             if any(token.type == tokenize.COMMENT and "# noqa: E402" in token.string for token in tokens):
                 matches.add(path.relative_to(REPO_ROOT).as_posix())
     return matches
-
 
 class ImportCouplingTests(unittest.TestCase):
     def test_runtime_has_no_top_level_flat_script_shims(self) -> None:
@@ -186,7 +182,6 @@ class ImportCouplingTests(unittest.TestCase):
                     check=False,
                 )
                 self.assertEqual(result.returncode, 0, result.stderr or result.stdout)
-
 
 if __name__ == "__main__":
     unittest.main()
