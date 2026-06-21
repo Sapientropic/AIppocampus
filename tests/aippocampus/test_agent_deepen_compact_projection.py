@@ -15,6 +15,9 @@ sys.path.insert(0, str(SCRIPTS))
 
 from aippocampus_runtime.mcp import server as mcp  # noqa: E402
 from aippocampus_runtime.recall import agent_continuity  # noqa: E402
+from tests.aippocampus.frontstage_assertions import (  # noqa: E402
+    assert_compact_frontstage_payload,
+)
 
 
 class AgentDeepenCompactProjectionTests(unittest.TestCase):
@@ -141,10 +144,7 @@ class AgentDeepenCompactProjectionTests(unittest.TestCase):
         self.assertEqual(compact_payload["detail"], "compact")
         self.assertEqual(compact_payload["surface"], "agent_cli_source_court_compact")
         self.assertEqual(compact_payload["source_window_summary"]["message_count"], 2)
-        self.assertIn(
-            "--request 1 --last-recall --json --detail full",
-            compact_payload["operator_detail_command"],
-        )
+        assert_compact_frontstage_payload(self, compact_payload, max_top_level_diagnostics=1)
         self.assertNotIn("result", compact_payload)
         self.assertNotIn("source_window", compact_payload)
         self.assertNotIn('"messages"', compact_encoded)
@@ -320,8 +320,8 @@ class AgentDeepenCompactProjectionTests(unittest.TestCase):
             route["callable_selector"]["recall_selector"],
             route_action["arguments"]["recall_selector"],
         )
-        self.assertEqual(route["display_id"], route["route_id"])
-        self.assertEqual(route["feedback_id"], route["route_id"])
+        self.assertNotIn("display_id", route)
+        self.assertNotIn("feedback_id", route)
         self.assertEqual(
             route["private_handle_boundary"],
             "compact_output_redacts_local_private_handle_use_callable_selector",
@@ -358,7 +358,8 @@ class AgentDeepenCompactProjectionTests(unittest.TestCase):
         for action in compact_payload["feedback_actions"]:
             self.assertEqual(action["mutation_risk"], "durable_low_authority_feedback_write")
             self.assertEqual(action["claim_boundary"], "feedback_is_not_source_truth")
-            self.assertIn(f"aippocampus agent feedback {route['feedback_id']}", action["command"])
+            self.assertIn("aippocampus agent feedback", action["command"])
+            self.assertNotIn("feedback_id", action["command"])
         self.assertNotIn("result", compact_payload)
         self.assertNotIn("source_window", compact_payload)
         self.assertNotIn('"messages"', compact_encoded)

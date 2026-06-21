@@ -56,6 +56,9 @@ from aippocampus_runtime.recall import (
 from aippocampus_runtime.recall import (
     agent_facade_contract as facade,
 )
+from aippocampus_runtime.recall import (
+    associative_path_fallback as apw_fallback,
+)
 from aippocampus_runtime.recall.agent_continuity_cli_support import (
     DEFAULT_MACRO_STATE_RELATIVE_PATHS,
     agent_recall_missing_query_payload,
@@ -895,6 +898,12 @@ def recall(
     semantic_timeout: int = 12,
     feedback_path: str | Path | None = None,
     opened_route_keys: set[str] | None = None,
+    include_associative_fallback: bool = False,
+    associative_path_sidecar_dir: str | Path | None = None,
+    associative_path_bridge_path: str | Path | None = None,
+    associative_path_navigation_path: str | Path | None = None,
+    associative_path_active_lock_path: str | Path | None = None,
+    associative_path_feedback_path: str | Path | None = None,
 ) -> dict[str, Any]:
     """Return compact MemoryPackets plus explicit deepen handles for an agent pull."""
 
@@ -1013,6 +1022,7 @@ def recall(
         attention_navigation=attention_navigation,
     )
     memory_packets = [_memory_packet_for_route(route) for route in routes]
+    triage_metrics = _memory_packet_triage_metrics(memory_packets)
     deepen_requests = [
         agent_deepen_requests.deepen_request_for_route(
             route,
@@ -1025,6 +1035,21 @@ def recall(
         )
         if route.get("handle")
     ]
+    ordinary_status = "ok" if memory_packets else "no_routes"
+    associative_path_fallback = apw_fallback.maybe_append_associative_path_fallback(
+        include_associative_fallback=include_associative_fallback,
+        query=str(query or ""),
+        ordinary_status=ordinary_status,
+        memory_packets=memory_packets,
+        deepen_requests=deepen_requests,
+        triage_metrics=triage_metrics,
+        cwd=cwd_path,
+        sidecar_dir=associative_path_sidecar_dir,
+        semantic_bridge_path=associative_path_bridge_path,
+        navigation_path=associative_path_navigation_path,
+        active_lock_path=associative_path_active_lock_path,
+        feedback_path=associative_path_feedback_path or feedback_path,
+    )
     already_opened_count = _mark_already_opened_routes(
         memory_packets,
         deepen_requests,
@@ -1054,7 +1079,6 @@ def recall(
         semantic_timeout=semantic_timeout,
     )
     forbidden_count = _count_forbidden_keys(memory_packets)
-    triage_metrics = _memory_packet_triage_metrics(memory_packets)
     result = {
         "kind": KIND,
         "schema_version": SCHEMA_VERSION,
@@ -1070,6 +1094,7 @@ def recall(
         "attention_router_navigation": attention_navigation,
         "navigation_signals": navigation_signals,
         "semantic_gate_diagnostics": semantic_diagnostics,
+        "associative_path_fallback": associative_path_fallback,
         "suggested_next": "agent deepen" if deepen_requests else "search_memory",
         "suggested_next_command": (
             deepen_requests[0].get("copy_paste_command") if deepen_requests else None
@@ -1090,6 +1115,8 @@ def recall(
             **macro_metrics,
             "source_reopen_success_rate_observed": None,
             "wrong_or_stale_handle_rate_observed": None,
+            "associative_path_fallback_requested": bool(include_associative_fallback),
+            "associative_path_fallback_route_count": apw_fallback.route_count(associative_path_fallback),
         },
         "red_lines": {
             "foreground_source_dump_count": forbidden_count,
@@ -1530,6 +1557,7 @@ def _parser() -> argparse.ArgumentParser:
     recall_parser.add_argument("--semantic-gate-mode", choices=["off", "auto", "on"])
     recall_parser.add_argument("--run-semantic-gate", action="store_true")
     recall_parser.add_argument("--semantic-timeout", type=int, default=12)
+    apw_fallback.add_cli_arguments(recall_parser)
     recall_parser.add_argument("--last-recall-path")
     recall_parser.add_argument(
         "--public",
@@ -1777,6 +1805,7 @@ def main(argv: list[str] | None = None) -> int:
                 registry_dir=args.registry_dir,
             )["path"],
             opened_route_keys=opened_route_keys_from_last_recall_cache(args.last_recall_path),
+            **apw_fallback.cli_kwargs(args),
         )
         cache_written = write_last_recall_cache(
             payload.get("deepen_requests") or [],

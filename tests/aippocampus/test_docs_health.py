@@ -23,6 +23,7 @@ import classifier_policy_guard  # noqa: E402
 import ia_pressure_guard  # noqa: E402
 
 from tests.aippocampus.docs_health_fixtures import (  # noqa: E402
+    docs_health_repo,
     write_classifier_policy,
     write_classifier_release_checklist,
     write_development_status_pyproject,
@@ -131,8 +132,7 @@ class DocsHealthTests(unittest.TestCase):
         self.assertEqual([], docs_health.benchmark_report_router_issues(REPO_ROOT))
         self.assertEqual([], docs_health.currentness_card_issues(REPO_ROOT))
 
-        with tempfile.TemporaryDirectory() as tmp:
-            repo = Path(tmp)
+        with docs_health_repo() as repo:
             current_claims = repo / "docs" / "evidence" / "current-claims.md"
             router = repo / "docs" / "evidence" / "benchmarks" / "reports" / "README.md"
             readiness = repo / "docs" / "evidence" / "readiness" / "stage-0-5-readiness.md"
@@ -301,8 +301,7 @@ class DocsHealthTests(unittest.TestCase):
             docs_health.EVIDENCE_LEDGER_LINE_LENGTH_LIMIT,
         )
 
-        with tempfile.TemporaryDirectory() as tmp:
-            repo = Path(tmp)
+        with docs_health_repo() as repo:
             ledger = repo / "docs" / "evidence" / "current-claims.md"
             ledger.parent.mkdir(parents=True)
             ledger.write_text("short\n" + ("x" * 1001) + "\n", encoding="utf-8")

@@ -235,6 +235,54 @@ def _storage_summary_projection(
     return {"command": summary}
 
 
+def _maintenance_plan_action(*, reason: str) -> dict[str, Any]:
+    return {
+        "id": "review_maintenance_plan",
+        "label": "Review maintenance plan",
+        "command": "aippocampus maintenance plan --summary-json",
+        "mutation_risk": "read_only",
+        "claim_boundary": "maintenance_plan_not_source_evidence",
+        "why": reason,
+    }
+
+
+def _maintenance_apply_action(*, reason: str) -> dict[str, Any]:
+    return {
+        "id": "apply_after_user_consent",
+        "label": "Apply maintenance after consent",
+        "command": "aippocampus maintenance apply --summary-json",
+        "mutation_risk": "writes_generated_source_artifacts",
+        "claim_boundary": "explicit_maintenance_write_not_source_claim",
+        "why": reason,
+        "write_boundary": {
+            "explicit_user_consent_required": True,
+            "no_write_happens_until_command_runs": True,
+        },
+    }
+
+
+def _health_followup_actions(
+    *,
+    freshness_degraded: bool,
+    exact_latest_action: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
+    if not (freshness_degraded and exact_latest_action):
+        return []
+    reason = (
+        "Latest clean-source or index artifacts may be stale; review the bounded maintenance "
+        "plan before exact-latest claims."
+    )
+    return [
+        _maintenance_plan_action(reason=reason),
+        _maintenance_apply_action(
+            reason=(
+                "Run only after reviewing the maintenance plan and deciding to refresh generated "
+                "source/index artifacts."
+            )
+        ),
+    ]
+
+
 def compact_health_payload(payload: dict[str, Any]) -> dict[str, Any]:
     readiness = payload.get("product_readiness") or {}
     all_recommended = [
@@ -368,10 +416,6 @@ def compact_health_payload(payload: dict[str, Any]) -> dict[str, Any]:
             "mutation_risk": "read_only", "claim_boundary": "health_not_source", "continue_without_command": True,
             "primary": {"ordinary_first_recall_usable": True},
         }
-        if freshness_degraded and exact_latest_action:
-            primary_action["before_exact_latest_claims"] = _action_command_projection(
-                exact_latest_action
-            )
         if storage_cleanup_action:
             primary_action["when_idle"] = _storage_summary_projection(
                 storage_cleanup_action,
@@ -421,7 +465,14 @@ def compact_health_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "maintenance_summary": maintenance_summary,
         "operator_detail_command": "aippocampus health --detail full --json --operator-timeout-ms 5000",
     }
-    foreground_fields = canonical_foreground_action_fields(foreground_action)
+    followup_actions = _health_followup_actions(
+        freshness_degraded=freshness_degraded,
+        exact_latest_action=exact_latest_action,
+    )
+    foreground_fields = canonical_foreground_action_fields(
+        foreground_action,
+        safe_next_actions=[foreground_action, *followup_actions],
+    )
     card.update(foreground_fields)
     return _without_empty(card)
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import contextlib
 import io
 import json
@@ -52,6 +53,26 @@ PR_CRITICAL_MODULES = {
 }
 
 PR_SIZE_DRIFT_SLACK = 10
+TESTS_ROOT = REPO_ROOT / "tests" / "aippocampus"
+
+
+def _raw_sleep_sites(path: Path) -> list[str]:
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    sites: list[str] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        if (
+            isinstance(func, ast.Attribute)
+            and func.attr == "sleep"
+            and isinstance(func.value, ast.Name)
+            and func.value.id == "time"
+        ):
+            sites.append(f"{path.relative_to(REPO_ROOT)}:{node.lineno}")
+        elif isinstance(func, ast.Name) and func.id == "sleep":
+            sites.append(f"{path.relative_to(REPO_ROOT)}:{node.lineno}")
+    return sites
 
 
 class RunTestsTierTests(unittest.TestCase):
@@ -412,6 +433,153 @@ class RunTestsTierTests(unittest.TestCase):
         self.assertEqual(report["budget"]["elapsed_seconds_status"], "over_target")
         self.assertIn("drift", report["budget"]["note"])
 
+    def test_timings_report_includes_manifest_freshness_metadata(self) -> None:
+        rows = [
+            {
+                "module": "tests.aippocampus.test_alpha",
+                "primary_tier": "pr",
+                "test_count": 2,
+                "duration_seconds": 0.5,
+                "ok": True,
+            },
+            {
+                "module": "tests.aippocampus.test_beta",
+                "primary_tier": "pr",
+                "test_count": 3,
+                "duration_seconds": 0.75,
+                "ok": True,
+            },
+        ]
+
+        with mock.patch.object(run_tests, "_utc_timestamp", return_value="2026-06-21T12:00:00Z"):
+            report = run_tests.build_timings_report(
+                selected_tier="pr",
+                rows=rows,
+                shard=None,
+            )
+
+        manifest = report["manifest"]
+        self.assertEqual(report["schema_version"], 2)
+        self.assertEqual(report["runner_version"], run_tests.RUNNER_VERSION)
+        self.assertEqual(report["generated_at"], "2026-06-21T12:00:00Z")
+        self.assertEqual(manifest["normalized_tier"], "pr")
+        self.assertEqual(manifest["module_count"], 2)
+        self.assertEqual(manifest["test_count"], 5)
+        self.assertEqual(len(manifest["module_list_hash"]), 64)
+        self.assertEqual(len(manifest["manifest_fingerprint"]), 64)
+
+    def test_timing_artifact_freshness_detects_stale_module_set(self) -> None:
+        current = run_tests.build_module_set_manifest(
+            selected_tier="pr",
+            rows=[
+                {"module": "tests.aippocampus.test_alpha", "test_count": 2},
+                {"module": "tests.aippocampus.test_beta", "test_count": 3},
+            ],
+        )
+        legacy_artifact = {
+            "kind": "aippocampus_test_module_timings",
+            "schema_version": 1,
+            "selected_tier": "pr",
+            "module_count": 1,
+            "test_count": 2,
+            "shard": None,
+            "modules": [
+                {
+                    "module": "tests.aippocampus.test_alpha",
+                    "primary_tier": "pr",
+                    "test_count": 2,
+                    "duration_seconds": 0.1,
+                    "ok": True,
+                }
+            ],
+        }
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "timings.json"
+            path.write_text(json.dumps(legacy_artifact), encoding="utf-8")
+
+            freshness = run_tests.assess_timing_artifact_freshness(
+                path,
+                current_manifests={"pr": current},
+            )
+
+        self.assertEqual(freshness["status"], "stale")
+        self.assertEqual(freshness["selected_tier"], "pr")
+        self.assertIn("module_count", freshness["mismatches"])
+        self.assertIn("module_list_hash", freshness["mismatches"])
+
+    def test_timing_artifact_without_module_set_is_incomparable(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "timings.json"
+            path.write_text(
+                json.dumps(
+                    {
+                        "kind": "aippocampus_test_module_timings",
+                        "schema_version": 1,
+                        "selected_tier": "pr",
+                        "modules": [],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            freshness = run_tests.assess_timing_artifact_freshness(
+                path,
+                current_manifests={
+                    "pr": run_tests.build_module_set_manifest(
+                        selected_tier="pr",
+                        rows=[{"module": "tests.aippocampus.test_alpha", "test_count": 1}],
+                    )
+                },
+            )
+
+        self.assertEqual(freshness["status"], "incomparable")
+        self.assertIn("module set", freshness["reason"])
+
+    def test_tier_report_can_include_timing_artifact_freshness(self) -> None:
+        rows = [
+            {
+                "module": "tests.aippocampus.test_alpha",
+                "primary_tier": "pr",
+                "test_count": 2,
+                "duration_seconds": 0.25,
+                "ok": True,
+            }
+        ]
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "timings.json"
+            path.write_text(
+                json.dumps(
+                    run_tests.build_timings_report(
+                        selected_tier="pr",
+                        rows=rows,
+                        shard=None,
+                    )
+                ),
+                encoding="utf-8",
+            )
+
+            with (
+                mock.patch.object(
+                    run_tests,
+                    "modules_for_tier",
+                    side_effect=lambda tier: ["tests.aippocampus.test_alpha"],
+                ),
+                mock.patch.object(
+                    run_tests,
+                    "count_tests_for_module",
+                    side_effect=lambda module: 2,
+                ),
+            ):
+                report = run_tests.build_tier_report(
+                    tiers=("pr",),
+                    timing_artifact_paths=(path,),
+                )
+
+        self.assertEqual(report["timing_artifacts"][0]["status"], "current")
+        self.assertEqual(report["timing_artifacts"][0]["path"], str(path))
+
     def test_invalid_or_empty_shards_fail_before_running_tests(self) -> None:
         with (
             io.StringIO() as stderr,
@@ -517,6 +685,24 @@ class RunTestsTierTests(unittest.TestCase):
             [],
         )
 
+    def test_tests_do_not_use_raw_sleep_outside_timing_helper(self) -> None:
+        offenders: list[str] = []
+        for path in sorted(TESTS_ROOT.glob("test_*.py")):
+            offenders.extend(_raw_sleep_sites(path))
+
+        self.assertEqual(
+            offenders,
+            [],
+            "Use timing_fixtures.host_timeout_sleep for host-time smokes, "
+            "or fake time / advance_file_mtime for deterministic cache tests.",
+        )
+
+    def test_sleep_helper_is_not_a_test_tier_module(self) -> None:
+        self.assertNotIn(
+            "tests.aippocampus.timing_fixtures",
+            run_tests.TEST_MODULE_CLASSIFICATIONS,
+        )
+
     def test_new_test_modules_fail_until_classified(self) -> None:
         discovered = run_tests.discover_modules() + ["tests.aippocampus.test_new_surface"]
 
@@ -544,6 +730,38 @@ class RunTestsTierTests(unittest.TestCase):
         self.assertLessEqual(len(pr) * 3, len(broad_pr) + PR_SIZE_DRIFT_SLACK)
         self.assertTrue(PR_CRITICAL_MODULES.isdisjoint(quick))
         self.assertLessEqual(PR_CRITICAL_MODULES, pr)
+
+    def test_benchmark_shaped_fast_lane_modules_have_explicit_categories(self) -> None:
+        report = run_tests.build_tier_report(tiers=("quick", "pr", "benchmark"))
+
+        quick_shape = report["tiers"]["quick"]["benchmark_shaped"]
+        pr_shape = report["tiers"]["pr"]["benchmark_shaped"]
+        benchmark_shape = report["tiers"]["benchmark"]["benchmark_shaped"]
+        fast_lane_modules = {
+            entry["module"]
+            for entry in quick_shape["fast_lane_modules"] + pr_shape["fast_lane_modules"]
+        }
+
+        self.assertIn(
+            "tests.aippocampus.test_benchmark_entrypoints",
+            fast_lane_modules,
+        )
+        self.assertTrue(
+            all(entry["category"] for entry in quick_shape["fast_lane_modules"])
+        )
+        self.assertTrue(
+            all(entry["rationale"] for entry in pr_shape["fast_lane_modules"])
+        )
+        self.assertEqual(quick_shape["evidence_module_count"], 0)
+        self.assertEqual(pr_shape["evidence_module_count"], 0)
+        self.assertGreater(benchmark_shape["evidence_module_count"], 0)
+
+    def test_future_benchmark_shaped_fast_lane_module_requires_rationale(self) -> None:
+        with self.assertRaisesRegex(ValueError, "benchmark-shaped fast-lane"):
+            run_tests.benchmark_shaped_tier_summary(
+                "quick",
+                ["tests.aippocampus.test_benchmark_new_fast_guard"],
+            )
 
     def test_fast_is_compatibility_alias_for_pr(self) -> None:
         self.assertEqual(run_tests.modules_for_tier("fast"), run_tests.modules_for_tier("pr"))

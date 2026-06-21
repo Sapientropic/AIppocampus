@@ -19,6 +19,7 @@ from aippocampus_runtime.navigation import attention_route_projection  # noqa: E
 from aippocampus_runtime.contracts import executable_command_violations, foreground_action_contract_violations  # noqa: E402
 from aippocampus_runtime.recall import agent_continuity, agent_continuity_cli_support, background_findings, feedback_events  # noqa: E402
 from aippocampus_runtime.registry import api as registry_api  # noqa: E402
+from tests.aippocampus.frontstage_assertions import assert_semantic_human_output  # noqa: E402
 
 
 class AgentOptInContinuityTests(unittest.TestCase):
@@ -773,21 +774,24 @@ class AgentOptInContinuityTests(unittest.TestCase):
             "check": False,
             "env": env,
         }
-        recall_proc = subprocess.run(
-            [
-                *base,
-                "recall",
-                "agent-native recall opt-in",
-                "--cwd",
-                str(self.cwd),
-                "--clean-source-dir",
-                str(self.clean),
-                "--json",
-            ],
-            **run_kwargs,
-        )
+        recall_args = [
+            *base,
+            "recall",
+            "agent-native recall opt-in",
+            "--cwd",
+            str(self.cwd),
+            "--clean-source-dir",
+            str(self.clean),
+            "--json",
+        ]
+        recall_proc = subprocess.run(recall_args, **run_kwargs)
         self.assertEqual(recall_proc.returncode, 0, recall_proc.stderr)
-        route_id = json.loads(recall_proc.stdout)["routes"][0]["route_id"]
+        recall_payload = json.loads(recall_proc.stdout)
+        self.assertNotIn("route_id", recall_payload["routes"][0])
+
+        detail_proc = subprocess.run([*recall_args, "--detail", "full"], **run_kwargs)
+        self.assertEqual(detail_proc.returncode, 0, detail_proc.stderr)
+        route_id = json.loads(detail_proc.stdout)["memory_packets"][0]["route_id"]
 
         feedback_proc = subprocess.run(
             [
@@ -1855,7 +1859,7 @@ class AgentOptInContinuityTests(unittest.TestCase):
             r"Next: aippocampus agent deepen --request 1 --recall-selector sel_[0-9a-f]{16}\.",
         )
         self.assertIn("AIppocampus agent deepen: ok", deepen_proc.stdout)
-        self.assertIn("Boundary: route only", proc.stdout)
+        assert_semantic_human_output(self, proc.stdout, max_lines=8)
         self.assertNotIn('"memory_packets"', proc.stdout)
         self.assertNotIn("source_refs", proc.stdout)
         self.assertNotIn(str(self.cwd), proc.stdout)
@@ -2360,7 +2364,12 @@ class AgentOptInContinuityTests(unittest.TestCase):
 
         self.assertEqual(proc.returncode, 0, proc.stderr)
         self.assertIn("AIppo:", proc.stdout)
-        self.assertIn("Boundary: working guidance only", proc.stdout)
+        assert_semantic_human_output(
+            self,
+            proc.stdout,
+            max_lines=8,
+            forbidden_boilerplate=(),
+        )
         self.assertNotIn("activation_packet", proc.stdout)
         self.assertNotIn("policy_boundary", proc.stdout)
 
@@ -2585,7 +2594,7 @@ class AgentOptInContinuityTests(unittest.TestCase):
 
         self.assertEqual(proc.returncode, 0, proc.stderr)
         self.assertIn("--detail {compact,full}", proc.stdout)
-        self.assertIn("Use full only for local diagnostics", proc.stdout)
+        self.assertIn("--json", proc.stdout)
 
 if __name__ == "__main__":
     unittest.main()

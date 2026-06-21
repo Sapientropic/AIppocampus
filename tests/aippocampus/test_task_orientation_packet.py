@@ -18,6 +18,9 @@ from aippocampus_runtime.contracts import (  # noqa: E402
 from aippocampus_runtime.journey import live as journey_live  # noqa: E402
 from aippocampus_runtime.journey import sidecar_materializer  # noqa: E402
 from aippocampus_runtime.recall import task_orientation, understanding_state  # noqa: E402
+from tests.aippocampus.frontstage_assertions import (  # noqa: E402
+    assert_compact_frontstage_payload,
+)
 
 
 def write_jsonl(path: Path, rows: list[dict]) -> None:
@@ -49,12 +52,22 @@ class TaskOrientationPacketTests(unittest.TestCase):
         self.assertNotIn("suppressed_constraints", packet)
         self.assertIn("route_plan", packet)
         self.assertGreaterEqual(len(packet["route_plan"]["first_sources_to_reopen"]), 1)
-        self.assertGreaterEqual(len(packet["route_plan"]["stop_conditions"]), 2)
+        self.assertEqual(packet["route_plan"]["next_step"], "inspect_first_source_route")
+        self.assertNotIn("stop_conditions", packet["route_plan"])
+        self.assertNotIn("source_reopen_required_before_claims", packet["route_plan"])
         self.assertLessEqual(len(packet["source_routes"]), 3)
-        self.assertTrue(packet["source_boundary"]["navigation_not_truth"])
-        self.assertFalse(packet["source_boundary"]["raw_source_text_serialized"])
-        self.assertFalse(packet["source_boundary"]["local_paths_serialized"])
-        self.assertIn("product_boundary", packet)
+        self.assertNotIn("source_boundary", packet)
+        self.assertNotIn("product_boundary", packet)
+        self.assertNotIn("detail_deferred", packet)
+        self.assertEqual(packet["use_boundary"]["use"], "navigation_only")
+        self.assertEqual(
+            packet["use_boundary"]["before_claiming"],
+            "reopen_or_deepen_a_source_route",
+        )
+        self.assertNotIn(
+            "claim_boundary",
+            {key for action in packet["safe_next_actions"] for key in action},
+        )
         self.assertIn("operator_detail_command", packet)
         self.assertNotIn("cannot_claim", packet)
         self.assertNotIn("red_lines", packet)
@@ -72,6 +85,14 @@ class TaskOrientationPacketTests(unittest.TestCase):
         self.assertEqual(full_packet["understanding_state_read_model"]["storage"], "derived_no_new_truth_store")
         self.assertEqual(full_packet["active_path_packet"]["kind"], "aippocampus_active_path_packet")
         self.assertLessEqual(full_packet["active_path_packet"]["path_count"], 3)
+        self.assertTrue(full_packet["source_boundary"]["navigation_not_truth"])
+        self.assertFalse(full_packet["source_boundary"]["raw_source_text_serialized"])
+        self.assertFalse(full_packet["source_boundary"]["local_paths_serialized"])
+        self.assertIn("product_boundary", full_packet)
+        self.assertGreaterEqual(len(full_packet["route_plan"]["stop_conditions"]), 2)
+        self.assertTrue(
+            any("claim_boundary" in action for action in full_packet["safe_next_actions"])
+        )
         self.assertIn("cannot_claim", full_packet)
         self.assertIn("red_lines", full_packet)
         self.assertIn("foreground_json_bytes", full_packet["metrics"])
@@ -85,6 +106,7 @@ class TaskOrientationPacketTests(unittest.TestCase):
         self.assertNotIn("E:\\", encoded)
         self.assertNotIn(".aippocampus\\clean-source", encoded)
         self.assertNotIn("source_handles", encoded)
+        assert_compact_frontstage_payload(self, packet, max_top_level_diagnostics=0)
 
     def test_external_source_anchors_have_roles_and_stale_boundaries(self) -> None:
         packet = task_orientation.build_task_orientation_packet(
@@ -452,7 +474,10 @@ class TaskOrientationPacketTests(unittest.TestCase):
         payload = json.loads(result.stdout)
         self.assertEqual(payload["kind"], "aippocampus_task_orientation_packet")
         self.assertEqual(payload["mode"], "orient")
-        self.assertIn("product_boundary", payload)
+        self.assertNotIn("product_boundary", payload)
+        self.assertNotIn("source_boundary", payload)
+        self.assertNotIn("detail_deferred", payload)
+        self.assertEqual(payload["use_boundary"]["use"], "navigation_only")
         self.assertIn("current_orientation", payload)
         self.assertNotIn("active_path_packet", payload)
         self.assertNotIn("suppressed_detail", payload)

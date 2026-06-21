@@ -218,12 +218,10 @@ def public_compact_route_receipts(routes: Any) -> list[dict[str, Any]]:
             {
                 key: value
                 for key, value in {
-                    "route_index": route.get("route_index"),
-                    "route_id": route.get("route_id"),
-                    "route_label": route.get("route_label"),
-                    "route_family": route.get("route_family"),
+                    "index": route.get("index") or route.get("route_index"),
+                    "label": route.get("label") or route.get("route_label"),
+                    "why_this_route": route.get("why_this_route"),
                     "already_opened": route.get("already_opened"),
-                    "choice_reason": route.get("choice_reason"),
                     "action": {
                         key: value
                         for key, value in compact_action.items()
@@ -242,10 +240,12 @@ def _public_projection_route_ids(data: Mapping[str, Any]) -> dict[int, str]:
         if not isinstance(route, Mapping):
             continue
         try:
-            index = int(route.get("route_index") or 0)
+            index = int(route.get("index") or route.get("route_index") or 0)
         except (TypeError, ValueError):
             index = 0
-        route_id = str(route.get("route_id") or "").strip()
+        raw_diagnostic = route.get("diagnostic_route")
+        diagnostic = raw_diagnostic if isinstance(raw_diagnostic, Mapping) else {}
+        route_id = str(route.get("route_id") or diagnostic.get("route_id") or "").strip()
         if index > 0 and route_id:
             route_ids[index] = route_id
     return route_ids

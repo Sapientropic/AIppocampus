@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib.util
 import json
 import os
@@ -11,9 +12,15 @@ import sys
 import tempfile
 import time
 import unittest
+from collections.abc import Iterable, Mapping
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import TypedDict
 
+from benchmark_test_classification import (
+    is_benchmark_shaped_module,
+    require_benchmark_fast_lane_profile,
+)
 from test_tier_manifest import (
     BENCHMARK_MODULES,
     BENCHMARK_SMOKE_MODULES,
@@ -34,8 +41,13 @@ RUNTIME_SOURCE_ROOT = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 FALLBACK_TEST_TMPDIR = REPO_ROOT / ".aippocampus" / "test-tmp"
 TEMP_ENV_NAMES = ("TMPDIR", "TEMP", "TMP")
 TEMP_PROBE_PREFIX = "aippocampus-test-runner-"
+DEFAULT_TIMING_ARTIFACTS = (
+    REPO_ROOT / "benchmark_corpus" / "reports" / "local-pr-tier-timings.json",
+)
 
 TIER_REPORT_TOP_LIMIT = 10
+RUNNER_VERSION = "aippocampus-run-tests-v2"
+TIMINGS_SCHEMA_VERSION = 2
 QUICK_BUDGET = {
     "module_count_target": 46,
     "test_count_target": 330,
@@ -49,6 +61,11 @@ PR_BUDGET = {
 
 
 class TierModuleRow(TypedDict):
+    module: str
+    test_count: int
+
+
+class ModuleSetManifestRow(TypedDict):
     module: str
     test_count: int
 
@@ -148,6 +165,250 @@ def timing_budget_for_tier(selected_tier: str, *, elapsed_seconds: float) -> dic
     }
 
 
+def _utc_timestamp() -> str:
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def _json_sha256(payload: object) -> str:
+    encoded = json.dumps(
+        payload,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def build_module_set_manifest(
+    *,
+    selected_tier: str,
+    rows: Iterable[Mapping[str, object]],
+    runner_version: str = RUNNER_VERSION,
+) -> dict[str, object]:
+    def row_test_count(row: Mapping[str, object]) -> int:
+        value = row.get("test_count", 0)
+        if isinstance(value, int):
+            return value
+        if isinstance(value, str):
+            return int(value)
+        return 0
+
+    normalized_tier = TIER_ALIASES.get(selected_tier, selected_tier)
+    module_rows: list[ModuleSetManifestRow] = sorted(
+        [
+            {
+                "module": str(row["module"]),
+                "test_count": row_test_count(row),
+            }
+            for row in rows
+            if "module" in row
+        ],
+        key=lambda row: row["module"],
+    )
+    module_list = [row["module"] for row in module_rows]
+    module_list_hash = _json_sha256(module_list)
+    module_count = len(module_rows)
+    test_count = sum(row["test_count"] for row in module_rows)
+    fingerprint_input = {
+        "runner_version": runner_version,
+        "normalized_tier": normalized_tier,
+        "module_list_hash": module_list_hash,
+        "module_count": module_count,
+        "test_count": test_count,
+    }
+    return {
+        "runner_version": runner_version,
+        "selected_tier": selected_tier,
+        "normalized_tier": normalized_tier,
+        "module_count": module_count,
+        "test_count": test_count,
+        "module_list_hash": module_list_hash,
+        "manifest_fingerprint": _json_sha256(fingerprint_input),
+    }
+
+
+def _timing_payload_manifest(payload: dict[str, object]) -> tuple[dict[str, object] | None, str | None]:
+    manifest = payload.get("manifest")
+    if isinstance(manifest, dict) and {
+        "runner_version",
+        "normalized_tier",
+        "module_count",
+        "test_count",
+        "module_list_hash",
+        "manifest_fingerprint",
+    }.issubset(manifest):
+        return manifest, None
+
+    modules = payload.get("modules")
+    selected_tier = payload.get("selected_tier")
+    if not isinstance(modules, list) or not modules:
+        return None, "timing artifact does not expose a comparable module set"
+    if not isinstance(selected_tier, str) or not selected_tier:
+        return None, "timing artifact does not identify its selected tier"
+    return (
+        build_module_set_manifest(
+            selected_tier=selected_tier,
+            rows=[row for row in modules if isinstance(row, dict)],
+            runner_version=str(payload.get("runner_version", "legacy-timings-v1")),
+        ),
+        "derived_from_legacy_timing_rows",
+    )
+
+
+def assess_timing_artifact_freshness(
+    path: Path,
+    *,
+    current_manifests: dict[str, dict[str, object]],
+) -> dict[str, object]:
+    result: dict[str, object] = {
+        "path": str(path),
+        "status": "missing",
+    }
+    if not path.is_file():
+        result["reason"] = "timing artifact does not exist"
+        return result
+
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return {
+            **result,
+            "status": "incomparable",
+            "reason": f"timing artifact is not readable JSON: {exc}",
+        }
+    if not isinstance(payload, dict) or payload.get("kind") != "aippocampus_test_module_timings":
+        return {
+            **result,
+            "status": "incomparable",
+            "reason": "timing artifact kind is not aippocampus_test_module_timings",
+        }
+    if payload.get("shard") is not None:
+        return {
+            **result,
+            "status": "incomparable",
+            "reason": "sharded timing artifact covers a partial module set",
+        }
+
+    artifact_manifest, compatibility_note = _timing_payload_manifest(payload)
+    if artifact_manifest is None:
+        return {
+            **result,
+            "status": "incomparable",
+            "reason": compatibility_note or "timing artifact lacks manifest metadata",
+        }
+
+    normalized_tier = str(
+        artifact_manifest.get(
+            "normalized_tier",
+            TIER_ALIASES.get(str(payload.get("selected_tier", "")), str(payload.get("selected_tier", ""))),
+        )
+    )
+    current_manifest = current_manifests.get(normalized_tier)
+    if current_manifest is None:
+        return {
+            **result,
+            "status": "incomparable",
+            "selected_tier": payload.get("selected_tier"),
+            "normalized_tier": normalized_tier,
+            "reason": "no current manifest is available for the artifact tier",
+        }
+
+    compare_keys = (
+        "runner_version",
+        "module_count",
+        "test_count",
+        "module_list_hash",
+        "manifest_fingerprint",
+    )
+    mismatches = [
+        key
+        for key in compare_keys
+        if artifact_manifest.get(key) != current_manifest.get(key)
+    ]
+    status = "stale" if mismatches else "current"
+    freshness: dict[str, object] = {
+        **result,
+        "status": status,
+        "selected_tier": payload.get("selected_tier"),
+        "normalized_tier": normalized_tier,
+        "generated_at": payload.get("generated_at"),
+        "artifact_manifest": artifact_manifest,
+        "current_manifest": current_manifest,
+        "mismatches": mismatches,
+    }
+    if compatibility_note:
+        freshness["compatibility_note"] = compatibility_note
+    if status == "stale":
+        freshness["reason"] = (
+            "timing artifact no longer matches the current tier manifest; "
+            "do not treat its elapsed time as current speed evidence"
+        )
+    return freshness
+
+
+def default_timing_artifact_paths() -> tuple[Path, ...]:
+    return tuple(path for path in DEFAULT_TIMING_ARTIFACTS if path.is_file())
+
+
+def benchmark_shaped_tier_summary(tier: str, modules: list[str]) -> dict[str, object]:
+    normalized_tier = TIER_ALIASES.get(tier, tier)
+    shaped_modules = [
+        module
+        for module in modules
+        if is_benchmark_shaped_module(module)
+    ]
+    if normalized_tier in {"quick", "pr"}:
+        fast_lane_profiles = [
+            require_benchmark_fast_lane_profile(module).as_dict()
+            for module in shaped_modules
+        ]
+        return {
+            "role": "fast_lane_guard_surface",
+            "fast_lane_module_count": len(fast_lane_profiles),
+            "fast_lane_modules": fast_lane_profiles,
+            "evidence_module_count": 0,
+            "evidence_modules": [],
+            "boundary": (
+                "Benchmark-shaped modules in quick/pr are guards or entrypoint "
+                "smokes. They do not claim benchmark quality evidence."
+            ),
+        }
+    if normalized_tier in {"benchmark", "benchmark-smoke"}:
+        evidence_modules = [
+            {
+                "module": module,
+                "category": "benchmark_evidence",
+                "rationale": (
+                    "Selected by a benchmark evidence lane; use its result only "
+                    "within the lane's documented benchmark scope."
+                ),
+            }
+            for module in shaped_modules
+        ]
+        return {
+            "role": "benchmark_evidence_lane",
+            "fast_lane_module_count": 0,
+            "fast_lane_modules": [],
+            "evidence_module_count": len(evidence_modules),
+            "evidence_modules": evidence_modules,
+            "boundary": (
+                "Benchmark evidence belongs to benchmark or benchmark-smoke lanes, "
+                "not to quick/pr guard summaries."
+            ),
+        }
+    return {
+        "role": "ordinary_test_lane",
+        "fast_lane_module_count": 0,
+        "fast_lane_modules": [],
+        "evidence_module_count": 0,
+        "evidence_modules": [],
+        "boundary": (
+            "This tier is not a benchmark evidence lane; benchmark-shaped names "
+            "need explicit review before entering quick/pr."
+        ),
+    }
+
+
 def discover_modules() -> list[str]:
     return [
         f"tests.aippocampus.{path.stem}"
@@ -170,11 +431,13 @@ def modules_for_tier(tier: str) -> list[str]:
     if normalized_tier == "slow":
         return [module for module in modules if module in SLOW_MODULES]
     if normalized_tier == "pr":
-        return [
+        selected = [
             module
             for module in modules
             if TEST_MODULE_CLASSIFICATIONS[module].primary_tier in PR_PRIMARY_TIERS
         ]
+        benchmark_shaped_tier_summary(normalized_tier, selected)
+        return selected
     if normalized_tier == "broad-pr":
         return [
             module
@@ -182,11 +445,14 @@ def modules_for_tier(tier: str) -> list[str]:
             if TEST_MODULE_CLASSIFICATIONS[module].primary_tier in BROAD_PR_PRIMARY_TIERS
         ]
     if normalized_tier in {"quick", "pr", "broad", "smoke", "integration"}:
-        return [
+        selected = [
             module
             for module in modules
             if TEST_MODULE_CLASSIFICATIONS[module].primary_tier == normalized_tier
         ]
+        if normalized_tier == "quick":
+            benchmark_shaped_tier_summary(normalized_tier, selected)
+        return selected
     raise ValueError(f"unknown test tier: {tier}")
 
 
@@ -319,12 +585,14 @@ def build_tier_report(
     *,
     tiers: tuple[str, ...] = TEST_TIERS,
     top_limit: int = TIER_REPORT_TOP_LIMIT,
+    timing_artifact_paths: Iterable[Path] = (),
 ) -> dict[str, object]:
     # This is an observation layer for #662's migration path. Keep it delegated
     # to modules_for_tier() until the explicit manifest exists, so the report
     # exposes the current drift without silently becoming a second tier contract.
     counts: dict[str, int] = {}
     report_tiers: dict[str, dict[str, object]] = {}
+    current_manifests: dict[str, dict[str, object]] = {}
 
     for tier in tiers:
         modules = modules_for_tier(tier)
@@ -336,6 +604,9 @@ def build_tier_report(
             module_rows,
             key=lambda row: (-row["test_count"], row["module"]),
         )[:top_limit]
+        manifest = build_module_set_manifest(selected_tier=tier, rows=module_rows)
+        normalized_tier = TIER_ALIASES.get(tier, tier)
+        current_manifests.setdefault(normalized_tier, manifest)
         report_tiers[tier] = {
             "module_count": len(modules),
             "test_count": sum(row["test_count"] for row in module_rows),
@@ -345,18 +616,29 @@ def build_tier_report(
                 module_count=len(modules),
                 test_count=sum(row["test_count"] for row in module_rows),
             ),
+            "manifest": manifest,
+            "benchmark_shaped": benchmark_shaped_tier_summary(tier, modules),
         }
 
     return {
         "kind": "aippocampus_test_tier_report",
-        "schema_version": 1,
+        "schema_version": 2,
+        "runner_version": RUNNER_VERSION,
+        "generated_at": _utc_timestamp(),
         "tier_definitions": TIER_DESCRIPTIONS,
         "tier_aliases": TIER_ALIASES,
         "tiers": report_tiers,
+        "timing_artifacts": [
+            assess_timing_artifact_freshness(path, current_manifests=current_manifests)
+            for path in timing_artifact_paths
+        ],
         "known_limitations": [
             "fast is a compatibility alias for the fast local pr gate; "
             "deterministic and ci remain broad-pr aliases for the old broad "
             "deterministic surface.",
+            "Benchmark-shaped modules in quick/pr are guard or entrypoint-smoke "
+            "coverage, not benchmark evidence; use benchmark-smoke or benchmark "
+            "for benchmark evidence claims.",
         ],
     }
 
@@ -444,8 +726,11 @@ def build_timings_report(
     elapsed_seconds = round(sum(row["duration_seconds"] for row in rows), 6)
     return {
         "kind": "aippocampus_test_module_timings",
-        "schema_version": 1,
+        "schema_version": TIMINGS_SCHEMA_VERSION,
+        "runner_version": RUNNER_VERSION,
+        "generated_at": _utc_timestamp(),
         "selected_tier": selected_tier,
+        "manifest": build_module_set_manifest(selected_tier=selected_tier, rows=rows),
         "module_count": len(rows),
         "test_count": sum(row["test_count"] for row in rows),
         "failed_module_count": sum(1 for row in rows if not row["ok"]),
@@ -554,6 +839,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="Print tier module/test counts as JSON without running tests.",
     )
     parser.add_argument(
+        "--timing-artifact",
+        action="append",
+        type=Path,
+        default=[],
+        help=(
+            "When used with --report-json, compare a timing artifact against "
+            "the current tier manifest and report current/stale/incomparable."
+        ),
+    )
+    parser.add_argument(
         "--timings-json",
         type=Path,
         help=(
@@ -585,7 +880,17 @@ def main(argv: list[str] | None = None) -> int:
         print(str(exc), file=sys.stderr)
         return 2
     if args.report_json:
-        json.dump(build_tier_report(), sys.stdout, ensure_ascii=False, indent=2)
+        timing_artifacts = (
+            tuple(args.timing_artifact)
+            if args.timing_artifact
+            else default_timing_artifact_paths()
+        )
+        json.dump(
+            build_tier_report(timing_artifact_paths=timing_artifacts),
+            sys.stdout,
+            ensure_ascii=False,
+            indent=2,
+        )
         print()
         return 0
     modules = modules_for_tier(args.tier)

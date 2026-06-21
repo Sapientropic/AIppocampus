@@ -192,7 +192,9 @@ class VaultDashboardAssetTests(unittest.TestCase):
         self.assertIn("ordinary_first_recall_usable", now_body)
         self.assertIn("blocks_first_recall", now_body)
         self.assertIn("blocks_exact_latest_claims", now_body)
-        self.assertIn("aippocampus maintenance --cwd . --json", now_body)
+        self.assertIn("continue_with_nonblocking_maintenance", now_body)
+        self.assertIn("aippocampus health --detail full --json", now_body)
+        self.assertNotIn("aippocampus maintenance --cwd . --json", now_body)
         self.assertEqual(pages["now"]["body_nodes"][0]["tag"], "div")
         fields_node = next(
             child

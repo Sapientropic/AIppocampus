@@ -51,6 +51,7 @@ def discussion(
     body: str = "",
     *,
     category: str = "Ideas",
+    url: str = "",
     comments: tuple[str, ...] = (),
     node_id: str | None = "discussion-node",
 ):
@@ -59,6 +60,7 @@ def discussion(
         title=title,
         body=body,
         category=category,
+        url=url,
         comments=comments,
         node_id=node_id,
     )
@@ -440,6 +442,34 @@ def test_discussion_with_issue_ref_is_not_orphan() -> None:
 
     assert "discussion_orphan" not in kinds(report["needs_human_review"])
     assert report["summary"]["orphan_discussions"] == 0
+
+
+def test_discussion_atlas_row_supplies_owner_route_without_body_mirror() -> None:
+    atlas_rows = {
+        2127: {
+            "owner": "[agent-native recall facade](../architecture/recall/agent-native-recall-facade.md)",
+            "execution": "#2489, #2490",
+            "next_action": "Keep a compact atlas pointer recallable.",
+        }
+    }
+
+    report = planning_audit.audit_discussions(
+        [
+            discussion(
+                2127,
+                "Moving Ground: source-backed memory and continuous craft",
+                category="Ideas",
+                url="https://github.com/Sapientropic/AIppocampus/discussions/2127",
+            )
+        ],
+        [issue(2489, "Make current GitHub Discussions recall-reachable as navigation sources")],
+        atlas_rows=atlas_rows,
+    )
+
+    assert "discussion_orphan" not in kinds(report["needs_human_review"])
+    assert report["owner_routes"][0]["discussion"] == 2127
+    assert report["owner_routes"][0]["execution"] == "#2489, #2490"
+    assert "body" not in report["owner_routes"][0]
 
 
 def test_discussion_stale_doc_link_is_reported(tmp_path: Path) -> None:

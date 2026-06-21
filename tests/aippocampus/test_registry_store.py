@@ -4,7 +4,6 @@ import json
 import sys
 import tempfile
 import threading
-import time
 import unittest
 from pathlib import Path
 
@@ -13,6 +12,7 @@ SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 from aippocampus_runtime.registry import store as store  # noqa: E402
+from tests.aippocampus.timing_fixtures import host_timeout_sleep  # noqa: E402
 
 
 class RegistryStoreTests(unittest.TestCase):
@@ -69,7 +69,10 @@ class RegistryStoreTests(unittest.TestCase):
                     start.wait(timeout=5)
 
                     def update(registry: dict) -> dict:
-                        time.sleep(0.03)
+                        host_timeout_sleep(
+                            0.03,
+                            reason="keep a writer inside the registry lease while the peer contends",
+                        )
                         return store.upsert_thread(
                             registry,
                             {

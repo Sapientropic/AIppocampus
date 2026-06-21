@@ -1510,6 +1510,14 @@ pasting raw JSON into multiple docs.
 - **Entrypoint:** `tools/aippocampus/smoke/smoke_source_evidence_recall_eval.py`
 - **Primary evidence owner:** `docs/evidence/readiness/stage-0-5-readiness.md`, `docs/evidence/benchmarks/design/memory-decision-benchmark-plan.md`, #458
 
+### Known-artifact recall dogfood probes
+
+- **Entrypoint:** `tools/aippocampus/smoke/known_artifact_recall_dogfood.py`
+- **Primary evidence owner:** #2489/#2490; cheap navigation-blocker probe for
+  public repo docs and Discussion atlas pointers. A failing owner such as
+  `registry_search_phrase_coverage` is remediation routing, not a broad recall
+  benchmark score or product-quality claim.
+
 ### Optional live question-confirmation smoke
 
 - **Entrypoint:** `tools/aippocampus/smoke/smoke_question_confirmation_live.py`

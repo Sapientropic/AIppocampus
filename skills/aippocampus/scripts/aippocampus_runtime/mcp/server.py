@@ -531,6 +531,14 @@ def call_agent_recall(arguments: dict[str, Any]) -> dict[str, Any]:
             arguments.get("semantic_timeout"), default=12, minimum=1, maximum=60
         ),
         opened_route_keys=opened_route_keys_from_last_recall_cache(arguments.get("last_recall_path")),
+        include_associative_fallback=bool(
+            arguments.get("include_associative_fallback") or arguments.get("apw_fallback")
+        ),
+        associative_path_sidecar_dir=arguments.get("apw_sidecar_dir"),
+        associative_path_bridge_path=arguments.get("apw_semantic_bridge_path"),
+        associative_path_navigation_path=arguments.get("apw_navigation_path"),
+        associative_path_active_lock_path=arguments.get("apw_active_lock_path"),
+        associative_path_feedback_path=arguments.get("apw_feedback_path"),
     )
     if provider_bridge_report is not None:
         payload["provider_key_bridge"] = provider_bridge_report

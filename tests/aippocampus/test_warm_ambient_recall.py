@@ -7,7 +7,6 @@ import json
 import os
 import sys
 import tempfile
-import time
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -27,6 +26,8 @@ from aippocampus_runtime.warm_ambient.hook_seen_threads import (  # noqa: E402
     load_hook_seen_rows,
 )
 from aippocampus_runtime.warm_ambient.scout_attribution import merge_scout_origins  # noqa: E402
+from aippocampus_runtime.warm_ambient.status_card import compact_warm_status_card  # noqa: E402
+from tests.aippocampus.timing_fixtures import host_timeout_sleep  # noqa: E402
 from tests.aippocampus.warm_ambient_fixtures import (  # noqa: E402
     write_registry,
     write_thread_registry,
@@ -629,6 +630,54 @@ class WarmAmbientRecallTests(unittest.TestCase):
         encoded = json.dumps(payload, ensure_ascii=False)
         self.assertNotIn("set the provider key or leave warm ambient off", encoded)
 
+        card = compact_warm_status_card(payload)
+        self.assertEqual(card["kind"], "aippocampus_warm_ambient_status_card")
+        self.assertEqual(card["detail"], "compact")
+        self.assertEqual(card["status"], "blocked_stale_queue")
+        self.assertTrue(card["ordinary_recall_usable"])
+        self.assertTrue(card["warm_not_blocking_recall"])
+        self.assertEqual(card["foreground_action"]["id"], "inspect_provider_status")
+        self.assertLessEqual(len(card["safe_next_actions"]), 3)
+        compact_encoded = json.dumps(card, ensure_ascii=False)
+        self.assertNotIn("action_code", compact_encoded)
+        self.assertNotIn("snooze_optional_warm_ambient", compact_encoded)
+        self.assertNotIn("retire_stale_warm_queue_after_review", compact_encoded)
+        self.assertNotIn("AIPPOCAMPUS_WARM_RECALL_BACKGROUND", compact_encoded)
+
+    def test_warm_status_detail_cli_keeps_operator_diagnostics(self) -> None:
+        job_dir = self.root / "warm-jobs"
+        job_dir.mkdir()
+        stale_job = job_dir / "warm-stale.json"
+        stale_job.write_text(
+            json.dumps({"created_at": "2020-01-01T00:00:00Z"}),
+            encoding="utf-8",
+        )
+        os.utime(stale_job, (1577836800, 1577836800))
+        stdout = io.StringIO()
+
+        with contextlib.redirect_stdout(stdout):
+            code = warm_cli.main(
+                [
+                    "status",
+                    "--job-dir",
+                    str(job_dir),
+                    "--detail",
+                    "full",
+                    "--json",
+                ]
+            )
+
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(code, 0)
+        self.assertEqual(payload["kind"], "aippocampus_warm_ambient_status")
+        self.assertEqual(payload["status"], "blocked")
+        self.assertIn("job_activity", payload)
+        self.assertEqual(payload["action_code"], "provider_or_worker_unavailable_optional")
+        action_ids = [action["id"] for action in payload["safe_next_actions"]]
+        self.assertIn("snooze_optional_warm_ambient", action_ids)
+        self.assertIn("retire_stale_warm_queue_after_review", action_ids)
+        self.assertNotIn(str(self.root), stdout.getvalue())
+
     def test_scheduler_env_opt_out_still_disables_default_warming(self) -> None:
         with patch.dict(os.environ, {"AIPPOCAMPUS_WARM_RECALL_BACKGROUND": "0"}):
             result = warm_scheduler.schedule_warm_ambient_recall(
@@ -888,7 +937,10 @@ class WarmAmbientRecallTests(unittest.TestCase):
                         }
                     ],
                 }
-            time.sleep(0.25)
+            host_timeout_sleep(
+                0.25,
+                reason="keep non-quorum warm scouts slower than the quorum timeout",
+            )
             return {"decision": "skip", "confidence": 0.1}
 
         result = warm.run_warm_ambient_recall(
@@ -924,7 +976,10 @@ class WarmAmbientRecallTests(unittest.TestCase):
             del payload, kwargs
             calls.append(scout)
             if len(calls) == 1:
-                time.sleep(0.02)
+                host_timeout_sleep(
+                    0.02,
+                    reason="prove prefix-cache warmup completes before follow-up scouts launch",
+                )
                 warmup_completed = True
             elif not warmup_completed:
                 premature_followups.append(scout)
@@ -967,7 +1022,10 @@ class WarmAmbientRecallTests(unittest.TestCase):
                         }
                     ],
                 }
-            time.sleep(0.2)
+            host_timeout_sleep(
+                0.2,
+                reason="keep the second scout slower than the weak-quorum timeout",
+            )
             return {"decision": "skip", "confidence": 0.1}
 
         result = warm.run_warm_ambient_recall(
@@ -1003,7 +1061,10 @@ class WarmAmbientRecallTests(unittest.TestCase):
                         }
                     ],
                 }
-            time.sleep(0.25)
+            host_timeout_sleep(
+                0.25,
+                reason="keep required guard scouts unobserved before cache-write decision",
+            )
             return {"decision": "skip", "confidence": 0.1}
 
         result = warm.run_warm_ambient_recall(
@@ -2392,7 +2453,10 @@ class WarmAmbientRecallTests(unittest.TestCase):
         def scout_fn(scout, payload, **kwargs):
             del payload, kwargs
             if scout.startswith("key_line_hunter"):
-                time.sleep(0.03)
+                host_timeout_sleep(
+                    0.03,
+                    reason="ensure detached warm job persists late useful scout results",
+                )
                 return {
                     "decision": "candidate",
                     "confidence": 0.82,

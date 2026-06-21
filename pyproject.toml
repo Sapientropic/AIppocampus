@@ -413,6 +413,7 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/recall/agent_continuity_cli_support.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/agent_recall_cache.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/agent_packet_compaction.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/recall/associative_path_fallback.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/associative_path_inputs.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/associative_path_walker.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/foreground_action_card.py",

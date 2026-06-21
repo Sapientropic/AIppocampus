@@ -91,6 +91,70 @@ def _issue_refs(text: str) -> list[int]:
     return refs
 
 
+def _public_atlas_row(row: Mapping[str, str]) -> dict[str, Any]:
+    return {
+        "discussion": int(row.get("number") or 0),
+        "title": row.get("title", ""),
+        "url": row.get("url", ""),
+        "atlas_layer": row.get("layer", ""),
+        "atlas_status": row.get("status", ""),
+        "owner": row.get("owner", ""),
+        "next_action": row.get("next_action", ""),
+        "claim_boundary": "discussion atlas rows are navigation pointers, not source-open evidence",
+    }
+
+
+def _query_terms(query: str) -> list[str]:
+    terms = re.findall(r"[\w#-]+", query.casefold())
+    return [term.removeprefix("#") for term in terms if len(term.removeprefix("#")) >= 3]
+
+
+def discussion_atlas_navigation_pointer(atlas_text: str, query: str) -> dict[str, Any]:
+    """Return a compact public-safe Discussion pointer for recall/orientation.
+
+    This is deliberately title/URL/owner metadata only. Discussion bodies stay
+    outside the atlas so a recall card can orient the agent without pretending
+    the row is source-open evidence or a mirrored article.
+    """
+
+    rows = parse_discussion_atlas_rows(atlas_text)
+    terms = _query_terms(query)
+    number_terms = {int(term) for term in terms if term.isdigit()}
+    scored: list[tuple[int, int, dict[str, str]]] = []
+    for number, row in rows.items():
+        title_terms = set(_query_terms(str(row.get("title") or "")))
+        owner_terms = set(_query_terms(str(row.get("owner") or "")))
+        next_action_terms = set(_query_terms(str(row.get("next_action") or "")))
+        overlap = len(set(terms) & (title_terms | owner_terms | next_action_terms))
+        if number in number_terms:
+            overlap += 10
+        if overlap:
+            scored.append((overlap, number, row))
+    scored.sort(key=lambda item: (-item[0], item[1]))
+    if not scored:
+        return {
+            "kind": "aippocampus_discussion_atlas_navigation_pointer",
+            "ok": False,
+            "status": "no_atlas_pointer",
+            "query": query,
+            "next_action": "Run discussion_atlas_guard with --live-github or tighten the cue with a discussion number/title.",
+            "claim_boundary": "no discussion row surfaced; do not infer source truth from absence",
+        }
+    _, _, row = scored[0]
+    return {
+        "kind": "aippocampus_discussion_atlas_navigation_pointer",
+        "ok": True,
+        "status": "atlas_pointer",
+        "query": query,
+        "pointer": _public_atlas_row(row),
+        "public_boundary": {
+            "discussion_body_serialized": False,
+            "comment_body_serialized": False,
+            "local_paths_serialized": False,
+        },
+    }
+
+
 def discussion_atlas_issue_refs(atlas_text: str) -> list[int]:
     refs: list[int] = []
     for row in parse_discussion_atlas_rows(atlas_text).values():
@@ -162,14 +226,21 @@ def discussion_atlas_drift_report(
             "title": title,
             "url": str(discussion.get("url") or f"https://github.com/Sapientropic/AIppocampus/discussions/{number}"),
             "github_category": category,
+            "owner": "discussion_atlas_guard",
+            "next_action": "Add or refresh a compact atlas row with owner/evidence metadata; do not mirror the discussion body.",
         }
         if atlas_row is None:
-            findings.append({**pointer, "code": "missing_row"})
+            finding = {**pointer, "code": "missing_row"}
+            if checked_at:
+                finding["atlas_last_checked"] = checked_at.isoformat()
+            findings.append(finding)
             continue
         pointer.update(
             {
                 "atlas_layer": atlas_row["layer"],
                 "atlas_status": atlas_row["status"],
+                "owner": atlas_row["owner"],
+                "next_action": atlas_row["next_action"],
             }
         )
         expected_status = discussion.get("expected_status")
@@ -414,11 +485,25 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--owner", default="Sapientropic")
     parser.add_argument("--repo", default="AIppocampus")
     parser.add_argument("--limit", type=int, default=100)
+    parser.add_argument("--pointer-query", help="Return a compact atlas pointer for recall/orientation.")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
 
     atlas = args.repo_root / ATLAS_REL_PATH
     atlas_text = atlas.read_text(encoding="utf-8")
+    if args.pointer_query:
+        report = discussion_atlas_navigation_pointer(atlas_text, args.pointer_query)
+        if args.json:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            if report["ok"]:
+                pointer = report["pointer"]
+                print(f"discussion #{pointer['discussion']}: {pointer['title']}")
+                print(f"url: {pointer['url']}")
+                print(f"next: {pointer['next_action']}")
+            else:
+                print(report["next_action"])
+        return 0 if report["ok"] else 1
     if args.live_github:
         discussions = load_github_discussions_via_gh(
             owner=args.owner,

@@ -132,6 +132,25 @@ def start_first_recall_readiness(
                 "message": "Recall should stay on the established local route; deepen may reopen source.",
             },
         },
+        "continue_from_existing_source_with_search_fallback": {
+            "phase": "steady_state_available",
+            "status": "ready_with_low_specificity_fallback",
+            "ordinary_first_recall_usable": True,
+            "private_source_ready": True,
+            "cold_start_expected": False,
+            "progress_signal": "clean_source_available_search_fallback_first",
+            "user_expectation": (
+                "Existing source is available, but the supplied cue looks low-specificity; "
+                "start with source search or a concrete recall command, then deepen before claims."
+            ),
+            "performance_expectation": {
+                "mode": "steady_state",
+                "message": (
+                    "Source search can be more useful than compact recall for weak cues; "
+                    "recall remains available after tightening the cue."
+                ),
+            },
+        },
         "repair_stale_source_before_continuity": {
             "phase": "cold_start_maintenance_required",
             "status": "needs_source_repair",

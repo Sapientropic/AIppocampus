@@ -10,6 +10,7 @@ sys.path.insert(0, str(DOC_TOOLS))
 
 from discussion_atlas_guard import (  # noqa: E402
     discussion_atlas_drift_report,
+    discussion_atlas_navigation_pointer,
     discussion_atlas_static_issues,
     parse_discussion_atlas_rows,
 )
@@ -22,7 +23,27 @@ class DiscussionAtlasGuardTests(unittest.TestCase):
 
         self.assertGreaterEqual(len(rows), 30)
         self.assertIn(519, rows)
+        self.assertIn(2127, rows)
         self.assertEqual(discussion_atlas_static_issues(REPO_ROOT), [])
+
+    def test_discussion_2127_has_compact_navigation_pointer(self) -> None:
+        atlas = REPO_ROOT / "docs" / "research" / "discussion-atlas.md"
+
+        pointer = discussion_atlas_navigation_pointer(
+            atlas.read_text(encoding="utf-8"),
+            "discussion 2127 source-backed conversation",
+        )
+        encoded = str(pointer)
+
+        self.assertTrue(pointer["ok"], encoded)
+        self.assertEqual(pointer["pointer"]["discussion"], 2127)
+        self.assertEqual(
+            pointer["pointer"]["url"],
+            "https://github.com/Sapientropic/AIppocampus/discussions/2127",
+        )
+        self.assertIn("Moving Ground", pointer["pointer"]["title"])
+        self.assertIn("next_action", pointer["pointer"])
+        self.assertNotIn("A safe packet that leaves the agent lost", encoded)
 
     def test_drift_report_catches_missing_and_stale_pointer_cases(self) -> None:
         atlas_text = """
@@ -52,6 +73,9 @@ class DiscussionAtlasGuardTests(unittest.TestCase):
         self.assertIn("owner_missing", codes)
         self.assertIn("execution_issue_missing", codes)
         self.assertIn("successor_missing", codes)
+        missing = next(finding for finding in report["findings"] if finding["code"] == "missing_row")
+        self.assertEqual(missing["owner"], "discussion_atlas_guard")
+        self.assertIn("compact atlas row", missing["next_action"])
         self.assertFalse(report["public_boundary"]["discussion_bodies_serialized"])
 
     def test_transit_report_separates_category_issue_state_and_comment_review(self) -> None:

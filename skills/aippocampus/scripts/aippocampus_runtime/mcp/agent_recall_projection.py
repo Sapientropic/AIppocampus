@@ -204,19 +204,39 @@ def _with_recall_selector(action: Mapping[str, Any], recall_selector: str) -> di
 
 
 def _public_route_label(packet: Mapping[str, Any]) -> str:
-    return core.compact_text(
-        str(
-            packet.get("route_topic")
-            or packet.get("route_label")
-            or packet.get("display_hint")
-            or "memory route"
-        ),
-        120,
+    raw = str(
+        packet.get("route_topic")
+        or packet.get("route_label")
+        or packet.get("display_hint")
+        or "memory route"
     )
+    label = raw.removeprefix("thread_candidate:")
+    label = label.replace("_", " ").replace("·", " ")
+    label = " ".join(label.split())
+    return core.compact_text(label[:1].upper() + label[1:] if label else "Memory route", 90)
 
 
 def _route_label_key(label: str) -> str:
     return " ".join(str(label or "").casefold().split())
+
+
+def _route_choice_explanation(
+    packet: Mapping[str, Any],
+    *,
+    index: int,
+    route_count: int,
+    labels_low_specificity: bool,
+) -> str:
+    if labels_low_specificity:
+        return "Potential route, but compact labels are not specific enough; refine or search source before choosing."
+    if route_count <= 1:
+        return "Best available route; reopen it before using source-backed details."
+    output_mode = str(packet.get("output_mode") or packet.get("route_kind") or "")
+    if output_mode == "reopenable_route":
+        return f"Route {index} of {route_count}; it can be reopened for source-backed details."
+    if output_mode == "direction_only":
+        return f"Route {index} of {route_count}; use as navigation only until source is reopened."
+    return f"Route {index} of {route_count}; inspect it before treating it as evidence."
 
 
 def route_deepen_action(
@@ -247,6 +267,58 @@ def route_deepen_action(
     if low_confidence:
         action["route_choice_posture"] = "labels_low_specificity"
         action["confidence"] = "low_confidence_navigation"
+    return action
+
+
+def _compact_associative_path_fallback_card(value: Any) -> dict[str, Any] | None:
+    if not isinstance(value, Mapping):
+        return None
+    return _without_empty(
+        {
+            "kind": value.get("kind"),
+            "schema_version": value.get("schema_version"),
+            "status": value.get("status"),
+            "decision": value.get("decision"),
+            "ordinary_recall_status": value.get("ordinary_recall_status"),
+            "request_index": value.get("request_index"),
+            "label": value.get("label"),
+            "why_this_route": value.get("why_this_route"),
+            "route_posture": value.get("route_posture"),
+            "action_grammar": value.get("action_grammar"),
+            "reason_codes": value.get("reason_codes"),
+            "risk_flags": value.get("risk_flags"),
+            "summary": value.get("summary"),
+            "opt_in_required": True,
+            "applied_to_default_ranking": False,
+            "source_shape_guarded": value.get("source_shape_guarded"),
+            "source_reopen_required_before_claim": True,
+        }
+    )
+
+
+def _associative_path_fallback_action(
+    card: Mapping[str, Any] | None,
+    *,
+    recall_selector: str,
+    cache_available: bool,
+) -> dict[str, Any] | None:
+    if not isinstance(card, Mapping) or card.get("status") != "route_candidate":
+        return None
+    try:
+        request_index = int(card.get("request_index") or 0)
+    except (TypeError, ValueError):
+        request_index = 0
+    if request_index <= 0 or not cache_available:
+        return None
+    action = route_deepen_action(request_index, recall_selector=recall_selector)
+    action["id"] = "deepen_associative_path_fallback"
+    action["label"] = "Open APW fallback source"
+    action["why"] = str(
+        card.get("why_this_route")
+        or "APW found a source-ref-backed fallback; reopen it before using it."
+    )
+    action["claim_boundary"] = "no_claim_before_reopen"
+    action["route_choice_posture"] = "associative_path_opt_in_fallback"
     return action
 
 
@@ -318,7 +390,6 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
         displayed_packets = list(enumerate(memory_packets[:3], start=1))
     route_receipts: list[dict[str, Any]] = []
     for index, packet in displayed_packets:
-        route_id = str(packet.get("route_id") or f"route:{index}").strip()
         already_opened = bool(packet.get("already_opened"))
         route_is_callable = (
             cache_available
@@ -347,25 +418,19 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
         route_receipts.append(
             _without_empty(
                 {
-                    "route_index": index,
-                    "route_id": route_id,
-                    "display_id": route_id,
-                    "feedback_id": route_id,
-                    "callable_selector": callable_selector,
-                    "private_handle_boundary": (
-                        "compact_output_redacts_local_private_handle_use_callable_selector"
-                    ),
-                    "route_label": _public_route_label(packet),
-                    "route_family": packet.get("route_kind") or packet.get("output_mode"),
-                    "already_opened": already_opened or None,
-                    "choice_reason": recall_choices.route_choice_reason(
+                    "index": index,
+                    "label": _public_route_label(packet),
+                    "why_this_route": _route_choice_explanation(
                         packet,
                         index=index,
                         route_count=len(memory_packets),
                         labels_low_specificity=labels_low_specificity,
-                    )
-                    if len(memory_packets) > 1 or labels_low_specificity
-                    else None,
+                    ),
+                    "callable_selector": callable_selector,
+                    "private_handle_boundary": (
+                        "compact_output_redacts_local_private_handle_use_callable_selector"
+                    ),
+                    "already_opened": already_opened or None,
                     "claim_permission": packet.get("claim_permission"),
                     "next_action_boundary": "reopen_required_before_claim",
                     "action": route_deepen_action(
@@ -455,6 +520,26 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
         and memory_packets
     ):
         foreground_action = _opened_route_reopen_action(1, recall_selector=recall_selector)
+    associative_path_fallback = _compact_associative_path_fallback_card(
+        payload.get("associative_path_fallback")
+    )
+    associative_path_action = _associative_path_fallback_action(
+        associative_path_fallback,
+        recall_selector=recall_selector,
+        cache_available=cache_available,
+    )
+    if associative_path_action:
+        ordinary_recovery_action = _without_empty(normalize_foreground_action(foreground_action))
+        ordinary_action_id = str(
+            ordinary_recovery_action.get("id") or ordinary_recovery_action.get("action_id") or ""
+        )
+        if ordinary_recovery_action:
+            safe_next_actions = [ordinary_recovery_action, *safe_next_actions]
+        foreground_action = associative_path_action
+        if isinstance(associative_path_fallback, dict):
+            associative_path_fallback["primary_action"] = "deepen_associative_path_fallback"
+            if ordinary_action_id:
+                associative_path_fallback["ordinary_recovery_action_id"] = ordinary_action_id
     detail_fields = _recall_detail_command_fields(recovery_cue)
     detail_command = str(detail_fields.get("operator_detail_command") or "")
     detail_command_template = str(detail_fields.get("operator_detail_command_template") or "")
@@ -470,7 +555,6 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
         duplicate_label_omissions.values(),
         key=lambda row: (int(row["kept_route_index"]), str(row["route_label"])),
     )
-    route_availability_summary = None
     if labels_low_specificity and memory_packets:
         safe_action_ids = [
             str(action.get("id") or action.get("action_id") or "")
@@ -484,28 +568,17 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
             (action_id for action_id in safe_action_ids if action_id.startswith("deepen")),
             None,
         )
-        route_availability_summary = _without_empty(
+        weak_route_recovery_card = _without_empty(
             {
+                **(weak_route_recovery_card or {}),
                 "posture": "labels_low_specificity",
-                "summary": (
-                    "Compact route labels are too low-specificity for foreground route "
-                    "choice; search all registered source for the original cue anchors "
-                    "before asking the user to invent a new cue."
-                ),
                 "route_count": len(memory_packets),
                 "displayed_as_choices": 0,
-                "hidden_low_confidence_route_count": len(memory_packets),
                 "primary_action": foreground_action.get("id") or foreground_action.get("action_id"),
-                "source_search_fallback_action_id": (
-                    foreground_action.get("id") or foreground_action.get("action_id")
-                ),
-                "full_detail_escape_hatch": {
-                    "command": detail_command or None,
-                    "command_template": detail_command_template or None,
-                    "requires": detail_fields.get("operator_detail_requires"),
-                },
-                "refine_escape_hatch_action_id": refine_action_id,
-                "deepen_escape_hatch_action_id": deepen_action_id,
+                "source_search_fallback_action_id": foreground_action.get("id")
+                or foreground_action.get("action_id"),
+                "refine_action_id": refine_action_id,
+                "deepen_action_id": deepen_action_id,
             }
         )
     can_use_for = ["next_action_choice"]
@@ -528,13 +601,13 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "route_count": len(memory_packets),
         **hidden_route_count_fields,
         "hidden_low_confidence_route_count": suppressed_low_confidence_route_count or None,
-        "route_availability_summary": route_availability_summary,
         "omitted_duplicate_route_label_count": sum(
             int(row["omitted_count"]) for row in duplicate_omission_rows
         )
         or None,
         "omitted_duplicate_route_labels": duplicate_omission_rows[:3] or None,
         "semantic_gate_diagnostics": semantic_compact,
+        "associative_path_fallback": associative_path_fallback,
         "provider_key_bridge": payload.get("provider_key_bridge"),
         "claim_boundary": _compact_claim_boundary(
             can_use_for=can_use_for,

@@ -74,6 +74,13 @@ DISCUSSION_COMMITMENT_RE = re.compile(
     re.IGNORECASE,
 )
 IMPLEMENTATION_MAP_RE = re.compile(r"\bimplementation map\b", re.IGNORECASE)
+DISCUSSION_ATLAS_REL_PATH = Path("docs/research/discussion-atlas.md")
+
+try:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "docs"))
+    from discussion_atlas_guard import parse_discussion_atlas_rows
+except Exception:  # pragma: no cover - planning audit can still run without docs helpers
+    parse_discussion_atlas_rows = None  # type: ignore[assignment]
 
 
 @dataclass(frozen=True)
@@ -369,9 +376,11 @@ def audit_discussions(
     *,
     repo_root: Path | None = None,
     generate_discussion_maps: bool = False,
+    atlas_rows: dict[int, dict[str, str]] | None = None,
 ) -> dict[str, Any]:
     safe_repairs: list[dict[str, Any]] = []
     needs_human_review: list[dict[str, Any]] = []
+    owner_routes: list[dict[str, Any]] = []
 
     open_issue_numbers = {issue.number for issue in issues if issue.is_open}
     all_issue_numbers = {issue.number for issue in issues}
@@ -379,10 +388,34 @@ def audit_discussions(
     for discussion in discussions:
         issue_refs = discussion_issue_refs(discussion)
         doc_refs = discussion_doc_refs(discussion)
+        atlas_row = (atlas_rows or {}).get(discussion.number)
+        atlas_issue_refs = set()
+        if atlas_row:
+            atlas_issue_refs = set(int(match.group(1)) for match in ISSUE_REF_RE.finditer(atlas_row.get("execution", "")))
+            owner_routes.append(
+                {
+                    "kind": "discussion_atlas_owner_route",
+                    "discussion": discussion.number,
+                    "title": discussion.title,
+                    "url": discussion.url,
+                    "owner": atlas_row.get("owner", ""),
+                    "execution": atlas_row.get("execution", ""),
+                    "next_action": atlas_row.get("next_action", ""),
+                    "claim_boundary": "atlas route is navigation metadata; reopen owner docs/issues before claims",
+                }
+            )
         known_issue_refs = sorted(issue_refs & all_issue_numbers)
-        open_owner_refs = sorted(issue_refs & open_issue_numbers)
+        open_owner_refs = sorted((issue_refs | atlas_issue_refs) & open_issue_numbers)
+        has_atlas_owner_route = bool(
+            atlas_row
+            and (
+                atlas_row.get("owner", "").strip()
+                and "owner_missing" not in atlas_row.get("owner", "").casefold()
+                or atlas_issue_refs
+            )
+        )
 
-        if not issue_refs and not doc_refs:
+        if not issue_refs and not doc_refs and not has_atlas_owner_route:
             needs_human_review.append(
                 {
                     "kind": "discussion_orphan",
@@ -395,6 +428,7 @@ def audit_discussions(
 
         if (
             not open_owner_refs
+            and not has_atlas_owner_route
             and discussion.category.casefold() in {"ideas", "idea", "evidence", "announcements", "q&a"}
             and DISCUSSION_COMMITMENT_RE.search(discussion.text)
         ):
@@ -441,7 +475,11 @@ def audit_discussions(
                     }
                 )
 
-    return {"safe_repairs": safe_repairs, "needs_human_review": needs_human_review}
+    return {
+        "safe_repairs": safe_repairs,
+        "needs_human_review": needs_human_review,
+        "owner_routes": owner_routes,
+    }
 
 
 def docs_unresolved_hits(repo_root: Path, issues: list[IssueSnapshot]) -> list[dict[str, Any]]:
@@ -501,6 +539,7 @@ def empty_summary() -> dict[str, int]:
         "discussion_unowned_commitments": 0,
         "stale_discussion_links": 0,
         "missing_discussion_maps": 0,
+        "discussion_owner_routes": 0,
         "safe_repairs": 0,
         "needs_human_review": 0,
         "suggested_followups": 0,
@@ -520,6 +559,7 @@ def audit_issues(
     safe_repairs: list[dict[str, Any]] = []
     needs_human_review: list[dict[str, Any]] = []
     suggested_followups: list[dict[str, Any]] = []
+    discussion_owner_routes: list[dict[str, Any]] = []
     closed_numbers = {issue.number for issue in issues if issue.is_closed}
 
     for issue in issues:
@@ -601,14 +641,17 @@ def audit_issues(
         needs_human_review.extend(doc_hits)
 
     if discussions:
+        atlas_rows = load_discussion_atlas_rows(repo_root) if repo_root else {}
         discussion_report = audit_discussions(
             discussions,
             issues,
             repo_root=repo_root,
             generate_discussion_maps=generate_discussion_maps,
+            atlas_rows=atlas_rows,
         )
         safe_repairs.extend(discussion_report["safe_repairs"])
         needs_human_review.extend(discussion_report["needs_human_review"])
+        discussion_owner_routes.extend(discussion_report.get("owner_routes", []))
         summary["orphan_discussions"] = sum(
             1 for item in discussion_report["needs_human_review"] if item["kind"] == "discussion_orphan"
         )
@@ -627,6 +670,7 @@ def audit_issues(
             for item in discussion_report["needs_human_review"]
             if item["kind"] == "discussion_missing_implementation_map"
         )
+        summary["discussion_owner_routes"] = len(discussion_owner_routes)
 
     summary["safe_repairs"] = len(safe_repairs)
     summary["needs_human_review"] = len(needs_human_review)
@@ -637,7 +681,17 @@ def audit_issues(
         "safe_repairs": safe_repairs,
         "needs_human_review": needs_human_review,
         "suggested_followups": suggested_followups,
+        "discussion_owner_routes": discussion_owner_routes,
     }
+
+
+def load_discussion_atlas_rows(repo_root: Path) -> dict[int, dict[str, str]]:
+    if parse_discussion_atlas_rows is None:
+        return {}
+    atlas = repo_root / DISCUSSION_ATLAS_REL_PATH
+    if not atlas.exists():
+        return {}
+    return parse_discussion_atlas_rows(atlas.read_text(encoding="utf-8"))
 
 
 def load_issues_file(path: Path) -> tuple[list[IssueSnapshot], dict[str, int]]:

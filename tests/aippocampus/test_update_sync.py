@@ -26,6 +26,7 @@ from tests.aippocampus.update_sync_fixtures import (  # noqa: E402
     pushd,
     run_update,
     source_plugin_version,
+    update_workspace,
     write_minimal_repo,
     write_plugin_package,
 )
@@ -52,8 +53,8 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertNotIn("private path", encoded)
 
     def test_status_reports_surfaces_and_does_not_create_hook_config(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp, provider_env():
-            codex_home = Path(tmp) / "codex-home"
+        with update_workspace() as root:
+            codex_home = root / "codex-home"
             hooks_json = codex_home / "hooks.json"
 
             code, payload = run_update(
@@ -89,8 +90,7 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertFalse(hooks_json.exists())
 
     def test_status_splits_core_magic_optional_and_operator_readiness(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp, provider_env():
-            root = Path(tmp)
+        with update_workspace() as root:
             codex_home = root / "codex-home"
             hooks_json = codex_home / "hooks.json"
             update_cli.install_prompt.install(hooks_json)
@@ -186,8 +186,7 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertEqual(hidden["repair_command"], "aippocampus hooks lifecycle install")
 
     def test_status_reports_first_run_capability_ladder(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp, provider_env():
-            root = Path(tmp)
+        with update_workspace() as root:
             codex_home = root / "codex-home"
             hooks_json = codex_home / "hooks.json"
             update_cli.install_prompt.install(hooks_json)
@@ -250,8 +249,7 @@ class UpdateSyncTests(unittest.TestCase):
         )
 
     def test_status_splits_mcp_artifact_from_foreground_agent_callable_readiness(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp, provider_env():
-            root = Path(tmp)
+        with update_workspace() as root:
             codex_home = root / "codex-home"
             mcp_config = root / ".mcp.json"
             mcp_config.write_text(
@@ -2059,8 +2057,10 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertFalse(payload["ok"])
         self.assertIn("plugin_cache", payload["summary"]["needs_action"])
         action = next(item for item in payload["safe_next_actions"] if item["surface"] == "plugin_cache")
-        self.assertIn("multiple_candidates", action["reason"])
-        self.assertIn("2 candidates", action["reason"])
+        self.assertEqual(action["status_code"], "multiple_candidates")
+        self.assertEqual(action["candidate_count"], 2)
+        self.assertNotEqual(action["reason"], action["status_code"])
+        self.assertIn("multiple possible targets", action["reason"])
         self.assertIn("plugin install --codex --verify --compact-json", action["command"])
         self.assertEqual(executable_command_violations(action), [])
 

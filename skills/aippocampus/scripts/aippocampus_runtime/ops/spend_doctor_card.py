@@ -133,9 +133,6 @@ def compact_spend_doctor_card(report: Mapping[str, Any]) -> dict[str, Any]:
             "lowest_yield_route": decision.get("lowest_yield_route"),
             "warm_queue_health": decision.get("warm_queue_health") or {},
             "usage_telemetry_gaps": decision.get("usage_telemetry_gaps") or [],
-            "estimated_cost_supported": bool(decision.get("estimated_cost_supported")),
-            "cost_basis": decision.get("cost_basis"),
-            "cost_explanation": decision.get("cost_explanation"),
         },
         **canonical_foreground_action_fields(
             primary_action,
@@ -143,17 +140,9 @@ def compact_spend_doctor_card(report: Mapping[str, Any]) -> dict[str, Any]:
         ),
         "routes_to_pause_or_inspect": routes_to_inspect,
         "warning_codes": warning_codes,
-        "route_artifact_scan": route_scan,
-        "privacy_boundary": report.get("privacy_boundary") or {},
-        "reporting_boundary": report.get("reporting_boundary") or {},
         "operator_json_available": {
             "detail_full_command": "aippocampus doctor spend --detail full --json",
             "operator_json_command": "aippocampus doctor spend --operator-json",
-        },
-        "claim_boundary": {
-            "can_use_for": "foreground spend/navigation decision",
-            "must_open_operator_report_for": "route-level telemetry and billing-cost details",
-            "not_source_evidence": True,
         },
     }
     return runtime_core.sanitize_external_model_payload(payload)

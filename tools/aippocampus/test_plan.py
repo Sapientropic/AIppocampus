@@ -37,7 +37,12 @@ DEBT_REGISTER_SOURCES = (
     REPO_ROOT / "docs" / "evidence" / "reports" / "architecture-debt-snapshot-2026-06-04.md",
 )
 BUDGET_ROW_RE = re.compile(r"^\|\s*`(?P<path>[^`]+\.py)`\s*\|", re.MULTILINE)
+LARGE_CHANGED_TEST_MODULE_THRESHOLD = 5
 
+from benchmark_test_classification import (
+    benchmark_fast_lane_profile_for,
+    is_benchmark_shaped_module,
+)
 from test_tier_manifest import TEST_MODULE_CLASSIFICATIONS
 
 
@@ -261,6 +266,65 @@ def _changed_test_modules(changed_files: Iterable[str]) -> list[str]:
     return sorted(modules)
 
 
+def _changed_test_group_name(module: str) -> str:
+    classification = TEST_MODULE_CLASSIFICATIONS.get(module)
+    return classification.primary_tier if classification else "unclassified"
+
+
+def _changed_test_module_groups(
+    modules: Iterable[str],
+    *,
+    local_executable: bool = False,
+) -> list[dict[str, object]]:
+    grouped: dict[str, list[str]] = {}
+    for module in sorted(modules):
+        grouped.setdefault(_changed_test_group_name(module), []).append(module)
+
+    groups: list[dict[str, object]] = []
+    for group_name, group_modules in grouped.items():
+        command = py_command(
+            f"-m unittest {' '.join(group_modules)} -v",
+            local_executable=local_executable,
+        )
+        groups.append(
+            {
+                "group": group_name,
+                "module_count": len(group_modules),
+                "modules": group_modules,
+                "command": command,
+                "reason": (
+                    "Large dirty test surface slice grouped by tier ownership; "
+                    "run the slice that matches your changed surface first."
+                ),
+            }
+        )
+    return sorted(groups, key=lambda group: str(group["command"]))
+
+
+def _large_dirty_surface_warning(changed_test_modules: list[str]) -> dict[str, str]:
+    return {
+        "kind": "large_dirty_surface",
+        "severity": "warning",
+        "message": (
+            f"{len(changed_test_modules)} changed test modules exceed the "
+            f"{LARGE_CHANGED_TEST_MODULE_THRESHOLD}-module planner slice threshold."
+        ),
+        "next_action": (
+            "Use changed_test_groups to pick the slice owned by your edit first; "
+            "run all listed slices before closeout if you own the whole dirty surface."
+        ),
+    }
+
+
+def _is_benchmark_fast_lane_guard(module: str | None) -> bool:
+    if module is None or not is_benchmark_shaped_module(module):
+        return False
+    classification = TEST_MODULE_CLASSIFICATIONS.get(module)
+    if classification is None or classification.primary_tier not in {"quick", "pr"}:
+        return False
+    return benchmark_fast_lane_profile_for(module) is not None
+
+
 def classify_changed_files(changed_files: Iterable[str]) -> set[str]:
     categories: set[str] = set()
     for raw_path in changed_files:
@@ -282,7 +346,11 @@ def classify_changed_files(changed_files: Iterable[str]) -> set[str]:
         if path.startswith("benchmarks/aippocampus/") or path.startswith("benchmark_corpus/"):
             categories.add("benchmark")
         if path.startswith("tests/aippocampus/test_benchmark"):
-            categories.add("benchmark")
+            module = _test_module_for_path(path)
+            if _is_benchmark_fast_lane_guard(module):
+                categories.add("benchmark_fast_lane_guard")
+            else:
+                categories.add("benchmark")
         if path.startswith("skills/aippocampus/SKILL.md") or path.startswith(
             "skills/aippocampus/references/"
         ):
@@ -383,8 +451,15 @@ def build_test_plan(
     categories = classify_changed_files(normalized_files)
     commands: list[PlannedCommand] = []
     changed_test_modules = _changed_test_modules(normalized_files)
+    changed_test_groups: list[dict[str, object]] = []
     debt_reason = architecture_debt_plan_reason(normalized_files)
     environment = python_environment_summary()
+    warnings = planner_warnings(environment)
+    large_dirty_surface = (
+        len(changed_test_modules) > LARGE_CHANGED_TEST_MODULE_THRESHOLD
+    )
+    if large_dirty_surface:
+        warnings.append(_large_dirty_surface_warning(changed_test_modules))
     if debt_reason:
         categories.add("architecture_debt")
 
@@ -404,7 +479,21 @@ def build_test_plan(
 
     _add_static_gates(commands, normalized_files, categories)
 
-    if changed_test_modules:
+    if changed_test_modules and large_dirty_surface:
+        changed_test_groups = _changed_test_module_groups(
+            changed_test_modules,
+            local_executable=local_executable,
+        )
+        for group in changed_test_groups:
+            _add_command(
+                commands,
+                PlannedCommand(
+                    command=str(group["command"]),
+                    reason=str(group["reason"]),
+                    scope=f"focused:{group['group']}",
+                ),
+            )
+    elif changed_test_modules:
         _add_command(
             commands,
             PlannedCommand(
@@ -573,8 +662,9 @@ def build_test_plan(
         "schema_version": 2,
         "command_mode": "local_executable" if local_executable else "portable",
         "python_environment": environment,
-        "warnings": planner_warnings(environment),
+        "warnings": warnings,
         "changed_files": normalized_files,
+        "changed_test_groups": changed_test_groups,
         "categories": sorted(categories),
         "commands": [command.as_dict() for command in commands],
         "followup": [

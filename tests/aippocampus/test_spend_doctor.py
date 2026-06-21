@@ -400,13 +400,12 @@ class SpendDoctorTests(unittest.TestCase):
         self.assertNotIn("routes", payload)
         self.assertNotIn("budget_guardrails", payload)
         self.assertNotIn("cannot_claim", payload)
+        self.assertNotIn("route_artifact_scan", payload)
+        self.assertNotIn("privacy_boundary", payload)
+        self.assertNotIn("reporting_boundary", payload)
+        self.assertNotIn("claim_boundary", payload)
         self.assertEqual(payload["summary"]["scan_status"], "deferred")
         self.assertFalse(payload["summary"]["effective_tokens_known"])
-        self.assertEqual(payload["route_artifact_scan"]["status"], "deferred")
-        self.assertEqual(
-            payload["claim_boundary"]["can_use_for"],
-            "foreground spend/navigation decision",
-        )
         self.assertIn("decision", payload)
         self.assertNotIn(str(root), proc.stdout)
 
@@ -437,6 +436,7 @@ class SpendDoctorTests(unittest.TestCase):
             card["operator_json_available"]["detail_full_command"],
             "aippocampus doctor spend --detail full --json",
         )
+        self.assertNotIn("claim_boundary", card)
 
     def test_default_compact_json_defers_route_scan_without_self_looping(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -483,7 +483,7 @@ class SpendDoctorTests(unittest.TestCase):
         payload = json.loads(proc.stdout)
         self.assertEqual(payload["status"], "partial")
         self.assertEqual(payload["decision"]["action"], "continue")
-        self.assertEqual(payload["route_artifact_scan"]["status"], "deferred")
+        self.assertNotIn("route_artifact_scan", payload)
         self.assertFalse(payload["summary"]["effective_tokens_known"])
         self.assertEqual(
             payload["decision"]["safe_next_command"],
@@ -578,6 +578,10 @@ class SpendDoctorTests(unittest.TestCase):
         self.assertEqual(compact_report["route_artifact_scan"]["status"], "deferred")
         self.assertEqual(compact_card["foreground_action"]["id"], "inspect_warm_ambient_queue")
         self.assertEqual(compact_card["foreground_action"]["command"], "aippocampus warm status --json")
+        self.assertNotIn("route_artifact_scan", compact_card)
+        self.assertNotIn("privacy_boundary", compact_card)
+        self.assertNotIn("reporting_boundary", compact_card)
+        self.assertNotIn("claim_boundary", compact_card)
 
     def test_explicit_full_spend_json_keeps_operator_telemetry(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

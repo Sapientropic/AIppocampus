@@ -56,6 +56,7 @@ class DebtReportTests(unittest.TestCase):
                     "drift": 1,
                 }
             ],
+            stale_allowances=[],
         )
         self.assertEqual(
             [warning["code"] for warning in warnings],
@@ -83,8 +84,78 @@ class DebtReportTests(unittest.TestCase):
         warnings = debt_report.report_warnings(
             headroom_summary=system_weight["guard_headroom_summary"],
             count_drifts=[],
+            stale_allowances=[],
         )
         self.assertEqual(warnings, [])
+
+    def test_count_drift_classifies_small_positive_and_stale_allowance(self) -> None:
+        self.assertEqual(
+            debt_report.drift_class(
+                registered_count=100,
+                current_count=103,
+                guard_budget=140,
+            ),
+            "harmless_small_drift",
+        )
+        self.assertEqual(
+            debt_report.drift_class(
+                registered_count=100,
+                current_count=130,
+                guard_budget=140,
+            ),
+            "positive_drift",
+        )
+        self.assertEqual(
+            debt_report.drift_class(
+                registered_count=2400,
+                current_count=120,
+                guard_budget=2500,
+            ),
+            "large_stale_allowance_after_shrink",
+        )
+
+    def test_stale_allowance_rows_are_actionable(self) -> None:
+        rows = [
+            {
+                "path": "tests/aippocampus/test_split_owner.py",
+                "current_count": 32,
+                "guard_budget": 4300,
+                "margin": 4268,
+                "over_budget": False,
+            },
+            {
+                "path": "tests/aippocampus/test_normal_owner.py",
+                "current_count": 1200,
+                "guard_budget": 1500,
+                "margin": 300,
+                "over_budget": False,
+            },
+        ]
+
+        stale = debt_report.stale_allowance_entries(rows)
+
+        self.assertEqual(len(stale), 1)
+        self.assertEqual(stale[0]["path"], "tests/aippocampus/test_split_owner.py")
+        self.assertEqual(
+            stale[0]["drift_class"],
+            "large_stale_allowance_after_shrink",
+        )
+        self.assertEqual(
+            stale[0]["recommended_action"],
+            "lower_guard_budget_or_archive_row_with_dated_owner_rationale",
+        )
+        warnings = debt_report.report_warnings(
+            headroom_summary={
+                "runtime_exact_zero_count": 0,
+                "runtime_near_zero_count": 0,
+            },
+            count_drifts=[],
+            stale_allowances=stale,
+        )
+        self.assertIn(
+            "architecture_debt_stale_allowance",
+            [warning["code"] for warning in warnings],
+        )
 
 
 if __name__ == "__main__":

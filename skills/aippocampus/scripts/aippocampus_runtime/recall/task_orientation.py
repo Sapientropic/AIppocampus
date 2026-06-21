@@ -299,11 +299,36 @@ def _safe_next_actions(
     ]
 
 
-def _compact_route_plan(plan: Mapping[str, Any]) -> dict[str, Any]:
+def _use_boundary() -> dict[str, Any]:
     return {
-        "first_sources_to_reopen": list(plan.get("first_sources_to_reopen") or [])[:3],
-        "stop_conditions": list(plan.get("stop_conditions") or [])[:3],
-        "source_reopen_required_before_claims": True,
+        "use": "navigation_only",
+        "before_claiming": "reopen_or_deepen_a_source_route",
+        "details": "full_detail_contains_source_boundary_diagnostics",
+    }
+
+
+def _compact_action_fields(actions: list[dict[str, Any]]) -> dict[str, Any]:
+    fields = canonical_foreground_action_fields(actions[0], safe_next_actions=actions)
+    alternates = []
+    safe_next_actions = fields.get("safe_next_actions")
+    if not isinstance(safe_next_actions, list):
+        safe_next_actions = []
+    for action in safe_next_actions:
+        if not isinstance(action, Mapping):
+            continue
+        compact_action = dict(action)
+        compact_action.pop("claim_boundary", None)
+        alternates.append(compact_action)
+    fields["safe_next_actions"] = alternates
+    return fields
+
+
+def _compact_route_plan(plan: Mapping[str, Any]) -> dict[str, Any]:
+    first_sources = list(plan.get("first_sources_to_reopen") or [])[:3]
+    return {
+        "first_sources_to_reopen": first_sources,
+        "source_route_count": len(first_sources),
+        "next_step": "inspect_first_source_route",
     }
 
 
@@ -378,7 +403,8 @@ def build_task_orientation_packet(
     )
     detail_level = str(detail or "compact").strip().casefold()
     full_detail = detail_level in {"full", "detail", "operator"}
-    action_fields = canonical_foreground_action_fields(actions[0], safe_next_actions=actions)
+    full_action_fields = canonical_foreground_action_fields(actions[0], safe_next_actions=actions)
+    compact_action_fields = _compact_action_fields(actions)
     base_packet: dict[str, Any] = {
         "kind": KIND,
         "schema_version": SCHEMA_VERSION,
@@ -398,12 +424,6 @@ def build_task_orientation_packet(
             "whether issue comments changed acceptance criteria",
             "whether private replay aggregate is opted in for evaluation",
         ],
-        **action_fields,
-        "source_boundary": _source_boundary(),
-        "product_boundary": (
-            "Orientation is navigation for choosing the next source route; reopen recall/deepen "
-            "source before exact, stale, sensitive, or issue-closeout claims."
-        ),
         "operator_detail_command": (
             "aippocampus agent orient "
             f"{shell_quote(clean_task)} --json --detail full"
@@ -412,6 +432,12 @@ def build_task_orientation_packet(
     if full_detail:
         packet: dict[str, Any] = {
             **base_packet,
+            **full_action_fields,
+            "source_boundary": _source_boundary(),
+            "product_boundary": (
+                "Orientation is navigation for choosing the next source route; reopen recall/deepen "
+                "source before exact, stale, sensitive, or issue-closeout claims."
+            ),
             "understanding_state_read_model": _compact_understanding_state(understanding_state),
             "orientation_sidecar_load": sidecar_load,
             "issue_work_guard": compact_issue_work_guard(issue_packet),
@@ -449,6 +475,7 @@ def build_task_orientation_packet(
     else:
         packet = {
             **base_packet,
+            **compact_action_fields,
             "current_orientation": {
                 "frontier": base_packet["frontier"],
                 "active_path_count": compact_path.get("path_count", 0),
@@ -461,24 +488,7 @@ def build_task_orientation_packet(
             },
             "source_routes": source_routes,
             "route_plan": _compact_route_plan(route_plan),
-            "detail_deferred": {
-                "active_path_packet": True,
-                "understanding_state_read_model": True,
-                "orientation_sidecar_load": True,
-                "external_source_anchors": len(anchors),
-                "suppressed_external_source_anchors": len(suppressed_anchors),
-                "learning_and_aippo_constraints": len(constraints),
-                "suppressed_constraints": len(suppressed_constraints),
-                "advanced_navigation_components": [
-                    {
-                        "component": item.get("component"),
-                        "status": item.get("status"),
-                        "item_count": item.get("item_count", 0),
-                    }
-                    for item in sidecar_load.get("components") or []
-                    if isinstance(item, Mapping)
-                ],
-            },
+            "use_boundary": _use_boundary(),
         }
     if full_detail:
         foreground_bytes = len(json.dumps(packet, ensure_ascii=False, sort_keys=True).encode("utf-8"))

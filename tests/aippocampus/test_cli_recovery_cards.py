@@ -22,6 +22,10 @@ from aippocampus_runtime.contracts import executable_command_violations  # noqa:
 from aippocampus_runtime.recall.agent_continuity_cli_support import (
     render_recall_human,  # noqa: E402
 )
+from tests.aippocampus.frontstage_assertions import (  # noqa: E402
+    assert_compact_frontstage_payload,
+    assert_semantic_human_output,
+)
 
 
 class AippocampusCliRecoveryCardTests(unittest.TestCase):
@@ -367,7 +371,6 @@ class AippocampusCliRecoveryCardTests(unittest.TestCase):
         self.assertNotIn("Configured env vars:", proc.stdout)
         self.assertNotIn("Sensitive env vars present:", proc.stdout)
         self.assertNotIn("Registered knobs:", proc.stdout)
-        self.assertIn("Boundary:", proc.stdout)
         self.assertNotIn("Cannot claim:", proc.stdout)
         self.assertIn("provider connectivity", proc.stdout)
         self.assertIn("doctor provider", proc.stdout)
@@ -939,7 +942,7 @@ class AippocampusCliRecoveryCardTests(unittest.TestCase):
         self.assertEqual(proc.stdout, "")
         self.assertIn("Error:", proc.stderr)
         self.assertIn("Try:", proc.stderr)
-        self.assertIn("Boundary:", proc.stderr)
+        assert_semantic_human_output(self, proc.stderr, max_lines=6)
         self.assertNotIn("usage:", proc.stderr)
         self.assertNotIn("facade.py", proc.stderr)
 
@@ -1167,7 +1170,7 @@ class AippocampusCliRecoveryCardTests(unittest.TestCase):
         self.assertNotIn("result", deepen_payload)
         self.assertNotIn("boundary_detail", deepen_payload)
         self.assertNotIn("operator_detail", deepen_payload)
-        self.assertIn("operator_detail_command", deepen_payload)
+        assert_compact_frontstage_payload(self, deepen_payload, max_top_level_diagnostics=1)
 
         self.assertEqual(provider.returncode, 0, provider.stderr)
         provider_payload = json.loads(provider.stdout)

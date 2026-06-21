@@ -25,6 +25,7 @@ from aippocampus_runtime.hooks.action_hint_cache_records import BLOCKED_STATES
 from aippocampus_runtime.hooks.foreground_status import (
     action_hint_cache_refresh_primary,
     action_hint_status_contract,
+    compact_action_hint_status_result,
     hook_install_closeout_contract,
     no_action_needed_install_primary,
 )
@@ -501,7 +502,11 @@ def status(
     result["warning_state"] = str(result["frontstage_card"].get("warning_state") or "")
     result["setup_role"] = str(result["frontstage_card"].get("setup_role") or "")
     result.update(action_hint_status_contract(result["frontstage_card"]))
-    return result if include_private_paths else redact_public_result(result, path=path)
+    return (
+        result
+        if include_private_paths
+        else compact_action_hint_status_result(result, event=ACTION_HINT_EVENT)
+    )
 
 
 def redact_public_result(result: Mapping[str, Any], *, path: Path) -> dict[str, Any]:
@@ -610,32 +615,39 @@ def main(argv: list[str] | None = None) -> int:
     include_private_paths = args.include_private_paths or args.operator_json
     if args.action == "install" and not include_private_paths:
         result = public_install_result(result, path=path)
+    elif args.action == "status" and not include_private_paths:
+        result = compact_action_hint_status_result(result, event=ACTION_HINT_EVENT)
     elif not include_private_paths:
         result = redact_public_result(result, path=path)
     if args.json_output:
         print(json.dumps(result, ensure_ascii=False, indent=2))
     else:
-        print(
-            f"Action-time hints: {((result.get('frontstage_card') or {}).get('status') or 'unknown')}"
-        )
+        print(f"Action-time hints: {result.get('status') or 'unknown'}")
         print("optional: true; fail-open: true; authority: navigation_only")
         print(f"event: {ACTION_HINT_EVENT}")
         print(f"support: {result.get('support_status')}")
-        steps = (result.get("frontstage_card") or {}).get("next_steps") or []
+        steps = [result.get("foreground_action"), *(result.get("safe_next_actions") or [])]
         if steps:
             installed = bool(result.get("installed"))
             preferred_labels = (
-                {"review_guidance", "install", "prepare_cache", "refresh_cache"}
+                {"review guidance", "install action hint hook", "refresh action hint cache"}
                 if not installed
-                else {"prepare_cache", "refresh_cache", "install"}
+                else {"refresh action hint cache", "install action hint hook"}
             )
             preferred = next(
                 (
                     step
                     for step in steps
-                    if step.get("label") in preferred_labels
+                    if str(step.get("label") or "").casefold() in preferred_labels
                 ),
-                next((step for step in steps if step.get("label") == "check"), steps[0]),
+                next(
+                    (
+                        step
+                        for step in steps
+                        if str(step.get("label") or "").casefold().startswith("check")
+                    ),
+                    steps[0],
+                ),
             )
             print(f"next: {preferred.get('command')}")
     return 0
