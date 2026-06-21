@@ -5,18 +5,15 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
-from pathlib import Path
 
-TOOLS_ROOT = Path(__file__).resolve().parents[1]
-if str(TOOLS_ROOT) not in sys.path:
-    sys.path.insert(0, str(TOOLS_ROOT))
+from _paths import ensure_paths
 
-from repo_paths import ensure_repo_imports
 
-ensure_repo_imports(Path(__file__))
+def _agency_host_timing_runtime():
+    ensure_paths()
+    from aippocampus_runtime.coding import agency_host_timing
 
-from aippocampus_runtime.coding import agency_host_timing  # noqa: E402
+    return agency_host_timing
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -25,6 +22,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args(argv)
+    agency_host_timing = _agency_host_timing_runtime()
     report = agency_host_timing.fixture_host_timing_replay()
     if args.json_output:
         print(json.dumps(report, ensure_ascii=False, indent=2))

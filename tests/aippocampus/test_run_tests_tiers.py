@@ -48,7 +48,6 @@ BENCHMARK_SMOKE_REVIEWED_NON_BENCHMARK_MODULES = {
 }
 
 PR_CRITICAL_MODULES = {
-    "tests.aippocampus.test_benchmark_graph_extraction_boundary",
     "tests.aippocampus.test_prompt_hook_anti_nag_behavior",
 }
 
@@ -772,24 +771,52 @@ class RunTestsTierTests(unittest.TestCase):
         quick_shape = report["tiers"]["quick"]["benchmark_shaped"]
         pr_shape = report["tiers"]["pr"]["benchmark_shaped"]
         benchmark_shape = report["tiers"]["benchmark"]["benchmark_shaped"]
-        fast_lane_modules = {
-            entry["module"]
-            for entry in quick_shape["fast_lane_modules"] + pr_shape["fast_lane_modules"]
-        }
 
-        self.assertIn(
-            "tests.aippocampus.test_benchmark_entrypoints",
-            fast_lane_modules,
-        )
-        self.assertTrue(
-            all(entry["category"] for entry in quick_shape["fast_lane_modules"])
-        )
-        self.assertTrue(
-            all(entry["rationale"] for entry in pr_shape["fast_lane_modules"])
-        )
+        self.assertEqual(quick_shape["fast_lane_module_count"], 0)
+        self.assertEqual(pr_shape["fast_lane_module_count"], 0)
         self.assertEqual(quick_shape["evidence_module_count"], 0)
         self.assertEqual(pr_shape["evidence_module_count"], 0)
         self.assertGreater(benchmark_shape["evidence_module_count"], 0)
+        replacement_lanes = report["tier_shrink_replacement_lanes"]
+        self.assertIn(
+            "tests.aippocampus.test_benchmark_entrypoints",
+            replacement_lanes,
+        )
+        self.assertIn(
+            "benchmark-smoke",
+            replacement_lanes["tests.aippocampus.test_benchmark_entrypoints"][
+                "replacement_lane"
+            ],
+        )
+
+    def test_cli_recovery_card_catalog_has_pr_core_replacement_lane(self) -> None:
+        report = run_tests.build_tier_report(tiers=("pr", "broad-pr"))
+        replacement_lanes = report["tier_shrink_replacement_lanes"]
+
+        self.assertIn(
+            "tests.aippocampus.test_cli_recovery_cards_core",
+            run_tests.modules_for_tier("pr"),
+        )
+        self.assertNotIn(
+            "tests.aippocampus.test_cli_recovery_cards",
+            run_tests.modules_for_tier("pr"),
+        )
+        self.assertIn(
+            "tests.aippocampus.test_cli_recovery_cards",
+            run_tests.modules_for_tier("broad-pr"),
+        )
+        self.assertEqual(
+            replacement_lanes["tests.aippocampus.test_cli_recovery_cards"][
+                "primary_tier"
+            ],
+            "broad",
+        )
+        self.assertIn(
+            "test_cli_recovery_cards_core",
+            replacement_lanes["tests.aippocampus.test_cli_recovery_cards"][
+                "replacement_lane"
+            ],
+        )
 
     def test_future_benchmark_shaped_fast_lane_module_requires_rationale(self) -> None:
         with self.assertRaisesRegex(ValueError, "benchmark-shaped fast-lane"):

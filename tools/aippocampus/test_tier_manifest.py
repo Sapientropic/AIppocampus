@@ -20,25 +20,17 @@ PR_STEMS = frozenset(
         "test_agent_recall_apw_fallback",
         "test_agent_recall_compact_projection",
         "test_agent_pull_gesture",
+        "test_agent_self_note_cli",
         "test_agent_self_notes",
         "test_aippo_clause_lifecycle",
         "test_aippo_skill_bridge",
         "test_aippo_working_contract",
         "test_ambient_recall_cards",
         "test_avatar_illumination",
-        # Benchmark-shaped architecture guards can still belong to the broad PR
-        # lane when they are local-safe contract checks rather than full
-        # benchmark mirrors. Keep the explicit override small so benchmark
-        # naming does not silently hide PR coverage.
-        "test_benchmark_capability_provenance",
-        "test_benchmark_dream_delivery_quality",
-        "test_benchmark_default_hook_recall_usefulness",
-        "test_benchmark_episode_arc_sequence_usefulness",
-        "test_benchmark_graph_extraction_boundary",
         "test_cognitive_load_sidecar",
         "test_cognitive_observatory",
         "test_circuit_feedback",
-        "test_cli_recovery_cards",
+        "test_cli_recovery_cards_core",
         "test_cli_start",
         "test_command_quoting_contract",
         "test_debt_report",
@@ -111,6 +103,7 @@ TEST_MODULE_STEMS = frozenset(
         "test_agent_recall_apw_fallback",
         "test_agent_recall_compact_projection",
         "test_agent_pull_gesture",
+        "test_agent_self_note_cli",
         "test_agent_self_notes",
         "test_aippo_clause_lifecycle",
         "test_aippo_feedback_eval_ficus",
@@ -226,6 +219,7 @@ TEST_MODULE_STEMS = frozenset(
         "test_checkpoint",
         "test_ci_parity",
         "test_cli_json_contract",
+        "test_cli_recovery_cards_core",
         "test_cli_runtime_floor",
         "test_closeout_audit",
         "test_claude_code_hooks",
@@ -260,6 +254,7 @@ TEST_MODULE_STEMS = frozenset(
         "test_diagnose_hooks",
         "test_docs_health",
         "test_docs_health_benchmark_evidence",
+        "test_docs_health_legacy_alias_inventory",
         "test_skill_entrypoint_docs",
         "test_dream_delivery_eligibility",
         "test_dream_atlas_pack",
@@ -520,8 +515,6 @@ QUICK_STEMS = frozenset(
         "test_continuity_domain_salience_adapter",
         "test_continuity_domain_producer",
         "test_cross_agent_isolation",
-        "test_benchmark_entrypoints",
-        "test_benchmark_capability_provenance",
         "test_foreground_action_card",
         "test_foreground_usefulness_and_candidate_survival",
         "test_hook_agent_affordance",
@@ -839,6 +832,70 @@ INTEGRATION_MODULES = frozenset(_module_name(stem) for stem in INTEGRATION_STEMS
 SLOW_MODULES = frozenset(_module_name(stem) for stem in SLOW_STEMS)
 BENCHMARK_MODULES = frozenset(_module_name(stem) for stem in BENCHMARK_STEMS)
 BENCHMARK_SMOKE_MODULES = frozenset(_module_name(stem) for stem in BENCHMARK_SMOKE_STEMS)
+
+TIER_SHRINK_REPLACEMENT_LANES: dict[str, dict[str, str]] = {
+    _module_name("test_cli_recovery_cards"): {
+        "primary_tier": "broad",
+        "replacement_lane": (
+            "tests.aippocampus.test_cli_recovery_cards_core remains in pr; "
+            "broad-pr and focused CLI recovery-card runs own the full catalog."
+        ),
+        "rationale": (
+            "The full recovery-card catalog is valuable but too wide for every "
+            "local PR loop; the PR core keeps representative foreground-action "
+            "and no-traceback contracts in the default lane."
+        ),
+    },
+    _module_name("test_benchmark_capability_provenance"): {
+        "primary_tier": "benchmark",
+        "replacement_lane": "benchmark-smoke public-fast and benchmark tiers",
+        "rationale": (
+            "Benchmark capability provenance is benchmark infrastructure evidence, "
+            "not ordinary PR product safety."
+        ),
+    },
+    _module_name("test_benchmark_default_hook_recall_usefulness"): {
+        "primary_tier": "benchmark",
+        "replacement_lane": "benchmark-smoke public-fast and benchmark tiers",
+        "rationale": (
+            "Default-hook recall usefulness belongs to benchmark evidence lanes; "
+            "runtime hook changes still get focused planner commands."
+        ),
+    },
+    _module_name("test_benchmark_dream_delivery_quality"): {
+        "primary_tier": "benchmark",
+        "replacement_lane": "benchmark-smoke public-fast and benchmark tiers",
+        "rationale": (
+            "Dream-delivery benchmark wiring should stay measurable without "
+            "making benchmark-shaped evidence a default PR ritual."
+        ),
+    },
+    _module_name("test_benchmark_entrypoints"): {
+        "primary_tier": "benchmark",
+        "replacement_lane": "benchmark-smoke public-fast and benchmark tiers",
+        "rationale": (
+            "Benchmark subprocess entrypoints are still covered by benchmark-smoke; "
+            "they do not need to run in quick for unrelated edits."
+        ),
+    },
+    _module_name("test_benchmark_episode_arc_sequence_usefulness"): {
+        "primary_tier": "benchmark",
+        "replacement_lane": "benchmark-smoke public-fast and benchmark tiers",
+        "rationale": (
+            "Episode-arc usefulness is benchmark-scope evidence, while runtime "
+            "episode changes are covered by focused tests and broad-pr."
+        ),
+    },
+    _module_name("test_benchmark_graph_extraction_boundary"): {
+        "primary_tier": "benchmark",
+        "replacement_lane": "benchmark and broad-pr architecture boundary coverage",
+        "rationale": (
+            "Graph extraction is an architecture boundary guard; keeping it out "
+            "of pr prevents benchmark-shaped guards from silently growing the "
+            "default lane."
+        ),
+    },
+}
 
 TIER_ALIASES = {"fast": "pr", "deterministic": "broad-pr", "ci": "broad-pr"}
 PR_PRIMARY_TIERS = frozenset({"quick", "pr"})

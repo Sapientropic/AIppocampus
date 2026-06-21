@@ -31,6 +31,7 @@ from test_tier_manifest import (
     TEST_TIERS,
     TIER_ALIASES,
     TIER_DESCRIPTIONS,
+    TIER_SHRINK_REPLACEMENT_LANES,
     validate_manifest,
 )
 
@@ -435,8 +436,9 @@ def benchmark_shaped_tier_summary(tier: str, modules: list[str]) -> dict[str, ob
             "evidence_module_count": 0,
             "evidence_modules": [],
             "boundary": (
-                "Benchmark-shaped modules in quick/pr are guards or entrypoint "
-                "smokes. They do not claim benchmark quality evidence."
+                "Benchmark-shaped modules should not live in quick/pr by default. "
+                "Any exception must carry an explicit fast-lane category and "
+                "rationale."
             ),
         }
     if normalized_tier in {"benchmark", "benchmark-smoke"}:
@@ -699,6 +701,7 @@ def build_tier_report(
         "generated_at": _utc_timestamp(),
         "tier_definitions": TIER_DESCRIPTIONS,
         "tier_aliases": TIER_ALIASES,
+        "tier_shrink_replacement_lanes": TIER_SHRINK_REPLACEMENT_LANES,
         "tiers": report_tiers,
         "timing_artifacts": [
             assess_timing_artifact_freshness(path, current_manifests=current_manifests)
@@ -708,9 +711,9 @@ def build_tier_report(
             "fast is a compatibility alias for the fast local pr gate; "
             "deterministic and ci remain broad-pr aliases for the old broad "
             "deterministic surface.",
-            "Benchmark-shaped modules in quick/pr are guard or entrypoint-smoke "
-            "coverage, not benchmark evidence; use benchmark-smoke or benchmark "
-            "for benchmark evidence claims.",
+            "Benchmark-shaped modules should stay in benchmark evidence lanes by "
+            "default. If one returns to quick/pr, it must carry an explicit "
+            "fast-lane category and rationale.",
         ],
     }
 

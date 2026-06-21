@@ -24,7 +24,6 @@ tools/aippocampus/benchmark_outcomes.py
 tools/aippocampus/smoke/dashboard_mobile_viewports.py
 tools/aippocampus/smoke/known_artifact_recall_dogfood.py
 tools/aippocampus/smoke/simulate_multilingual_prompt_hook.py
-tools/aippocampus/smoke/smoke_agency_host_timing.py
 tools/aippocampus/smoke/smoke_claude_code_history.py
 tools/aippocampus/smoke/smoke_codex_long_session_continuity.py
 tools/aippocampus/smoke/smoke_cognitive_observatory_current_completeness.py
@@ -32,7 +31,6 @@ tools/aippocampus/smoke/smoke_cross_agent_continuity.py
 tools/aippocampus/smoke/smoke_e2e50_seed_candidates.py
 tools/aippocampus/smoke/smoke_fresh_thread_real_history.py
 tools/aippocampus/smoke/smoke_generic_jsonl_integration.py
-tools/aippocampus/smoke/smoke_living_cue_cache.py
 tools/aippocampus/smoke/smoke_long_thread_segment_soak.py
 tools/aippocampus/smoke/smoke_memory_pain_prompt_hook.py
 tools/aippocampus/smoke/smoke_provider_key_bridge_os_store.py

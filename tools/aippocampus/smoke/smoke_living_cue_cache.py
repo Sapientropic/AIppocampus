@@ -5,20 +5,20 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
-from pathlib import Path
 from typing import Any
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
-if str(SCRIPTS) not in sys.path:
-    sys.path.insert(0, str(SCRIPTS))
+from _paths import ensure_paths
 
-from aippocampus_runtime.recall.living_cue_cache import (  # noqa: E402
-    demo_living_cue_entries,
-    living_cue_cache_report,
-    select_living_cue_packet,
-)
+
+def _living_cue_cache_runtime() -> tuple[Any, Any, Any]:
+    ensure_paths()
+    from aippocampus_runtime.recall.living_cue_cache import (
+        demo_living_cue_entries,
+        living_cue_cache_report,
+        select_living_cue_packet,
+    )
+
+    return demo_living_cue_entries, living_cue_cache_report, select_living_cue_packet
 
 
 def _case_projection(label: str, packet: dict[str, Any]) -> dict[str, Any]:
@@ -33,6 +33,11 @@ def _case_projection(label: str, packet: dict[str, Any]) -> dict[str, Any]:
 
 
 def run_smoke() -> dict[str, Any]:
+    (
+        demo_living_cue_entries,
+        living_cue_cache_report,
+        select_living_cue_packet,
+    ) = _living_cue_cache_runtime()
     entries = demo_living_cue_entries()
     positive = select_living_cue_packet("please continue learned phrase alpha", entries)
     negative = select_living_cue_packet("temporary mood beta", entries)

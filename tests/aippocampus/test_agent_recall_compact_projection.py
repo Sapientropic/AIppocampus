@@ -7,6 +7,7 @@ import unittest
 from aippocampus_runtime.contracts import executable_command_violations
 from aippocampus_runtime.recall import agent_continuity, foreground_action_card
 from tests.aippocampus.frontstage_assertions import (
+    assert_compact_detail_affordances,
     assert_compact_frontstage_payload,
 )
 
@@ -63,6 +64,7 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
             safe["claim_boundary"]["detail_available_with"],
             safe["operator_detail_command"],
         )
+        assert_compact_detail_affordances(self, safe, surface="agent_recall.safe_cue_detail")
         self.assertNotIn("old decision or handoff cue", json.dumps(safe, ensure_ascii=False))
 
         template_only = agent_continuity.public_recall_projection(
@@ -84,12 +86,12 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
             'aippocampus agent recall "{cue}" --json --detail full',
         )
         self.assertEqual(template_only["operator_detail_requires"], ["cue"])
-        self.assertNotIn("detail_available_with", template_only["claim_boundary"])
         self.assertEqual(
             template_only["claim_boundary"]["detail_available_with_template"],
             'aippocampus agent recall "{cue}" --json --detail full',
         )
         self.assertEqual(template_only["claim_boundary"]["detail_requires"], ["cue"])
+        assert_compact_detail_affordances(self, template_only, surface="agent_recall.template_detail")
         self.assertEqual(executable_command_violations(template_only), [])
 
     def test_low_specificity_thread_candidate_choices_get_public_safe_differentiators(

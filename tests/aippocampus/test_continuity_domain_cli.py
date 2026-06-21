@@ -11,6 +11,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 
 from aippocampus_runtime.recall import continuity_domain_cli
+from tests.aippocampus.cli_fixtures import write_continuity_domain_registry
 
 
 class ContinuityDomainCliTests(unittest.TestCase):
@@ -31,52 +32,14 @@ class ContinuityDomainCliTests(unittest.TestCase):
         *,
         thread_count: int,
     ) -> Path:
-        registry_dir = root / "registry"
-        registry_dir.mkdir()
-        threads = []
-        for index in range(thread_count):
-            clean = root / f"clean-source-{index}"
-            clean.mkdir()
-            rows = [
-                {
-                    "message_id": f"msg-{index}-{line}",
-                    "turn_id": f"turn-{index}-{line}",
-                    "turn_index": line,
-                    "source_line": line,
-                    "phase": "final_answer",
-                    "text": (
-                        "provider orchestration continuity route needs "
-                        "source-backed operator review before append publish"
-                    ),
-                }
-                for line in (1, 2)
-            ]
-            (clean / "messages.jsonl").write_text(
-                "\n".join(json.dumps(row, ensure_ascii=False) for row in rows) + "\n",
-                encoding="utf-8",
-            )
-            threads.append(
-                {
-                    "thread_key": f"session:{index}",
-                    "title": "provider orchestration continuity route",
-                    "summary": "provider orchestration continuity route",
-                    "project_label": "AIppocampus",
-                    "paths": {"clean_source_dir": str(clean)},
-                }
-            )
-        (registry_dir / "threads.json").write_text(
-            json.dumps(
-                {
-                    "schema_version": 1,
-                    "updated_at": "2026-06-16T00:00:00Z",
-                    "threads": threads,
-                },
-                ensure_ascii=False,
-                indent=2,
+        return write_continuity_domain_registry(
+            root,
+            thread_count=thread_count,
+            message_text=(
+                "provider orchestration continuity route needs "
+                "source-backed operator review before append publish"
             ),
-            encoding="utf-8",
         )
-        return registry_dir
 
     def test_default_produce_json_is_bounded_preview_equivalent(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -276,6 +239,286 @@ class ContinuityDomainCliTests(unittest.TestCase):
         self.assertNotIn("锚点", command)
         self.assertNotIn("Sapientropic", command)
         self.assertNotIn("--append", command)
+
+    def test_latest_list_and_append_require_resolvable_refs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            clean = root / "clean-source"
+            clean.mkdir()
+            (clean / "messages.jsonl").write_text(
+                json.dumps(
+                    {
+                        "message_id": "msg_domain",
+                        "source_id": "source_domain",
+                        "text": "continuity domain source anchor",
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            events = clean / "continuity-domain-events.jsonl"
+            snapshots = root / "snapshots"
+            event = json.dumps(
+                {
+                    "event_kind": "domain_created",
+                    "title": "Durable route for domain read",
+                    "domain_type": "recurring_question",
+                    "source_refs": [{"message_id": "msg_domain"}],
+                }
+            )
+            append = self.run_cli(
+                "continuity-domain",
+                "--cwd",
+                str(root),
+                "append",
+                "--events-path",
+                str(events),
+                "--clean-source-dir",
+                str(clean),
+                "--snapshot-dir",
+                str(snapshots),
+                "--event-json",
+                event,
+                "--publish",
+                "--json",
+            )
+            latest = self.run_cli(
+                "continuity-domain",
+                "--cwd",
+                str(root),
+                "latest",
+                "--snapshot-dir",
+                str(snapshots),
+                "--json",
+            )
+            listed = self.run_cli(
+                "continuity-domain",
+                "--cwd",
+                str(root),
+                "list",
+                "--snapshot-dir",
+                str(snapshots),
+                "--json",
+            )
+            missing = self.run_cli(
+                "continuity-domain",
+                "--cwd",
+                str(root),
+                "latest",
+                "--snapshot-dir",
+                str(root / "missing-snapshots"),
+                "--json",
+            )
+            unresolved_events = root / "unresolved-events.jsonl"
+            unresolved = self.run_cli(
+                "continuity-domain",
+                "--cwd",
+                str(root),
+                "append",
+                "--events-path",
+                str(unresolved_events),
+                "--event-json",
+                json.dumps(
+                    {
+                        "event_kind": "domain_created",
+                        "title": "Fake unresolved refs",
+                        "domain_type": "recurring_question",
+                        "source_refs": [{"message_id": "fake-missing-message"}],
+                    }
+                ),
+                "--json",
+            )
+
+        self.assertEqual(append.returncode, 0, append.stderr)
+        self.assertEqual(latest.returncode, 0, latest.stderr)
+        latest_payload = json.loads(latest.stdout)
+        encoded_latest = json.dumps(latest_payload, ensure_ascii=False)
+        self.assertEqual(latest_payload["status"], "ok")
+        self.assertEqual(latest_payload["summary"]["domain_count"], 1)
+        self.assertTrue(latest_payload["domains"][0]["source_reopen_required_before_claim"])
+        self.assertNotIn(str(root), encoded_latest)
+        self.assertEqual(listed.returncode, 0, listed.stderr)
+        self.assertEqual(json.loads(listed.stdout)["snapshot_count"], 1)
+        self.assertEqual(missing.returncode, 0, missing.stderr)
+        missing_payload = json.loads(missing.stdout)
+        self.assertEqual(missing_payload["status"], "empty")
+        self.assertIn("safe_next_actions", missing_payload)
+        self.assertNotIn("recovery_actions", missing_payload)
+        encoded_missing = json.dumps(missing_payload, ensure_ascii=False)
+        self.assertIn("aippocampus agent recall", encoded_missing)
+        self.assertNotIn("<cue>", encoded_missing)
+        self.assertNotEqual(unresolved.returncode, 0)
+        unresolved_payload = json.loads(unresolved.stdout)
+        self.assertIn("--clean-source-dir", unresolved_payload["error"]["message"])
+        self.assertFalse(unresolved_events.exists())
+
+    def test_read_path_help_is_action_card_not_bare_argparse(self) -> None:
+        latest = self.run_cli("continuity-domain", "latest", "--help")
+        listed = self.run_cli("continuity-domain", "list", "--help")
+        report = self.run_cli("continuity-domain", "report", "--help")
+
+        for proc in (latest, listed, report):
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            self.assertIn("Read-path action card", proc.stdout)
+            self.assertIn("reopenable routes", proc.stdout)
+            self.assertIn("source truth", proc.stdout)
+
+    def test_preview_is_foreground_bounded_with_broad_scan_escape_hatch(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            registry_dir = self.write_registry(root, thread_count=12)
+            bounded = self.run_cli("continuity-domain", "--registry-dir", str(registry_dir), "preview", "--json")
+            human = self.run_cli("continuity-domain", "--registry-dir", str(registry_dir), "preview")
+            broad = self.run_cli(
+                "continuity-domain",
+                "--registry-dir",
+                str(registry_dir),
+                "preview",
+                "--broad-scan",
+                "--max-candidates",
+                "1",
+                "--json",
+            )
+
+        self.assertEqual(bounded.returncode, 0, bounded.stderr)
+        bounded_payload = json.loads(bounded.stdout)
+        self.assertEqual(bounded_payload["preview_scan_policy"]["mode"], "foreground_bounded_default")
+        preview = bounded_payload["candidate_previews"][0]
+        self.assertNotIn("<cue>", json.dumps(preview, ensure_ascii=False))
+        self.assertIn(preview["foreground_candidate_quality"], {"actionable", "low_information"})
+        if preview["foreground_candidate_quality"] == "actionable":
+            self.assertIn("agent recall", preview["foreground_actions"][0]["command"])
+            self.assertEqual(preview["foreground_actions"][0]["claim_boundary"], "no_claim_before_reopen")
+        else:
+            self.assertEqual(preview["foreground_actions"], [])
+            self.assertIn("suppression_reason", preview)
+        self.assertEqual(bounded_payload["metrics"]["registered_thread_count"], 12)
+        self.assertEqual(bounded_payload["metrics"]["considered_thread_count"], 8)
+        self.assertEqual(bounded_payload["metrics"]["scanned_thread_count"], 8)
+        self.assertTrue(bounded_payload["metrics"]["scan_partial"])
+        self.assertTrue(bounded_payload["scan_policy"]["partial"])
+        self.assertIn("--broad-scan", bounded_payload["scan_policy"]["broad_scan_command"])
+        self.assertIn(
+            bounded_payload["foreground_action"]["id"],
+            {"use_candidate_preview_as_reopenable_route", "needs_broader_scan_or_cue"},
+        )
+        self.assertNotIn("--append", bounded_payload["foreground_action"]["command"])
+        if bounded_payload["foreground_action"]["id"] == "use_candidate_preview_as_reopenable_route":
+            self.assertIn("--append", bounded_payload["operator_next_action"]["command"])
+        else:
+            self.assertEqual(bounded_payload["foreground_candidate_quality"], "needs_broader_scan")
+
+        self.assertEqual(human.returncode, 0, human.stderr)
+        self.assertIn("scan: 8/12 threads", human.stdout)
+        self.assertIn("partial", human.stdout)
+        self.assertIn("low-info suppressed", human.stdout)
+        self.assertIn("boundary: preview is a route card", human.stdout)
+
+        self.assertEqual(broad.returncode, 0, broad.stderr)
+        broad_payload = json.loads(broad.stdout)
+        self.assertEqual(broad_payload["preview_scan_policy"]["mode"], "explicit_broad_scan")
+        self.assertEqual(broad_payload["metrics"]["registered_thread_count"], 12)
+        self.assertEqual(broad_payload["metrics"]["considered_thread_count"], 12)
+        self.assertEqual(broad_payload["metrics"]["scanned_thread_count"], 12)
+        self.assertFalse(broad_payload["metrics"]["scan_partial"])
+
+    def test_preview_filters_low_information_titles_and_cues(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            registry_dir = write_continuity_domain_registry(
+                root,
+                thread_count=1,
+                title="AIppocampus issues from Candidate generated recent messages",
+                message_text=(
+                    "from recent messages rollout lines user Candidate generated issues 看看 "
+                    "用户 角度 现在试 然后提 provider orchestration source-backed continuity route"
+                ),
+            )
+            proc = self.run_cli("continuity-domain", "--registry-dir", str(registry_dir), "preview", "--json")
+
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        payload = json.loads(proc.stdout)
+        self.assertGreater(payload["metrics"]["low_information_label_suppressed_count"], 0)
+        self.assertTrue(payload["candidate_previews"])
+        rejected = {
+            "aippocampus",
+            "candidate",
+            "candidate generated",
+            "checkpoint",
+            "clean",
+            "focus",
+            "from",
+            "generated",
+            "health",
+            "issue",
+            "issues",
+            "line",
+            "lines",
+            "message",
+            "messages",
+            "normalized",
+            "plugin",
+            "recent",
+            "rollout",
+            "user",
+            "用户",
+            "角度",
+            "现在试",
+            "然后提",
+            "看看",
+            "6-67",
+        }
+        for preview in payload["candidate_previews"]:
+            self.assertNotIn(str(preview["title"]).casefold(), rejected)
+            for cue in preview["activation_cues"]:
+                self.assertNotIn(str(cue).casefold(), rejected)
+
+    def test_preview_does_not_promote_generic_tool_words(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            registry_dir = write_continuity_domain_registry(
+                root,
+                thread_count=3,
+                title="AIppocampus recall append maintenance runtime-contract.md",
+                message_text=(
+                    "recall append maintenance AIppocampus aippocampus runtime-contract.md "
+                    "continuity-domain preview foreground action should prefer "
+                    "provider orchestration source-backed continuity route"
+                ),
+            )
+            proc = self.run_cli("continuity-domain", "--registry-dir", str(registry_dir), "preview", "--json")
+
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        payload = json.loads(proc.stdout)
+        encoded_action = json.dumps(payload["foreground_action"], ensure_ascii=False).casefold()
+        self.assertNotIn('"recall"', encoded_action)
+        self.assertNotIn('"append"', encoded_action)
+        self.assertNotIn('"maintenance"', encoded_action)
+        self.assertNotIn('"aippocampus"', encoded_action)
+        self.assertIn("--broad-scan", encoded_action)
+        self.assertEqual(payload["foreground_candidate_quality"], "needs_broader_scan")
+        for preview in payload["candidate_previews"]:
+            self.assertIn(preview["foreground_candidate_quality"], {"actionable", "low_information"})
+            if preview["foreground_candidate_quality"] == "low_information":
+                self.assertIn("suppression_reason", preview)
+
+    def test_preview_noisy_candidates_return_broader_scan_card(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            registry_dir = write_continuity_domain_registry(
+                root,
+                thread_count=1,
+                title="AIppocampus recall append maintenance",
+                message_text="recall append maintenance AIppocampus aippocampus runtime-contract.md",
+            )
+            proc = self.run_cli("continuity-domain", "--registry-dir", str(registry_dir), "preview", "--json")
+
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        payload = json.loads(proc.stdout)
+        self.assertEqual(payload["foreground_candidate_quality"], "needs_broader_scan")
+        self.assertEqual(payload["foreground_action"]["id"], "needs_broader_scan_or_cue")
+        self.assertIn("--broad-scan", payload["foreground_action"]["command"])
+        self.assertNotIn("agent recall", payload["foreground_action"]["command"])
 
 if __name__ == "__main__":
     unittest.main()

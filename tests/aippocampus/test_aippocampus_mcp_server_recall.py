@@ -13,6 +13,7 @@ from aippocampus_runtime.mcp import server as mcp
 from aippocampus_runtime.recall.agent_recall_cache import write_last_recall_cache
 from aippocampus_runtime.registry import store as registry_store
 from conversation_sources import ConversationSourceRef
+from tests.aippocampus.frontstage_assertions import assert_compact_detail_affordances
 from tests.aippocampus.mcp_server_fixtures import (
     assert_recall_template_action,
     field_path_count,
@@ -1167,7 +1168,7 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
         self.assertEqual(agent_payload["error"]["code"], "missing_recall_handle")
         self.assertNotIn("operator_detail", agent_payload)
         self.assertNotIn("boundary_detail", agent_payload)
-        self.assertIn("operator_detail_command", agent_payload)
+        assert_compact_detail_affordances(self, agent_payload, surface="mcp.agent_deepen.missing_selector")
         assert_recall_template_action(self, agent_payload["foreground_action"])
         self.assertIn("foreground_action", agent_payload)
         self.assertIn(

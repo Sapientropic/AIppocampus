@@ -24,56 +24,7 @@ class BenchmarkFastLaneProfile:
         }
 
 
-BENCHMARK_FAST_LANE_PROFILES: dict[str, BenchmarkFastLaneProfile] = {
-    "tests.aippocampus.test_benchmark_capability_provenance": BenchmarkFastLaneProfile(
-        module="tests.aippocampus.test_benchmark_capability_provenance",
-        category="benchmark_guard",
-        rationale=(
-            "Fast-lane provenance guard for benchmark capability records; "
-            "benchmark tiers own quality evidence."
-        ),
-    ),
-    "tests.aippocampus.test_benchmark_default_hook_recall_usefulness": BenchmarkFastLaneProfile(
-        module="tests.aippocampus.test_benchmark_default_hook_recall_usefulness",
-        category="benchmark_guard",
-        rationale=(
-            "PR-critical contract guard for default-hook recall fixtures; "
-            "passing PR does not claim benchmark quality."
-        ),
-    ),
-    "tests.aippocampus.test_benchmark_dream_delivery_quality": BenchmarkFastLaneProfile(
-        module="tests.aippocampus.test_benchmark_dream_delivery_quality",
-        category="benchmark_guard",
-        rationale=(
-            "PR-critical guard for dream-delivery benchmark wiring and public "
-            "fixture boundaries, not a fresh benchmark evidence run."
-        ),
-    ),
-    "tests.aippocampus.test_benchmark_entrypoints": BenchmarkFastLaneProfile(
-        module="tests.aippocampus.test_benchmark_entrypoints",
-        category="benchmark_entrypoint_smoke",
-        rationale=(
-            "Smoke-tests benchmark entrypoints and subprocess frontdoors only; "
-            "it is not a quality evidence lane."
-        ),
-    ),
-    "tests.aippocampus.test_benchmark_episode_arc_sequence_usefulness": BenchmarkFastLaneProfile(
-        module="tests.aippocampus.test_benchmark_episode_arc_sequence_usefulness",
-        category="benchmark_guard",
-        rationale=(
-            "PR-critical guard for episode-arc benchmark wiring; benchmark "
-            "smoke/full benchmark tiers own evidence claims."
-        ),
-    ),
-    "tests.aippocampus.test_benchmark_graph_extraction_boundary": BenchmarkFastLaneProfile(
-        module="tests.aippocampus.test_benchmark_graph_extraction_boundary",
-        category="benchmark_guard",
-        rationale=(
-            "Architecture boundary guard for graph extraction benchmark shape; "
-            "it is not benchmark-result evidence."
-        ),
-    ),
-}
+BENCHMARK_FAST_LANE_PROFILES: dict[str, BenchmarkFastLaneProfile] = {}
 
 
 def is_benchmark_shaped_module(module: str) -> bool:
