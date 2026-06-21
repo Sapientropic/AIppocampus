@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import ast
+import io
+import re
 import sys
+import tokenize
 import unittest
 from subprocess import run
 
@@ -17,6 +20,47 @@ FORMER_FLAT_MODULES = {
     path.stem
     for path in (REPO_ROOT / "skills" / "aippocampus" / "scripts").glob("*.py")
 }
+IMPORT_POLICY_ROOTS = (
+    REPO_ROOT / "tests" / "aippocampus",
+    REPO_ROOT / "tools" / "aippocampus",
+    REPO_ROOT / "benchmarks" / "aippocampus",
+)
+
+
+def _policy_baseline(path: str) -> set[str]:
+    return {
+        line.strip()
+        for line in (REPO_ROOT / path).read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.startswith("#")
+    }
+
+
+def _python_files_matching(pattern: str) -> set[str]:
+    regex = re.compile(pattern)
+    matches: set[str] = set()
+    for root in IMPORT_POLICY_ROOTS:
+        for path in root.rglob("*.py"):
+            if "__pycache__" in path.parts:
+                continue
+            if regex.search(path.read_text(encoding="utf-8")):
+                matches.add(path.relative_to(REPO_ROOT).as_posix())
+    return matches
+
+
+def _python_files_with_e402_comments() -> set[str]:
+    matches: set[str] = set()
+    for root in IMPORT_POLICY_ROOTS:
+        for path in root.rglob("*.py"):
+            if "__pycache__" in path.parts:
+                continue
+            source = path.read_text(encoding="utf-8")
+            try:
+                tokens = tokenize.generate_tokens(io.StringIO(source).readline)
+            except tokenize.TokenError:
+                continue
+            if any(token.type == tokenize.COMMENT and "# noqa: E402" in token.string for token in tokens):
+                matches.add(path.relative_to(REPO_ROOT).as_posix())
+    return matches
 
 
 class ImportCouplingTests(unittest.TestCase):
@@ -78,6 +122,29 @@ class ImportCouplingTests(unittest.TestCase):
                     offenders[path.relative_to(REPO_ROOT).as_posix()] = sorted(set(bad))
 
         self.assertEqual(offenders, {})
+
+    def test_import_path_debt_does_not_gain_new_first_party_exceptions(self) -> None:
+        baselines = {
+            "sys.path": (
+                _policy_baseline("tools/aippocampus/import_path_policy_baseline.txt"),
+                _python_files_matching(r"sys\.path\.(insert|append)"),
+            ),
+            "E402": (
+                _policy_baseline("tools/aippocampus/import_e402_policy_baseline.txt"),
+                _python_files_with_e402_comments(),
+            ),
+        }
+
+        for label, (baseline, current) in baselines.items():
+            with self.subTest(label=label):
+                new_exceptions = sorted(current - baseline)
+                self.assertEqual(
+                    new_exceptions,
+                    [],
+                    f"New {label} import exceptions must use package-owner imports, a public "
+                    "CLI/module entrypoint, or a documented central helper.",
+                )
+                self.assertLessEqual(len(current), len(baseline))
 
     def test_cli_facade_uses_package_owners(self) -> None:
         from aippocampus_runtime.cli import facade

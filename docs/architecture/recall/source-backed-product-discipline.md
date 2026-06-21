@@ -43,14 +43,14 @@ may retain detailed source trails and boundary fields.
 | Surface | Class | Current role | Source-backed boundary | First audit check |
 | --- | --- | --- | --- | --- |
 | `aippocampus agent orient` | `missing_usability_counterweight` to guard | Task Orientation Packet for fresh-thread starts. | Derived read model over existing routes, not a truth store. | `python -m unittest tests.aippocampus.test_task_orientation_packet -v` |
-| `aippocampus agent recall` | `useful_guard` | Source-backed route pull. | Compact packets are route selection; deepen before claims. | `tests/aippocampus/test_agent_opt_in_continuity.py` |
+| `aippocampus agent recall` | `useful_guard` | Source-backed route pull. | Compact packets are route selection; deepen before claims. | `tests/aippocampus/test_agent_opt_in_recall_routes.py` / `tests/aippocampus/test_agent_opt_in_cli_contracts.py` |
 | `aippocampus agent deepen` | `load_bearing_guard` | Opens selected source route. | Claims are bounded to the reopened source window. | request-index and malformed-handle tests |
 | `aippocampus agent aippo` | `progressive_disclosure` | Low-risk working-contract guidance. | Guidance shapes planning only; it does not prove project facts. | AIppo activation and explain tests |
 | Active Path Packet | `substrate_only` by default | Chooses a few paths from existing sidecars. | Non-evidence paths require reopen; stale paths are boundaries. | `tests/aippocampus/test_active_path_packet.py` |
 | Issue work guard | `useful_guard` | Prevents broad manual scaffolding before owner-route checks. | Navigation-only owner refs. | `tests/aippocampus/test_issue_work_guard.py` |
 | Foreground action cards | `useful_guard` | Copyable next action for agents. | Commands must be executable or explicit templates. | `executable_command_violations` checks |
-| MCP `agent_recall` / `agent_deepen` | `progressive_disclosure` | Host tool projection. | Compact default redacts private handles and local paths. | `tests/aippocampus/test_aippocampus_mcp_server.py` |
-| Associative Path Walker diagnostics | `progressive_disclosure` | Explicit `why-recall --apw-diagnostics` sidecar for associative route investigation. | Opt-in only; input packs are read-only navigation, positive feedback lifts only inside the same safe scope, and default recall ranking is unchanged. | `tests/aippocampus/test_associative_path_inputs.py` |
+| MCP `agent_recall` / `agent_deepen` | `progressive_disclosure` | Host tool projection. | Compact default redacts private handles and local paths. | `tests/aippocampus/test_aippocampus_mcp_server_catalog.py` / `tests/aippocampus/test_aippocampus_mcp_server_recall.py` |
+| Associative Path Walker diagnostics | `progressive_disclosure` | Explicit `why-recall --apw-diagnostics` sidecar for associative route investigation. | Opt-in only; input packs are read-only navigation, positive feedback lifts only inside the same safe scope, source-shape guards run before fallback projection, and default recall ranking is unchanged. | `tests/aippocampus/test_associative_path_inputs.py` / `tests/aippocampus/test_associative_path_source_shape.py` |
 | Hook affordances | `overblocking` risk | Tiny prompt-time ignition. | No raw source, local paths, or source refs in hook output. | hook affordance tests |
 | Background findings / observatory | `progressive_disclosure` | Reviewed navigation readouts. | Findings stay navigation-only until source is reopened. | foreground/output audit tests |
 

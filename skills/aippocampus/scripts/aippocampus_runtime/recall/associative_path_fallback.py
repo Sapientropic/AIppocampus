@@ -20,11 +20,10 @@ from aippocampus_runtime import core
 from aippocampus_runtime.mcp import recall_navigation
 from aippocampus_runtime.recall import agent_deepen_requests
 from aippocampus_runtime.recall.associative_path_inputs import build_associative_path_diagnostic
-from aippocampus_runtime.recall.query_policy import unique_preserve
-from aippocampus_runtime.source_shape import (
-    build_source_shape_descriptor,
-    project_source_shape_for_foreground,
+from aippocampus_runtime.recall.associative_path_source_shape import (
+    build_associative_path_source_shape,
 )
+from aippocampus_runtime.recall.query_policy import unique_preserve
 
 KIND = "aippocampus_associative_path_recall_fallback"
 SCHEMA_VERSION = 1
@@ -79,38 +78,9 @@ def _route_label(candidate: Mapping[str, Any]) -> str:
 
 def _source_shape_projection(candidate: Mapping[str, Any], refs: list[dict[str, Any]]) -> dict[str, Any]:
     route_id = _text(candidate.get("route_id"), 120) or _stable_id("apw", candidate)
-    descriptor = build_source_shape_descriptor(
-        producer="associative_path_walker",
-        source_refs=refs,
-        derivation_dag={
-            "producer": "associative_path_walker",
-            "nodes": [
-                {"id": route_id, "kind": "apw_candidate"},
-                *(
-                    {"id": _text(bridge_id, 80), "kind": "semantic_bridge"}
-                    for bridge_id in candidate.get("bridge_ids") or []
-                    if _text(bridge_id, 80)
-                ),
-            ],
-            "edges": [],
-        },
-        guard_inputs={
-            "privacy_state": "allowed",
-            "freshness": "current",
-            "authority_level": "navigation_only",
-            "claim_permission": "no_claim_before_reopen",
-        },
-        signals={
-            "compatibility": {
-                "status": "opt_in_fallback_only",
-                "reason_code": "ordinary_recall_weak_or_silent",
-            }
-        },
-        projection_intent="foreground_recall",
-        target_surfaces=("agent_recall_compact",),
-        source_shape_id=_stable_id("source_shape_apw", route_id, refs),
-    )
-    return project_source_shape_for_foreground(descriptor)
+    shaped = build_associative_path_source_shape(candidate, refs=refs, route_id=route_id)
+    projection = shaped["projection"]
+    return projection if isinstance(projection, dict) else {}
 
 
 def _candidate_to_route(
@@ -262,6 +232,8 @@ def build_associative_path_agent_fallback(
             "action_grammar": projection.get("action_grammar"),
             "risk_flags": route.get("risk_flags") or [],
             "reason_codes": route.get("triage_rank_reason_codes") or [],
+            "source_shape_id": projection.get("source_shape_id"),
+            "source_shape_guard_reasons": projection.get("triage_rank_reason_codes") or [],
             "source_reopen_required_before_claim": True,
             "source_shape_guarded": True,
         }
