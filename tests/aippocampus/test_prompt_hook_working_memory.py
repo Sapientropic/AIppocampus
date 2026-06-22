@@ -519,7 +519,7 @@ class PromptHookWorkingMemoryTests(AmbientRecallHookCase):
         self.assertIn("Ambient recall evidence", context)
         self.assertIn("line 190", context)
         self.assertNotIn("line 999", context)
-        self.assertIn("final_answer", context)
+        self.assertNotIn("final_answer", context)
         self.assertIn("bounded source-backed evidence", context)
         self.assertNotIn("search the source thread before relying on exact wording", context)
         self.assertFalse(result["ambient_recall"]["cards"][0]["source_reopen_required"])
@@ -547,4 +547,3 @@ class PromptHookWorkingMemoryTests(AmbientRecallHookCase):
         context = hook.context_for_hook(result)
         self.assertIsNotNone(context)
         self.assertIn("deep archival", context.casefold())
-

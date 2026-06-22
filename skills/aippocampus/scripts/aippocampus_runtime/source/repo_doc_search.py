@@ -74,6 +74,11 @@ def _repo_doc_match(
         gate=query_gate,
         haystack=_row_haystack(row, path),
     )
+    if (
+        int(profile.get("distinctive_anchor_count") or 0) > 0
+        and int(profile.get("matched_distinctive_anchor_count") or 0) <= 0
+    ):
+        return None
     if not profile["accepted"]:
         return None
     line = row.get("source_line") if isinstance(row.get("source_line"), int) else 1

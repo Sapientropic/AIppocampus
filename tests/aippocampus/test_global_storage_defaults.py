@@ -11,7 +11,6 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 ROOT = REPO_ROOT / "skills" / "aippocampus"
 SCRIPTS = ROOT / "scripts"
 BUILD_INDEX_CMD = [sys.executable, "-m", "aippocampus_runtime.recall.index_builder"]
-sys.path.insert(0, str(SCRIPTS))
 
 from aippocampus_runtime import core
 
