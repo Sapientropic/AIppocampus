@@ -456,5 +456,54 @@ class AgentDeepenCompactProjectionTests(unittest.TestCase):
         self.assertFalse(payload["recommended_evidence_route"])
         self.assertEqual(payload["foreground_action"]["id"], "treat_opened_source_as_diagnostic")
 
+    def test_mcp_selector_survives_without_last_recall_env_path(self) -> None:
+        old_registry = os.environ.get("AIPPOCAMPUS_REGISTRY_DIR")
+        old_last_recall = os.environ.get(agent_continuity.LAST_RECALL_CACHE_ENV)
+        registry_dir = self.cwd / "registry"
+        custom_last_recall = self.cwd / "custom-last-recall" / "last-recall.json"
+        os.environ["AIPPOCAMPUS_REGISTRY_DIR"] = str(registry_dir)
+        os.environ[agent_continuity.LAST_RECALL_CACHE_ENV] = str(custom_last_recall)
+
+        def restore_env() -> None:
+            if old_registry is None:
+                os.environ.pop("AIPPOCAMPUS_REGISTRY_DIR", None)
+            else:
+                os.environ["AIPPOCAMPUS_REGISTRY_DIR"] = old_registry
+            if old_last_recall is None:
+                os.environ.pop(agent_continuity.LAST_RECALL_CACHE_ENV, None)
+            else:
+                os.environ[agent_continuity.LAST_RECALL_CACHE_ENV] = old_last_recall
+
+        self.addCleanup(restore_env)
+
+        recall_payload = self._call_tool_payload(
+            "agent_recall",
+            {
+                "query": "clean source continuity",
+                "cwd": str(self.cwd),
+                "clean_source_dir": str(self.clean),
+                "max": 2,
+            },
+        )
+        selector = str(recall_payload.get("recall_selector_id") or "")
+        self.assertTrue(selector, recall_payload)
+        self.assertTrue((custom_last_recall.parent / "recall-selectors" / f"{selector}.json").exists())
+        self.assertTrue((registry_dir / "agent" / "recall-selectors" / f"{selector}.json").exists())
+
+        os.environ.pop(agent_continuity.LAST_RECALL_CACHE_ENV, None)
+        payload = self._call_tool_payload(
+            "agent_deepen",
+            {
+                "request_index": 1,
+                "recall_selector": selector,
+                "cwd": str(self.cwd),
+                "clean_source_dir": str(self.clean),
+            },
+        )
+
+        self.assertEqual(payload["status"], "ok")
+        self.assertEqual(payload["surface"], "mcp_agent_deepen_compact")
+        self.assertEqual(payload["source_window_summary"]["message_count"], 2)
+
 if __name__ == "__main__":
     unittest.main()

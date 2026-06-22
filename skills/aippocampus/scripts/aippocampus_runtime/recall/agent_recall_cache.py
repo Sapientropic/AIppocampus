@@ -37,6 +37,10 @@ def last_recall_cache_path(explicit: str | Path | None = None) -> Path:
     env = os.environ.get(LAST_RECALL_CACHE_ENV)
     if env:
         return Path(env).resolve()
+    return default_last_recall_cache_path()
+
+
+def default_last_recall_cache_path() -> Path:
     return core.aippocampus_registry_dir().resolve() / "agent" / "last-recall.json"
 
 
@@ -53,6 +57,39 @@ def recall_selector_cache_path(
     if not RECALL_SELECTOR_ID_RE.match(clean_id):
         raise ValueError("recall selector id has an unsupported shape")
     return recall_selector_cache_dir(last_recall_path_value) / f"{clean_id}.json"
+
+
+def recall_selector_cache_candidates(
+    selector_id: str,
+    *,
+    last_recall_path_value: str | Path | None = None,
+) -> list[Path]:
+    """Return selector lookup paths from most-specific to stable default.
+
+    Compact foreground output must not carry local cache paths. A selector
+    emitted from a custom `AIPPOCAMPUS_AGENT_LAST_RECALL_PATH` therefore needs
+    a stable same-machine fallback location as well as the caller-specific one;
+    otherwise a later MCP call can have a valid selector id but no way to find
+    its private snapshot.
+    """
+
+    primary = recall_selector_cache_path(
+        selector_id,
+        last_recall_path_value=last_recall_path_value,
+    )
+    default = (
+        default_last_recall_cache_path().parent
+        / "recall-selectors"
+        / f"{str(selector_id or '').strip()}.json"
+    )
+    candidates = [primary]
+    try:
+        same = primary.resolve() == default.resolve()
+    except OSError:
+        same = str(primary) == str(default)
+    if not same:
+        candidates.append(default)
+    return candidates
 
 
 def _selector_request_seed(cache: Mapping[str, Any]) -> str:
@@ -115,13 +152,15 @@ def write_recall_selector_snapshot(path: str | Path | None = None) -> str | None
         }
     )
     snapshot["privacy_boundary"] = boundary
-    try:
-        target = recall_selector_cache_path(selector_id, last_recall_path_value=path)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        atomic_write_json(target, snapshot)
-    except OSError:
-        return None
-    return selector_id
+    wrote_any = False
+    for target in recall_selector_cache_candidates(selector_id, last_recall_path_value=path):
+        try:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            atomic_write_json(target, snapshot)
+            wrote_any = True
+        except OSError:
+            continue
+    return selector_id if wrote_any else None
 
 
 def _encode_local_reopen_token(value: Any) -> dict[str, Any]:
