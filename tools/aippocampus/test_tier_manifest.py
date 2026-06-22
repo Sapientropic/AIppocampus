@@ -388,6 +388,7 @@ TEST_MODULE_STEMS = frozenset(
         "test_recall_scoring_policy",
         "test_recall_structure_time_features",
         "test_recall_why_diagnostics",
+        "test_relationship_origin_recall",
         "test_reflection_space",
         "test_registry_register_rollout",
         "test_registry_search",
@@ -572,6 +573,7 @@ INTEGRATION_STEMS = frozenset(
         "test_project_triage",
         "test_provider_doctor",
         "test_question_confirmation_live",
+        "test_relationship_origin_recall",
         "test_sync_bundle",
     }
 )
@@ -752,6 +754,7 @@ TAG_OVERRIDES = {
     "test_prompt_hook_semantic_diagnostics": ("hook", "semantic"),
     "test_privacy_projection": ("privacy",),
     "test_public_boundary_check": ("release", "privacy"),
+    "test_relationship_origin_recall": ("cli", "mcp", "recall", "registry"),
     "test_skill_entrypoint_docs": ("docs", "skill_surface"),
     "test_benchmark_avatar_bounded_resonance": ("benchmark", "public_fixture"),
     "test_benchmark_provider_conformance": ("provider", "mcp", "public_fixture"),

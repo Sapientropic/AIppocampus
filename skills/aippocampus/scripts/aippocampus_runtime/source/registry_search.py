@@ -42,6 +42,10 @@ from aippocampus_runtime.source.registry_source_window import (
     open_registry_source_window,
     write_last_registry_search_cache,
 )
+from aippocampus_runtime.source.relationship_origin import (
+    relationship_origin_allows_low_coverage,
+    relationship_origin_rank_adjustment,
+)
 from aippocampus_runtime.source.repo_doc_search import repo_checkout_doc_matches
 from aippocampus_runtime.source.search_terms import search_query_terms
 
@@ -287,6 +291,38 @@ def search_registry_sources(
                     gate=query_gate,
                     haystack=match_haystack(match),
                 )
+                if not profile["accepted"]:
+                    thread = match.get("thread")
+                    thread_map = thread if isinstance(thread, Mapping) else {}
+                    origin_profile = relationship_origin_allows_low_coverage(
+                        query_text=query_text,
+                        haystack=match_haystack(match),
+                        scope_labels=[
+                            *[str(label) for label in match.get("scope_labels") or []],
+                            *[str(label) for label in match.get("semantic_scope_labels") or []],
+                        ],
+                        thread_title=str(thread_map.get("title") or ""),
+                    )
+                    if origin_profile["accepted"]:
+                        profile = {
+                            **profile,
+                            "accepted": True,
+                            "suppression_reason": "",
+                            "relationship_origin_override": origin_profile[
+                                "suppression_override_reason"
+                            ],
+                            "relationship_origin": {
+                                key: value
+                                for key, value in origin_profile.items()
+                                if key
+                                in {
+                                    "primary_anchor_count",
+                                    "supporting_anchor_count",
+                                    "matched_primary_anchors",
+                                    "matched_supporting_anchors",
+                                }
+                            },
+                        }
                 match["query_match_profile"] = profile
                 if profile["accepted"]:
                     matches.append(match)
@@ -304,7 +340,14 @@ def search_registry_sources(
     matches.sort(
         key=lambda item: (
             1 if item.get("search_noise") else 0,
-            -as_float(item.get("score")),
+            -(
+                as_float(item.get("score"))
+                + relationship_origin_rank_adjustment(
+                    query_text=query_text,
+                    match=item,
+                    haystack=match_haystack(item),
+                )
+            ),
             str((item.get("thread") or {}).get("thread_key") or ""),
             as_int(item.get("line")),
         )
