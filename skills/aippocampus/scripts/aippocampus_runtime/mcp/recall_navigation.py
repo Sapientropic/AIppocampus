@@ -22,7 +22,16 @@ from typing import Any
 from aippocampus_runtime.core import compact_text, sanitize_external_model_text
 from aippocampus_runtime.mcp.continuity_routes import continuity_routes_for_context
 from aippocampus_runtime.mcp.handle_inputs import nested_navigation_handle_value
-from aippocampus_runtime.mcp.relationship_origin_routes import relationship_origin_registry_routes
+from aippocampus_runtime.mcp.registry_source_routes import (
+    dedupe_routes_by_source_ref,
+    registry_clean_source_routes,
+    reviewed_semantic_seed_path,
+    semantic_trigger_source_routes,
+)
+from aippocampus_runtime.mcp.relationship_origin_routes import (
+    relationship_origin_registry_routes,
+    relationship_origin_source_chain_routes,
+)
 from aippocampus_runtime.mcp.source_ref_matching import (
     message_matches_ref,
     public_source_message,
@@ -32,6 +41,7 @@ from aippocampus_runtime.mcp.source_ref_registry import (
     registry_source_fingerprint_invalidations,
     source_candidate_dirs_for_ref,
 )
+from aippocampus_runtime.mcp.thread_candidate_routes import registry_thread_candidate_routes
 from aippocampus_runtime.recall.active_recall_lock import (
     default_active_recall_lock_path,
     reopen_lock_sources,
@@ -46,8 +56,6 @@ from aippocampus_runtime.recall.continuity_domains import (
     load_continuity_domains_snapshot,
 )
 from aippocampus_runtime.recall.query_policy import split_query_terms
-from aippocampus_runtime.registry import api as registry
-from aippocampus_runtime.registry.search import entry_search_score
 from aippocampus_runtime.source.relationship_origin import RELATIONSHIP_ORIGIN_ROUTE_TOPIC
 from aippocampus_runtime.source.search import iter_clean_messages, search_clean_source
 
@@ -457,56 +465,6 @@ def _route_from_clean_hit(
     }
 
 
-def _registry_routes(
-    *,
-    intent: str,
-    registry_dir: Path | None,
-    max_routes: int,
-) -> list[dict[str, Any]]:
-    json_path, _ = registry.registry_paths(registry_dir)
-    if not json_path.exists():
-        return []
-    terms = _query_terms(intent)
-    payload = registry.load_registry(json_path)
-    candidates: list[tuple[float, dict[str, Any]]] = []
-    for entry in payload.get("threads") or []:
-        if not isinstance(entry, dict):
-            continue
-        score = entry_search_score(entry, terms)
-        if score <= 0:
-            continue
-        candidates.append((score, entry))
-    candidates.sort(key=lambda item: -item[0])
-    routes: list[dict[str, Any]] = []
-    for score, entry in candidates[:max_routes]:
-        route_id = _stable_id("registry", entry.get("thread_key"), score)
-        routes.append(
-            {
-                "handle": {
-                    "kind": "thread_candidate",
-                    "thread_key": entry.get("thread_key"),
-                    "route_id": route_id,
-                },
-                "route_id": route_id,
-                "kind": "thread_candidate",
-                "title": _safe_text(entry.get("title") or entry.get("thread_key"), 120),
-                "summary": _safe_text(entry.get("summary") or entry.get("workspace_name"), 180),
-                "evidence_level": "candidate",
-                "support_level": "navigation",
-                "source_refs": [{"thread_key": entry.get("thread_key")}],
-                "scope_labels": [
-                    str(label)
-                    for label in entry.get("scope_labels") or []
-                    if isinstance(label, str)
-                ][:8],
-                "reopenable": False,
-                "why_this_may_matter": "A registry thread matched the cue; search or reopen concrete source refs before relying on it.",
-                "suggested_next": {"tool": "search_memory"},
-            }
-        )
-    return routes
-
-
 def recall_context_packet(
     *,
     intent: str,
@@ -530,6 +488,16 @@ def recall_context_packet(
         limit=limit,
         snippet_chars=220,
     )
+    relationship_origin_chain_routes = relationship_origin_source_chain_routes(
+        intent=clean_intent,
+        source_dir=clean_source_dir,
+        registry_dir=registry_dir,
+        max_routes=limit,
+        clean_ref=_clean_ref,
+        route_handle=_route_handle,
+        stable_id=_stable_id,
+        safe_text=_safe_text,
+    )
     relationship_origin_routes = relationship_origin_registry_routes(
         intent=clean_intent,
         cwd=cwd,
@@ -541,11 +509,34 @@ def recall_context_packet(
         stable_id=_stable_id,
         safe_text=_safe_text,
     )
-    routes = [
+    current_source_routes = [
         _route_from_clean_hit(hit, source_dir=clean_source_dir, intent=clean_intent)
         for hit in search_result.get("matches") or []
         if isinstance(hit, dict)
     ]
+    registry_semantic_path = registry_dir / "semantic_triggers.jsonl" if registry_dir else None
+    semantic_routes, semantic_trigger_diagnostics = semantic_trigger_source_routes(
+        intent=clean_intent,
+        source_dir=clean_source_dir,
+        registry_dir=registry_dir,
+        semantic_triggers_path=registry_semantic_path,
+        max_routes=limit,
+        clean_ref=_clean_ref,
+        route_handle=_route_handle,
+        stable_id=_stable_id,
+        safe_text=_safe_text,
+    )
+    seed_semantic_routes, seed_semantic_diagnostics = semantic_trigger_source_routes(
+        intent=clean_intent,
+        source_dir=clean_source_dir,
+        registry_dir=registry_dir,
+        semantic_triggers_path=reviewed_semantic_seed_path(),
+        max_routes=limit,
+        clean_ref=_clean_ref,
+        route_handle=_route_handle,
+        stable_id=_stable_id,
+        safe_text=_safe_text,
+    )
     snapshot_path = continuity_domains_snapshot_path or continuity_domains_latest_path_for_clean_source(
         clean_source_dir
     )
@@ -558,29 +549,42 @@ def recall_context_packet(
     )
     domain_routes = continuity_routes["domain_routes"]
     pathlet_routes = continuity_routes["pathlet_routes"]
-    routes = [*relationship_origin_routes, *domain_routes, *pathlet_routes, *routes]
-    deduped_routes: list[dict[str, Any]] = []
-    seen_route_refs: set[str] = set()
-    for route in routes:
-        refs = route.get("source_refs") or []
-        ref = refs[0] if refs and isinstance(refs[0], Mapping) else {}
-        key = "|".join(
-            str(ref.get(part) or "")
-            for part in ("thread_key", "message_id", "turn_id", "turn_index", "line")
-        )
-        key = key or str(route.get("route_id") or "")
-        if key and key in seen_route_refs:
-            continue
-        if key:
-            seen_route_refs.add(key)
-        deduped_routes.append(route)
-    routes = deduped_routes
+    routes = dedupe_routes_by_source_ref(
+        [
+            *relationship_origin_chain_routes,
+            *relationship_origin_routes,
+            *domain_routes,
+            *pathlet_routes,
+            *current_source_routes,
+            *([] if current_source_routes else semantic_routes),
+            *([] if current_source_routes else seed_semantic_routes),
+        ]
+    )
+    if len(routes) < limit and not any(route.get("reopenable") is True for route in routes):
+        routes = dedupe_routes_by_source_ref(
+            [
+                *routes,
+                *registry_clean_source_routes(
+                    intent=clean_intent,
+                    cwd=cwd,
+                    source_dir=clean_source_dir,
+                    registry_dir=registry_dir,
+                    max_routes=limit - len(routes),
+                    clean_ref=_clean_ref,
+                    route_handle=_route_handle,
+                    stable_id=_stable_id,
+                    safe_text=_safe_text,
+                ),
+            ]
+    )
     if len(routes) < limit:
         routes.extend(
-            _registry_routes(
-                intent=clean_intent,
+            registry_thread_candidate_routes(
+                intent_terms=_query_terms(clean_intent),
                 registry_dir=registry_dir,
                 max_routes=limit - len(routes),
+                stable_id=_stable_id,
+                safe_text=_safe_text,
             )
         )
     continuity_status = continuity_routes["continuity_route_status"]
@@ -609,6 +613,21 @@ def recall_context_packet(
             "continuity_pathlet_route_count": len(pathlet_routes),
             "source_reopen_success_rate_observed": None,
             "wrong_or_stale_handle_rate_observed": None,
+            "relationship_origin_source_chain_route_count": len(relationship_origin_chain_routes),
+            "registry_clean_source_route_count": len(
+                [route for route in routes[:limit] if route.get("matched_cue_family") == "registry_source_search"]
+            ),
+        },
+        "semantic_trigger_diagnostics": {
+            **semantic_trigger_diagnostics,
+            "reviewed_seed_trigger_match_count": seed_semantic_diagnostics.get("seed_trigger_match_count", 0),
+            "reviewed_seed_triggers_are_query_scent_only": bool(
+                seed_semantic_diagnostics.get("seed_triggers_are_query_scent_only")
+            ),
+            "reviewed_seed_matched_trigger_terms": seed_semantic_diagnostics.get(
+                "matched_trigger_terms",
+                [],
+            ),
         },
         "warnings": list(search_result.get("warnings") or []),
     }
@@ -633,10 +652,32 @@ def normalize_handle(handle: Any) -> dict[str, Any]:
                 return normalize_handle(parsed)
         return _decode_handle(current)
     if isinstance(current, dict):
+        kind = str(current.get("kind") or "")
+        if kind == "thread_candidate":
+            thread_key = str(current.get("thread_key") or "").strip()
+            if not thread_key:
+                raise RecallNavigationError(
+                    "malformed_recall_handle",
+                    "thread candidate handles require thread_key.",
+                )
+            raise RecallNavigationError(
+                "thread_candidate_needs_source_resolution",
+                (
+                    "Thread candidates are navigation hints, not source-open handles. "
+                    "Search within the thread or rerun recall so it can resolve concrete source refs."
+                ),
+                thread_key=thread_key,
+                suggested_next={
+                    "tool": "search_memory",
+                    "arguments": {
+                        "thread_key": thread_key,
+                        "scope": "all_registered_sources",
+                    },
+                },
+            )
         nested = nested_navigation_handle_value(current, clean_ref=_clean_ref)
         if nested is not None and nested is not current:
             return normalize_handle(nested)
-        kind = str(current.get("kind") or "")
         if kind == "source_ref":
             refs = current.get("source_refs") or []
             if isinstance(refs, dict):
@@ -651,20 +692,6 @@ def normalize_handle(handle: Any) -> dict[str, Any]:
                 "kind": "source_ref",
                 "route_id": current.get("route_id") or _stable_id("source_ref", refs),
                 "source_refs": [_clean_ref(ref) for ref in refs if isinstance(ref, dict)],
-                "source_fingerprint": current.get("source_fingerprint"),
-            }
-        if kind == "thread_candidate":
-            thread_key = str(current.get("thread_key") or "").strip()
-            if not thread_key:
-                raise RecallNavigationError(
-                    "malformed_recall_handle",
-                    "thread candidate handles require thread_key.",
-                )
-            return {
-                "schema_version": HANDLE_SCHEMA_VERSION,
-                "kind": "source_ref",
-                "route_id": current.get("route_id") or _stable_id("thread_candidate", thread_key),
-                "source_refs": [{"thread_key": thread_key}],
                 "source_fingerprint": current.get("source_fingerprint"),
             }
         if kind in {"active_recall_lock", "active_lock"}:

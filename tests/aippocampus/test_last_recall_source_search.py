@@ -177,9 +177,15 @@ class LastRecallSourceSearchTests(unittest.TestCase):
         self.assertEqual({match["request_index"] for match in payload["matches"]}, {1, 2})
         self.assertEqual(
             payload["foreground_action"]["command"],
-            f"aippocampus agent deepen --request 1 --recall-selector {selector} --json",
+            "aippocampus search --open-source --thread-key session:two "
+            "--message-id msg_second --line 7 --json",
         )
-        self.assertEqual(payload["foreground_action"]["arguments"]["recall_selector"], selector)
+        self.assertEqual(payload["foreground_action"]["id"], "open_last_recall_search_hit_source_window")
+        self.assertNotIn("agent deepen", payload["foreground_action"]["command"])
+        self.assertEqual(
+            payload["matches"][0]["source_window_command"],
+            payload["foreground_action"]["command"],
+        )
         self.assertEqual(payload["matches"][0]["source_route"]["recall_selector"], selector)
         self.assertIn(
             f"--recall-selector {selector}",
@@ -412,18 +418,9 @@ class LastRecallSourceSearchTests(unittest.TestCase):
         self.assertEqual(payload["unavailable_request_count"], 1)
         self.assertEqual(
             payload["foreground_action"]["id"],
-            "deepen_route_when_exact_search_not_available",
-        )
-        self.assertIn(
-            "--recall-selector {recall_selector}",
-            payload["foreground_action"]["command_template"],
-        )
-        self.assertEqual(payload["foreground_action"]["requires"], ["recall_selector"])
-        self.assertIn("--last-recall", payload["foreground_action"]["last_recall_fallback_command"])
-        self.assertEqual(
-            payload["safe_next_actions"][0]["id"],
             "rerun_recall_for_fresh_search_set",
         )
+        self.assertNotIn("agent deepen", json.dumps(payload, ensure_ascii=False))
         self.assertNotIn(str(self.cwd), json.dumps(payload, ensure_ascii=False))
 
     def test_registry_audit_reports_redacted_source_reachability_counts(self) -> None:
@@ -558,7 +555,8 @@ class LastRecallSourceSearchTests(unittest.TestCase):
 
         self.assertEqual(recall_code, 0)
         self.assertTrue(recall_payload["last_recall_cache_available"])
-        self.assertEqual(recall_payload["route_count"], 1)
+        self.assertGreaterEqual(recall_payload["route_count"], 1)
+        self.assertEqual(recall_payload["routes"][0]["label"], "Registry source route")
         self.assertIn("agent deepen --request 1", recall_payload["foreground_action"]["command"])
         self.assertEqual(deepen_code, 0)
         self.assertEqual(deepen_payload["result"]["status"], "ok")

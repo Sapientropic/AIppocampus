@@ -353,10 +353,17 @@ class AgentOptInRecallRoutesTests(unittest.TestCase):
         self.assertNotIn(str(working_memory), encoded)
 
     def test_public_recall_no_routes_returns_recovery_card_without_deepen_placeholder(self) -> None:
+        empty_registry = self.cwd / "empty-registry"
+        empty_registry.mkdir()
+        (empty_registry / "threads.json").write_text(
+            json.dumps({"schema_version": 1, "threads": []}),
+            encoding="utf-8",
+        )
         report = agent_continuity.recall(
             "unlikely-no-match-token-xyz-12345",
             cwd=self.cwd,
             clean_source_dir=self.clean,
+            registry_dir=empty_registry,
             max_routes=2,
         )
         public = agent_continuity_cli_support.public_recall_projection(
@@ -913,7 +920,42 @@ class AgentOptInRecallRoutesTests(unittest.TestCase):
             "use_opened_route_context",
         )
 
-    def test_agent_deepen_accepts_json_thread_candidate_handle(self) -> None:
+    def test_agent_recall_keeps_thread_candidate_as_direction_only(self) -> None:
+        fake_packet = {
+            "kind": "aippocampus_recall_context",
+            "status": "ok",
+            "routes": [
+                {
+                    "kind": "thread_candidate",
+                    "route_id": "route_thread_candidate",
+                    "title": "Thread-level registry hint",
+                    "summary": "This is a weak navigation hint.",
+                    "handle": {
+                        "kind": "thread_candidate",
+                        "route_id": "route_thread_candidate",
+                        "thread_key": "session:thread-candidate",
+                    },
+                    "reopenable": False,
+                    "triage_rank_reason_codes": ["registry_thread_candidate"],
+                }
+            ],
+            "route_count": 1,
+        }
+
+        with patch.object(agent_continuity, "recall_context_packet", return_value=fake_packet):
+            payload = agent_continuity.recall(
+                "weak registry thread hint",
+                cwd=self.cwd,
+                clean_source_dir=self.clean,
+                registry_dir=self.cwd / "registry",
+            )
+
+        self.assertEqual(payload["status"], "ok")
+        self.assertEqual(payload["memory_packets"][0]["output_mode"], "direction_only")
+        self.assertEqual(payload["memory_packets"][0]["route_kind"], "thread_candidate")
+        self.assertEqual(payload["deepen_requests"], [])
+
+    def test_agent_deepen_rejects_bare_json_thread_candidate_handle(self) -> None:
         registry_dir = self.cwd / "registry"
         thread_key = "session:thread-candidate"
         clean_dir = registry_api.thread_store_dir(thread_key, registry_dir) / "clean-source"
@@ -951,9 +993,14 @@ class AgentOptInRecallRoutesTests(unittest.TestCase):
             registry_dir=registry_dir,
         )
 
-        self.assertEqual(payload["status"], "ok")
-        self.assertEqual(payload["result"]["route_id"], "route_thread_candidate")
-        self.assertEqual(payload["result"]["source_refs"][0]["thread_key"], thread_key)
+        self.assertEqual(payload["status"], "cannot_verify")
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["error"]["code"], "thread_candidate_needs_source_resolution")
+        self.assertEqual(
+            payload["result"]["error"]["details"]["suggested_next"]["tool"],
+            "search_memory",
+        )
+        self.assertNotIn("source_window", json.dumps(payload, ensure_ascii=False))
 
     def test_compact_projection_does_not_advertise_last_recall_when_cache_missing(self) -> None:
         payload = {
@@ -1152,6 +1199,102 @@ class AgentOptInRecallRoutesTests(unittest.TestCase):
         self.assertFalse(report["attention_router_navigation"]["enabled"])
         self.assertEqual(report["memory_packets"][0]["route_id"], "route_generic")
         self.assertIn("safety_red_line_present", policy["promotion_blockers"])
+
+    def test_low_anchor_source_route_is_not_default_foreground_action(self) -> None:
+        self._append_clean_rows(
+            [
+                {
+                    "message_id": "msg_low_anchor",
+                    "turn_id": "turn_low_anchor",
+                    "source_id": "src_test",
+                    "source_line": 40,
+                    "role": "assistant",
+                    "phase": "final_answer",
+                    "turn_index": 40,
+                    "is_final": True,
+                    "text": "General recall implementation notes without the benchmark complaint anchors.",
+                }
+            ]
+        )
+        handle = {
+            "kind": "source_ref",
+            "route_id": "route_low_anchor",
+            "source_refs": [{"source_id": "src_test", "message_id": "msg_low_anchor"}],
+        }
+        fake_packet = {
+            "kind": "aippocampus_recall_context",
+            "status": "ok",
+            "routes": [
+                {
+                    "route_id": "route_low_anchor",
+                    "kind": "source_ref",
+                    "handle": handle,
+                    "route_label": "coding_route_recovery route",
+                    "source_refs": handle["source_refs"],
+                }
+            ],
+        }
+
+        with patch.object(agent_continuity, "recall_context_packet", return_value=fake_packet):
+            report = agent_continuity.recall(
+                "benchmark 实测检索不弱 recall deepen 实际都好差劲",
+                cwd=self.cwd,
+                clean_source_dir=self.clean,
+            )
+
+        self.assertEqual(report["source_anchor_gate"]["status"], "blocked")
+        self.assertEqual(report["foreground_action_card"]["decision"], "recover_low_confidence_route")
+        self.assertEqual(report["suggested_next"], "search_memory")
+        self.assertIn("low_source_anchor_coverage", report["memory_packets"][0]["risk_flags"])
+        secondary = report["foreground_action_card"]["safe_next_actions"][1]
+        self.assertEqual(secondary["action_id"], "deepen_low_confidence_route")
+
+    def test_anchor_matching_source_route_remains_default_deepen_action(self) -> None:
+        self._append_clean_rows(
+            [
+                {
+                    "message_id": "msg_anchor_match",
+                    "turn_id": "turn_anchor_match",
+                    "source_id": "src_test",
+                    "source_line": 41,
+                    "role": "assistant",
+                    "phase": "final_answer",
+                    "turn_index": 41,
+                    "is_final": True,
+                    "text": "黏菌 联想回忆 探索算法 all point to the same current source trail.",
+                }
+            ]
+        )
+        handle = {
+            "kind": "source_ref",
+            "route_id": "route_anchor_match",
+            "source_refs": [{"source_id": "src_test", "message_id": "msg_anchor_match"}],
+        }
+        fake_packet = {
+            "kind": "aippocampus_recall_context",
+            "status": "ok",
+            "routes": [
+                {
+                    "route_id": "route_anchor_match",
+                    "kind": "source_ref",
+                    "handle": handle,
+                    "route_label": "agent_native_recall_facade route",
+                    "source_refs": handle["source_refs"],
+                }
+            ],
+        }
+
+        with patch.object(agent_continuity, "recall_context_packet", return_value=fake_packet):
+            report = agent_continuity.recall(
+                "黏菌 联想回忆 探索算法",
+                cwd=self.cwd,
+                clean_source_dir=self.clean,
+            )
+
+        self.assertEqual(report["source_anchor_gate"]["status"], "passed")
+        self.assertEqual(report["source_anchor_gate"]["opened_anchor_hits"], 3)
+        self.assertEqual(report["foreground_action_card"]["decision"], "use_route_first")
+        self.assertEqual(report["suggested_next"], "agent deepen")
 
     def test_macro_applied_recall_exposes_compact_route_delta_hint(self) -> None:
         fake_packet = {

@@ -75,6 +75,8 @@ def _why_for_decision(decision: str, packet: Mapping[str, Any]) -> str:
         return "This route was already reopened in the local last-recall session; reuse that opened context unless scope changed."
     if decision == "recover_no_route":
         return "No compact source-backed route surfaced; try exact source search or check source registration."
+    if decision == "recover_low_confidence_route":
+        return "A route opened, but its source window did not carry enough distinctive cue anchors for the default action."
     if decision == "continue_normally":
         return "No compact source-backed route surfaced."
     if decision == "ignore_or_blocked":
@@ -104,6 +106,8 @@ def _decision_for(status: Any, packet: Mapping[str, Any], request: Mapping[str, 
     risks = _risk_codes(packet)
     if {"check_currentness", "conflict_requires_deepen"} & risks:
         return "deepen_before_claim"
+    if "low_source_anchor_coverage" in risks:
+        return "recover_low_confidence_route"
     if request or packet.get("output_mode") in {"reopenable_route", "bounded_summary_as_route"}:
         return "use_route_first"
     return "continue_normally"
@@ -111,6 +115,8 @@ def _decision_for(status: Any, packet: Mapping[str, Any], request: Mapping[str, 
 
 def _next_action(decision: str, request: Mapping[str, Any], packet: Mapping[str, Any]) -> str:
     if decision == "recover_no_route":
+        return "search_memory"
+    if decision == "recover_low_confidence_route":
         return "search_memory"
     if decision == "use_opened_context":
         return "continue_with_opened_context"
@@ -170,7 +176,7 @@ def _canonical_action(
     *,
     source_registered: bool | None,
 ) -> dict[str, Any]:
-    if decision == "recover_no_route":
+    if decision in {"recover_no_route", "recover_low_confidence_route"}:
         if source_registered is False:
             return _onboarding_register_action()
         return _search_recovery_action(query)
@@ -254,6 +260,19 @@ def build_recall_foreground_action_card(
         if card["canonical_action"].get("action_id") != search_action.get("action_id"):
             actions.append(search_action)
         card["safe_next_actions"] = actions
+    if decision == "recover_low_confidence_route":
+        low_confidence_action = _canonical_action(
+            "use_route_first",
+            request,
+            query,
+            source_registered=source_registered,
+        )
+        low_confidence_action["action_id"] = "deepen_low_confidence_route"
+        low_confidence_action["claim_boundary"] = "low_confidence_no_claim_before_reopen"
+        low_confidence_action["why"] = (
+            "Secondary only: the opened top source did not carry enough distinctive cue anchors."
+        )
+        card["safe_next_actions"] = [card["canonical_action"], low_confidence_action]
     if packet:
         card["route_label"] = _route_label(packet)
         card["route_family"] = _safe_text(
