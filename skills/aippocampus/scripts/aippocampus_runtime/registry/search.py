@@ -42,6 +42,10 @@ REGISTRY_SEARCH_DEEP_BUDGET = RegistrySearchBudget(
     snippet_chars=700,
     context_radius=2,
 )
+PROCESS_NOISE_PREFIXES = (
+    ("<subagent_notification>", "process_notification"),
+    ("<tool", "tool_process"),
+)
 
 
 def entry_search_score(entry: dict, terms: list[str]) -> float:
@@ -80,6 +84,10 @@ def search_noise_reason(text: str) -> str | None:
     them auditable while making real user/final-answer evidence win.
     """
 
+    snippet = str(text or "").lstrip().casefold()
+    for prefix, reason in PROCESS_NOISE_PREFIXES:
+        if snippet.startswith(prefix):
+            return reason
     if is_injected_instruction_text(text):
         return "injected_instruction"
     return None

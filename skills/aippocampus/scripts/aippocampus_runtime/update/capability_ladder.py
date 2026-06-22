@@ -116,11 +116,12 @@ def build_capability_ladder(
             ),
         },
         {
-            "id": "ambient_hooks_ready",
-            "ready": _surface_ready(hooks),
-            "status": _ready_or_status(hooks),
+            "id": "ambient_hooks_stage",
+            "stage": "callable" if _surface_ready(hooks) else "installed",
+            "status": "callable" if _surface_ready(hooks) else "installed",
             "what_works": "prompt-time recall scent and lifecycle refresh hooks",
             "next_command": "aippocampus update apply --surface hooks",
+            "claim_boundary": "ambient hook stage is operational status, not source evidence",
         },
         {
             "id": "semantic_provider_ready",

@@ -43,6 +43,7 @@ from aippocampus_runtime.mcp.recall_navigation import (
     recall_context_packet,
     recall_deepen_packet,
 )
+from aippocampus_runtime.mcp.runtime_provenance import mcp_runtime_provenance
 from aippocampus_runtime.mcp.sync_status_projection import backend_selection_payload
 from aippocampus_runtime.ops import telepathy_handoff_store
 from aippocampus_runtime.privacy import LOCAL_PATH_REDACTION
@@ -529,6 +530,12 @@ def call_agent_recall(arguments: dict[str, Any]) -> dict[str, Any]:
     )
     if provider_bridge_report is not None:
         payload["provider_key_bridge"] = provider_bridge_report
+    if isinstance(payload, dict):
+        payload["runtime_provenance"] = mcp_runtime_provenance(
+            arguments,
+            clean_source_dir=source_dir,
+            registry_dir=arguments.get("registry_dir") or cwd_path,
+        )
     cache_written = write_last_recall_cache(
         payload.get("deepen_requests") or [],
         query=query,
@@ -774,6 +781,11 @@ def call_recall_diagnostic(arguments: dict[str, Any]) -> dict[str, Any]:
     )
     if provider_bridge_report is not None:
         payload["provider_key_bridge"] = provider_bridge_report
+    payload["runtime_provenance"] = mcp_runtime_provenance(
+        arguments,
+        clean_source_dir=source_dir,
+        registry_dir=arguments.get("registry_dir") or cwd_path,
+    )
     payload = why_cli.attach_foreground_actions(payload, cue=cue)
     return text_result(public_payload(arguments, payload))
 
@@ -1077,6 +1089,11 @@ def call_memory_health(arguments: dict[str, Any]) -> dict[str, Any]:
     except Exception as exc:
         del exc
         payload = memory_health_recovery.payload_for_health_exception(arguments)
+        payload["runtime_provenance"] = mcp_runtime_provenance(
+            arguments,
+            clean_source_dir=clean_source_dir_for(arguments),
+            registry_dir=arguments.get("registry_dir") or cwd_arg(arguments),
+        )
         return text_result(public_payload(arguments, payload), is_error=False)
 
     if detail_arg(arguments) == "compact" and not arguments.get("include_private_paths"):
@@ -1085,6 +1102,11 @@ def call_memory_health(arguments: dict[str, Any]) -> dict[str, Any]:
         payload = {"detail": "full", **payload}
     if isinstance(payload, dict):
         payload = memory_health_recovery.recall_first_health_payload(arguments, payload)
+        payload["runtime_provenance"] = mcp_runtime_provenance(
+            arguments,
+            clean_source_dir=clean_source_dir_for(arguments),
+            registry_dir=arguments.get("registry_dir") or cwd_arg(arguments),
+        )
     return text_result(public_payload(arguments, payload))
 
 

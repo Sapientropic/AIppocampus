@@ -5,6 +5,7 @@ import subprocess
 import sys
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from tests.aippocampus.import_path_helpers import import_tool_root_module
 
@@ -21,13 +22,13 @@ class RecallIntegrationReadinessTests(unittest.TestCase):
         self.assertEqual(report["kind"], "aippocampus_recall_integration_readiness")
         self.assertEqual(
             by_id["repo_familiarity_fallback"]["status"],
-            "wired_foreground_action",
+            "callable",
         )
         self.assertTrue(by_id["repo_familiarity_fallback"]["foreground_callable"])
         self.assertTrue(by_id["mcp_agent_recall_deepen_parity"]["mcp_wired"])
         self.assertEqual(
             by_id["ambient_tiny_agent_recall_affordance"]["status"],
-            "wired_secondary_action",
+            "callable",
         )
         self.assertTrue(by_id["ambient_tiny_agent_recall_affordance"]["foreground_callable"])
         self.assertTrue(by_id["ambient_tiny_agent_recall_affordance"]["mcp_wired"])
@@ -47,7 +48,7 @@ class RecallIntegrationReadinessTests(unittest.TestCase):
                     "foreground_callable": False,
                     "cli_wired": False,
                     "mcp_wired": False,
-                    "claim": "foreground ready from a proxy smoke",
+                    "claim": "foreground callable from a proxy smoke",
                 }
             ]
         )
@@ -55,7 +56,7 @@ class RecallIntegrationReadinessTests(unittest.TestCase):
         self.assertFalse(report["ok"])
         self.assertEqual(
             report["failures"][0]["reason"],
-            "proxy_only_surface_claims_foreground_ready",
+            "proxy_only_surface_claims_foreground_callable",
         )
 
     def test_cli_wired_mcp_unwired_agent_surface_fails(self) -> None:
@@ -63,7 +64,7 @@ class RecallIntegrationReadinessTests(unittest.TestCase):
             [
                 {
                     "surface_id": "cli_only_agent_feature",
-                    "status": "wired_foreground_action",
+                    "status": "callable",
                     "owner_issue": "#0",
                     "foreground_callable": True,
                     "cli_wired": True,
@@ -92,6 +93,244 @@ class RecallIntegrationReadinessTests(unittest.TestCase):
         self.assertFalse(report["ok"])
         self.assertEqual(report["failures"][0]["surface_id"], "known_artifact_recall_dogfood")
         self.assertEqual(report["failures"][0]["reason"], "live known-artifact dogfood failed")
+
+    def test_mcp_first_apw_probe_failure_blocks_readiness(self) -> None:
+        report = readiness.build_recall_integration_readiness(
+            apw_probe={
+                "ok": False,
+                "status": "blocked",
+                "cue": "黏菌 联想回忆 探索算法",
+                "failures": [{"reason": "cli_apw_candidate_missing_from_mcp"}],
+                "cli": {"apw_candidate_input_available": True},
+                "mcp": {"apw_candidate_input_available": False},
+            }
+        )
+        by_id = {surface["surface_id"]: surface for surface in report["surfaces"]}
+
+        self.assertFalse(report["ok"])
+        self.assertEqual(by_id["apw_fallback"]["status"], "blocked")
+        self.assertEqual(by_id["mcp_agent_recall_deepen_parity"]["status"], "blocked")
+        self.assertIn(
+            "cli_apw_candidate_missing_from_mcp",
+            by_id["mcp_agent_recall_deepen_parity"]["mcp_first_apw_probe"]["failure_reasons"],
+        )
+
+    def test_mcp_first_apw_safe_abstain_does_not_claim_source_open(self) -> None:
+        report = readiness.build_recall_integration_readiness(
+            apw_probe={
+                "ok": True,
+                "status": "safe_abstain",
+                "cue": "黏菌 联想回忆 探索算法",
+                "failures": [],
+                "cli": {"apw_candidate_input_available": False},
+                "mcp": {
+                    "apw_candidate_input_available": False,
+                    "fallback_status": "abstained",
+                    "foreground_action_id": "search_registry_sources_for_original_cue_anchors",
+                },
+            }
+        )
+        by_id = {surface["surface_id"]: surface for surface in report["surfaces"]}
+
+        self.assertTrue(report["ok"])
+        self.assertEqual(by_id["apw_fallback"]["status"], "callable")
+        self.assertIn("abstained safely", by_id["apw_fallback"]["reason"])
+        self.assertIn(
+            "MCP stayed aligned",
+            by_id["mcp_agent_recall_deepen_parity"]["reason"],
+        )
+
+    def test_foreground_mcp_transport_failure_blocks_parity_claim(self) -> None:
+        report = readiness.build_recall_integration_readiness(
+            foreground_mcp_failure="Transport closed"
+        )
+        by_id = {surface["surface_id"]: surface for surface in report["surfaces"]}
+
+        self.assertFalse(report["ok"])
+        self.assertEqual(by_id["mcp_agent_recall_deepen_parity"]["status"], "blocked")
+        self.assertEqual(
+            by_id["mcp_agent_recall_deepen_parity"]["reason"],
+            "foreground MCP transport failed",
+        )
+        self.assertEqual(report["failures"][0]["surface_id"], "mcp_agent_recall_deepen_parity")
+
+    def test_acceptance_bearing_warning_fails_readiness(self) -> None:
+        report = readiness.build_recall_integration_readiness(
+            [
+                {
+                    "surface_id": "warned_acceptance_surface",
+                    "status": "callable",
+                    "owner_issue": "#0",
+                    "foreground_callable": True,
+                    "cli_wired": True,
+                    "mcp_wired": True,
+                    "claim": "follow-through was attempted",
+                    "warnings": [
+                        {
+                            "code": "opened_source_anchor_hit_missing",
+                            "acceptance_bearing": True,
+                        }
+                    ],
+                }
+            ]
+        )
+
+        self.assertFalse(report["ok"])
+        self.assertEqual(report["failures"][0]["reason"], "acceptance_bearing_warning")
+
+    def test_apw_probe_blocks_when_deepen_opens_source_without_advertised_anchors(self) -> None:
+        def fake_source_cli(
+            repo_root: Path,
+            args: list[str],
+            *,
+            timeout: float = 30,
+            stdin: str | None = None,
+        ) -> dict:
+            if args == ["mcp"]:
+                request = json.loads(stdin or "{}")
+                params = request.get("params", {})
+                tool_name = params.get("name")
+                if tool_name == "agent_recall":
+                    payload = {
+                        "status": "ok",
+                        "associative_path_policy": {
+                            "apw_candidate_input_available": True,
+                        },
+                        "associative_path_fallback": {"status": "route_candidate"},
+                        "foreground_action": {
+                            "id": "deepen_associative_path_fallback",
+                            "arguments": {
+                                "request_index": 6,
+                                "recall_selector": "apw:fallback:test",
+                            },
+                        },
+                    }
+                elif tool_name == "agent_deepen":
+                    payload = {
+                        "status": "ok",
+                        "result": {
+                            "source_window": {
+                                "messages": [
+                                    {"text": "都弄完了，你验收一下看看，然后开下一阶段issues"}
+                                ]
+                            }
+                        },
+                    }
+                else:
+                    payload = {"status": "error"}
+                return {
+                    "result": {
+                        "content": [
+                            {"type": "text", "text": json.dumps(payload, ensure_ascii=False)}
+                        ]
+                    }
+                }
+            return {
+                "status": "ok",
+                "result": {
+                    "source_window": {
+                        "messages": [
+                            {"text": "公开 fixture 锚点：黏菌 联想回忆 探索算法。"}
+                        ]
+                    }
+                },
+            } if args[:2] == ["agent", "deepen"] else {
+                "status": "ok",
+                "associative_path_policy": {"apw_candidate_input_available": True},
+                "associative_path_fallback": {"status": "route_candidate"},
+                "foreground_action": {
+                    "id": "deepen_associative_path_fallback",
+                    "arguments": {
+                        "request_index": 6,
+                        "recall_selector": "apw:fallback:test-cli",
+                    },
+                },
+            }
+
+        with mock.patch.object(
+            readiness,
+            "_run_source_cli_json",
+            side_effect=fake_source_cli,
+        ):
+            probe = readiness._apw_mcp_probe(
+                REPO_ROOT,
+                cue="黏菌 联想回忆 探索算法",
+                anchors=["黏菌", "联想回忆", "探索算法"],
+            )
+
+        self.assertFalse(probe["ok"])
+        self.assertEqual(probe["status"], "blocked")
+        self.assertEqual(probe["mcp"]["opened_anchor_hits"], 0)
+        self.assertEqual(
+            probe["failures"][0]["reason"],
+            "mcp_apw_deepen_opened_source_without_advertised_anchors",
+        )
+
+    def test_apw_probe_blocks_when_cli_candidate_is_missing_from_mcp(self) -> None:
+        def fake_source_cli(
+            repo_root: Path,
+            args: list[str],
+            *,
+            timeout: float = 30,
+            stdin: str | None = None,
+        ) -> dict:
+            if args == ["mcp"]:
+                payload = {
+                    "status": "ok",
+                    "associative_path_policy": {
+                        "apw_candidate_input_available": False,
+                    },
+                    "associative_path_fallback": {"status": "abstained"},
+                    "foreground_action": {
+                        "id": "search_registry_sources_for_original_cue_anchors",
+                    },
+                }
+                return {
+                    "result": {
+                        "content": [
+                            {"type": "text", "text": json.dumps(payload, ensure_ascii=False)}
+                        ]
+                    }
+                }
+            return {
+                "status": "ok",
+                "result": {
+                    "source_window": {
+                        "messages": [
+                            {"text": "公开 fixture 锚点：黏菌 联想回忆 探索算法。"}
+                        ]
+                    }
+                },
+            } if args[:2] == ["agent", "deepen"] else {
+                "status": "ok",
+                "associative_path_policy": {"apw_candidate_input_available": True},
+                "associative_path_fallback": {"status": "route_candidate"},
+                "foreground_action": {
+                    "id": "deepen_associative_path_fallback",
+                    "arguments": {
+                        "request_index": 6,
+                        "recall_selector": "apw:fallback:test-cli",
+                    },
+                },
+            }
+
+        with mock.patch.object(
+            readiness,
+            "_run_source_cli_json",
+            side_effect=fake_source_cli,
+        ):
+            probe = readiness._apw_mcp_probe(
+                REPO_ROOT,
+                cue="黏菌 联想回忆 探索算法",
+                anchors=["黏菌", "联想回忆", "探索算法"],
+            )
+
+        self.assertFalse(probe["ok"])
+        self.assertEqual(probe["status"], "blocked")
+        self.assertEqual(
+            probe["failures"][0]["reason"],
+            "cli_apw_candidate_missing_from_mcp",
+        )
 
     def test_cli_json_report_is_machine_readable(self) -> None:
         proc = subprocess.run(

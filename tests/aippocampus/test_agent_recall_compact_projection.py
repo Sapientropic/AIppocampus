@@ -290,12 +290,87 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
             public["associative_path_policy"]["secondary_action"],
             "run_apw_opt_in_recovery",
         )
+        self.assertNotIn("opt_in_required", public)
+        self.assertEqual(public["apw_recovery_state"], "available_requires_explicit_opt_in")
+        self.assertTrue(public["apw_recovery"]["requires_explicit_opt_in"])
         self.assertFalse(public["associative_path_policy"]["run_fallback"])
         encoded = json.dumps(public, ensure_ascii=False, sort_keys=True)
         self.assertNotIn("source_refs", encoded)
         self.assertNotIn("deepen_associative_path_fallback", encoded)
         self.assertEqual(executable_command_violations(public), [])
         assert_compact_frontstage_payload(self, public, max_top_level_diagnostics=2)
+
+    def test_discussion_atlas_pointer_can_replace_generic_recovery_action(self) -> None:
+        public = agent_continuity_cli_support.public_recall_projection(
+            {
+                "kind": "aippocampus_agent_continuity_path",
+                "schema_version": "agent-continuity-path-v1",
+                "mode": "recall",
+                "status": "no_routes",
+                "last_recall_cache_available": False,
+                "foreground_action_card": {
+                    "canonical_action": {
+                        "id": "search_registry_sources_for_original_cue_anchors",
+                        "tool_name": "search_memory",
+                        "arguments": {"query": "discussion 2127", "scope": "all_registered_sources"},
+                        "claim_boundary": "source_reopen_required_before_claim",
+                    }
+                },
+                "memory_packets": [],
+                "discussion_atlas_pointer": {
+                    "kind": "aippocampus_discussion_atlas_navigation_pointer",
+                    "status": "atlas_pointer",
+                    "discussion": 2127,
+                    "title": "Moving Ground",
+                    "url": "https://github.com/Sapientropic/AIppocampus/discussions/2127",
+                    "owner": "agent-native recall facade",
+                    "claim_boundary": "discussion_atlas_navigation_only_until_external_source_opened",
+                },
+            },
+            query="discussion 2127 source-backed conversation",
+        )
+
+        self.assertEqual(public["foreground_action"]["id"], "open_discussion_atlas_pointer")
+        self.assertEqual(public["foreground_action"]["arguments"]["discussion"], 2127)
+        self.assertIn("/discussions/2127", json.dumps(public, ensure_ascii=False))
+
+    def test_repo_familiarity_source_open_command_avoids_bash_only_quote_idiom(self) -> None:
+        public = agent_continuity_cli_support.public_recall_projection(
+            {
+                "kind": "aippocampus_agent_continuity_path",
+                "schema_version": "agent-continuity-path-v1",
+                "mode": "recall",
+                "status": "no_routes",
+                "last_recall_cache_available": True,
+                "foreground_action_card": {
+                    "canonical_action": {
+                        "id": "search_registry_sources_for_original_cue_anchors",
+                        "tool_name": "search_memory",
+                        "arguments": {"query": "compatibility shim", "scope": "all_registered_sources"},
+                    }
+                },
+                "memory_packets": [],
+                "repo_familiarity_fallback": {
+                    "kind": "aippocampus_repo_familiarity_fallback",
+                    "status": "route_candidate",
+                    "landmark": "Compatibility shim inventory",
+                    "category": "compat_shim",
+                    "first_source_to_reopen": "docs/architecture/ops/compatibility-shim-inventory.md",
+                    "query_anchor_count": 2,
+                    "query_anchor_match_count": 2,
+                    "query_anchor_alignment": "overlap",
+                    "route_choice_posture": "repo_familiarity_current_checkout_fallback",
+                    "claim_boundary": "repo_familiarity_navigation_only_until_source_opened",
+                },
+            },
+            query="compatibility shim inventory legacy fields",
+        )
+
+        command = public["foreground_action"]["command"]
+        self.assertEqual(public["foreground_action"]["id"], "open_repo_familiarity_source")
+        self.assertNotIn("'\"'\"'", command)
+        self.assertIn('python -c "', command)
+        self.assertIn("sys.argv[1]", command)
 
     def test_repeated_same_topic_low_distinctiveness_routes_refine_before_deepen(
         self,
@@ -632,6 +707,160 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
         self.assertNotIn("C:\\", encoded)
         self.assertNotIn("source_refs", encoded)
 
+    def test_low_specificity_exact_source_search_is_not_replaced_by_unrelated_repo_familiarity(
+        self,
+    ) -> None:
+        public = agent_continuity_cli_support.public_recall_projection(
+            {
+                "kind": "aippocampus_agent_continuity_path",
+                "schema_version": "agent-continuity-path-v1",
+                "mode": "recall",
+                "status": "ok",
+                "query": "黏菌 联想回忆 探索算法",
+                "opt_in_required": False,
+                "last_recall_cache_available": True,
+                "foreground_action_card": {
+                    "decision": "use_route_first",
+                    "canonical_action": {
+                        "action_id": "agent_deepen_selected_route",
+                        "tool_name": "agent_deepen",
+                        "arguments": {"request_index": 1, "last_recall": True},
+                        "claim_boundary": "no_claim_before_reopen",
+                    },
+                },
+                "memory_packets": [
+                    {
+                        "route_id": "route_generic_1",
+                        "route_topic": "task management",
+                        "route_kind": "clean_source_route",
+                        "output_mode": "reopenable_route",
+                        "claim_permission": "no_claim_before_reopen",
+                    },
+                    {
+                        "route_id": "route_generic_2",
+                        "route_topic": "task management",
+                        "route_kind": "clean_source_route",
+                        "output_mode": "reopenable_route",
+                        "claim_permission": "no_claim_before_reopen",
+                    },
+                ],
+                "repo_familiarity_fallback": {
+                    "kind": "aippocampus_repo_familiarity_fallback",
+                    "schema_version": 1,
+                    "status": "route_candidate",
+                    "route_choice_posture": "repo_familiarity_current_checkout_fallback",
+                    "landmark": "compatibility and legacy-alias inventory",
+                    "action_delta_required": (
+                        "Open the compatibility inventory before changing aliases."
+                    ),
+                    "first_source_to_reopen": (
+                        "docs/architecture/ops/compatibility-shim-inventory.md"
+                    ),
+                    "source_line": 1,
+                    "source_ref_count": 1,
+                    "selected_card_count": 1,
+                    "current_checkout_checked": True,
+                    "query_anchor_count": 3,
+                    "query_anchor_match_count": 0,
+                    "query_anchor_alignment": "no_overlap",
+                    "claim_boundary": "repo_familiarity_navigation_only_until_source_opened",
+                },
+                "metrics": {
+                    "memory_packet_count": 2,
+                    "deepen_request_count": 2,
+                    "packet_triage_distinctiveness": 0.4,
+                    "route_label_specificity_floor": 0.0,
+                    "topic_label_present_count": 2,
+                },
+            }
+        )
+
+        action = public["foreground_action"]
+        self.assertEqual(action["id"], "search_registry_sources_for_original_cue_anchors")
+        self.assertEqual(action["tool_name"], "search_memory")
+        self.assertEqual(action["arguments"]["query"], "黏菌 联想回忆 探索算法")
+        self.assertNotIn("repo_familiarity_fallback", public)
+        safe_ids = {item["id"] for item in public["safe_next_actions"]}
+        self.assertIn("deepen_top_route_low_confidence", safe_ids)
+
+    def test_current_source_anchor_probe_blocks_repo_familiarity_primary(
+        self,
+    ) -> None:
+        public = agent_continuity_cli_support.public_recall_projection(
+            {
+                "kind": "aippocampus_agent_continuity_path",
+                "schema_version": "agent-continuity-path-v1",
+                "mode": "recall",
+                "status": "ok",
+                "query": "compatibility historical fields inventory report",
+                "opt_in_required": False,
+                "last_recall_cache_available": True,
+                "foreground_action_card": {
+                    "decision": "use_route_first",
+                    "canonical_action": {
+                        "action_id": "agent_deepen_selected_route",
+                        "tool_name": "agent_deepen",
+                        "arguments": {"request_index": 1, "last_recall": True},
+                        "claim_boundary": "no_claim_before_reopen",
+                    },
+                },
+                "memory_packets": [
+                    {
+                        "route_id": "route_generic_1",
+                        "route_topic": "coding_route_recovery",
+                        "route_kind": "clean_source_route",
+                        "output_mode": "reopenable_route",
+                        "claim_permission": "no_claim_before_reopen",
+                    },
+                    {
+                        "route_id": "route_generic_2",
+                        "route_topic": "coding_route_recovery",
+                        "route_kind": "clean_source_route",
+                        "output_mode": "reopenable_route",
+                        "claim_permission": "no_claim_before_reopen",
+                    },
+                ],
+                "current_source_anchor_probe": {
+                    "status": "matched",
+                    "match_count": 1,
+                    "anchor_query": "compatibility historical fields inventory report",
+                },
+                "repo_familiarity_fallback": {
+                    "kind": "aippocampus_repo_familiarity_fallback",
+                    "schema_version": 1,
+                    "status": "route_candidate",
+                    "route_choice_posture": "repo_familiarity_current_checkout_fallback",
+                    "landmark": "compatibility and legacy-alias inventory",
+                    "action_delta_required": (
+                        "Open the compatibility inventory before changing aliases."
+                    ),
+                    "first_source_to_reopen": (
+                        "docs/architecture/ops/compatibility-shim-inventory.md"
+                    ),
+                    "source_line": 1,
+                    "source_ref_count": 1,
+                    "selected_card_count": 1,
+                    "current_checkout_checked": True,
+                    "query_anchor_count": 4,
+                    "query_anchor_match_count": 1,
+                    "query_anchor_alignment": "overlap",
+                    "claim_boundary": "repo_familiarity_navigation_only_until_source_opened",
+                },
+                "metrics": {
+                    "memory_packet_count": 2,
+                    "deepen_request_count": 2,
+                    "packet_triage_distinctiveness": 0.4,
+                    "route_label_specificity_floor": 0.0,
+                    "topic_label_present_count": 2,
+                },
+            }
+        )
+
+        action = public["foreground_action"]
+        self.assertEqual(action["id"], "search_registry_sources_for_original_cue_anchors")
+        self.assertEqual(action["tool_name"], "search_memory")
+        self.assertNotIn("repo_familiarity_fallback", public)
+
     def test_already_opened_compact_without_source_receipt_reopens_read_only(
         self,
     ) -> None:
@@ -667,6 +896,20 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
                         },
                     }
                 ],
+                "metrics": {
+                    "memory_packet_count": 1,
+                    "deepen_request_count": 1,
+                    "route_label_specificity_floor": 0.0,
+                    "topic_label_present_count": 0,
+                },
+                "discussion_atlas_pointer": {
+                    "kind": "aippocampus_discussion_atlas_navigation_pointer",
+                    "status": "atlas_pointer",
+                    "discussion": 2127,
+                    "title": "Moving Ground",
+                    "url": "https://github.com/Sapientropic/AIppocampus/discussions/2127",
+                    "claim_boundary": "discussion_atlas_navigation_only_until_external_source_opened",
+                },
             },
             query="opened compact route cue",
         )
@@ -681,6 +924,7 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
         self.assertIn("--last-recall", action["last_recall_fallback_command"])
         self.assertIn("current compact payload has no source-window receipt", action["why"])
         self.assertEqual(action["claim_boundary"], "no_claim_before_reopen")
+        self.assertEqual(public["discussion_atlas_pointer"]["discussion"], 2127)
         self.assertEqual(public["routes"][0]["already_opened"], True)
         self.assertEqual(public["routes"][0]["action"]["tool_name"], "agent_deepen")
         self.assertEqual(executable_command_violations(public), [])

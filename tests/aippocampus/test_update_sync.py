@@ -211,7 +211,7 @@ class UpdateSyncTests(unittest.TestCase):
             [
                 "source_search_ready",
                 "active_recall_ready",
-                "ambient_hooks_ready",
+                "ambient_hooks_stage",
                 "semantic_provider_ready",
                 "hook_provider_ready",
                 "dream_or_subconscious_ready",
@@ -225,7 +225,7 @@ class UpdateSyncTests(unittest.TestCase):
         )
         self.assertFalse(by_id["active_recall_ready"]["ready"])
         self.assertIn("foreground host", by_id["active_recall_ready"]["what_works"])
-        self.assertEqual(by_id["ambient_hooks_ready"]["status"], "ready")
+        self.assertEqual(by_id["ambient_hooks_stage"]["status"], "callable")
         self.assertEqual(
             by_id["semantic_provider_ready"]["status"], "missing_provider_env_var"
         )
@@ -923,8 +923,8 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertEqual(payload["summary"]["agent_callable_status"], "host_live_probe_ok_foreground_probe_not_checked")
         self.assertTrue(payload["summary"]["partial_readiness"])
         self.assertIn("hooks_status", payload["summary"]["deferred_components"])
-        self.assertEqual(payload["summary"]["ambient_recall_state"], "deferred")
-        self.assertEqual(payload["ambient_recall"]["state"], "deferred")
+        self.assertEqual(payload["summary"]["ambient_recall_stage"], "installed")
+        self.assertEqual(payload["ambient_recall"]["stage"], "installed")
         self.assertIn("hooks:deferred", payload["ambient_recall"]["issue_codes"])
         self.assertEqual(
             payload["setup_card"]["operator_detail_command"],
@@ -961,9 +961,10 @@ class UpdateSyncTests(unittest.TestCase):
         raw = stdout.getvalue()
         payload = json.loads(raw)
         self.assertEqual(code, 0, payload)
-        self.assertEqual(payload["summary"]["ambient_recall_state"], "degraded")
+        self.assertEqual(payload["summary"]["ambient_recall_stage"], "callable")
         self.assertTrue(payload["ambient_recall"]["action_hints_installed"])
-        self.assertFalse(payload["ambient_recall"]["action_hints_ready"])
+        self.assertEqual(payload["ambient_recall"]["action_hints_stage"], "callable")
+        self.assertFalse(payload["ambient_recall"]["action_hints_useful"])
         self.assertFalse(payload["ambient_recall"]["hot_path_active"])
         self.assertIn("action_hints:with_missing_cache_file", payload["ambient_recall"]["issue_codes"])
         action_hint_next = next(
@@ -1030,8 +1031,8 @@ class UpdateSyncTests(unittest.TestCase):
         payload = json.loads(raw)
         ambient = payload["ambient_recall"]
         self.assertEqual(code, 0, payload)
-        self.assertEqual(payload["summary"]["ambient_recall_state"], "degraded")
-        self.assertFalse(ambient["active_useful"])
+        self.assertEqual(payload["summary"]["ambient_recall_stage"], "callable")
+        self.assertFalse(ambient["useful_signal_present"])
         self.assertIn("action_hints:with_missing_cache_file", ambient["issue_codes"])
         self.assertIn("prompt_hook:latency_risk", ambient["issue_codes"])
         self.assertIn("warm_ambient:blocked_stale_pending", ambient["issue_codes"])
@@ -1183,9 +1184,9 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertIn("Magic blockers: llm", output)
         self.assertIn("Optional surfaces: plugin", output)
         self.assertIn("Agent-callable surfaces:", output)
-        self.assertIn("First-run readiness:", output)
+        self.assertIn("First-run capability stages:", output)
         self.assertIn("source_search_ready: ready", output)
-        self.assertIn("ambient_hooks_ready: ready", output)
+        self.assertIn("ambient_hooks_stage: callable", output)
         self.assertIn("semantic_provider_ready: missing_provider_env_var", output)
         self.assertIn(
             "agent_fallback_ready: deterministic_only_missing_provider_and_agent",

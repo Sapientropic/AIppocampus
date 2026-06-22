@@ -690,7 +690,7 @@ def status_hooks(codex_home_path: Path, hooks_json: Path | None = None) -> dict[
         "windows_lifecycle_hidden_launch": lifecycle_hidden,
         "action_hints": action_hint_status,
         "action_hints_installed": bool(action_hint_status.get("installed")),
-        "action_hints_ready": action_hint_status.get("cache_status") == "with_fresh_records",
+        "action_hints_useful": action_hint_status.get("cache_status") == "with_fresh_records",
         "action_hints_status": action_hint_status.get("cache_status") or "not_installed",
         "prompt_hook_status": {
             "status": prompt_hook_status.get("status"),
@@ -1575,7 +1575,7 @@ def render_text(report: dict[str, Any]) -> str:
         + str(summary.get("agent_callable_status") or "unknown")
     )
     if summary.get("capability_ladder"):
-        lines.append("- First-run readiness:")
+        lines.append("- First-run capability stages:")
         for item in summary.get("capability_ladder") or []:
             lines.append(f"  {item.get('id')}: {item.get('status')}")
     render_mode = str(mode or "status")

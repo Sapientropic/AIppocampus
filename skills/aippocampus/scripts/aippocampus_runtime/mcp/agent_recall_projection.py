@@ -14,7 +14,10 @@ from aippocampus_runtime.contracts import (
     shell_quote,
 )
 from aippocampus_runtime.mcp import agent_recall_compact_choices as recall_choices
+from aippocampus_runtime.mcp import agent_recall_discussion_projection as discussion_projection
 from aippocampus_runtime.mcp import agent_recall_recovery_projection as recovery_projection
+from aippocampus_runtime.mcp import agent_recall_repo_projection as repo_projection
+from aippocampus_runtime.mcp import agent_recall_result_projection as result_projection
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 
 
@@ -477,7 +480,7 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
                 "boundary": semantic.get("boundary"),
             }
         )
-    status = payload.get("status")
+    status = str(payload.get("status") or "")
     miss_recovery_card = None if memory_packets else _recall_miss_recovery_card(status)
     weak_route_recovery_card = None
     safe_next_actions: list[dict[str, Any]] = []
@@ -542,6 +545,10 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
     )
     associative_path_policy = recovery_projection.compact_associative_path_policy(
         payload.get("associative_path_policy")
+    )
+    apw_recovery = recovery_projection.associative_path_recovery_state(
+        associative_path_policy,
+        associative_path_fallback,
     )
     associative_path_action = _associative_path_fallback_action(
         associative_path_fallback,
@@ -628,69 +635,53 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
             foreground_action["secondary_action"] = associative_policy_action
             if isinstance(associative_path_policy, dict):
                 associative_path_policy["secondary_action"] = associative_policy_action["id"]
+    (
+        foreground_action,
+        safe_next_actions,
+        discussion_atlas_pointer,
+    ) = discussion_projection.maybe_promote_discussion_atlas_action(
+        payload=payload,
+        foreground_action=foreground_action,
+        safe_next_actions=safe_next_actions,
+        status=status,
+        labels_low_specificity=labels_low_specificity,
+        recovery_cue=recovery_cue,
+    )
     repo_familiarity_fallback = recovery_projection.compact_repo_familiarity_fallback_card(
         payload.get("repo_familiarity_fallback")
     )
     repo_familiarity_action = recovery_projection.repo_familiarity_fallback_action(
         repo_familiarity_fallback
     )
-    if repo_familiarity_action and recovery_projection.repo_familiarity_should_replace_foreground_action(
-        foreground_action
-    ):
-        ordinary_recovery_action = _without_empty(normalize_foreground_action(foreground_action))
-        ordinary_action_id = str(
-            ordinary_recovery_action.get("id") or ordinary_recovery_action.get("action_id") or ""
-        )
-        if ordinary_recovery_action:
-            safe_next_actions = [ordinary_recovery_action, *safe_next_actions]
-        foreground_action = repo_familiarity_action
-        if isinstance(repo_familiarity_fallback, dict):
-            repo_familiarity_fallback["primary_action"] = "open_repo_familiarity_source"
-            if ordinary_action_id:
-                repo_familiarity_fallback["ordinary_recovery_action_id"] = ordinary_action_id
-    elif repo_familiarity_fallback:
-        repo_familiarity_fallback = None
+    (
+        foreground_action,
+        safe_next_actions,
+        repo_familiarity_fallback,
+    ) = repo_projection.maybe_promote_repo_familiarity_action(
+        payload=payload,
+        foreground_action=foreground_action,
+        safe_next_actions=safe_next_actions,
+        repo_familiarity_fallback=repo_familiarity_fallback,
+        repo_familiarity_action=repo_familiarity_action,
+    )
     detail_fields = _recall_detail_command_fields(recovery_cue)
     detail_command = str(detail_fields.get("operator_detail_command") or "")
     detail_command_template = str(detail_fields.get("operator_detail_command_template") or "")
-    displayed_route_count = len(route_receipts)
-    hidden_route_count_fields: dict[str, int] = {}
-    omitted_route_count = max(0, len(memory_packets) - displayed_route_count)
-    if omitted_route_count or labels_low_specificity:
-        hidden_route_count_fields = {
-            "displayed_route_count": displayed_route_count,
-        }
-        if omitted_route_count:
-            hidden_route_count_fields["omitted_route_count"] = omitted_route_count
-    duplicate_omission_rows = sorted(
-        duplicate_label_omissions.values(),
-        key=lambda row: (int(row["kept_route_index"]), str(row["route_label"])),
+    hidden_route_count_fields = result_projection.hidden_route_count_fields(
+        route_receipts=route_receipts,
+        memory_packets=memory_packets,
+        labels_low_specificity=labels_low_specificity,
+    )
+    duplicate_omission_rows = result_projection.sorted_duplicate_label_omissions(
+        duplicate_label_omissions
     )
     if labels_low_specificity and memory_packets:
-        safe_action_ids = [
-            str(action.get("id") or action.get("action_id") or "")
-            for action in safe_next_actions
-        ]
-        refine_action_id = next(
-            (action_id for action_id in safe_action_ids if action_id.startswith("refine")),
-            None,
-        )
-        deepen_action_id = next(
-            (action_id for action_id in safe_action_ids if action_id.startswith("deepen")),
-            None,
-        )
-        weak_route_recovery_card = _without_empty(
-            {
-                **(weak_route_recovery_card or {}),
-                "posture": "labels_low_specificity",
-                "route_count": len(memory_packets),
-                "displayed_as_choices": displayed_route_count,
-                "primary_action": foreground_action.get("id") or foreground_action.get("action_id"),
-                "source_search_fallback_action_id": foreground_action.get("id")
-                or foreground_action.get("action_id"),
-                "refine_action_id": refine_action_id,
-                "deepen_action_id": deepen_action_id,
-            }
+        weak_route_recovery_card = result_projection.low_specificity_weak_route_recovery_card(
+            weak_route_recovery_card=weak_route_recovery_card,
+            safe_next_actions=safe_next_actions,
+            foreground_action=foreground_action,
+            memory_packets=memory_packets,
+            displayed_route_count=int(hidden_route_count_fields.get("displayed_route_count") or 0),
         )
     can_use_for = ["next_action_choice"]
     if not labels_low_specificity:
@@ -702,7 +693,8 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "mode": payload.get("mode"),
         "surface": "mcp_agent_recall_compact",
         "status": status,
-        "opt_in_required": payload.get("opt_in_required"),
+        "apw_recovery_state": apw_recovery.get("state") if isinstance(apw_recovery, dict) else None,
+        "apw_recovery": apw_recovery,
         "last_recall_cache_available": cache_available,
         "recall_selector_available": bool(recall_selector),
         "recall_selector_id": recall_selector or None,
@@ -722,7 +714,9 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "associative_path_policy": associative_path_policy,
         "associative_path_fallback": associative_path_fallback,
         "repo_familiarity_fallback": repo_familiarity_fallback,
+        "discussion_atlas_pointer": discussion_atlas_pointer,
         "provider_key_bridge": payload.get("provider_key_bridge"),
+        "runtime_provenance": payload.get("runtime_provenance"),
         "claim_boundary": _compact_claim_boundary(
             can_use_for=can_use_for,
             must_reopen_for=["source_backed_claims", "exact_wording", "sensitive_or_stale_facts"],

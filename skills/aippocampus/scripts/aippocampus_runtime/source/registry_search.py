@@ -18,11 +18,21 @@ from aippocampus_runtime.privacy import (
     redact_private_paths,
     redact_sensitive_values,
 )
+from aippocampus_runtime.source.discussion_atlas_pointer import (
+    discussion_atlas_action,
+    discussion_atlas_pointer_for_query,
+)
 from aippocampus_runtime.source.query_match_gate import (
     match_query_profile,
     query_match_gate,
 )
 from aippocampus_runtime.source.registry_search_actions import registry_search_actions
+from aippocampus_runtime.source.registry_search_duplicates import (
+    collapse_duplicate_matches,
+    compact_registry_match,
+    match_haystack,
+    process_noise_reason,
+)
 from aippocampus_runtime.source.registry_search_skips import (
     registry_entry_ref,
     registry_entry_search_skip,
@@ -33,8 +43,6 @@ from aippocampus_runtime.source.search_terms import search_query_terms
 DEFAULT_PUBLIC_SNIPPET_CHARS = 260
 DEFAULT_SOURCE_WINDOW_CHARS = 700
 LAST_SEARCH_CACHE_NAME = "last-registry-source-search.json"
-COMPACT_MATCH_DIAGNOSTIC_KEYS = {"score", "query_match_profile"}
-
 
 def _without_empty(value: Mapping[str, Any]) -> dict[str, Any]:
     return {key: item for key, item in value.items() if item not in (None, "", {})}
@@ -132,6 +140,8 @@ def _registry_match(
         "message_id": hit.get("message_id") or hit.get("id"),
         "boundary": "reopen_source_before_quoting_or_strong_claims",
     }
+    snippet = compact_text(str(hit.get("snippet") or ""), DEFAULT_PUBLIC_SNIPPET_CHARS)
+    noise_reason = str(hit.get("noise_reason") or "") or process_noise_reason(snippet)
     match = {
         "hit_selector": _hit_selector(source_route),
         "thread": registry_entry_ref(entry),
@@ -146,9 +156,9 @@ def _registry_match(
         "scope_labels": hit.get("scope_labels") or [],
         "semantic_scope_labels": hit.get("semantic_scope_labels") or [],
         "score": hit.get("rank_score") or hit.get("score"),
-        "snippet": compact_text(str(hit.get("snippet") or ""), DEFAULT_PUBLIC_SNIPPET_CHARS),
-        "search_noise": bool(hit.get("search_noise")),
-        "noise_reason": hit.get("noise_reason"),
+        "snippet": snippet,
+        "search_noise": bool(hit.get("search_noise")) or bool(noise_reason),
+        "noise_reason": noise_reason,
         "source_route": source_route,
     }
     if include_paths:
@@ -158,28 +168,6 @@ def _registry_match(
             "sqlite": paths.get("sqlite"),
         }
     return {key: value for key, value in match.items() if value not in (None, "", [], {})}
-
-
-def _match_haystack(match: Mapping[str, Any]) -> str:
-    thread = match.get("thread")
-    thread_map = thread if isinstance(thread, Mapping) else {}
-    return " ".join(
-        str(value or "")
-        for value in (
-            match.get("snippet"),
-            thread_map.get("title"),
-            thread_map.get("workspace_name"),
-            match.get("source"),
-        )
-    )
-
-
-def _compact_registry_match(match: Mapping[str, Any]) -> dict[str, Any]:
-    return {
-        key: value
-        for key, value in match.items()
-        if key not in COMPACT_MATCH_DIAGNOSTIC_KEYS
-    }
 
 
 def _annotate_last_search_reopen_commands(
@@ -208,9 +196,11 @@ def _annotate_last_search_reopen_commands(
             registry_arg.strip(),
             "--json",
         ]
+        source_window_command = " ".join(part for part in direct_parts if part)
         match["hit_index"] = index
-        match["reopen_command"] = f"aippocampus search --hit {index} --last-search --json"
-        match["source_window_command"] = " ".join(part for part in direct_parts if part)
+        match["reopen_command"] = source_window_command
+        match["source_window_command"] = source_window_command
+        match["last_search_reopen_command"] = f"aippocampus search --hit {index} --last-search --json"
 
 
 def search_registry_sources(
@@ -282,7 +272,7 @@ def search_registry_sources(
                 profile = match_query_profile(
                     query_text=query_text,
                     gate=query_gate,
-                    haystack=_match_haystack(match),
+                    haystack=match_haystack(match),
                 )
                 match["query_match_profile"] = profile
                 if profile["accepted"]:
@@ -306,7 +296,7 @@ def search_registry_sources(
             as_int(item.get("line")),
         )
     )
-    matches = matches[:limit]
+    matches, duplicate_metrics = collapse_duplicate_matches(matches, limit=limit)
     _annotate_last_search_reopen_commands(
         matches,
         registry_dir=registry_root,
@@ -318,14 +308,21 @@ def search_registry_sources(
             query_text=query_text,
             matches=matches,
         )
+    discussion_pointer = discussion_atlas_pointer_for_query(
+        query_text,
+        cwd=registry_root or Path.cwd(),
+    )
+    discussion_action = discussion_atlas_action(discussion_pointer, query=query_text)
     actions = registry_search_actions(
         query=query_text,
         has_matches=bool(matches),
         first_match=matches[0] if matches else None,
     )
+    if discussion_action:
+        actions = [discussion_action, *actions]
     no_phrase_like_matches = bool(query_gate.get("phrase_like_query")) and not matches and bool(suppressed_matches)
     diagnostic_output = include_paths or search_budget == "deep"
-    output_matches = matches if diagnostic_output else [_compact_registry_match(match) for match in matches]
+    output_matches = matches if diagnostic_output else [compact_registry_match(match) for match in matches]
     payload: dict[str, Any] = _without_empty({
         "kind": "aippocampus_registry_source_search",
         "ok": bool(matches),
@@ -341,6 +338,9 @@ def search_registry_sources(
         "query_match_gate": query_gate if diagnostic_output else None,
         "matches": output_matches,
         "match_count": len(matches),
+        "duplicate_cluster_count": duplicate_metrics["duplicate_cluster_count"],
+        "duplicate_collapsed_hit_count": duplicate_metrics["duplicate_hit_count"],
+        "discussion_atlas_pointer": discussion_pointer,
         "suppressed_low_coverage_match_count": len(suppressed_matches),
         "suppressed_low_coverage_matches": suppressed_matches[:3] if diagnostic_output else None,
         "searched_entry_count": searched_entry_count,

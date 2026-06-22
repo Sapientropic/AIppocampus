@@ -739,7 +739,7 @@ def _tiny_agent_recall_host_faithful_replay(
         "cannot_claim": [
             "live_tiny_agent_recall_affordance_quality",
             "source_truth_from_affordance",
-            "default_foreground_adoption_ready",
+            "default_foreground_adoption_useful",
         ],
     }
 
@@ -882,7 +882,7 @@ def build_default_hook_recall_usefulness_report() -> dict[str, Any]:
             "tiny_affordance_host_replay_gate_passed": bool(tiny_affordance_host_replay.get("ok")),
         },
         "hook_integration_status": {
-            "ambient_tiny_agent_recall_affordance": "wired_secondary_action",
+            "ambient_tiny_agent_recall_affordance": "callable",
             "owner_issue": "#2554",
             "foreground_callable": True,
             "action_only": True,
@@ -901,7 +901,7 @@ def build_default_hook_recall_usefulness_report() -> dict[str, Any]:
             "default_foreground_adoption_recommended": False,
             "eligible_default_foreground_surfaces": [],
             "tiny_agent_recall_affordance_decision": (
-                "default_tiny_agent_recall_affordance_host_replay_ready_action_only"
+                "default_tiny_agent_recall_affordance_callable_action_only"
                 if tiny_affordance_gate_passed
                 else "review_opt_in_affordance_only_not_default_foreground"
             ),
@@ -973,7 +973,7 @@ def build_default_hook_recall_usefulness_report() -> dict[str, Any]:
         "cannot_claim": [
             "live_default_hook_quality",
             "live_tiny_agent_recall_affordance_quality",
-            "default_foreground_adoption_ready",
+            "default_foreground_adoption_useful",
             "broad_private_history_question_quality",
             "theme_rows_as_source_truth",
             "cognitive_load_default_foreground_readiness",

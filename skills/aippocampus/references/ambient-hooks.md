@@ -14,9 +14,11 @@ aippocampus agent recall "old decision or handoff cue" --json
 ```
 
 These are read-only checks. They tell the agent whether prompt/lifecycle hooks,
-action-time hints, and foreground visibility are ready, degraded, or simply not
-installed. If a hook is installed but degraded, prefer the smallest surfaced
-status action before reinstalling.
+action-time hints, and foreground visibility are `installed`, `callable`,
+`active`, or `useful`. Keep those stages separate: installed files do not prove
+a callable host, and a callable hook is not useful until a real cue improves
+with correct source follow-through. If a hook is installed but degraded, prefer
+the smallest surfaced status action before reinstalling.
 
 Install only after reviewing the status card and keeping rollback visible:
 `aippocampus hooks prompt install --json` installs Codex prompt wiring, and

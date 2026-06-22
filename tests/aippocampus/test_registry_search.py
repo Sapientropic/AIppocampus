@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -125,6 +126,40 @@ class RegistrySearchBudgetTests(unittest.TestCase):
             kwargs["context_radius"],
             registry_search.REGISTRY_SEARCH_DEEP_BUDGET.context_radius,
         )
+
+    def test_deep_registry_search_demotes_process_notification_hits(self) -> None:
+        clean_dir = self.root / "clean"
+        clean_dir.mkdir()
+        messages = clean_dir / "messages.jsonl"
+        rows = [
+            {
+                "message_id": "msg_process",
+                "source_line": 3,
+                "role": "user",
+                "text": "<subagent_notification> registry search source route wrapper echo",
+            },
+            {
+                "message_id": "msg_real",
+                "source_line": 4,
+                "role": "assistant",
+                "phase": "final_answer",
+                "is_final": True,
+                "text": "registry search source route should prefer this final source-bearing note",
+            },
+        ]
+        messages.write_text(
+            "\n".join(json.dumps(row, ensure_ascii=False) for row in rows),
+            encoding="utf-8",
+        )
+        result = registry_search.deep_search_entry_result(
+            {"paths": {"clean_source_messages_jsonl": str(messages)}},
+            ["registry", "search", "source", "route"],
+            max_hits=2,
+        )
+
+        self.assertEqual(result["hits"][0]["message_id"], "msg_real")
+        self.assertTrue(result["hits"][1]["search_noise"])
+        self.assertEqual(result["hits"][1]["noise_reason"], "process_notification")
 
 if __name__ == "__main__":
     unittest.main()

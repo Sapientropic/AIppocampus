@@ -47,7 +47,7 @@ def source_label_for_match(match: dict[str, Any]) -> str:
 
 def date_for_match(match: dict[str, Any]) -> str:
     timestamp = str(match.get("timestamp") or "").strip()
-    return timestamp[:10] if timestamp else "unknown date"
+    return timestamp[:10] if timestamp else ""
 
 
 def turn_for_match(match: dict[str, Any]) -> str:
@@ -127,15 +127,14 @@ def render_human_search_result(result: dict[str, Any]) -> str:
     matches = list(result.get("matches") or [])
     lines: list[str] = []
     if matches:
-        lines.append("Source-backed action cards")
-        lines.append("Source-backed snippets are receipts; reopen before relying on exact wording.")
+        lines.append("Source-backed matches")
         lines.append(f"query: {query}")
         for index, match in enumerate(matches, start=1):
             source = source_label_for_match(match)
             date = date_for_match(match)
             turn = turn_for_match(match)
-            lines.append(f"{index}. Source: {source} · {date} · {turn}")
-            lines.append("   boundary: source-backed receipt; reopen before quoting or strong claims")
+            meta = " · ".join(part for part in (source, date, turn) if part)
+            lines.append(f"{index}. Source: {meta}")
             if match.get("snippet_omitted"):
                 lines.append("   snippet omitted in public mode; reopen source for exact text.")
             elif match.get("search_noise"):
@@ -152,10 +151,14 @@ def render_human_search_result(result: dict[str, Any]) -> str:
             command = str(match.get("reopen_command") or "").strip()
             if command:
                 lines.append(f"   reopen: {command}")
+            duplicate_count = int(match.get("duplicate_count") or 0)
+            if duplicate_count:
+                lines.append(f"   mirrored in {duplicate_count + 1} source rows; representative shown.")
         lines.append(
             "Next: reopen source before quoting beyond these snippets, or refine with "
             "a project cue / time cue if this is not the thread you meant."
         )
+        lines.append("Boundary: source-backed snippets are receipts; reopen before strong claims.")
     else:
         if result.get("status") == "no_phrase_like_matches":
             lines.append(f"No exact or phrase-like source match found for: {query}")

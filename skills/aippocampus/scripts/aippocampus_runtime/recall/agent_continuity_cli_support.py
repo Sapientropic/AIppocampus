@@ -78,6 +78,11 @@ SENSITIVE_ASSIGNMENT_RE = re.compile(
     re.I,
 )
 SOURCE_SNIPPET_CHAR_LIMIT = 420
+INTERNAL_ROUTE_LABELS = {
+    "agent_native_recall_facade",
+    "coding_route_recovery",
+    "source_reopen_boundary",
+}
 
 
 class RouteLimitError(ValueError):
@@ -218,6 +223,22 @@ def _recall_with_cue_action(*, label: str, why: str, action_id: str = "recall_wi
         }
     )
     return action
+
+
+def _human_route_label(packet: Mapping[str, Any]) -> tuple[str, bool]:
+    label = str(
+        packet.get("route_topic")
+        or packet.get("display_hint")
+        or packet.get("route_label")
+        or packet.get("route_id")
+        or ""
+    ).strip()
+    normalized = label.casefold().replace(" ", "_")
+    if normalized in INTERNAL_ROUTE_LABELS:
+        return "low-confidence navigation route", True
+    if not label:
+        return "memory route", False
+    return label, False
 
 
 def _request_index_followup_action(mode: str) -> dict[str, Any]:
@@ -1160,12 +1181,9 @@ def render_recall_human(payload: Mapping[str, Any]) -> str:
     rendered_packets: list[Mapping[str, Any]] = []
     duplicate_counts: dict[tuple[str, str], int] = {}
     for packet in packets:
-        label = (
-            packet.get("route_topic")
-            or packet.get("route_label")
-            or packet.get("route_id")
-            or "memory route"
-        )
+        label, low_confidence_machinery = _human_route_label(packet)
+        if low_confidence_machinery:
+            packet = {**packet, "_low_confidence_machinery": True}
         next_action = packet.get("recommended_next") or packet.get("next_action") or "reopen_source"
         key = (str(label), str(next_action))
         if key in duplicate_counts:
@@ -1174,16 +1192,12 @@ def render_recall_human(payload: Mapping[str, Any]) -> str:
         duplicate_counts[key] = 0
         rendered_packets.append(packet)
     for index, packet in enumerate(rendered_packets[:3], start=1):
-        label = (
-            packet.get("route_topic")
-            or packet.get("route_label")
-            or packet.get("route_id")
-            or "memory route"
-        )
+        label, low_confidence_machinery = _human_route_label(packet)
         next_action = packet.get("recommended_next") or packet.get("next_action") or "reopen_source"
         duplicate_count = duplicate_counts.get((str(label), str(next_action)), 0)
         duplicate_suffix = f" (+{duplicate_count} similar omitted)" if duplicate_count else ""
-        lines.append(f"{index}. {label} -> {next_action}{duplicate_suffix}")
+        suffix = " (low-confidence machinery)" if low_confidence_machinery or packet.get("_low_confidence_machinery") else ""
+        lines.append(f"{index}. {label}{suffix} -> {next_action}{duplicate_suffix}")
         hint = packet.get("selection_hint")
         if isinstance(hint, Mapping) and hint.get("source"):
             lines.append(f"   why: {hint.get('source')}:{hint.get('why') or 'selected'}")
