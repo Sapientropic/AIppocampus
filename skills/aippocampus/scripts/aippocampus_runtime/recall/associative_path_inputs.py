@@ -471,6 +471,16 @@ def build_associative_path_input_pack(
     task_echo_filtered_count = int(clean_source_component.get("same_thread_task_echo_filtered_count") or 0)
     if task_echo_filtered_count:
         reason_codes.append("same_thread_task_echo_no_anchor")
+    validation_report_demoted_count = int(
+        clean_source_component.get("self_referential_validation_report_demoted_count") or 0
+    )
+    if validation_report_demoted_count:
+        reason_codes.append("self_referential_validation_report_demoted")
+    low_actual_anchor_filtered_count = int(
+        clean_source_component.get("low_actual_source_anchor_coverage_filtered_count") or 0
+    )
+    if low_actual_anchor_filtered_count:
+        reason_codes.append("low_actual_source_anchor_coverage")
 
     pack = {
         "kind": KIND,
@@ -507,6 +517,8 @@ def build_associative_path_input_pack(
                 clean_source_component.get("control_source_explicitly_allowed_count") or 0
             ),
             "same_thread_task_echo_filtered_count": task_echo_filtered_count,
+            "self_referential_validation_report_demoted_count": validation_report_demoted_count,
+            "low_actual_source_anchor_coverage_filtered_count": low_actual_anchor_filtered_count,
             "candidate_source_counts": dict(sorted(candidate_source_counts.items())),
         },
         "boundary": {

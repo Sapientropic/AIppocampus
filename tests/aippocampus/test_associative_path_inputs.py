@@ -319,6 +319,105 @@ class AssociativePathInputPackTests(unittest.TestCase):
         self.assertEqual(diagnostic["top_candidates"][0]["source_refs"][0]["message_id"], "msg-current-real")
         self.assertEqual(diagnostic["metrics"]["same_thread_task_echo_filtered_count"], 0)
 
+    def test_current_clean_source_filters_low_actual_anchor_coverage(self) -> None:
+        clean = self._write_clean_messages(
+            [
+                {
+                    "message_id": "msg-closeout-summary",
+                    "turn_id": "turn-closeout",
+                    "turn_index": 18,
+                    "source_id": "src-closeout",
+                    "source_line": 50,
+                    "role": "assistant",
+                    "phase": "final_answer",
+                    "is_final": True,
+                    "text": "这个旧摘要只提到 benchmark，但没有用户这次线索的其它承重锚点。",
+                },
+                {
+                    "message_id": "msg-topic-source",
+                    "turn_id": "turn-topic",
+                    "turn_index": 19,
+                    "source_id": "src-topic",
+                    "source_line": 51,
+                    "role": "assistant",
+                    "phase": "final_answer",
+                    "is_final": True,
+                    "text": "这次实测检索不弱，但 recall deepen 实际都好差劲，需要真实 source follow-through。",
+                },
+            ]
+        )
+
+        diagnostic = build_associative_path_diagnostic(
+            query="benchmark 实测检索不弱 recall deepen 实际都好差劲",
+            cwd=self.root,
+            clean_source_dir=clean,
+        )
+
+        self.assertEqual(diagnostic["decision"], "route_candidates")
+        self.assertEqual(
+            diagnostic["top_candidates"][0]["source_refs"][0]["message_id"],
+            "msg-topic-source",
+        )
+        self.assertEqual(
+            diagnostic["metrics"]["low_actual_source_anchor_coverage_filtered_count"],
+            1,
+        )
+        self.assertIn("low_actual_source_anchor_coverage", diagnostic["reason_codes"])
+
+    def test_current_clean_source_demotes_self_referential_validation_reports(self) -> None:
+        clean = self._write_clean_messages(
+            [
+                {
+                    "message_id": "msg-validation-report",
+                    "turn_id": "turn-validation",
+                    "turn_index": 20,
+                    "source_id": "src-validation",
+                    "source_line": 60,
+                    "role": "assistant",
+                    "phase": "final_answer",
+                    "is_final": True,
+                    "text": (
+                        "Strict acceptance failed. Probe: aippocampus agent recall "
+                        "\"黏菌 联想回忆 探索算法\" --apw-fallback --json, then "
+                        "aippocampus agent deepen --request 6 --recall-selector sel_x --json. "
+                        "Observed foreground_action=deepen_associative_path_fallback, "
+                        "matched_cue_anchors=[黏菌, 联想回忆, 探索算法], opened_anchor_hits=0."
+                    ),
+                },
+                {
+                    "message_id": "msg-topic-source",
+                    "turn_id": "turn-topic",
+                    "turn_index": 21,
+                    "source_id": "src-topic",
+                    "source_line": 61,
+                    "role": "assistant",
+                    "phase": "final_answer",
+                    "is_final": True,
+                    "text": "我们认真讨论过黏菌启发的联想回忆和探索算法，重点是让路径探索先保持可打开的源。",
+                },
+            ]
+        )
+
+        diagnostic = build_associative_path_diagnostic(
+            query="黏菌 联想回忆 探索算法",
+            cwd=self.root,
+            clean_source_dir=clean,
+        )
+
+        self.assertEqual(diagnostic["decision"], "route_candidates")
+        self.assertEqual(
+            diagnostic["top_candidates"][0]["source_refs"][0]["message_id"],
+            "msg-topic-source",
+        )
+        self.assertEqual(
+            diagnostic["metrics"]["self_referential_validation_report_demoted_count"],
+            1,
+        )
+        self.assertIn(
+            "self_referential_validation_report_demoted",
+            diagnostic["reason_codes"],
+        )
+
     def test_wrong_route_feedback_aliases_suppress_same_apw_identity(self) -> None:
         source_refs = [
             {

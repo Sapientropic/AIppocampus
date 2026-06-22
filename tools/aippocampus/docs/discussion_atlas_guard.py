@@ -109,6 +109,62 @@ def _query_terms(query: str) -> list[str]:
     return [term.removeprefix("#") for term in terms if len(term.removeprefix("#")) >= 3]
 
 
+_LOW_SIGNAL_ATLAS_TERMS = {
+    "agent",
+    "apw",
+    "benchmark",
+    "ci",
+    "closeout",
+    "deepen",
+    "dogfood",
+    "issue",
+    "issues",
+    "known",
+    "mcp",
+    "memory",
+    "pr",
+    "recall",
+    "reopen",
+    "search",
+    "source",
+    "test",
+    "tests",
+    "tool",
+    "tooling",
+}
+
+
+def _distinctive_query_terms(query: str) -> set[str]:
+    return {term for term in _query_terms(query) if term not in _LOW_SIGNAL_ATLAS_TERMS}
+
+
+def _explicit_discussion_reference(query: str, number: int) -> bool:
+    raw = str(query or "").casefold()
+    return bool(
+        re.search(rf"(?:discussion|discussions)\s*#?\s*{number}\b", raw)
+        or re.search(rf"/discussions/{number}\b", raw)
+        or re.search(rf"#\s*{number}\b", raw)
+    )
+
+
+def _row_match_basis(query: str, number: int, row: Mapping[str, str]) -> tuple[str, int]:
+    query_terms = _distinctive_query_terms(query)
+    if _explicit_discussion_reference(query, number):
+        return "explicit_discussion_reference", 100
+    title_terms = _distinctive_query_terms(str(row.get("title") or ""))
+    owner_terms = _distinctive_query_terms(str(row.get("owner") or ""))
+    execution_terms = _distinctive_query_terms(str(row.get("execution") or ""))
+    next_action_terms = _distinctive_query_terms(str(row.get("next_action") or ""))
+    title_overlap = query_terms & title_terms
+    public_phrase_overlap = query_terms & (next_action_terms | execution_terms)
+    owner_overlap = query_terms & owner_terms
+    if len(title_overlap) >= 2:
+        return "discussion_title_match", 20 + len(title_overlap) * 2 + min(len(owner_overlap), 1)
+    if len(public_phrase_overlap) >= 2:
+        return "discussion_public_phrase_match", 10 + len(public_phrase_overlap) + min(len(title_overlap), 1)
+    return "", 0
+
+
 def discussion_atlas_navigation_pointer(atlas_text: str, query: str) -> dict[str, Any]:
     """Return a compact public-safe Discussion pointer for recall/orientation.
 
@@ -118,18 +174,11 @@ def discussion_atlas_navigation_pointer(atlas_text: str, query: str) -> dict[str
     """
 
     rows = parse_discussion_atlas_rows(atlas_text)
-    terms = _query_terms(query)
-    number_terms = {int(term) for term in terms if term.isdigit()}
-    scored: list[tuple[int, int, dict[str, str]]] = []
+    scored: list[tuple[int, int, str, dict[str, str]]] = []
     for number, row in rows.items():
-        title_terms = set(_query_terms(str(row.get("title") or "")))
-        owner_terms = set(_query_terms(str(row.get("owner") or "")))
-        next_action_terms = set(_query_terms(str(row.get("next_action") or "")))
-        overlap = len(set(terms) & (title_terms | owner_terms | next_action_terms))
-        if number in number_terms:
-            overlap += 10
-        if overlap:
-            scored.append((overlap, number, row))
+        basis, score = _row_match_basis(query, number, row)
+        if basis:
+            scored.append((score, number, basis, row))
     scored.sort(key=lambda item: (-item[0], item[1]))
     if not scored:
         return {
@@ -140,13 +189,15 @@ def discussion_atlas_navigation_pointer(atlas_text: str, query: str) -> dict[str
             "next_action": "Run discussion_atlas_guard with --live-github or tighten the cue with a discussion number/title.",
             "claim_boundary": "no discussion row surfaced; do not infer source truth from absence",
         }
-    _, _, row = scored[0]
+    _, _, basis, row = scored[0]
+    pointer = _public_atlas_row(row)
+    pointer["match_basis"] = basis
     return {
         "kind": "aippocampus_discussion_atlas_navigation_pointer",
         "ok": True,
         "status": "atlas_pointer",
         "query": query,
-        "pointer": _public_atlas_row(row),
+        "pointer": pointer,
         "public_boundary": {
             "discussion_body_serialized": False,
             "comment_body_serialized": False,

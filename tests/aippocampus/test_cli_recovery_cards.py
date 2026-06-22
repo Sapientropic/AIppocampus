@@ -1238,8 +1238,12 @@ class AippocampusCliRecoveryCardTests(unittest.TestCase):
                     self.assertIn("command_template", recall_funnel)
                 for action in actions:
                     if isinstance(action, dict) and "command" in action:
-                        self.assertIn("aippocampus ", action["command"])
-                        resolved = facade.resolve_command(action["command"].split()[1:])
+                        command = str(action["command"])
+                        if command.startswith("python -m pip install -e"):
+                            self.assertEqual(args, ("doctor", "--json"))
+                            continue
+                        self.assertIn("aippocampus ", command)
+                        resolved = facade.resolve_command(command.split()[1:])
                         self.assertIsNotNone(resolved.script_name)
 
     def test_continuity_domain_json_does_not_put_placeholders_in_executable_commands(self) -> None:

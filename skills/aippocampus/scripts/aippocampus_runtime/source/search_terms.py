@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from aippocampus_runtime.recall.query_policy import cjk_query_sidecar_terms, split_query_terms
+from aippocampus_runtime.source.relationship_origin import relationship_origin_expansion_terms
 
 
 def search_query_terms(patterns: list[str]) -> list[str]:
@@ -22,6 +23,11 @@ def search_query_terms(patterns: list[str]) -> list[str]:
             sidecar
             for pattern in patterns
             for sidecar in cjk_query_sidecar_terms(str(pattern or ""))
+        ],
+        *[
+            term
+            for pattern in patterns
+            for term in relationship_origin_expansion_terms(str(pattern or ""))
         ],
     ]:
         key = term.casefold()

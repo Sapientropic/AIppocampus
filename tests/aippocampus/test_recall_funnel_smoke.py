@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -11,6 +12,7 @@ from unittest import mock
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 
+from aippocampus_runtime import core
 from aippocampus_runtime.ops import recall_funnel_live_agent_gate, recall_funnel_smoke
 
 
@@ -18,7 +20,9 @@ class RecallFunnelSmokeTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
         self.cwd = Path(self.tmp.name)
-        self.clean = self.cwd / ".aippocampus" / "clean-source"
+        self.old_registry_dir = os.environ.get("AIPPOCAMPUS_REGISTRY_DIR")
+        os.environ["AIPPOCAMPUS_REGISTRY_DIR"] = str(self.cwd / "default-registry")
+        self.clean = core.default_thread_clean_source_dir(self.cwd)
         self.clean.mkdir(parents=True)
         messages = [
             {
@@ -62,6 +66,10 @@ class RecallFunnelSmokeTests(unittest.TestCase):
             )
 
     def tearDown(self) -> None:
+        if self.old_registry_dir is None:
+            os.environ.pop("AIPPOCAMPUS_REGISTRY_DIR", None)
+        else:
+            os.environ["AIPPOCAMPUS_REGISTRY_DIR"] = self.old_registry_dir
         self.tmp.cleanup()
 
     def test_recall_funnel_reports_counts_without_leaking_cue_source_text_or_paths(self) -> None:

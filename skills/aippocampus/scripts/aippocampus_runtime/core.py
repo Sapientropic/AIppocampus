@@ -18,8 +18,6 @@ from aippocampus_runtime.registry import paths as _registry_paths
 from aippocampus_runtime.source import rollout as _rollout
 
 aippocampus_home = _registry_paths.aippocampus_home
-aippocampus_registry_resolution = _registry_paths.aippocampus_registry_resolution
-aippocampus_registry_dir = _registry_paths.aippocampus_registry_dir
 build_anchor_graph = _anchor_graph.build_anchor_graph
 benchmark_sensitive_text_policy = _safety.benchmark_sensitive_text_policy
 benchmark_text_is_sensitive = _safety.benchmark_text_is_sensitive
@@ -52,11 +50,75 @@ def now_utc() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
-def codex_home() -> Path:
+def _codex_home_from_installed_skill() -> Path | None:
+    """Infer CODEX_HOME when a host launches an installed skill without env.
+
+    Codex Desktop MCP hosts can start the AIppocampus stdio server without
+    inheriting the user's shell environment. In that case the installed skill
+    still lives under `<codex-home>/skills/aippocampus/`, and using
+    `Path.home()/.codex` would silently point recall at an empty registry. Only
+    accept the inferred root when it looks like a real Codex home.
+    """
+
+    try:
+        here = Path(__file__).resolve()
+    except OSError:
+        return None
+    for parent in here.parents:
+        if parent.name != "aippocampus":
+            continue
+        if parent.parent.name != "skills":
+            continue
+        candidate = parent.parent.parent
+        if (
+            (candidate / "aippocampus-registry").exists()
+            or (candidate / "sessions").exists()
+            or (candidate / "config.toml").exists()
+        ):
+            return candidate
+    return None
+
+
+def _explicit_or_inferred_codex_home() -> Path | None:
     env = os.environ.get("CODEX_HOME")
     if env:
         return Path(env)
-    return Path.home() / ".codex"
+    return _codex_home_from_installed_skill()
+
+
+def codex_home() -> Path:
+    explicit_or_inferred = _explicit_or_inferred_codex_home()
+    if explicit_or_inferred is not None:
+        return explicit_or_inferred
+    try:
+        return Path.home() / ".codex"
+    except RuntimeError:
+        # Some CI or embedded host processes clear HOME/USERPROFILE. Preserve a
+        # deterministic host fallback instead of failing before explicit
+        # AIPPOCAMPUS_* registry envs or caller-provided paths can be honored.
+        return Path.cwd() / ".codex"
+
+
+def aippocampus_registry_resolution(home: Path | None = None) -> dict:
+    resolved_home = home if home is not None else _explicit_or_inferred_codex_home()
+    if (
+        resolved_home is None
+        and not os.environ.get("AIPPOCAMPUS_REGISTRY_DIR")
+        and not os.environ.get("AIPPOCAMPUS_HOME")
+    ):
+        resolved_home = codex_home()
+    return _registry_paths.aippocampus_registry_resolution(resolved_home)
+
+
+def aippocampus_registry_dir(home: Path | None = None) -> Path:
+    resolved_home = home if home is not None else _explicit_or_inferred_codex_home()
+    if (
+        resolved_home is None
+        and not os.environ.get("AIPPOCAMPUS_REGISTRY_DIR")
+        and not os.environ.get("AIPPOCAMPUS_HOME")
+    ):
+        resolved_home = codex_home()
+    return _registry_paths.aippocampus_registry_dir(resolved_home)
 
 
 def safe_path_name(value: str, fallback: str = "item") -> str:

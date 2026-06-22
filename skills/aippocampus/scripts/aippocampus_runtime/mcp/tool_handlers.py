@@ -16,6 +16,7 @@ from aippocampus_runtime.mcp import memory_health_recovery
 from aippocampus_runtime.mcp.agent_deepen_projection import compact_agent_deepen_payload
 from aippocampus_runtime.mcp.agent_explain_projection import compact_agent_explain_payload
 from aippocampus_runtime.mcp.agent_recall_projection import compact_agent_recall_payload
+from aippocampus_runtime.mcp.clean_source_resolution import resolve_mcp_clean_source_dir
 from aippocampus_runtime.mcp.foreground_recovery import (
     missing_input_recovery_card,
 )
@@ -40,6 +41,7 @@ from aippocampus_runtime.mcp.public_projection import (
 from aippocampus_runtime.mcp.recall_navigation import (
     RecallNavigationError,
     navigation_error_payload,
+    normalize_handle,
     recall_context_packet,
     recall_deepen_packet,
 )
@@ -106,15 +108,18 @@ def agent_continuity_module() -> Any:
 
 
 def clean_source_dir_for(arguments: dict[str, Any]) -> Path:
-    cwd = cwd_arg(arguments)
-    explicit = arguments.get("clean_source_dir")
-    if explicit:
-        return core.resolve_artifact_path(str(explicit), cwd, core.default_thread_clean_source_dir(cwd))
-    global_dir = core.default_thread_clean_source_dir(cwd)
-    legacy_dir = cwd / ".aippocampus" / "clean-source"
-    if (global_dir / "messages.jsonl").exists() or not (legacy_dir / "messages.jsonl").exists():
-        return global_dir
-    return legacy_dir
+    return resolve_mcp_clean_source_dir(
+        cwd=cwd_arg(arguments),
+        clean_source_dir=arguments.get("clean_source_dir"),
+    )
+
+
+def recall_clean_source_dir_for(arguments: dict[str, Any]) -> Path:
+    return resolve_mcp_clean_source_dir(
+        cwd=cwd_arg(arguments),
+        clean_source_dir=arguments.get("clean_source_dir"),
+        continuity_domains_snapshot=arguments.get("continuity_domains_snapshot"),
+    )
 
 
 def missing_files(root: Path, required: list[str]) -> list[str]:
@@ -296,6 +301,7 @@ def call_search_memory(arguments: dict[str, Any]) -> dict[str, Any]:
             include_paths=include_paths,
             search_budget=str(arguments.get("search_budget") or "default"),
             record_last_search=False,
+            cwd=cwd_arg(arguments),
         )
         payload["limit"] = limit
         payload["mcp_search_scope"] = scope
@@ -335,7 +341,7 @@ def call_search_memory(arguments: dict[str, Any]) -> dict[str, Any]:
                 )
             ],
         )
-    source_dir = clean_source_dir_for(arguments)
+    source_dir = recall_clean_source_dir_for(arguments)
     required = ["messages.jsonl"]
     if missing_files(source_dir, required):
         return clean_source_unavailable(source_dir, required, arguments)
@@ -395,7 +401,7 @@ def call_recall_context(arguments: dict[str, Any]) -> dict[str, Any]:
                 ),
             ],
         )
-    source_dir = clean_source_dir_for(arguments)
+    source_dir = recall_clean_source_dir_for(arguments)
     required = ["messages.jsonl"]
     if missing_files(source_dir, required):
         return clean_source_unavailable(source_dir, required, arguments)
@@ -465,16 +471,22 @@ def call_recall_deepen(arguments: dict[str, Any]) -> dict[str, Any]:
                 },
             },
         )
-    source_dir = clean_source_dir_for(arguments)
+    try:
+        normalized_handle = normalize_handle(arguments.get("handle"))
+    except RecallNavigationError as exc:
+        return text_result(public_payload(arguments, navigation_error_payload(exc)), is_error=True)
+    source_dir = recall_clean_source_dir_for(arguments)
     required = ["messages.jsonl"]
-    if missing_files(source_dir, required):
+    if str(normalized_handle.get("kind") or "") != "active_recall_lock" and missing_files(
+        source_dir, required
+    ):
         return clean_source_unavailable(source_dir, required, arguments)
     registry_dir = registry_dir_arg(arguments)
     registry_path = registry.registry_paths(registry_dir)[0]
     lock_path = Path(str(arguments["lock_path"])).resolve() if arguments.get("lock_path") else None
     try:
         payload = recall_deepen_packet(
-            handle=arguments.get("handle"),
+            handle=normalized_handle,
             clean_source_dir=source_dir,
             registry_path=registry_path if registry_path.exists() else None,
             registry_dir=registry_dir,

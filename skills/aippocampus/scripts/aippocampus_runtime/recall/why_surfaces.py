@@ -6,7 +6,6 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Mapping
 
-from aippocampus_runtime import core
 from aippocampus_runtime.mcp.recall_navigation import (
     RecallNavigationError,
     clean_source_fingerprint,
@@ -14,17 +13,11 @@ from aippocampus_runtime.mcp.recall_navigation import (
 )
 from aippocampus_runtime.recall.semantic_gate_response import public_semantic_gate_payload
 from aippocampus_runtime.recall.why_reason_codes import safe_int, surface_report
+from aippocampus_runtime.source.clean_source_resolver import resolve_clean_source_dir
 
 
 def clean_source_dir_for(cwd: Path, clean_source_dir: str | Path | None = None) -> Path:
-    default_dir = core.default_thread_clean_source_dir(cwd)
-    selected = core.resolve_artifact_path(clean_source_dir, cwd, default_dir)
-    if clean_source_dir is not None:
-        return selected
-    legacy = cwd / ".aippocampus" / "clean-source"
-    if (default_dir / "messages.jsonl").exists() or not (legacy / "messages.jsonl").exists():
-        return default_dir
-    return legacy
+    return resolve_clean_source_dir(cwd, clean_source_dir)
 
 
 def _source_ref_count_from_routes(routes: list[Any]) -> int:

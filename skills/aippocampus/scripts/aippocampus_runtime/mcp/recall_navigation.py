@@ -22,6 +22,7 @@ from typing import Any
 from aippocampus_runtime.core import compact_text, sanitize_external_model_text
 from aippocampus_runtime.mcp.continuity_routes import continuity_routes_for_context
 from aippocampus_runtime.mcp.handle_inputs import nested_navigation_handle_value
+from aippocampus_runtime.mcp.relationship_origin_routes import relationship_origin_registry_routes
 from aippocampus_runtime.mcp.source_ref_matching import (
     message_matches_ref,
     public_source_message,
@@ -47,6 +48,7 @@ from aippocampus_runtime.recall.continuity_domains import (
 from aippocampus_runtime.recall.query_policy import split_query_terms
 from aippocampus_runtime.registry import api as registry
 from aippocampus_runtime.registry.search import entry_search_score
+from aippocampus_runtime.source.relationship_origin import RELATIONSHIP_ORIGIN_ROUTE_TOPIC
 from aippocampus_runtime.source.search import iter_clean_messages, search_clean_source
 
 HANDLE_PREFIX = "aippo-nav:"
@@ -111,6 +113,19 @@ _ROUTE_TOPIC_RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
     (
         "coding_route_recovery",
         ("rejected route", "test failed", "failed route", "patch", "pr", "pull request"),
+    ),
+    (
+        RELATIONSHIP_ORIGIN_ROUTE_TOPIC,
+        (
+            "小海马体",
+            "外置海马体",
+            "未干的地图",
+            "机械飞升",
+            "机仆",
+            "机械种族",
+            "未来机械生命",
+            "生命还能变成什么",
+        ),
     ),
 )
 _TOPIC_TOKEN_RE = re.compile(r"[a-z0-9_]+")
@@ -515,6 +530,17 @@ def recall_context_packet(
         limit=limit,
         snippet_chars=220,
     )
+    relationship_origin_routes = relationship_origin_registry_routes(
+        intent=clean_intent,
+        cwd=cwd,
+        source_dir=clean_source_dir,
+        registry_dir=registry_dir,
+        max_routes=limit,
+        clean_ref=_clean_ref,
+        route_handle=_route_handle,
+        stable_id=_stable_id,
+        safe_text=_safe_text,
+    )
     routes = [
         _route_from_clean_hit(hit, source_dir=clean_source_dir, intent=clean_intent)
         for hit in search_result.get("matches") or []
@@ -532,7 +558,23 @@ def recall_context_packet(
     )
     domain_routes = continuity_routes["domain_routes"]
     pathlet_routes = continuity_routes["pathlet_routes"]
-    routes = [*domain_routes, *pathlet_routes, *routes]
+    routes = [*relationship_origin_routes, *domain_routes, *pathlet_routes, *routes]
+    deduped_routes: list[dict[str, Any]] = []
+    seen_route_refs: set[str] = set()
+    for route in routes:
+        refs = route.get("source_refs") or []
+        ref = refs[0] if refs and isinstance(refs[0], Mapping) else {}
+        key = "|".join(
+            str(ref.get(part) or "")
+            for part in ("thread_key", "message_id", "turn_id", "turn_index", "line")
+        )
+        key = key or str(route.get("route_id") or "")
+        if key and key in seen_route_refs:
+            continue
+        if key:
+            seen_route_refs.add(key)
+        deduped_routes.append(route)
+    routes = deduped_routes
     if len(routes) < limit:
         routes.extend(
             _registry_routes(

@@ -18,6 +18,7 @@ from aippocampus_runtime.contracts import (
     canonical_foreground_action_fields,
     foreground_readiness_card,
 )
+from aippocampus_runtime.source.clean_source_resolver import resolve_clean_source_dir
 
 
 def payload_for_health_exception(arguments: dict[str, Any]) -> dict[str, Any]:
@@ -104,15 +105,7 @@ def _registry_dir_arg(arguments: dict[str, Any]) -> Path | None:
 
 
 def _clean_source_dir_for(arguments: dict[str, Any]) -> Path:
-    cwd = _cwd_arg(arguments)
-    explicit = arguments.get("clean_source_dir")
-    if explicit:
-        return core.resolve_artifact_path(str(explicit), cwd, core.default_thread_clean_source_dir(cwd))
-    global_dir = core.default_thread_clean_source_dir(cwd)
-    legacy_dir = cwd / ".aippocampus" / "clean-source"
-    if (global_dir / "messages.jsonl").exists() or not (legacy_dir / "messages.jsonl").exists():
-        return global_dir
-    return legacy_dir
+    return resolve_clean_source_dir(_cwd_arg(arguments), arguments.get("clean_source_dir"))
 
 
 def _agent_continuity_module() -> Any:

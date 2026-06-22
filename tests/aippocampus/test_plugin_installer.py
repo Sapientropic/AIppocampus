@@ -462,6 +462,11 @@ class PluginInstallerTests(unittest.TestCase):
                     runner=FakeCodexRunner(),
                     host_probe_runner=lambda **_: successful_probe_with_noisy_stderr(),
                 )
+                result["mcp_command_preflight"] = {
+                    "command": "aippocampus",
+                    "resolves": True,
+                    "status": "console_script_resolved",
+                }
 
                 summary = plugin_installer.public_install_summary(result)
 

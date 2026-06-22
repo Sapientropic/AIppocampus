@@ -13,6 +13,8 @@ from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
+from report_provenance import git_worktree_evidence
+
 READY_STATUSES = {
     "callable",
     "useful",
@@ -622,16 +624,25 @@ def _apply_apw_probe(
         return
     failures = list(apw_probe.get("failures") or [])
     status = str(apw_probe.get("status") or "")
+    probe_label = str(apw_probe.get("probe_label") or "")
+    probe_scope = "fixture" if probe_label.startswith("fixture_") else "live_current_context"
     for surface in surfaces:
         if surface.get("surface_id") not in {"apw_fallback", "mcp_agent_recall_deepen_parity"}:
             continue
         surface["mcp_first_apw_probe"] = {
             "status": status,
             "ok": bool(apw_probe.get("ok")),
+            "probe_label": probe_label or None,
+            "probe_scope": probe_scope,
             "cue": apw_probe.get("cue"),
             "failure_reasons": [failure.get("reason") for failure in failures if isinstance(failure, Mapping)],
             "cli": apw_probe.get("cli"),
             "mcp": apw_probe.get("mcp"),
+            "claim_boundary": (
+                "fixture probe verifies CLI/MCP wiring, not live historical usefulness"
+                if probe_scope == "fixture"
+                else "live probe verifies current-context follow-through for this cue"
+            ),
         }
         if failures:
             surface["status"] = "blocked"
@@ -752,10 +763,12 @@ def build_recall_integration_readiness(
         status: sum(1 for surface in surfaces if surface.get("status") == status)
         for status in sorted(READY_STATUSES)
     }
+    provenance = git_worktree_evidence(root)
     return {
         "kind": "aippocampus_recall_integration_readiness",
         "schema_version": 1,
         "ok": not failures,
+        **provenance,
         "surface_count": len(surfaces),
         "status_counts": status_counts,
         "failure_count": len(failures),
