@@ -361,6 +361,70 @@ class RecallIntegrationReadinessTests(unittest.TestCase):
             "cli_apw_candidate_missing_from_mcp",
         )
 
+    def test_apw_probe_blocks_when_anchors_hit_wrong_target_source(self) -> None:
+        def fake_source_cli(
+            repo_root: Path,
+            args: list[str],
+            *,
+            timeout: float = 30,
+            stdin: str | None = None,
+        ) -> dict:
+            del repo_root, timeout
+            source_payload = {
+                "status": "ok",
+                "result": {
+                    "source_refs": [{"message_id": "msg_wrong"}],
+                    "source_window": {
+                        "messages": [
+                            {"text": "公开 fixture 锚点：黏菌 联想回忆 探索算法。"}
+                        ]
+                    },
+                },
+            }
+            recall_payload = {
+                "status": "ok",
+                "associative_path_policy": {"apw_candidate_input_available": True},
+                "associative_path_fallback": {"status": "route_candidate"},
+                "foreground_action": {
+                    "id": "deepen_associative_path_fallback",
+                    "arguments": {
+                        "request_index": 6,
+                        "recall_selector": "apw:fallback:test",
+                    },
+                },
+            }
+            if args == ["mcp"]:
+                request = json.loads(stdin or "{}")
+                tool_name = request.get("params", {}).get("name")
+                payload = source_payload if tool_name == "agent_deepen" else recall_payload
+                return {
+                    "result": {
+                        "content": [
+                            {"type": "text", "text": json.dumps(payload, ensure_ascii=False)}
+                        ]
+                    }
+                }
+            return source_payload if args[:2] == ["agent", "deepen"] else recall_payload
+
+        with mock.patch.object(
+            readiness,
+            "_run_source_cli_json",
+            side_effect=fake_source_cli,
+        ):
+            probe = readiness._apw_mcp_probe(
+                REPO_ROOT,
+                cue="黏菌 联想回忆 探索算法",
+                anchors=["黏菌", "联想回忆", "探索算法"],
+                expected_source_refs=[{"message_id": "msg_expected"}],
+            )
+
+        self.assertFalse(probe["ok"])
+        self.assertFalse(probe["cli"]["target_source_matched"])
+        self.assertFalse(probe["mcp"]["target_source_matched"])
+        reasons = {failure["reason"] for failure in probe["failures"]}
+        self.assertIn("cli_apw_deepen_opened_wrong_target_source", reasons)
+        self.assertIn("mcp_apw_deepen_opened_wrong_target_source", reasons)
+
     def test_cli_json_report_is_machine_readable(self) -> None:
         proc = subprocess.run(
             [

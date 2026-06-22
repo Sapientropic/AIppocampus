@@ -153,30 +153,48 @@ def actions_for_last_recall_search(
             request_scoped=True,
             phrase_placeholder="exact_phrase",
         )
+        follow_up = foreground_template_action(
+            action_id="search_one_last_recall_request",
+            label="Search one recalled route",
+            command_template=str(one_route_template["command_template"]),
+            requires=list(one_route_template["requires"]),
+            why="Use this when the relevant numbered recall route is known.",
+            mutation_risk="read_only",
+            claim_boundary="source_reopen_required_before_claim",
+        ) | {
+            key: value
+            for key, value in one_route_template.items()
+            if key not in {"command_template", "requires"}
+        }
+        source_window_command = str(
+            first_match.get("source_window_command") or first_match.get("reopen_command") or ""
+        ).strip()
+        if source_window_command:
+            return [
+                foreground_shell_action(
+                    action_id="open_last_recall_search_hit_source_window",
+                    label="Open last-recall source hit",
+                    command=source_window_command,
+                    why=(
+                        "Exact wording matched inside a recalled registry source; "
+                        "open the bounded source window before quoting or making strong claims."
+                    ),
+                    mutation_risk="read_only",
+                    claim_boundary="source_reopen_required_before_claim",
+                ),
+                follow_up,
+            ]
         return [
             deepen_action_for_request(
                 int(first_match.get("request_index") or 1),
                 recall_selector,
                 action_id="deepen_last_recall_search_hit",
                 why=(
-                    "Exact wording matched inside a last-recall candidate route; "
+                    "Exact wording matched inside a last-recall source-ref route; "
                     "deepen that route before quoting or making strong claims."
                 ),
             ),
-            foreground_template_action(
-                action_id="search_one_last_recall_request",
-                label="Search one recalled route",
-                command_template=str(one_route_template["command_template"]),
-                requires=list(one_route_template["requires"]),
-                why="Use this when the relevant numbered recall route is known.",
-                mutation_risk="read_only",
-                claim_boundary="source_reopen_required_before_claim",
-            )
-            | {
-                key: value
-                for key, value in one_route_template.items()
-                if key not in {"command_template", "requires"}
-            },
+            follow_up,
         ]
     refine_template = search_command_template(
         recall_selector=recall_selector,

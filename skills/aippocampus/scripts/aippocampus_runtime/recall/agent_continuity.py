@@ -178,17 +178,22 @@ def _route_packet_from_navigation_route(route: Mapping[str, Any]) -> dict[str, A
     action = str(route.get("action_grammar") or "")
     if action == "ignore_or_blocked":
         output_mode = "ignore_or_blocked"
-    elif route.get("reopenable") or route.get("handle"):
+    elif route.get("reopenable") is True or (
+        route.get("handle")
+        and route.get("reopenable") is not False
+        and _route_kind(route) != "thread_candidate"
+    ):
         output_mode = "reopenable_route"
     else:
         output_mode = "direction_only"
+    source_handles = []
+    if output_mode == "reopenable_route" and route.get("handle"):
+        source_handles = [{"handle": route.get("handle"), "kind": route.get("kind")}]
     return {
         "route_id": str(route.get("route_id") or "route:unknown"),
         "output_mode": output_mode,
         "claim_permission": "blocked" if output_mode == "ignore_or_blocked" else "no_claim_before_reopen",
-        "source_handles": [{"handle": route.get("handle"), "kind": route.get("kind")}]
-        if route.get("handle")
-        else [],
+        "source_handles": source_handles,
         "head_votes": [],
         "masks_applied": ["blocked"] if output_mode == "ignore_or_blocked" else [],
         "route_label": _route_label(route),
@@ -212,6 +217,15 @@ def _memory_packet_for_route(route: Mapping[str, Any]) -> dict[str, Any]:
     route_topic = _safe_code_text(route.get("route_topic"))
     if route_topic and not packet.get("route_topic"):
         packet["route_topic"] = route_topic
+    route_kind = _safe_code_text(route.get("kind"))
+    if route_kind == "thread_candidate":
+        packet["route_kind"] = route_kind
+    source_chain_role = _safe_code_text(route.get("source_chain_role"))
+    if source_chain_role:
+        packet["source_chain_role"] = source_chain_role
+    matched_cue_family = _safe_code_text(route.get("matched_cue_family"))
+    if matched_cue_family:
+        packet["matched_cue_family"] = matched_cue_family
     hint = _selection_hint_for_route(route)
     if hint:
         packet["selection_hint"] = hint
@@ -996,7 +1010,7 @@ def recall(
             zip(routes, memory_packets, strict=True),
             start=1,
         )
-        if route.get("handle")
+        if route.get("handle") and memory_packet.get("output_mode") == "reopenable_route"
     ]
     associative_path_policy, associative_path_fallback = (
         apw_fallback.maybe_append_associative_path_fallback_with_policy(
@@ -1097,6 +1111,12 @@ def recall(
         "macro_navigation": macro_navigation,
         "attention_router_navigation": attention_navigation,
         "navigation_signals": navigation_signals,
+        "recall_context_diagnostics": {
+            "route_count": packet.get("route_count"),
+            "metrics": packet.get("metrics"),
+            "semantic_trigger_diagnostics": packet.get("semantic_trigger_diagnostics"),
+            "warnings": packet.get("warnings") or [],
+        },
         "semantic_gate_diagnostics": semantic_diagnostics,
         "associative_path_policy": associative_path_policy,
         "associative_path_fallback": associative_path_fallback,

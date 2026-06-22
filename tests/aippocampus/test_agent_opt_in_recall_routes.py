@@ -353,10 +353,17 @@ class AgentOptInRecallRoutesTests(unittest.TestCase):
         self.assertNotIn(str(working_memory), encoded)
 
     def test_public_recall_no_routes_returns_recovery_card_without_deepen_placeholder(self) -> None:
+        empty_registry = self.cwd / "empty-registry"
+        empty_registry.mkdir()
+        (empty_registry / "threads.json").write_text(
+            json.dumps({"schema_version": 1, "threads": []}),
+            encoding="utf-8",
+        )
         report = agent_continuity.recall(
             "unlikely-no-match-token-xyz-12345",
             cwd=self.cwd,
             clean_source_dir=self.clean,
+            registry_dir=empty_registry,
             max_routes=2,
         )
         public = agent_continuity_cli_support.public_recall_projection(
@@ -913,7 +920,42 @@ class AgentOptInRecallRoutesTests(unittest.TestCase):
             "use_opened_route_context",
         )
 
-    def test_agent_deepen_accepts_json_thread_candidate_handle(self) -> None:
+    def test_agent_recall_keeps_thread_candidate_as_direction_only(self) -> None:
+        fake_packet = {
+            "kind": "aippocampus_recall_context",
+            "status": "ok",
+            "routes": [
+                {
+                    "kind": "thread_candidate",
+                    "route_id": "route_thread_candidate",
+                    "title": "Thread-level registry hint",
+                    "summary": "This is a weak navigation hint.",
+                    "handle": {
+                        "kind": "thread_candidate",
+                        "route_id": "route_thread_candidate",
+                        "thread_key": "session:thread-candidate",
+                    },
+                    "reopenable": False,
+                    "triage_rank_reason_codes": ["registry_thread_candidate"],
+                }
+            ],
+            "route_count": 1,
+        }
+
+        with patch.object(agent_continuity, "recall_context_packet", return_value=fake_packet):
+            payload = agent_continuity.recall(
+                "weak registry thread hint",
+                cwd=self.cwd,
+                clean_source_dir=self.clean,
+                registry_dir=self.cwd / "registry",
+            )
+
+        self.assertEqual(payload["status"], "ok")
+        self.assertEqual(payload["memory_packets"][0]["output_mode"], "direction_only")
+        self.assertEqual(payload["memory_packets"][0]["route_kind"], "thread_candidate")
+        self.assertEqual(payload["deepen_requests"], [])
+
+    def test_agent_deepen_rejects_bare_json_thread_candidate_handle(self) -> None:
         registry_dir = self.cwd / "registry"
         thread_key = "session:thread-candidate"
         clean_dir = registry_api.thread_store_dir(thread_key, registry_dir) / "clean-source"
@@ -951,9 +993,14 @@ class AgentOptInRecallRoutesTests(unittest.TestCase):
             registry_dir=registry_dir,
         )
 
-        self.assertEqual(payload["status"], "ok")
-        self.assertEqual(payload["result"]["route_id"], "route_thread_candidate")
-        self.assertEqual(payload["result"]["source_refs"][0]["thread_key"], thread_key)
+        self.assertEqual(payload["status"], "cannot_verify")
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["error"]["code"], "thread_candidate_needs_source_resolution")
+        self.assertEqual(
+            payload["result"]["error"]["details"]["suggested_next"]["tool"],
+            "search_memory",
+        )
+        self.assertNotIn("source_window", json.dumps(payload, ensure_ascii=False))
 
     def test_compact_projection_does_not_advertise_last_recall_when_cache_missing(self) -> None:
         payload = {

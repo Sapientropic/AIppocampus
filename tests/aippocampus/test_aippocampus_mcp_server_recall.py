@@ -810,9 +810,11 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
         self.assertEqual(payload["match_count"], 1)
         self.assertEqual(payload["matches"][0]["request_index"], 1)
         self.assertIn(
-            f"aippocampus agent deepen --request 1 --recall-selector {selector} --json",
+            "aippocampus search --open-source --thread-key session:last-recall "
+            "--message-id msg_route --line 5 --json",
             encoded,
         )
+        self.assertNotIn("aippocampus agent deepen --request 1", encoded)
         self.assertNotIn(str(self.cwd), encoded)
 
     def test_recall_context_default_is_compact_without_opaque_handles(self) -> None:

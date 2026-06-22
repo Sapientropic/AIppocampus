@@ -41,6 +41,12 @@ from aippocampus_runtime.source.last_recall_actions import (
 from aippocampus_runtime.source.last_recall_actions import (
     selector_cache_path as _selector_cache_path,
 )
+from aippocampus_runtime.source.last_recall_thread_candidate import (
+    registry_source_window_command as _registry_source_window_command,
+)
+from aippocampus_runtime.source.last_recall_thread_candidate import (
+    thread_candidate_search_refs as _thread_candidate_search_refs,
+)
 from aippocampus_runtime.source.search_core import iter_clean_messages, score_message
 from aippocampus_runtime.source.search_terms import search_query_terms
 from aippocampus_runtime.source.semantic_scope_labels import (
@@ -136,6 +142,9 @@ def _request_indices(
 
 
 def _handle_source_refs(handle: Any) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    thread_candidate = _thread_candidate_search_refs(handle)
+    if thread_candidate is not None:
+        return thread_candidate
     normalized = normalize_handle(handle)
     expires_unix = normalized.get("expires_unix")
     if isinstance(expires_unix, (int, float)) and time.time() > float(expires_unix):
@@ -176,20 +185,26 @@ def _match_for_last_recall(
     route_id: str,
     recall_selector: str | None,
     source_dir: Path,
+    source_ref: Mapping[str, Any],
     match: Mapping[str, Any],
     include_paths: bool,
 ) -> dict[str, Any]:
     selector = _clean_recall_selector(recall_selector)
+    thread_key = str(source_ref.get("thread_key") or "").strip()
     source_route = {
-        "kind": "last_recall_candidate_hit",
+        "kind": "registry_clean_source_hit" if thread_key else "last_recall_candidate_hit",
         "request_index": request_index,
         "route_id": route_id,
         "line": match.get("source_line") or match.get("line"),
         "message_id": match.get("message_id") or match.get("id"),
         "boundary": "deepen_last_recall_route_before_quoting_or_strong_claims",
     }
+    if thread_key:
+        source_route["thread_key"] = thread_key
+        source_route["boundary"] = "open_registry_source_window_before_quoting_or_strong_claims"
     if selector:
         source_route["recall_selector"] = selector
+    source_window_command = _registry_source_window_command(source_ref, match)
     item = {
         "request_index": request_index,
         "route_id": route_id,
@@ -211,8 +226,12 @@ def _match_for_last_recall(
         "search_noise": bool(match.get("search_noise")),
         "noise_reason": match.get("noise_reason"),
         "source_route": source_route,
-        "deepen_command": _deepen_command_for_request(request_index, selector),
     }
+    if source_window_command:
+        item["reopen_command"] = source_window_command
+        item["source_window_command"] = source_window_command
+    else:
+        item["deepen_command"] = _deepen_command_for_request(request_index, selector)
     if include_paths:
         item["local_diagnostic"] = {
             "clean_source_messages_jsonl": str(source_dir / "messages.jsonl"),
@@ -296,8 +315,9 @@ def render_last_recall_search_result(result: Mapping[str, Any]) -> str:
             lines.append(f"{index}. request {request} · line {line}")
             if match.get("snippet"):
                 lines.append(f"   {match.get('snippet')}")
-            if match.get("deepen_command"):
-                lines.append(f"   next: {match.get('deepen_command')}")
+            next_command = match.get("source_window_command") or match.get("deepen_command")
+            if next_command:
+                lines.append(f"   next: {next_command}")
         return "\n".join(lines)
     status = str(result.get("status") or "no_matches")
     lines = [
@@ -355,6 +375,8 @@ def search_last_recall_sources(
     searched_route_count = 0
     searched_source_count = 0
     unavailable_request_indices: set[int] = set()
+    thread_candidate_request_indices: set[int] = set()
+    source_ref_request_indices: set[int] = set()
     seen_sources: set[tuple[int, str]] = set()
 
     for index in indices:
@@ -393,6 +415,10 @@ def search_last_recall_sources(
             unavailable_request_indices.add(index)
             continue
 
+        if normalized.get("kind") == "thread_candidate":
+            thread_candidate_request_indices.add(index)
+        else:
+            source_ref_request_indices.add(index)
         if not refs:
             warnings.append(
                 {
@@ -460,6 +486,7 @@ def search_last_recall_sources(
                                 route_id=route_id,
                                 recall_selector=recall_selector,
                                 source_dir=source_dir,
+                                source_ref=ref,
                                 match=match,
                                 include_paths=include_paths,
                             )
@@ -480,14 +507,35 @@ def search_last_recall_sources(
     )
     matches = matches[: max(1, int(limit or 1))]
     all_unavailable = bool(indices) and not matches and searched_source_count == 0
+    all_unavailable_thread_candidates = (
+        all_unavailable
+        and bool(unavailable_request_indices)
+        and unavailable_request_indices.issubset(thread_candidate_request_indices)
+    )
+    unavailable_source_ref_indices = unavailable_request_indices.intersection(source_ref_request_indices)
     partial_unavailable_no_matches = (
         bool(indices)
         and not matches
         and searched_source_count > 0
         and bool(unavailable_request_indices)
     )
-    actions = (
-        [
+    if all_unavailable_thread_candidates:
+        actions = [_rerun_recall_action(query_from_last_recall_cache(cache_path))]
+    elif all_unavailable and unavailable_source_ref_indices:
+        actions = [
+            _deepen_action_for_request(
+                sorted(unavailable_source_ref_indices)[0],
+                recall_selector,
+                action_id="deepen_route_when_exact_search_not_available",
+                why=(
+                    "The recall route set could not be phrase-searched from local source refs; "
+                    "deepen the same selector/request before falling back to a new recall."
+                ),
+            ),
+            _rerun_recall_action(query_from_last_recall_cache(cache_path)),
+        ]
+    elif all_unavailable and indices:
+        actions = [
             _deepen_action_for_request(
                 indices[0],
                 recall_selector,
@@ -499,8 +547,8 @@ def search_last_recall_sources(
             ),
             _rerun_recall_action(query_from_last_recall_cache(cache_path)),
         ]
-        if all_unavailable and indices
-        else _actions_for_last_recall_search(
+    else:
+        actions = _actions_for_last_recall_search(
             query_text=query_text,
             has_matches=bool(matches),
             first_match=matches[0] if matches else None,
@@ -508,7 +556,6 @@ def search_last_recall_sources(
             partial_unavailable_no_matches=partial_unavailable_no_matches,
             recall_cue=query_from_last_recall_cache(cache_path),
         )
-    )
     status = (
         "ok"
         if matches

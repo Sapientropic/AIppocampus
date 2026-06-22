@@ -253,6 +253,59 @@ def _source_text_from_deepen(payload: Mapping[str, Any]) -> str:
     return ""
 
 
+def _source_refs_from_deepen(payload: Mapping[str, Any]) -> list[dict[str, Any]]:
+    result = payload.get("result") if isinstance(payload.get("result"), Mapping) else payload
+    if not isinstance(result, Mapping):
+        return []
+    refs = [dict(ref) for ref in result.get("source_refs") or [] if isinstance(ref, Mapping)]
+    source_window = result.get("source_window")
+    if isinstance(source_window, Mapping):
+        messages = source_window.get("messages")
+        if isinstance(messages, list):
+            for message in messages:
+                if not isinstance(message, Mapping):
+                    continue
+                refs.append(
+                    {
+                        key: message.get(key)
+                        for key in (
+                            "thread_key",
+                            "source_id",
+                            "message_id",
+                            "turn_id",
+                            "turn_index",
+                            "line",
+                            "source_line",
+                        )
+                        if message.get(key) not in (None, "")
+                    }
+                )
+    return refs
+
+
+def _target_source_matched(
+    opened_refs: Iterable[Mapping[str, Any]],
+    expected_refs: Iterable[Mapping[str, Any]],
+) -> bool | None:
+    expected = [
+        {key: str(value) for key, value in ref.items() if value not in (None, "")}
+        for ref in expected_refs
+        if isinstance(ref, Mapping)
+    ]
+    if not expected:
+        return None
+    opened = [
+        {key: str(value) for key, value in ref.items() if value not in (None, "")}
+        for ref in opened_refs
+        if isinstance(ref, Mapping)
+    ]
+    for target in expected:
+        for ref in opened:
+            if all(ref.get(key) == value for key, value in target.items()):
+                return True
+    return False
+
+
 def _anchor_hits(text: str, anchors: Iterable[str]) -> int:
     haystack = str(text or "")
     return sum(1 for anchor in anchors if str(anchor or "") and str(anchor) in haystack)
@@ -347,6 +400,7 @@ def _apw_mcp_probe(
     clean_source_dir: Path | None = None,
     registry_dir: Path | None = None,
     last_recall_path: Path | None = None,
+    expected_source_refs: Iterable[Mapping[str, Any]] | None = None,
     probe_label: str = "live",
 ) -> dict[str, Any]:
     """Run the APW path through source CLI and stdio MCP, then compare posture.
@@ -411,6 +465,7 @@ def _apw_mcp_probe(
     cli_action = cli.get("foreground_action") if isinstance(cli.get("foreground_action"), Mapping) else {}
     cli_action_id = _action_id(cli)
     cli_opened_anchor_hits: int | None = None
+    cli_target_source_matched: bool | None = None
     cli_deepen_command = ""
     if cli_action_id == "deepen_associative_path_fallback":
         if not _action_arguments(cli):
@@ -425,11 +480,22 @@ def _apw_mcp_probe(
                 last_recall_path=last_recall_path,
             )
             cli_opened_anchor_hits = _anchor_hits(_source_text_from_deepen(cli_deepen), anchors)
+            cli_target_source_matched = _target_source_matched(
+                _source_refs_from_deepen(cli_deepen),
+                expected_source_refs or [],
+            )
             if cli_opened_anchor_hits <= 0:
                 failures.append(
                     {
                         "reason": "cli_apw_deepen_opened_source_without_advertised_anchors",
                         "opened_anchor_hits": cli_opened_anchor_hits,
+                    }
+                )
+            if cli_target_source_matched is False:
+                failures.append(
+                    {
+                        "reason": "cli_apw_deepen_opened_wrong_target_source",
+                        "target_source_matched": False,
                     }
                 )
     elif cli_input or cli_status == "route_candidate":
@@ -443,6 +509,7 @@ def _apw_mcp_probe(
     mcp_action = mcp.get("foreground_action") if isinstance(mcp.get("foreground_action"), Mapping) else {}
     mcp_action_id = _action_id(mcp)
     mcp_opened_anchor_hits: int | None = None
+    mcp_target_source_matched: bool | None = None
     mcp_deepen_args: dict[str, Any] = {}
     if mcp_action_id == "deepen_associative_path_fallback":
         if not _action_arguments(mcp):
@@ -457,11 +524,22 @@ def _apw_mcp_probe(
                 last_recall_path=last_recall_path,
             )
             mcp_opened_anchor_hits = _anchor_hits(_source_text_from_deepen(mcp_deepen), anchors)
+            mcp_target_source_matched = _target_source_matched(
+                _source_refs_from_deepen(mcp_deepen),
+                expected_source_refs or [],
+            )
             if mcp_opened_anchor_hits <= 0:
                 failures.append(
                     {
                         "reason": "mcp_apw_deepen_opened_source_without_advertised_anchors",
                         "opened_anchor_hits": mcp_opened_anchor_hits,
+                    }
+                )
+            if mcp_target_source_matched is False:
+                failures.append(
+                    {
+                        "reason": "mcp_apw_deepen_opened_wrong_target_source",
+                        "target_source_matched": False,
                     }
                 )
     elif mcp_input or mcp_status == "route_candidate":
@@ -495,6 +573,7 @@ def _apw_mcp_probe(
             "fallback_status": cli_status,
             "foreground_action_id": cli_action_id,
             "opened_anchor_hits": cli_opened_anchor_hits,
+            "target_source_matched": cli_target_source_matched,
         },
         "mcp": {
             "status": mcp.get("status"),
@@ -502,6 +581,7 @@ def _apw_mcp_probe(
             "fallback_status": mcp_status,
             "foreground_action_id": mcp_action_id,
             "opened_anchor_hits": mcp_opened_anchor_hits,
+            "target_source_matched": mcp_target_source_matched,
         },
         "claim_boundary": (
             "APW probe checks foreground action wiring only; it is not a broad recall quality benchmark."
@@ -563,6 +643,7 @@ def _fixture_apw_mcp_probe(repo_root: Path) -> dict[str, Any]:
             clean_source_dir=clean,
             registry_dir=registry,
             last_recall_path=last_recall,
+            expected_source_refs=[{"message_id": "msg-apw", "source_id": "src-apw"}],
             probe_label="fixture_current_clean_source",
         )
 
