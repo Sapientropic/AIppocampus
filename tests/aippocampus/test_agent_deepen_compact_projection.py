@@ -7,6 +7,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ROOT = REPO_ROOT / "skills" / "aippocampus"
@@ -15,6 +16,7 @@ SCRIPTS = ROOT / "scripts"
 from aippocampus_runtime.mcp import server as mcp
 from aippocampus_runtime.recall import agent_continuity
 from aippocampus_runtime.recall.agent_recall_cache import (
+    recall_selector_cache_path,
     write_last_recall_cache,
     write_recall_selector_snapshot,
 )
@@ -456,6 +458,58 @@ class AgentDeepenCompactProjectionTests(unittest.TestCase):
         self.assertFalse(payload["recommended_evidence_route"])
         self.assertEqual(payload["foreground_action"]["id"], "treat_opened_source_as_diagnostic")
 
+    def test_selector_ids_do_not_collide_for_identical_fast_cache_writes(self) -> None:
+        request = {
+            "request_index": 1,
+            "route_id": "route_same",
+            "handle": {
+                "kind": "source_ref",
+                "route_id": "route_same",
+                "source_refs": [{"source_id": "src_test", "message_id": "msg_user"}],
+            },
+        }
+        cache_a = self.cwd / "cache-a" / "last-recall.json"
+        cache_b = self.cwd / "cache-b" / "last-recall.json"
+
+        with patch(
+            "aippocampus_runtime.recall.agent_recall_cache.secrets.token_hex",
+            side_effect=["nonce_a", "nonce_b"],
+        ):
+            self.assertTrue(
+                write_last_recall_cache(
+                    [request],
+                    query="clean source continuity",
+                    cwd=self.cwd,
+                    clean_source_dir=self.clean,
+                    registry_dir=self.cwd / "registry",
+                    macro_state_path=None,
+                    project="fixture",
+                    max_matches=5,
+                    schema_version="agent-continuity-path-v1",
+                    path=cache_a,
+                )
+            )
+            self.assertTrue(
+                write_last_recall_cache(
+                    [request],
+                    query="clean source continuity",
+                    cwd=self.cwd,
+                    clean_source_dir=self.clean,
+                    registry_dir=self.cwd / "registry",
+                    macro_state_path=None,
+                    project="fixture",
+                    max_matches=5,
+                    schema_version="agent-continuity-path-v1",
+                    path=cache_b,
+                )
+            )
+
+        selector_a = write_recall_selector_snapshot(cache_a)
+        selector_b = write_recall_selector_snapshot(cache_b)
+        self.assertIsNotNone(selector_a)
+        self.assertIsNotNone(selector_b)
+        self.assertNotEqual(selector_a, selector_b)
+
     def test_mcp_selector_survives_without_last_recall_env_path(self) -> None:
         old_registry = os.environ.get("AIPPOCAMPUS_REGISTRY_DIR")
         old_last_recall = os.environ.get(agent_continuity.LAST_RECALL_CACHE_ENV)
@@ -498,6 +552,67 @@ class AgentDeepenCompactProjectionTests(unittest.TestCase):
                 "recall_selector": selector,
                 "cwd": str(self.cwd),
                 "clean_source_dir": str(self.clean),
+            },
+        )
+
+        self.assertEqual(payload["status"], "ok")
+        self.assertEqual(payload["surface"], "mcp_agent_deepen_compact")
+        self.assertEqual(payload["source_window_summary"]["message_count"], 2)
+
+    def test_mcp_selector_uses_explicit_registry_without_private_cache_path(self) -> None:
+        old_registry = os.environ.get("AIPPOCAMPUS_REGISTRY_DIR")
+        old_last_recall = os.environ.get(agent_continuity.LAST_RECALL_CACHE_ENV)
+        os.environ["AIPPOCAMPUS_REGISTRY_DIR"] = str(self.cwd / "fallback-registry")
+        os.environ.pop(agent_continuity.LAST_RECALL_CACHE_ENV, None)
+
+        def restore_env() -> None:
+            if old_registry is None:
+                os.environ.pop("AIPPOCAMPUS_REGISTRY_DIR", None)
+            else:
+                os.environ["AIPPOCAMPUS_REGISTRY_DIR"] = old_registry
+            if old_last_recall is None:
+                os.environ.pop(agent_continuity.LAST_RECALL_CACHE_ENV, None)
+            else:
+                os.environ[agent_continuity.LAST_RECALL_CACHE_ENV] = old_last_recall
+
+        self.addCleanup(restore_env)
+        registry_dir = self.cwd / "explicit-registry"
+
+        recall_payload = self._call_tool_payload(
+            "agent_recall",
+            {
+                "query": "clean source continuity",
+                "cwd": str(self.cwd),
+                "clean_source_dir": str(self.clean),
+                "registry_dir": str(registry_dir),
+                "max": 2,
+            },
+        )
+        selector = str(recall_payload.get("recall_selector_id") or "")
+        self.assertTrue(selector, recall_payload)
+        explicit_selector = registry_dir / "agent" / "recall-selectors" / f"{selector}.json"
+        default_selector = recall_selector_cache_path(selector)
+        self.assertTrue(explicit_selector.exists())
+        self.assertTrue(default_selector.exists())
+        fallback_cache = json.loads(default_selector.read_text(encoding="utf-8"))
+        fallback_cache["requests"][0]["local_reopen_token"] = {
+            "encoding": "utf8_xor_v1_not_encryption",
+            "bytes": [],
+        }
+        fallback_cache["requests"][0]["handle"] = {"kind": "source_ref"}
+        default_selector.write_text(
+            json.dumps(fallback_cache, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+
+        payload = self._call_tool_payload(
+            "agent_deepen",
+            {
+                "request_index": 1,
+                "recall_selector": selector,
+                "cwd": str(self.cwd),
+                "clean_source_dir": str(self.clean),
+                "registry_dir": str(registry_dir),
             },
         )
 

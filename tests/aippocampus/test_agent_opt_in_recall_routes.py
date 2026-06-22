@@ -805,6 +805,40 @@ class AgentOptInRecallRoutesTests(unittest.TestCase):
         self.assertTrue(wrote)
         self.assertEqual(json.loads(handle), handle_dict)
 
+    def test_legacy_last_recall_cache_dict_handle_still_reopens_as_json(self) -> None:
+        cache_path = self.cwd / "last-recall-legacy-dict.json"
+        handle_dict = {
+            "kind": "source_ref",
+            "route_id": "route_legacy_dict",
+            "source_refs": [{"source_id": "src_test", "message_id": "msg_user"}],
+        }
+        cache_path.write_text(
+            json.dumps(
+                {
+                    "kind": "aippocampus_agent_last_recall",
+                    "schema_version": agent_continuity.SCHEMA_VERSION,
+                    "requests": [
+                        {
+                            "request_index": 1,
+                            "route_id": "route_legacy_dict",
+                            "handle": handle_dict,
+                        }
+                    ],
+                    "context": {},
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        handle, _context = agent_continuity_cli_support.handle_from_last_recall_cache(
+            request_index=1,
+            path=cache_path,
+        )
+
+        self.assertEqual(json.loads(handle), handle_dict)
+        self.assertNotIn("'", handle)
+
     def test_last_recall_cache_marks_opened_routes_without_plaintext_handles(self) -> None:
         cache_path = self.cwd / "last-recall-opened.json"
         wrote = agent_continuity_cli_support.write_last_recall_cache(

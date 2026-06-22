@@ -46,6 +46,10 @@ from aippocampus_runtime.mcp.recall_navigation import (
     recall_deepen_packet,
 )
 from aippocampus_runtime.mcp.runtime_provenance import mcp_runtime_provenance
+from aippocampus_runtime.mcp.selector_cache import (
+    handle_from_selector_or_last_recall,
+    recall_cache_path_for_mcp_recall,
+)
 from aippocampus_runtime.mcp.sync_status_projection import backend_selection_payload
 from aippocampus_runtime.ops import telepathy_handoff_store
 from aippocampus_runtime.privacy import LOCAL_PATH_REDACTION
@@ -55,14 +59,12 @@ from aippocampus_runtime.recall.agent_continuity_cli_support import (
     agent_recall_missing_query_payload,
     attach_recall_gate_context_to_payload,
     compact_aippo_guidance_card,
-    handle_from_last_recall_cache,
     last_recall_unavailable_payload,
     mark_last_recall_request_opened,
     missing_handle_payload,
     normalize_route_limit,
     opened_route_keys_from_last_recall_cache,
     query_from_last_recall_cache,
-    recall_selector_cache_candidates,
     write_last_recall_cache,
     write_recall_selector_snapshot,
 )
@@ -529,6 +531,7 @@ def call_agent_recall(arguments: dict[str, Any]) -> dict[str, Any]:
     cwd_path = cwd_arg(arguments)
     source_dir = clean_source_dir_for(arguments)
     registry_dir = registry_dir_arg(arguments)
+    cache_path = recall_cache_path_for_mcp_recall(arguments, registry_dir=registry_dir)
     provider_bridge_report = maybe_apply_provider_key_bridge_for_semantic_diagnostic(arguments)
     payload = agent.recall(
         query,
@@ -577,9 +580,9 @@ def call_agent_recall(arguments: dict[str, Any]) -> dict[str, Any]:
         project=str(arguments.get("project") or "AIppocampus"),
         max_matches=route_limit_arg(arguments.get("max"), default=agent.MAX_ROUTES),
         schema_version=str(getattr(agent, "SCHEMA_VERSION", "agent-continuity-path-v1")),
-        path=arguments.get("last_recall_path"),
+        path=cache_path,
     )
-    selector_id = write_recall_selector_snapshot(arguments.get("last_recall_path")) if cache_written else None
+    selector_id = write_recall_selector_snapshot(cache_path) if cache_written else None
     if selector_id:
         agent_deepen_requests.attach_recall_selector_to_payload(payload, selector_id)
     payload["last_recall_cache_available"] = cache_written
@@ -630,29 +633,10 @@ def call_agent_deepen(arguments: dict[str, Any]) -> dict[str, Any]:
         request_index = int_range(arguments.get("request_index"), default=1, minimum=1, maximum=25)
         request_index_arg = request_index
         try:
-            selector = str(arguments.get("recall_selector") or "")
-            if selector:
-                last_exc: Exception | None = None
-                for candidate in recall_selector_cache_candidates(
-                    selector,
-                    last_recall_path_value=arguments.get("last_recall_path"),
-                ):
-                    try:
-                        handle, cached_context = handle_from_last_recall_cache(
-                            request_index=request_index,
-                            path=candidate,
-                        )
-                        selector_cache_path = candidate
-                        break
-                    except (OSError, ValueError, json.JSONDecodeError) as exc:
-                        last_exc = exc
-                if handle is None and last_exc is not None:
-                    raise last_exc
-            else:
-                handle, cached_context = handle_from_last_recall_cache(
-                    request_index=request_index,
-                    path=selector_cache_path,
-                )
+            handle, cached_context, selector_cache_path = handle_from_selector_or_last_recall(
+                arguments,
+                request_index=request_index,
+            )
         except (OSError, ValueError, json.JSONDecodeError) as exc:
             payload = last_recall_unavailable_payload(
                 mode="deepen",
@@ -725,29 +709,10 @@ def call_agent_explain(arguments: dict[str, Any]) -> dict[str, Any]:
         request_index = int_range(arguments.get("request_index"), default=1, minimum=1, maximum=25)
         request_index_arg = request_index
         try:
-            selector = str(arguments.get("recall_selector") or "")
-            if selector:
-                last_exc: Exception | None = None
-                for candidate in recall_selector_cache_candidates(
-                    selector,
-                    last_recall_path_value=arguments.get("last_recall_path"),
-                ):
-                    try:
-                        handle, cached_context = handle_from_last_recall_cache(
-                            request_index=request_index,
-                            path=candidate,
-                        )
-                        selector_cache_path = candidate
-                        break
-                    except (OSError, ValueError, json.JSONDecodeError) as exc:
-                        last_exc = exc
-                if handle is None and last_exc is not None:
-                    raise last_exc
-            else:
-                handle, cached_context = handle_from_last_recall_cache(
-                    request_index=request_index,
-                    path=selector_cache_path,
-                )
+            handle, cached_context, selector_cache_path = handle_from_selector_or_last_recall(
+                arguments,
+                request_index=request_index,
+            )
         except (OSError, ValueError, json.JSONDecodeError) as exc:
             payload = last_recall_unavailable_payload(
                 mode="explain",

@@ -22,10 +22,10 @@ from aippocampus_runtime.contracts import (
 from aippocampus_runtime.macro import state as macro_state
 from aippocampus_runtime.mcp.agent_recall_projection import compact_agent_recall_payload
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
+from aippocampus_runtime.recall import agent_recall_cache as _agent_recall_cache
 from aippocampus_runtime.recall.agent_recall_cache import (
     LAST_RECALL_CACHE_ENV,
     attach_recall_gate_context_to_payload,
-    handle_from_last_recall_cache,
     last_recall_cache_path,
     last_recall_route_choices,
     last_recall_route_key,
@@ -81,6 +81,26 @@ SENSITIVE_ASSIGNMENT_RE = re.compile(
     r"\b[A-Za-z0-9_]*(?:TOKEN|SECRET|PASSWORD|API_KEY|ACCESS_KEY)[A-Za-z0-9_]*=\S+",
     re.I,
 )
+
+
+def handle_from_last_recall_cache(
+    *,
+    request_index: int,
+    path: str | Path | None = None,
+) -> tuple[Any, dict[str, Any]]:
+    """Resolve last-recall handles through the source module at call time.
+
+    Tests and diagnostics sometimes patch `agent_recall_cache` while importing
+    higher-level CLI/MCP helpers. Holding a by-value re-export here can freeze a
+    transient patch into later foreground follow-through calls, which makes a
+    valid selector look stale or unavailable. Keep this wrapper dynamic so the
+    callable route always follows the current cache implementation.
+    """
+
+    return _agent_recall_cache.handle_from_last_recall_cache(
+        request_index=request_index,
+        path=path,
+    )
 SOURCE_SNIPPET_CHAR_LIMIT = 420
 INTERNAL_ROUTE_LABELS = {
     "agent_native_recall_facade",

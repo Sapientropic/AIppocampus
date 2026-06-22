@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import importlib
 import io
 import json
 import os
@@ -16,6 +17,7 @@ from aippocampus_runtime.learning_loop.effectiveness_ledger import (
     append_ledger_rows,
     ledger_rows_from_guidance_outcomes,
 )
+from aippocampus_runtime.recall import agent_continuity, agent_continuity_cli_support
 from aippocampus_runtime.reflection.aar_v2 import build_aar_v2_report
 
 
@@ -142,6 +144,54 @@ class ActionHintCacheTests(unittest.TestCase):
             probe["cached_source_anchor_gate"]["source_chain_role"],
             "original_mechanical_ascension_source",
         )
+
+    def test_cli_support_last_recall_lookup_recovers_after_import_time_patch(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            clean = root / ".aippocampus" / "clean-source"
+            clean.mkdir(parents=True)
+            cache_path = root / "last-recall-import-time-patch.json"
+            handle_dict = {
+                "kind": "thread_candidate",
+                "route_id": "route_after_patch",
+                "thread_key": "session:after-patch",
+            }
+            self.assertTrue(
+                agent_continuity_cli_support.write_last_recall_cache(
+                    [{"request_index": 1, "route_id": "route_after_patch", "handle": handle_dict}],
+                    cwd=root,
+                    clean_source_dir=clean,
+                    registry_dir=None,
+                    macro_state_path=None,
+                    project="AIppocampus",
+                    max_matches=1,
+                    schema_version=agent_continuity.SCHEMA_VERSION,
+                    path=cache_path,
+                )
+            )
+
+            try:
+                with patch(
+                    "aippocampus_runtime.recall.agent_recall_cache.handle_from_last_recall_cache",
+                    return_value=("patched-handle", {}),
+                ):
+                    importlib.reload(agent_continuity_cli_support)
+                    patched_handle, _context = (
+                        agent_continuity_cli_support.handle_from_last_recall_cache(
+                            request_index=1,
+                            path=cache_path,
+                        )
+                    )
+                    self.assertEqual(patched_handle, "patched-handle")
+
+                handle, _context = agent_continuity_cli_support.handle_from_last_recall_cache(
+                    request_index=1,
+                    path=cache_path,
+                )
+            finally:
+                importlib.reload(agent_continuity_cli_support)
+
+        self.assertEqual(json.loads(handle), handle_dict)
 
     def test_read_filters_pending_action_features_and_suppression_boundaries(self) -> None:
         report = cache.build_action_hint_cache_report(
