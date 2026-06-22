@@ -23,6 +23,29 @@ _ROW_RE = re.compile(
     r"\s*(?P<execution>[^|]*)\|\s*(?P<next_action>[^|]*)\|\s*(?P<cannot_claim>[^|]*)\|"
 )
 _TERM_RE = re.compile(r"[\w#-]+", re.UNICODE)
+_LOW_SIGNAL_ATLAS_TERMS = {
+    "agent",
+    "apw",
+    "benchmark",
+    "ci",
+    "closeout",
+    "deepen",
+    "dogfood",
+    "issue",
+    "issues",
+    "known",
+    "mcp",
+    "memory",
+    "pr",
+    "recall",
+    "reopen",
+    "search",
+    "source",
+    "test",
+    "tests",
+    "tool",
+    "tooling",
+}
 
 
 def _repo_root(cwd: str | Path | None) -> Path:
@@ -43,6 +66,40 @@ def _terms(value: str) -> list[str]:
         seen.add(term)
         terms.append(term)
     return terms
+
+
+def _distinctive_terms(value: str) -> set[str]:
+    return {term for term in _terms(value) if term not in _LOW_SIGNAL_ATLAS_TERMS}
+
+
+def _explicit_discussion_reference(query: str, number: int) -> bool:
+    raw = str(query or "").casefold()
+    return bool(
+        re.search(rf"(?:discussion|discussions)\s*#?\s*{number}\b", raw)
+        or re.search(rf"/discussions/{number}\b", raw)
+        or re.search(rf"#\s*{number}\b", raw)
+    )
+
+
+def _row_match_basis(query: str, number: int, row: Mapping[str, str]) -> tuple[str, int]:
+    query_terms = _distinctive_terms(query)
+    if _explicit_discussion_reference(query, number):
+        return "explicit_discussion_reference", 100
+    title_terms = _distinctive_terms(row.get("title", ""))
+    owner_terms = _distinctive_terms(row.get("owner", ""))
+    execution_terms = _distinctive_terms(row.get("execution", ""))
+    next_action_terms = _distinctive_terms(row.get("next_action", ""))
+    title_overlap = query_terms & title_terms
+    public_phrase_overlap = query_terms & (next_action_terms | execution_terms)
+    # Owner labels like "agent-native recall facade" are deliberately weak:
+    # they describe the atlas row owner, not the user's requested discussion.
+    # Only use them as a tiny tie-breaker after a title or public phrase hit.
+    owner_overlap = query_terms & owner_terms
+    if len(title_overlap) >= 2:
+        return "discussion_title_match", 20 + len(title_overlap) * 2 + min(len(owner_overlap), 1)
+    if len(public_phrase_overlap) >= 2:
+        return "discussion_public_phrase_match", 10 + len(public_phrase_overlap) + min(len(title_overlap), 1)
+    return "", 0
 
 
 def _parse_rows(text: str) -> dict[int, dict[str, str]]:
@@ -72,40 +129,20 @@ def discussion_atlas_pointer_for_query(
     rows = _parse_rows(atlas.read_text(encoding="utf-8"))
     if not rows:
         return None
-    query_terms = _terms(query)
-    number_terms = {int(term) for term in query_terms if term.isdigit()}
-    scored: list[tuple[int, int, dict[str, str]]] = []
+    scored: list[tuple[int, int, str, dict[str, str]]] = []
     for number, row in rows.items():
-        haystack_terms = set(
-            _terms(
-                " ".join(
-                    (
-                        row.get("title", ""),
-                        row.get("owner", ""),
-                        row.get("execution", ""),
-                        row.get("next_action", ""),
-                    )
-                )
-            )
-        )
-        overlap = len(set(query_terms) & haystack_terms)
-        if number in number_terms:
-            overlap += 10
-        if overlap:
-            scored.append((overlap, number, row))
+        basis, score = _row_match_basis(query, number, row)
+        if basis:
+            scored.append((score, number, basis, row))
     if not scored:
         return None
     scored.sort(key=lambda item: (-item[0], item[1]))
-    score, number, row = scored[0]
-    explicit_number = number in number_terms
-    # Do not let broad "discussion" language hijack ordinary search. A title
-    # overlap is useful, but one weak shared token is only background context.
-    if not explicit_number and score < 2:
-        return None
+    _score, number, basis, row = scored[0]
     pointer = {
         "kind": "aippocampus_discussion_atlas_navigation_pointer",
         "status": "atlas_pointer",
         "discussion": number,
+        "match_basis": basis,
         "title": core.compact_text(row.get("title", ""), 120),
         "url": row.get("url", ""),
         "owner": _clean_owner(row.get("owner", "")),
@@ -128,6 +165,13 @@ def discussion_atlas_action(
     if not isinstance(pointer, Mapping) or pointer.get("status") != "atlas_pointer":
         return None
     title = core.compact_text(str(pointer.get("title") or "discussion atlas row"), 80)
+    basis = str(pointer.get("match_basis") or "")
+    if basis == "explicit_discussion_reference":
+        why = f"Explicit discussion cue matched {title}; open the atlas pointer before relying on it."
+    elif basis == "discussion_title_match":
+        why = f"Discussion title matched {title}; open the atlas pointer before relying on it."
+    else:
+        why = f"Discussion atlas public phrase matched {title}; open the atlas pointer before relying on it."
     action = foreground_shell_action(
         action_id="open_discussion_atlas_pointer",
         label=f"Open Discussion #{pointer.get('discussion')} pointer",
@@ -135,10 +179,7 @@ def discussion_atlas_action(
             "python tools/aippocampus/docs/discussion_atlas_guard.py "
             f"--pointer-query {shell_quote(query)} --json"
         ),
-        why=(
-            f"Explicit discussion cue matched {title}; use the atlas pointer before "
-            "registry chatter or repo familiarity."
-        ),
+        why=why,
         mutation_risk="read_only",
         claim_boundary="discussion_atlas_navigation_only_until_external_source_opened",
     )

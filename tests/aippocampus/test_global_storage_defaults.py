@@ -5,11 +5,16 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ROOT = REPO_ROOT / "skills" / "aippocampus"
 SCRIPTS = ROOT / "scripts"
 BUILD_INDEX_CMD = [sys.executable, "-m", "aippocampus_runtime.recall.index_builder"]
+sys.path.insert(0, str(SCRIPTS))
+
+from aippocampus_runtime import core
+
 
 class GlobalStorageDefaultTests(unittest.TestCase):
     def write_rollout(self, cwd: Path, rollout: Path) -> None:
@@ -105,6 +110,31 @@ class GlobalStorageDefaultTests(unittest.TestCase):
             manifest = json.loads(proc.stdout)
             self.assertEqual(manifest["artifact_scope"], "explicit_output_dir")
             self.assertTrue((cwd / ".aippocampus" / "source_index.sqlite").exists())
+
+    def test_codex_home_infers_installed_skill_root_when_env_is_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            codex_home = root / "codex-home"
+            installed_core = (
+                codex_home
+                / "skills"
+                / "aippocampus"
+                / "scripts"
+                / "aippocampus_runtime"
+                / "core.py"
+            )
+            installed_core.parent.mkdir(parents=True)
+            (codex_home / "config.toml").write_text("", encoding="utf-8")
+
+            with (
+                mock.patch.dict(os.environ, {}, clear=True),
+                mock.patch.object(core, "__file__", str(installed_core)),
+            ):
+                self.assertEqual(core.codex_home(), codex_home)
+                self.assertEqual(
+                    core.aippocampus_registry_dir(),
+                    codex_home / "aippocampus-registry",
+                )
 
 if __name__ == "__main__":
     unittest.main()

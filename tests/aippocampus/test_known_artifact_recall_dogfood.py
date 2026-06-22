@@ -59,6 +59,10 @@ class KnownArtifactRecallDogfoodTests(unittest.TestCase):
         by_id = {case["case_id"]: case for case in report["cases"]}
 
         self.assertEqual(report["kind"], "aippocampus_known_artifact_recall_dogfood")
+        self.assertIn("git_head", report)
+        self.assertIn("git_dirty", report)
+        self.assertIn(report["evidence_scope"], {"clean_worktree", "dirty_worktree"})
+        self.assertIsInstance(report["dirty_path_count"], int)
         self.assertEqual(report["case_count"], 3)
         self.assertTrue(by_id["compatibility_inventory_natural_cue"]["metrics"]["known_artifact_found"])
         self.assertTrue(by_id["compatibility_inventory_natural_cue"]["metrics"]["artifact_exists"])
@@ -131,6 +135,10 @@ class KnownArtifactRecallDogfoodTests(unittest.TestCase):
 
         self.assertEqual(proc.returncode, 0, proc.stderr)
         payload = json.loads(proc.stdout)
+        self.assertIn("git_head", payload)
+        self.assertIn("git_dirty", payload)
+        self.assertIn(payload["evidence_scope"], {"clean_worktree", "dirty_worktree"})
+        self.assertIn("clean_main_closeout_evidence", payload)
         self.assertEqual(payload["failed_count"], 0)
         self.assertEqual(payload["failing_owners"], [])
         compat = {

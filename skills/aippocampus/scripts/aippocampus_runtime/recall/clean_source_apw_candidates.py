@@ -13,11 +13,11 @@ from aippocampus_runtime.recall.query_policy import (
     split_query_terms,
     unique_preserve,
 )
+from aippocampus_runtime.source.clean_source_resolver import resolve_clean_source_dir
 from aippocampus_runtime.source.search import process_noise_reason
 from aippocampus_runtime.source.search_core import iter_clean_messages, score_message
 from aippocampus_runtime.source.search_terms import search_query_terms
 
-LEGACY_CLEAN_SOURCE_DIR = Path(".aippocampus") / "clean-source"
 MAX_CLEAN_SOURCE_SCAN_ROWS = 2500
 
 PRIVATE_BUCKETS = {"private", "restricted", "personal", "user_private", "machine_private"}
@@ -75,6 +75,50 @@ TASK_ECHO_MARKERS = (
     "修 issue",
     "关 issue",
 )
+VALIDATION_REPORT_MARKERS = (
+    "strict acceptance",
+    "acceptance failed",
+    "acceptance criteria",
+    "closeout",
+    "fixed in https://github.com",
+    "pull/",
+    "issuecomment",
+    "foreground_action",
+    "opened_anchor_hits",
+    "anchor hits",
+    "source_ref_digest",
+    "matched_cue_anchors",
+    "recall_selector",
+    "request_index",
+    "agent recall",
+    "agent deepen",
+    "aippocampus agent recall",
+    "aippocampus agent deepen",
+    "readiness",
+    "dogfood",
+    "验收没通过",
+    "验收失败",
+    "关闭 issue",
+)
+GENERIC_FLOW_ANCHORS = {
+    "agent",
+    "apw",
+    "benchmark",
+    "ci",
+    "cli",
+    "deepen",
+    "dogfood",
+    "issue",
+    "issues",
+    "key",
+    "llm",
+    "mcp",
+    "pr",
+    "recall",
+    "source",
+    "test",
+    "tests",
+}
 
 
 def _compact(value: Any, limit: int = 120) -> str:
@@ -96,15 +140,7 @@ def _component(name: str, *, status: str, row_count: int, malformed_count: int =
 
 
 def _clean_source_root(cwd: str | Path | None, clean_source_dir: str | Path | None) -> Path:
-    root = Path(cwd).expanduser().resolve() if cwd else Path.cwd().resolve()
-    if clean_source_dir:
-        raw = Path(clean_source_dir).expanduser()
-        return raw.resolve() if raw.is_absolute() else (root / raw).resolve()
-    global_dir = core.default_thread_clean_source_dir(root)
-    legacy_dir = root / LEGACY_CLEAN_SOURCE_DIR
-    if (global_dir / "messages.jsonl").exists() or not (legacy_dir / "messages.jsonl").exists():
-        return global_dir
-    return legacy_dir
+    return resolve_clean_source_dir(cwd, clean_source_dir)
 
 
 def _query_anchor_terms(query: str, *, limit: int = 12) -> list[str]:
@@ -238,11 +274,86 @@ def _task_echo_reason(
     matched = [str(term).strip() for term in matched_terms if str(term).strip()]
     if not anchors:
         return ""
-    required = min(3, max(2, len(anchors) // 2))
+    required = min(3, max(2, (len(anchors) + 1) // 2))
     coverage = len(set(term.casefold() for term in matched)) / max(1, len(set(term.casefold() for term in anchors)))
     if len(matched) >= required or coverage >= 0.5:
         return ""
     return "same_thread_task_echo_no_anchor"
+
+
+def _low_actual_anchor_coverage_reason(
+    *,
+    matched_terms: Sequence[str],
+    anchor_terms: Sequence[str],
+) -> str:
+    """Require APW current-source candidates to carry the advertised cue anchors.
+
+    APW may use sidecar or label terms for navigation, but a foreground
+    current-clean-source route must not claim anchors that are absent from the
+    exact source message it will reopen. Keep one- or two-anchor cues permissive;
+    for multi-anchor cues, one generic overlap such as "benchmark" is not enough
+    to become the primary source-open action.
+    """
+
+    anchors = {str(term).strip().casefold() for term in anchor_terms if str(term).strip()}
+    matched = {str(term).strip().casefold() for term in matched_terms if str(term).strip()}
+    if len(anchors) <= 2:
+        return "" if matched & anchors else "low_actual_source_anchor_coverage"
+    meaningful_anchors = {
+        term
+        for term in anchors
+        if term not in GENERIC_FLOW_ANCHORS and (not term.isascii() or len(term) >= 6)
+    }
+    if meaningful_anchors and not (matched & meaningful_anchors):
+        return "low_actual_source_anchor_coverage"
+    required = min(3, max(2, (len(anchors) + 1) // 2))
+    coverage = len(matched & anchors) / max(1, len(anchors))
+    if len(matched & anchors) >= required or coverage >= 0.5:
+        return ""
+    return "low_actual_source_anchor_coverage"
+
+
+def _self_referential_validation_reason(
+    message: Mapping[str, Any],
+    text: str,
+    *,
+    matched_terms: Sequence[str],
+    anchor_terms: Sequence[str],
+) -> str:
+    """Demote command replay and validation chatter from foreground APW routes.
+
+    These rows can be valuable operator diagnostics, but they are a bad source
+    route for the user's remembered topic: the cue anchors often appear only
+    because a previous acceptance report pasted the command and its expected
+    anchors. Keep them searchable/auditable while preventing APW from claiming a
+    source-open route that merely replays its own validation history.
+    """
+
+    haystack = " ".join([str(text or ""), " ".join(_message_metadata_values(message))]).casefold()
+    marker_count = sum(1 for marker in VALIDATION_REPORT_MARKERS if marker in haystack)
+    if marker_count < 2:
+        return ""
+    anchors = {str(term).strip().casefold() for term in anchor_terms if str(term).strip()}
+    matched = {str(term).strip().casefold() for term in matched_terms if str(term).strip()}
+    if not anchors or len(matched & anchors) < min(2, len(anchors)):
+        return ""
+    command_replay = (
+        ("agent recall" in haystack or "aippocampus agent recall" in haystack)
+        and ("agent deepen" in haystack or "aippocampus agent deepen" in haystack)
+    )
+    source_identity_replay = any(
+        marker in haystack
+        for marker in (
+            "opened_anchor_hits",
+            "matched_cue_anchors",
+            "source_ref_digest",
+            "foreground_action",
+            "recall_selector",
+        )
+    )
+    if command_replay or source_identity_replay:
+        return "self_referential_validation_report_demoted"
+    return ""
 
 
 def _source_ref_from_current_clean_message(message: Mapping[str, Any]) -> dict[str, Any]:
@@ -286,6 +397,8 @@ def clean_source_candidate_rows(
     control_reason_counts: Counter[str] = Counter()
     control_allowed_count = 0
     task_echo_filtered_count = 0
+    self_referential_validation_filtered_count = 0
+    low_actual_anchor_filtered_count = 0
     for ordinal, message in enumerate(messages[: max(0, int(max_scan_rows or 0))], start=1):
         text = str(message.get("text") or "")
         score = score_message(message, search_terms)
@@ -311,6 +424,24 @@ def clean_source_candidate_rows(
         if task_echo_reason and not explicit_control_query:
             task_echo_filtered_count += 1
             continue
+        validation_reason = _self_referential_validation_reason(
+            message,
+            text,
+            matched_terms=matched_terms,
+            anchor_terms=anchor_terms,
+        )
+        if validation_reason and not explicit_control_query:
+            control_reason_counts[validation_reason] += 1
+            self_referential_validation_filtered_count += 1
+            continue
+        low_anchor_reason = _low_actual_anchor_coverage_reason(
+            matched_terms=matched_terms,
+            anchor_terms=anchor_terms,
+        )
+        if low_anchor_reason:
+            control_reason_counts[low_anchor_reason] += 1
+            low_actual_anchor_filtered_count += 1
+            continue
         ref = _source_ref_from_current_clean_message(message)
         if not ref:
             continue
@@ -321,7 +452,7 @@ def clean_source_candidate_rows(
             or f"line:{message.get('source_line') or ordinal}",
             100,
         )
-        route_terms = unique_preserve([*matched_terms, *anchor_terms], limit=12)
+        route_terms = unique_preserve(matched_terms, limit=12)
         reason_codes = ["control_source_explicitly_requested"] if control_reason else []
         rows.append(
             (
@@ -331,6 +462,8 @@ def clean_source_candidate_rows(
                     "route_id": f"current-clean-source:{route_id}",
                     "candidate_id": f"current-clean-source:{route_id}",
                     "route_terms": route_terms,
+                    "query_anchor_terms": unique_preserve(anchor_terms, limit=12),
+                    "actual_source_matched_terms": route_terms,
                     "route_label": "APW source route: " + " / ".join(matched_terms[:3]),
                     "source_refs": [ref],
                     "scope_bucket": _message_scope_bucket(message),
@@ -352,7 +485,13 @@ def clean_source_candidate_rows(
         row_count=len(candidates),
     )
     total_filtered = sum(control_reason_counts.values())
-    if total_filtered or control_allowed_count or task_echo_filtered_count:
+    if (
+        total_filtered
+        or control_allowed_count
+        or task_echo_filtered_count
+        or self_referential_validation_filtered_count
+        or low_actual_anchor_filtered_count
+    ):
         component.update(
             {
                 "control_source_filtered_count": total_filtered,
@@ -367,6 +506,12 @@ def clean_source_candidate_rows(
                 ),
                 "control_source_explicitly_allowed_count": control_allowed_count,
                 "same_thread_task_echo_filtered_count": task_echo_filtered_count,
+                "self_referential_validation_report_demoted_count": (
+                    self_referential_validation_filtered_count
+                ),
+                "low_actual_source_anchor_coverage_filtered_count": (
+                    low_actual_anchor_filtered_count
+                ),
             }
         )
     if len(messages) > max_scan_rows:

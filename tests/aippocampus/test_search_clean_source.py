@@ -9,6 +9,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from aippocampus_runtime import core
 from aippocampus_runtime.cli import facade as cli_facade
 from aippocampus_runtime.contracts import foreground_action_contract_violations
 from aippocampus_runtime.registry import api as registry
@@ -20,7 +21,13 @@ class SearchCleanSourceTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
         self.cwd = Path(self.tmp.name)
-        self.source = self.cwd / ".aippocampus" / "clean-source"
+        self.registry_root = self.cwd / "registry-default"
+        self.env_patch = patch.dict(
+            "os.environ",
+            {"AIPPOCAMPUS_REGISTRY_DIR": str(self.registry_root)},
+        )
+        self.env_patch.start()
+        self.source = core.default_thread_clean_source_dir(self.cwd)
         self.source.mkdir(parents=True)
         messages = [
             {
@@ -69,6 +76,7 @@ class SearchCleanSourceTests(unittest.TestCase):
                 f.write(json.dumps(message, ensure_ascii=False) + "\n")
 
     def tearDown(self) -> None:
+        self.env_patch.stop()
         self.tmp.cleanup()
 
     def test_searches_clean_source_without_raw_rollout(self) -> None:
@@ -960,6 +968,8 @@ class SearchCleanSourceTests(unittest.TestCase):
                     "cross-thread exact registry phrase",
                     "--registry-dir",
                     str(self.cwd),
+                    "--cwd",
+                    str(self.cwd),
                     "--json",
                 ]
             )
@@ -1008,6 +1018,8 @@ class SearchCleanSourceTests(unittest.TestCase):
                     "1",
                     "--last-search",
                     "--registry-dir",
+                    str(self.cwd),
+                    "--cwd",
                     str(self.cwd),
                     "--json",
                 ]
@@ -1071,6 +1083,8 @@ class SearchCleanSourceTests(unittest.TestCase):
                     "主动回忆层 潜意识 momentum line_topology Dream",
                     "--registry-dir",
                     str(self.cwd),
+                    "--cwd",
+                    str(self.cwd),
                     "--json",
                 ]
             )
@@ -1110,6 +1124,8 @@ class SearchCleanSourceTests(unittest.TestCase):
                     "discussion 2127",
                     "--registry-dir",
                     str(self.cwd),
+                    "--cwd",
+                    str(self.cwd),
                     "--json",
                 ]
             )
@@ -1119,6 +1135,82 @@ class SearchCleanSourceTests(unittest.TestCase):
         self.assertEqual(payload["foreground_action"]["id"], "open_discussion_atlas_pointer")
         self.assertEqual(payload["discussion_atlas_pointer"]["discussion"], 2127)
         self.assertIn("/discussions/2127", json.dumps(payload, ensure_ascii=False))
+
+    def test_search_all_unrelated_tooling_cue_does_not_surface_atlas_pointer(self) -> None:
+        atlas = self.cwd / "docs" / "research"
+        atlas.mkdir(parents=True)
+        (atlas / "discussion-atlas.md").write_text(
+            "\n".join(
+                [
+                    "| Discussion | Layer | Status | Owner | Execution / evidence | Next action | Cannot claim |",
+                    "| --- | --- | --- | --- | --- | --- | --- |",
+                    "| [#587 When models learn to smell memory, they still need a way back to the source](https://github.com/Sapientropic/AIppocampus/discussions/587) | source_ground | current_contract | [agent-native recall facade](../architecture/recall/agent-native-recall-facade.md) | MCP/CLI recall tests | Keep deepen/reopen visible. | Scent/support as source evidence. |",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        (self.cwd / "threads.json").write_text(
+            json.dumps({"schema_version": 1, "threads": []}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            code = search.main(
+                [
+                    "--all",
+                    "benchmark 实测检索不弱 recall deepen 实际都好差劲",
+                    "--registry-dir",
+                    str(self.cwd),
+                    "--cwd",
+                    str(self.cwd),
+                    "--json",
+                ]
+            )
+        payload = json.loads(stdout.getvalue())
+
+        self.assertEqual(code, 1)
+        self.assertNotEqual(payload["foreground_action"]["id"], "open_discussion_atlas_pointer")
+        self.assertNotIn("discussion_atlas_pointer", payload)
+
+    def test_search_all_surfaces_known_repo_docs_from_current_checkout(self) -> None:
+        docs = self.cwd / "docs" / "architecture" / "ops"
+        docs.mkdir(parents=True)
+        (docs / "compatibility-shim-inventory.md").write_text(
+            "# Compatibility shim inventory\n\nCompatibility historical fields inventory report.\n",
+            encoding="utf-8",
+        )
+        (docs / "legacy-alias-inventory.md").write_text(
+            "# Legacy alias inventory\n\nLegacy alias report.\n",
+            encoding="utf-8",
+        )
+        (self.cwd / "threads.json").write_text(
+            json.dumps({"schema_version": 1, "threads": []}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            code = search.main(
+                [
+                    "--all",
+                    "compatibility historical fields inventory/report",
+                    "--registry-dir",
+                    str(self.cwd),
+                    "--cwd",
+                    str(self.cwd),
+                    "--json",
+                ]
+            )
+        payload = json.loads(stdout.getvalue())
+        encoded = json.dumps(payload, ensure_ascii=False)
+
+        self.assertEqual(code, 0)
+        self.assertEqual(payload["matches"][0]["source"], "repo_checkout_doc")
+        self.assertIn("docs/architecture/ops/compatibility-shim-inventory.md", encoded)
+        self.assertEqual(payload["repo_doc_match_count"], 1)
+        self.assertEqual(payload["foreground_action"]["id"], "open_registry_search_source_window")
+        self.assertIn("compatibility-shim-inventory.md", payload["foreground_action"]["command"])
 
     def test_search_all_registry_can_include_paths_as_local_diagnostic(self) -> None:
         registry_clean = self.cwd / "registry-thread" / "clean-source"
@@ -1206,6 +1298,8 @@ class SearchCleanSourceTests(unittest.TestCase):
                     "registry phrase",
                     "--registry-dir",
                     str(self.cwd),
+                    "--cwd",
+                    str(self.cwd),
                     "--json",
                 ]
             )
@@ -1235,6 +1329,8 @@ class SearchCleanSourceTests(unittest.TestCase):
                     str(self.cwd),
                     "--search-budget",
                     "deep",
+                    "--cwd",
+                    str(self.cwd),
                     "--json",
                 ]
             )
@@ -1273,6 +1369,8 @@ class SearchCleanSourceTests(unittest.TestCase):
                     "--all",
                     "missing artifact phrase",
                     "--registry-dir",
+                    str(self.cwd),
+                    "--cwd",
                     str(self.cwd),
                     "--json",
                 ]

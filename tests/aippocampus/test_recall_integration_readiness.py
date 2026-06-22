@@ -20,6 +20,10 @@ class RecallIntegrationReadinessTests(unittest.TestCase):
 
         self.assertTrue(report["ok"])
         self.assertEqual(report["kind"], "aippocampus_recall_integration_readiness")
+        self.assertIn("git_head", report)
+        self.assertIn("git_dirty", report)
+        self.assertIn(report["evidence_scope"], {"clean_worktree", "dirty_worktree"})
+        self.assertIsInstance(report["dirty_path_count"], int)
         self.assertEqual(
             by_id["repo_familiarity_fallback"]["status"],
             "callable",
@@ -139,6 +143,31 @@ class RecallIntegrationReadinessTests(unittest.TestCase):
             "MCP stayed aligned",
             by_id["mcp_agent_recall_deepen_parity"]["reason"],
         )
+
+    def test_fixture_apw_probe_is_labeled_as_fixture_evidence(self) -> None:
+        report = readiness.build_recall_integration_readiness(
+            apw_probe={
+                "ok": True,
+                "status": "passed",
+                "probe_label": "fixture_current_clean_source",
+                "cue": "黏菌 联想回忆 探索算法",
+                "failures": [],
+                "cli": {
+                    "apw_candidate_input_available": True,
+                    "opened_anchor_hits": 3,
+                },
+                "mcp": {
+                    "apw_candidate_input_available": True,
+                    "opened_anchor_hits": 3,
+                },
+            }
+        )
+        by_id = {surface["surface_id"]: surface for surface in report["surfaces"]}
+
+        probe = by_id["mcp_agent_recall_deepen_parity"]["mcp_first_apw_probe"]
+        self.assertEqual(probe["probe_label"], "fixture_current_clean_source")
+        self.assertEqual(probe["probe_scope"], "fixture")
+        self.assertIn("not live historical usefulness", probe["claim_boundary"])
 
     def test_foreground_mcp_transport_failure_blocks_parity_claim(self) -> None:
         report = readiness.build_recall_integration_readiness(

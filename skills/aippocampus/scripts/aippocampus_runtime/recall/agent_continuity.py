@@ -63,6 +63,7 @@ from aippocampus_runtime.recall.agent_continuity_cli_support import (
     normalize_route_limit,
     policy_boundary,
 )
+from aippocampus_runtime.source.clean_source_resolver import resolve_clean_source_dir
 from aippocampus_runtime.source.discussion_atlas_pointer import discussion_atlas_pointer_for_query
 
 SCHEMA_VERSION = "agent-continuity-path-v1"
@@ -90,13 +91,7 @@ def _as_path(value: str | Path | None, fallback: Path) -> Path:
 
 
 def _clean_source_dir(cwd: Path, explicit: str | Path | None = None) -> Path:
-    if explicit:
-        return core.canonical_path(explicit)
-    global_dir = core.default_thread_clean_source_dir(cwd)
-    legacy_dir = cwd / ".aippocampus" / "clean-source"
-    if (global_dir / "messages.jsonl").exists() or not (legacy_dir / "messages.jsonl").exists():
-        return global_dir
-    return legacy_dir
+    return resolve_clean_source_dir(cwd, explicit)
 
 
 def _public_payload(payload: Any) -> Any:

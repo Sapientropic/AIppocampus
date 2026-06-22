@@ -68,6 +68,7 @@ from aippocampus_runtime.recall.why_diagnostics import recall_diagnostic_report
 from aippocampus_runtime.registry import api as registry
 from aippocampus_runtime.registry.store import RegistryWriteBusyError
 from aippocampus_runtime.source import latest_reply as latest_reply_module
+from aippocampus_runtime.source.clean_source_resolver import resolve_clean_source_dir
 from aippocampus_runtime.source.search import (
     iter_clean_messages,
     public_search_result,
@@ -106,15 +107,7 @@ def agent_continuity_module() -> Any:
 
 
 def clean_source_dir_for(arguments: dict[str, Any]) -> Path:
-    cwd = cwd_arg(arguments)
-    explicit = arguments.get("clean_source_dir")
-    if explicit:
-        return core.resolve_artifact_path(str(explicit), cwd, core.default_thread_clean_source_dir(cwd))
-    global_dir = core.default_thread_clean_source_dir(cwd)
-    legacy_dir = cwd / ".aippocampus" / "clean-source"
-    if (global_dir / "messages.jsonl").exists() or not (legacy_dir / "messages.jsonl").exists():
-        return global_dir
-    return legacy_dir
+    return resolve_clean_source_dir(cwd_arg(arguments), arguments.get("clean_source_dir"))
 
 
 def missing_files(root: Path, required: list[str]) -> list[str]:
@@ -296,6 +289,7 @@ def call_search_memory(arguments: dict[str, Any]) -> dict[str, Any]:
             include_paths=include_paths,
             search_budget=str(arguments.get("search_budget") or "default"),
             record_last_search=False,
+            cwd=cwd_arg(arguments),
         )
         payload["limit"] = limit
         payload["mcp_search_scope"] = scope

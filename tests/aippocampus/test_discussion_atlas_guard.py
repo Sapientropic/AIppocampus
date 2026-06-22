@@ -42,6 +42,17 @@ class DiscussionAtlasGuardTests(unittest.TestCase):
         self.assertIn("next_action", pointer["pointer"])
         self.assertNotIn("A safe packet that leaves the agent lost", encoded)
 
+    def test_generic_recall_tooling_cue_does_not_get_discussion_pointer(self) -> None:
+        atlas = REPO_ROOT / "docs" / "research" / "discussion-atlas.md"
+
+        pointer = discussion_atlas_navigation_pointer(
+            atlas.read_text(encoding="utf-8"),
+            "benchmark 实测检索不弱 recall deepen 实际都好差劲",
+        )
+
+        self.assertFalse(pointer["ok"], str(pointer))
+        self.assertEqual(pointer["status"], "no_atlas_pointer")
+
     def test_drift_report_catches_missing_and_stale_pointer_cases(self) -> None:
         atlas_text = """
 | Discussion | Layer | Status | Owner | Execution / evidence | Next action | Cannot claim |

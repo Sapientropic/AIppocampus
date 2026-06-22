@@ -11,11 +11,10 @@ from typing import Any
 
 from aippocampus_runtime.core import (
     compact_text,
-    default_thread_clean_source_dir,
-    resolve_artifact_path,
 )
 from aippocampus_runtime.privacy import LOCAL_PATH_REDACTION as LOCAL_PATH_REDACTION
 from aippocampus_runtime.source.clean_source import SCOPE_LABEL_ORDER
+from aippocampus_runtime.source.clean_source_resolver import resolve_clean_source_dir
 from aippocampus_runtime.source.current_source_window import (
     open_current_thread_source_window,
 )
@@ -54,7 +53,6 @@ from aippocampus_runtime.source.semantic_scope_labels import (
     semantic_labels_for_message,
 )
 
-LEGACY_CLEAN_SOURCE_DIR = ".aippocampus/clean-source"
 PROCESS_NOISE_PREFIXES = (
     ("<subagent_notification>", "process_notification"),
     ("<tool", "tool_process"),
@@ -112,19 +110,7 @@ def search_clean_source(
     scope_labels: list[str] | None = None,
 ) -> dict[str, Any]:
     cwd = Path(cwd).resolve()
-    if clean_source_dir is None:
-        global_dir = default_thread_clean_source_dir(cwd)
-        legacy_dir = cwd / LEGACY_CLEAN_SOURCE_DIR
-        source_dir = (
-            global_dir
-            if (global_dir / "messages.jsonl").exists()
-            or not (legacy_dir / "messages.jsonl").exists()
-            else legacy_dir
-        )
-    else:
-        source_dir = resolve_artifact_path(
-            clean_source_dir, cwd, default_thread_clean_source_dir(cwd)
-        )
+    source_dir = resolve_clean_source_dir(cwd, clean_source_dir)
     messages_path = source_dir / "messages.jsonl"
     semantic_sidecar = load_semantic_scope_labels(source_dir)
     terms = search_query_terms(patterns)

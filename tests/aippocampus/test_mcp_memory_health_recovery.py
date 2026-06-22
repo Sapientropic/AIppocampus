@@ -7,6 +7,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+from aippocampus_runtime import core
 from aippocampus_runtime.contracts import executable_command_violations
 from aippocampus_runtime.mcp import server as mcp
 from aippocampus_runtime.mcp import tool_handlers as mcp_tools
@@ -16,7 +17,9 @@ class McpMemoryHealthRecoveryTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
         self.cwd = Path(self.tmp.name)
-        self.clean = self.cwd / ".aippocampus" / "clean-source"
+        self.old_registry_dir = os.environ.get("AIPPOCAMPUS_REGISTRY_DIR")
+        os.environ["AIPPOCAMPUS_REGISTRY_DIR"] = str(self.cwd / "default-registry")
+        self.clean = core.default_thread_clean_source_dir(self.cwd)
         self.clean.mkdir(parents=True)
         messages = [
             {
@@ -59,6 +62,10 @@ class McpMemoryHealthRecoveryTests(unittest.TestCase):
             )
 
     def tearDown(self) -> None:
+        if self.old_registry_dir is None:
+            os.environ.pop("AIPPOCAMPUS_REGISTRY_DIR", None)
+        else:
+            os.environ["AIPPOCAMPUS_REGISTRY_DIR"] = self.old_registry_dir
         self.tmp.cleanup()
 
     def tool_payload(self, response: dict) -> dict:

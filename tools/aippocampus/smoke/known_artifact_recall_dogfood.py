@@ -15,12 +15,13 @@ import _paths
 _paths.ensure_paths()
 
 DOC_TOOLS = Path(__file__).resolve().parents[1] / "docs"
+TOOL_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(DOC_TOOLS))
+sys.path.insert(0, str(TOOL_ROOT))
 
-from discussion_atlas_guard import (  # noqa: E402
-    ATLAS_REL_PATH,
-    discussion_atlas_navigation_pointer,
-)
+from discussion_atlas_guard import ATLAS_REL_PATH, discussion_atlas_navigation_pointer  # noqa: E402
+
+from report_provenance import git_worktree_evidence  # noqa: E402
 
 OBSERVED_METRICS = (
     "manual_search_fallback",
@@ -334,10 +335,12 @@ def evaluate_known_artifact_recall(
         for metric in OBSERVED_METRICS
     }
     failing_owners = sorted({result["owner"] for result in results if not result["ok"]})
+    provenance = git_worktree_evidence(repo_root)
     return {
         "kind": "aippocampus_known_artifact_recall_dogfood",
         "schema_version": 1,
         "ok": not failing_owners,
+        **provenance,
         "case_count": len(results),
         "passed_count": sum(1 for result in results if result["ok"]),
         "failed_count": sum(1 for result in results if not result["ok"]),

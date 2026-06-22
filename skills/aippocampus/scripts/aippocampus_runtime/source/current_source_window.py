@@ -12,17 +12,15 @@ from aippocampus_runtime.contracts import (
 )
 from aippocampus_runtime.core import (
     compact_text,
-    default_thread_clean_source_dir,
-    resolve_artifact_path,
 )
 from aippocampus_runtime.privacy import (
     LOCAL_PATH_REDACTION,
     redact_private_paths,
     redact_sensitive_values,
 )
+from aippocampus_runtime.source.clean_source_resolver import resolve_clean_source_dir
 from aippocampus_runtime.source.search_core import iter_clean_messages
 
-LEGACY_CLEAN_SOURCE_DIR = ".aippocampus/clean-source"
 DEFAULT_SOURCE_WINDOW_CHARS = 1800
 
 
@@ -36,17 +34,7 @@ def _as_int(value: Any, default: int = 0) -> int:
 def _resolved_clean_source_dir(
     cwd: str | Path, clean_source_dir: str | Path | None = None
 ) -> Path:
-    root = Path(cwd).resolve()
-    if clean_source_dir is None:
-        global_dir = default_thread_clean_source_dir(root)
-        legacy_dir = root / LEGACY_CLEAN_SOURCE_DIR
-        return (
-            global_dir
-            if (global_dir / "messages.jsonl").exists()
-            or not (legacy_dir / "messages.jsonl").exists()
-            else legacy_dir
-        )
-    return resolve_artifact_path(clean_source_dir, root, default_thread_clean_source_dir(root))
+    return resolve_clean_source_dir(cwd, clean_source_dir)
 
 
 def _current_source_window_recovery(*, code: str, message: str) -> dict[str, Any]:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import tempfile
 import threading
 import unittest
@@ -35,7 +36,9 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
         self.cwd = Path(self.tmp.name)
-        self.clean = self.cwd / ".aippocampus" / "clean-source"
+        self.old_registry_dir = os.environ.get("AIPPOCAMPUS_REGISTRY_DIR")
+        os.environ["AIPPOCAMPUS_REGISTRY_DIR"] = str(self.cwd / "default-registry")
+        self.clean = core.default_thread_clean_source_dir(self.cwd)
         self.clean.mkdir(parents=True)
         self.messages = [
             {
@@ -79,6 +82,10 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
             )
 
     def tearDown(self) -> None:
+        if self.old_registry_dir is None:
+            os.environ.pop("AIPPOCAMPUS_REGISTRY_DIR", None)
+        else:
+            os.environ["AIPPOCAMPUS_REGISTRY_DIR"] = self.old_registry_dir
         self.tmp.cleanup()
 
     def tool_payload(self, response: dict) -> dict:
@@ -283,6 +290,85 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
         self.assertTrue(rerun["associative_path_policy"]["apw_candidate_input_available"])
         self.assertEqual(rerun["associative_path_fallback"]["status"], "abstained")
         self.assertIn("negative_feedback_evaporated", rerun["associative_path_fallback"]["reason_codes"])
+
+    def test_mcp_default_apw_followthrough_ignores_project_local_legacy_clean_source(self) -> None:
+        legacy_clean = self.cwd / ".aippocampus" / "clean-source"
+        legacy_clean.mkdir(parents=True)
+        legacy_row = {
+            "message_id": "msg-legacy-trap-apw",
+            "turn_id": "turn-legacy-trap-apw",
+            "turn_index": 99,
+            "source_id": "src-legacy-trap-apw",
+            "source_line": 99,
+            "role": "assistant",
+            "phase": "final_answer",
+            "is_final": True,
+            "text": "legacy trap smooth contributor workflow role partition anchor should not win default MCP.",
+        }
+        with (legacy_clean / "messages.jsonl").open("w", encoding="utf-8", newline="\n") as f:
+            f.write(json.dumps(legacy_row, ensure_ascii=False) + "\n")
+        with (legacy_clean / "turns.jsonl").open("w", encoding="utf-8", newline="\n") as f:
+            f.write(
+                json.dumps(
+                    {
+                        "turn_id": "turn-legacy-trap-apw",
+                        "turn_index": 99,
+                        "message_ids": ["msg-legacy-trap-apw"],
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n"
+            )
+        self.append_clean_message(
+            {
+                "message_id": "msg-current-default-apw",
+                "turn_id": "turn-current-default-apw",
+                "turn_index": 12,
+                "source_id": "src-current-default-apw",
+                "source_line": 42,
+                "role": "assistant",
+                "phase": "final_answer",
+                "is_final": True,
+                "text": "current registry smooth contributor workflow role partition anchor is the MCP default APW source.",
+            }
+        )
+
+        recall_payload = self.call_tool_payload(
+            "agent_recall",
+            {
+                "query": "smooth contributor workflow role partition anchor",
+                "cwd": str(self.cwd),
+                "registry_dir": str(self.cwd / "registry"),
+                "apw_fallback": True,
+                "last_recall_path": str(self.cwd / "mcp-default-last-recall.json"),
+                "detail": "full",
+            },
+        )
+
+        self.assertTrue(recall_payload["associative_path_policy"]["apw_candidate_input_available"])
+        self.assertEqual(recall_payload["associative_path_fallback"]["status"], "route_candidate")
+        request_index = recall_payload["associative_path_fallback"]["request_index"]
+        recall_selector = recall_payload["recall_selector_id"]
+        self.assertEqual(request_index, 2)
+        self.assertTrue(str(recall_selector).startswith("sel_"))
+
+        deepen_payload = self.call_tool_payload(
+            "agent_deepen",
+            {
+                "request_index": request_index,
+                "recall_selector": recall_selector,
+                "last_recall_path": str(self.cwd / "mcp-default-last-recall.json"),
+                "cwd": str(self.cwd),
+                "detail": "full",
+            },
+        )
+        window_text = "\n".join(
+            str(message.get("text") or "")
+            for message in deepen_payload["result"]["source_window"]["messages"]
+            if isinstance(message, dict)
+        )
+        self.assertIn("current registry smooth contributor workflow role partition anchor", window_text)
+        self.assertNotIn("legacy trap smooth contributor workflow role partition anchor", window_text)
 
     def test_register_thread_requires_explicit_write_shape(self) -> None:
         with mock.patch.object(mcp_handlers.registry, "register_current_thread") as register:
