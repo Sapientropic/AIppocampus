@@ -708,6 +708,63 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertEqual(card["status"], "foreground_mcp_runtime_mismatch")
         self.assertNotIn("E:\\private", encoded)
 
+    def test_status_agent_json_keeps_true_foreground_mcp_failure_actionable(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, provider_env():
+            root = Path(tmp)
+            codex_home = root / "codex-home"
+            probe = root / "codex-host-probe.json"
+            probe.write_text(
+                json.dumps(
+                    {
+                        "validation_ok": True,
+                        "mcp_status": {
+                            "tool_names": ["agent_recall", "agent_aippo", "agent_deepen"]
+                        },
+                        "mcp_tool_is_error": False,
+                        "mcp_tool_payload": {"status": "available_requires_sync_dir"},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            stdout = StringIO()
+
+            with redirect_stdout(stdout):
+                code = update_cli.main(
+                    [
+                        "status",
+                        "--repo-root",
+                        str(REPO_ROOT),
+                        "--codex-home",
+                        str(codex_home),
+                        "--host-probe-report",
+                        str(probe),
+                        "--foreground-tools-visible",
+                        "--foreground-key-tool-failure",
+                        "Transport closed from foreground MCP",
+                        "--no-child-check",
+                        "--agent-json",
+                    ]
+                )
+
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(code, 0, payload)
+        self.assertEqual(
+            payload["summary"]["agent_callable_status"],
+            "foreground_mcp_runtime_mismatch",
+        )
+        self.assertIn("agent_callable", payload["summary"]["needs_action"])
+        self.assertEqual(payload["foreground_action"]["surface"], "agent_callable")
+        self.assertEqual(
+            payload["foreground_action"]["status_code"],
+            "foreground_mcp_runtime_mismatch",
+        )
+        self.assertIn(
+            "aippocampus agent recall",
+            payload["foreground_action"].get("command")
+            or payload["foreground_action"].get("command_template"),
+        )
+        self.assertIn("Reload Codex Desktop", payload["foreground_action"]["manual_instruction"])
+
     def test_status_detects_stale_live_host_when_key_tool_smoke_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, provider_env():
             root = Path(tmp)
@@ -968,9 +1025,14 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertFalse(payload["ambient_recall"]["hot_path_active"])
         self.assertIn("action_hints:with_missing_cache_file", payload["ambient_recall"]["issue_codes"])
         action_hint_next = next(
-            item for item in payload["safe_next_actions"] if item["surface"] == "action_hints"
+            item
+            for item in [payload["foreground_action"], *payload["safe_next_actions"]]
+            if item["surface"] == "action_hints"
         )
-        self.assertEqual(action_hint_next["command"], "aippocampus hooks action status --json")
+        self.assertEqual(
+            action_hint_next["command"],
+            "aippocampus hooks action refresh-cache --write --json",
+        )
         self.assertNotIn("action_hints", payload)
         self.assertNotIn("foreground_status_cards", payload)
         self.assertNotIn("next_actions", payload)

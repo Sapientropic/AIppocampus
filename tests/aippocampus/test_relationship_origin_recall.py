@@ -123,6 +123,24 @@ class RelationshipOriginRecallTests(unittest.TestCase):
                         "Test anchor for origin reflection: 初心, 源头, 关系连续性, "
                         "小海马体."
                     ),
+                },
+                {
+                    "thread_key": "session:019e6071-5a9b-71d2-b15a-27f6ba211494",
+                    "message_id": "msg_ea1e9e5ea23db0e8519e",
+                    "turn_id": "turn_canonical_doc_handoff",
+                    "turn_index": 77,
+                    "source_id": "src_canonical_doc_handoff",
+                    "source_line": 6726,
+                    "role": "assistant",
+                    "phase": "final_answer",
+                    "is_final": True,
+                    "scope_labels": ["relationship_continuity", "technical_work"],
+                    "text": (
+                        "Canonical origin essay handoff: README is the entry, "
+                        "《未干的地图》 / docs/the-unfinished-map.md is the origin "
+                        "essay and source-backed continuity north star, ROADMAP "
+                        "is the route, SKILL is the runtime entry."
+                    ),
                 }
             ],
         )
@@ -418,6 +436,107 @@ class RelationshipOriginRecallTests(unittest.TestCase):
         )
         self.assertIn("thread-memory-index", window_text)
         self.assertIn("外置小海马体", window_text)
+
+    def test_origin_essay_cue_prefers_canonical_doc_handoff_in_cli_and_mcp(self) -> None:
+        cue = "未干的地图 origin essay source-backed continuity"
+        cli_cache = self.cwd / "cli-origin-essay-last-recall.json"
+        cli_recall = self._cli(
+            "agent",
+            "recall",
+            cue,
+            "--cwd",
+            str(self.cwd),
+            "--clean-source-dir",
+            str(self.clean),
+            "--registry-dir",
+            str(self.registry),
+            "--last-recall-path",
+            str(cli_cache),
+            "--detail",
+            "full",
+            "--json",
+        )
+        self.assertEqual(cli_recall["status"], "ok")
+        self.assertEqual(
+            cli_recall["memory_packets"][0]["source_chain_role"],
+            "canonical_doc",
+        )
+        self.assertEqual(cli_recall["source_anchor_gate"]["status"], "passed")
+        self.assertEqual(
+            cli_recall["source_anchor_gate"]["reason"],
+            "canonical_origin_doc_source_chain_reopened",
+        )
+        self.assertGreaterEqual(cli_recall["source_anchor_gate"]["opened_anchor_hits"], 2)
+
+        cli_deepen = self._cli(
+            "agent",
+            "deepen",
+            "--request",
+            "1",
+            "--recall-selector",
+            cli_recall["recall_selector_id"],
+            "--last-recall-path",
+            str(cli_cache),
+            "--cwd",
+            str(self.cwd),
+            "--clean-source-dir",
+            str(self.clean),
+            "--registry-dir",
+            str(self.registry),
+            "--detail",
+            "full",
+            "--json",
+        )
+        self.assertEqual(cli_deepen["status"], "ok")
+        self.assertEqual(cli_deepen["source_chain_role"], "canonical_doc")
+        self.assertTrue(cli_deepen["target_source_matched"])
+        self.assertEqual(
+            cli_deepen["result"]["source_refs"][0]["message_id"],
+            "msg_ea1e9e5ea23db0e8519e",
+        )
+        cli_window = json.dumps(cli_deepen["result"]["source_window"], ensure_ascii=False)
+        self.assertIn("《未干的地图》", cli_window)
+        self.assertIn("origin essay", cli_window)
+        self.assertIn("source-backed continuity", cli_window)
+
+        mcp_cache = self.cwd / "mcp-origin-essay-last-recall.json"
+        mcp_recall = self._mcp_tool_payload(
+            "agent_recall",
+            {
+                "query": cue,
+                "cwd": str(self.cwd),
+                "clean_source_dir": str(self.clean),
+                "registry_dir": str(self.registry),
+                "last_recall_path": str(mcp_cache),
+                "detail": "full",
+            },
+        )
+        self.assertEqual(mcp_recall["status"], "ok")
+        self.assertEqual(
+            mcp_recall["memory_packets"][0]["source_chain_role"],
+            "canonical_doc",
+        )
+        self.assertEqual(mcp_recall["source_anchor_gate"]["status"], "passed")
+
+        mcp_deepen = self._mcp_tool_payload(
+            "agent_deepen",
+            {
+                "request_index": 1,
+                "recall_selector": mcp_recall["recall_selector_id"],
+                "last_recall_path": str(mcp_cache),
+                "cwd": str(self.cwd),
+                "clean_source_dir": str(self.clean),
+                "registry_dir": str(self.registry),
+                "detail": "full",
+            },
+        )
+        self.assertEqual(mcp_deepen["status"], "ok")
+        self.assertEqual(mcp_deepen["source_chain_role"], "canonical_doc")
+        self.assertTrue(mcp_deepen["target_source_matched"])
+        self.assertEqual(
+            mcp_deepen["result"]["source_refs"][0]["message_id"],
+            "msg_ea1e9e5ea23db0e8519e",
+        )
 
     def test_mcp_agent_recall_origin_route_deepens_source(self) -> None:
         cache = self.cwd / "mcp-last-recall.json"

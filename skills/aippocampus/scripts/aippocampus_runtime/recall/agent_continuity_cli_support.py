@@ -24,6 +24,7 @@ from aippocampus_runtime.mcp.agent_recall_projection import compact_agent_recall
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 from aippocampus_runtime.recall.agent_recall_cache import (
     LAST_RECALL_CACHE_ENV,
+    attach_recall_gate_context_to_payload,
     handle_from_last_recall_cache,
     last_recall_cache_path,
     last_recall_route_choices,
@@ -44,6 +45,7 @@ from aippocampus_runtime.recall.human_actions import recall_human_next_hint
 
 __all__ = [
     "LAST_RECALL_CACHE_ENV",
+    "attach_recall_gate_context_to_payload",
     "handle_from_last_recall_cache",
     "last_recall_cache_path",
     "last_recall_route_choices",

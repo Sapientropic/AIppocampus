@@ -92,6 +92,7 @@ def print_hooks_help(kind: str | None = None, *, file: TextIO | None = None) -> 
         print("Before/after:", file=target)
         print("  aippocampus hooks action status --json", file=target)
         print("  aippocampus hooks action refresh-cache --write --json", file=target)
+        print("  aippocampus hooks action probe --json", file=target)
         print("  aippocampus hooks action install --json", file=target)
         print("  aippocampus hooks action uninstall --json", file=target)
         return
@@ -125,13 +126,14 @@ def print_hooks_help(kind: str | None = None, *, file: TextIO | None = None) -> 
         print("  aippocampus hooks lifecycle uninstall --json", file=target)
         return
     if kind == "action":
-        print("usage: aippocampus hooks action [status|install|uninstall|refresh-cache] [options]", file=target)
+        print("usage: aippocampus hooks action [status|install|uninstall|refresh-cache|probe] [options]", file=target)
         print("", file=target)
         print("Action-time hints: optional PreToolUse nudges backed by a prepared cache.", file=target)
         print("Default cache: .aippocampus/action-hints/pretooluse-cache.jsonl", file=target)
         print("Common:", file=target)
         print("  aippocampus hooks action status --json", file=target)
         print("  aippocampus hooks action refresh-cache --write --json", file=target)
+        print("  aippocampus hooks action probe --json", file=target)
         print("  aippocampus hooks action install --json", file=target)
         print("  aippocampus hooks action uninstall --json", file=target)
         return
@@ -148,6 +150,7 @@ def print_hooks_help(kind: str | None = None, *, file: TextIO | None = None) -> 
         print("Common:", file=target)
         print("  aippocampus hooks action refresh-cache --json", file=target)
         print("  aippocampus hooks action refresh-cache --write --json", file=target)
+        print("  aippocampus hooks action probe --json", file=target)
         return
     if kind == "claude-code":
         print(

@@ -338,6 +338,11 @@ def write_last_recall_cache(
                 "request_index": request.get("request_index"),
                 "route_id": request.get("route_id"),
                 "handle_sha256_12": handle_digest,
+                "source_anchor_gate": request.get("source_anchor_gate"),
+                "target_source_matched": request.get("target_source_matched"),
+                "source_chain_role": request.get("source_chain_role"),
+                "route_choice_posture": request.get("route_choice_posture"),
+                "recommended_evidence_route": request.get("recommended_evidence_route"),
                 "matched_cue_family": request.get("matched_cue_family"),
                 "matched_cue_anchors": request.get("matched_cue_anchors"),
                 "candidate_source_kind": request.get("candidate_source_kind"),
@@ -559,8 +564,64 @@ def handle_from_last_recall_cache(
                 }
                 if compact_identity.get("source_ref_digest"):
                     context["apw_route_identity"] = compact_identity
+            gate_context = {
+                key: value
+                for key, value in {
+                    "source_anchor_gate": request.get("source_anchor_gate"),
+                    "target_source_matched": request.get("target_source_matched"),
+                    "source_chain_role": request.get("source_chain_role"),
+                    "route_choice_posture": request.get("route_choice_posture"),
+                    "recommended_evidence_route": request.get("recommended_evidence_route"),
+                }.items()
+                if value not in (None, "", [], {})
+            }
+            if gate_context:
+                context["recall_gate_context"] = gate_context
             return handle, context
     raise ValueError(f"last recall cache does not contain request {request_index}")
+
+
+def attach_recall_gate_context_to_payload(
+    payload: dict[str, Any],
+    cached_context: Mapping[str, Any],
+) -> None:
+    """Attach selector-cached recall gate context to a deepen payload.
+
+    `agent_deepen` opens source. It should also preserve whether recall had
+    accepted this route as the target source, marked it low-confidence, or used
+    a declared source-chain role. This keeps `source_backed` from silently
+    meaning `target-source accepted`.
+    """
+
+    raw_context = cached_context.get("recall_gate_context")
+    context = dict(raw_context) if isinstance(raw_context, Mapping) else {}
+    if not context:
+        return
+    payload["recall_gate_context"] = context
+    gate = context.get("source_anchor_gate")
+    if isinstance(gate, Mapping):
+        payload["source_anchor_gate"] = dict(gate)
+    for key in (
+        "target_source_matched",
+        "source_chain_role",
+        "route_choice_posture",
+        "recommended_evidence_route",
+    ):
+        if key in context:
+            payload[key] = context[key]
+    result = payload.get("result")
+    if isinstance(result, dict):
+        result["recall_gate_context"] = dict(context)
+        if isinstance(gate, Mapping):
+            result["source_anchor_gate"] = dict(gate)
+        for key in (
+            "target_source_matched",
+            "source_chain_role",
+            "route_choice_posture",
+            "recommended_evidence_route",
+        ):
+            if key in context:
+                result[key] = context[key]
 
 
 def query_from_last_recall_cache(path: str | Path | None = None) -> str | None:

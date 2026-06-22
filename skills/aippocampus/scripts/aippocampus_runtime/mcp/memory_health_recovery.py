@@ -101,7 +101,9 @@ def _cwd_arg(arguments: dict[str, Any]) -> Path:
 
 
 def _registry_dir_arg(arguments: dict[str, Any]) -> Path | None:
-    return Path(str(arguments["registry_dir"])).resolve() if arguments.get("registry_dir") else None
+    if arguments.get("registry_dir"):
+        return Path(str(arguments["registry_dir"])).resolve()
+    return core.aippocampus_registry_dir().resolve()
 
 
 def _clean_source_dir_for(arguments: dict[str, Any]) -> Path:

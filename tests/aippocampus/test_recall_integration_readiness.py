@@ -169,6 +169,73 @@ class RecallIntegrationReadinessTests(unittest.TestCase):
         self.assertEqual(probe["probe_scope"], "fixture")
         self.assertIn("not live historical usefulness", probe["claim_boundary"])
 
+    def test_live_source_chain_probe_marks_mcp_parity_useful(self) -> None:
+        report = readiness.build_recall_integration_readiness(
+            source_chain_probe={
+                "ok": True,
+                "status": "passed",
+                "probe_label": "live_registry_source_chain",
+                "cue": "最早那条机械飞升和海马体的讨论",
+                "failures": [],
+                "commands": {
+                    "cli_recall": "aippocampus agent recall ...",
+                    "cli_deepen": "aippocampus agent deepen ...",
+                    "mcp_agent_recall_arguments": {"query": "最早那条机械飞升和海马体的讨论"},
+                    "mcp_agent_deepen_arguments": {"request_index": 1},
+                },
+                "expected_source_refs": [{"message_id": "msg_expected"}],
+                "anchors": ["机械飞升", "基因飞升"],
+                "cli": {
+                    "target_source_matched": True,
+                    "opened_anchor_hits": 2,
+                },
+                "mcp": {
+                    "target_source_matched": True,
+                    "opened_anchor_hits": 2,
+                },
+                "claim_boundary": "live registry/source-chain probe",
+            }
+        )
+        by_id = {surface["surface_id"]: surface for surface in report["surfaces"]}
+
+        self.assertTrue(report["ok"])
+        parity = by_id["mcp_agent_recall_deepen_parity"]
+        self.assertEqual(parity["status"], "useful")
+        self.assertIn("source-chain cue passed", parity["reason"])
+        self.assertEqual(
+            parity["source_chain_identity_probe"]["probe_label"],
+            "live_registry_source_chain",
+        )
+
+    def test_live_source_chain_probe_failure_blocks_readiness(self) -> None:
+        report = readiness.build_recall_integration_readiness(
+            source_chain_probe={
+                "ok": False,
+                "status": "blocked",
+                "probe_label": "live_registry_source_chain",
+                "cue": "最早那条机械飞升和海马体的讨论",
+                "failures": [
+                    {
+                        "surface": "mcp",
+                        "reason": "mcp_source_chain_deepen_opened_wrong_source",
+                    }
+                ],
+                "mcp": {"target_source_matched": False},
+            }
+        )
+        by_id = {surface["surface_id"]: surface for surface in report["surfaces"]}
+
+        self.assertFalse(report["ok"])
+        self.assertEqual(by_id["mcp_agent_recall_deepen_parity"]["status"], "blocked")
+        self.assertEqual(
+            by_id["mcp_agent_recall_deepen_parity"]["reason"],
+            "live source-chain identity probe failed",
+        )
+        self.assertIn(
+            "mcp_source_chain_deepen_opened_wrong_source",
+            by_id["mcp_agent_recall_deepen_parity"]["source_chain_identity_probe"]["failure_reasons"],
+        )
+
     def test_foreground_mcp_transport_failure_blocks_parity_claim(self) -> None:
         report = readiness.build_recall_integration_readiness(
             foreground_mcp_failure="Transport closed"
@@ -431,6 +498,7 @@ class RecallIntegrationReadinessTests(unittest.TestCase):
                 sys.executable,
                 str(REPO_ROOT / "tools" / "aippocampus" / "recall_integration_readiness.py"),
                 "--json",
+                "--skip-live-checks",
             ],
             cwd=REPO_ROOT,
             text=True,

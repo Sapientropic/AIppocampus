@@ -42,6 +42,7 @@ from aippocampus_runtime.recall.agent_continuity import (
 )
 from aippocampus_runtime.recall.agent_continuity_cli_support import (
     agent_recall_missing_query_payload,
+    attach_recall_gate_context_to_payload,
     compact_aippo_guidance_card,
     compact_feedback_receipt,
     feedback_lane_resolution,
@@ -551,6 +552,7 @@ def main(argv: list[str] | None = None) -> int:
             result = payload.get("result")
             if isinstance(result, dict):
                 result["apw_route_identity"] = dict(apw_identity)
+        attach_recall_gate_context_to_payload(payload, cached_context)
         request_index = int(args.request or 1) if has_request_selector else None
         if request_index is not None and payload.get("status") == "cannot_verify":
             recovery_cue = (

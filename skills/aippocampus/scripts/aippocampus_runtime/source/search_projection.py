@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from aippocampus_runtime.source.artifact_role import match_is_demoted_artifact
+
 
 def _query_text(query_terms: list[str], query_text: str | None) -> str:
     explicit = str(query_text or "").strip()
@@ -41,6 +43,55 @@ def search_foreground_authority(
 
     query = _query_text(query_terms, query_text)
     has_matches = bool(matches)
+    useful_target_hit = bool(matches) and not match_is_demoted_artifact(matches[0])
+    first_hit_profile = (
+        {
+            "status": "demoted_artifact" if not useful_target_hit else "topic_bearing_candidate",
+            "artifact_role": matches[0].get("artifact_role") if matches else None,
+            "first_hit_demoted": bool(matches and match_is_demoted_artifact(matches[0])),
+        }
+        if matches
+        else {}
+    )
+    if has_matches and not useful_target_hit:
+        return {
+            "kind": "aippocampus_search_result",
+            "ok": False,
+            "status": "matches_need_broadened_source_search",
+            "entry_state": "explicit_search_invoked",
+            "route_state": "no_useful_target_hit",
+            "usefulness": "needs_broadened_source_search",
+            "useful_target_hit": False,
+            "first_match_usefulness": first_hit_profile,
+            "claim_permission": "no_claim_before_topic_bearing_source",
+            "source_boundary": {
+                "authority": "direction_only",
+                "source_backed_claim_allowed": False,
+                "source_reopen_required_before_claim": True,
+                "demoted_artifact_matches_remain_diagnostic": True,
+            },
+            "foreground_action": {
+                "action_id": "broaden_source_search_for_topic_bearing_hit",
+                "label": "Broaden source search",
+                "tool_name": "search_memory",
+                "arguments": {
+                    "query": query or "distinctive old source cue",
+                    "scope": "all_registered_sources",
+                    "max": 5,
+                },
+                "mutation_risk": "read_only",
+                "claim_boundary": "search_hit_not_yet_topic_bearing_source",
+                "why": (
+                    "Search found validation, fixture, or closeout material that repeats "
+                    "the cue; find a topic-bearing source before relying on it."
+                ),
+            },
+            "forbidden_claims": [
+                "source-backed fact from demoted artifact",
+                "exact wording beyond diagnostic artifact",
+                "absence of topic-bearing source",
+            ],
+        }
     if has_matches and metadata_only:
         return {
             "kind": "aippocampus_search_result",
@@ -49,6 +100,8 @@ def search_foreground_authority(
             "entry_state": "explicit_search_invoked",
             "route_state": "reopenable_route",
             "usefulness": "useful_for_next_action",
+            "useful_target_hit": True,
+            "first_match_usefulness": first_hit_profile,
             "claim_permission": "capped_search_snippet_no_claim_before_reopen",
             "source_boundary": {
                 "authority": "reopenable_route",
@@ -84,6 +137,8 @@ def search_foreground_authority(
             "entry_state": "explicit_search_invoked",
             "route_state": "source_refs_available",
             "usefulness": "useful_for_next_action",
+            "useful_target_hit": True,
+            "first_match_usefulness": first_hit_profile,
             "claim_permission": "bounded_search_receipt_requires_reopen",
             "source_boundary": {
                 "authority": "bounded_evidence",

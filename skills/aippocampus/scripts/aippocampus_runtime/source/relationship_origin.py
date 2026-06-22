@@ -23,6 +23,17 @@ PRIMARY_ORIGIN_ANCHORS = (
     "生命还能变成什么",
 )
 
+CANONICAL_ORIGIN_DOC_ANCHORS = (
+    "未干的地图",
+    "origin essay",
+    "unfinished map",
+    "the unfinished map",
+    "the-unfinished-map",
+    "docs/未干的地图",
+    "docs/the-unfinished-map",
+    "初心长文",
+)
+
 SUPPORTING_ORIGIN_ANCHORS = (
     "外置小海马体",
     "外置海马体",
@@ -84,6 +95,20 @@ def relationship_origin_intent(query_text: str) -> bool:
     if supporting and intent:
         return True
     return False
+
+
+def canonical_origin_doc_intent(query_text: str) -> bool:
+    """Return true when the cue asks for the origin essay/document itself.
+
+    Relationship-origin source-chain routes intentionally cover several nearby
+    sources: the mechanical-ascension conversation, the external hippocampus
+    design turn, and later reconstruction notes. A cue like "未干的地图" or
+    "origin essay" is narrower than that whole lane. Keep this distinction
+    explicit so a broad origin source cannot satisfy a request for the
+    canonical essay/handoff merely because both belong to the same story.
+    """
+
+    return bool(_normalized_contains(str(query_text or ""), CANONICAL_ORIGIN_DOC_ANCHORS))
 
 
 def relationship_origin_expansion_terms(query_text: str) -> list[str]:
@@ -219,6 +244,7 @@ def relationship_origin_allows_low_coverage(
 
 __all__ = [
     "RELATIONSHIP_ORIGIN_ROUTE_TOPIC",
+    "canonical_origin_doc_intent",
     "relationship_origin_allows_low_coverage",
     "relationship_origin_expansion_terms",
     "relationship_origin_intent",

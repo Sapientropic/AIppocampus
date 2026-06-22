@@ -690,7 +690,7 @@ def status_hooks(codex_home_path: Path, hooks_json: Path | None = None) -> dict[
         "windows_lifecycle_hidden_launch": lifecycle_hidden,
         "action_hints": action_hint_status,
         "action_hints_installed": bool(action_hint_status.get("installed")),
-        "action_hints_useful": action_hint_status.get("cache_status") == "with_fresh_records",
+        "action_hints_useful": bool(action_hint_status.get("useful")),
         "action_hints_status": action_hint_status.get("cache_status") or "not_installed",
         "prompt_hook_status": {
             "status": prompt_hook_status.get("status"),

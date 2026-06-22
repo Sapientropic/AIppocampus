@@ -14,6 +14,10 @@ SCRIPTS = ROOT / "scripts"
 
 from aippocampus_runtime.mcp import server as mcp
 from aippocampus_runtime.recall import agent_continuity
+from aippocampus_runtime.recall.agent_recall_cache import (
+    write_last_recall_cache,
+    write_recall_selector_snapshot,
+)
 from tests.aippocampus.frontstage_assertions import (
     assert_compact_frontstage_payload,
 )
@@ -395,6 +399,62 @@ class AgentDeepenCompactProjectionTests(unittest.TestCase):
         self.assertIn("source_window", full_payload["result"])
         self.assertIn("AIppocampus 使用 clean source", full_encoded)
         self.assertNotIn(str(self.cwd), full_encoded)
+
+    def test_mcp_deepen_carries_blocked_recall_gate_context(self) -> None:
+        cache_path = self.cwd / "blocked-gate-last-recall.json"
+        self.assertTrue(
+            write_last_recall_cache(
+                [
+                    {
+                        "request_index": 1,
+                        "route_id": "route_blocked",
+                        "handle": {
+                            "kind": "source_ref",
+                            "route_id": "route_blocked",
+                            "source_refs": [
+                                {"source_id": "src_test", "message_id": "msg_final"}
+                            ],
+                        },
+                        "source_anchor_gate": {
+                            "status": "blocked",
+                            "reason": "opened_source_validation_artifact",
+                            "opened_anchor_hits": 0,
+                            "target_source_matched": False,
+                        },
+                        "target_source_matched": False,
+                        "recommended_evidence_route": False,
+                        "route_choice_posture": "low_confidence_source_anchor_gap",
+                    }
+                ],
+                query="黏菌 联想回忆 探索算法",
+                cwd=self.cwd,
+                clean_source_dir=self.clean,
+                registry_dir=self.cwd / "registry",
+                macro_state_path=None,
+                project="fixture",
+                max_matches=5,
+                schema_version="agent-continuity-path-v1",
+                path=cache_path,
+            )
+        )
+        selector = write_recall_selector_snapshot(cache_path)
+        self.assertIsNotNone(selector)
+
+        payload = self._call_tool_payload(
+            "agent_deepen",
+            {
+                "request_index": 1,
+                "recall_selector": selector,
+                "last_recall_path": str(cache_path),
+                "cwd": str(self.cwd),
+                "clean_source_dir": str(self.clean),
+            },
+        )
+
+        self.assertEqual(payload["source_anchor_gate"]["status"], "blocked")
+        self.assertFalse(payload["target_source_matched"])
+        self.assertFalse(payload["recommended_evidence_route"])
+        self.assertEqual(payload["foreground_action"]["id"], "treat_opened_source_as_diagnostic")
 
 if __name__ == "__main__":
     unittest.main()

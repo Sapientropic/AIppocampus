@@ -301,7 +301,20 @@ def build_hint(record: Mapping[str, Any]) -> dict[str, Any]:
         {
             key: value
             for key, value in dict(handle).items()
-            if key in {"route_id", "lock_id", "source_id", "segment_id", "deepen_route_id", "reopen_required"}
+            if key
+            in {
+                "route_id",
+                "lock_id",
+                "source_id",
+                "segment_id",
+                "deepen_route_id",
+                "reopen_required",
+                "request_index",
+                "recall_selector",
+                "tool_name",
+                "arguments",
+                "command",
+            }
         }
         for handle in record.get("source_handles") or []
         if isinstance(handle, Mapping)
@@ -379,6 +392,42 @@ def _read_stdin_json() -> dict[str, Any]:
         return {}
     payload = json.loads(raw)
     return dict(payload) if isinstance(payload, Mapping) else {}
+
+
+def _default_probe_envelope() -> dict[str, Any]:
+    return {
+        "hook_event_name": SUPPORTED_EVENT,
+        "tool_name": "Bash",
+        "tool_input": {
+            "command": "rg AIppocampus recall source route",
+            "command_family": "rg",
+        },
+        "intent": "broad search for a recent recall source route",
+    }
+
+
+def _with_probe_usefulness(report: dict[str, Any]) -> dict[str, Any]:
+    raw_hint = report.get("hint")
+    hint: Mapping[str, Any] = raw_hint if isinstance(raw_hint, Mapping) else {}
+    source_handles = [
+        handle for handle in hint.get("source_handles") or [] if isinstance(handle, Mapping)
+    ]
+    useful = bool(
+        report.get("decision") == "hint"
+        and hint.get("source_reopen_required")
+        and source_handles
+    )
+    diagnostics = report.setdefault("diagnostics", {})
+    if isinstance(diagnostics, dict):
+        diagnostics["probe"] = True
+        diagnostics["source_followthrough_handle_count"] = len(source_handles)
+    report["usefulness_stage"] = "useful" if useful else "active" if source_handles else "callable"
+    report["useful"] = useful
+    report["claim_boundary"] = (
+        "probe verifies hook hint selection and follow-through handle presence; "
+        "agent_deepen or recall_deepen must still open source before claims"
+    )
+    return report
 
 
 def _silent_report(reason: str, *, diagnostics: Mapping[str, Any] | None = None) -> dict[str, Any]:
@@ -498,15 +547,21 @@ def _cache_readiness(cache_jsonl: Path | None) -> dict[str, Any]:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
+    parser.add_argument("action", choices=["run", "probe"], nargs="?", default="run")
     parser.add_argument("--cache-jsonl", type=Path, help="Prepared action-hint record JSONL.")
     parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args(argv)
     try:
-        envelope = _read_stdin_json()
+        envelope = _read_stdin_json() or (_default_probe_envelope() if args.action == "probe" else {})
     except json.JSONDecodeError:
         report = _silent_report("malformed_input")
     else:
-        readiness = _cache_readiness(args.cache_jsonl)
+        cache_jsonl = args.cache_jsonl
+        if cache_jsonl is None and args.action == "probe":
+            from aippocampus_runtime.hooks.action_hint_cache import default_action_hint_cache_path
+
+            cache_jsonl = default_action_hint_cache_path()
+        readiness = _cache_readiness(cache_jsonl)
         if readiness["cache_status"] != "with_fresh_records":
             report = _silent_report(
                 "cache_not_ready",
@@ -531,6 +586,8 @@ def main(argv: list[str] | None = None) -> int:
                         "malformed_cache_line_count": readiness["malformed_cache_line_count"],
                     }
                 )
+    if args.action == "probe":
+        report = _with_probe_usefulness(report)
     if args.json_output:
         print(json.dumps(report, ensure_ascii=False, indent=2))
     elif report.get("hint"):

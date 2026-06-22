@@ -16,6 +16,8 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.mcp.recall_navigation import RecallNavigationError, recall_deepen_packet
+from aippocampus_runtime.source.artifact_role import artifact_role_profile
+from aippocampus_runtime.source.relationship_origin import canonical_origin_doc_intent
 
 _ANCHOR_RE = re.compile(r"[\u4e00-\u9fff]{2,}|[A-Za-z0-9][A-Za-z0-9_-]{3,}")
 _NORMALIZE_RE = re.compile(r"[^0-9A-Za-z\u4e00-\u9fff]+")
@@ -35,6 +37,23 @@ _LOW_SIGNAL_ANCHORS = {
     "source-backed",
     "sourcebacked",
 }
+_DOMAIN_PHRASE_ANCHORS = (
+    "机械飞升",
+    "基因飞升",
+    "机仆",
+    "机械种族",
+    "未来机械生命",
+    "未干的地图",
+    "生命还能变成什么",
+    "外置小海马体",
+    "外置海马体",
+    "小海马体",
+    "海马体",
+    "thread-memory-index",
+    "origin essay",
+    "unfinished map",
+    "the-unfinished-map",
+)
 _SOURCE_CHAIN_ROLE_ALLOWLIST = {
     "original_mechanical_ascension_source",
     "original_external_hippocampus_design",
@@ -46,6 +65,16 @@ _SOURCE_CHAIN_ROLE_ALLOWLIST = {
 def distinctive_query_anchors(query: str, *, limit: int = 8) -> list[str]:
     anchors: list[str] = []
     seen: set[str] = set()
+    normalized_query = _NORMALIZE_RE.sub("", str(query or "").casefold())
+    for phrase in _DOMAIN_PHRASE_ANCHORS:
+        key = _NORMALIZE_RE.sub("", phrase.casefold())
+        if not key or key in _LOW_SIGNAL_ANCHORS or key in seen:
+            continue
+        if key in normalized_query:
+            seen.add(key)
+            anchors.append(phrase)
+            if len(anchors) >= limit:
+                return anchors
     for match in _ANCHOR_RE.finditer(str(query or "")):
         raw = match.group(0)
         key = _NORMALIZE_RE.sub("", raw.casefold())
@@ -93,27 +122,67 @@ def top_route_source_anchor_gate(
     if not route or not request:
         return {"status": "skipped", "reason": "no_reopenable_top_route"}
 
+    handle = request.get("handle") or request.get("callable_handle")
+    if not handle:
+        return {"status": "skipped", "reason": "missing_deepen_handle"}
+
     source_chain_role = str(route.get("source_chain_role") or "").strip()
-    if source_chain_role in _SOURCE_CHAIN_ROLE_ALLOWLIST:
+    role_allowlisted = source_chain_role in _SOURCE_CHAIN_ROLE_ALLOWLIST
+    if canonical_origin_doc_intent(query) and source_chain_role != "canonical_doc":
+        role_allowlisted = False
+
+    anchors = distinctive_query_anchors(query)
+    if role_allowlisted:
+        try:
+            opened = recall_deepen_packet(
+                handle=handle,
+                clean_source_dir=clean_source_dir,
+                registry_dir=registry_dir,
+            )
+        except RecallNavigationError as exc:
+            return {
+                "status": "blocked",
+                "reason": "source_chain_role_not_reopenable",
+                "source_chain_role": source_chain_role,
+                "error_code": exc.code,
+                "anchor_count": len(anchors),
+                "opened_anchor_hits": 0,
+                "target_source_matched": False,
+            }
+
+        opened_source_text = _source_text(opened)
+        hits = _anchor_hits(opened_source_text, anchors)
+        artifact_role = artifact_role_profile(text=opened_source_text, query_text=query)
+        artifact_blocked = bool(artifact_role.get("demote"))
+        if artifact_blocked:
+            return {
+                "status": "blocked",
+                "reason": "opened_source_validation_artifact",
+                "source_chain_role": source_chain_role,
+                "anchor_count": len(anchors),
+                "opened_anchor_hits": len(hits),
+                "target_source_matched": False,
+                "artifact_role": artifact_role,
+            }
         return {
             "status": "passed",
-            "reason": "source_chain_role_allowlist",
+            "reason": (
+                "canonical_origin_doc_source_chain_reopened"
+                if source_chain_role == "canonical_doc" and canonical_origin_doc_intent(query)
+                else "source_chain_role_reopened"
+            ),
             "source_chain_role": source_chain_role,
-            "opened_anchor_hits": None,
+            "anchor_count": len(anchors),
+            "opened_anchor_hits": len(hits),
             "target_source_matched": True,
         }
 
-    anchors = distinctive_query_anchors(query)
     if len(anchors) < 2:
         return {
             "status": "skipped",
             "reason": "not_enough_distinctive_query_anchors",
             "anchor_count": len(anchors),
         }
-
-    handle = request.get("handle") or request.get("callable_handle")
-    if not handle:
-        return {"status": "skipped", "reason": "missing_deepen_handle"}
 
     try:
         opened = recall_deepen_packet(
@@ -131,16 +200,24 @@ def top_route_source_anchor_gate(
             "target_source_matched": False,
         }
 
-    hits = _anchor_hits(_source_text(opened), anchors)
+    opened_source_text = _source_text(opened)
+    hits = _anchor_hits(opened_source_text, anchors)
     required_hits = 2 if len(anchors) >= 3 else 1
-    status = "passed" if len(hits) >= required_hits else "blocked"
+    artifact_role = artifact_role_profile(text=opened_source_text, query_text=query)
+    artifact_blocked = bool(artifact_role.get("demote"))
+    status = "passed" if len(hits) >= required_hits and not artifact_blocked else "blocked"
     return {
         "status": status,
-        "reason": "opened_source_anchor_coverage",
+        "reason": (
+            "opened_source_validation_artifact"
+            if artifact_blocked
+            else "opened_source_anchor_coverage"
+        ),
         "anchor_count": len(anchors),
         "opened_anchor_hits": len(hits),
         "required_anchor_hits": required_hits,
         "target_source_matched": status == "passed",
+        "artifact_role": artifact_role if artifact_role.get("role") != "topic_candidate" else None,
     }
 
 

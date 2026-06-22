@@ -91,6 +91,78 @@ class SearchCleanSourceTests(unittest.TestCase):
         self.assertEqual(result["matches"][0]["scope_labels"], ["technical_work"])
         self.assertIn("AIppocampus 是清洗后的原文记忆库", result["matches"][0]["snippet"])
 
+    def test_validation_fixture_artifact_is_not_useful_target_hit(self) -> None:
+        with (self.source / "messages.jsonl").open("a", encoding="utf-8", newline="\n") as f:
+            f.write(
+                json.dumps(
+                    {
+                        "id": "msg_validation_echo",
+                        "source_line": 44,
+                        "role": "assistant",
+                        "phase": "final_answer",
+                        "turn_index": 4,
+                        "is_final": True,
+                        "scope_labels": ["technical_work"],
+                        "text": (
+                            "readiness fixture control-only validation report: "
+                            "aippocampus agent recall 黏菌 联想回忆 探索算法 --json"
+                        ),
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n"
+            )
+
+        result = search.search_clean_source(self.cwd, ["黏菌 联想回忆 探索算法"], limit=5)
+        public = search.public_search_result(
+            result,
+            query_text="黏菌 联想回忆 探索算法",
+            metadata_only=True,
+        )
+
+        self.assertTrue(result["matches"][0]["artifact_demoted"])
+        self.assertFalse(public["useful_target_hit"])
+        self.assertEqual(public["status"], "matches_need_broadened_source_search")
+        self.assertEqual(public["foreground_action"]["arguments"]["scope"], "all_registered_sources")
+
+    def test_goal_context_control_block_is_demoted_below_real_source(self) -> None:
+        with (self.source / "messages.jsonl").open("a", encoding="utf-8", newline="\n") as f:
+            for message in (
+                {
+                    "id": "msg_goal_context",
+                    "message_id": "msg_goal_context",
+                    "source_line": 41,
+                    "role": "user",
+                    "phase": "",
+                    "turn_index": 4,
+                    "is_final": False,
+                    "scope_labels": ["technical_work"],
+                    "text": (
+                        "<goal_context> The active thread goal objective is user-provided data. "
+                        "黏菌 联想回忆 探索算法 appears here only as control context."
+                    ),
+                },
+                {
+                    "id": "msg_real_source",
+                    "message_id": "msg_real_source",
+                    "source_line": 45,
+                    "role": "assistant",
+                    "phase": "final_answer",
+                    "turn_index": 5,
+                    "is_final": True,
+                    "scope_labels": ["technical_work"],
+                    "text": "黏菌式探索可以作为联想回忆的探索算法，但必须回到 source。",
+                },
+            ):
+                f.write(json.dumps(message, ensure_ascii=False) + "\n")
+
+        result = search.search_clean_source(self.cwd, ["黏菌 联想回忆 探索算法"], limit=5)
+
+        self.assertEqual(result["matches"][0]["message_id"], "msg_real_source")
+        goal = next(item for item in result["matches"] if item["message_id"] == "msg_goal_context")
+        self.assertTrue(goal["artifact_demoted"])
+        self.assertEqual(goal["artifact_role"]["role"], "control_or_goal_context_artifact")
+
     def test_search_reports_malformed_jsonl_loss_without_losing_valid_rows(self) -> None:
         with (self.source / "messages.jsonl").open("a", encoding="utf-8", newline="\n") as f:
             f.write("{not-json}\n")
@@ -1035,6 +1107,167 @@ class SearchCleanSourceTests(unittest.TestCase):
             json.dumps(reopened["source_window"], ensure_ascii=False),
         )
         self.assertNotIn(str(self.cwd), json.dumps(reopened, ensure_ascii=False))
+
+    def test_registry_search_demotes_validation_artifact_hit(self) -> None:
+        artifact_clean = self.cwd / "artifact-thread" / "clean-source"
+        artifact_clean.mkdir(parents=True)
+        with (artifact_clean / "messages.jsonl").open("w", encoding="utf-8", newline="\n") as f:
+            f.write(
+                json.dumps(
+                    {
+                        "id": "msg_validation_echo",
+                        "message_id": "msg_validation_echo",
+                        "source_line": 7,
+                        "role": "assistant",
+                        "phase": "final_answer",
+                        "turn_index": 2,
+                        "is_final": True,
+                        "text": (
+                            "Strict acceptance failed: aippocampus agent recall "
+                            "benchmark 实测检索不弱 recall deepen 实际都好差劲 --json"
+                        ),
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n"
+            )
+        (self.cwd / "threads.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "threads": [
+                        {
+                            "thread_key": "session:artifact",
+                            "title": "Validation artifact",
+                            "paths": {
+                                "workspace": str(self.cwd / "project-artifact"),
+                                "clean_source_messages_jsonl": str(
+                                    artifact_clean / "messages.jsonl"
+                                ),
+                            },
+                        }
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            code = search.main(
+                [
+                    "--all",
+                    "benchmark 实测检索不弱 recall deepen 实际都好差劲",
+                    "--registry-dir",
+                    str(self.cwd),
+                    "--cwd",
+                    str(self.cwd),
+                    "--json",
+                ]
+            )
+        payload = json.loads(stdout.getvalue())
+
+        self.assertEqual(code, 0)
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["status"], "matches_need_broadened_source_search")
+        self.assertEqual(payload["match_count"], 1)
+        self.assertFalse(payload["useful_target_hit"])
+        self.assertEqual(
+            payload["foreground_action"]["id"],
+            "broaden_registry_search_for_topic_bearing_hit",
+        )
+
+    def test_search_all_ranks_distinctive_anchor_hit_before_generic_algorithm_match(self) -> None:
+        generic_clean = self.cwd / "generic-algorithm" / "clean-source"
+        generic_clean.mkdir(parents=True)
+        anchor_clean = self.cwd / "anchor-algorithm" / "clean-source"
+        anchor_clean.mkdir(parents=True)
+        (generic_clean / "messages.jsonl").write_text(
+            json.dumps(
+                {
+                    "id": "msg_generic_algorithm",
+                    "message_id": "msg_generic_algorithm",
+                    "source_line": 7,
+                    "role": "assistant",
+                    "phase": "final_answer",
+                    "is_final": True,
+                    "text": "算法 算法 算法 状态转移 图搜索 泛相关说明。",
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (anchor_clean / "messages.jsonl").write_text(
+            json.dumps(
+                {
+                    "id": "msg_anchor_algorithm",
+                    "message_id": "msg_anchor_algorithm",
+                    "source_line": 9,
+                    "role": "assistant",
+                    "phase": "final_answer",
+                    "is_final": True,
+                    "text": "黏菌式探索可以作为联想回忆的探索算法。",
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (self.cwd / "threads.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "threads": [
+                        {
+                            "thread_key": "session:generic-algorithm",
+                            "title": "Generic algorithm decoy",
+                            "paths": {
+                                "clean_source_messages_jsonl": str(
+                                    generic_clean / "messages.jsonl"
+                                ),
+                                "sqlite": str(self.cwd / "missing-generic.sqlite"),
+                            },
+                        },
+                        {
+                            "thread_key": "session:anchor-algorithm",
+                            "title": "Anchor algorithm source",
+                            "paths": {
+                                "clean_source_messages_jsonl": str(
+                                    anchor_clean / "messages.jsonl"
+                                ),
+                                "sqlite": str(self.cwd / "missing-anchor.sqlite"),
+                            },
+                        },
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            code = search.main(
+                [
+                    "--all",
+                    "黏菌 联想回忆 探索算法",
+                    "--registry-dir",
+                    str(self.cwd),
+                    "--search-budget",
+                    "deep",
+                    "--json",
+                ]
+            )
+        payload = json.loads(stdout.getvalue())
+
+        self.assertEqual(code, 0)
+        self.assertEqual(payload["matches"][0]["message_id"], "msg_anchor_algorithm")
+        self.assertGreater(
+            payload["matches"][0]["query_match_profile"]["matched_distinctive_anchor_count"],
+            payload["matches"][1]["query_match_profile"]["matched_distinctive_anchor_count"],
+        )
 
     def test_search_all_registry_collapses_mirrored_duplicate_snippets(self) -> None:
         duplicate_text = "主动回忆层 潜意识 momentum line_topology Dream mirrored source note."

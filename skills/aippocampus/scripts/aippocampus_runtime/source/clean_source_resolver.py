@@ -104,7 +104,13 @@ def resolve_clean_source_dir(
     root = core.canonical_path(cwd or Path.cwd())
     default_dir = core.default_thread_clean_source_dir(root)
     if clean_source_dir is not None:
-        return core.resolve_artifact_path(clean_source_dir, root, default_dir).resolve()
+        # Explicit caller paths are presentation as well as identity inputs.
+        # On macOS, `/var` is normally a symlink to `/private/var`; resolving an
+        # explicit path rewrites the string and has caused false equality
+        # failures between CLI/MCP producers and consumers. Use canonical
+        # identity keys for comparisons, but preserve the caller's explicit path
+        # spelling for the selected artifact.
+        return core.resolve_artifact_path(clean_source_dir, root, default_dir)
     resolved = default_dir.resolve()
     return fresher_same_cwd_registry_clean_source(resolved, root) or resolved
 

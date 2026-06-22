@@ -11,7 +11,7 @@ import sys
 import tempfile
 from collections.abc import Iterable, Mapping
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from report_provenance import git_worktree_evidence
 
@@ -22,6 +22,36 @@ READY_STATUSES = {
     "proxy_only",
     "blocked",
 }
+
+DEFAULT_SOURCE_CHAIN_CUE = "最早那条机械飞升和海马体的讨论"
+DEFAULT_SOURCE_CHAIN_ANCHORS = ["机械飞升", "基因飞升"]
+DEFAULT_SOURCE_CHAIN_EXPECTED_REFS = [
+    {
+        "thread_key": "session:019e5aea-a7ea-78f1-bb9c-b51df0837343",
+        "message_id": "msg_b2dfe27431403cdc8ffa",
+        "line": 88,
+    }
+]
+SOURCE_CHAIN_PROBE_SPECS = (
+    {
+        "probe_label": "live_registry_source_chain:mechanical_origin",
+        "cue": DEFAULT_SOURCE_CHAIN_CUE,
+        "anchors": DEFAULT_SOURCE_CHAIN_ANCHORS,
+        "expected_source_refs": DEFAULT_SOURCE_CHAIN_EXPECTED_REFS,
+    },
+    {
+        "probe_label": "live_registry_source_chain:canonical_origin_doc",
+        "cue": "未干的地图 origin essay source-backed continuity",
+        "anchors": ["未干的地图"],
+        "expected_source_refs": [
+            {
+                "thread_key": "session:019e6071-5a9b-71d2-b15a-27f6ba211494",
+                "message_id": "msg_ea1e9e5ea23db0e8519e",
+                "line": 6726,
+            }
+        ],
+    },
+)
 
 
 def _surface(
@@ -64,11 +94,14 @@ def default_surfaces() -> list[dict[str, Any]]:
         _surface(
             "mcp_agent_recall_deepen_parity",
             status="callable",
-            owner_issue="#2561",
+            owner_issue="#2561/#2602",
             foreground_callable=True,
             cli_wired=True,
             mcp_wired=True,
-            claim="MCP agent_recall can emit a deepen action that MCP agent_deepen follows.",
+            claim=(
+                "MCP agent_recall can emit a deepen action that MCP agent_deepen follows "
+                "to the expected source-chain target."
+            ),
         ),
         _surface(
             "low_specificity_recall_recovery",
@@ -187,8 +220,9 @@ def _mcp_tool_payload(repo_root: Path, name: str, arguments: Mapping[str, Any]) 
         ["mcp"],
         stdin=json.dumps(request, ensure_ascii=False, separators=(",", ":")) + "\n",
     )
-    result = response.get("result") if isinstance(response.get("result"), Mapping) else {}
-    content = result.get("content") if isinstance(result, Mapping) else None
+    raw_result = response.get("result")
+    result: Mapping[str, Any] = raw_result if isinstance(raw_result, Mapping) else {}
+    content = result.get("content")
     if not isinstance(content, list) or not content:
         return {"ok": False, "error": "mcp_response_missing_content", "response": response}
     first = content[0] if isinstance(content[0], Mapping) else {}
@@ -311,6 +345,56 @@ def _anchor_hits(text: str, anchors: Iterable[str]) -> int:
     return sum(1 for anchor in anchors if str(anchor or "") and str(anchor) in haystack)
 
 
+def _recall_selector(payload: Mapping[str, Any]) -> str:
+    selector = str(payload.get("recall_selector_id") or "").strip()
+    if selector:
+        return selector
+    action = payload.get("foreground_action")
+    if not isinstance(action, Mapping):
+        action = payload.get("foreground_action_card")
+    if not isinstance(action, Mapping):
+        return ""
+    arguments = action.get("arguments")
+    if not isinstance(arguments, Mapping):
+        canonical = action.get("canonical_action")
+        arguments = canonical.get("arguments") if isinstance(canonical, Mapping) else None
+    if not isinstance(arguments, Mapping):
+        return ""
+    return str(arguments.get("recall_selector") or "").strip()
+
+
+def _source_chain_role(payload: Mapping[str, Any]) -> str:
+    result = payload.get("result") if isinstance(payload.get("result"), Mapping) else {}
+    for item in (payload, result):
+        if not isinstance(item, Mapping):
+            continue
+        role = str(item.get("source_chain_role") or "").strip()
+        if role:
+            return role
+        gate = item.get("source_anchor_gate")
+        if isinstance(gate, Mapping):
+            role = str(gate.get("source_chain_role") or "").strip()
+            if role:
+                return role
+    return ""
+
+
+def _target_source_gate(payload: Mapping[str, Any]) -> bool | None:
+    result = payload.get("result") if isinstance(payload.get("result"), Mapping) else {}
+    for item in (payload, result):
+        if not isinstance(item, Mapping):
+            continue
+        if "target_source_matched" in item:
+            return bool(item.get("target_source_matched"))
+        gate = item.get("source_anchor_gate")
+        if isinstance(gate, Mapping) and "target_source_matched" in gate:
+            return bool(gate.get("target_source_matched"))
+        recall_gate = item.get("recall_gate_context")
+        if isinstance(recall_gate, Mapping) and "target_source_matched" in recall_gate:
+            return bool(recall_gate.get("target_source_matched"))
+    return None
+
+
 def _optional_path_args(
     *,
     cwd: Path,
@@ -337,7 +421,8 @@ def _cli_apw_deepen(
     registry_dir: Path | None,
     last_recall_path: Path | None,
 ) -> tuple[dict[str, Any], str]:
-    arguments = action.get("arguments") if isinstance(action.get("arguments"), Mapping) else {}
+    raw_arguments = action.get("arguments")
+    arguments: Mapping[str, Any] = raw_arguments if isinstance(raw_arguments, Mapping) else {}
     request_index = arguments.get("request_index")
     recall_selector = arguments.get("recall_selector")
     if request_index is None or not recall_selector:
@@ -371,7 +456,8 @@ def _mcp_apw_deepen(
     registry_dir: Path | None,
     last_recall_path: Path | None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
-    arguments = action.get("arguments") if isinstance(action.get("arguments"), Mapping) else {}
+    raw_arguments = action.get("arguments")
+    arguments: Mapping[str, Any] = raw_arguments if isinstance(raw_arguments, Mapping) else {}
     request_index = arguments.get("request_index")
     recall_selector = arguments.get("recall_selector")
     if request_index is None or not recall_selector:
@@ -389,6 +475,247 @@ def _mcp_apw_deepen(
     if last_recall_path is not None:
         tool_args["last_recall_path"] = str(last_recall_path)
     return _mcp_tool_payload(repo_root, "agent_deepen", tool_args), tool_args
+
+
+def _source_chain_identity_probe(
+    repo_root: Path,
+    *,
+    cue: str = DEFAULT_SOURCE_CHAIN_CUE,
+    anchors: Iterable[str] = DEFAULT_SOURCE_CHAIN_ANCHORS,
+    expected_source_refs: Iterable[Mapping[str, Any]] = DEFAULT_SOURCE_CHAIN_EXPECTED_REFS,
+    probe_label: str = "live_registry_source_chain",
+    cwd: Path | None = None,
+) -> dict[str, Any]:
+    """Verify a real source-chain route opens the intended source on CLI and MCP.
+
+    The APW fixture probe checks tool wiring and source-open mechanics in a
+    portable clean-source sandbox. This probe guards the stricter closeout bar
+    from #2602: default cwd/registry recall must not become route-positive while
+    deepening a nearby or generic source. It intentionally records only source
+    ids/lines and anchor counts, never private paths.
+    """
+
+    workspace = cwd or repo_root
+    anchors = list(anchors)
+    expected_refs = list(expected_source_refs)
+    failures: list[dict[str, Any]] = []
+
+    cli_recall_args = [
+        "agent",
+        "recall",
+        cue,
+        "--json",
+        "--detail",
+        "full",
+        "--cwd",
+        str(workspace),
+    ]
+    cli_recall = _run_source_cli_json(repo_root, cli_recall_args, timeout=45)
+    cli_selector = _recall_selector(cli_recall)
+    cli_deepen_args: list[str] = []
+    cli_deepen: dict[str, Any] = {}
+    if cli_recall.get("status") != "ok":
+        failures.append(
+            {
+                "surface": "cli",
+                "reason": "cli_source_chain_recall_not_ok",
+                "status": cli_recall.get("status"),
+            }
+        )
+    elif not cli_selector:
+        failures.append({"surface": "cli", "reason": "cli_source_chain_selector_missing"})
+    else:
+        cli_deepen_args = [
+            "agent",
+            "deepen",
+            "--request",
+            "1",
+            "--recall-selector",
+            cli_selector,
+            "--json",
+            "--detail",
+            "full",
+            "--cwd",
+            str(workspace),
+        ]
+        cli_deepen = _run_source_cli_json(repo_root, cli_deepen_args, timeout=45)
+
+    mcp_recall_args: dict[str, Any] = {
+        "query": cue,
+        "cwd": str(workspace),
+        "detail": "full",
+        "max": 5,
+    }
+    mcp_recall = _mcp_tool_payload(repo_root, "agent_recall", mcp_recall_args)
+    mcp_selector = _recall_selector(mcp_recall)
+    mcp_deepen_args: dict[str, Any] = {}
+    mcp_deepen: dict[str, Any] = {}
+    if mcp_recall.get("status") != "ok":
+        failures.append(
+            {
+                "surface": "mcp",
+                "reason": "mcp_source_chain_recall_not_ok",
+                "status": mcp_recall.get("status"),
+            }
+        )
+    elif not mcp_selector:
+        failures.append({"surface": "mcp", "reason": "mcp_source_chain_selector_missing"})
+    else:
+        mcp_deepen_args = {
+            "request_index": 1,
+            "recall_selector": mcp_selector,
+            "cwd": str(workspace),
+            "detail": "full",
+        }
+        mcp_deepen = _mcp_tool_payload(repo_root, "agent_deepen", mcp_deepen_args)
+
+    def evaluate(surface: str, recall: Mapping[str, Any], deepen: Mapping[str, Any]) -> dict[str, Any]:
+        text = _source_text_from_deepen(deepen)
+        opened_refs = _source_refs_from_deepen(deepen)
+        target_ref_matched = _target_source_matched(opened_refs, expected_refs)
+        gate_matched = _target_source_gate(deepen)
+        opened_anchor_hits = _anchor_hits(text, anchors)
+        if deepen and deepen.get("status") != "ok":
+            failures.append(
+                {
+                    "surface": surface,
+                    "reason": f"{surface}_source_chain_deepen_not_ok",
+                    "status": deepen.get("status"),
+                }
+            )
+        if target_ref_matched is False:
+            failures.append(
+                {
+                    "surface": surface,
+                    "reason": f"{surface}_source_chain_deepen_opened_wrong_source",
+                    "target_source_matched": False,
+                }
+            )
+        if gate_matched is False:
+            failures.append(
+                {
+                    "surface": surface,
+                    "reason": f"{surface}_source_chain_gate_rejected_target_source",
+                    "target_source_matched": False,
+                }
+            )
+        if opened_anchor_hits < len(anchors):
+            failures.append(
+                {
+                    "surface": surface,
+                    "reason": f"{surface}_source_chain_anchor_hits_incomplete",
+                    "opened_anchor_hits": opened_anchor_hits,
+                    "required_anchor_hits": len(anchors),
+                }
+            )
+        repo_familiarity = recall.get("repo_familiarity_fallback")
+        return {
+            "recall_status": recall.get("status"),
+            "deepen_status": deepen.get("status") if deepen else None,
+            "recall_selector_available": bool(_recall_selector(recall)),
+            "source_chain_role": _source_chain_role(deepen),
+            "target_source_matched": target_ref_matched,
+            "gate_target_source_matched": gate_matched,
+            "opened_anchor_hits": opened_anchor_hits,
+            "required_anchor_hits": len(anchors),
+            "repo_familiarity_status": (
+                repo_familiarity.get("status") if isinstance(repo_familiarity, Mapping) else None
+            ),
+            "source_refs": opened_refs[:3],
+        }
+
+    cli_summary = evaluate("cli", cli_recall, cli_deepen)
+    mcp_summary = evaluate("mcp", mcp_recall, mcp_deepen)
+    status = "blocked" if failures else "passed"
+    return {
+        "kind": "aippocampus_source_chain_identity_probe",
+        "probe_label": probe_label,
+        "cue": cue,
+        "status": status,
+        "ok": not failures,
+        "failures": failures,
+        "commands": {
+            "cli_recall": " ".join(["aippocampus", *cli_recall_args]),
+            "cli_deepen": " ".join(["aippocampus", *cli_deepen_args]) if cli_deepen_args else "",
+            "mcp_agent_recall_arguments": mcp_recall_args,
+            "mcp_agent_deepen_arguments": mcp_deepen_args,
+        },
+        "expected_source_refs": expected_refs,
+        "anchors": anchors,
+        "cli": cli_summary,
+        "mcp": mcp_summary,
+        "claim_boundary": (
+            "live registry/source-chain probe; source claims still require the returned source window"
+        ),
+    }
+
+
+def _source_chain_identity_probe_suite(repo_root: Path) -> dict[str, Any]:
+    probes = [
+        _source_chain_identity_probe(
+            repo_root,
+            cue=str(spec["cue"]),
+            anchors=cast(Iterable[str], spec["anchors"]),
+            expected_source_refs=cast(
+                Iterable[Mapping[str, Any]],
+                spec["expected_source_refs"],
+            ),
+            probe_label=str(spec["probe_label"]),
+        )
+        for spec in SOURCE_CHAIN_PROBE_SPECS
+    ]
+    failures: list[dict[str, Any]] = []
+    for probe in probes:
+        for failure in probe.get("failures") or []:
+            if not isinstance(failure, Mapping):
+                continue
+            failures.append(
+                {
+                    **dict(failure),
+                    "probe_label": probe.get("probe_label"),
+                    "cue": probe.get("cue"),
+                }
+            )
+    status = "blocked" if failures else "passed"
+    return {
+        "kind": "aippocampus_source_chain_identity_probe_suite",
+        "probe_label": "live_registry_source_chain_suite",
+        "cue": " | ".join(str(probe.get("cue") or "") for probe in probes),
+        "status": status,
+        "ok": not failures,
+        "failures": failures,
+        "probes": probes,
+        "commands": {
+            str(probe.get("probe_label") or index): probe.get("commands")
+            for index, probe in enumerate(probes, start=1)
+        },
+        "expected_source_refs": {
+            str(probe.get("probe_label") or index): probe.get("expected_source_refs")
+            for index, probe in enumerate(probes, start=1)
+        },
+        "anchors": {
+            str(probe.get("probe_label") or index): probe.get("anchors")
+            for index, probe in enumerate(probes, start=1)
+        },
+        "cli": {
+            "probe_count": len(probes),
+            "all_target_source_matched": all(
+                bool((probe.get("cli") or {}).get("target_source_matched"))
+                for probe in probes
+            ),
+        },
+        "mcp": {
+            "probe_count": len(probes),
+            "all_target_source_matched": all(
+                bool((probe.get("mcp") or {}).get("target_source_matched"))
+                for probe in probes
+            ),
+        },
+        "claim_boundary": (
+            "live registry/source-chain probe suite; source claims still require each "
+            "returned source window"
+        ),
+    }
 
 
 def _apw_mcp_probe(
@@ -462,7 +789,10 @@ def _apw_mcp_probe(
             }
         )
 
-    cli_action = cli.get("foreground_action") if isinstance(cli.get("foreground_action"), Mapping) else {}
+    raw_cli_action = cli.get("foreground_action")
+    cli_action: Mapping[str, Any] = (
+        raw_cli_action if isinstance(raw_cli_action, Mapping) else {}
+    )
     cli_action_id = _action_id(cli)
     cli_opened_anchor_hits: int | None = None
     cli_target_source_matched: bool | None = None
@@ -506,7 +836,10 @@ def _apw_mcp_probe(
             }
         )
 
-    mcp_action = mcp.get("foreground_action") if isinstance(mcp.get("foreground_action"), Mapping) else {}
+    raw_mcp_action = mcp.get("foreground_action")
+    mcp_action: Mapping[str, Any] = (
+        raw_mcp_action if isinstance(raw_mcp_action, Mapping) else {}
+    )
     mcp_action_id = _action_id(mcp)
     mcp_opened_anchor_hits: int | None = None
     mcp_target_source_matched: bool | None = None
@@ -740,6 +1073,49 @@ def _apply_apw_probe(
             )
 
 
+def _apply_source_chain_probe(
+    surfaces: list[dict[str, Any]],
+    source_chain_probe: Mapping[str, Any] | None,
+) -> None:
+    if source_chain_probe is None:
+        return
+    failures = [
+        failure
+        for failure in source_chain_probe.get("failures") or []
+        if isinstance(failure, Mapping)
+    ]
+    for surface in surfaces:
+        if surface.get("surface_id") != "mcp_agent_recall_deepen_parity":
+            continue
+        surface["source_chain_identity_probe"] = {
+            "status": source_chain_probe.get("status"),
+            "ok": bool(source_chain_probe.get("ok")),
+            "probe_label": source_chain_probe.get("probe_label"),
+            "cue": source_chain_probe.get("cue"),
+            "failure_reasons": [
+                failure.get("reason") for failure in failures if failure.get("reason")
+            ],
+            "commands": source_chain_probe.get("commands"),
+            "expected_source_refs": source_chain_probe.get("expected_source_refs"),
+            "anchors": source_chain_probe.get("anchors"),
+            "cli": source_chain_probe.get("cli"),
+            "mcp": source_chain_probe.get("mcp"),
+            "probes": source_chain_probe.get("probes"),
+            "claim_boundary": source_chain_probe.get("claim_boundary"),
+        }
+        if failures:
+            surface["status"] = "blocked"
+            surface["foreground_callable"] = False
+            surface["mcp_wired"] = False
+            surface["reason"] = "live source-chain identity probe failed"
+        else:
+            surface["status"] = "useful"
+            surface["reason"] = (
+                "live source-chain cue passed CLI and MCP recall->deepen identity checks"
+            )
+        break
+
+
 def _apply_foreground_mcp_failure(
     surfaces: list[dict[str, Any]],
     foreground_mcp_failure: str | None,
@@ -766,6 +1142,7 @@ def build_recall_integration_readiness(
     *,
     dogfood_report: Mapping[str, Any] | None = None,
     apw_probe: Mapping[str, Any] | None = None,
+    source_chain_probe: Mapping[str, Any] | None = None,
     run_live_checks: bool = False,
     foreground_mcp_failure: str | None = None,
     repo_root: Path | None = None,
@@ -776,8 +1153,11 @@ def build_recall_integration_readiness(
         dogfood_report = _dogfood_report(root)
     if run_live_checks and apw_probe is None:
         apw_probe = _fixture_apw_mcp_probe(root)
+    if run_live_checks and source_chain_probe is None:
+        source_chain_probe = _source_chain_identity_probe_suite(root)
     _apply_dogfood_report(surfaces, dogfood_report)
     _apply_apw_probe(surfaces, apw_probe)
+    _apply_source_chain_probe(surfaces, source_chain_probe)
     _apply_foreground_mcp_failure(
         surfaces,
         foreground_mcp_failure or os.environ.get("AIPPOCAMPUS_FOREGROUND_MCP_FAILURE"),

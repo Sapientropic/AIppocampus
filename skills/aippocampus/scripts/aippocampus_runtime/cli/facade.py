@@ -939,6 +939,7 @@ SCRIPT_MODULES = {
     "install_aippocampus_prompt_hook.py": "aippocampus_runtime.hooks.install_prompt",
     "install_aippocampus_lifecycle_hook.py": "aippocampus_runtime.hooks.install_lifecycle",
     "install_aippocampus_action_hint_hook.py": "aippocampus_runtime.hooks.install_action_hint",
+    "action_hint.py": "aippocampus_runtime.hooks.action_hint",
     "action_hint_cache.py": "aippocampus_runtime.hooks.action_hint_cache",
     "aippocampus_claude_code_hooks.py": "aippocampus_runtime.hooks.claude_code",
     "start.py": "aippocampus_runtime.cli.start",
@@ -1194,6 +1195,13 @@ def resolve_command(argv: list[str]) -> CommandInvocation | None:
                 "action_hint_cache.py",
                 module_name_for_script("action_hint_cache.py"),
                 ["refresh-cache", *hook_args[1:]],
+            )
+        if hook_kind == "action" and hook_args and hook_args[0] == "probe":
+            return CommandInvocation(
+                command,
+                "action_hint.py",
+                module_name_for_script("action_hint.py"),
+                ["probe", *hook_args[1:]],
             )
         script_by_kind = {
             "prompt": "install_aippocampus_prompt_hook.py",
