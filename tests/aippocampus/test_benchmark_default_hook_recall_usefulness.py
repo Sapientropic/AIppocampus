@@ -139,11 +139,11 @@ class DefaultHookRecallUsefulnessBenchmarkTests(unittest.TestCase):
         self.assertGreaterEqual(tiny["quiet_for_reason_count"], 1)
         self.assertEqual(
             decision["tiny_agent_recall_affordance_decision"],
-            "default_tiny_agent_recall_affordance_host_replay_ready_action_only",
+            "default_tiny_agent_recall_affordance_callable_action_only",
         )
         self.assertEqual(
             integration["ambient_tiny_agent_recall_affordance"],
-            "wired_secondary_action",
+            "callable",
         )
         self.assertTrue(integration["foreground_callable"])
         self.assertTrue(integration["action_only"])
@@ -213,7 +213,7 @@ class DefaultHookRecallUsefulnessBenchmarkTests(unittest.TestCase):
         ]:
             self.assertNotIn(forbidden, encoded)
         self.assertIn("live_default_hook_quality", report["cannot_claim"])
-        self.assertIn("default_foreground_adoption_ready", report["cannot_claim"])
+        self.assertIn("default_foreground_adoption_useful", report["cannot_claim"])
         self.assertIn(
             "live_tiny_agent_recall_affordance_quality",
             report["cannot_claim"],
@@ -223,7 +223,7 @@ class DefaultHookRecallUsefulnessBenchmarkTests(unittest.TestCase):
             report["can_claim"],
         )
         self.assertNotIn(
-            "tiny_agent_recall_affordance_ready_for_default",
+            "tiny_agent_recall_affordance_useful_for_default",
             report["cannot_claim"],
         )
 

@@ -120,7 +120,7 @@ class PromptContextRenderTests(unittest.TestCase):
             "evidence": [],
             "ambient_recall": {
                 "tiny_agent_recall_affordance": {
-                    "status": "host_replay_ready_action_only",
+                    "status": "callable",
                     "suggested_agent_action": "agent_recall",
                     "cue_shape": "relationship continuity / old UX review",
                     "source_open_gates_passed": True,

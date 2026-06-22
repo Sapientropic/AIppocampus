@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, cast
@@ -10,6 +11,58 @@ from aippocampus_runtime.contracts import normalize_foreground_action
 from aippocampus_runtime.mcp import agent_recall_compact_choices as recall_choices
 from aippocampus_runtime.mcp import agent_recall_recovery_projection as recovery_projection
 from aippocampus_runtime.navigation import repo_familiarity
+from aippocampus_runtime.source.search import search_clean_source
+
+_ANCHOR_RE = re.compile(r"[\u4e00-\u9fff]{2,}|[A-Za-z0-9][A-Za-z0-9_-]{3,}")
+_NORMALIZE_RE = re.compile(r"[^0-9A-Za-z\u4e00-\u9fff]+")
+_LOW_SIGNAL_ANCHORS = {
+    "agent",
+    "current",
+    "issue",
+    "issues",
+    "memory",
+    "recall",
+    "route",
+    "source",
+    "source-backed",
+    "sourcebacked",
+}
+
+
+def _query_anchor_stats(query: str, card: Mapping[str, Any]) -> dict[str, Any]:
+    tokens: list[str] = []
+    seen: set[str] = set()
+    for match in _ANCHOR_RE.finditer(str(query or "")):
+        token = _NORMALIZE_RE.sub("", match.group(0).casefold())
+        if not token or token in _LOW_SIGNAL_ANCHORS or token in seen:
+            continue
+        seen.add(token)
+        tokens.append(token)
+    card_text = _NORMALIZE_RE.sub(
+        "",
+        " ".join(
+            str(card.get(key) or "")
+            for key in (
+                "landmark",
+                "category",
+                "why_now",
+                "action_delta_required",
+                "first_source_to_reopen",
+            )
+        ).casefold(),
+    )
+    matched = [token for token in tokens if token in card_text]
+    return {
+        "query_anchor_count": len(tokens),
+        "query_anchor_match_count": len(matched),
+        "query_anchor_alignment": (
+            "no_distinctive_query_anchors"
+            if not tokens
+            else "overlap"
+            if matched
+            else "no_overlap"
+        ),
+    }
 
 
 def repo_familiarity_root(cwd: Path) -> Path | None:
@@ -54,6 +107,7 @@ def repo_familiarity_fallback_card(query: str, cwd: Path) -> dict[str, Any] | No
         }
     card = cards[0]
     refs = [ref for ref in card.get("source_refs") or [] if isinstance(ref, Mapping)]
+    anchor_stats = _query_anchor_stats(query, card)
     return {
         "kind": "aippocampus_repo_familiarity_fallback",
         "schema_version": repo_familiarity.SCHEMA_VERSION,
@@ -69,8 +123,59 @@ def repo_familiarity_fallback_card(query: str, cwd: Path) -> dict[str, Any] | No
         "selected_card_count": len(cards),
         "current_checkout_checked": True,
         "invalidation_present": bool(card.get("invalidation")),
+        **anchor_stats,
         "source_reopen_required_before_claim": True,
         "claim_boundary": "repo_familiarity_navigation_only_until_source_opened",
+    }
+
+
+def current_source_anchor_probe(
+    query: str,
+    cwd: Path,
+    *,
+    clean_source_dir: str | Path | None = None,
+) -> dict[str, Any]:
+    anchor_query = recall_choices.registry_source_search_anchor_query(query)
+    if not anchor_query:
+        return {
+            "status": "skipped",
+            "reason": "no_distinctive_anchor_query",
+            "match_count": 0,
+        }
+    try:
+        result = search_clean_source(
+            cwd,
+            [anchor_query],
+            clean_source_dir=clean_source_dir,
+            limit=1,
+            snippet_chars=0,
+        )
+    except Exception as exc:  # pragma: no cover - defensive diagnostic path
+        return {
+            "status": "unavailable",
+            "reason": type(exc).__name__,
+            "match_count": 0,
+            "anchor_query": anchor_query,
+        }
+    raw_matches = [match for match in result.get("matches") or [] if isinstance(match, Mapping)]
+    matches = [
+        match
+        for match in raw_matches
+        if not match.get("search_noise")
+        and (
+            bool(match.get("is_final"))
+            or str(match.get("phase") or "") == "final_answer"
+            or str(match.get("role") or "") == "user"
+        )
+    ]
+    return {
+        "status": "matched" if matches else "no_match",
+        "match_count": len(matches),
+        "raw_match_count": len(raw_matches),
+        "anchor_query": anchor_query,
+        "search_scope": result.get("search_scope"),
+        "top_match_message_id": matches[0].get("message_id") if matches else None,
+        "claim_boundary": "current_source_anchor_probe_only_blocks_unrelated_repo_fallback",
     }
 
 
@@ -81,12 +186,19 @@ def repo_familiarity_action_card(
     triage_metrics: Mapping[str, Any],
     memory_packets: list[dict[str, Any]],
     query: str,
+    current_source_probe: Mapping[str, Any] | None = None,
 ) -> tuple[dict[str, Any] | None, str | None]:
     compact_card = recovery_projection.compact_repo_familiarity_fallback_card(
         repo_familiarity_fallback
     )
     repo_action = recovery_projection.repo_familiarity_fallback_action(compact_card)
     if not repo_action:
+        return None, None
+
+    if recovery_projection.repo_familiarity_query_anchor_alignment(compact_card) == "no_overlap":
+        return None, None
+
+    if current_source_probe and int(current_source_probe.get("match_count") or 0) > 0:
         return None, None
 
     if any(packet.get("already_opened") for packet in memory_packets):

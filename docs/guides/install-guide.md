@@ -242,18 +242,19 @@ For the detailed runtime contract, see
 
 ## First-Run Capability Ladder
 
-Use `aippocampus update status` as the canonical readiness card. It is not a
+Use `aippocampus update status` as the canonical capability card. It is not a
 second source of truth; it projects existing CLI, hook, MCP, and provider checks
-into labels a new user can understand. This avoids the
+into labels a new user can understand. Ambient foreground surfaces use four
+stages only: `installed`, `callable`, `active`, or `useful`. This avoids the
 [#201](https://github.com/Sapientropic/AIppocampus/issues/201)-style failure
 mode where source exists and manual search works, but foreground continuity
-still feels like grep because hooks or provider visibility are not ready.
+still feels like grep because hooks or provider visibility are not useful yet.
 
 | Label | What works | What does not work yet | Next check |
 | --- | --- | --- | --- |
 | `source_search_ready` | Onboarding plus clean-source search after consent. | Automatic prompt-time recall is not implied. | `aippocampus onboard --provider auto --status` |
-| `active_recall_ready` | The current foreground host exposes AIppocampus MCP/plugin tools to the agent. | Current MCP/plugin artifacts alone do not prove host tool visibility; CLI/module fallbacks may still work. | `aippocampus update status --json` |
-| `ambient_hooks_ready` | Prompt/lifecycle hooks can emit recall scents and refresh clean source/indexes. | Semantic lift still needs provider visibility. | `aippocampus hooks prompt status --last` |
+| `active_recall_stage` | `installed`/`callable`/`active`/`useful` state for foreground MCP/plugin recall. | Package artifacts alone do not prove host tool visibility or useful source follow-through; CLI/module fallbacks may still work. | `aippocampus update status --json` |
+| `ambient_hooks_stage` | `installed`/`callable`/`active`/`useful` state for prompt/lifecycle hooks. | A callable hook is not useful until it improves a real cue without blocking foreground work. | `aippocampus hooks prompt status --last` |
 | `semantic_provider_ready` | Semantic lift, warm scouts, and provider-backed jobs can call the configured route. | It does not prove a previously started hook process can see the key. | `aippocampus doctor provider --json` |
 | `hook_provider_ready` | The provider key is visible to the current process and a child process like a future/restarted hook. | It still does not inspect an already-running older Codex Desktop hook process or validate the key value. | `aippocampus hooks prompt status --last` |
 | `dream_or_subconscious_ready` | Provider-backed background semantic, subconscious, and Dream-style work can run. | No provider means these routes stay disabled or diagnostic-only today. | `aippocampus doctor provider --json` |
@@ -280,8 +281,9 @@ key are current. Human output leads with profile-aware readiness:
 
 - `core_ready`: the small source-backed CLI/skill path is usable.
 - `magic_ready`: current subsystem signal for hook/model plumbing. Do not read
-  this legacy field as "first useful magic moment is ready" unless source
-  search, foreground recall/deepen, and any chosen action hints are also ready.
+  this legacy field as the first useful magic moment unless source search,
+  foreground recall/deepen, and any chosen action hints have useful
+  source-follow-through evidence.
 - `agent_callable_status`: whether package artifacts are merely current or the
   active host is known to expose AIppocampus tools to the foreground agent.
 - optional/plugin and operator surfaces stay visible without making the default

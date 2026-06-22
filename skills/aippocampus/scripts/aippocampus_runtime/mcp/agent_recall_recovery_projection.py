@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from collections.abc import Callable, Mapping
 from typing import Any
 
@@ -86,6 +85,41 @@ def compact_associative_path_policy(value: Any) -> dict[str, Any] | None:
             "rollback_env": value.get("rollback_env"),
             "hard_off_env": value.get("hard_off_env"),
             "rollback_behavior": value.get("rollback_behavior"),
+            "source_reopen_required_before_claim": True,
+        }
+    )
+
+
+def associative_path_recovery_state(
+    policy: Mapping[str, Any] | None,
+    fallback: Mapping[str, Any] | None,
+) -> dict[str, Any] | None:
+    if not isinstance(policy, Mapping):
+        return None
+    run_reason = str(policy.get("run_reason") or "")
+    fallback_status = str(fallback.get("status") or "") if isinstance(fallback, Mapping) else ""
+    available = bool(policy.get("apw_candidate_input_available"))
+    ran = bool(policy.get("run_fallback"))
+    requires_opt_in = bool(policy.get("opt_in_required_for_this_run"))
+    if fallback_status == "route_candidate":
+        state = "already_run"
+    elif run_reason == "apw_fallback_policy_off":
+        state = "blocked"
+    elif available and not ran and requires_opt_in:
+        state = "available_requires_explicit_opt_in"
+    elif not available:
+        state = "unavailable"
+    elif not bool(policy.get("ordinary_recall_recovery_needed")):
+        state = "not_needed"
+    else:
+        state = "available"
+    return _without_empty(
+        {
+            "state": state,
+            "available": available,
+            "requires_explicit_opt_in": requires_opt_in and state == "available_requires_explicit_opt_in",
+            "already_run": state == "already_run",
+            "run_reason": run_reason,
             "source_reopen_required_before_claim": True,
         }
     )
@@ -211,6 +245,9 @@ def compact_repo_familiarity_fallback_card(value: Any) -> dict[str, Any] | None:
             "source_line": value.get("source_line"),
             "source_ref_count": value.get("source_ref_count"),
             "selected_card_count": value.get("selected_card_count"),
+            "query_anchor_count": value.get("query_anchor_count"),
+            "query_anchor_match_count": value.get("query_anchor_match_count"),
+            "query_anchor_alignment": value.get("query_anchor_alignment"),
             "current_checkout_checked": value.get("current_checkout_checked"),
             "invalidation_present": value.get("invalidation_present"),
             "stale_fast_reject_count": value.get("stale_fast_reject_count"),
@@ -224,13 +261,12 @@ def compact_repo_familiarity_fallback_card(value: Any) -> dict[str, Any] | None:
 
 
 def _repo_file_read_command(path: str) -> str:
-    literal = json.dumps(path)
     script = (
-        "from pathlib import Path; "
-        f"p=Path({literal}); "
+        "import pathlib,sys; "
+        "p=pathlib.Path(sys.argv[1]); "
         "print(p.read_text(encoding='utf-8')[:6000])"
     )
-    return f"python -c {shell_quote(script)}"
+    return f'python -c "{script}" {shell_quote(path)}'
 
 
 def repo_familiarity_fallback_action(card: Mapping[str, Any] | None) -> dict[str, Any] | None:
@@ -288,3 +324,19 @@ def repo_familiarity_should_replace_foreground_action(action: Mapping[str, Any])
     }:
         return True
     return str(action.get("tool_name") or "") == "search_memory"
+
+
+def repo_familiarity_query_anchor_alignment(card: Mapping[str, Any] | None) -> str:
+    if not isinstance(card, Mapping):
+        return "unknown"
+    alignment = str(card.get("query_anchor_alignment") or "").strip()
+    if alignment:
+        return alignment
+    try:
+        total = int(card.get("query_anchor_count") or 0)
+        matched = int(card.get("query_anchor_match_count") or 0)
+    except (TypeError, ValueError):
+        return "unknown"
+    if total <= 0:
+        return "no_distinctive_query_anchors"
+    return "overlap" if matched > 0 else "no_overlap"

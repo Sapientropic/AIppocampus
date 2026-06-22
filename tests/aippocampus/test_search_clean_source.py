@@ -181,7 +181,7 @@ class SearchCleanSourceTests(unittest.TestCase):
 
         output = stdout.getvalue()
         self.assertEqual(code, 0)
-        self.assertIn("Source-backed snippets", output)
+        self.assertIn("Source-backed matches", output)
         self.assertIn("Source:", output)
         self.assertIn("turn 1", output)
         self.assertIn("AIppocampus 是清洗后的原文记忆库", output)
@@ -202,7 +202,8 @@ class SearchCleanSourceTests(unittest.TestCase):
 
         output = stdout.getvalue()
         self.assertEqual(code, 0)
-        self.assertIn("Source-backed action cards", output)
+        self.assertIn("Source-backed matches", output)
+        self.assertEqual(output.count("Boundary:"), 1)
         assert_semantic_human_output(self, output, max_lines=8)
         self.assertNotIn("role=", output)
         self.assertNotIn("phase=", output)
@@ -987,8 +988,13 @@ class SearchCleanSourceTests(unittest.TestCase):
         self.assertNotIn("query_match_profile", payload["matches"][0])
         self.assertNotIn("query_match_gate", payload)
         self.assertIn("diagnostic_detail_command", payload)
+        self.assertIn("--open-source", payload["matches"][0]["reopen_command"])
         self.assertEqual(
             payload["matches"][0]["reopen_command"],
+            payload["matches"][0]["source_window_command"],
+        )
+        self.assertEqual(
+            payload["matches"][0]["last_search_reopen_command"],
             "aippocampus search --hit 1 --last-search --json",
         )
         self.assertIn("source_window_command", payload["matches"][0])
@@ -1017,6 +1023,102 @@ class SearchCleanSourceTests(unittest.TestCase):
             json.dumps(reopened["source_window"], ensure_ascii=False),
         )
         self.assertNotIn(str(self.cwd), json.dumps(reopened, ensure_ascii=False))
+
+    def test_search_all_registry_collapses_mirrored_duplicate_snippets(self) -> None:
+        duplicate_text = "主动回忆层 潜意识 momentum line_topology Dream mirrored source note."
+        unique_text = "主动回忆层 潜意识 momentum line_topology Dream unique follow-up route."
+        threads = []
+        for index in range(1, 5):
+            clean = self.cwd / f"mirror-{index}" / "clean-source"
+            clean.mkdir(parents=True)
+            text = duplicate_text if index < 4 else unique_text
+            (clean / "messages.jsonl").write_text(
+                json.dumps(
+                    {
+                        "id": f"msg_mirror_{index}",
+                        "message_id": f"msg_mirror_{index}",
+                        "source_line": index,
+                        "role": "assistant",
+                        "phase": "final_answer",
+                        "is_final": True,
+                        "text": text,
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            threads.append(
+                {
+                    "thread_key": f"session:mirror-{index}",
+                    "title": f"Mirror {index}",
+                    "paths": {
+                        "clean_source_messages_jsonl": str(clean / "messages.jsonl"),
+                        "sqlite": str(self.cwd / f"missing-{index}.sqlite"),
+                    },
+                }
+            )
+        (self.cwd / "threads.json").write_text(
+            json.dumps({"schema_version": 1, "threads": threads}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            code = search.main(
+                [
+                    "--all",
+                    "主动回忆层 潜意识 momentum line_topology Dream",
+                    "--registry-dir",
+                    str(self.cwd),
+                    "--json",
+                ]
+            )
+        payload = json.loads(stdout.getvalue())
+
+        self.assertEqual(code, 0)
+        self.assertEqual(payload["match_count"], 2)
+        self.assertEqual(payload["duplicate_cluster_count"], 1)
+        self.assertEqual(payload["duplicate_collapsed_hit_count"], 2)
+        duplicate = next(match for match in payload["matches"] if match.get("duplicate_count"))
+        self.assertEqual(duplicate["source_count"], 3)
+        self.assertTrue(any("unique follow-up" in match["snippet"] for match in payload["matches"]))
+
+    def test_search_all_discussion_id_surfaces_atlas_pointer_before_registry_chatter(self) -> None:
+        atlas = self.cwd / "docs" / "research"
+        atlas.mkdir(parents=True)
+        (atlas / "discussion-atlas.md").write_text(
+            "\n".join(
+                [
+                    "| Discussion | Layer | Status | Owner | Execution / evidence | Next action | Cannot claim |",
+                    "| --- | --- | --- | --- | --- | --- | --- |",
+                    "| [#2127 Moving Ground: source-backed memory and continuous craft](https://github.com/Sapientropic/AIppocampus/discussions/2127) | route_attention | active_design | [agent-native recall facade](../architecture/recall/agent-native-recall-facade.md) | #2489 | Keep a compact atlas pointer recallable. | Discussion row as source truth. |",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        (self.cwd / "threads.json").write_text(
+            json.dumps({"schema_version": 1, "threads": []}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            code = search.main(
+                [
+                    "--all",
+                    "discussion 2127",
+                    "--registry-dir",
+                    str(self.cwd),
+                    "--json",
+                ]
+            )
+        payload = json.loads(stdout.getvalue())
+
+        self.assertEqual(code, 1)
+        self.assertEqual(payload["foreground_action"]["id"], "open_discussion_atlas_pointer")
+        self.assertEqual(payload["discussion_atlas_pointer"]["discussion"], 2127)
+        self.assertIn("/discussions/2127", json.dumps(payload, ensure_ascii=False))
 
     def test_search_all_registry_can_include_paths_as_local_diagnostic(self) -> None:
         registry_clean = self.cwd / "registry-thread" / "clean-source"

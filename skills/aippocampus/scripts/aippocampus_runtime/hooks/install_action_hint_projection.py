@@ -21,12 +21,13 @@ def action_hint_frontstage_card(
 ) -> dict[str, Any]:
     cache_status = str(status_result.get("cache_status") or "not_installed")
     installed = bool(status_result.get("installed"))
-    ready = installed and cache_status == "with_fresh_records"
-    warning_state = "installed_cache_not_ready" if installed and not ready else ""
-    hot_path_active = ready
+    useful = installed and cache_status == "with_fresh_records"
+    stage = "useful" if useful else "callable" if installed else "installed"
+    warning_state = "installed_cache_not_useful" if installed and not useful else ""
+    hot_path_active = useful
     if not installed:
         first_command = "aippocampus learning guidance --json"
-    elif not ready:
+    elif not useful:
         first_command = "aippocampus hooks action refresh-cache --write --json"
     else:
         first_command = "aippocampus hooks action status --json"
@@ -40,7 +41,7 @@ def action_hint_frontstage_card(
                 "command": "aippocampus hooks action refresh-cache --write --json",
             }
         )
-    elif not ready:
+    elif not useful:
         next_steps.append({"label": "refresh_cache", "command": first_command})
     next_steps.append(
         {
@@ -51,12 +52,14 @@ def action_hint_frontstage_card(
     return {
         "kind": "aippocampus_action_hint_frontstage_card",
         "title": "Action-time hints",
-        "status": "ready" if ready else cache_status,
+        "status": stage,
+        "stage": stage,
+        "stage_values": ["installed", "callable", "active", "useful"],
         "installed": installed,
-        "ready": ready,
+        "useful": useful,
         "setup_role": (
-            "ready"
-            if ready
+            "useful"
+            if useful
             else "cleanup_or_prepare_required"
             if installed
             else "recommended_for_trusted_codex"
@@ -112,13 +115,13 @@ def redact_public_result(result: Mapping[str, Any], *, path: Path) -> dict[str, 
 
 def public_install_result(result: Mapping[str, Any], *, path: Path) -> dict[str, Any]:
     public = redact_public_result(result, path=path)
-    ready = bool((public.get("frontstage_card") or {}).get("ready"))
+    useful = bool((public.get("frontstage_card") or {}).get("useful"))
     primary = (
         no_action_needed_install_primary(
             label="Action-time hints installed",
             message="No foreground action-hint setup action is needed.",
         )
-        if ready
+        if useful
         else action_hint_cache_refresh_primary(
             claim_boundary=str(public.get("claim_boundary") or "host_setup_not_memory_evidence")
         )
@@ -132,12 +135,12 @@ def public_install_result(result: Mapping[str, Any], *, path: Path) -> dict[str,
         hook_install_closeout_contract(
             surface="action_hint_hook_install",
             title="Action-time hint install",
-            status="installed_ready" if ready else "installed_but_not_ready",
+            status="installed_useful" if useful else "installed_needs_cache",
             primary=primary,
             status_command="aippocampus hooks action status --json",
             rollback_command="aippocampus hooks action uninstall --json",
             extra={
-                "ready": ready,
+                "useful": useful,
                 "cache_status": str(public.get("cache_status") or "unknown"),
                 "cache_path_label": str(public.get("cache_path_label") or ""),
                 "cache_scope": str(public.get("cache_scope") or ""),

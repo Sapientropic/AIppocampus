@@ -76,7 +76,7 @@ class UpdateForegroundActionTests(unittest.TestCase):
         }
         self.assertIn("action_hints", surfaces)
         self.assertIn("hooks", surfaces)
-        self.assertEqual(compact["ambient_recall"]["state"], "not_installed")
+        self.assertEqual(compact["ambient_recall"]["stage"], "installed")
 
     def test_agent_status_projection_distinguishes_deferred_hooks_from_missing_hooks(self) -> None:
         common = {
@@ -110,10 +110,10 @@ class UpdateForegroundActionTests(unittest.TestCase):
             schema_version=1,
         )
 
-        self.assertEqual(deferred["ambient_recall"]["state"], "deferred")
+        self.assertEqual(deferred["ambient_recall"]["stage"], "installed")
         self.assertIn("hooks:deferred", deferred["ambient_recall"]["issue_codes"])
         self.assertIn("hooks_status", deferred["summary"]["deferred_components"])
-        self.assertEqual(missing["ambient_recall"]["state"], "not_installed")
+        self.assertEqual(missing["ambient_recall"]["stage"], "installed")
         self.assertIn("hooks:missing", missing["ambient_recall"]["issue_codes"])
         self.assertNotIn("hooks_status", missing["summary"]["deferred_components"])
 

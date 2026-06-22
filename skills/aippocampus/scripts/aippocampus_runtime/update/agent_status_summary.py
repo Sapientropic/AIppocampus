@@ -461,23 +461,49 @@ def compact_agent_status_report(
             or action_hints_ready
         )
     )
-    ambient_state = (
-        "ready"
-        if hook_status == "current"
-        and (not action_hints_installed or action_hints_ready)
-        and not prompt_latency_risk
-        and not warm_stale_queue
-        and not (provider_degraded and ambient_installed_for_provider)
-        else "degraded"
-        if prompt_installed
+    prompt_hook_active = bool(
+        prompt_installed
+        and str(prompt_hook_status.get("last_prompt_hook_status") or "") == "found"
+    )
+    ambient_callable = bool(
+        hook_status == "current"
+        or prompt_installed
         or lifecycle_installed
         or action_hints_installed
         or warm_status in {"blocked", "pending"}
-        else "deferred"
-        if hooks_deferred and not (prompt_installed or lifecycle_installed)
-        else "not_installed"
-        if hook_status in {"missing", "not_checked", "deferred"} and not (prompt_installed or lifecycle_installed)
-        else "attention_needed"
+    )
+    # "Active" is narrower than installed/callable: the foreground path must
+    # actually run without a current red-line repair state. Empty action-hint
+    # caches and prompt near-timeout telemetry make the path callable but not
+    # active, otherwise the status card repeats the historical "installed but
+    # inert" ambient failure mode.
+    ambient_active = bool(
+        not prompt_latency_risk
+        and not warm_stale_queue
+        and (
+            prompt_hook_active
+            or action_hints_hot_path_active
+            or warm_status in {"pending"}
+        )
+    )
+    ambient_stage = (
+        "useful"
+        if active_useful
+        and not prompt_latency_risk
+        and not warm_stale_queue
+        and not (provider_degraded and ambient_installed_for_provider)
+        else "active"
+        if ambient_active
+        else "callable"
+        if ambient_callable
+        else "installed"
+    )
+    action_hints_stage = (
+        "useful"
+        if action_hints_ready
+        else "callable"
+        if action_hints_installed
+        else "installed"
     )
     if prompt_latency_risk:
         ambient_next_command = "aippocampus hooks prompt status --last --json"
@@ -493,19 +519,21 @@ def compact_agent_status_report(
     elif action_hints_installed and not action_hints_ready:
         ambient_next_command = action_hint_primary_command
         ambient_next_action = "refresh_or_inspect_action_hints"
-    elif ambient_state == "ready":
+    elif ambient_stage == "useful":
         ambient_next_command = ""
         ambient_next_action = "continue_with_ordinary_recall"
     else:
         ambient_next_command = "aippocampus update status --operator-json"
         ambient_next_action = "inspect_operator_status"
     ambient_recall = {
-        "state": ambient_state,
-        "active_useful": active_useful,
+        "stage": ambient_stage,
+        "stage_values": ["installed", "callable", "active", "useful"],
+        "useful_signal_present": active_useful,
         "prompt_hook_installed": prompt_installed,
         "lifecycle_hook_installed": lifecycle_installed,
         "action_hints_installed": action_hints_installed,
-        "action_hints_ready": action_hints_ready,
+        "action_hints_stage": action_hints_stage,
+        "action_hints_useful": action_hints_ready,
         "hot_path_active": action_hints_hot_path_active,
         "latency_risk": {
             "status": prompt_latency_status or "not_checked",
@@ -531,7 +559,7 @@ def compact_agent_status_report(
         "issue_codes": ambient_issue_codes,
         "next_action": ambient_next_action,
         "next_command": ambient_next_command,
-        "claim_boundary": "ambient readiness is operational status, not source evidence",
+        "claim_boundary": "ambient stage is operational status, not source evidence",
     }
     readiness_state = (
         "partial_foreground_status"
@@ -570,7 +598,7 @@ def compact_agent_status_report(
             "partial_readiness": bool(deferred_components),
             "deferred_components": [item["id"] for item in deferred_components],
             "dirty_worktree_guards": summary.get("dirty_worktree_guards") or {},
-            "ambient_recall_state": ambient_state,
+            "ambient_recall_stage": ambient_stage,
             "needs_action": needs_action,
         },
         "setup_card": {

@@ -32,11 +32,7 @@ _STRONG_CLAIM_INTENTS = {
     "numeric_claim",
 }
 _TOOL_VISIBILITY_VALUES = {"visible", "unknown", "cli_fallback_only"}
-_TINY_AFFORDANCE_READY_STATUSES = {
-    "ready_action_only",
-    "host_replay_ready_action_only",
-    "wired_secondary_action",
-}
+_TINY_AFFORDANCE_STAGES = {"installed", "callable", "active", "useful"}
 _TINY_AFFORDANCE_BLOCKERS = {
     "wrong_route_drag_present",
     "irrelevant_memory_drag_present",
@@ -84,7 +80,7 @@ def _ambient_tiny_agent_recall_affordance(result: Mapping[str, Any]) -> dict[str
         or raw.get("decision")
         or ""
     ).strip()
-    if status not in _TINY_AFFORDANCE_READY_STATUSES:
+    if status not in _TINY_AFFORDANCE_STAGES:
         return {}
     if str(raw.get("suggested_agent_action") or "agent_recall") != "agent_recall":
         return {}
@@ -357,7 +353,7 @@ def _reason_codes(action: str, lead_kinds: list[str], result: Mapping[str, Any])
     if "memory_route" in lead_kinds:
         codes.append("warm_route_available")
     if "ambient_tiny_agent_recall" in lead_kinds:
-        codes.append("ambient_tiny_agent_recall_ready")
+        codes.append("ambient_tiny_agent_recall_callable")
     if "source_required" in lead_kinds:
         codes.append("source_required_route_available")
     if "avatar_posture" in lead_kinds:

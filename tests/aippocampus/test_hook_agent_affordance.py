@@ -143,7 +143,7 @@ class HookAgentAffordanceTests(unittest.TestCase):
                 "confidence": "medium",
                 "ambient_recall": {
                     "tiny_agent_recall_affordance": {
-                        "status": "host_replay_ready_action_only",
+                        "status": "callable",
                         "suggested_agent_action": "agent_recall",
                         "cue_shape": "relationship continuity / old UX review",
                         "source_open_gates_passed": True,
@@ -163,7 +163,7 @@ class HookAgentAffordanceTests(unittest.TestCase):
             "relationship continuity / old UX review",
         )
         self.assertIn("ambient_tiny_agent_recall", packet["lead_kinds"])
-        self.assertIn("ambient_tiny_agent_recall_ready", packet["reason_codes"])
+        self.assertIn("ambient_tiny_agent_recall_callable", packet["reason_codes"])
         self.assertTrue(packet["not_enough_for_claim"])
         self.assertEqual(policy["next_step"], "call_agent_recall")
         self.assertEqual(policy["claim_permission"], "navigation_only_not_fact")
@@ -177,7 +177,7 @@ class HookAgentAffordanceTests(unittest.TestCase):
                 "confidence": "medium",
                 "ambient_recall": {
                     "tiny_agent_recall_affordance": {
-                        "status": "host_replay_ready_action_only",
+                        "status": "callable",
                         "suggested_agent_action": "agent_recall",
                         "cue_shape": "stale route drag",
                         "source_open_gates_passed": True,

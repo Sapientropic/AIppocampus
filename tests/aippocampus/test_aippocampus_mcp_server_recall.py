@@ -649,6 +649,68 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
         self.assertNotIn(str(self.cwd), encoded)
         self.assertFalse(payload["privacy"]["paths_included"])
 
+    def test_search_memory_all_registered_sources_uses_configured_registry_when_registry_dir_omitted(self) -> None:
+        registry_clean = self.cwd / "registry-cwd-thread" / "clean-source"
+        registry_clean.mkdir(parents=True)
+        (registry_clean / "messages.jsonl").write_text(
+            json.dumps(
+                {
+                    "id": "msg_registry_cwd",
+                    "message_id": "msg_registry_cwd",
+                    "source_line": 11,
+                    "role": "assistant",
+                    "phase": "final_answer",
+                    "is_final": True,
+                    "text": "The MCP cwd fallback registry exact phrase is discoverable.",
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (self.cwd / "threads.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "threads": [
+                        {
+                            "thread_key": "session:registry-cwd",
+                            "title": "Registry cwd route",
+                            "paths": {
+                                "clean_source_messages_jsonl": str(registry_clean / "messages.jsonl"),
+                                "sqlite": str(self.cwd / "missing-cwd.sqlite"),
+                            },
+                        }
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        with mock.patch.dict("os.environ", {"AIPPOCAMPUS_REGISTRY_DIR": str(self.cwd)}):
+            response = mcp.handle_request(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 3102,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "search_memory",
+                        "arguments": {
+                            "query": "cwd fallback registry exact phrase",
+                            "cwd": str(self.cwd),
+                            "scope": "all_registered_sources",
+                        },
+                    },
+                }
+            )
+        payload = self.tool_payload(response)
+
+        self.assertFalse(response["result"].get("isError", False))
+        self.assertEqual(payload["mcp_search_scope"], "all_registered_sources")
+        self.assertEqual(payload["match_count"], 1)
+        self.assertEqual(payload["matches"][0]["thread"]["thread_key"], "session:registry-cwd")
+
     def test_search_memory_last_recall_scope_searches_cached_route_set(self) -> None:
         route_clean = self.cwd / "route-thread" / "clean-source"
         route_clean.mkdir(parents=True)

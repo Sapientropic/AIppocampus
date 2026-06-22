@@ -265,11 +265,16 @@ Keep external-model semantics separate. A local hook install does not require an
 LLM key, and semantic/warm/subconscious/Dream outputs are navigation layers
 until the original source is reopened.
 
-`aippocampus update status` exposes the first-run readiness labels:
+`aippocampus update status` exposes first-run capability labels. Ambient
+foreground surfaces should be read as stages, not as a broad "ready" claim:
+`installed`, `callable`, `active`, or `useful`.
 
 - `source_search_ready`: onboarding/search can produce source-backed snippets.
-- `active_recall_ready`: MCP/progressive recall can reopen source for an agent.
-- `ambient_hooks_ready`: Codex prompt/lifecycle hooks are installed and trusted.
+- `active_recall_stage`: whether MCP/progressive recall is merely installed,
+  callable by the host, active in the current path, or useful after
+  recall/deepen source follow-through.
+- `ambient_hooks_stage`: whether Codex prompt/lifecycle hooks are installed,
+  callable, active, or useful for a real cue.
 - `semantic_provider_ready`: provider-backed semantic/warm work can run.
 - `hook_provider_ready`: provider visibility has been checked for the current
   process and a child process like a future/restarted hook; use prompt-hook

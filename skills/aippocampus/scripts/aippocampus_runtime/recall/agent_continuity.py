@@ -63,6 +63,7 @@ from aippocampus_runtime.recall.agent_continuity_cli_support import (
     normalize_route_limit,
     policy_boundary,
 )
+from aippocampus_runtime.source.discussion_atlas_pointer import discussion_atlas_pointer_for_query
 
 SCHEMA_VERSION = "agent-continuity-path-v1"
 MACRO_PACKET_SCHEMA_VERSION = "macro-orientation-agent-packet-v0"
@@ -1034,6 +1035,16 @@ def recall(
     repo_familiarity_fallback = repo_familiarity_recovery.repo_familiarity_fallback_card(
         str(query or ""), cwd_path
     )
+    current_source_anchor_probe = (
+        repo_familiarity_recovery.current_source_anchor_probe(
+            str(query or ""),
+            cwd_path,
+            clean_source_dir=source_dir,
+        )
+        if isinstance(repo_familiarity_fallback, dict)
+        and repo_familiarity_fallback.get("status") == "route_candidate"
+        else None
+    )
     repo_action_card, repo_suggested_next_command = (
         repo_familiarity_recovery.repo_familiarity_action_card(
             repo_familiarity_fallback=repo_familiarity_fallback,
@@ -1041,6 +1052,7 @@ def recall(
             triage_metrics=triage_metrics,
             memory_packets=memory_packets,
             query=str(query or ""),
+            current_source_probe=current_source_anchor_probe,
         )
     )
     if repo_action_card:
@@ -1094,6 +1106,11 @@ def recall(
         "associative_path_policy": associative_path_policy,
         "associative_path_fallback": associative_path_fallback,
         "repo_familiarity_fallback": repo_familiarity_fallback,
+        "current_source_anchor_probe": current_source_anchor_probe,
+        "discussion_atlas_pointer": discussion_atlas_pointer_for_query(
+            str(query or ""),
+            cwd=cwd_path,
+        ),
         "suggested_next": suggested_next,
         "suggested_next_command": suggested_next_command,
         **handle_boundary_fields(),

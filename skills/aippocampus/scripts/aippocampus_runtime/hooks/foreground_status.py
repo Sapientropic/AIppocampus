@@ -161,7 +161,13 @@ def hook_install_closeout_contract(
         surface=surface,
         title=title,
         status=status,
-        installed=status in {"installed_ready", "installed_but_not_ready"},
+        installed=status
+        in {
+            "installed_ready",
+            "installed_but_not_ready",
+            "installed_useful",
+            "installed_needs_cache",
+        },
         primary=primary,
         safe_actions=[
             primary,
@@ -198,7 +204,7 @@ def action_hint_cache_refresh_primary(*, claim_boundary: str = CLAIM_BOUNDARY) -
             action_id="refresh_action_hint_cache",
             label="Refresh action-hint cache",
             command="aippocampus hooks action refresh-cache --write --json",
-            why="Prepare trusted action-hint input before treating the hook as ready.",
+            why="Prepare trusted action-hint input before treating the hook as useful.",
             mutation_risk="explicit_local_cache_write",
             claim_boundary=claim_boundary,
         )
@@ -470,7 +476,7 @@ def _action_hint_step_action(step: Mapping[str, Any], *, claim_boundary: str) ->
 
 def action_hint_status_contract(frontstage_card: Mapping[str, Any]) -> dict[str, Any]:
     status = str(frontstage_card.get("status") or "unknown")
-    ready = bool(frontstage_card.get("ready"))
+    useful = bool(frontstage_card.get("useful"))
     installed = bool(frontstage_card.get("installed"))
     claim_boundary = str(frontstage_card.get("claim_boundary") or CLAIM_BOUNDARY)
     steps = [step for step in frontstage_card.get("next_steps") or [] if isinstance(step, Mapping)]
@@ -509,7 +515,7 @@ def action_hint_status_contract(frontstage_card: Mapping[str, Any]) -> dict[str,
             for key in ("id", "label", "command", "mutation_risk", "claim_boundary")
             if key in refresh_action
         }
-    if ready:
+    if useful:
         primary = _status_action(
             action_id="check_action_hint_status",
             label="Check action-hint hook status",
@@ -517,7 +523,7 @@ def action_hint_status_contract(frontstage_card: Mapping[str, Any]) -> dict[str,
         )
         primary["claim_boundary"] = claim_boundary
         primary["why"] = (
-            "Ready action-time hints are navigation setup, not source evidence; "
+            "Useful action-time hints are navigation setup, not source evidence; "
             "status stays read-only and ordinary recall remains the proof path."
         )
     elif not installed and isinstance(review_action, dict):
@@ -551,7 +557,9 @@ def action_hint_status_contract(frontstage_card: Mapping[str, Any]) -> dict[str,
         primary=primary,
         safe_actions=[primary, *mapped_steps],
         extra={
-            "ready": ready,
+            "stage": str(frontstage_card.get("stage") or status),
+            "stage_values": ["installed", "callable", "active", "useful"],
+            "useful": useful,
             "cache_status": str(frontstage_card.get("cache_status") or status),
             "cache_path_label": str(frontstage_card.get("cache_path_label") or ""),
             "cache_scope": str(frontstage_card.get("cache_scope") or ""),
@@ -591,7 +599,8 @@ def compact_action_hint_status_result(
         {
             "kind": "aippocampus_action_hint_status_compact",
             "title": "Action-time hints",
-            "ready": bool(frontstage_card.get("ready")),
+            "stage": str(frontstage_card.get("stage") or public.get("status") or ""),
+            "useful": bool(frontstage_card.get("useful")),
             "optional": bool(frontstage_card.get("optional")),
             "fail_open": bool(frontstage_card.get("fail_open")),
             "recall_blocking": bool(frontstage_card.get("recall_blocking")),
