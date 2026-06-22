@@ -485,6 +485,7 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/recall/rollout_search.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/scoring_policy.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/score_fusion.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/recall/source_anchor_gate.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/feedback_events.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/source_reopen_budget.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/source_backed_lessons.py",

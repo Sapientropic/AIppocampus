@@ -53,6 +53,9 @@ from aippocampus_runtime.recall import (
 from aippocampus_runtime.recall import (
     repo_familiarity_fallback as repo_familiarity_recovery,
 )
+from aippocampus_runtime.recall import (
+    source_anchor_gate as recall_source_anchor_gate,
+)
 from aippocampus_runtime.recall.agent_continuity_cli_support import (
     DEFAULT_MACRO_STATE_RELATIVE_PATHS,
     handle_boundary_fields,
@@ -1003,7 +1006,6 @@ def recall(
         attention_navigation=attention_navigation,
     )
     memory_packets = [_memory_packet_for_route(route) for route in routes]
-    triage_metrics = _memory_packet_triage_metrics(memory_packets)
     deepen_requests = [
         agent_deepen_requests.deepen_request_for_route(route, memory_packet, request_index=index)
         for index, (route, memory_packet) in enumerate(
@@ -1012,6 +1014,15 @@ def recall(
         )
         if route.get("handle") and memory_packet.get("output_mode") == "reopenable_route"
     ]
+    source_anchor_gate = recall_source_anchor_gate.apply_top_route_source_anchor_gate(
+        query=str(query or ""),
+        routes=routes,
+        deepen_requests=deepen_requests,
+        memory_packets=memory_packets,
+        clean_source_dir=source_dir,
+        registry_dir=registry_path,
+    )
+    triage_metrics = _memory_packet_triage_metrics(memory_packets)
     associative_path_policy, associative_path_fallback = (
         apw_fallback.maybe_append_associative_path_fallback_with_policy(
             include_associative_fallback=include_associative_fallback,
@@ -1066,9 +1077,12 @@ def recall(
     )
     if repo_action_card:
         action_card = repo_action_card
+    action_decision = str(action_card.get("decision") or "")
     suggested_next_command = (
         repo_suggested_next_command
         if repo_suggested_next_command
+        else None
+        if action_decision == "recover_low_confidence_route"
         else deepen_requests[0].get("copy_paste_command")
         if deepen_requests
         else None
@@ -1076,6 +1090,8 @@ def recall(
     suggested_next = (
         "open_repo_familiarity_source"
         if repo_action_card
+        else "search_memory"
+        if action_decision == "recover_low_confidence_route"
         else "agent deepen"
         if deepen_requests
         else "search_memory"
@@ -1122,6 +1138,7 @@ def recall(
         "associative_path_fallback": associative_path_fallback,
         "repo_familiarity_fallback": repo_familiarity_fallback,
         "current_source_anchor_probe": current_source_anchor_probe,
+        "source_anchor_gate": source_anchor_gate,
         "discussion_atlas_pointer": discussion_atlas_pointer_for_query(
             str(query or ""),
             cwd=cwd_path,
