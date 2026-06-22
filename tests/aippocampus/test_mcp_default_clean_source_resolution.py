@@ -165,6 +165,37 @@ class McpDefaultCleanSourceResolutionTests(unittest.TestCase):
 
         self.assertEqual(resolved, explicit)
 
+    def test_mcp_default_resolution_preserves_explicit_symlink_spelling(self) -> None:
+        target_root = self.cwd / "private" / "var"
+        symlink_root = self.cwd / "var"
+        target_clean = target_root / "session-explicit" / "clean-source"
+        try:
+            target_root.mkdir(parents=True)
+            os.symlink(target_root, symlink_root, target_is_directory=True)
+        except (AttributeError, NotImplementedError, OSError) as exc:
+            self.skipTest(f"directory symlink unavailable: {exc}")
+
+        explicit = symlink_root / "session-explicit" / "clean-source"
+        self._write_manifest_clean_source(
+            target_clean,
+            cwd=self.cwd,
+            source_transcript_mtime=1,
+            text="explicit symlink spelling should stay selected",
+        )
+
+        with mock.patch(
+            "aippocampus_runtime.source.clean_source_resolver.core.default_thread_clean_source_dir",
+            return_value=target_clean,
+        ):
+            resolved = resolve_mcp_clean_source_dir(
+                cwd=self.cwd,
+                clean_source_dir=explicit,
+            )
+
+        self.assertEqual(resolved, explicit)
+        self.assertEqual(core.path_identity_key(resolved), core.path_identity_key(target_clean))
+        self.assertNotEqual(str(resolved), str(target_clean.resolve()))
+
     def test_mcp_default_apw_followthrough_ignores_project_local_legacy_clean_source(self) -> None:
         legacy_clean = self.cwd / ".aippocampus" / "clean-source"
         self._write_message(
