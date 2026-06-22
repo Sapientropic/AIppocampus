@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import tempfile
 import unittest
 from contextlib import redirect_stdout
@@ -377,7 +378,7 @@ class UpdateSyncTests(unittest.TestCase):
             write_plugin_package(
                 installed,
                 version="0.1.0",
-                mcp_command=r"C:\Python313\python.exe",
+                mcp_command=str(Path(sys.executable).resolve()),
                 mcp_args=["-m", "aippocampus_runtime.cli.facade", "mcp"],
             )
 
@@ -2014,7 +2015,7 @@ class UpdateSyncTests(unittest.TestCase):
     def test_plugin_apply_preserves_absolute_python_module_installed_mcp_command(self) -> None:
         with plugin_update_scenario() as scenario:
             marketplace = scenario.root / "local-marketplace" / "aippocampus"
-            fixed_command = r"C:\Python313\python.exe"
+            fixed_command = str(Path(sys.executable).resolve())
             installed = scenario.write_installed_cache(
                 "0.1.0",
                 mcp_command=fixed_command,
