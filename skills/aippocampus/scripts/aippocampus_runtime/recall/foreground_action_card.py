@@ -102,12 +102,21 @@ def _decision_for(status: Any, packet: Mapping[str, Any], request: Mapping[str, 
     if packet.get("claim_permission") == "blocked" or packet.get("output_mode") == "ignore_or_blocked":
         return "ignore_or_blocked"
     risks = _risk_codes(packet)
-    if "low_source_anchor_coverage" in risks:
+    if {"check_currentness", "conflict_requires_deepen"} & risks:
+        return "deepen_before_claim"
+    if str(packet.get("currentness") or "") == "stale" or packet.get("conflict"):
+        return "deepen_before_claim"
+    gate = _mapping(packet.get("source_anchor_gate"))
+    gate_reason = str(gate.get("reason") or "")
+    if gate.get("status") == "blocked" and (
+        "low_source_anchor_coverage" in risks
+        or gate_reason == "opened_source_validation_artifact"
+    ):
         return "recover_low_confidence_route"
     if packet.get("already_opened"):
         return "use_opened_context"
-    if {"check_currentness", "conflict_requires_deepen"} & risks:
-        return "deepen_before_claim"
+    if "low_source_anchor_coverage" in risks and not request:
+        return "recover_low_confidence_route"
     if request or packet.get("output_mode") in {"reopenable_route", "bounded_summary_as_route"}:
         return "use_route_first"
     return "continue_normally"

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib
 import json
 from collections.abc import Mapping
 from datetime import datetime
@@ -26,14 +27,16 @@ def _recent_recall_anchor_probe(
     query: str,
 ) -> dict[str, Any]:
     try:
-        from aippocampus_runtime.recall import agent_continuity as agent
-        from aippocampus_runtime.recall.agent_recall_cache import handle_from_last_recall_cache
-        from aippocampus_runtime.recall.source_anchor_gate import distinctive_query_anchors
-        from aippocampus_runtime.source.artifact_role import artifact_role_profile
+        agent = importlib.import_module("aippocampus_runtime.recall.agent_continuity")
+        recall_cache = importlib.import_module("aippocampus_runtime.recall.agent_recall_cache")
+        source_anchor_gate = importlib.import_module(
+            "aippocampus_runtime.recall.source_anchor_gate"
+        )
+        artifact_role = importlib.import_module("aippocampus_runtime.source.artifact_role")
     except Exception as exc:  # pragma: no cover - defensive intake metadata
         return {"status": "blocked", "reason": "probe_unavailable", "error": type(exc).__name__}
 
-    anchors = distinctive_query_anchors(query)
+    anchors = source_anchor_gate.distinctive_query_anchors(query)
     if not anchors:
         return {
             "status": "blocked",
@@ -42,7 +45,7 @@ def _recent_recall_anchor_probe(
             "opened_anchor_hits": 0,
         }
     try:
-        handle, cached_context = handle_from_last_recall_cache(
+        handle, cached_context = recall_cache.handle_from_last_recall_cache(
             request_index=request_index,
             path=selector_path,
         )
@@ -79,8 +82,8 @@ def _recent_recall_anchor_probe(
     source_text = json.dumps(source_map, ensure_ascii=False, sort_keys=True).casefold()
     hits = [anchor for anchor in anchors if anchor.casefold() in source_text]
     required = 2 if len(anchors) >= 3 else 1
-    artifact_role = artifact_role_profile(text=source_text, query_text=query)
-    artifact_blocked = bool(artifact_role.get("demote"))
+    role_profile = artifact_role.artifact_role_profile(text=source_text, query_text=query)
+    artifact_blocked = bool(role_profile.get("demote"))
     cached_gate_passed = bool(
         cached_gate.get("status") == "passed"
         and (
@@ -121,7 +124,7 @@ def _recent_recall_anchor_probe(
         }
         if cached_gate
         else None,
-        "artifact_role": artifact_role if artifact_role.get("role") != "topic_candidate" else None,
+        "artifact_role": role_profile if role_profile.get("role") != "topic_candidate" else None,
     }
 
 
@@ -142,7 +145,7 @@ def load_default_recent_recall_routes(
     """
 
     try:
-        from aippocampus_runtime.recall.agent_recall_cache import recall_selector_cache_dir
+        recall_cache = importlib.import_module("aippocampus_runtime.recall.agent_recall_cache")
     except Exception as exc:  # pragma: no cover - defensive provider metadata
         return [], {
             "status": "unavailable",
@@ -152,7 +155,7 @@ def load_default_recent_recall_routes(
         }
 
     try:
-        selector_dir = recall_selector_cache_dir()
+        selector_dir = recall_cache.recall_selector_cache_dir()
         paths = sorted(
             selector_dir.glob("sel_*.json"),
             key=lambda path: path.stat().st_mtime,

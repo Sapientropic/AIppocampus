@@ -62,6 +62,7 @@ STATUS_ACTION_PRIORITY = {
     "prompt_hook_latency": 10,
     "warm_ambient": 20,
     "provider": 30,
+    "hooks": 35,
     "action_hints": 40,
     # Plugin cache repair is important, but it is a nested install/cache
     # follow-up rather than the foreground state itself. Keep it in
@@ -159,12 +160,6 @@ def _compact_update_action(
 
 def _status_action_priority(action: dict[str, Any]) -> int:
     surface = str(action.get("surface") or "")
-    if surface == "action_hints":
-        status_code = str(action.get("status_code") or action.get("diagnostic_code") or "")
-        if status_code in {"with_missing_cache_file", "with_empty_cache", "with_expired_records"}:
-            return 5
-        if status_code == "with_fresh_records":
-            return 8
     if surface == "agent_callable":
         status_code = str(action.get("status_code") or action.get("diagnostic_code") or "")
         if status_code in TRUE_FOREGROUND_TOOL_FAILURE_STATUSES:
@@ -189,6 +184,28 @@ def _prioritize_status_actions(actions: list[dict[str, Any]]) -> list[dict[str, 
             key=lambda item: (item[0], item[1]),
         )
     ]
+
+
+def _dedupe_status_actions(actions: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Keep one foreground card per surface after priority ordering.
+
+    The raw status report can mention the same surface from multiple places:
+    direct surface readiness, summary.needs_action, and late next_actions. The
+    compact agent card is an execution queue, so repeating the same surface
+    teaches agents to do the same repair twice and can hide the next real
+    blocker behind a duplicate primary action.
+    """
+
+    seen: set[str] = set()
+    deduped: list[dict[str, Any]] = []
+    for action in actions:
+        surface = str(action.get("surface") or action.get("id") or "")
+        if surface and surface in seen:
+            continue
+        if surface:
+            seen.add(surface)
+        deduped.append(action)
+    return deduped
 
 
 def compact_agent_status_report(
@@ -347,6 +364,15 @@ def compact_agent_status_report(
                     reason=status_code,
                     command=command,
                     status_code=status_code,
+                )
+            )
+        if "hooks" in {str(item) for item in plan_surface_filter} and not action_hints_installed:
+            actions.append(
+                _compact_update_action(
+                    surface="action_hints",
+                    reason="not_installed",
+                    command=update_actions.action_hint_status_command(),
+                    status_code="not_installed",
                 )
             )
     if prompt_latency_risk and not foreground_partial:
@@ -599,7 +625,7 @@ def compact_agent_status_report(
         if bool(summary.get("core_ready")) and not needs_action
         else "attention_needed"
     )
-    actions = _prioritize_status_actions(actions)
+    actions = _dedupe_status_actions(_prioritize_status_actions(actions))
     primary_action = actions[0] if actions else {
         "id": "continue_after_update_status",
         "label": "Continue after update status",

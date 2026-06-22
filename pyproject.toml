@@ -269,6 +269,7 @@ files = [
     "skills/aippocampus/scripts/conversation_sources/generic_jsonl.py",
     "skills/aippocampus/scripts/conversation_sources/normalized.py",
     "skills/aippocampus/scripts/aippocampus_runtime/mcp/__init__.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/mcp/agent_deepen_projection.py",
     "skills/aippocampus/scripts/aippocampus_runtime/mcp/agent_recall_projection.py",
     "skills/aippocampus/scripts/aippocampus_runtime/mcp/agent_recall_recovery_projection.py",
     "skills/aippocampus/scripts/aippocampus_runtime/mcp/domain_handles.py",
