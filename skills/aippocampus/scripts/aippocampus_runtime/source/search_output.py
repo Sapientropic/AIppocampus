@@ -238,6 +238,8 @@ def public_search_result(
                     "reopen_command": match.get("reopen_command"),
                     "search_noise": bool(match.get("search_noise")),
                     "noise_reason": match.get("noise_reason"),
+                    "artifact_role": match.get("artifact_role"),
+                    "artifact_demoted": bool(match.get("artifact_demoted")),
                 }
             )
         public["matches"] = matches

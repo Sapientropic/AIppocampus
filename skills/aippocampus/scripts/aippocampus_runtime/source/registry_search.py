@@ -17,6 +17,10 @@ from aippocampus_runtime.privacy import (
     redact_private_paths,
     redact_sensitive_values,
 )
+from aippocampus_runtime.source.artifact_role import (
+    artifact_role_profile,
+    match_is_demoted_artifact,
+)
 from aippocampus_runtime.source.discussion_atlas_pointer import (
     discussion_atlas_action,
     discussion_atlas_pointer_for_query,
@@ -68,6 +72,16 @@ def as_int(value: Any, default: int = 0) -> int:
         return int(value)
     except (TypeError, ValueError):
         return default
+
+
+def _query_anchor_rank(match: Mapping[str, Any]) -> tuple[int, int, float]:
+    profile_value = match.get("query_match_profile")
+    profile: Mapping[str, Any] = profile_value if isinstance(profile_value, Mapping) else {}
+    return (
+        1 if profile.get("exact_phrase_match") else 0,
+        as_int(profile.get("matched_distinctive_anchor_count")),
+        as_float(profile.get("distinctive_anchor_coverage")),
+    )
 
 
 def add_registry_search_arguments(parser: Any) -> None:
@@ -142,6 +156,15 @@ def _registry_match(
     }
     snippet = compact_text(str(hit.get("snippet") or ""), DEFAULT_PUBLIC_SNIPPET_CHARS)
     noise_reason = str(hit.get("noise_reason") or "") or process_noise_reason(snippet)
+    artifact_role = artifact_role_profile(
+        text=snippet,
+        metadata={
+            "role": hit.get("role"),
+            "phase": hit.get("phase"),
+            "scope_labels": hit.get("scope_labels") or [],
+            "semantic_scope_labels": hit.get("semantic_scope_labels") or [],
+        },
+    )
     match = {
         "hit_selector": _hit_selector(source_route),
         "thread": registry_entry_ref(entry),
@@ -159,6 +182,8 @@ def _registry_match(
         "snippet": snippet,
         "search_noise": bool(hit.get("search_noise")) or bool(noise_reason),
         "noise_reason": noise_reason,
+        "artifact_role": artifact_role if artifact_role.get("role") != "topic_candidate" else None,
+        "artifact_demoted": bool(artifact_role.get("demote")),
         "source_route": source_route,
     }
     if include_paths:
@@ -286,6 +311,22 @@ def search_registry_sources(
                     hit=hit,
                     include_paths=include_paths,
                 )
+                text_for_artifact = match_haystack(match)
+                artifact_role = artifact_role_profile(
+                    text=text_for_artifact,
+                    query_text=query_text,
+                    metadata={
+                        "role": match.get("role"),
+                        "phase": match.get("phase"),
+                        "scope_labels": match.get("scope_labels") or [],
+                        "semantic_scope_labels": match.get("semantic_scope_labels") or [],
+                    },
+                )
+                if artifact_role.get("role") != "topic_candidate":
+                    match["artifact_role"] = artifact_role
+                else:
+                    match.pop("artifact_role", None)
+                match["artifact_demoted"] = bool(artifact_role.get("demote"))
                 profile = match_query_profile(
                     query_text=query_text,
                     gate=query_gate,
@@ -339,7 +380,10 @@ def search_registry_sources(
 
     matches.sort(
         key=lambda item: (
-            1 if item.get("search_noise") else 0,
+            1 if item.get("search_noise") or match_is_demoted_artifact(item) else 0,
+            -_query_anchor_rank(item)[0],
+            -_query_anchor_rank(item)[1],
+            -_query_anchor_rank(item)[2],
             -(
                 as_float(item.get("score"))
                 + relationship_origin_rank_adjustment(
@@ -364,6 +408,7 @@ def search_registry_sources(
             query_text=query_text,
             matches=matches,
         )
+    useful_target_hit = bool(matches) and not match_is_demoted_artifact(matches[0])
     discussion_pointer = discussion_atlas_pointer_for_query(
         query_text,
         cwd=registry_root or Path.cwd(),
@@ -381,8 +426,16 @@ def search_registry_sources(
     output_matches = matches if diagnostic_output else [compact_registry_match(match) for match in matches]
     payload: dict[str, Any] = _without_empty({
         "kind": "aippocampus_registry_source_search",
-        "ok": bool(matches),
-        "status": "ok" if matches else "no_phrase_like_matches" if no_phrase_like_matches else "no_matches",
+        "ok": useful_target_hit,
+        "status": (
+            "ok"
+            if useful_target_hit
+            else "matches_need_broadened_source_search"
+            if matches
+            else "no_phrase_like_matches"
+            if no_phrase_like_matches
+            else "no_matches"
+        ),
         "search_scope": "registered_clean_source_and_indexes",
         "scope_description": (
             "registered clean-source/index entries across the local registry; "
@@ -394,6 +447,18 @@ def search_registry_sources(
         "query_match_gate": query_gate if diagnostic_output else None,
         "matches": output_matches,
         "match_count": len(matches),
+        "useful_target_hit": useful_target_hit,
+        "first_match_usefulness": (
+            {
+                "status": "demoted_artifact"
+                if match_is_demoted_artifact(matches[0])
+                else "topic_bearing_candidate",
+                "artifact_role": matches[0].get("artifact_role"),
+                "first_hit_demoted": match_is_demoted_artifact(matches[0]),
+            }
+            if matches
+            else None
+        ),
         "duplicate_cluster_count": duplicate_metrics["duplicate_cluster_count"],
         "duplicate_collapsed_hit_count": duplicate_metrics["duplicate_hit_count"],
         "repo_doc_match_count": len(repo_doc_matches),
@@ -432,8 +497,9 @@ def search_registry_sources(
         "source_boundary": {
             "authority": "bounded_evidence" if matches else "direction_only",
             "registry_wide_search": True,
-            "source_backed_claim_allowed": bool(matches),
+            "source_backed_claim_allowed": useful_target_hit,
             "source_reopen_required_before_claim": True,
+            "demoted_artifact_matches_are_diagnostic": bool(matches) and not useful_target_hit,
             "search_miss_is_not_absence_of_memory": not bool(matches),
             "phrase_like_low_coverage_suppressed": no_phrase_like_matches,
         },

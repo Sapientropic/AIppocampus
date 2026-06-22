@@ -18,6 +18,7 @@ from aippocampus_runtime.mcp import agent_recall_discussion_projection as discus
 from aippocampus_runtime.mcp import agent_recall_recovery_projection as recovery_projection
 from aippocampus_runtime.mcp import agent_recall_repo_projection as repo_projection
 from aippocampus_runtime.mcp import agent_recall_result_projection as result_projection
+from aippocampus_runtime.mcp.runtime_provenance import compact_runtime_provenance
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 
 
@@ -716,7 +717,7 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "repo_familiarity_fallback": repo_familiarity_fallback,
         "discussion_atlas_pointer": discussion_atlas_pointer,
         "provider_key_bridge": payload.get("provider_key_bridge"),
-        "runtime_provenance": payload.get("runtime_provenance"),
+        "runtime_provenance": compact_runtime_provenance(payload.get("runtime_provenance")),
         "claim_boundary": _compact_claim_boundary(
             can_use_for=can_use_for,
             must_reopen_for=["source_backed_claims", "exact_wording", "sensitive_or_stale_facts"],

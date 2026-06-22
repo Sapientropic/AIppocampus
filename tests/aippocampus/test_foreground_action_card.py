@@ -31,7 +31,7 @@ class ForegroundActionCardTests(unittest.TestCase):
                         "phase": "final_answer",
                         "turn_index": 1,
                         "is_final": True,
-                        "text": "Agent recall should surface one action card before audit details.",
+                        "text": "Foreground action card should surface one route before audit details.",
                     },
                     ensure_ascii=False,
                 )

@@ -13,6 +13,7 @@ import hashlib
 import json
 import os
 import re
+import secrets
 from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
@@ -20,11 +21,16 @@ from typing import Any
 from aippocampus_runtime import core
 from aippocampus_runtime.io_integrity import atomic_write_json
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
+from aippocampus_runtime.recall.local_reopen_token import (
+    LOCAL_REOPEN_TOKEN_ENCODING,
+    decode_local_reopen_context,
+    decode_local_reopen_token,
+    encode_local_reopen_token,
+    local_reopen_context_token,
+)
 
 LAST_RECALL_CACHE_ENV = "AIPPOCAMPUS_AGENT_LAST_RECALL_PATH"
 RECALL_SELECTOR_ID_RE = re.compile(r"^sel_[0-9a-f]{12,32}$")
-LOCAL_REOPEN_TOKEN_ENCODING = "utf8_xor_v1_not_encryption"
-_LOCAL_REOPEN_TOKEN_MASK = 0xA5
 SENSITIVE_ASSIGNMENT_RE = re.compile(
     r"\b[A-Za-z0-9_]*(?:TOKEN|SECRET|PASSWORD|API_KEY|ACCESS_KEY)[A-Za-z0-9_]*=\S+",
     re.I,
@@ -37,6 +43,10 @@ def last_recall_cache_path(explicit: str | Path | None = None) -> Path:
     env = os.environ.get(LAST_RECALL_CACHE_ENV)
     if env:
         return Path(env).resolve()
+    return default_last_recall_cache_path()
+
+
+def default_last_recall_cache_path() -> Path:
     return core.aippocampus_registry_dir().resolve() / "agent" / "last-recall.json"
 
 
@@ -55,6 +65,39 @@ def recall_selector_cache_path(
     return recall_selector_cache_dir(last_recall_path_value) / f"{clean_id}.json"
 
 
+def recall_selector_cache_candidates(
+    selector_id: str,
+    *,
+    last_recall_path_value: str | Path | None = None,
+) -> list[Path]:
+    """Return selector lookup paths from most-specific to stable default.
+
+    Compact foreground output must not carry local cache paths. A selector
+    emitted from a custom `AIPPOCAMPUS_AGENT_LAST_RECALL_PATH` therefore needs
+    a stable same-machine fallback location as well as the caller-specific one;
+    otherwise a later MCP call can have a valid selector id but no way to find
+    its private snapshot.
+    """
+
+    primary = recall_selector_cache_path(
+        selector_id,
+        last_recall_path_value=last_recall_path_value,
+    )
+    default = (
+        default_last_recall_cache_path().parent
+        / "recall-selectors"
+        / f"{str(selector_id or '').strip()}.json"
+    )
+    candidates = [primary]
+    try:
+        same = primary.resolve() == default.resolve()
+    except OSError:
+        same = str(primary) == str(default)
+    if not same:
+        candidates.append(default)
+    return candidates
+
+
 def _selector_request_seed(cache: Mapping[str, Any]) -> str:
     requests = [
         {
@@ -70,6 +113,12 @@ def _selector_request_seed(cache: Mapping[str, Any]) -> str:
     return json.dumps(
         {
             "written_at": cache.get("written_at"),
+            # Selector ids are public-safe local reopen ids, but their backing
+            # snapshots live in a shared same-machine selector directory. A
+            # nonce prevents fast fixture/live writes in the same second from
+            # overwriting each other without hashing private cache paths into
+            # the emitted selector.
+            "selector_nonce": cache.get("selector_nonce"),
             "requests": requests[:25],
             "project": context.get("project"),
             "query": context.get("query"),
@@ -115,79 +164,15 @@ def write_recall_selector_snapshot(path: str | Path | None = None) -> str | None
         }
     )
     snapshot["privacy_boundary"] = boundary
-    try:
-        target = recall_selector_cache_path(selector_id, last_recall_path_value=path)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        atomic_write_json(target, snapshot)
-    except OSError:
-        return None
-    return selector_id
-
-
-def _encode_local_reopen_token(value: Any) -> dict[str, Any]:
-    """Encode a local reopen token so it is not stored as ordinary text.
-
-    This is an accidental-disclosure guard for a same-machine cache, not a
-    cryptographic promise. The handle remains local-private navigation material;
-    public output should keep using `--public` / `--compact-json`.
-    """
-
-    raw_text = (
-        json.dumps(dict(value), ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-        if isinstance(value, Mapping)
-        else str(value or "")
-    )
-    raw = raw_text.encode("utf-8")
-    return {
-        "encoding": LOCAL_REOPEN_TOKEN_ENCODING,
-        "bytes": [byte ^ _LOCAL_REOPEN_TOKEN_MASK for byte in raw],
-    }
-
-
-def _decode_local_reopen_token(value: Any) -> str:
-    if isinstance(value, Mapping) and value.get("encoding") == LOCAL_REOPEN_TOKEN_ENCODING:
-        raw_bytes = value.get("bytes")
-        if not isinstance(raw_bytes, list):
-            return ""
+    wrote_any = False
+    for target in recall_selector_cache_candidates(selector_id, last_recall_path_value=path):
         try:
-            return bytes(int(byte) ^ _LOCAL_REOPEN_TOKEN_MASK for byte in raw_bytes).decode(
-                "utf-8"
-            )
-        except (TypeError, ValueError, UnicodeDecodeError):
-            return ""
-    return ""
-
-
-def _local_reopen_context_token(
-    *,
-    cwd: str | Path | None,
-    clean_source_dir: str | Path | None,
-    registry_dir: str | Path | None,
-    macro_state_path: str | Path | None,
-) -> dict[str, Any] | None:
-    context: dict[str, str] = {}
-    if cwd:
-        context["cwd"] = str(Path(cwd).resolve())
-    if clean_source_dir:
-        context["clean_source_dir"] = str(Path(clean_source_dir).resolve())
-    if registry_dir:
-        context["registry_dir"] = str(Path(registry_dir).resolve())
-    if macro_state_path:
-        context["macro_state_jsonl"] = str(Path(macro_state_path).resolve())
-    if not context:
-        return None
-    return _encode_local_reopen_token(context)
-
-
-def _decode_local_reopen_context(value: Any) -> dict[str, Any]:
-    raw = _decode_local_reopen_token(value)
-    if not raw:
-        return {}
-    try:
-        decoded = json.loads(raw)
-    except json.JSONDecodeError:
-        return {}
-    return dict(decoded) if isinstance(decoded, Mapping) else {}
+            target.parent.mkdir(parents=True, exist_ok=True)
+            atomic_write_json(target, snapshot)
+            wrote_any = True
+        except OSError:
+            continue
+    return selector_id if wrote_any else None
 
 
 def _public_safe_recall_query(query: str | None) -> str:
@@ -338,6 +323,11 @@ def write_last_recall_cache(
                 "request_index": request.get("request_index"),
                 "route_id": request.get("route_id"),
                 "handle_sha256_12": handle_digest,
+                "source_anchor_gate": request.get("source_anchor_gate"),
+                "target_source_matched": request.get("target_source_matched"),
+                "source_chain_role": request.get("source_chain_role"),
+                "route_choice_posture": request.get("route_choice_posture"),
+                "recommended_evidence_route": request.get("recommended_evidence_route"),
                 "matched_cue_family": request.get("matched_cue_family"),
                 "matched_cue_anchors": request.get("matched_cue_anchors"),
                 "candidate_source_kind": request.get("candidate_source_kind"),
@@ -346,7 +336,7 @@ def write_last_recall_cache(
                 "apw_candidate_route_id": request.get("apw_candidate_route_id"),
                 "apw_candidate_id": request.get("apw_candidate_id"),
                 "apw_route_identity": request.get("apw_route_identity"),
-                "local_reopen_token": _encode_local_reopen_token(request.get("handle")),
+                "local_reopen_token": encode_local_reopen_token(request.get("handle")),
                 "opened": bool(opened_entry),
                 "opened_at": opened_entry.get("opened_at") if opened_entry else None,
                 "opened_count": opened_entry.get("opened_count") if opened_entry else 0,
@@ -354,7 +344,7 @@ def write_last_recall_cache(
         )
     if not requests:
         return False
-    context_token = _local_reopen_context_token(
+    context_token = local_reopen_context_token(
         cwd=cwd,
         clean_source_dir=clean_source_dir,
         registry_dir=registry_dir,
@@ -364,6 +354,7 @@ def write_last_recall_cache(
         "kind": "aippocampus_agent_last_recall",
         "schema_version": schema_version,
         "written_at": core.now_utc(),
+        "selector_nonce": secrets.token_hex(8),
         "requests": requests[:25],
         # This is session-local route-opened state, not a new memory layer. It
         # stores only route id plus opaque handle digest so the next foreground
@@ -529,13 +520,25 @@ def handle_from_last_recall_cache(
                 raise ValueError(
                     "same-machine last recall cache does not match the public recall projection"
                 )
-            handle = _decode_local_reopen_token(request.get("local_reopen_token"))
-            if not handle and request.get("handle"):
+            handle = decode_local_reopen_token(request.get("local_reopen_token"))
+            legacy_handle = request.get("handle")
+            if not handle and isinstance(legacy_handle, Mapping):
+                # Older local caches stored mapping handles directly. Keep the
+                # reopen path alive, but normalize them to the same canonical
+                # JSON string used by encoded same-machine tokens; `str(dict)`
+                # is not valid JSON and later MCP deepen calls will reject it.
+                handle = json.dumps(
+                    dict(legacy_handle),
+                    ensure_ascii=False,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                )
+            elif not handle and legacy_handle:
                 # Backward compatibility for caches written before the
                 # local-reopen-token boundary existed.
-                handle = str(request.get("handle") or "")
+                handle = str(legacy_handle or "")
             context = dict(cache.get("context") or {})
-            context.update(_decode_local_reopen_context(context.pop("local_reopen_context_token", None)))
+            context.update(decode_local_reopen_context(context.pop("local_reopen_context_token", None)))
             identity = request.get("apw_route_identity")
             if isinstance(identity, Mapping):
                 context["apw_route_identity"] = dict(identity)
@@ -559,8 +562,64 @@ def handle_from_last_recall_cache(
                 }
                 if compact_identity.get("source_ref_digest"):
                     context["apw_route_identity"] = compact_identity
+            gate_context = {
+                key: value
+                for key, value in {
+                    "source_anchor_gate": request.get("source_anchor_gate"),
+                    "target_source_matched": request.get("target_source_matched"),
+                    "source_chain_role": request.get("source_chain_role"),
+                    "route_choice_posture": request.get("route_choice_posture"),
+                    "recommended_evidence_route": request.get("recommended_evidence_route"),
+                }.items()
+                if value not in (None, "", [], {})
+            }
+            if gate_context:
+                context["recall_gate_context"] = gate_context
             return handle, context
     raise ValueError(f"last recall cache does not contain request {request_index}")
+
+
+def attach_recall_gate_context_to_payload(
+    payload: dict[str, Any],
+    cached_context: Mapping[str, Any],
+) -> None:
+    """Attach selector-cached recall gate context to a deepen payload.
+
+    `agent_deepen` opens source. It should also preserve whether recall had
+    accepted this route as the target source, marked it low-confidence, or used
+    a declared source-chain role. This keeps `source_backed` from silently
+    meaning `target-source accepted`.
+    """
+
+    raw_context = cached_context.get("recall_gate_context")
+    context = dict(raw_context) if isinstance(raw_context, Mapping) else {}
+    if not context:
+        return
+    payload["recall_gate_context"] = context
+    gate = context.get("source_anchor_gate")
+    if isinstance(gate, Mapping):
+        payload["source_anchor_gate"] = dict(gate)
+    for key in (
+        "target_source_matched",
+        "source_chain_role",
+        "route_choice_posture",
+        "recommended_evidence_route",
+    ):
+        if key in context:
+            payload[key] = context[key]
+    result = payload.get("result")
+    if isinstance(result, dict):
+        result["recall_gate_context"] = dict(context)
+        if isinstance(gate, Mapping):
+            result["source_anchor_gate"] = dict(gate)
+        for key in (
+            "target_source_matched",
+            "source_chain_role",
+            "route_choice_posture",
+            "recommended_evidence_route",
+        ):
+            if key in context:
+                result[key] = context[key]
 
 
 def query_from_last_recall_cache(path: str | Path | None = None) -> str | None:

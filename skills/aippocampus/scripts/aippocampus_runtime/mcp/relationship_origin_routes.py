@@ -14,6 +14,7 @@ from aippocampus_runtime.mcp.registry_source_routes import (
 from aippocampus_runtime.source.registry_search import search_registry_sources
 from aippocampus_runtime.source.relationship_origin import (
     RELATIONSHIP_ORIGIN_ROUTE_TOPIC,
+    canonical_origin_doc_intent,
     relationship_origin_intent,
     relationship_origin_search_patterns,
 )
@@ -24,6 +25,28 @@ StableId = Callable[..., str]
 SafeText = Callable[[Any, int], str]
 
 ORIGIN_SOURCE_CHAIN_REFS: tuple[dict[str, Any], ...] = (
+    {
+        "thread_key": "session:019e6071-5a9b-71d2-b15a-27f6ba211494",
+        "message_id": "msg_ea1e9e5ea23db0e8519e",
+        "line": 6726,
+        "source_chain_role": "canonical_doc",
+        "title": "relationship origin canonical essay handoff source",
+        "summary": (
+            "Source-chain route for the canonical origin essay handoff that "
+            "kept the origin narrative in The Unfinished Map."
+        ),
+        "query_cues": (
+            "未干的地图",
+            "origin",
+            "essay",
+            "unfinished",
+            "the-unfinished-map",
+            "source-backed",
+            "continuity",
+            "初心",
+            "文档",
+        ),
+    },
     {
         "thread_key": "session:019e5aea-a7ea-78f1-bb9c-b51df0837343",
         "message_id": "msg_b2dfe27431403cdc8ffa",
@@ -61,6 +84,16 @@ def _origin_chain_priority(intent: str, row: Mapping[str, Any]) -> tuple[int, st
     cue_hit = cue_match_count > 0
     role = str(row.get("source_chain_role") or "")
     strength = f"{999 - min(cue_match_count, 999):03d}"
+    if canonical_origin_doc_intent(intent):
+        if cue_hit and role == "canonical_doc":
+            return (0, strength + role)
+        if role == "canonical_doc":
+            return (1, strength + role)
+        if cue_hit:
+            return (2, strength + role)
+        if role.startswith("original_"):
+            return (3, strength + role)
+        return (4, strength + role)
     if cue_hit and role.startswith("original_"):
         return (0, strength + role)
     if cue_hit:

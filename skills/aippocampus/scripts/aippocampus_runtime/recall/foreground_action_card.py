@@ -99,14 +99,23 @@ def _decision_for(status: Any, packet: Mapping[str, Any], request: Mapping[str, 
         return "recover_no_route"
     if not packet:
         return "continue_normally"
-    if packet.get("already_opened"):
-        return "use_opened_context"
     if packet.get("claim_permission") == "blocked" or packet.get("output_mode") == "ignore_or_blocked":
         return "ignore_or_blocked"
     risks = _risk_codes(packet)
     if {"check_currentness", "conflict_requires_deepen"} & risks:
         return "deepen_before_claim"
-    if "low_source_anchor_coverage" in risks:
+    if str(packet.get("currentness") or "") == "stale" or packet.get("conflict"):
+        return "deepen_before_claim"
+    gate = _mapping(packet.get("source_anchor_gate"))
+    gate_reason = str(gate.get("reason") or "")
+    if gate.get("status") == "blocked" and (
+        "low_source_anchor_coverage" in risks
+        or gate_reason == "opened_source_validation_artifact"
+    ):
+        return "recover_low_confidence_route"
+    if packet.get("already_opened"):
+        return "use_opened_context"
+    if "low_source_anchor_coverage" in risks and not request:
         return "recover_low_confidence_route"
     if request or packet.get("output_mode") in {"reopenable_route", "bounded_summary_as_route"}:
         return "use_route_first"
@@ -125,18 +134,29 @@ def _next_action(decision: str, request: Mapping[str, Any], packet: Mapping[str,
     return "continue_normally"
 
 
-def _search_recovery_action(query: Any) -> dict[str, Any]:
+def _search_recovery_action(query: Any, *, registry_wide: bool = False) -> dict[str, Any]:
     cue = _safe_text(query, limit=160)
     base = {
         "action_id": "recover_recall_miss",
         "tool_name": "search_memory",
-        "why": "Search clean source for exact wording before broadening the recall attempt.",
+        "why": (
+            "Search registered source for a topic-bearing hit before trusting the low-confidence route."
+            if registry_wide
+            else "Search clean source for exact wording before broadening the recall attempt."
+        ),
         "claim_boundary": "no_route_claim",
     }
     if cue:
+        arguments = {"query": cue, "max": 5}
+        if registry_wide:
+            arguments["scope"] = "all_registered_sources"
         return base | {
-            "arguments": {"query": cue, "max": 5},
-            "cli_command": f"aippocampus search {shell_quote(cue)} --json",
+            "arguments": arguments,
+            "cli_command": (
+                f"aippocampus search --all {shell_quote(cue)} --json"
+                if registry_wide
+                else f"aippocampus search {shell_quote(cue)} --json"
+            ),
         }
     return base | {
         "arguments_template": {"query": "{exact_phrase}", "max": 5},
@@ -179,7 +199,10 @@ def _canonical_action(
     if decision in {"recover_no_route", "recover_low_confidence_route"}:
         if source_registered is False:
             return _onboarding_register_action()
-        return _search_recovery_action(query)
+        return _search_recovery_action(
+            query,
+            registry_wide=decision == "recover_low_confidence_route",
+        )
     if decision == "use_opened_context":
         return {
             "action_id": "use_opened_route_context",

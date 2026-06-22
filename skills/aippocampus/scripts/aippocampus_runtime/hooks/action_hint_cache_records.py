@@ -103,9 +103,34 @@ def _source_handles(values: Any) -> list[dict[str, Any]]:
             continue
         handle: dict[str, Any] = {
             key: str(value.get(key) or "").strip()
-            for key in ("route_id", "lock_id", "source_id", "segment_id", "deepen_route_id")
+            for key in (
+                "route_id",
+                "lock_id",
+                "source_id",
+                "segment_id",
+                "deepen_route_id",
+                "recall_selector",
+                "tool_name",
+                "command",
+            )
             if str(value.get(key) or "").strip()
         }
+        try:
+            request_index = int(value.get("request_index") or 0)
+        except (TypeError, ValueError):
+            request_index = 0
+        if request_index > 0:
+            handle["request_index"] = request_index
+        raw_arguments = value.get("arguments")
+        if isinstance(raw_arguments, Mapping):
+            arguments = {
+                str(key): argument_value
+                for key, argument_value in raw_arguments.items()
+                if str(key) in {"request_index", "recall_selector", "detail"}
+                and argument_value not in (None, "", [], {})
+            }
+            if arguments:
+                handle["arguments"] = arguments
         if handle:
             handle["reopen_required"] = bool(value.get("reopen_required", True))
             handles.append(handle)
@@ -332,6 +357,81 @@ def records_from_attention_route_tokens(
     return out
 
 
+def records_from_recent_recall_routes(
+    rows: Iterable[Mapping[str, Any]] | None,
+    *,
+    now_unix: float,
+) -> list[dict[str, Any]]:
+    """Materialize short-lived hints from routes the agent already reopened.
+
+    This provider is intentionally narrow. A recent recall/deepen success is
+    enough to remind the agent to reuse that same source route before broad
+    search or source-sensitive work, but it is not a durable learning rule and
+    it never stores the local reopen token. The public selector/request pair is
+    sufficient for CLI and MCP follow-through on the same machine.
+    """
+
+    out: list[dict[str, Any]] = []
+    for row in rows or []:
+        route_id = str(row.get("route_id") or "").strip()
+        selector = str(row.get("recall_selector") or "").strip()
+        try:
+            request_index = int(row.get("request_index") or 0)
+        except (TypeError, ValueError):
+            request_index = 0
+        if not route_id or not selector or request_index <= 0:
+            continue
+        command = (
+            f"aippocampus agent deepen --request {request_index} "
+            f"--recall-selector {selector} --json"
+        )
+        handle = {
+            "route_id": route_id,
+            "deepen_route_id": str(row.get("deepen_route_id") or route_id),
+            "request_index": request_index,
+            "recall_selector": selector,
+            "tool_name": "agent_deepen",
+            "arguments": {
+                "request_index": request_index,
+                "recall_selector": selector,
+            },
+            "command": command,
+            "reopen_required": True,
+        }
+        record = _base_record(
+            provider_family="recent_recall_route",
+            record_id=str(row.get("record_id") or _stable_id("recent_recall", selector, request_index, route_id)),
+            action_hint_kind="reopen_recent_recall_route_before_broad_search",
+            next_action="reopen_recent_recall_route_before_broad_search",
+            row={
+                **dict(row),
+                "confidence": str(row.get("confidence") or "high"),
+                "occurrence_count": max(1, int(row.get("opened_count") or 1)),
+                "command_terms": ["broad_search", "grep", "rg", "search"],
+                "support_levels": WEAK_SUPPORT_LEVELS,
+                "reason_codes": [
+                    "recent_recall_route_opened",
+                    "source_reopen_required",
+                    *[str(code) for code in row.get("reason_codes") or []],
+                ],
+            },
+            source_refs=[],
+            source_handles=[handle],
+            match_terms=[
+                row.get("query"),
+                row.get("matched_cue_anchors"),
+                row.get("route_id"),
+                "recent recall source route",
+                "broad search",
+            ],
+            now_unix=now_unix,
+            ttl_seconds=24 * 60 * 60,
+        )
+        if record:
+            out.append(record)
+    return out
+
+
 def records_from_aippo_learned_clauses(
     clauses: Iterable[Mapping[str, Any]] | None,
     *,
@@ -433,6 +533,7 @@ def build_action_hint_cache_report(
     aippo_verification_probes: Iterable[Mapping[str, Any]] | None = None,
     active_recall_locks: Iterable[Mapping[str, Any]] | None = None,
     attention_route_tokens: Iterable[Mapping[str, Any]] | None = None,
+    recent_recall_routes: Iterable[Mapping[str, Any]] | None = None,
     now_unix: float | None = None,
 ) -> dict[str, Any]:
     now_value = float(now_unix if now_unix is not None else time.time())
@@ -443,6 +544,7 @@ def build_action_hint_cache_report(
         *records_from_aippo_verification_probes(aippo_verification_probes, now_unix=now_value),
         *records_from_active_recall_locks(active_recall_locks, now_unix=now_value),
         *records_from_attention_route_tokens(attention_route_tokens, now_unix=now_value),
+        *records_from_recent_recall_routes(recent_recall_routes, now_unix=now_value),
     ]
     return {
         "schema_version": SCHEMA_VERSION,
@@ -462,6 +564,7 @@ def build_action_hint_cache_report(
                 aippo_verification_probes,
                 active_recall_locks,
                 attention_route_tokens,
+                recent_recall_routes,
             )
             if provider_rows is None
         ),

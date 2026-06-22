@@ -387,9 +387,13 @@ def foreground_status_cards(report: dict[str, Any]) -> list[dict[str, Any]]:
                 **plugin_command_fields,
             }
         )
-    action_hints_ready = action_hints.get("cache_status") == "with_fresh_records"
-    if not action_hints_ready and not foreground_partial:
+    action_hints_useful = bool(action_hints.get("useful"))
+    if not action_hints_useful and not foreground_partial:
         installed = bool(action_hints.get("installed"))
+        raw_foreground_action = action_hints.get("foreground_action")
+        foreground_action = (
+            raw_foreground_action if isinstance(raw_foreground_action, dict) else {}
+        )
         cards.append(
             {
                 "id": "action_hint_cache" if installed else "action_hint_setup",
@@ -401,8 +405,14 @@ def foreground_status_cards(report: dict[str, Any]) -> list[dict[str, Any]]:
                 "why": (
                     "Action-time hints are recommended setup for trusted Codex sessions, but remain fail-open navigation hints rather than source evidence or a recall blocker."
                 ),
-                "command": action_hint_status_command(),
-                "mutation_risk": "read_only",
+                "command": str(
+                    foreground_action.get("command")
+                    or action_hints.get("next_command")
+                    or action_hint_status_command()
+                ),
+                "mutation_risk": str(
+                    foreground_action.get("mutation_risk") or "read_only"
+                ),
                 "claim_boundary": "action_hints_are_navigation_not_source_evidence",
                 "recommended_next_actions": action_hint_recommended_actions(),
             }

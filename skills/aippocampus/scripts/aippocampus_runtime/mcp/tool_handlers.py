@@ -46,6 +46,10 @@ from aippocampus_runtime.mcp.recall_navigation import (
     recall_deepen_packet,
 )
 from aippocampus_runtime.mcp.runtime_provenance import mcp_runtime_provenance
+from aippocampus_runtime.mcp.selector_cache import (
+    handle_from_selector_or_last_recall,
+    recall_cache_path_for_mcp_recall,
+)
 from aippocampus_runtime.mcp.sync_status_projection import backend_selection_payload
 from aippocampus_runtime.ops import telepathy_handoff_store
 from aippocampus_runtime.privacy import LOCAL_PATH_REDACTION
@@ -53,15 +57,14 @@ from aippocampus_runtime.recall import agent_deepen_requests, why_cli
 from aippocampus_runtime.recall.agent_continuity_cli_support import (
     RouteLimitError,
     agent_recall_missing_query_payload,
+    attach_recall_gate_context_to_payload,
     compact_aippo_guidance_card,
-    handle_from_last_recall_cache,
     last_recall_unavailable_payload,
     mark_last_recall_request_opened,
     missing_handle_payload,
     normalize_route_limit,
     opened_route_keys_from_last_recall_cache,
     query_from_last_recall_cache,
-    recall_selector_cache_path,
     write_last_recall_cache,
     write_recall_selector_snapshot,
 )
@@ -296,7 +299,7 @@ def call_search_memory(arguments: dict[str, Any]) -> dict[str, Any]:
 
         payload = search_registry_sources(
             [query],
-            registry_dir=arguments.get("registry_dir"),
+            registry_dir=registry_dir_arg(arguments),
             limit=limit,
             include_paths=include_paths,
             search_budget=str(arguments.get("search_budget") or "default"),
@@ -305,6 +308,11 @@ def call_search_memory(arguments: dict[str, Any]) -> dict[str, Any]:
         )
         payload["limit"] = limit
         payload["mcp_search_scope"] = scope
+        payload["runtime_provenance"] = mcp_runtime_provenance(
+            arguments,
+            clean_source_dir=clean_source_dir_for(arguments),
+            registry_dir=registry_dir_arg(arguments),
+        )
         return text_result(public_payload(arguments, payload))
     if scope == "last_recall_candidates":
         from aippocampus_runtime.source.last_recall_search import search_last_recall_sources
@@ -325,6 +333,11 @@ def call_search_memory(arguments: dict[str, Any]) -> dict[str, Any]:
         )
         payload["limit"] = limit
         payload["mcp_search_scope"] = scope
+        payload["runtime_provenance"] = mcp_runtime_provenance(
+            arguments,
+            clean_source_dir=clean_source_dir_for(arguments),
+            registry_dir=registry_dir_arg(arguments),
+        )
         return text_result(public_payload(arguments, payload), is_error=not bool(payload.get("ok")))
     if scope != "current":
         return missing_input_recovery_card(
@@ -362,11 +375,18 @@ def call_search_memory(arguments: dict[str, Any]) -> dict[str, Any]:
         query_text=query,
     )
     payload["mcp_search_scope"] = "current"
+    payload["runtime_provenance"] = mcp_runtime_provenance(
+        arguments,
+        clean_source_dir=source_dir,
+        registry_dir=registry_dir_arg(arguments),
+    )
     return text_result(public_payload(arguments, payload))
 
 
 def registry_dir_arg(arguments: dict[str, Any]) -> Path | None:
-    return Path(str(arguments["registry_dir"])).resolve() if arguments.get("registry_dir") else None
+    if arguments.get("registry_dir"):
+        return Path(str(arguments["registry_dir"])).resolve()
+    return core.aippocampus_registry_dir().resolve()
 
 
 def continuity_domains_snapshot_arg(arguments: dict[str, Any]) -> Path | None:
@@ -510,12 +530,14 @@ def call_agent_recall(arguments: dict[str, Any]) -> dict[str, Any]:
     agent = agent_continuity_module()
     cwd_path = cwd_arg(arguments)
     source_dir = clean_source_dir_for(arguments)
+    registry_dir = registry_dir_arg(arguments)
+    cache_path = recall_cache_path_for_mcp_recall(arguments, registry_dir=registry_dir)
     provider_bridge_report = maybe_apply_provider_key_bridge_for_semantic_diagnostic(arguments)
     payload = agent.recall(
         query,
         cwd=cwd_path,
         clean_source_dir=source_dir,
-        registry_dir=arguments.get("registry_dir"),
+        registry_dir=registry_dir,
         macro_state_path=arguments.get("macro_state_jsonl"),
         project=str(arguments.get("project") or "AIppocampus"),
         max_routes=route_limit_arg(arguments.get("max"), default=agent.MAX_ROUTES),
@@ -546,21 +568,21 @@ def call_agent_recall(arguments: dict[str, Any]) -> dict[str, Any]:
         payload["runtime_provenance"] = mcp_runtime_provenance(
             arguments,
             clean_source_dir=source_dir,
-            registry_dir=arguments.get("registry_dir") or cwd_path,
+            registry_dir=registry_dir,
         )
     cache_written = write_last_recall_cache(
         payload.get("deepen_requests") or [],
         query=query,
         cwd=cwd_path,
         clean_source_dir=source_dir,
-        registry_dir=arguments.get("registry_dir"),
+        registry_dir=registry_dir,
         macro_state_path=arguments.get("macro_state_jsonl"),
         project=str(arguments.get("project") or "AIppocampus"),
         max_matches=route_limit_arg(arguments.get("max"), default=agent.MAX_ROUTES),
         schema_version=str(getattr(agent, "SCHEMA_VERSION", "agent-continuity-path-v1")),
-        path=arguments.get("last_recall_path"),
+        path=cache_path,
     )
-    selector_id = write_recall_selector_snapshot(arguments.get("last_recall_path")) if cache_written else None
+    selector_id = write_recall_selector_snapshot(cache_path) if cache_written else None
     if selector_id:
         agent_deepen_requests.attach_recall_selector_to_payload(payload, selector_id)
     payload["last_recall_cache_available"] = cache_written
@@ -590,7 +612,7 @@ def call_agent_background(arguments: dict[str, Any]) -> dict[str, Any]:
     cue = str(arguments.get("cue") or arguments.get("query") or arguments.get("task") or "").strip()
     payload = background_findings_card(
         cue,
-        registry_dir=arguments.get("registry_dir"),
+        registry_dir=registry_dir_arg(arguments),
         working_memory_path=arguments.get("working_memory_path"),
         project=str(arguments.get("project") or "AIppocampus"),
         limit=int_range(arguments.get("limit"), default=4, minimum=1, maximum=12),
@@ -611,14 +633,9 @@ def call_agent_deepen(arguments: dict[str, Any]) -> dict[str, Any]:
         request_index = int_range(arguments.get("request_index"), default=1, minimum=1, maximum=25)
         request_index_arg = request_index
         try:
-            if arguments.get("recall_selector"):
-                selector_cache_path = recall_selector_cache_path(
-                    str(arguments.get("recall_selector") or ""),
-                    last_recall_path_value=arguments.get("last_recall_path"),
-                )
-            handle, cached_context = handle_from_last_recall_cache(
+            handle, cached_context, selector_cache_path = handle_from_selector_or_last_recall(
+                arguments,
                 request_index=request_index,
-                path=selector_cache_path,
             )
         except (OSError, ValueError, json.JSONDecodeError) as exc:
             payload = last_recall_unavailable_payload(
@@ -641,7 +658,9 @@ def call_agent_deepen(arguments: dict[str, Any]) -> dict[str, Any]:
         handle,
         cwd=arguments.get("cwd") or cached_context.get("cwd"),
         clean_source_dir=arguments.get("clean_source_dir") or cached_context.get("clean_source_dir"),
-        registry_dir=arguments.get("registry_dir") or cached_context.get("registry_dir"),
+        registry_dir=arguments.get("registry_dir")
+        or cached_context.get("registry_dir")
+        or registry_dir_arg(arguments),
         macro_state_path=arguments.get("macro_state_jsonl") or cached_context.get("macro_state_jsonl"),
         project=str(arguments.get("project") or cached_context.get("project") or "AIppocampus"),
         max_matches=route_limit_arg(
@@ -655,6 +674,7 @@ def call_agent_deepen(arguments: dict[str, Any]) -> dict[str, Any]:
         result = payload.get("result")
         if isinstance(result, dict):
             result["apw_route_identity"] = dict(apw_identity)
+    attach_recall_gate_context_to_payload(payload, cached_context)
     if request_index_arg is not None and payload.get("status") == "ok":
         try:
             mark_last_recall_request_opened(
@@ -689,14 +709,9 @@ def call_agent_explain(arguments: dict[str, Any]) -> dict[str, Any]:
         request_index = int_range(arguments.get("request_index"), default=1, minimum=1, maximum=25)
         request_index_arg = request_index
         try:
-            if arguments.get("recall_selector"):
-                selector_cache_path = recall_selector_cache_path(
-                    str(arguments.get("recall_selector") or ""),
-                    last_recall_path_value=arguments.get("last_recall_path"),
-                )
-            handle, cached_context = handle_from_last_recall_cache(
+            handle, cached_context, selector_cache_path = handle_from_selector_or_last_recall(
+                arguments,
                 request_index=request_index,
-                path=selector_cache_path,
             )
         except (OSError, ValueError, json.JSONDecodeError) as exc:
             payload = last_recall_unavailable_payload(
@@ -768,7 +783,7 @@ def call_recall_diagnostic(arguments: dict[str, Any]) -> dict[str, Any]:
         mode=str(arguments.get("mode") or "why-recall"),
         cwd=cwd_path,
         clean_source_dir=source_dir,
-        registry_dir=arguments.get("registry_dir"),
+        registry_dir=registry_dir_arg(arguments),
         max_routes=route_limit_arg(arguments.get("max"), default=5),
         handle=arguments.get("handle"),
         thread_id=arguments.get("thread_id"),
@@ -796,7 +811,7 @@ def call_recall_diagnostic(arguments: dict[str, Any]) -> dict[str, Any]:
     payload["runtime_provenance"] = mcp_runtime_provenance(
         arguments,
         clean_source_dir=source_dir,
-        registry_dir=arguments.get("registry_dir") or cwd_path,
+        registry_dir=registry_dir_arg(arguments),
     )
     payload = why_cli.attach_foreground_actions(payload, cue=cue)
     return text_result(public_payload(arguments, payload))
@@ -1098,13 +1113,12 @@ def call_sync_status(arguments: dict[str, Any]) -> dict[str, Any]:
 def call_memory_health(arguments: dict[str, Any]) -> dict[str, Any]:
     try:
         payload = aippocampus_health.health_report(cwd_arg(arguments))
-    except Exception as exc:
-        del exc
+    except Exception:
         payload = memory_health_recovery.payload_for_health_exception(arguments)
         payload["runtime_provenance"] = mcp_runtime_provenance(
             arguments,
             clean_source_dir=clean_source_dir_for(arguments),
-            registry_dir=arguments.get("registry_dir") or cwd_arg(arguments),
+            registry_dir=registry_dir_arg(arguments),
         )
         return text_result(public_payload(arguments, payload), is_error=False)
 
@@ -1117,7 +1131,7 @@ def call_memory_health(arguments: dict[str, Any]) -> dict[str, Any]:
         payload["runtime_provenance"] = mcp_runtime_provenance(
             arguments,
             clean_source_dir=clean_source_dir_for(arguments),
-            registry_dir=arguments.get("registry_dir") or cwd_arg(arguments),
+            registry_dir=registry_dir_arg(arguments),
         )
     return text_result(public_payload(arguments, payload))
 

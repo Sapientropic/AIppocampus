@@ -137,8 +137,10 @@ def has_associative_path_candidate_input(
     cwd: str | Path | None = None,
     sidecar_dir: str | Path | None = None,
     clean_source_dir: str | Path | None = None,
+    registry_dir: str | Path | None = None,
     navigation_path: str | Path | None = None,
     active_lock_path: str | Path | None = None,
+    include_registry_sources: bool = False,
 ) -> bool:
     """Return whether APW has candidate sidecars worth trying by default.
 
@@ -158,11 +160,18 @@ def has_associative_path_candidate_input(
     ):
         return True
     if str(query or "").strip():
-        return apw_inputs.has_clean_source_candidate_input(
+        if apw_inputs.has_clean_source_candidate_input(
             query=query,
             cwd=cwd,
             clean_source_dir=clean_source_dir,
-        )
+        ):
+            return True
+        if include_registry_sources and registry_dir is not None:
+            return apw_inputs.has_registry_source_candidate_input(
+                query=query,
+                cwd=cwd,
+                registry_dir=registry_dir,
+            )
     return False
 
 
@@ -176,6 +185,7 @@ def recall_fallback_policy(
     cwd: str | Path | None = None,
     sidecar_dir: str | Path | None = None,
     clean_source_dir: str | Path | None = None,
+    registry_dir: str | Path | None = None,
     navigation_path: str | Path | None = None,
     active_lock_path: str | Path | None = None,
 ) -> dict[str, Any]:
@@ -196,8 +206,13 @@ def recall_fallback_policy(
         cwd=cwd,
         sidecar_dir=sidecar_dir,
         clean_source_dir=clean_source_dir,
+        registry_dir=registry_dir,
         navigation_path=navigation_path,
         active_lock_path=active_lock_path,
+        # Registry-wide exact search is useful for an explicit APW recovery ask,
+        # but it is too expensive/noisy to run as a semi-default hot-path probe
+        # on every ordinary recall. Keep it behind explicit opt-in.
+        include_registry_sources=bool(include_associative_fallback),
     )
     explicit_requested = bool(include_associative_fallback)
     explicit_run = (
@@ -421,6 +436,7 @@ def build_associative_path_agent_fallback(
     cwd: str | Path | None = None,
     sidecar_dir: str | Path | None = None,
     clean_source_dir: str | Path | None = None,
+    registry_dir: str | Path | None = None,
     semantic_bridge_path: str | Path | None = None,
     navigation_path: str | Path | None = None,
     active_lock_path: str | Path | None = None,
@@ -440,6 +456,7 @@ def build_associative_path_agent_fallback(
             cwd=cwd,
             sidecar_dir=sidecar_dir,
             clean_source_dir=clean_source_dir,
+            registry_dir=registry_dir,
             navigation_path=navigation_path,
             active_lock_path=active_lock_path,
         )
@@ -449,6 +466,7 @@ def build_associative_path_agent_fallback(
         cwd=cwd,
         sidecar_dir=sidecar_dir,
         clean_source_dir=clean_source_dir,
+        registry_dir=registry_dir,
         semantic_bridge_path=semantic_bridge_path,
         navigation_path=navigation_path,
         active_lock_path=active_lock_path,
@@ -562,6 +580,7 @@ def maybe_append_associative_path_fallback(
     cwd: str | Path | None = None,
     sidecar_dir: str | Path | None = None,
     clean_source_dir: str | Path | None = None,
+    registry_dir: str | Path | None = None,
     semantic_bridge_path: str | Path | None = None,
     navigation_path: str | Path | None = None,
     active_lock_path: str | Path | None = None,
@@ -581,6 +600,7 @@ def maybe_append_associative_path_fallback(
             cwd=cwd,
             sidecar_dir=sidecar_dir,
             clean_source_dir=clean_source_dir,
+            registry_dir=registry_dir,
             navigation_path=navigation_path,
             active_lock_path=active_lock_path,
         )
@@ -594,6 +614,7 @@ def maybe_append_associative_path_fallback(
         cwd=cwd,
         sidecar_dir=sidecar_dir,
         clean_source_dir=clean_source_dir,
+        registry_dir=registry_dir,
         semantic_bridge_path=semantic_bridge_path,
         navigation_path=navigation_path,
         active_lock_path=active_lock_path,
@@ -619,6 +640,7 @@ def maybe_append_associative_path_fallback_with_policy(
         cwd=kwargs.get("cwd"),
         sidecar_dir=kwargs.get("sidecar_dir"),
         clean_source_dir=kwargs.get("clean_source_dir"),
+        registry_dir=kwargs.get("registry_dir"),
         navigation_path=kwargs.get("navigation_path"),
         active_lock_path=kwargs.get("active_lock_path"),
     )

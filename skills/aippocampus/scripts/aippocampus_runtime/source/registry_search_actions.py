@@ -6,7 +6,9 @@ from typing import Any
 from aippocampus_runtime.contracts import (
     foreground_shell_action,
     foreground_template_action,
+    shell_quote,
 )
+from aippocampus_runtime.source.artifact_role import match_is_demoted_artifact
 
 
 def registry_search_actions(
@@ -16,6 +18,32 @@ def registry_search_actions(
     first_match: Mapping[str, Any] | None,
 ) -> list[dict[str, Any]]:
     if has_matches and first_match:
+        if match_is_demoted_artifact(first_match):
+            return [
+                foreground_shell_action(
+                    action_id="broaden_registry_search_for_topic_bearing_hit",
+                    label="Broaden registry search",
+                    command=(
+                        f"aippocampus search --all {shell_quote(query)} "
+                        "--search-budget deep --json"
+                    ),
+                    why=(
+                        "The first registry hit looks like validation, fixture, or closeout "
+                        "material; use diagnostic search before treating it as the target source."
+                    ),
+                    mutation_risk="read_only",
+                    claim_boundary="search_hit_not_yet_topic_bearing_source",
+                ),
+                foreground_template_action(
+                    action_id="recall_before_artifact_hit",
+                    label="Use recall before artifact hit",
+                    command_template='aippocampus agent recall "{cue}" --json',
+                    requires=["cue"],
+                    why="Use a richer cue when exact search mostly finds diagnostic artifacts.",
+                    mutation_risk="read_only",
+                    claim_boundary="no_claim_before_reopen",
+                ),
+            ]
         command = str(first_match.get("reopen_command") or "").strip()
         actions = [
             foreground_shell_action(

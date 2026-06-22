@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import importlib
 import io
 import json
 import os
@@ -10,11 +11,13 @@ from pathlib import Path
 from unittest.mock import patch
 
 from aippocampus_runtime.hooks import action_hint_cache as cache
+from aippocampus_runtime.hooks import recent_recall_routes
 from aippocampus_runtime.learning_loop.core import project_action_time_guidance
 from aippocampus_runtime.learning_loop.effectiveness_ledger import (
     append_ledger_rows,
     ledger_rows_from_guidance_outcomes,
 )
+from aippocampus_runtime.recall import agent_continuity, agent_continuity_cli_support
 from aippocampus_runtime.reflection.aar_v2 import build_aar_v2_report
 
 
@@ -65,6 +68,130 @@ class ActionHintCacheTests(unittest.TestCase):
             self.assertTrue(record["no_claim_before_reopen"])
             self.assertTrue(record["source_reopen_required"])
             self.assertFalse(record["can_support_factual_claim"])
+
+    def test_recent_recall_route_materializes_selector_followthrough_hint(self) -> None:
+        report = cache.build_action_hint_cache_report(
+            recent_recall_routes=[
+                {
+                    "record_id": "recent-route",
+                    "route_id": "route_recent",
+                    "request_index": 2,
+                    "recall_selector": "sel_1234567890abcdef",
+                    "query": "黏菌 联想回忆 探索算法",
+                    "opened_count": 1,
+                }
+            ],
+            now_unix=1000,
+        )
+
+        self.assertEqual(report["record_count"], 1)
+        self.assertEqual(report["provider_counts"]["recent_recall_route"], 1)
+        record = report["records"][0]
+        self.assertEqual(record["provider_family"], "recent_recall_route")
+        self.assertEqual(record["next_action"], "reopen_recent_recall_route_before_broad_search")
+        self.assertTrue(record["navigation_only"])
+        self.assertFalse(record["can_support_factual_claim"])
+        handle = record["source_handles"][0]
+        self.assertEqual(handle["tool_name"], "agent_deepen")
+        self.assertEqual(handle["arguments"]["request_index"], 2)
+        self.assertEqual(handle["arguments"]["recall_selector"], "sel_1234567890abcdef")
+        self.assertIn("--recall-selector sel_1234567890abcdef", handle["command"])
+        self.assertNotIn("local_reopen_token", json.dumps(record, ensure_ascii=False))
+
+    def test_recent_recall_anchor_probe_honors_cached_source_gate_after_reopen(self) -> None:
+        cached_context = {
+            "cwd": str(Path.cwd()),
+            "project": "AIppocampus",
+            "max": 5,
+            "source_anchor_gate": {
+                "status": "passed",
+                "reason": "source_chain_role_allowlist",
+                "source_chain_role": "original_mechanical_ascension_source",
+                "target_source_matched": True,
+            },
+            "target_source_matched": True,
+            "source_chain_role": "original_mechanical_ascension_source",
+        }
+        payload = {
+            "status": "ok",
+            "result": {
+                "source_window": {
+                    "messages": [
+                        {
+                            "text": "This opened source is the original mechanical ascension thread."
+                        }
+                    ]
+                }
+            },
+        }
+        with patch(
+            "aippocampus_runtime.recall.agent_recall_cache.handle_from_last_recall_cache",
+            return_value=({"route_id": "route_origin"}, cached_context),
+        ), patch(
+            "aippocampus_runtime.recall.agent_continuity.deepen",
+            return_value=payload,
+        ):
+            probe = recent_recall_routes._recent_recall_anchor_probe(
+                selector_path=Path("sel_1234567890abcdef.json"),
+                request_index=1,
+                query="最早那条机械飞升和海马体的讨论",
+            )
+
+        self.assertEqual(probe["status"], "passed")
+        self.assertEqual(probe["reason"], "source_chain_role_allowlist")
+        self.assertTrue(probe["target_source_matched"])
+        self.assertEqual(
+            probe["cached_source_anchor_gate"]["source_chain_role"],
+            "original_mechanical_ascension_source",
+        )
+
+    def test_cli_support_last_recall_lookup_recovers_after_import_time_patch(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            clean = root / ".aippocampus" / "clean-source"
+            clean.mkdir(parents=True)
+            cache_path = root / "last-recall-import-time-patch.json"
+            handle_dict = {
+                "kind": "thread_candidate",
+                "route_id": "route_after_patch",
+                "thread_key": "session:after-patch",
+            }
+            self.assertTrue(
+                agent_continuity_cli_support.write_last_recall_cache(
+                    [{"request_index": 1, "route_id": "route_after_patch", "handle": handle_dict}],
+                    cwd=root,
+                    clean_source_dir=clean,
+                    registry_dir=None,
+                    macro_state_path=None,
+                    project="AIppocampus",
+                    max_matches=1,
+                    schema_version=agent_continuity.SCHEMA_VERSION,
+                    path=cache_path,
+                )
+            )
+
+            try:
+                with patch(
+                    "aippocampus_runtime.recall.agent_recall_cache.handle_from_last_recall_cache",
+                    return_value=("patched-handle", {}),
+                ):
+                    importlib.reload(agent_continuity_cli_support)
+                    patched_handle, _context = (
+                        agent_continuity_cli_support.handle_from_last_recall_cache(
+                            request_index=1,
+                            path=cache_path,
+                        )
+                    )
+                    self.assertEqual(patched_handle, "patched-handle")
+
+                handle, _context = agent_continuity_cli_support.handle_from_last_recall_cache(
+                    request_index=1,
+                    path=cache_path,
+                )
+            finally:
+                importlib.reload(agent_continuity_cli_support)
+
+        self.assertEqual(json.loads(handle), handle_dict)
 
     def test_read_filters_pending_action_features_and_suppression_boundaries(self) -> None:
         report = cache.build_action_hint_cache_report(
@@ -256,7 +383,7 @@ class ActionHintCacheTests(unittest.TestCase):
         report = cache.build_action_hint_cache_report(now_unix=1000)
 
         self.assertEqual(report["record_count"], 0)
-        self.assertEqual(report["missing_provider_count"], 6)
+        self.assertEqual(report["missing_provider_count"], 7)
         self.assertFalse(report["privacy_boundary"]["raw_tool_args_serialized"])
 
     def test_aippo_verification_probe_materializes_tiny_navigation_hint(self) -> None:
@@ -404,7 +531,7 @@ class ActionHintCacheTests(unittest.TestCase):
         self.assertEqual(result["foreground_action_contract"], "foreground-action-v2")
         self.assertNotIn("agent_next_action", result)
         self.assertNotIn(result["foreground_action"], result["safe_next_actions"])
-        self.assertEqual(result["foreground_action"]["id"], "review_semantic_guidance_before_cache")
+        self.assertEqual(result["foreground_action"]["id"], "discover_learning_sources")
         self.assertIn("readiness", result)
         self.assertNotIn("cache", result)
         self.assertNotIn("effectiveness_ledger_intake", result)
@@ -520,7 +647,7 @@ class ActionHintCacheTests(unittest.TestCase):
 
         self.assertTrue(result["ok"], result)
         self.assertEqual(result["cache"]["record_count"], 0)
-        self.assertEqual(result["foreground_action"]["id"], "review_semantic_guidance_before_cache")
+        self.assertEqual(result["foreground_action"]["id"], "discover_learning_sources")
         action_ids = [item["id"] for item in result["safe_next_actions"]]
         self.assertIn("review_semantic_guidance_before_cache", action_ids)
         self.assertIn("discover_learning_sources", action_ids)
@@ -528,7 +655,7 @@ class ActionHintCacheTests(unittest.TestCase):
         self.assertIn("activate_aippo_guidance", action_ids)
         self.assertEqual(
             result["empty_cache_recovery"]["reason"],
-            "semantic_guidance_present_but_not_materialized",
+            "semantic_fixture_guidance_not_live_cache_input",
         )
         self.assertFalse(result["action_hints_ready"])
         self.assertFalse(result["wrote_empty_cache"])
@@ -539,9 +666,17 @@ class ActionHintCacheTests(unittest.TestCase):
                 "semantic_guidance_present_but_not_materialized"
             ]
         )
+        self.assertTrue(
+            result["empty_cache_recovery"][
+                "semantic_fixture_guidance_not_live_cache_input"
+            ]
+        )
         self.assertEqual(
             result["empty_cache_recovery"]["bridge_status"],
-            "blocked_pending_semantic_guidance_review",
+            "needs_live_learning_input",
+        )
+        self.assertTrue(
+            result["empty_cache_recovery"]["semantic_guidance"]["fixture_only"]
         )
         self.assertGreater(
             result["empty_cache_recovery"]["semantic_guidance"][
@@ -575,7 +710,7 @@ class ActionHintCacheTests(unittest.TestCase):
         self.assertTrue(result["empty_cache_recovery"]["wrote_empty_cache"])
         self.assertEqual(
             result["foreground_action"]["id"],
-            "review_semantic_guidance_before_cache",
+            "discover_learning_sources",
         )
 
 if __name__ == "__main__":

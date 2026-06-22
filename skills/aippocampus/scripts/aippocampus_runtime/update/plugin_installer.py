@@ -725,6 +725,7 @@ def install_codex_plugin(
         package_root=package_root,
         marketplace_dir=Path(marketplace_result["plugin_dir"]),
         installed_dir=installed_cache_dir_path,
+        codex_home_path=codex_home_resolved,
     )
 
     codex = _codex_base(codex_command)

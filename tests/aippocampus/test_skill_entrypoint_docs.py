@@ -7,6 +7,24 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 ROOT = REPO_ROOT / "skills" / "aippocampus"
 
 class SkillEntrypointDocsTests(unittest.TestCase):
+    def test_skill_frontmatter_stays_codex_yaml_compatible(self) -> None:
+        skill_text = (ROOT / "SKILL.md").read_text(encoding="utf-8")
+        self.assertTrue(skill_text.startswith("---\n"))
+        frontmatter = skill_text.split("---", 2)[1]
+
+        for raw_line in frontmatter.splitlines():
+            line = raw_line.strip()
+            if not line or ":" not in line:
+                continue
+            key, value = line.split(":", 1)
+            value = value.strip()
+            if ": " not in value:
+                continue
+            self.assertTrue(
+                value.startswith(('"', "'", "|", ">")),
+                f"{key.strip()} frontmatter value contains ': ' and must be quoted",
+            )
+
     def test_agent_entrypoints_frame_early_route_first_continuity(self) -> None:
         skill_text = (ROOT / "SKILL.md").read_text(encoding="utf-8")
         agent_context = (REPO_ROOT / "docs" / "agent-context.md").read_text(

@@ -42,6 +42,7 @@ from aippocampus_runtime.recall.agent_continuity import (
 )
 from aippocampus_runtime.recall.agent_continuity_cli_support import (
     agent_recall_missing_query_payload,
+    attach_recall_gate_context_to_payload,
     compact_aippo_guidance_card,
     compact_feedback_receipt,
     feedback_lane_resolution,
@@ -56,7 +57,7 @@ from aippocampus_runtime.recall.agent_continuity_cli_support import (
     opened_route_keys_from_last_recall_cache,
     public_recall_projection,
     query_from_last_recall_cache,
-    recall_selector_cache_path,
+    recall_selector_cache_candidates,
     render_aippo_human,
     render_deepen_human,
     render_macro_human,
@@ -515,14 +516,27 @@ def main(argv: list[str] | None = None) -> int:
         if has_request_selector:
             try:
                 if args.recall_selector:
-                    selector_cache_path = recall_selector_cache_path(
+                    selector_last_exc: Exception | None = None
+                    for candidate in recall_selector_cache_candidates(
                         args.recall_selector,
                         last_recall_path_value=args.last_recall_path,
+                    ):
+                        try:
+                            handle, cached_context = handle_from_last_recall_cache(
+                                request_index=int(args.request or 1),
+                                path=candidate,
+                            )
+                            selector_cache_path = candidate
+                            break
+                        except (OSError, ValueError, json.JSONDecodeError) as exc:
+                            selector_last_exc = exc
+                    if handle is None and selector_last_exc is not None:
+                        raise selector_last_exc
+                else:
+                    handle, cached_context = handle_from_last_recall_cache(
+                        request_index=int(args.request or 1),
+                        path=selector_cache_path,
                     )
-                handle, cached_context = handle_from_last_recall_cache(
-                    request_index=int(args.request or 1),
-                    path=selector_cache_path,
-                )
             except (OSError, ValueError, json.JSONDecodeError) as exc:
                 payload = last_recall_unavailable_payload(
                     mode="deepen",
@@ -551,6 +565,7 @@ def main(argv: list[str] | None = None) -> int:
             result = payload.get("result")
             if isinstance(result, dict):
                 result["apw_route_identity"] = dict(apw_identity)
+        attach_recall_gate_context_to_payload(payload, cached_context)
         request_index = int(args.request or 1) if has_request_selector else None
         if request_index is not None and payload.get("status") == "cannot_verify":
             recovery_cue = (
@@ -598,14 +613,27 @@ def main(argv: list[str] | None = None) -> int:
         if has_request_selector:
             try:
                 if args.recall_selector:
-                    selector_cache_path = recall_selector_cache_path(
+                    explain_selector_last_exc: Exception | None = None
+                    for candidate in recall_selector_cache_candidates(
                         args.recall_selector,
                         last_recall_path_value=args.last_recall_path,
+                    ):
+                        try:
+                            handle, explain_cached_context = handle_from_last_recall_cache(
+                                request_index=int(args.request or 1),
+                                path=candidate,
+                            )
+                            selector_cache_path = candidate
+                            break
+                        except (OSError, ValueError, json.JSONDecodeError) as exc:
+                            explain_selector_last_exc = exc
+                    if handle is None and explain_selector_last_exc is not None:
+                        raise explain_selector_last_exc
+                else:
+                    handle, explain_cached_context = handle_from_last_recall_cache(
+                        request_index=int(args.request or 1),
+                        path=selector_cache_path,
                     )
-                handle, explain_cached_context = handle_from_last_recall_cache(
-                    request_index=int(args.request or 1),
-                    path=selector_cache_path,
-                )
             except (OSError, ValueError, json.JSONDecodeError) as exc:
                 payload = last_recall_unavailable_payload(
                     mode="explain",

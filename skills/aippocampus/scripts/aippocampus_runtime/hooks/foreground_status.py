@@ -166,6 +166,7 @@ def hook_install_closeout_contract(
             "installed_ready",
             "installed_but_not_ready",
             "installed_useful",
+            "installed_active_needs_probe",
             "installed_needs_cache",
         },
         primary=primary,
@@ -419,6 +420,7 @@ _ACTION_STEP_IDS = {
     "review_guidance": "review_action_hint_guidance",
     "prepare_cache": "refresh_action_hint_cache",
     "refresh_cache": "refresh_action_hint_cache",
+    "probe": "probe_action_hint_hot_path",
     "install": "install_action_hint_hook",
     "rollback": "rollback_action_hint_hook",
 }
@@ -428,6 +430,7 @@ _ACTION_STEP_RISK = {
     "review_guidance": "read_only",
     "prepare_cache": "explicit_local_cache_write",
     "refresh_cache": "explicit_local_cache_write",
+    "probe": "read_only",
     "install": "explicit_config_write",
     "rollback": "explicit_config_write",
 }
@@ -456,6 +459,10 @@ def _action_hint_step_action(step: Mapping[str, Any], *, claim_boundary: str) ->
         "check_action_hint_status": (
             "Recheck whether action-time hints are installed and have prepared "
             "records available."
+        ),
+        "probe_action_hint_hot_path": (
+            "Run a live PreToolUse-shaped probe; only a matched hint with a "
+            "follow-through source route proves useful action-time behavior."
         ),
     }
     action_id = _ACTION_STEP_IDS.get(label, f"action_hint_{label}")
@@ -530,6 +537,33 @@ def action_hint_status_contract(frontstage_card: Mapping[str, Any]) -> dict[str,
         primary = review_action
     elif installed and isinstance(refresh_action, dict):
         primary = refresh_action
+    elif installed:
+        probe_action = next(
+            (action for action in mapped_steps if action.get("id") == "probe_action_hint_hot_path"),
+            None,
+        )
+        primary = (
+            dict(probe_action)
+            if isinstance(probe_action, dict)
+            else next(
+                (
+                    action
+                    for action in mapped_steps
+                    if action.get("id")
+                    in {
+                        "check_action_hint_status",
+                        "review_action_hint_guidance",
+                    }
+                ),
+                mapped_steps[0]
+                if mapped_steps
+                else _status_action(
+                    action_id="check_action_hint_status",
+                    label="Check action-hint hook status",
+                    command="aippocampus hooks action status --json",
+                ),
+            )
+        )
     else:
         primary = next(
             (

@@ -227,14 +227,48 @@ def compact_agent_deepen_payload(
     route_id = result.get("route_id")
     apw_identity = result.get("apw_route_identity") or source.get("apw_route_identity")
     apw_identity = dict(apw_identity) if isinstance(apw_identity, Mapping) else {}
+    recall_gate_context = _as_dict(
+        result.get("recall_gate_context") or source.get("recall_gate_context")
+    )
+    source_anchor_gate = _as_dict(
+        result.get("source_anchor_gate")
+        or source.get("source_anchor_gate")
+        or recall_gate_context.get("source_anchor_gate")
+    )
+    target_source_matched = (
+        result.get("target_source_matched")
+        if "target_source_matched" in result
+        else source.get("target_source_matched")
+        if "target_source_matched" in source
+        else recall_gate_context.get("target_source_matched")
+    )
+    recommended_evidence_route = (
+        result.get("recommended_evidence_route")
+        if "recommended_evidence_route" in result
+        else source.get("recommended_evidence_route")
+        if "recommended_evidence_route" in source
+        else recall_gate_context.get("recommended_evidence_route")
+    )
     feedback_route_id = apw_identity.get("feedback_target_id") or route_id
-    primary_action = {
-        "id": "use_opened_source_window",
-        "label": "Use the opened source window",
-        "mutation_risk": "read_only",
-        "claim_boundary": "source_open_within_returned_window",
-        "why": "Source has been reopened; use only the returned window unless you deepen or request full detail.",
-    }
+    if source_anchor_gate.get("status") == "blocked" or recommended_evidence_route is False:
+        primary_action = {
+            "id": "treat_opened_source_as_diagnostic",
+            "label": "Treat opened source as diagnostic",
+            "mutation_risk": "read_only",
+            "claim_boundary": "opened_source_not_target_evidence",
+            "why": (
+                "Source opened, but recall did not accept it as the target evidence route; "
+                "use search or another deepen route before making source-backed claims."
+            ),
+        }
+    else:
+        primary_action = {
+            "id": "use_opened_source_window",
+            "label": "Use the opened source window",
+            "mutation_risk": "read_only",
+            "claim_boundary": "source_open_within_returned_window",
+            "why": "Source has been reopened; use only the returned window unless you deepen or request full detail.",
+        }
     feedback = _feedback_actions(feedback_route_id)
     carry_actions = _carry_next_actions()
     foreground_fields = canonical_foreground_action_fields(
@@ -253,6 +287,20 @@ def compact_agent_deepen_payload(
             "evidence_level": result.get("evidence_level") or result.get("support_level"),
             "route_id": result.get("route_id"),
             "apw_route_identity": apw_identity,
+            "recall_gate_context": recall_gate_context,
+            "source_anchor_gate": source_anchor_gate,
+            "target_source_matched": target_source_matched,
+            "source_chain_role": (
+                result.get("source_chain_role")
+                or source.get("source_chain_role")
+                or recall_gate_context.get("source_chain_role")
+            ),
+            "route_choice_posture": (
+                result.get("route_choice_posture")
+                or source.get("route_choice_posture")
+                or recall_gate_context.get("route_choice_posture")
+            ),
+            "recommended_evidence_route": recommended_evidence_route,
             "summary": why,
             "source_window_summary": {
                 "message_count": message_count,

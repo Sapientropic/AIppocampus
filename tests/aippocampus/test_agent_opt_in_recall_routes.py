@@ -805,6 +805,40 @@ class AgentOptInRecallRoutesTests(unittest.TestCase):
         self.assertTrue(wrote)
         self.assertEqual(json.loads(handle), handle_dict)
 
+    def test_legacy_last_recall_cache_dict_handle_still_reopens_as_json(self) -> None:
+        cache_path = self.cwd / "last-recall-legacy-dict.json"
+        handle_dict = {
+            "kind": "source_ref",
+            "route_id": "route_legacy_dict",
+            "source_refs": [{"source_id": "src_test", "message_id": "msg_user"}],
+        }
+        cache_path.write_text(
+            json.dumps(
+                {
+                    "kind": "aippocampus_agent_last_recall",
+                    "schema_version": agent_continuity.SCHEMA_VERSION,
+                    "requests": [
+                        {
+                            "request_index": 1,
+                            "route_id": "route_legacy_dict",
+                            "handle": handle_dict,
+                        }
+                    ],
+                    "context": {},
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        handle, _context = agent_continuity_cli_support.handle_from_last_recall_cache(
+            request_index=1,
+            path=cache_path,
+        )
+
+        self.assertEqual(json.loads(handle), handle_dict)
+        self.assertNotIn("'", handle)
+
     def test_last_recall_cache_marks_opened_routes_without_plaintext_handles(self) -> None:
         cache_path = self.cwd / "last-recall-opened.json"
         wrote = agent_continuity_cli_support.write_last_recall_cache(
@@ -1241,6 +1275,16 @@ class AgentOptInRecallRoutesTests(unittest.TestCase):
                 cwd=self.cwd,
                 clean_source_dir=self.clean,
             )
+            already_opened_report = agent_continuity.recall(
+                "benchmark 实测检索不弱 recall deepen 实际都好差劲",
+                cwd=self.cwd,
+                clean_source_dir=self.clean,
+                opened_route_keys={
+                    agent_continuity_cli_support.last_recall_route_wildcard_key(
+                        "route_low_anchor"
+                    )
+                },
+            )
 
         self.assertEqual(report["source_anchor_gate"]["status"], "blocked")
         self.assertEqual(report["foreground_action_card"]["decision"], "recover_low_confidence_route")
@@ -1248,6 +1292,11 @@ class AgentOptInRecallRoutesTests(unittest.TestCase):
         self.assertIn("low_source_anchor_coverage", report["memory_packets"][0]["risk_flags"])
         secondary = report["foreground_action_card"]["safe_next_actions"][1]
         self.assertEqual(secondary["action_id"], "deepen_low_confidence_route")
+        self.assertTrue(already_opened_report["memory_packets"][0]["already_opened"])
+        self.assertEqual(
+            already_opened_report["foreground_action_card"]["decision"],
+            "recover_low_confidence_route",
+        )
 
     def test_anchor_matching_source_route_remains_default_deepen_action(self) -> None:
         self._append_clean_rows(
@@ -1295,6 +1344,59 @@ class AgentOptInRecallRoutesTests(unittest.TestCase):
         self.assertEqual(report["source_anchor_gate"]["opened_anchor_hits"], 3)
         self.assertEqual(report["foreground_action_card"]["decision"], "use_route_first")
         self.assertEqual(report["suggested_next"], "agent deepen")
+
+    def test_validation_artifact_anchor_echo_is_not_default_deepen_action(self) -> None:
+        self._append_clean_rows(
+            [
+                {
+                    "message_id": "msg_validation_anchor_echo",
+                    "turn_id": "turn_validation_anchor_echo",
+                    "source_id": "src_test",
+                    "source_line": 42,
+                    "role": "assistant",
+                    "phase": "final_answer",
+                    "turn_index": 42,
+                    "is_final": True,
+                    "text": (
+                        "readiness fixture control-only validation report: "
+                        "aippocampus agent recall 黏菌 联想回忆 探索算法 --json"
+                    ),
+                }
+            ]
+        )
+        handle = {
+            "kind": "source_ref",
+            "route_id": "route_validation_anchor_echo",
+            "source_refs": [{"source_id": "src_test", "message_id": "msg_validation_anchor_echo"}],
+        }
+        fake_packet = {
+            "kind": "aippocampus_recall_context",
+            "status": "ok",
+            "routes": [
+                {
+                    "route_id": "route_validation_anchor_echo",
+                    "kind": "source_ref",
+                    "handle": handle,
+                    "route_label": "validation echo route",
+                    "source_refs": handle["source_refs"],
+                }
+            ],
+        }
+
+        with patch.object(agent_continuity, "recall_context_packet", return_value=fake_packet):
+            report = agent_continuity.recall(
+                "黏菌 联想回忆 探索算法",
+                cwd=self.cwd,
+                clean_source_dir=self.clean,
+            )
+
+        self.assertEqual(report["source_anchor_gate"]["status"], "blocked")
+        self.assertEqual(
+            report["source_anchor_gate"]["reason"],
+            "opened_source_validation_artifact",
+        )
+        self.assertEqual(report["source_anchor_gate"]["opened_anchor_hits"], 3)
+        self.assertEqual(report["foreground_action_card"]["decision"], "recover_low_confidence_route")
 
     def test_macro_applied_recall_exposes_compact_route_delta_hint(self) -> None:
         fake_packet = {

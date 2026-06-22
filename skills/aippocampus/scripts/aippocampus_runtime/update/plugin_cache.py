@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import shutil
+import sys
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -65,6 +66,75 @@ def _load_json(path: Path) -> Mapping[str, Any] | None:
     return data if isinstance(data, Mapping) else None
 
 
+def _mcp_server_config(root: Path | None) -> Mapping[str, Any] | None:
+    if root is None:
+        return None
+    data = _load_json(root / ".mcp.json")
+    if data is None:
+        return None
+    server = (data.get("mcpServers") or {}).get(PLUGIN_NAME)
+    return server if isinstance(server, Mapping) else None
+
+
+def _current_mcp_server_config(server: Mapping[str, Any] | None) -> bool:
+    if server is None:
+        return False
+    command = str(server.get("command") or "")
+    args = [str(item) for item in server.get("args") or []]
+    command_name = Path(command).name.casefold()
+    if command_name in {"aippocampus", "aippocampus.exe"}:
+        return args[:1] == ["mcp"]
+    if len(args) >= 2 and args[0] == "-m":
+        module_name = args[1]
+        if module_name == "aippocampus_runtime.cli.facade":
+            return len(args) >= 3 and args[2] == "mcp"
+        if module_name == "aippocampus_runtime.mcp.server":
+            return True
+    return False
+
+
+def _mcp_launch_kind(command: str, args: list[str]) -> str:
+    command_name = Path(command).name.casefold()
+    if command_name in {"aippocampus", "aippocampus.exe"}:
+        return "console_script"
+    if len(args) >= 2 and args[0] == "-m":
+        return "python_module"
+    if Path(command).is_absolute():
+        return "absolute_command"
+    return "host_command"
+
+
+def _mcp_launch_info(root: Path | None) -> dict[str, Any]:
+    server = _mcp_server_config(root)
+    if server is None:
+        return {
+            "exists": False,
+            "current": False,
+            "command": None,
+            "args": [],
+            "command_kind": None,
+        }
+    command = str(server.get("command") or "")
+    args = [str(item) for item in server.get("args") or []]
+    env = server.get("env")
+    env_keys = {str(key) for key in env} if isinstance(env, Mapping) else set()
+    return {
+        "exists": True,
+        "current": _current_mcp_server_config(server),
+        "command": command or None,
+        "args": args,
+        "command_kind": _mcp_launch_kind(command, args) if command else None,
+        "uses_console_script": Path(command).name.casefold()
+        in {"aippocampus", "aippocampus.exe"},
+        "uses_python_module": len(args) >= 2 and args[0] == "-m",
+        "uses_absolute_command": Path(command).is_absolute() if command else False,
+        "env_key_count": len(env_keys),
+        "codex_home_env_present": "CODEX_HOME" in env_keys,
+        "registry_dir_env_present": "AIPPOCAMPUS_REGISTRY_DIR" in env_keys,
+        "claim_boundary": "installed-cache MCP launch shape is host setup evidence, not recall quality evidence",
+    }
+
+
 def _manifest_info(root: Path | None) -> dict[str, Any]:
     if root is None:
         return {
@@ -83,6 +153,7 @@ def _manifest_info(root: Path | None) -> dict[str, Any]:
             "version": None,
             "manifest_hash": None,
             "tree_hash": None,
+            "mcp_launch": _mcp_launch_info(root),
         }
     data = _load_json(manifest)
     if data is None:
@@ -93,6 +164,7 @@ def _manifest_info(root: Path | None) -> dict[str, Any]:
             "version": None,
             "manifest_hash": None,
             "tree_hash": _tree_fingerprint(root),
+            "mcp_launch": _mcp_launch_info(root),
         }
     return {
         "status": "present",
@@ -102,6 +174,7 @@ def _manifest_info(root: Path | None) -> dict[str, Any]:
         "version": str(data.get("version") or ""),
         "manifest_hash": _file_hash(manifest),
         "tree_hash": _tree_fingerprint(root),
+        "mcp_launch": _mcp_launch_info(root),
     }
 
 
@@ -383,10 +456,87 @@ def _portable_mcp_config(path: Path) -> bool:
     if data is None:
         return False
     server = ((data.get("mcpServers") or {}).get(PLUGIN_NAME) or {}) if isinstance(data, Mapping) else {}
-    command = str(server.get("command") or "")
-    if Path(command).name.casefold() in {"python", "python.exe"}:
+    command = str(server.get("command") or "") if isinstance(server, Mapping) else ""
+    if Path(command).name.casefold() in {"aippocampus", "aippocampus.exe"}:
         return False
-    return bool(command)
+    return _current_mcp_server_config(server if isinstance(server, Mapping) else None)
+
+
+def _codex_home_from_installed_cache_path(installed_root: Path) -> Path | None:
+    for parent in installed_root.resolve().parents:
+        if parent.name == "plugins":
+            return parent.parent
+    return None
+
+
+def _ensure_installed_mcp_host_launch(
+    installed_root: Path,
+    *,
+    codex_home_path: Path | None,
+) -> dict[str, Any]:
+    mcp_path = installed_root / ".mcp.json"
+    data = dict(_load_json(mcp_path) or {})
+    servers = data.get("mcpServers")
+    if not isinstance(servers, Mapping):
+        servers = {}
+    servers = dict(servers)
+    server = servers.get(PLUGIN_NAME)
+    server = dict(server) if isinstance(server, Mapping) else {}
+    original_command = str(server.get("command") or "")
+    original_args = [str(item) for item in server.get("args") or []]
+    original_current = _current_mcp_server_config(server)
+    original_console_script = Path(original_command).name.casefold() in {
+        "aippocampus",
+        "aippocampus.exe",
+    }
+    original_absolute_command = Path(original_command).is_absolute()
+    command_updated = False
+    if not original_current or original_console_script or not original_absolute_command:
+        # The public plugin package stays portable (`aippocampus mcp`), but the
+        # installed Codex cache is host-local. GUI MCP hosts do not always
+        # inherit the shell PATH. Keep the installed layer deterministic by
+        # using the exact interpreter that refreshed the cache and an explicit
+        # module entrypoint. A current absolute Python command is the only shape
+        # we preserve here.
+        server["command"] = str(Path(sys.executable))
+        server["args"] = ["-m", "aippocampus_runtime.cli.facade", "mcp"]
+        command_updated = (server["command"] != original_command) or (
+            server["args"] != original_args
+        )
+    env = server.get("env")
+    env = dict(env) if isinstance(env, Mapping) else {}
+    resolved_codex_home = codex_home_path or _codex_home_from_installed_cache_path(installed_root)
+    env_keys_added: list[str] = []
+    env_keys_updated: list[str] = []
+    if resolved_codex_home is not None:
+        codex_home_text = str(resolved_codex_home.resolve())
+        registry_dir_text = str((resolved_codex_home.resolve() / "aippocampus-registry"))
+        for key, value in {
+            "CODEX_HOME": codex_home_text,
+            "AIPPOCAMPUS_REGISTRY_DIR": registry_dir_text,
+        }.items():
+            previous = env.get(key)
+            env[key] = value
+            if previous is None:
+                env_keys_added.append(key)
+            elif str(previous) != value:
+                env_keys_updated.append(key)
+    if env:
+        server["env"] = env
+    servers[PLUGIN_NAME] = server
+    data["mcpServers"] = servers
+    mcp_path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return {
+        "status": "current",
+        "command_updated": command_updated,
+        "env_keys_added": env_keys_added,
+        "env_keys_updated": env_keys_updated,
+        "env_key_count": len(env),
+        "codex_home_env_present": "CODEX_HOME" in env,
+        "registry_dir_env_present": "AIPPOCAMPUS_REGISTRY_DIR" in env,
+        "command_kind": _mcp_launch_info(installed_root).get("command_kind"),
+        "claim_boundary": "installed-cache launch repair is local host setup, not source evidence",
+    }
 
 
 def _replace_plugin_tree(source: Path, target: Path, *, preserve_portable_mcp: bool) -> dict[str, Any]:
@@ -428,6 +578,7 @@ def refresh_plugin_cache_layers(
     package_root: Path,
     marketplace_dir: Path | None = None,
     installed_dir: Path | None = None,
+    codex_home_path: Path | None = None,
     plugin_name: str = PLUGIN_NAME,
 ) -> dict[str, Any]:
     if not package_root.exists():
@@ -446,6 +597,10 @@ def refresh_plugin_cache_layers(
             package_root,
             installed_root,
             preserve_portable_mcp=True,
+        )
+        refreshed["installed_cache"]["mcp_host_launch"] = _ensure_installed_mcp_host_launch(
+            installed_root,
+            codex_home_path=codex_home_path,
         )
     return {
         "ok": True,

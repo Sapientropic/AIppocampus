@@ -13,6 +13,7 @@ from aippocampus_runtime.core import (
     compact_text,
 )
 from aippocampus_runtime.privacy import LOCAL_PATH_REDACTION as LOCAL_PATH_REDACTION
+from aippocampus_runtime.source.artifact_role import artifact_role_profile
 from aippocampus_runtime.source.clean_source import SCOPE_LABEL_ORDER
 from aippocampus_runtime.source.clean_source_resolver import resolve_clean_source_dir
 from aippocampus_runtime.source.current_source_window import (
@@ -152,6 +153,16 @@ def search_clean_source(
         if score <= 0:
             continue
         noise_reason = process_noise_reason(message_text)
+        artifact_role = artifact_role_profile(
+            text=message_text,
+            query_text=" ".join(str(pattern) for pattern in patterns),
+            metadata={
+                "role": message.get("role"),
+                "phase": message.get("phase"),
+                "scope_labels": message_scope_labels,
+                "semantic_scope_labels": semantic_scope_labels,
+            },
+        )
         match = {
             "id": message.get("message_id") or message.get("id"),
             "message_id": message.get("message_id") or message.get("id"),
@@ -173,13 +184,17 @@ def search_clean_source(
             "snippet": compact_text(message_text, snippet_chars) if snippet_chars else "",
             "snippet_omitted": snippet_chars == 0,
         }
+        if artifact_role.get("role") != "topic_candidate":
+            match["artifact_role"] = artifact_role
+        if artifact_role.get("demote"):
+            match["artifact_demoted"] = True
         if noise_reason:
             match["search_noise"] = True
             match["noise_reason"] = noise_reason
         matches.append(match)
     matches.sort(
         key=lambda item: (
-            1 if item.get("search_noise") else 0,
+            1 if item.get("search_noise") or item.get("artifact_demoted") else 0,
             -as_float(item.get("score")),
             as_int(item.get("source_line")),
         )

@@ -228,6 +228,58 @@ class ActionHintHookTests(unittest.TestCase):
         self.assertTrue(report["hint"]["navigation_only"])
         self.assertNotIn("PRIVATE_REPO_SENTINEL", serialized)
 
+    def test_probe_reports_useful_only_with_followthrough_source_handle(self) -> None:
+        cache_report = action_hint_cache.build_action_hint_cache_report(
+            recent_recall_routes=[
+                {
+                    "record_id": "recent-route",
+                    "route_id": "route_recent",
+                    "request_index": 1,
+                    "recall_selector": "sel_1234567890abcdef",
+                    "query": "黏菌 联想回忆 探索算法",
+                    "opened_count": 1,
+                }
+            ],
+            now_unix=1000,
+        )
+        for record in cache_report["records"]:
+            record["expires_at_unix"] = 9999999999
+        with tempfile.TemporaryDirectory() as tmp:
+            cache_path = Path(tmp) / "action-hints.jsonl"
+            action_hint_cache.write_action_hint_cache(cache_path, cache_report)
+            env = {**os.environ, "PYTHONPATH": str(SCRIPTS)}
+            proc = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "aippocampus_runtime.hooks.action_hint",
+                    "probe",
+                    "--cache-jsonl",
+                    str(cache_path),
+                    "--json",
+                ],
+                text=True,
+                encoding="utf-8",
+                capture_output=True,
+                env=env,
+                check=False,
+            )
+
+        payload = json.loads(proc.stdout)
+        encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(payload["decision"], "hint")
+        self.assertTrue(payload["useful"])
+        self.assertEqual(payload["usefulness_stage"], "useful")
+        self.assertEqual(
+            payload["diagnostics"]["source_followthrough_handle_count"],
+            1,
+        )
+        handle = payload["hint"]["source_handles"][0]
+        self.assertEqual(handle["tool_name"], "agent_deepen")
+        self.assertEqual(handle["arguments"]["recall_selector"], "sel_1234567890abcdef")
+        self.assertNotIn("local_reopen_token", encoded)
+
     def test_unsupported_event_fails_open(self) -> None:
         report = action_hint.evaluate_action_hint(
             {"hook_event_name": "UserPromptSubmit", "prompt": "hello"},

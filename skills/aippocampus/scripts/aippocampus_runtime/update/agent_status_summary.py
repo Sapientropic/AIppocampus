@@ -62,8 +62,13 @@ STATUS_ACTION_PRIORITY = {
     "prompt_hook_latency": 10,
     "warm_ambient": 20,
     "provider": 30,
+    "hooks": 35,
     "action_hints": 40,
-    "plugin_cache": 50,
+    # Plugin cache repair is important, but it is a nested install/cache
+    # follow-up rather than the foreground state itself. Keep it in
+    # safe_next_actions so agents can execute the concrete repair command,
+    # while letting direct foreground/provider blockers remain the primary card.
+    "plugin_cache": 65,
     "operator_detail": 90,
 }
 
@@ -181,6 +186,28 @@ def _prioritize_status_actions(actions: list[dict[str, Any]]) -> list[dict[str, 
     ]
 
 
+def _dedupe_status_actions(actions: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Keep one foreground card per surface after priority ordering.
+
+    The raw status report can mention the same surface from multiple places:
+    direct surface readiness, summary.needs_action, and late next_actions. The
+    compact agent card is an execution queue, so repeating the same surface
+    teaches agents to do the same repair twice and can hide the next real
+    blocker behind a duplicate primary action.
+    """
+
+    seen: set[str] = set()
+    deduped: list[dict[str, Any]] = []
+    for action in actions:
+        surface = str(action.get("surface") or action.get("id") or "")
+        if surface and surface in seen:
+            continue
+        if surface:
+            seen.add(surface)
+        deduped.append(action)
+    return deduped
+
+
 def compact_agent_status_report(
     report: dict[str, Any],
     *,
@@ -204,15 +231,34 @@ def compact_agent_status_report(
     action_hints = hooks.get("action_hints") if isinstance(hooks, dict) else {}
     if not isinstance(action_hints, dict):
         action_hints = {}
+    agent_status_for_needs = str(agent.get("status") or summary.get("agent_callable_status") or "")
     needs_action = [
         str(item)
         for item in summary.get("needs_action") or []
-        if str(item) not in {"", "agent_callable"}
+        if str(item)
+        and (
+            str(item) != "agent_callable"
+            or agent_status_for_needs in TRUE_FOREGROUND_TOOL_FAILURE_STATUSES
+        )
     ]
+    if (
+        agent_status_for_needs in TRUE_FOREGROUND_TOOL_FAILURE_STATUSES
+        and "agent_callable" not in needs_action
+    ):
+        needs_action.insert(0, "agent_callable")
     action_hints_ready = action_hints.get("cache_status") == "with_fresh_records"
+    action_hints_useful_signal = bool(action_hints.get("useful"))
     action_hints_installed = bool(action_hints.get("installed"))
     action_hints_hot_path_active = bool(action_hints.get("hot_path_active"))
-    action_hint_primary_command = update_actions.action_hint_status_command()
+    raw_action_hint_foreground = action_hints.get("foreground_action")
+    action_hint_foreground = (
+        raw_action_hint_foreground if isinstance(raw_action_hint_foreground, dict) else {}
+    )
+    action_hint_primary_command = str(
+        action_hint_foreground.get("command")
+        or action_hints.get("next_command")
+        or update_actions.action_hint_status_command()
+    )
     hook_status = str(hooks.get("status") or "not_checked")
     prompt_installed = bool(hooks.get("prompt_installed"))
     lifecycle_installed = bool(hooks.get("lifecycle_installed"))
@@ -297,7 +343,7 @@ def compact_agent_status_report(
                 command="aippocampus update status --operator-json",
             )
         )
-    if not action_hints_ready and not foreground_partial:
+    if action_hints_installed and not action_hints_useful_signal and not foreground_partial:
         actions.append(
             _compact_update_action(
                 surface="action_hints",
@@ -318,6 +364,15 @@ def compact_agent_status_report(
                     reason=status_code,
                     command=command,
                     status_code=status_code,
+                )
+            )
+        if "hooks" in {str(item) for item in plan_surface_filter} and not action_hints_installed:
+            actions.append(
+                _compact_update_action(
+                    surface="action_hints",
+                    reason="not_installed",
+                    command=update_actions.action_hint_status_command(),
+                    status_code="not_installed",
                 )
             )
     if prompt_latency_risk and not foreground_partial:
@@ -458,7 +513,7 @@ def compact_agent_status_report(
         and not prompt_latency_risk
         and (
             _safe_int(prompt_hook_status.get("last_prompt_hook_useful_signal_count")) > 0
-            or action_hints_ready
+            or action_hints_useful_signal
         )
     )
     prompt_hook_active = bool(
@@ -500,7 +555,9 @@ def compact_agent_status_report(
     )
     action_hints_stage = (
         "useful"
-        if action_hints_ready
+        if action_hints_useful_signal
+        else "active"
+        if action_hints_hot_path_active or action_hints_ready
         else "callable"
         if action_hints_installed
         else "installed"
@@ -533,7 +590,7 @@ def compact_agent_status_report(
         "lifecycle_hook_installed": lifecycle_installed,
         "action_hints_installed": action_hints_installed,
         "action_hints_stage": action_hints_stage,
-        "action_hints_useful": action_hints_ready,
+        "action_hints_useful": action_hints_useful_signal,
         "hot_path_active": action_hints_hot_path_active,
         "latency_risk": {
             "status": prompt_latency_status or "not_checked",
@@ -568,7 +625,7 @@ def compact_agent_status_report(
         if bool(summary.get("core_ready")) and not needs_action
         else "attention_needed"
     )
-    actions = _prioritize_status_actions(actions)
+    actions = _dedupe_status_actions(_prioritize_status_actions(actions))
     primary_action = actions[0] if actions else {
         "id": "continue_after_update_status",
         "label": "Continue after update status",
