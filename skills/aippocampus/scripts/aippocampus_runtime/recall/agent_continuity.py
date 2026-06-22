@@ -1044,6 +1044,7 @@ def recall(
             cwd=cwd_path,
             sidecar_dir=associative_path_sidecar_dir,
             clean_source_dir=source_dir,
+            registry_dir=registry_path,
             semantic_bridge_path=associative_path_bridge_path,
             navigation_path=associative_path_navigation_path,
             active_lock_path=associative_path_active_lock_path,

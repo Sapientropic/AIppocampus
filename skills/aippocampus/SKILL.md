@@ -1,6 +1,6 @@
 ---
 name: aippocampus
-description: Find source-backed continuity before important agent work: recover old wording, reopen routes, check handoffs/corrections/preferences, and keep fresh-thread or high-risk work grounded in local source. Use reference docs and CLI cards for setup, repair, import, sync, hooks, and storage operations.
+description: "Find source-backed continuity before important agent work: recover old wording, reopen routes, check handoffs/corrections/preferences, and keep fresh-thread or high-risk work grounded in local source. Use reference docs and CLI cards for setup, repair, import, sync, hooks, and storage operations."
 ---
 
 # AIppocampus

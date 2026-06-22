@@ -120,6 +120,68 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
                 + "\n"
             )
 
+    def write_registry_clean_source(
+        self,
+        *,
+        registry_dir: Path,
+        thread_key: str,
+        message_id: str,
+        source_text: str,
+    ) -> Path:
+        clean = self.cwd / "registry-source" / thread_key.replace(":", "-") / "clean-source"
+        clean.mkdir(parents=True)
+        row = {
+            "message_id": message_id,
+            "turn_id": f"turn-{message_id}",
+            "turn_index": 23,
+            "source_id": f"src-{message_id}",
+            "source_line": 90,
+            "role": "assistant",
+            "phase": "final_answer",
+            "is_final": True,
+            "text": source_text,
+        }
+        (clean / "messages.jsonl").write_text(
+            json.dumps(row, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+        (clean / "turns.jsonl").write_text(
+            json.dumps(
+                {
+                    "turn_id": row["turn_id"],
+                    "turn_index": row["turn_index"],
+                    "message_ids": [message_id],
+                    "assistant_phase": "final_answer",
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        registry_dir.mkdir(parents=True, exist_ok=True)
+        (registry_dir / "threads.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "updated_at": "2026-06-22T00:00:00Z",
+                    "threads": [
+                        {
+                            "thread_key": thread_key,
+                            "title": "registry APW MCP source",
+                            "project_label": "AIppocampus",
+                            "paths": {
+                                "clean_source_dir": str(clean),
+                                "clean_source_messages_jsonl": str(clean / "messages.jsonl"),
+                            },
+                        }
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        return clean
+
     def assert_mcp_apw_roundtrip(
         self,
         *,
@@ -290,6 +352,86 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
         self.assertTrue(rerun["associative_path_policy"]["apw_candidate_input_available"])
         self.assertEqual(rerun["associative_path_fallback"]["status"], "abstained")
         self.assertIn("negative_feedback_evaporated", rerun["associative_path_fallback"]["reason_codes"])
+
+    def test_mcp_first_apw_registry_clean_source_roundtrip(self) -> None:
+        registry = self.cwd / "registry"
+        self.write_registry_clean_source(
+            registry_dir=registry,
+            thread_key="session:mcp-registry-apw",
+            message_id="msg-mcp-registry-apw",
+            source_text="我们认真讨论过黏菌启发的联想回忆和探索算法，MCP 必须 deepen 打开这条 source。",
+        )
+        cache_path = self.cwd / "mcp-registry-last-recall.json"
+
+        with mock.patch.dict(
+            "os.environ",
+            {associative_path_fallback.PROMOTION_MODE_ENV: "semi_default_recovery"},
+        ):
+            recall_payload = self.call_tool_payload(
+                "agent_recall",
+                {
+                    "query": "黏菌 联想回忆 探索算法",
+                    "cwd": str(self.cwd),
+                    "clean_source_dir": str(self.clean),
+                    "registry_dir": str(registry),
+                    "apw_fallback": True,
+                    "last_recall_path": str(cache_path),
+                },
+            )
+
+        self.assertTrue(recall_payload["associative_path_policy"]["apw_candidate_input_available"])
+        self.assertEqual(recall_payload["associative_path_fallback"]["status"], "route_candidate")
+        self.assertEqual(
+            recall_payload["associative_path_fallback"]["candidate_source_kind"],
+            "registry_clean_source",
+        )
+        action = recall_payload["foreground_action"]
+        self.assertEqual(action["id"], "deepen_associative_path_fallback")
+        self.assertEqual(action["tool_name"], "agent_deepen")
+        self.assertIn("recall_selector", action["arguments"])
+
+        deepen_payload = self.call_tool_payload(
+            "agent_deepen",
+            {
+                "request_index": action["arguments"]["request_index"],
+                "recall_selector": action["arguments"]["recall_selector"],
+                "last_recall_path": str(cache_path),
+                "cwd": str(self.cwd),
+                "clean_source_dir": str(self.clean),
+                "registry_dir": str(registry),
+                "detail": "full",
+            },
+        )
+
+        self.assertEqual(deepen_payload["status"], "ok")
+        self.assertEqual(deepen_payload["result"]["source_refs"][0]["message_id"], "msg-mcp-registry-apw")
+        self.assertEqual(
+            deepen_payload["result"]["apw_route_identity"]["source_ref_digest"],
+            action["apw_route_identity"]["source_ref_digest"],
+        )
+        window_text = "\n".join(
+            str(message.get("text") or "")
+            for message in deepen_payload["result"]["source_window"]["messages"]
+            if isinstance(message, dict)
+        )
+        self.assertIn("黏菌启发的联想回忆和探索算法", window_text)
+
+        diagnostic = self.call_tool_payload(
+            "recall_diagnostic",
+            {
+                "cue": "黏菌 联想回忆 探索算法",
+                "cwd": str(self.cwd),
+                "clean_source_dir": str(self.clean),
+                "registry_dir": str(registry),
+                "include_associative_path_diagnostics": True,
+            },
+        )
+        apw_diagnostic = diagnostic["associative_path_diagnostics"]
+        self.assertEqual(apw_diagnostic["decision"], "route_candidates")
+        self.assertEqual(
+            apw_diagnostic["metrics"]["candidate_source_counts"]["registry_clean_source"],
+            1,
+        )
 
     def test_register_thread_requires_explicit_write_shape(self) -> None:
         with mock.patch.object(mcp_handlers.registry, "register_current_thread") as register:

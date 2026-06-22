@@ -90,6 +90,66 @@ class AgentRecallApwFallbackTests(unittest.TestCase):
                 + "\n"
             )
 
+    def _write_registry_clean_source(
+        self,
+        *,
+        thread_key: str,
+        message_id: str,
+        source_text: str,
+    ) -> Path:
+        clean = self.root / "registry-source" / thread_key.replace(":", "-") / "clean-source"
+        clean.mkdir(parents=True)
+        row = {
+            "message_id": message_id,
+            "turn_id": f"turn-{message_id}",
+            "turn_index": 22,
+            "source_id": f"src-{message_id}",
+            "source_line": 88,
+            "role": "assistant",
+            "phase": "final_answer",
+            "is_final": True,
+            "text": source_text,
+        }
+        (clean / "messages.jsonl").write_text(
+            json.dumps(row, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+        (clean / "turns.jsonl").write_text(
+            json.dumps(
+                {
+                    "turn_id": row["turn_id"],
+                    "turn_index": row["turn_index"],
+                    "message_ids": [message_id],
+                    "assistant_phase": "final_answer",
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (self.registry / "threads.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "updated_at": "2026-06-22T00:00:00Z",
+                    "threads": [
+                        {
+                            "thread_key": thread_key,
+                            "title": "registry APW source",
+                            "project_label": "AIppocampus",
+                            "paths": {
+                                "clean_source_dir": str(clean),
+                                "clean_source_messages_jsonl": str(clean / "messages.jsonl"),
+                            },
+                        }
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        return clean
+
     def _write_apw_sidecars(
         self,
         *,
@@ -402,6 +462,72 @@ class AgentRecallApwFallbackTests(unittest.TestCase):
         )
         self.assertIn("黏菌 联想回忆 探索算法", compact_deepened["primary_source_snippet"]["text"])
         self.assertNotIn("<goal_context>", compact_deepened["primary_source_snippet"]["text"])
+
+    def test_registry_source_apw_fallback_deepens_registered_source(self) -> None:
+        self._write_registry_clean_source(
+            thread_key="session:registry-apw",
+            message_id="msg-registry-apw",
+            source_text="我们认真讨论过黏菌启发的联想回忆和探索算法，重点是 source reopen 后再使用。",
+        )
+
+        payload = self._recall(include_apw=True)
+
+        policy = payload["associative_path_policy"]
+        self.assertTrue(policy["apw_candidate_input_available"])
+        fallback = payload["associative_path_fallback"]
+        self.assertEqual(fallback["status"], "route_candidate")
+        self.assertEqual(fallback["candidate_source_kind"], "registry_clean_source")
+        self.assertEqual(fallback["matched_cue_anchors"], ["黏菌", "联想回忆", "探索算法"])
+
+        cache_path = self.root / "last-recall-registry-source.json"
+        cache_written = agent_continuity_cli_support.write_last_recall_cache(
+            payload["deepen_requests"],
+            query="黏菌 联想回忆 探索算法",
+            cwd=self.root,
+            clean_source_dir=self.clean,
+            registry_dir=self.registry,
+            macro_state_path=None,
+            project="AIppocampus",
+            max_matches=5,
+            schema_version=agent_continuity.SCHEMA_VERSION,
+            path=cache_path,
+        )
+        selector_id = agent_continuity_cli_support.write_recall_selector_snapshot(cache_path)
+        self.assertTrue(cache_written)
+
+        handle, context = agent_continuity_cli_support.handle_from_last_recall_cache(
+            request_index=int(fallback["request_index"]),
+            path=cache_path,
+        )
+        self.assertEqual(
+            context["apw_route_identity"]["source_ref_digest"],
+            fallback["source_ref_digest"],
+        )
+        deepened = agent_continuity.deepen(
+            handle,
+            cwd=self.root,
+            clean_source_dir=self.clean,
+            registry_dir=self.registry,
+        )
+        deepened["apw_route_identity"] = context["apw_route_identity"]
+        deepened["result"]["apw_route_identity"] = context["apw_route_identity"]
+        self._assert_opened_message(
+            deepened,
+            message_id="msg-registry-apw",
+            required_text="黏菌启发的联想回忆和探索算法",
+        )
+
+        payload["last_recall_cache_available"] = cache_written
+        payload["recall_selector_id"] = selector_id
+        public = agent_continuity_cli_support.public_recall_projection(
+            payload,
+            query="黏菌 联想回忆 探索算法",
+        )
+        encoded = json.dumps(public, ensure_ascii=False, sort_keys=True)
+        self.assertEqual(public["foreground_action"]["id"], "deepen_associative_path_fallback")
+        self.assertEqual(public["foreground_action"]["tool_name"], "agent_deepen")
+        self.assertNotIn("source_refs", encoded)
+        self.assertNotIn("msg-registry-apw", encoded)
 
     def test_opt_in_apw_fallback_preserves_shadowed_source_shape_posture(self) -> None:
         self._write_apw_sidecars(freshness="unknown")

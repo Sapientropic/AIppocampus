@@ -24,12 +24,18 @@ from aippocampus_runtime.recall.clean_source_apw_candidates import (
 from aippocampus_runtime.recall.query_policy import (
     unique_preserve,
 )
+from aippocampus_runtime.recall.registry_source_apw_candidates import (
+    has_registry_source_candidate_input,
+    registry_source_candidate_rows,
+)
 
 __all__ = [
     "build_associative_path_diagnostic",
     "build_associative_path_input_pack",
     "clean_source_candidate_rows",
     "has_clean_source_candidate_input",
+    "has_registry_source_candidate_input",
+    "registry_source_candidate_rows",
 ]
 
 KIND = "aippocampus_associative_path_input_pack"
@@ -359,6 +365,7 @@ def build_associative_path_input_pack(
     cwd: str | Path | None = None,
     sidecar_dir: str | Path | None = None,
     clean_source_dir: str | Path | None = None,
+    registry_dir: str | Path | None = None,
     candidates: Sequence[Mapping[str, Any]] | None = None,
     recall_context_payload: Mapping[str, Any] | None = None,
     memory_packets: Sequence[Mapping[str, Any]] | None = None,
@@ -414,6 +421,17 @@ def build_associative_path_input_pack(
         components.append(clean_source_component)
     else:
         clean_source_component = {}
+    registry_source_candidates: list[dict[str, Any]] = []
+    if registry_dir is not None:
+        registry_source_candidates, registry_source_component = registry_source_candidate_rows(
+            query=query,
+            cwd=cwd,
+            registry_dir=registry_dir,
+            limit=limit,
+        )
+        components.append(registry_source_component)
+    else:
+        registry_source_component = {}
 
     candidate_rows: list[dict[str, Any]] = []
     for row in candidates or []:
@@ -442,6 +460,7 @@ def build_associative_path_input_pack(
         if candidate:
             candidate_rows.append(candidate)
     candidate_rows.extend(clean_source_candidates)
+    candidate_rows.extend(registry_source_candidates)
     candidates_clean = _dedupe_rows([row for row in candidate_rows if row])
     candidate_source_counts = Counter(
         str(row.get("source") or row.get("candidate_source_kind") or "unknown")
@@ -481,6 +500,16 @@ def build_associative_path_input_pack(
     )
     if low_actual_anchor_filtered_count:
         reason_codes.append("low_actual_source_anchor_coverage")
+    registry_source_candidate_count = int(
+        registry_source_component.get("source_reopenable_candidate_count") or 0
+    )
+    if registry_source_candidate_count:
+        reason_codes.append("registry_source_candidates_available")
+    registry_demoted_artifact_count = int(
+        registry_source_component.get("demoted_artifact_match_count") or 0
+    )
+    if registry_demoted_artifact_count:
+        reason_codes.append("registry_artifact_matches_demoted")
 
     pack = {
         "kind": KIND,
@@ -519,6 +548,8 @@ def build_associative_path_input_pack(
             "same_thread_task_echo_filtered_count": task_echo_filtered_count,
             "self_referential_validation_report_demoted_count": validation_report_demoted_count,
             "low_actual_source_anchor_coverage_filtered_count": low_actual_anchor_filtered_count,
+            "registry_source_candidate_count": registry_source_candidate_count,
+            "registry_demoted_artifact_match_count": registry_demoted_artifact_count,
             "candidate_source_counts": dict(sorted(candidate_source_counts.items())),
         },
         "boundary": {
