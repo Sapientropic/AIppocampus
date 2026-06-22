@@ -1111,6 +1111,7 @@ def apply_plugin(args: argparse.Namespace) -> dict[str, Any]:
         package_root=output,
         marketplace_dir=marketplace_arg,
         installed_dir=installed_arg if isinstance(installed_arg, Path) else None,
+        codex_home_path=codex_home_path,
     )
     cache_status_after_refresh = build_plugin_cache_status(
         source_root=repo_root / "plugins" / "aippocampus",
