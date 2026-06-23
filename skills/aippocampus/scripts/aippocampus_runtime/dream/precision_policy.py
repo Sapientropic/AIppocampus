@@ -20,6 +20,7 @@ from aippocampus_runtime.core import compact_text
 from aippocampus_runtime.dream.probe_authority import active_imagination_probe_boundary
 from aippocampus_runtime.dream.risk_terms import dream_text_hard_risk
 from aippocampus_runtime.dream.status import retention_lifecycle_action
+from aippocampus_runtime.source.io_kernel import parse_utc, safe_float, source_ref_key
 
 SCHEMA_VERSION = 1
 POLICY_VERSION = "dream_precision_policy_v1"
@@ -74,28 +75,6 @@ def stable_digest(*parts: object, prefix: str, length: int = 18) -> str:
     return f"{prefix}_{hashlib.sha1(raw.encode('utf-8', errors='replace')).hexdigest()[:length]}"
 
 
-def safe_float(value: Any, default: float = 0.0) -> float:
-    try:
-        number = float(value)
-    except (TypeError, ValueError):
-        return default
-    if number != number or number in {float("inf"), float("-inf")}:
-        return default
-    return number
-
-
-def parse_utc(value: object) -> datetime | None:
-    text = str(value or "")
-    if not text:
-        return None
-    try:
-        if text.endswith("Z"):
-            text = text[:-1] + "+00:00"
-        return datetime.fromisoformat(text).astimezone(timezone.utc)
-    except ValueError:
-        return None
-
-
 def normalize_now(now: str | datetime | None) -> datetime:
     if isinstance(now, datetime):
         return now.astimezone(timezone.utc)
@@ -131,15 +110,6 @@ def text_terms(text: str) -> list[str]:
         for term in re.findall(r"[\w\u4e00-\u9fff]+", text.casefold(), flags=re.UNICODE)
         if len(term) >= 4 and term not in LOW_SIGNAL_TERMS
     ]
-
-
-def source_ref_key(ref: Mapping[str, Any]) -> tuple[str, str, str, str]:
-    return (
-        str(ref.get("thread_key") or ref.get("thread_id") or ""),
-        str(ref.get("message_id") or ""),
-        str(ref.get("turn_id") or ""),
-        str(ref.get("source_id") or ref.get("source_line") or ref.get("line") or ""),
-    )
 
 
 def normalize_source_refs(value: object) -> list[dict[str, Any]]:

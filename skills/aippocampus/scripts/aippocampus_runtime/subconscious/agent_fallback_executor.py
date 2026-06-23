@@ -19,6 +19,7 @@ from typing import Any
 
 from aippocampus_runtime.core import compact_text, now_utc, sanitize_external_model_payload
 from aippocampus_runtime.registry.api import registry_paths
+from aippocampus_runtime.source.io_kernel import iter_jsonl_dict_rows_with_line_numbers
 from aippocampus_runtime.subconscious import (
     agent_fallback_materializer,
     agent_fallback_queue,
@@ -51,21 +52,12 @@ def default_results_path(
     return agent_fallback_materializer.default_results_path(registry_path, registry_dir)
 
 
-def iter_jsonl(path: Path) -> list[dict[str, Any]]:
-    if not path.exists():
-        return []
+def task_rows(path: Path) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
-    with path.open("r", encoding="utf-8", errors="replace") as fh:
-        for line_number, line in enumerate(fh, start=1):
-            if not line.strip():
-                continue
-            try:
-                item = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if isinstance(item, dict):
-                item["_line_number"] = line_number
-                rows.append(item)
+    for line_number, item in iter_jsonl_dict_rows_with_line_numbers(path):
+        row = dict(item)
+        row["_line_number"] = line_number
+        rows.append(row)
     return rows
 
 
@@ -86,7 +78,7 @@ def _task_id(task: dict[str, Any]) -> str:
 def _processed_task_ids(results_path: Path) -> set[str]:
     return {
         str(row.get("task_id") or "")
-        for row in iter_jsonl(results_path)
+        for row in task_rows(results_path)
         if row.get("kind") == RESULT_KIND and row.get("task_id")
     }
 
@@ -207,7 +199,7 @@ def produce_agent_fallback_results(
 ) -> dict[str, Any]:
     tasks = [
         row
-        for row in iter_jsonl(tasks_path)
+        for row in task_rows(tasks_path)
         if row.get("kind") == "agent_fallback_subconscious_task"
         and (not project or str(row.get("project_label") or "") == project)
     ]

@@ -7,16 +7,19 @@ and `agent deepen` before it supports a claim.
 
 from __future__ import annotations
 
+from collections import Counter
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime import core
-from aippocampus_runtime.recall.query_policy import (
-    normalize_term,
-    split_query_terms,
-    unique_preserve,
+from aippocampus_runtime.recall.apw_anchor_coverage import (
+    low_actual_anchor_coverage_reason,
+    matched_terms_from_text,
+    query_anchor_terms,
+    source_anchor_gate,
 )
+from aippocampus_runtime.recall.query_policy import unique_preserve
 from aippocampus_runtime.source.artifact_role import match_is_demoted_artifact
 from aippocampus_runtime.source.registry_search import search_registry_sources
 from aippocampus_runtime.source.registry_search_duplicates import match_haystack
@@ -41,29 +44,6 @@ def _component(name: str, *, status: str, row_count: int, malformed_count: int =
     if status == "missing":
         result["next_action"] = "continue without registry APW candidates or pass a registry_dir"
     return result
-
-
-def _query_anchor_terms(query: str, *, limit: int = 12) -> list[str]:
-    normalized_query = normalize_term(query).casefold()
-    split_terms = split_query_terms([query])
-    anchors = [
-        term
-        for term in split_terms
-        if term.casefold() != normalized_query or len(split_terms) == 1
-    ]
-    if not anchors:
-        anchors = split_terms
-    return unique_preserve(anchors, limit=limit)
-
-
-def _matched_terms_from_text(text: str, terms: Sequence[str], *, limit: int = 8) -> list[str]:
-    haystack = str(text or "").casefold()
-    matched: list[str] = []
-    for term in terms:
-        clean = normalize_term(str(term or ""))
-        if clean and clean.casefold() in haystack:
-            matched.append(clean)
-    return unique_preserve(matched, limit=limit)
 
 
 def _scope_bucket(match: Mapping[str, Any]) -> str:
@@ -110,13 +90,16 @@ def _candidate_from_match(
     *,
     query: str,
     anchor_terms: Sequence[str],
+    skip_reasons: Counter[str] | None = None,
 ) -> dict[str, Any] | None:
     ref = _source_ref_from_registry_match(match)
     if not ref:
+        if skip_reasons is not None:
+            skip_reasons["missing_reopenable_source_ref"] += 1
         return None
     haystack = match_haystack(match)
-    anchor_matches = _matched_terms_from_text(haystack, anchor_terms)
-    search_term_matches = _matched_terms_from_text(
+    anchor_matches = matched_terms_from_text(haystack, anchor_terms)
+    search_term_matches = matched_terms_from_text(
         haystack,
         search_query_terms([query]),
         limit=12,
@@ -126,8 +109,18 @@ def _candidate_from_match(
     # "探索算法". Accept that as APW navigation only when it still carries at
     # least one declared anchor or multiple concrete query subterms.
     if not anchor_matches and len(search_term_matches) < 2:
+        if skip_reasons is not None:
+            skip_reasons["insufficient_anchor_matches"] += 1
         return None
     matched_terms = unique_preserve([*anchor_matches, *search_term_matches], limit=8)
+    low_anchor_reason = low_actual_anchor_coverage_reason(
+        matched_terms=matched_terms,
+        anchor_terms=anchor_terms,
+    )
+    if low_anchor_reason:
+        if skip_reasons is not None:
+            skip_reasons[low_anchor_reason] += 1
+        return None
     thread = match.get("thread")
     thread_map = thread if isinstance(thread, Mapping) else {}
     thread_key = str(ref.get("thread_key") or "")
@@ -147,6 +140,10 @@ def _candidate_from_match(
         "route_terms": unique_preserve(matched_terms, limit=12),
         "query_anchor_terms": unique_preserve(anchor_terms, limit=12),
         "actual_source_matched_terms": unique_preserve(matched_terms, limit=12),
+        "source_anchor_gate": source_anchor_gate(
+            matched_terms=matched_terms,
+            anchor_terms=anchor_terms,
+        ),
         "route_label": "APW registry source route: " + " / ".join(matched_terms[:3]),
         "source_refs": [ref],
         "scope_bucket": _scope_bucket(match),
@@ -170,7 +167,7 @@ def registry_source_candidate_rows(
 
     if registry_dir is None:
         return [], _component("registry_clean_source_candidates", status="missing", row_count=0)
-    anchor_terms = _query_anchor_terms(query)
+    anchor_terms = query_anchor_terms(query)
     if not anchor_terms:
         return [], _component("registry_clean_source_candidates", status="needs_query", row_count=0)
     try:
@@ -185,6 +182,7 @@ def registry_source_candidate_rows(
     except Exception:
         return [], _component("registry_clean_source_candidates", status="unreadable", row_count=0)
     candidates: list[dict[str, Any]] = []
+    skip_reasons: Counter[str] = Counter()
     demoted_count = 0
     malformed_count = 0
     for match in payload.get("matches") or []:
@@ -194,7 +192,12 @@ def registry_source_candidate_rows(
         if match_is_demoted_artifact(match):
             demoted_count += 1
             continue
-        candidate = _candidate_from_match(match, query=query, anchor_terms=anchor_terms)
+        candidate = _candidate_from_match(
+            match,
+            query=query,
+            anchor_terms=anchor_terms,
+            skip_reasons=skip_reasons,
+        )
         if candidate:
             candidates.append(candidate)
     candidates = candidates[: max(1, int(limit or 1))]
@@ -209,6 +212,10 @@ def registry_source_candidate_rows(
             "searched_entry_count": int(payload.get("searched_entry_count") or 0),
             "registry_match_count": int(payload.get("match_count") or 0),
             "demoted_artifact_match_count": demoted_count,
+            "low_actual_source_anchor_coverage_filtered_count": int(
+                skip_reasons.get("low_actual_source_anchor_coverage", 0)
+                + skip_reasons.get("missing_cjk_context_anchor", 0)
+            ),
             "source_reopenable_candidate_count": len(candidates),
         }
     )

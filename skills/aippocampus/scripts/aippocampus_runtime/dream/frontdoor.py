@@ -41,9 +41,9 @@ def dream_status_payload(
 ) -> dict[str, Any]:
     lane = "subconscious" if str(lane or "").strip() == "subconscious" else "dream"
     root = registry_root(registry_dir)
-    queue_rows = sleep_cycle.iter_jsonl(queue_jsonl or root / "dream_queue.jsonl")
-    finding_rows = sleep_cycle.iter_jsonl(findings_jsonl or root / "dream_findings.jsonl")
-    working_rows = sleep_cycle.iter_jsonl(
+    queue_rows = sleep_cycle.load_sleep_cycle_rows(queue_jsonl or root / "dream_queue.jsonl")
+    finding_rows = sleep_cycle.load_sleep_cycle_rows(findings_jsonl or root / "dream_findings.jsonl")
+    working_rows = sleep_cycle.load_sleep_cycle_rows(
         working_memory_jsonl or root / "dream_working_memory.jsonl"
     )
     accepted = sum(

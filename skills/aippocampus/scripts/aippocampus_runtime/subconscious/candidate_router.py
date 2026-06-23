@@ -37,6 +37,11 @@ from aippocampus_runtime.navigation.associations import (
 )
 from aippocampus_runtime.recall.query_policy import split_query_terms
 from aippocampus_runtime.registry.api import unique_preserve
+from aippocampus_runtime.source.io_kernel import (
+    load_jsonl_dict_rows,
+    write_json_atomic,
+    write_jsonl_dict_rows,
+)
 from aippocampus_runtime.subconscious import match_terms
 from aippocampus_runtime.subconscious.candidate_router_dream import (
     DREAM_HYPOTHESIS_TYPE,
@@ -68,12 +73,9 @@ from aippocampus_runtime.subconscious.candidate_router_io import (
     default_jobs_path,
     default_summary_path,
     default_working_memory_path,
-    iter_jsonl,
     load_candidates,
     load_findings_by_id,
     load_thread_projects,
-    write_json,
-    write_jsonl,
 )
 from aippocampus_runtime.subconscious.candidate_router_projection import (
     strip_for_hook as strip_for_hook,
@@ -519,7 +521,7 @@ def route_candidates(
 ) -> dict[str, Any]:
     findings_by_id = load_findings_by_id(jobs_path)
     thread_projects = load_thread_projects(candidates_path)
-    feedback_rows = iter_jsonl(feedback_path) if feedback_path else []
+    feedback_rows = load_jsonl_dict_rows(feedback_path).rows if feedback_path else []
     routed_by_key: dict[str, dict[str, Any]] = {}
     for candidate in load_candidates(candidates_path):
         entry = route_entry(candidate, findings_by_id, thread_projects, feedback_rows)
@@ -696,8 +698,8 @@ def main() -> int:
     result = route_candidates(candidates, jobs, feedback_path=feedback_path)
     rows = result.pop("rows")
     if not args.no_write:
-        write_jsonl(output, rows)
-        write_json(summary_path, {**result, "output": str(output), "summary": str(summary_path)})
+        write_jsonl_dict_rows(output, rows)
+        write_json_atomic(summary_path, {**result, "output": str(output), "summary": str(summary_path)})
     result = {**result, "output": str(output), "summary": str(summary_path)}
     if args.json_output:
         print(json.dumps(result, ensure_ascii=False, indent=2))

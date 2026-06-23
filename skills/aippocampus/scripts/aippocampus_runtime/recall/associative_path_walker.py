@@ -239,6 +239,7 @@ def walk_associative_paths(
                 "source_refs": _dedupe_refs(refs, limit=4),
                 "event_refs": _dedupe_refs(event_refs, limit=4),
                 "source_ref_digest": source_ref_digest,
+                "source_anchor_gate": row.get("source_anchor_gate"),
                 "scope_bucket": _scope_bucket(row),
                 "freshness": str(
                     row.get("freshness")

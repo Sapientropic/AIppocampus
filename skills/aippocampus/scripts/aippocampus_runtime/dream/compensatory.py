@@ -25,6 +25,7 @@ from aippocampus_runtime.dream.working_memory import (
     adjudicated_dream_findings_to_working_memory,  # noqa: F401
     reviewed_dream_findings_to_working_memory,  # noqa: F401
 )
+from aippocampus_runtime.source.io_kernel import source_ref_identity_key
 
 SCHEMA_VERSION = 1
 REPORT_KIND = "aippocampus_compensatory_dream_report"
@@ -107,21 +108,6 @@ def stable_digest(*parts: object, prefix: str, length: int = 16) -> str:
     return f"{prefix}_{hashlib.sha1(raw.encode('utf-8', errors='replace')).hexdigest()[:length]}"
 
 
-def source_ref_key(ref: Mapping[str, Any]) -> tuple[str, str, str, str]:
-    return (
-        str(ref.get("thread_key") or ref.get("thread_id") or ""),
-        str(ref.get("message_id") or ""),
-        str(ref.get("turn_id") or ""),
-        str(
-            ref.get("source_id")
-            or ref.get("source_line")
-            or ref.get("line")
-            or ref.get("source_ref")
-            or ""
-        ),
-    )
-
-
 def source_ref_thread(ref: Mapping[str, Any]) -> str:
     return str(ref.get("thread_key") or ref.get("thread_id") or "")
 
@@ -141,14 +127,14 @@ def normalize_source_refs(value: object, *, thread_key: str | None = None) -> tu
         raw_items = []
 
     refs: list[dict[str, Any]] = []
-    seen: set[tuple[str, str, str, str]] = set()
+    seen: set[tuple[str, str, str, str, str]] = set()
     for item in raw_items:
         if not isinstance(item, Mapping):
             continue
         ref = dict(item)
         if thread_key and not ref.get("thread_key") and not ref.get("thread_id"):
             ref["thread_key"] = thread_key
-        key = source_ref_key(ref)
+        key = source_ref_identity_key(ref)
         if not any(key) or key in seen:
             continue
         seen.add(key)
@@ -226,10 +212,10 @@ def input_row_from_mapping(row: Mapping[str, Any], *, thread_key: str) -> DreamI
 
 def merge_refs(rows: Iterable[DreamInputRow], *, limit: int = 10) -> tuple[dict[str, Any], ...]:
     refs: list[dict[str, Any]] = []
-    seen: set[tuple[str, str, str, str]] = set()
+    seen: set[tuple[str, str, str, str, str]] = set()
     for row in rows:
         for ref in row.source_refs:
-            key = source_ref_key(ref)
+            key = source_ref_identity_key(ref)
             if key in seen:
                 continue
             seen.add(key)
@@ -511,4 +497,3 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

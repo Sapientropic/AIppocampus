@@ -286,7 +286,7 @@ class DebtReportTests(unittest.TestCase):
         self.assertEqual(clean["status"], "pass")
 
         changed = debt_report.changed_surface_debt(
-            ["skills/aippocampus/scripts/aippocampus_runtime/mcp/agent_recall_projection.py"]
+            ["skills/aippocampus/scripts/aippocampus_runtime/mcp/agent_deepen_projection.py"]
         )
 
         self.assertEqual(changed["status"], "fail")

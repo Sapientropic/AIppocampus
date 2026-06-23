@@ -59,6 +59,7 @@ from aippocampus_runtime.privacy import (
 )
 from aippocampus_runtime.question.constants import DEFAULT_DORMANT_AFTER_DAYS
 from aippocampus_runtime.registry.store import registry_paths
+from aippocampus_runtime.source.io_kernel import load_json_dict
 from aippocampus_runtime.source.source_intake_health import clean_source_health_summaries
 
 DEFAULT_JOBS_OUTPUT_NAME = "subconscious_jobs.jsonl"
@@ -97,20 +98,6 @@ class HealthOptions:
     include_expensive_diagnostics: bool = False
     operator_timeout_ms: int = DEFAULT_OPERATOR_DIAGNOSTIC_TIMEOUT_MS
     slow_section_threshold_ms: int = DEFAULT_SLOW_HEALTH_SECTION_MS
-
-
-def load_json(path: Path) -> dict:
-    if not path.exists():
-        return {}
-    return json.loads(path.read_text(encoding="utf-8"))
-
-
-def load_json_fail_open(path: Path) -> dict[str, Any]:
-    try:
-        data = load_json(path)
-    except Exception:
-        return {}
-    return data if isinstance(data, dict) else {}
 
 
 def safe_int(value: Any, default: int = 0) -> int:
@@ -481,6 +468,14 @@ def _rewrite_redacted_action_commands(payload: dict[str, Any]) -> None:
 
 
 def build_health_report(options: HealthOptions) -> dict[str, Any]:
+    """Build full health state for later compact/operator rendering.
+
+    aippocampus-stage-map: resolve local inputs -> load manifest/cache state ->
+    evaluate readiness/actions -> attach operator-only diagnostics -> return a
+    full payload for renderers to compact/redact. Do not add foreground proof
+    fields here; compact health projection owns frontstage shape.
+    """
+
     section_timings: list[dict[str, Any]] = []
     core_started_at = perf_counter()
     cwd = Path(options.cwd).resolve()
@@ -542,7 +537,7 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
         root=index_dir,
         include_paths=False,
     )
-    manifest = load_json(manifest_path)
+    manifest = load_json_dict(manifest_path).data
     index_intentional_eviction = {"detected": False}
     if not sqlite_path.exists():
         candidate_eviction = latest_intentional_eviction(index_dir, "source_index.sqlite")
@@ -609,7 +604,7 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
     clean_manifest_path = clean_source_dir / "manifest.json"
     clean_messages_path = clean_source_dir / "messages.jsonl"
     clean_turns_path = clean_source_dir / "turns.jsonl"
-    clean_manifest = load_json(clean_manifest_path)
+    clean_manifest = load_json_dict(clean_manifest_path).data
     clean_reasons: list[str] = []
     if not clean_manifest:
         clean_reasons.append("clean-source manifest is missing")
@@ -657,7 +652,7 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
     )
 
     corpus_manifest_path = graphify_corpus / "corpus_manifest.json"
-    corpus_manifest = load_json(corpus_manifest_path)
+    corpus_manifest = load_json_dict(corpus_manifest_path).data
     current_manifest_sha = file_sha256(manifest_path) if manifest_path.exists() else None
     graphify_reasons: list[str] = []
     if not graphify_corpus.exists():
@@ -674,7 +669,7 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
     graphify_stale = bool(graphify_reasons)
 
     segments_manifest_path = segments_dir / "manifest.json"
-    segments_manifest = load_json(segments_manifest_path)
+    segments_manifest = load_json_dict(segments_manifest_path).data
     segment_generations = segment_generation_diagnostics(
         segments_manifest_path,
         root=segments_dir,
@@ -724,7 +719,7 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
         max_stale_bytes=options.max_stale_bytes,
     )
 
-    checkpoint = load_json(checkpoint_state)
+    checkpoint = load_json_dict(checkpoint_state).data
     captured_count = int(checkpoint.get("last_captured_message_count") or 0)
     checked_count = int(checkpoint.get("last_checked_message_count") or 0)
     checkpoint_delta = current_message_count - captured_count

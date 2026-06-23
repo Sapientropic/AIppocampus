@@ -16,11 +16,11 @@ from typing import Any
 
 from aippocampus_runtime.core import cli_error_payload, cli_exit_code_for_error_code
 from aippocampus_runtime.registry.api import load_registry, registry_paths
+from aippocampus_runtime.source.io_kernel import load_jsonl_dict_rows
 from aippocampus_runtime.source.registry_paths import resolve_registry_member_path
 from aippocampus_runtime.source.semantic_scope_labels import (
     SEMANTIC_SCOPE_LABELS_FILENAME,
     clean_messages_by_id,
-    iter_jsonl,
     semantic_scope_label_rows_from_findings,
     write_semantic_scope_label_sidecar,
 )
@@ -59,7 +59,7 @@ def build_semantic_scope_labels(
     no_write: bool = False,
 ) -> dict[str, Any]:
     messages_by_id = clean_messages_by_id(clean_source_dir)
-    findings = iter_jsonl(jobs_output_path)
+    findings = load_jsonl_dict_rows(jobs_output_path).rows
     rows = semantic_scope_label_rows_from_findings(
         findings,
         messages_by_id,

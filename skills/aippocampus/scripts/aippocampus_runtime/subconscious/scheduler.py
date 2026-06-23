@@ -31,6 +31,7 @@ from aippocampus_runtime.core import aippocampus_registry_dir, now_utc
 from aippocampus_runtime.model import routing as model_routing
 from aippocampus_runtime.ops import log_retention
 from aippocampus_runtime.public_output import emit_public_text
+from aippocampus_runtime.source.io_kernel import load_json_dict, write_json_atomic
 from aippocampus_runtime.subconscious import (
     agent_fallback_queue,
     scheduler_due_diagnostics,
@@ -95,25 +96,12 @@ def log_path(root: Path) -> Path:
     return root / "subconscious_scheduler.log"
 
 
-def load_json(path: Path) -> dict[str, Any]:
-    if not path.exists():
-        return {}
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        return {}
-    return data if isinstance(data, dict) else {}
-
-
 def save_json(path: Path, data: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8", newline="\n")
-    tmp.replace(path)
+    write_json_atomic(path, data)
 
 
 def load_state(path: Path) -> dict[str, Any]:
-    data = load_json(path)
+    data = load_json_dict(path).data
     data.setdefault("schema_version", STATE_SCHEMA_VERSION)
     data.setdefault("projects", {})
     return data
@@ -130,7 +118,7 @@ def norm_path(value: str | None) -> str:
         return ""
     try:
         return str(Path(value).resolve()).casefold()
-    except Exception:
+    except (OSError, RuntimeError, ValueError):
         return value.casefold()
 
 
@@ -553,7 +541,7 @@ def choose_projects_with_diagnostics(
     cooldown_seconds: int,
     min_new_turns: int,
 ) -> tuple[list[tuple[ProjectStats, str]], list[dict[str, Any]]]:
-    registry = load_json(registry_path(root))
+    registry = load_json_dict(registry_path(root)).data
     stats_by_label = project_stats_from_registry(registry)
     return scheduler_due_diagnostics.choose_projects_with_diagnostics(
         root=root,

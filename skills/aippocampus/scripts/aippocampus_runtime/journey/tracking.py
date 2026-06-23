@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from aippocampus_runtime.core import compact_text, now_utc
+from aippocampus_runtime.source.io_kernel import source_ref_key
 from aippocampus_runtime.source.texture_consumption import (
     select_texture_signals,
     texture_signal_summary,
@@ -145,15 +146,6 @@ def unique_preserve(values: Iterable[str], *, limit: int = 20) -> tuple[str, ...
         if len(out) >= limit:
             break
     return tuple(out)
-
-
-def source_ref_key(ref: Mapping[str, Any]) -> tuple[str, str, str, str]:
-    return (
-        str(ref.get("thread_key") or ref.get("thread_id") or ""),
-        str(ref.get("message_id") or ""),
-        str(ref.get("turn_id") or ""),
-        str(ref.get("source_id") or ref.get("source_line") or ref.get("line") or ""),
-    )
 
 
 def normalize_source_refs(value: object, *, thread_id: str | None = None) -> tuple[dict[str, Any], ...]:

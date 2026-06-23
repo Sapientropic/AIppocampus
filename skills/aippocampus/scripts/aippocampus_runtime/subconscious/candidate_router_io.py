@@ -9,8 +9,6 @@ from aippocampus_runtime.registry.api import registry_paths
 from aippocampus_runtime.source.io_kernel import (
     load_json_dict,
     load_jsonl_dict_rows,
-    write_json_atomic,
-    write_jsonl_dict_rows,
 )
 
 DEFAULT_CANDIDATES_NAME = "promotion_candidates.jsonl"
@@ -53,25 +51,17 @@ def default_summary_path(
     return json_path.resolve().parent / DEFAULT_SUMMARY_NAME
 
 
-def iter_jsonl(path: Path) -> list[dict[str, Any]]:
-    return load_jsonl_dict_rows(path).rows
-
-
-def write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
-    write_jsonl_dict_rows(path, rows)
-
-
-def write_json(path: Path, data: dict[str, Any]) -> None:
-    write_json_atomic(path, data)
-
-
 def load_candidates(path: Path) -> list[dict[str, Any]]:
-    return [row for row in iter_jsonl(path) if row.get("kind") == "aippocampus_promotion_candidate"]
+    return [
+        row
+        for row in load_jsonl_dict_rows(path).rows
+        if row.get("kind") == "aippocampus_promotion_candidate"
+    ]
 
 
 def load_findings_by_id(path: Path) -> dict[str, dict[str, Any]]:
     out: dict[str, dict[str, Any]] = {}
-    for row in iter_jsonl(path):
+    for row in load_jsonl_dict_rows(path).rows:
         if row.get("kind") != "aippocampus_subconscious_job_finding":
             continue
         key = str(row.get("fingerprint") or "")

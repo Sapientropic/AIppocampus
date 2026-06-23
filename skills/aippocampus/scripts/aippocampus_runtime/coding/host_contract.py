@@ -14,6 +14,8 @@ import json
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
+from aippocampus_runtime.source.io_kernel import load_json_dict, load_jsonl_dict_rows
+
 SCHEMA_VERSION = 1
 
 TICKET_KIND = "aippocampus_coding_continuity_ticket"
@@ -494,11 +496,10 @@ def tune_activation_from_feedback(
     }
 
 
-def _load_json(path: Path) -> Any:
-    raw = path.read_text(encoding="utf-8")
+def _load_contract_input(path: Path) -> Any:
     if path.suffix == ".jsonl":
-        return [json.loads(line) for line in raw.splitlines() if line.strip()]
-    return json.loads(raw)
+        return load_jsonl_dict_rows(path).rows
+    return load_json_dict(path, missing_is_loss=True).data
 
 
 def main() -> int:
@@ -511,7 +512,7 @@ def main() -> int:
     if args.contract:
         payload = describe_host_contract()
     elif args.input:
-        raw = _load_json(Path(args.input))
+        raw = _load_contract_input(Path(args.input))
         tickets = raw if isinstance(raw, list) else [raw]
         payload = simulate_host_consumption([item for item in tickets if isinstance(item, Mapping)])
     else:

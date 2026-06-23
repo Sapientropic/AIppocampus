@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from aippocampus_runtime.core import aippocampus_registry_dir, file_sha256, now_utc, safe_path_name
+from aippocampus_runtime.source.io_kernel import load_json_dict
 from aippocampus_runtime.sync import bundle as sync_bundle
 from aippocampus_runtime.sync.encrypted import keys as encrypted_sync_keys
 from aippocampus_runtime.sync.encrypted.crypto import (
@@ -90,7 +91,7 @@ def encrypted_state_file(registry_dir: Path, vault_id_hash: str) -> Path:
 
 
 def load_encrypted_state(registry_dir: Path, vault_id_hash: str) -> dict[str, Any]:
-    return sync_bundle.load_json(encrypted_state_file(registry_dir, vault_id_hash))
+    return load_json_dict(encrypted_state_file(registry_dir, vault_id_hash)).data
 
 
 def save_encrypted_state(registry_dir: Path, inner_manifest: dict[str, Any]) -> None:

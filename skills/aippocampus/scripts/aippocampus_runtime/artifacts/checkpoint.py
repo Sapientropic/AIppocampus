@@ -21,6 +21,7 @@ from aippocampus_runtime.core import (
     now_utc,
     resolve_artifact_path,
 )
+from aippocampus_runtime.source.io_kernel import load_json_dict
 
 SCRIPT_DIR = Path(__file__).resolve().parents[2]
 KNOWN_TERMS = [
@@ -37,12 +38,6 @@ KNOWN_TERMS = [
     "AGI",
     "2028",
 ]
-
-
-def load_json(path: Path) -> dict:
-    if not path.exists():
-        return {}
-    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def run_build_index(cwd: Path, index_dir: Path, anchors: Path) -> None:
@@ -147,7 +142,7 @@ def portable_source_path(path: Path, cwd: Path) -> str:
 
 
 def update_state(path: Path, candidate: dict, appended: bool, total_messages: int) -> None:
-    old = load_json(path)
+    old = load_json_dict(path).data
     state = dict(old)
     state.update(
         {
@@ -267,4 +262,3 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

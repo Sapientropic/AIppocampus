@@ -7,7 +7,6 @@ write/update path for ``journeys.jsonl`` without bloating ``journey.live``.
 
 from __future__ import annotations
 
-import json
 from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
@@ -15,39 +14,9 @@ from typing import Any
 from aippocampus_runtime.core import compact_text
 from aippocampus_runtime.journey import tracking
 from aippocampus_runtime.journey.live import create_journey_from_live_navigation_rows
+from aippocampus_runtime.source.io_kernel import load_jsonl_dict_rows, write_jsonl_dict_rows
 
 SIDECAR_MATERIALIZATION_KIND = "aippocampus_live_journey_sidecar_materialization"
-
-
-def _read_jsonl(path: Path) -> list[dict[str, Any]]:
-    if not path.is_file():
-        return []
-    rows: list[dict[str, Any]] = []
-    try:
-        lines = path.read_text(encoding="utf-8").splitlines()
-    except OSError:
-        return rows
-    for line in lines:
-        if not line.strip():
-            continue
-        try:
-            item = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(item, dict):
-            rows.append(item)
-    return rows
-
-
-def _write_jsonl(path: Path, rows: Iterable[Mapping[str, Any]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(
-        "".join(json.dumps(dict(row), ensure_ascii=False, sort_keys=True) + "\n" for row in rows),
-        encoding="utf-8",
-        newline="\n",
-    )
-    tmp.replace(path)
 
 
 def _sidecar_source_refs(value: object) -> list[dict[str, Any]]:
@@ -172,10 +141,10 @@ def materialize_live_journey_sidecar(
     compact_row = compact_journey_sidecar_row(journey_row)
     existing = [
         row
-        for row in _read_jsonl(target)
+        for row in load_jsonl_dict_rows(target).rows
         if str(row.get("journey_id") or "") != str(compact_row.get("journey_id") or "")
     ]
-    _write_jsonl(target, [*existing, compact_row])
+    write_jsonl_dict_rows(target, [*existing, compact_row], sort_keys=True)
     return {
         "kind": SIDECAR_MATERIALIZATION_KIND,
         "status": "materialized",

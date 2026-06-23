@@ -49,10 +49,10 @@ from aippocampus_runtime.model.routing import (
     route_service_name,
 )
 from aippocampus_runtime.registry.store import registry_paths
+from aippocampus_runtime.source.io_kernel import load_jsonl_dict_rows, safe_float, source_ref_key
 from aippocampus_runtime.subconscious.candidate_router import (
     default_jobs_path,
     default_working_memory_path,
-    iter_jsonl,
     load_working_memory,
 )
 
@@ -177,21 +177,6 @@ def unique_preserve(values: Iterable[object], *, limit: int = 16, max_chars: int
     return out
 
 
-def source_ref_key(ref: Mapping[str, Any]) -> tuple[str, str, str, str]:
-    return (
-        str(ref.get("thread_key") or ref.get("thread_id") or ""),
-        str(ref.get("message_id") or ""),
-        str(ref.get("turn_id") or ""),
-        str(
-            ref.get("source_id")
-            or ref.get("source_line")
-            or ref.get("line")
-            or ref.get("source_ref")
-            or ""
-        ),
-    )
-
-
 def source_ref_thread(ref: Mapping[str, Any]) -> str:
     return str(ref.get("thread_key") or ref.get("thread_id") or "")
 
@@ -216,16 +201,6 @@ def normalize_source_refs(value: object) -> tuple[dict[str, Any], ...]:
         seen.add(key)
         refs.append({k: v for k, v in ref.items() if is_present(v)})
     return tuple(refs)
-
-
-def safe_float(value: object, default: float = 0.0) -> float:
-    try:
-        number = float(value)  # type: ignore[arg-type]
-    except (TypeError, ValueError):
-        return default
-    if number != number or number in {float("inf"), float("-inf")}:
-        return default
-    return number
 
 
 def normalized_term(value: object) -> str:
@@ -1072,7 +1047,11 @@ def run_dream_real_history_eval(
     if worker_mode == MODEL_BACKED_DREAM_WORKER_MODE and model_config is None:
         raise ValueError("model_config is required when dream_worker_mode='model_backed'")
     registry_path, _ = registry_paths(registry_dir)
-    jobs = list(job_rows) if job_rows is not None else iter_jsonl(jobs_path or default_jobs_path(registry_path))
+    jobs = (
+        list(job_rows)
+        if job_rows is not None
+        else load_jsonl_dict_rows(jobs_path or default_jobs_path(registry_path)).rows
+    )
     working_rows = (
         list(working_memory_rows)
         if working_memory_rows is not None

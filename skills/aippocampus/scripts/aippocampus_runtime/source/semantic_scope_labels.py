@@ -16,7 +16,7 @@ from typing import Any
 
 from aippocampus_runtime.core import compact_text
 from aippocampus_runtime.source.clean_source import SCOPE_LABEL_ORDER
-from aippocampus_runtime.source.jsonl_reader import load_jsonl_dict_rows
+from aippocampus_runtime.source.io_kernel import load_jsonl_dict_rows
 
 SEMANTIC_SCOPE_LABELS_FILENAME = "semantic-scope-labels.jsonl"
 SEMANTIC_SCOPE_LABEL_FINDING_KIND = "semantic_scope_labels"
@@ -203,15 +203,11 @@ def merged_scope_labels(base_labels: list[Any], semantic_labels: list[Any]) -> l
     return canonical_scope_labels([*base_labels, *semantic_labels])
 
 
-def iter_jsonl(path: Path) -> list[dict[str, Any]]:
-    return load_jsonl_dict_rows(path).rows
-
-
 def clean_messages_by_id(clean_source_dir: Path) -> dict[str, dict[str, Any]]:
     messages_path = clean_source_dir / "messages.jsonl"
     return {
         str(item.get("message_id") or item.get("id")): item
-        for item in iter_jsonl(messages_path)
+        for item in load_jsonl_dict_rows(messages_path).rows
         if item.get("message_id") or item.get("id")
     }
 

@@ -364,6 +364,103 @@ class AssociativePathInputPackTests(unittest.TestCase):
         )
         self.assertIn("low_actual_source_anchor_coverage", diagnostic["reason_codes"])
 
+    def test_current_clean_source_filters_generic_ascii_matches_without_cjk_context(self) -> None:
+        clean = self._write_clean_messages(
+            [
+                {
+                    "message_id": "msg-generic-closeout",
+                    "turn_id": "turn-generic",
+                    "turn_index": 18,
+                    "source_id": "src-generic",
+                    "source_line": 50,
+                    "role": "assistant",
+                    "phase": "final_answer",
+                    "is_final": True,
+                    "text": (
+                        "Historical note mentions benchmark and deepen commands, "
+                        "but not the user's actual Chinese experience cue."
+                    ),
+                },
+                {
+                    "message_id": "msg-topic-source",
+                    "turn_id": "turn-topic",
+                    "turn_index": 19,
+                    "source_id": "src-topic",
+                    "source_line": 51,
+                    "role": "assistant",
+                    "phase": "final_answer",
+                    "is_final": True,
+                    "text": (
+                        "这次实测检索不弱，但 recall deepen 实际都好差劲，"
+                        "需要真实 source follow-through。"
+                    ),
+                },
+            ]
+        )
+
+        diagnostic = build_associative_path_diagnostic(
+            query="benchmark 实测检索不弱 recall deepen 实际都好差劲",
+            cwd=self.root,
+            clean_source_dir=clean,
+        )
+
+        self.assertEqual(diagnostic["decision"], "route_candidates")
+        self.assertEqual(
+            diagnostic["top_candidates"][0]["source_refs"][0]["message_id"],
+            "msg-topic-source",
+        )
+        self.assertEqual(
+            diagnostic["metrics"]["low_actual_source_anchor_coverage_filtered_count"],
+            1,
+        )
+
+    def test_current_clean_source_requires_cjk_context_anchor_for_mixed_hook_cue(self) -> None:
+        clean = self._write_clean_messages(
+            [
+                {
+                    "message_id": "msg-hook-closeout",
+                    "turn_id": "turn-hook-closeout",
+                    "turn_index": 18,
+                    "source_id": "src-hook-closeout",
+                    "source_line": 50,
+                    "role": "assistant",
+                    "phase": "final_answer",
+                    "is_final": True,
+                    "text": (
+                        "The old closeout mentions ambient recall and a hook evidence branch, "
+                        "but it never discusses the user's current Chinese cue."
+                    ),
+                },
+                {
+                    "message_id": "msg-hook-topic",
+                    "turn_id": "turn-hook-topic",
+                    "turn_index": 19,
+                    "source_id": "src-hook-topic",
+                    "source_line": 51,
+                    "role": "assistant",
+                    "phase": "final_answer",
+                    "is_final": True,
+                    "text": "用户问 hook 刚刚对你有帮助吗，ambient recall 还是迟钝。",
+                },
+            ]
+        )
+
+        diagnostic = build_associative_path_diagnostic(
+            query="hook刚刚对你有帮助吗 ambient recall 迟钝",
+            cwd=self.root,
+            clean_source_dir=clean,
+        )
+
+        self.assertEqual(diagnostic["decision"], "route_candidates")
+        self.assertEqual(
+            diagnostic["top_candidates"][0]["source_refs"][0]["message_id"],
+            "msg-hook-topic",
+        )
+        self.assertEqual(
+            diagnostic["metrics"]["low_actual_source_anchor_coverage_filtered_count"],
+            1,
+        )
+
     def test_current_clean_source_demotes_self_referential_validation_reports(self) -> None:
         clean = self._write_clean_messages(
             [

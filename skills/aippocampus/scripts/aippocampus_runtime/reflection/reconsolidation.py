@@ -28,10 +28,12 @@ from aippocampus_runtime.core import (
     now_utc,
     safe_path_name,
     sanitize_external_model_text,
+    stable_json_id,
     stable_text_fingerprint,
 )
-from aippocampus_runtime.question.source_refs import compact_source_refs, source_ref_key
+from aippocampus_runtime.question.source_refs import compact_source_refs
 from aippocampus_runtime.registry.api import unique_preserve
+from aippocampus_runtime.source.io_kernel import load_jsonl_dict_rows, source_ref_key
 from aippocampus_runtime.source.texture_consumption import (
     select_texture_signals,
     texture_signal_source_refs,
@@ -85,11 +87,6 @@ SUPPRESS_ANCHOR_STATUSES = {"refuted", "superseded", "local_only", "uncertain"}
 LOCAL_PATH_RE = re.compile(
     r"(?i)(^[a-z]:[\\/])|(^/(Users|home|root|tmp|var|mnt|Volumes|private)/)|(^~[\\/])"
 )
-
-
-def stable_id(prefix: str, *parts: Any, length: int = 18) -> str:
-    raw = "\n".join(json.dumps(part, ensure_ascii=False, sort_keys=True) for part in parts)
-    return stable_text_fingerprint(raw, namespace="correction-reconsolidation-id", prefix=prefix, length=length)
 
 
 def _sanitize_text(
@@ -308,7 +305,16 @@ def build_activation_event(
         "created_at": created_at or now_utc(),
         "prompt_version": PROMPT_VERSION,
         "event_id": event_id
-        or stable_id("corr_act", thread, epoch, target_type, surface, refs, length=20),
+        or stable_json_id(
+            "corr_act",
+            "correction-reconsolidation-id",
+            thread,
+            epoch,
+            target_type,
+            surface,
+            refs,
+            length=20,
+        ),
         "thread_id": thread,
         **_workspace_fields(workspace, policies),
         "topic_epoch": epoch,
@@ -383,7 +389,16 @@ def build_outcome_event(
         "created_at": created_at or now_utc(),
         "prompt_version": PROMPT_VERSION,
         "event_id": event_id
-        or stable_id("corr_out", activation_id, thread, epoch, summary, refs, length=20),
+        or stable_json_id(
+            "corr_out",
+            "correction-reconsolidation-id",
+            activation_id,
+            thread,
+            epoch,
+            summary,
+            refs,
+            length=20,
+        ),
         "activation_event_id": activation_id,
         "thread_id": thread,
         **_workspace_fields(workspace, policies),
@@ -419,21 +434,10 @@ def build_outcome_event(
     return payload
 
 
-def iter_jsonl(path: Path) -> list[dict[str, Any]]:
+def load_reconsolidation_rows(path: Path) -> list[dict[str, Any]]:
     if not path.exists():
         return []
-    rows: list[dict[str, Any]] = []
-    with path.open("r", encoding="utf-8") as fh:
-        for line in fh:
-            if not line.strip():
-                continue
-            try:
-                item = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if isinstance(item, dict):
-                rows.append(item)
-    return rows
+    return load_jsonl_dict_rows(path).rows
 
 
 def append_events(path: Path, events: Iterable[Mapping[str, Any]]) -> int:
@@ -516,7 +520,14 @@ def build_adjudication_candidate(
         "kind": ADJUDICATION_KIND,
         "created_at": now_utc(),
         "prompt_version": PROMPT_VERSION,
-        "candidate_id": stable_id("corr_adj", activation_id, outcome_id, status, length=20),
+        "candidate_id": stable_json_id(
+            "corr_adj",
+            "correction-reconsolidation-id",
+            activation_id,
+            outcome_id,
+            status,
+            length=20,
+        ),
         "activation_event_id": activation_id,
         "outcome_event_id": outcome_id or None,
         "thread_id": activation.get("thread_id"),
@@ -678,7 +689,7 @@ def run_adjudication(
     no_write: bool = False,
     context_state: str | None = None,
 ) -> dict[str, Any]:
-    events = iter_jsonl(events_path)
+    events = load_reconsolidation_rows(events_path)
     candidates = adjudicate_events(events)
     wrote_count = 0
     if output_path and not no_write and candidates:

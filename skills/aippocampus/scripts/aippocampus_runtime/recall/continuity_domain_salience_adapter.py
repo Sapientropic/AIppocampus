@@ -9,13 +9,12 @@ source refs, dedupe, auditable provenance, and source-reopen requirements.
 
 from __future__ import annotations
 
-import hashlib
-import json
 from collections import Counter
 from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.core import stable_json_id
 from aippocampus_runtime.ops.route_readiness import safe_source_refs
 from aippocampus_runtime.recall.continuity_domains import (
     append_continuity_domain_event,
@@ -23,6 +22,7 @@ from aippocampus_runtime.recall.continuity_domains import (
     normalize_continuity_domain_event,
     publish_continuity_domains_snapshot,
 )
+from aippocampus_runtime.source.io_kernel import load_jsonl_dict_rows
 
 ADAPTER_KIND = "aippocampus_continuity_domain_salience_adapter_report"
 REPORT_MODE = "report"
@@ -65,27 +65,6 @@ EVENT_KIND_TO_SOURCE_GROUP = {
     "domain_created": "support_refs",
     "domain_superseded": "counter_refs",
 }
-
-
-def _stable_id(*parts: Any, prefix: str, length: int = 20) -> str:
-    raw = "\0".join(json.dumps(part, sort_keys=True, default=str) for part in parts)
-    digest = hashlib.sha256(raw.encode("utf-8", errors="replace")).hexdigest()[:length]
-    return f"{prefix}_{digest}"
-
-
-def _iter_jsonl(path: Path) -> Iterable[dict[str, Any]]:
-    if not path.exists():
-        return
-    with path.open("r", encoding="utf-8") as fh:
-        for line in fh:
-            if not line.strip():
-                continue
-            try:
-                row = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if isinstance(row, dict):
-                yield row
 
 
 def _reason_codes(row: Mapping[str, Any]) -> list[str]:
@@ -154,13 +133,14 @@ def _event_from_salience_row(row: Mapping[str, Any]) -> tuple[dict[str, Any] | N
         }
     source_group_key = EVENT_KIND_TO_SOURCE_GROUP.get(continuity_event_kind, "support_refs")
     producer_event_id = str(row.get("event_id") or "")
-    event_id = _stable_id(
+    event_id = stable_json_id(
+        "cde_sal",
         producer_event_id,
         salience_kind,
         continuity_event_kind,
         domain_id,
         refs,
-        prefix="cde_sal",
+        length=20,
     )
     event: dict[str, Any] = {
         "event_id": event_id,
@@ -334,7 +314,7 @@ def adapt_salience_sidecar_to_continuity_domains(
     publish: bool = False,
 ) -> dict[str, Any]:
     return adapt_salience_rows_to_continuity_domains(
-        list(_iter_jsonl(Path(salience_path))),
+        load_jsonl_dict_rows(Path(salience_path)).rows,
         events_path=events_path,
         snapshot_dir=snapshot_dir,
         clean_source_dir=clean_source_dir,

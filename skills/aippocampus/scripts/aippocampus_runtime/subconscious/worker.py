@@ -43,6 +43,7 @@ from aippocampus_runtime.model.routing import (
     route_service_name,
 )
 from aippocampus_runtime.registry.api import registry_paths, unique_preserve
+from aippocampus_runtime.source.io_kernel import load_json_dict
 from aippocampus_runtime.subconscious.edge_validation import (
     ALLOWED_EDGE_TYPES,  # noqa: F401 - re-exported for direct-script compatibility
     WORKER_EDGE_POLICY,
@@ -188,16 +189,6 @@ def default_staging_path(
         return registry_path.resolve().parent / "subconscious_edges.jsonl"
     json_path, _ = registry_paths(registry_dir)
     return json_path.resolve().parent / "subconscious_edges.jsonl"
-
-
-def load_json(path: Path) -> dict[str, Any]:
-    if not path.exists():
-        return {}
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        return {}
-    return data if isinstance(data, dict) else {}
 
 
 def select_timeline_turns(
@@ -408,7 +399,7 @@ def run_worker(
     dry_run: bool = False,
     no_write: bool = False,
 ) -> dict[str, Any]:
-    timeline = load_json(timeline_path)
+    timeline = load_json_dict(timeline_path).data
     turns = select_timeline_turns(timeline, project=project, max_turns=max_turns)
     batch_id = f"subconscious-{int(time.time())}"
     if dry_run:

@@ -9,7 +9,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from aippocampus_runtime.source.rollout import iter_jsonl
+from aippocampus_runtime.source.rollout import iter_rollout_jsonl
 
 TOOL_EXIT_CODE_RE = re.compile(r"Exit code:\s*(-?\d+)", re.IGNORECASE)
 PATH_TOKEN_RE = re.compile(
@@ -416,7 +416,7 @@ def extract_rollout_behavior_events(rollout: Path) -> list[dict[str, Any]]:
     events: list[dict[str, Any]] = []
     current_turn = 0
     calls_by_ref: dict[str, dict[str, Any]] = {}
-    for line_no, item in iter_jsonl(rollout):
+    for line_no, item in iter_rollout_jsonl(rollout):
         timestamp = item.get("timestamp")
         typ = item.get("type")
         payload = item.get("payload") or {}

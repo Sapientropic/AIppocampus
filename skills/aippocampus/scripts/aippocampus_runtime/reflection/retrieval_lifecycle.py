@@ -23,10 +23,12 @@ from aippocampus_runtime.core import (
     now_utc,
     safe_path_name,
     sanitize_external_model_text,
+    stable_json_id,
     stable_text_fingerprint,
 )
-from aippocampus_runtime.question.source_refs import compact_source_refs, source_ref_key
+from aippocampus_runtime.question.source_refs import compact_source_refs
 from aippocampus_runtime.registry.api import unique_preserve
+from aippocampus_runtime.source.io_kernel import load_jsonl_dict_rows, source_ref_key
 
 SCHEMA_VERSION = 1
 PROMPT_VERSION = "aippocampus-retrieval-lifecycle-v1"
@@ -96,16 +98,6 @@ LOCAL_PATH_RE = re.compile(
     r"(?i)(^[a-z]:[\\/])|(^/(Users|home|root|tmp|var|mnt|Volumes|private)/)|(^~[\\/])"
 )
 FAKE_TEST_SECRET_RE = re.compile(r"FAKE_TEST_(SECRET|PASSWORD|TOKEN|KEY)_VALUE_[A-Za-z0-9_:-]+")
-
-
-def stable_id(prefix: str, *parts: Any, length: int = 20) -> str:
-    raw = "\n".join(json.dumps(part, ensure_ascii=False, sort_keys=True) for part in parts)
-    return stable_text_fingerprint(
-        raw,
-        namespace="retrieval-lifecycle-id",
-        prefix=prefix,
-        length=length,
-    )
 
 
 def _sanitize_text(
@@ -273,7 +265,16 @@ def build_retrieval_event(
         "created_at": created_at or now_utc(),
         "prompt_version": PROMPT_VERSION,
         "event_id": event_id
-        or stable_id("retr", thread, route, action_grammar, fingerprint, created_at or ""),
+        or stable_json_id(
+            "retr",
+            "retrieval-lifecycle-id",
+            thread,
+            route,
+            action_grammar,
+            fingerprint,
+            created_at or "",
+            length=20,
+        ),
         "thread_id": thread,
         **_workspace_fields(workspace, policies),
         "source_key": fingerprint,
@@ -323,7 +324,15 @@ def build_outcome_event(
         "created_at": created_at or now_utc(),
         "prompt_version": PROMPT_VERSION,
         "event_id": event_id
-        or stable_id("retr_out", retrieval_id, outcome_category, fingerprint, created_at or ""),
+        or stable_json_id(
+            "retr_out",
+            "retrieval-lifecycle-id",
+            retrieval_id,
+            outcome_category,
+            fingerprint,
+            created_at or "",
+            length=20,
+        ),
         "retrieval_event_id": retrieval_id,
         "thread_id": thread,
         **_workspace_fields(workspace, policies),
@@ -355,21 +364,10 @@ def append_events(path: Path, events: Iterable[Mapping[str, Any]]) -> int:
     return count
 
 
-def iter_jsonl(path: Path) -> list[dict[str, Any]]:
+def load_lifecycle_rows(path: Path) -> list[dict[str, Any]]:
     if not path.exists():
         return []
-    rows: list[dict[str, Any]] = []
-    with path.open("r", encoding="utf-8") as fh:
-        for line in fh:
-            if not line.strip():
-                continue
-            try:
-                item = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if isinstance(item, dict):
-                rows.append(item)
-    return rows
+    return load_jsonl_dict_rows(path).rows
 
 
 def _empty_source_stats(source_key: str) -> dict[str, Any]:
@@ -456,7 +454,7 @@ def lifecycle_projection(events: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
 
 
 def lifecycle_report(*, events_path: Path) -> dict[str, Any]:
-    return lifecycle_projection(iter_jsonl(events_path))
+    return lifecycle_projection(load_lifecycle_rows(events_path))
 
 
 def events_from_prompt_recall_result(

@@ -37,6 +37,7 @@ from aippocampus_runtime.model.routing import (
     route_payload_with_effective_values,
     route_service_name,
 )
+from aippocampus_runtime.source.io_kernel import load_json_dict
 from aippocampus_runtime.subconscious import circuit_feedback, semantic_subregion_budget
 from aippocampus_runtime.subconscious.continuity_domain_salience import (
     add_continuity_domain_salience_args,
@@ -118,7 +119,6 @@ from aippocampus_runtime.subconscious.worker import (
     DEFAULT_MAX_TURNS,
     DEFAULT_MODEL,
     append_staging_edges,
-    load_json,
     select_timeline_turns,
 )
 
@@ -183,9 +183,16 @@ def run_one_job(
     sample_index: int = 1,
     sample_count: int = 1,
 ) -> dict[str, Any]:
+    """Run one background job through explicit stages.
+
+    aippocampus-stage-map: load timeline and route config -> choose worker
+    context -> validate source-backed findings -> write staging artifacts ->
+    return public diagnostics without promoting memory.
+    """
+
     if JOB_SPECS.get(job, {}).get("runner") in DETERMINISTIC_RUNNERS:
         raise ValueError(f"{job} is a deterministic follow-up; run it through run_jobs")
-    timeline = load_json(timeline_path)
+    timeline = load_json_dict(timeline_path).data
     turns = select_timeline_turns(timeline, project=project, max_turns=max_turns)
     event_salience_report: dict[str, Any] = {}
     if event_salience_gate:
@@ -483,6 +490,13 @@ def run_jobs(
     samples_per_job: int = DEFAULT_SAMPLES_PER_JOB,
     chat_fn: ChatFn = call_chat_json,
 ) -> dict[str, Any]:
+    """Run a batch of background jobs through orchestration stages.
+
+    aippocampus-stage-map: build shared run config -> plan job/sample waves ->
+    execute deterministic and model jobs -> merge usage/backpressure
+    diagnostics -> emit optional feedback and public summary.
+    """
+
     results: list[dict[str, Any]] = []
     usage_total: dict[str, Any] = {}
     sample_total = sample_count(samples_per_job)

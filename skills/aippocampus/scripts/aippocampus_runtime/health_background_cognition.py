@@ -14,6 +14,7 @@ from aippocampus_runtime.recall.semantic_recall_gate import (
     semantic_gate_enabled,
     semantic_gate_mode,
 )
+from aippocampus_runtime.source.io_kernel import load_json_dict
 from aippocampus_runtime.subconscious import scheduler as subconscious_scheduler
 from aippocampus_runtime.subconscious.scheduler_public import public_scheduler_diagnostic
 from aippocampus_runtime.warm_ambient.scheduler import (
@@ -27,18 +28,8 @@ BACKGROUND_COGNITION_STALE_SECONDS = 24 * 60 * 60
 BACKGROUND_COGNITION_TAIL_BYTES = 96 * 1024
 
 
-def load_json(path: Path) -> dict:
-    if not path.exists():
-        return {}
-    return json.loads(path.read_text(encoding="utf-8"))
-
-
 def load_json_fail_open(path: Path) -> dict[str, Any]:
-    try:
-        data = load_json(path)
-    except Exception:
-        return {}
-    return data if isinstance(data, dict) else {}
+    return load_json_dict(path).data
 
 
 def safe_int(value: Any, default: int = 0) -> int:
@@ -131,7 +122,7 @@ def _tail_json_rows(path: Path, *, max_bytes: int = BACKGROUND_COGNITION_TAIL_BY
             for raw in fh:
                 try:
                     item = json.loads(raw.decode("utf-8"))
-                except Exception:
+                except (UnicodeDecodeError, json.JSONDecodeError):
                     continue
                 if isinstance(item, dict):
                     yield item

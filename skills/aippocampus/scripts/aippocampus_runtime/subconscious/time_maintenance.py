@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.cognitive_worker_mode import resolve_cognitive_worker_mode
+from aippocampus_runtime.source.io_kernel import load_json_dict
 from aippocampus_runtime.subconscious import scheduler
 from aippocampus_runtime.subconscious.agent_fallback_queue import TASKS_NAME
 from aippocampus_runtime.subconscious.scheduler_lock import FileLock
@@ -210,7 +211,7 @@ def run_time_maintenance(
         return plan
 
     state_path = scheduler.state_path(root, Path(state_file).resolve() if state_file else None)
-    registry = scheduler.load_json(scheduler.registry_path(root))
+    registry = load_json_dict(scheduler.registry_path(root)).data
     try:
         with FileLock(root / "time_maintenance_enqueue.lock"):
             state = scheduler.load_state(state_path)
@@ -254,6 +255,9 @@ def run_time_maintenance(
                 plan["agent_fallback_task_count"] = worker_count
                 scheduler.save_state(state_path, state)
                 return plan
+            # aippocampus-debt-ok: broad-exception-boundary
+            # Roll back local lease claims, persist that rollback, then re-raise
+            # the original failure so operators see the real enqueue error.
             except Exception:
                 for label in claimed:
                     scheduler.clear_project_lease(state.setdefault("projects", {}).setdefault(label, {}))

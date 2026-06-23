@@ -16,6 +16,7 @@ from typing import Any, Mapping
 from aippocampus_runtime.core import compact_text
 from aippocampus_runtime.question.source_refs import source_ref_key
 from aippocampus_runtime.registry.api import unique_preserve
+from aippocampus_runtime.source.io_kernel import safe_float
 
 QUESTION_LINK_KIND = "question_link"
 FRONTIER_MARKER_KIND = "frontier_marker"
@@ -66,16 +67,6 @@ class FrontierMarker:
     boundary_reason: str
     source_refs: tuple[dict[str, Any], ...]
     concepts: tuple[str, ...]
-
-
-def safe_float(value: Any, default: float = 0.0) -> float:
-    try:
-        number = float(value)
-    except (TypeError, ValueError):
-        return default
-    if number != number or number in {float("inf"), float("-inf")}:
-        return default
-    return number
 
 
 def safe_int(value: Any, default: int = 0) -> int:

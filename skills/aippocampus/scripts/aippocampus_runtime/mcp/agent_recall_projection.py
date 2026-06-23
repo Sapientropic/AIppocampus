@@ -20,18 +20,7 @@ from aippocampus_runtime.mcp import agent_recall_repo_projection as repo_project
 from aippocampus_runtime.mcp import agent_recall_result_projection as result_projection
 from aippocampus_runtime.mcp.compact_profile import strip_compact_foreground_debug_fields
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
-
-
-def _without_empty(value: Any) -> Any:
-    if isinstance(value, dict):
-        return {
-            key: cleaned
-            for key, item in value.items()
-            if (cleaned := _without_empty(item)) not in (None, "", [])
-        }
-    if isinstance(value, list):
-        return [cleaned for item in value if (cleaned := _without_empty(item)) not in (None, "", [])]
-    return value
+from aippocampus_runtime.recall import associative_path_foreground_gate as apw_gate
 
 
 def _compact_claim_boundary(
@@ -76,7 +65,7 @@ def _canonical_agent_action(card: Any) -> dict[str, Any]:
     card_map = card if isinstance(card, dict) else {}
     action = card_map.get("canonical_action") if isinstance(card_map.get("canonical_action"), dict) else {}
     if action:
-        result = _without_empty(normalize_foreground_action(action))
+        result = core.strip_empty(normalize_foreground_action(action))
         result.setdefault("label", "Open selected recall route")
         result.setdefault("mutation_risk", "read_only")
         result.setdefault(
@@ -338,7 +327,12 @@ def _associative_path_fallback_action(
 
 
 def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
-    """Project agent_recall into one foreground action plus compact route receipts."""
+    """Project agent_recall into one foreground action plus compact route receipts.
+
+    aippocampus-stage-map: sanitize cue -> choose primary action -> keep APW
+    and weak-route proof internal/detail-only -> render compact receipts ->
+    strip debug fields. Do not carry source-open proof material in default MCP.
+    """
 
     recovery_cue = str(
         redact_sensitive_values(
@@ -411,7 +405,7 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
             and str(packet.get("output_mode") or "") == "reopenable_route"
         )
         route_receipts.append(
-            _without_empty(
+            core.strip_empty(
                 {
                     "index": index,
                     "label": _public_route_label(packet),
@@ -507,8 +501,12 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
         and memory_packets
     ):
         foreground_action = _opened_route_reopen_action(1, recall_selector=recall_selector)
+    raw_associative_path_fallback = payload.get("associative_path_fallback")
+    raw_associative_path_fallback = (
+        raw_associative_path_fallback if isinstance(raw_associative_path_fallback, Mapping) else None
+    )
     associative_path_fallback = recovery_projection.compact_associative_path_fallback_card(
-        payload.get("associative_path_fallback")
+        raw_associative_path_fallback
     )
     associative_path_policy = recovery_projection.compact_associative_path_policy(
         payload.get("associative_path_policy")
@@ -534,14 +532,21 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
         # generic relationship/task-management route. When APW cannot produce a
         # source-openable candidate, keep ordinary low-confidence routes as
         # secondary navigation only and make the primary action recover the cue.
-        ordinary_recovery_action = _without_empty(normalize_foreground_action(foreground_action))
+        ordinary_recovery_action = core.strip_empty(normalize_foreground_action(foreground_action))
         if ordinary_recovery_action:
             ordinary_recovery_action["route_choice_posture"] = (
                 ordinary_recovery_action.get("route_choice_posture")
                 or "ordinary_low_confidence_not_apw"
             )
             safe_next_actions = [ordinary_recovery_action, *safe_next_actions]
-        registry_fallback = recall_choices.registry_source_search_fallback_action(recovery_cue)
+        registry_match_count = 0
+        if isinstance(raw_associative_path_fallback, Mapping):
+            registry_match_count = int(raw_associative_path_fallback.get("registry_match_count") or 0)
+        registry_fallback = (
+            recall_choices.registry_source_search_fallback_action(recovery_cue)
+            if registry_match_count > 0
+            else None
+        )
         foreground_action = registry_fallback or {
             "id": "refine_apw_recovery_cue",
             "label": "Refine APW recovery cue",
@@ -572,11 +577,13 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
             )
             weak_route_recovery_card["posture"] = "apw_requested_no_source_reopenable_candidate"
     if associative_path_action:
-        ordinary_recovery_action = _without_empty(normalize_foreground_action(foreground_action))
+        ordinary_recovery_action = core.strip_empty(normalize_foreground_action(foreground_action))
         ordinary_action_id = str(
             ordinary_recovery_action.get("id") or ordinary_recovery_action.get("action_id") or ""
         )
-        apw_primary = recovery_projection.apw_should_replace_foreground_action(foreground_action)
+        apw_primary = recovery_projection.apw_should_replace_foreground_action(
+            foreground_action
+        ) and apw_gate.card_allows_primary_source_action(raw_associative_path_fallback)
         if apw_primary:
             if ordinary_recovery_action:
                 safe_next_actions = [ordinary_recovery_action, *safe_next_actions]
@@ -693,4 +700,4 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
             safe_next_actions=safe_next_actions,
         )
     )
-    return strip_compact_foreground_debug_fields(_without_empty(result))
+    return strip_compact_foreground_debug_fields(core.strip_empty(result))

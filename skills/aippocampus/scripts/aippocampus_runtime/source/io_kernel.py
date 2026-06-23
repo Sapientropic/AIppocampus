@@ -14,6 +14,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
+MAX_LOSS_LINE_NUMBERS = 20
+
 
 @dataclass(frozen=True)
 class JsonlReadResult:
@@ -34,6 +36,8 @@ def empty_jsonl_loss() -> dict[str, Any]:
         "skipped_empty_line_count": 0,
         "unreadable_file_count": 0,
         "total_loss_count": 0,
+        "invalid_json_line_numbers": [],
+        "non_object_line_numbers": [],
         "warning_codes": [],
     }
 
@@ -123,11 +127,17 @@ def iter_jsonl_dict_rows_with_line_numbers(
                     counters["invalid_json_line_count"] = (
                         int(counters.get("invalid_json_line_count") or 0) + 1
                     )
+                    line_numbers = counters.setdefault("invalid_json_line_numbers", [])
+                    if isinstance(line_numbers, list) and len(line_numbers) < MAX_LOSS_LINE_NUMBERS:
+                        line_numbers.append(line_no)
                     continue
                 if not isinstance(item, dict):
                     counters["non_object_line_count"] = (
                         int(counters.get("non_object_line_count") or 0) + 1
                     )
+                    line_numbers = counters.setdefault("non_object_line_numbers", [])
+                    if isinstance(line_numbers, list) and len(line_numbers) < MAX_LOSS_LINE_NUMBERS:
+                        line_numbers.append(line_no)
                     continue
                 yield line_no, item
     except OSError:
@@ -153,6 +163,21 @@ def write_jsonl_dict_rows(
         for row in rows:
             handle.write(json.dumps(dict(row), ensure_ascii=False, sort_keys=sort_keys) + "\n")
     tmp.replace(path)
+
+
+def append_jsonl_dict_rows(
+    path: Path,
+    rows: Iterable[Mapping[str, Any]],
+    *,
+    sort_keys: bool = False,
+) -> int:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    count = 0
+    with path.open("a", encoding="utf-8", newline="\n") as handle:
+        for row in rows:
+            handle.write(json.dumps(dict(row), ensure_ascii=False, sort_keys=sort_keys) + "\n")
+            count += 1
+    return count
 
 
 def load_json_dict(path: Path, *, missing_is_loss: bool = False) -> JsonReadResult:
@@ -208,6 +233,8 @@ def jsonl_loss_warning(
         "non_object_line_count": int(loss.get("non_object_line_count") or 0),
         "unreadable_file_count": int(loss.get("unreadable_file_count") or 0),
         "total_loss_count": int(loss.get("total_loss_count") or 0),
+        "invalid_json_line_numbers": list(loss.get("invalid_json_line_numbers") or []),
+        "non_object_line_numbers": list(loss.get("non_object_line_numbers") or []),
         "warning_codes": list(loss.get("warning_codes") or []),
         "message": "JSONL reader skipped malformed or unreadable rows; treat misses as degraded.",
     }
@@ -228,6 +255,31 @@ def source_ref_key(ref: Mapping[str, Any]) -> tuple[str, str, str, str]:
         str(ref.get("turn_id") or ref.get("turn_index") or ""),
         str(line),
     )
+
+
+def source_ref_identity_key(ref: Mapping[str, Any]) -> tuple[str, str, str, str, str]:
+    """Return a full source-ref identity key for cache ids and local dedupe.
+
+    `source_ref_key()` is the reopen/join key used by existing source indexes:
+    when `source_id` is present it intentionally occupies the line slot. Some
+    local caches and audit paths need a stable identity that preserves both
+    `source_id` and the original line anchor. Bare historical `source_ref`
+    strings are also identity-bearing even when they are not reopenable by the
+    legacy join key. Keep that variant here instead of letting cache modules
+    grow their own subtly different source-ref keys again.
+    """
+
+    thread_key, message_id, turn_id, line = source_ref_key(ref)
+    source_id = str(ref.get("source_id") or ref.get("stable_source_id") or ref.get("source_ref") or "")
+    if source_id and line == source_id:
+        line = str(
+            ref.get("source_line")
+            or ref.get("assistant_line")
+            or ref.get("user_line")
+            or ref.get("line")
+            or ""
+        )
+    return (source_id, thread_key, message_id, turn_id, line)
 
 
 def clean_source_ref(ref: Any, *, require_anchor: bool = True) -> dict[str, Any] | None:

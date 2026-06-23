@@ -11,9 +11,7 @@ source.
 
 from __future__ import annotations
 
-import hashlib
 import json
-import os
 import time
 from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
@@ -25,6 +23,7 @@ from aippocampus_runtime.core import (
     default_thread_store_dir,
     now_utc,
     sanitize_external_model_text,
+    stable_json_id,
 )
 from aippocampus_runtime.ops.route_readiness import safe_source_refs
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
@@ -48,6 +47,7 @@ from aippocampus_runtime.recall.continuity_situation_glyphs import (
     project_situation_glyph as _project_situation_glyph,
 )
 from aippocampus_runtime.recall.query_policy import split_query_terms
+from aippocampus_runtime.source.io_kernel import iter_jsonl_dict_rows, write_json_atomic
 from aippocampus_runtime.source.search import iter_clean_messages
 
 SITUATION_GLYPH_KIND = _SITUATION_GLYPH_KIND
@@ -121,12 +121,6 @@ TEXT_FIELDS = (
 )
 
 
-def _stable_id(*parts: Any, prefix: str, length: int = 20) -> str:
-    raw = "\0".join(json.dumps(part, sort_keys=True, default=str) for part in parts)
-    digest = hashlib.sha256(raw.encode("utf-8", errors="replace")).hexdigest()[:length]
-    return f"{prefix}_{digest}"
-
-
 def _fingerprint_paths(paths: Sequence[Path]) -> str:
     parts: list[str] = []
     for path in paths:
@@ -136,7 +130,7 @@ def _fingerprint_paths(paths: Sequence[Path]) -> str:
             parts.append(f"{path.name}:missing")
             continue
         parts.append(f"{path.name}:{stat.st_mtime_ns}:{stat.st_size}")
-    return _stable_id(*parts, prefix="source")
+    return stable_json_id("source", *parts, length=20)
 
 
 def clean_source_fingerprint(clean_source_dir: Path) -> str:
@@ -179,30 +173,6 @@ def _safe_list(values: Any, *, limit: int = 12, chars: int = 80) -> list[str]:
         if len(out) >= limit:
             break
     return out
-
-
-def _write_json_atomic(path: Path, payload: Mapping[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(f".{path.name}.tmp-{os.getpid()}-{time.time_ns()}")
-    tmp.write_text(
-        json.dumps(payload, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-        newline="\n",
-    )
-    os.replace(tmp, path)
-
-
-def iter_jsonl(path: Path) -> Iterable[dict[str, Any]]:
-    if not path.exists():
-        return
-    with path.open("r", encoding="utf-8") as fh:
-        for line in fh:
-            try:
-                row = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if isinstance(row, dict):
-                yield row
 
 
 def default_continuity_domain_events_path(
@@ -355,18 +325,19 @@ def normalize_continuity_domain_event(
     pathlet_id = _safe_text(row.get("pathlet_id"), 100)
     title = _safe_text(row.get("title") or domain_id or pathlet_id, 160)
     if event_kind in DOMAIN_EVENT_KINDS and not domain_id:
-        domain_id = _stable_id(title, source_refs, prefix="cd")
+        domain_id = stable_json_id("cd", title, source_refs, length=20)
     if event_kind in PATHLET_EVENT_KINDS and not pathlet_id:
-        pathlet_id = _stable_id(title, source_refs, prefix="pathlet")
+        pathlet_id = stable_json_id("pathlet", title, source_refs, length=20)
     source_groups = _source_ref_groups(row, clean_source_dir=clean_source_dir)
-    event_id = _safe_text(row.get("event_id"), 100) or _stable_id(
+    event_id = _safe_text(row.get("event_id"), 100) or stable_json_id(
+        "cde",
         event_kind,
         domain_id,
         pathlet_id,
         title,
         source_refs,
         row.get("created_at") or row.get("timestamp"),
-        prefix="cde",
+        length=20,
     )
     event: dict[str, Any] = {
         "kind": CONTINUITY_DOMAIN_EVENT_KIND,
@@ -443,7 +414,7 @@ def load_continuity_domain_events(
     clean_source_dir: Path | None = None,
 ) -> list[dict[str, Any]]:
     events: list[dict[str, Any]] = []
-    for row in iter_jsonl(path):
+    for row in iter_jsonl_dict_rows(path):
         normalized = normalize_continuity_domain_event(row, clean_source_dir=clean_source_dir)
         if normalized:
             events.append(normalized)
@@ -553,7 +524,7 @@ def _apply_event_to_domain(domain: dict[str, Any], event: Mapping[str, Any]) -> 
         domain["pinned_boundary_conditions"].append(
             {
                 "pin_id": event.get("pin_id")
-                or _stable_id(event.get("event_id"), event.get("effect"), prefix="pin"),
+                or stable_json_id("pin", event.get("event_id"), event.get("effect"), length=20),
                 "kind": event.get("boundary_kind") or "explicit_user_correction",
                 "source_refs": boundary_refs,
                 "strength": event.get("strength") or "hard",
@@ -688,7 +659,7 @@ def _derive_macro_tendencies(domains: list[dict[str, Any]], pathlets: list[dict[
             row = tendencies.setdefault(
                 key,
                 {
-                    "macro_id": _stable_id(label, prefix="macro"),
+                    "macro_id": stable_json_id("macro", label, length=20),
                     "kind": "continuity_macro_tendency_pointer",
                     "label": label,
                     "scale": "macro",
@@ -758,11 +729,12 @@ def materialize_continuity_domains(
         for boundary in domain.get("pinned_boundary_conditions") or []
         if isinstance(boundary, dict)
     ]
-    snapshot_id = _stable_id(
+    snapshot_id = stable_json_id(
+        "cdsnap",
         [domain.get("domain_id") for domain in finalized_domains],
         [pathlet.get("pathlet_id") for pathlet in finalized_pathlets],
         accepted,
-        prefix="cdsnap",
+        length=20,
     )
     snapshot = {
         "kind": CONTINUITY_DOMAIN_SNAPSHOT_KIND,
@@ -795,7 +767,7 @@ def publish_continuity_domains_snapshot(
 ) -> dict[str, Any]:
     events = load_continuity_domain_events(events_path, clean_source_dir=clean_source_dir)
     snapshot = materialize_continuity_domains(events, clean_source_dir=clean_source_dir)
-    snapshot_id = str(snapshot.get("snapshot_id") or _stable_id(time.time_ns(), prefix="cdsnap"))
+    snapshot_id = str(snapshot.get("snapshot_id") or stable_json_id("cdsnap", time.time_ns(), length=20))
     snapshot_path = snapshot_dir / f"{snapshot_id}.json"
     latest_path = snapshot_dir / LATEST_POINTER_NAME
     pointer = {
@@ -810,8 +782,8 @@ def publish_continuity_domains_snapshot(
         LEASE_NAME,
         wait_timeout_seconds=wait_timeout_seconds,
     ):
-        _write_json_atomic(snapshot_path, snapshot)
-        _write_json_atomic(latest_path, pointer)
+        write_json_atomic(snapshot_path, snapshot)
+        write_json_atomic(latest_path, pointer)
     return {
         "kind": "aippocampus_continuity_domains_publish_report",
         "schema_version": CONTINUITY_DOMAIN_SCHEMA_VERSION,

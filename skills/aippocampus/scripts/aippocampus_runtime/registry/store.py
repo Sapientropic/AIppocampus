@@ -67,15 +67,6 @@ def thread_store_dir(thread_key: str, registry_dir: Path | None = None) -> Path:
     return registry_root(registry_dir) / "threads" / safe_slug(thread_key)
 
 
-def load_json(path: Path) -> dict:
-    if not path.exists():
-        return {}
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        return {}
-
-
 def load_existing_json_object(path: Path, *, label: str) -> dict:
     if not path.exists():
         return {}

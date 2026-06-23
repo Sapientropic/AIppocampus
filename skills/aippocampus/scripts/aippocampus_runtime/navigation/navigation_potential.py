@@ -10,14 +10,13 @@ still own factual claims.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 from collections.abc import Iterable, Mapping, Sequence
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from aippocampus_runtime.core import compact_text, now_utc
+from aippocampus_runtime.core import compact_text, now_utc, stable_json_id
 from aippocampus_runtime.navigation import microcircuit_router
 from aippocampus_runtime.navigation.parallel_derivation_bundle import (
     preflattening_gate_for_route_affordance,
@@ -25,6 +24,7 @@ from aippocampus_runtime.navigation.parallel_derivation_bundle import (
 from aippocampus_runtime.navigation.repo_familiarity import navigation_routes_from_cards
 from aippocampus_runtime.question.source_refs import compact_source_refs, source_ref_key
 from aippocampus_runtime.registry.api import unique_preserve
+from aippocampus_runtime.source.io_kernel import load_json_dict
 
 SCHEMA_VERSION = 1
 PROJECTION_KIND = "aippocampus_navigation_potential_projection"
@@ -69,15 +69,6 @@ ACTION_GRAMMAR = {
 
 SOURCE_THICKNESS_RANK = {"thin": 0, "usable": 1, "strong": 2}
 NEGATIVE_FEEDBACK_OUTCOMES = {"ignored", "dismissed", "corrected"}
-
-
-def _sha1(value: str) -> str:
-    return hashlib.sha1(value.encode("utf-8", errors="replace")).hexdigest()
-
-
-def stable_id(prefix: str, *parts: Any, length: int = 18) -> str:
-    raw = "\n".join(json.dumps(part, ensure_ascii=False, sort_keys=True) for part in parts)
-    return f"{prefix}_{_sha1(raw)[:length]}"
 
 
 def _text(value: Any, limit: int = 220) -> str:
@@ -164,7 +155,7 @@ def _route_id(route: Mapping[str, Any]) -> str:
         value = _text(route.get(key), 120)
         if value:
             return value
-    return stable_id("nav_route", route.get("title"), route.get("summary"), route.get("source_refs"))
+    return stable_json_id("nav_route", route.get("title"), route.get("summary"), route.get("source_refs"))
 
 
 def _route_title(route: Mapping[str, Any]) -> str:
@@ -601,6 +592,13 @@ def _potential_from_route(
     parallel_preflattening_gate: Mapping[str, Any] | None,
     now: str,
 ) -> dict[str, Any] | None:
+    """Evaluate one navigation route into a bounded action potential.
+
+    aippocampus-stage-map: normalize route/source refs -> gather correction,
+    journey, and feedback signals -> choose action grammar/affordance -> render
+    compact-safe potential. This projection remains navigation, not source fact.
+    """
+
     route_id = _route_id(route)
     route_refs = _source_refs(
         route.get("source_refs"),
@@ -821,7 +819,7 @@ def _potential_from_route(
     potential = {
         "schema_version": SCHEMA_VERSION,
         "kind": POTENTIAL_KIND,
-        "potential_id": stable_id(
+        "potential_id": stable_json_id(
             "nav_potential",
             route_id,
             status,
@@ -1018,11 +1016,6 @@ def navigation_potentials_to_agency_inputs(
     return rows
 
 
-def _load_json(path: Path) -> dict[str, Any]:
-    data = json.loads(path.read_text(encoding="utf-8"))
-    return data if isinstance(data, dict) else {}
-
-
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Build AIppocampus navigation-potential projection.")
     parser.add_argument("--input", required=True, help="JSON object with route and sidecar rows.")
@@ -1031,7 +1024,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args(argv)
 
-    raw = _load_json(Path(args.input))
+    raw = load_json_dict(Path(args.input), missing_is_loss=True).data
     projection = build_navigation_potential_projection(
         cognitive_routes=raw.get("cognitive_routes") or raw.get("routes") or [],
         concept_edges=raw.get("concept_edges") or [],

@@ -15,6 +15,7 @@ from typing import Any, Iterable, Mapping, cast
 
 from aippocampus_runtime.core import now_utc
 from aippocampus_runtime.registry.api import registry_paths, unique_preserve
+from aippocampus_runtime.source.io_kernel import iter_jsonl_dict_rows_with_line_numbers, parse_utc
 
 REPORT_KIND = "aippocampus_subconscious_staging_maintenance_report"
 ARCHIVE_MANIFEST_KIND = "aippocampus_subconscious_staging_archive_manifest"
@@ -98,21 +99,6 @@ def default_pressure_thresholds() -> StagingPressureThresholds:
     )
 
 
-def parse_utc(value: object) -> datetime | None:
-    text = str(value or "").strip()
-    if not text:
-        return None
-    if text.endswith("Z"):
-        text = text[:-1] + "+00:00"
-    try:
-        parsed = datetime.fromisoformat(text)
-    except ValueError:
-        return None
-    if parsed.tzinfo is None:
-        return parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(timezone.utc)
-
-
 def normalize_now(value: str | datetime | None = None) -> datetime:
     if isinstance(value, datetime):
         return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
@@ -123,21 +109,11 @@ def normalize_now(value: str | datetime | None = None) -> datetime:
 
 
 def iter_jsonl_rows(path: Path) -> list[dict[str, Any]]:
-    if not path.exists():
-        return []
     rows: list[dict[str, Any]] = []
-    with path.open("r", encoding="utf-8", errors="replace") as fh:
-        for line_number, line in enumerate(fh, start=1):
-            if not line.strip():
-                continue
-            try:
-                item = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if isinstance(item, dict):
-                item = dict(item)
-                item["_maintenance_line_number"] = line_number
-                rows.append(item)
+    for line_number, item in iter_jsonl_dict_rows_with_line_numbers(path):
+        row = dict(item)
+        row["_maintenance_line_number"] = line_number
+        rows.append(row)
     return rows
 
 

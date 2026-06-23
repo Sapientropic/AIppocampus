@@ -9,7 +9,6 @@ initiative tickets; it never grants permission, sequences work, or executes.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
@@ -19,9 +18,10 @@ from aippocampus_runtime.core import (
     cli_exit_code_for_error_code,
     compact_text,
     now_utc,
+    stable_json_id,
 )
-from aippocampus_runtime.question.source_refs import source_ref_key
 from aippocampus_runtime.registry.api import unique_preserve
+from aippocampus_runtime.source.io_kernel import source_ref_key
 
 SCHEMA_VERSION = 1
 PROMPT_VERSION = "aippocampus-agency-affordance-v1"
@@ -69,32 +69,6 @@ LEVEL_RANK = {
 }
 
 
-def sha1_text(value: str) -> str:
-    return hashlib.sha1(value.encode("utf-8", errors="replace")).hexdigest()
-
-
-def stable_id(prefix: str, *parts: Any, length: int = 18) -> str:
-    raw = "\n".join(json.dumps(part, ensure_ascii=False, sort_keys=True) for part in parts)
-    return f"{prefix}_{sha1_text(raw)[:length]}"
-
-
-def iter_jsonl(path: Path) -> list[dict[str, Any]]:
-    if not path.exists():
-        return []
-    rows: list[dict[str, Any]] = []
-    with path.open("r", encoding="utf-8") as fh:
-        for line in fh:
-            if not line.strip():
-                continue
-            try:
-                item = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if isinstance(item, dict):
-                rows.append(item)
-    return rows
-
-
 def clean_source_ref(ref: Any) -> dict[str, Any] | None:
     if not isinstance(ref, Mapping):
         return None
@@ -135,7 +109,7 @@ def source_ref_fingerprint(refs: Sequence[Mapping[str, Any]]) -> str:
     if not refs:
         return ""
     keys = [source_ref_key(ref) for ref in refs]
-    return stable_id("src_refs", keys, length=16)
+    return stable_json_id("src_refs", keys, length=16)
 
 
 def source_thickness(refs: Sequence[Mapping[str, Any]], explicit: str | None = None) -> str:
@@ -228,7 +202,7 @@ def scope_for(row: Mapping[str, Any], source_kind: str) -> dict[str, Any]:
     ) or row.get("decision_id") or row.get("activation_event_id") or row.get("ticket_id")
     return {
         "kind": str((scope.get("kind") if isinstance(scope, Mapping) else None) or "thread"),
-        "stable_id": str(stable or stable_id("scope", source_kind, row.get("summary") or "")),
+        "stable_id": str(stable or stable_json_id("scope", source_kind, row.get("summary") or "")),
         "label": compact_text(str((scope.get("label") if isinstance(scope, Mapping) else None) or row.get("title") or ""), 140),
     }
 
@@ -292,7 +266,7 @@ def affordance_from_row(
         return None
     thickness = source_thickness(refs, str(row.get("source_thickness") or ""))
     action = proposed_action_for(level, row)
-    affordance_id = stable_id(
+    affordance_id = stable_json_id(
         "agency_affordance",
         source_kind,
         trigger,
@@ -397,17 +371,17 @@ def affordance_from_journey_resonance(row: Mapping[str, Any]) -> dict[str, Any] 
         ),
         520,
     )
-    resonance_id = str(match.get("resonance_id") or stable_id("journey_resonance", summary))
+    resonance_id = str(match.get("resonance_id") or stable_json_id("journey_resonance", summary))
     return {
         "schema_version": SCHEMA_VERSION,
         "kind": AFFORDANCE_KIND,
-        "affordance_id": stable_id("agency_affordance", "journey_resonance", resonance_id, summary, length=20),
+        "affordance_id": stable_json_id("agency_affordance", "journey_resonance", resonance_id, summary, length=20),
         "created_at": row.get("created_at") or now_utc(),
         "source_kind": "journey_resonance",
         "source_ids": unique_preserve([resonance_id], limit=8),
         "scope": {
             "kind": "cross_project_journey_resonance",
-            "stable_id": stable_id("scope", "journey_resonance", resonance_id, length=16),
+            "stable_id": stable_json_id("scope", "journey_resonance", resonance_id, length=16),
             "label": "content-light Journey resonance",
         },
         "intervention_level": "backstage_only",
@@ -545,7 +519,7 @@ def ticket_from_affordance(
     foreground: bool,
 ) -> dict[str, Any]:
     refs = [dict(ref) for ref in affordance.get("evidence_refs") or [] if isinstance(ref, Mapping)]
-    ticket_id = stable_id(
+    ticket_id = stable_json_id(
         "agency_ticket",
         topic_epoch,
         affordance.get("affordance_id"),

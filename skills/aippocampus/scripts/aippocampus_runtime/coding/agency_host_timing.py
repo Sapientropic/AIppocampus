@@ -15,6 +15,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime import core
 from aippocampus_runtime.coding import agency_affordance as agency
 
 REPLAY_KIND = "aippocampus_agency_host_timing_replay"
@@ -80,7 +81,7 @@ def host_duplicate_key(ticket: Mapping[str, Any]) -> str:
     if not source_fp:
         source_fp = agency.source_ref_fingerprint(_source_refs(ticket.get("source_refs")))
     scope = _as_mapping(ticket.get("scope"))
-    return agency.stable_id(
+    return core.stable_json_id(
         "agency_host_duplicate",
         source_fp,
         scope.get("kind"),

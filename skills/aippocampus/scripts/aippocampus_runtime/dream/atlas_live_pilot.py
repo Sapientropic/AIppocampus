@@ -11,7 +11,7 @@ import time
 from collections.abc import Callable, Iterable, Mapping
 from typing import Any
 
-from aippocampus_runtime.core import sanitize_external_model_payload
+from aippocampus_runtime.core import sanitize_external_model_payload, stable_json_id
 from aippocampus_runtime.dream import worker as dream_worker
 from aippocampus_runtime.dream.worker_contract import (
     stable_worker_contract,
@@ -35,6 +35,7 @@ from aippocampus_runtime.model.routing import (
     route_payload_with_effective_values,
     route_service_name,
 )
+from aippocampus_runtime.source.io_kernel import safe_float
 
 LIVE_PILOT_KIND = "aippocampus_dream_atlas_live_pilot"
 LIVE_WORKER_KIND = "aippocampus_dream_atlas_live_worker_run"
@@ -58,13 +59,6 @@ def _safe_int(value: Any) -> int:
         return int(value or 0)
     except (TypeError, ValueError):
         return 0
-
-
-def _safe_float(value: Any, *, default: float = 0.0) -> float:
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return default
 
 
 def _source_ref_dict(
@@ -100,8 +94,11 @@ def _atlas_worker_pack(
     return {
         "schema_version": 1,
         "kind": dream_worker.PACK_KIND,
-        "pack_id": "dream_atlas_live_"
-        + atlas_builder.stable_hash(*(pack["pack_id"] for pack in selected)),
+        "pack_id": stable_json_id(
+            "dream_atlas_live",
+            *(pack["pack_id"] for pack in selected),
+            length=16,
+        ),
         "pack_kind": atlas_builder.ATLAS_KIND,
         "status": atlas_builder.READY_STATUS,
         "selection": {
@@ -214,8 +211,8 @@ def _cost_summary(
             "input_cost_per_million": input_cost_per_million,
             "output_cost_per_million": output_cost_per_million,
         }
-    prompt_tokens = _safe_float(usage.get("prompt_tokens"), default=0.0)
-    completion_tokens = _safe_float(usage.get("completion_tokens"), default=0.0)
+    prompt_tokens = safe_float(usage.get("prompt_tokens"), 0.0)
+    completion_tokens = safe_float(usage.get("completion_tokens"), 0.0)
     if input_cost_per_million is None or output_cost_per_million is None:
         return {
             "mode": "provider_pricing_not_configured",

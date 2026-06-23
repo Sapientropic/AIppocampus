@@ -34,7 +34,7 @@ INJECTED_INSTRUCTION_PREFIXES = (
 )
 
 
-def iter_jsonl(
+def iter_rollout_jsonl(
     path: Path,
     *,
     normalization_loss: dict[str, Any] | None = None,
@@ -180,7 +180,7 @@ def normalize_rollout_with_loss(
     current_turn = 0
     normalization_loss = empty_provider_normalization_loss("codex")
 
-    for line_no, item in iter_jsonl(rollout, normalization_loss=normalization_loss):
+    for line_no, item in iter_rollout_jsonl(rollout, normalization_loss=normalization_loss):
         timestamp = item.get("timestamp")
         tool_kind = tool_payload_kind(item)
         if current_turn and current_turn in turns:
@@ -264,7 +264,7 @@ __all__ = [
     "empty_turn",
     "extract_message",
     "is_injected_instruction_text",
-    "iter_jsonl",
+    "iter_rollout_jsonl",
     "iter_messages",
     "message_phase",
     "normalize_rollout",

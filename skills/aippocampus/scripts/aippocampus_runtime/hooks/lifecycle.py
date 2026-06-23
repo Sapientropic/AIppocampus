@@ -33,6 +33,7 @@ from aippocampus_runtime.io_integrity import atomic_write_json
 from aippocampus_runtime.ops import log_retention
 from aippocampus_runtime.public_output import emit_public_text
 from aippocampus_runtime.source import emergency_snapshot
+from aippocampus_runtime.source.io_kernel import load_json_dict
 
 SCRIPT_DIR = Path(__file__).resolve().parents[2]
 STATE_SCHEMA_VERSION = 1
@@ -78,16 +79,6 @@ def state_key(cwd: Path | str) -> str:
     return f"workspace:{digest}"
 
 
-def load_json(path: Path) -> dict[str, Any]:
-    if not path.exists():
-        return {}
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        return {}
-    return data if isinstance(data, dict) else {}
-
-
 def save_json(path: Path, data: dict[str, Any]) -> None:
     atomic_write_json(path, data, sanitize=True)
 
@@ -102,7 +93,7 @@ def _emit_public_json(payload: dict[str, Any]) -> None:
 
 
 def load_state(path: Path | None = None) -> dict[str, Any]:
-    data = load_json(state_path(path))
+    data = load_json_dict(state_path(path)).data
     data.setdefault("schema_version", STATE_SCHEMA_VERSION)
     data.setdefault("workspaces", {})
     return data

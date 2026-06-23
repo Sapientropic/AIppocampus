@@ -53,6 +53,7 @@ from aippocampus_runtime.navigation.concept_lifecycle import (
     unique_source_refs,
 )
 from aippocampus_runtime.registry.api import unique_preserve
+from aippocampus_runtime.source.io_kernel import load_json_dict, load_jsonl_dict_rows
 
 # Public graph artifact schema. Additive rebuildable SQLite cache columns are
 # migrated in concept_graph_schema.py without changing this artifact contract.
@@ -101,14 +102,8 @@ BIDIRECTIONAL_EDGE_TYPES = {
 }
 
 
-def load_json(path: Path) -> dict[str, Any]:
-    if not path.exists():
-        return {}
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        return {}
-    return data if isinstance(data, dict) else {}
+def load_timeline_payload(path: Path) -> dict[str, Any]:
+    return load_json_dict(path).data
 
 
 def concept_normalized(value: str) -> str:
@@ -408,7 +403,7 @@ def add_bidirectional_edge(
 def collect_timeline_edges(con: sqlite3.Connection, timeline_path: Path | None) -> int:
     if not timeline_path or not timeline_path.exists():
         return 0
-    timeline = load_json(timeline_path)
+    timeline = load_timeline_payload(timeline_path)
     edge_count = 0
     for project in (timeline.get("projects") or {}).values():
         if not isinstance(project, dict):
@@ -444,26 +439,17 @@ def collect_timeline_edges(con: sqlite3.Connection, timeline_path: Path | None) 
     return edge_count
 
 
-def iter_jsonl(path: Path) -> list[dict[str, Any]]:
+def load_concept_graph_rows(path: Path) -> list[dict[str, Any]]:
     if not path.exists():
         return []
-    rows: list[dict[str, Any]] = []
-    with path.open("r", encoding="utf-8") as fh:
-        for line in fh:
-            try:
-                item = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if isinstance(item, dict):
-                rows.append(item)
-    return rows
+    return load_jsonl_dict_rows(path).rows
 
 
 def collect_subconscious_edges(con: sqlite3.Connection, staging_path: Path | None) -> int:
     if not staging_path or not staging_path.exists():
         return 0
     grouped: dict[tuple[str, str, str], dict[str, Any]] = {}
-    for item in iter_jsonl(staging_path):
+    for item in load_concept_graph_rows(staging_path):
         if item.get("kind") != "aippocampus_subconscious_edge":
             continue
         src = str(item.get("src") or "")

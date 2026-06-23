@@ -14,32 +14,21 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.core import dict_or_empty
 from aippocampus_runtime.hooks import prompt as prompt_hook
 from aippocampus_runtime.recall import ambient_cache
+from aippocampus_runtime.source.io_kernel import write_jsonl_dict_rows
 
 KIND = "aippocampus_worker_hook_handoff_smoke"
 SCHEMA_VERSION = 1
 ROUTE_GRAMMARS = {"direction_with_ref", "reopenable_route", "bounded_evidence", "source_open"}
 
 
-def _as_dict(value: Any) -> dict[str, Any]:
-    return value if isinstance(value, dict) else {}
-
-
-def _write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        "\n".join(json.dumps(row, ensure_ascii=False) for row in rows) + "\n",
-        encoding="utf-8",
-        newline="\n",
-    )
-
-
 def _write_fixture_registry(root: Path) -> Path:
     workspace = root / "workspace"
     workspace.mkdir(parents=True, exist_ok=True)
     messages = root / "clean-source" / "messages.jsonl"
-    _write_jsonl(
+    write_jsonl_dict_rows(
         messages,
         [
             {
@@ -180,10 +169,10 @@ def _suppression_reasons(
 
 
 def _case_report(case_id: str, result: dict[str, Any]) -> dict[str, Any]:
-    ambient = _as_dict(result.get("ambient_recall"))
+    ambient = dict_or_empty(result.get("ambient_recall"))
     cards = [card for card in ambient.get("cards") or [] if isinstance(card, dict)]
-    cache_status = _as_dict(ambient.get("cache_status"))
-    source_reopen = _as_dict(ambient.get("source_reopen"))
+    cache_status = dict_or_empty(ambient.get("cache_status"))
+    source_reopen = dict_or_empty(ambient.get("source_reopen"))
     grammars = _action_grammars(cards)
     worker_candidate_available = str(cache_status.get("status") or "") in {"hit", "related_hit"} and int(
         cache_status.get("card_count") or 0
@@ -373,7 +362,7 @@ def build_worker_hook_handoff_smoke() -> dict[str, Any]:
 
 
 def render_text(report: dict[str, Any]) -> str:
-    metrics = _as_dict(report.get("metrics"))
+    metrics = dict_or_empty(report.get("metrics"))
     lines = [
         "AIppocampus worker-to-hook handoff smoke",
         f"ok: {bool(report.get('ok'))}",

@@ -17,6 +17,7 @@ from typing import Any
 
 from aippocampus_runtime.core import sanitize_external_model_text
 from aippocampus_runtime.registry.api import unique_preserve
+from aippocampus_runtime.source.io_kernel import source_ref_identity_key
 
 LIVING_CUE_SCHEMA_VERSION = 1
 LIVING_CUE_KIND = "aippocampus_living_cue_cache_entry"
@@ -98,16 +99,6 @@ def _source_ref(ref: dict[str, Any]) -> dict[str, Any]:
     return clean
 
 
-def _source_ref_key(ref: dict[str, Any]) -> tuple[str, str, str, str, str]:
-    return (
-        str(ref.get("source_id") or ""),
-        str(ref.get("thread_key") or ""),
-        str(ref.get("message_id") or ""),
-        str(ref.get("turn_id") or ""),
-        str(ref.get("line") or ref.get("source_line") or ""),
-    )
-
-
 def compact_source_refs(rows: list[Any]) -> list[dict[str, Any]]:
     refs: list[dict[str, Any]] = []
     seen: set[tuple[str, str, str, str, str]] = set()
@@ -117,7 +108,7 @@ def compact_source_refs(rows: list[Any]) -> list[dict[str, Any]]:
         ref = _source_ref(row)
         if not ref:
             continue
-        key = _source_ref_key(ref)
+        key = source_ref_identity_key(ref)
         if key in seen:
             continue
         seen.add(key)
@@ -129,7 +120,8 @@ def compact_source_refs(rows: list[Any]) -> list[dict[str, Any]]:
 
 def _entry_id(cue: str, aliases: list[str], source_refs: list[dict[str, Any]]) -> str:
     ref_material = [
-        "|".join(str(part) for part in _source_ref_key(ref)) for ref in source_refs[:MAX_SOURCE_REFS]
+        "|".join(str(part) for part in source_ref_identity_key(ref))
+        for ref in source_refs[:MAX_SOURCE_REFS]
     ]
     material = json.dumps(
         {

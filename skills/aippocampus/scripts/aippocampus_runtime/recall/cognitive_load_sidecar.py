@@ -13,6 +13,8 @@ import json
 from datetime import datetime, timezone
 from typing import Any, Iterable, Mapping
 
+from aippocampus_runtime.source.io_kernel import source_ref_key as canonical_source_ref_key
+
 PROJECTION_BOUNDARY = "routing_caution_not_affect_or_personality_truth"
 MAX_LOAD_BOOST = 0.16
 HALF_LIFE_DAYS = 30.0
@@ -87,7 +89,7 @@ def _as_mapping(value: Any) -> Mapping[str, Any]:
     return value if isinstance(value, Mapping) else {}
 
 
-def _as_list(value: Any) -> list[Any]:
+def _list_items(value: Any) -> list[Any]:
     return value if isinstance(value, list) else []
 
 
@@ -100,28 +102,20 @@ def _stable_report_id(prefix: str, *parts: Any, length: int = 14) -> str:
     return f"{prefix}_{digest}"
 
 
-def source_ref_key(source_ref: Mapping[str, Any]) -> str:
+def source_ref_hash(source_ref: Mapping[str, Any]) -> str:
     existing = str(source_ref.get("source_ref_hash") or "").strip()
     if existing.startswith("sha256:"):
         return existing
-    public_ref = {
-        "source_id": source_ref.get("source_id"),
-        "thread_id": source_ref.get("thread_id"),
-        "turn_id": source_ref.get("turn_id"),
-        "message_id": source_ref.get("message_id"),
-        "line": source_ref.get("line"),
-        "source_line": source_ref.get("source_line"),
-    }
-    digest = hashlib.sha256(_stable_json(public_ref).encode("utf-8")).hexdigest()
+    digest = hashlib.sha256(_stable_json(canonical_source_ref_key(source_ref)).encode("utf-8")).hexdigest()
     return f"sha256:{digest}"
 
 
 def _source_keys(value: Any) -> list[str]:
     keys: list[str] = []
-    for raw_ref in _as_list(value):
+    for raw_ref in _list_items(value):
         ref = _as_mapping(raw_ref)
         if ref:
-            keys.append(source_ref_key(ref))
+            keys.append(source_ref_hash(ref))
     return sorted(set(keys))
 
 
@@ -339,7 +333,7 @@ def build_cognitive_load_calibration_report(
         )
     )
     cannot_claim_values = {
-        *[str(item) for item in _as_list(sidecar.get("cannot_claim"))],
+        *[str(item) for item in _list_items(sidecar.get("cannot_claim"))],
         *CALIBRATION_CANNOT_CLAIM,
     }
     if private_history_measured:
@@ -452,7 +446,7 @@ def _public_feedback_case_summary(event: Mapping[str, Any]) -> dict[str, Any]:
         ),
         "event_type": event_type,
         "feedback_outcome": _feedback_outcome(event),
-        "source_ref_count": len(_as_list(event.get("source_refs"))),
+        "source_ref_count": len(_list_items(event.get("source_refs"))),
         "load_weight_reviewed": bool(event.get("load_weight_reviewed")),
         "caution_hint_reviewed": bool(event.get("caution_hint_reviewed")),
     }
@@ -535,7 +529,7 @@ def build_public_behavior_trace_feedback_report(
         },
         "cannot_claim": sorted(
             {
-                *[str(item) for item in _as_list(calibration.get("cannot_claim"))],
+                *[str(item) for item in _list_items(calibration.get("cannot_claim"))],
                 "default_foreground_policy_quality",
                 "host_timing_quality",
                 "private_history_generality",
@@ -749,7 +743,7 @@ def build_public_default_path_usefulness_report(*, now: str | None = None) -> di
 def _sidecar_index(sidecar: Mapping[str, Any]) -> dict[str, Mapping[str, Any]]:
     return {
         str(entry.get("source_ref_key")): entry
-        for entry in _as_list(sidecar.get("entries"))
+        for entry in _list_items(sidecar.get("entries"))
         if isinstance(entry, Mapping)
     }
 

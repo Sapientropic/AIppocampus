@@ -16,6 +16,7 @@ from aippocampus_runtime.contracts import (
 from aippocampus_runtime.core import codex_home, default_thread_index_dir, parse_anchor_file
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 from aippocampus_runtime.registry.api import register_current_thread
+from aippocampus_runtime.source.io_kernel import load_json_dict
 from aippocampus_runtime.vault.dashboard import html_dashboard_v2
 from aippocampus_runtime.vault.notes import (
     anchor_note,
@@ -34,7 +35,6 @@ from aippocampus_runtime.vault.utils import (
     DEFAULT_SITE_TITLE,
     DEFAULT_VAULT,
     copy_dashboard_assets,
-    load_json,
     read_recent_messages,
     resolve_under,
     run_json,
@@ -104,9 +104,9 @@ def main(argv: list[str] | None = None) -> int:
         [sys.executable, "-m", "aippocampus_runtime.health", "--cwd", str(cwd), "--json"]
     )
     index_dir = Path((health.get("index") or {}).get("dir") or default_thread_index_dir(cwd))
-    checkpoint_state = load_json(
+    checkpoint_state = load_json_dict(
         Path((health.get("checkpoint") or {}).get("state") or (index_dir / "checkpoint_state.json"))
-    )
+    ).data
     anchors_path = cwd / "thread-anchors.md"
     anchors = parse_anchor_file(anchors_path)
 

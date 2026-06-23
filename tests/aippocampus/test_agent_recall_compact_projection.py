@@ -940,6 +940,61 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
         self.assertEqual(executable_command_violations(no_route), [])
         self.assertEqual(executable_command_violations(weak_route), [])
 
+    def test_blocked_source_anchor_gate_prevents_apw_primary_deepen(self) -> None:
+        public = agent_continuity_cli_support.public_recall_projection(
+            {
+                "kind": "aippocampus_agent_continuity_path",
+                "schema_version": "agent-continuity-path-v1",
+                "mode": "recall",
+                "status": "ok",
+                "last_recall_cache_available": True,
+                "recall_selector_id": "sel_blocked_apw",
+                "foreground_action_card": {
+                    "canonical_action": {
+                        "action_id": "recover_recall_miss",
+                        "tool_name": "search_memory",
+                        "arguments": {
+                            "query": "hook刚刚对你有帮助吗 ambient recall 迟钝",
+                            "scope": "all_registered_sources",
+                            "max": 5,
+                        },
+                        "cli_command": (
+                            "aippocampus search --all "
+                            "'hook刚刚对你有帮助吗 ambient recall 迟钝' --json"
+                        ),
+                        "claim_boundary": "no_route_claim",
+                    }
+                },
+                "memory_packets": [{"route_id": "route_low", "route_kind": "direction_only"}],
+                "associative_path_fallback": {
+                    "status": "route_candidate",
+                    "request_index": 6,
+                    "label": "APW source route: hook刚刚对你有帮助吗 / ambient",
+                    "candidate_source_kind": "current_clean_source",
+                    "matched_cue_anchors": ["hook刚刚对你有帮助吗", "ambient"],
+                    "source_anchor_gate": {
+                        "status": "blocked",
+                        "target_source_matched": False,
+                        "opened_anchor_hits": 1,
+                        "required_anchor_hits": 2,
+                    },
+                },
+                "source_anchor_gate": {
+                    "status": "blocked",
+                    "target_source_matched": False,
+                    "opened_anchor_hits": 1,
+                    "required_anchor_hits": 2,
+                },
+            },
+            query="hook刚刚对你有帮助吗 ambient recall 迟钝",
+        )
+
+        encoded = json.dumps(public, ensure_ascii=False, sort_keys=True)
+        self.assertEqual(public["foreground_action"]["id"], "recover_recall_miss")
+        self.assertNotIn("deepen_associative_path_fallback", encoded)
+        self.assertNotIn("associative_path_fallback", public)
+        self.assertEqual(executable_command_violations(public), [])
+
     def test_full_recall_action_card_no_routes_has_executable_recovery_action(self) -> None:
         card = foreground_action_card.build_recall_foreground_action_card(
             status="no_routes",

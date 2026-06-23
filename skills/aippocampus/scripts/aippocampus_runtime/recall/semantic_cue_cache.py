@@ -141,18 +141,10 @@ def merge_source_refs(existing: list[Any], incoming: list[dict[str, Any]]) -> li
     return refs
 
 
-def iter_jsonl(path: Path) -> list[dict[str, Any]]:
-    return load_jsonl_dict_rows(path).rows
-
-
-def write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
-    write_jsonl_dict_rows(path, rows, sort_keys=True)
-
-
 def all_semantic_cues(path: Path) -> list[dict[str, Any]]:
     return [
         row
-        for row in iter_jsonl(path)
+        for row in load_jsonl_dict_rows(path).rows
         if row.get("kind") == SEMANTIC_CUE_KIND
         and row.get("schema_version") == SEMANTIC_CUE_SCHEMA_VERSION
     ]
@@ -289,7 +281,7 @@ def record_semantic_cue_hits(
         updated_ids.append(key)
 
     all_rows = _sorted_rows(list(rows.values()))
-    write_jsonl(path, all_rows)
+    write_jsonl_dict_rows(path, all_rows, sort_keys=True)
     active_count = sum(1 for row in all_rows if row.get("cue_id") in updated_ids and cue_is_active(row))
     return {
         "path": str(path),
@@ -322,7 +314,7 @@ def record_semantic_cue_misses(
         refresh_status(row)
         updated += 1
     if updated:
-        write_jsonl(path, _sorted_rows(list(rows.values())))
+        write_jsonl_dict_rows(path, _sorted_rows(list(rows.values())), sort_keys=True)
     return {"path": str(path), "updated_count": updated}
 
 

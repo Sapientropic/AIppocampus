@@ -25,13 +25,12 @@ from aippocampus_runtime.recall import feedback_events
 from aippocampus_runtime.recall.query_policy import split_query_terms
 from aippocampus_runtime.recall.semantic_recall_gate import default_semantic_triggers_path
 from aippocampus_runtime.registry.api import registry_paths, unique_preserve
+from aippocampus_runtime.source.io_kernel import load_jsonl_dict_rows, write_jsonl_dict_rows
 from aippocampus_runtime.subconscious.candidate_router import (
     SOURCE_SEMANTIC_TYPES,
     activation_cue_terms_for,
     activation_cues_for,
     default_candidates_path,
-    iter_jsonl,
-    write_jsonl,
 )
 from aippocampus_runtime.subconscious.candidate_router_feedback import (
     apply_alias_merge_feedback,
@@ -277,7 +276,7 @@ def iter_seed_triggers(
     if not path or not path.exists():
         return []
     rows: list[dict[str, Any]] = []
-    for row in iter_jsonl(path):
+    for row in load_jsonl_dict_rows(path).rows:
         if row.get("kind") != "aippocampus_semantic_trigger":
             continue
         if row.get("status") != "active":
@@ -470,10 +469,10 @@ def build_semantic_triggers(
         "skipped_seed_reasons": {},
     }
     seed_triggers = iter_seed_triggers(seed_triggers_path, diagnostics=diagnostics)
-    feedback_rows = iter_jsonl(feedback_path) if feedback_path else []
+    feedback_rows = load_jsonl_dict_rows(feedback_path).rows if feedback_path else []
     for trigger in seed_triggers:
         by_key[str(trigger.get("trigger_id"))] = trigger
-    for candidate in iter_jsonl(candidates_path):
+    for candidate in load_jsonl_dict_rows(candidates_path).rows:
         routed = route_candidate(
             candidate,
             diagnostics=diagnostics,
@@ -493,7 +492,7 @@ def build_semantic_triggers(
         key=lambda row: (float(row.get("confidence") or 0.0), str(row.get("title") or "")),
         reverse=True,
     )
-    write_jsonl(output_path, rows)
+    write_jsonl_dict_rows(output_path, rows)
     summary = {
         "schema_version": TRIGGER_SCHEMA_VERSION,
         "kind": "aippocampus_semantic_trigger_routing",

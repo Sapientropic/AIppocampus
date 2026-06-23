@@ -4,13 +4,13 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 from collections import Counter, defaultdict
 from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.core import stable_json_id
 from aippocampus_runtime.model.routing import (
     DEEPSEEK_PREFIX_CACHE_CONTRACT,
     DEFAULT_DEEPSEEK_API_KEY_ENV,
@@ -18,6 +18,7 @@ from aippocampus_runtime.model.routing import (
     flash_model,
 )
 from aippocampus_runtime.safety import deepseek_cache_metrics_from_usage
+from aippocampus_runtime.source.io_kernel import safe_float
 
 SCHEMA_VERSION = 1
 REPORT_KIND = "aippocampus_dream_long_context_atlas_report"
@@ -40,13 +41,6 @@ OFFICIAL_DEEPSEEK_SOURCES = [
     "https://api-docs.deepseek.com/news/news260424",
     "https://api-docs.deepseek.com/guides/kv_cache",
 ]
-
-
-def stable_hash(*parts: Any, length: int = 16) -> str:
-    digest = hashlib.sha256(
-        "\u241f".join(str(part) for part in parts).encode("utf-8", errors="replace")
-    ).hexdigest()
-    return digest[:length]
 
 
 def _text(value: Any) -> str:
@@ -74,7 +68,7 @@ def _safe_pack_id(value: Any) -> str:
         and all(char.isalnum() or char in "-_." for char in text)
     ):
         return text
-    return "pack_" + stable_hash(text, length=12)
+    return stable_json_id("pack", text, length=12)
 
 
 def _safe_ref(value: Any) -> str | None:
@@ -100,7 +94,7 @@ def _safe_refs(value: Any) -> list[str]:
 
 def _safe_topic(value: Any) -> str:
     label = _label(value, fallback="")
-    return label if label else "topic_" + stable_hash(_text(value), length=10)
+    return label if label else stable_json_id("topic", _text(value), length=10)
 
 
 def _safe_int(value: Any) -> int:
@@ -108,13 +102,6 @@ def _safe_int(value: Any) -> int:
         return int(value or 0)
     except (TypeError, ValueError):
         return 0
-
-
-def _safe_float(value: Any, *, default: float = 0.0) -> float:
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return default
 
 
 def _reject_reasons(row: Mapping[str, Any], refs: list[str]) -> list[str]:
@@ -135,14 +122,14 @@ def normalize_pack_row(row: Mapping[str, Any]) -> dict[str, Any]:
     refs = _safe_refs(row.get("source_refs") or row.get("source_ref_ids"))
     thread_ids = _safe_refs(row.get("source_threads") or row.get("thread_ids"))
     if not thread_ids and refs:
-        thread_ids = ["thread_" + stable_hash(ref, length=8) for ref in refs]
+        thread_ids = [stable_json_id("thread", ref, length=8) for ref in refs]
     return {
         "pack_id": pack_id,
         "status": _label(row.get("status"), fallback=""),
         "topic_epoch": _safe_topic(row.get("topic_epoch") or row.get("topic")),
         "project_scope": _safe_topic(row.get("project_scope") or "project:aippocampus"),
         "freshness": _safe_topic(row.get("freshness") or "current"),
-        "roi_score": round(_safe_float(row.get("roi_score"), default=0.5), 4),
+        "roi_score": round(safe_float(row.get("roi_score"), 0.5), 4),
         "source_ref_ids": refs,
         "source_thread_ids": thread_ids[:16],
         "cycle_key": _label(row.get("cycle_key"), fallback=""),
@@ -225,7 +212,7 @@ def _candidate(
     return {
         "kind": "dream_atlas_candidate",
         "schema_version": SCHEMA_VERSION,
-        "candidate_id": "dream_atlas_" + stable_hash(candidate_type, key, *source_ref_ids),
+        "candidate_id": stable_json_id("dream_atlas", candidate_type, key, *source_ref_ids),
         "candidate_type": candidate_type,
         "shape": shape,
         "authority": "dream_synthesized_candidate_not_fact",

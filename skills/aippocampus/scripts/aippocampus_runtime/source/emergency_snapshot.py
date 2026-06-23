@@ -26,9 +26,9 @@ from aippocampus_runtime.core import (
     default_thread_clean_source_dir,
     default_thread_store_dir,
     now_utc,
+    stable_json_id,
 )
-from aippocampus_runtime.source.io_kernel import write_json_atomic as canonical_write_json_atomic
-from aippocampus_runtime.source.jsonl_reader import load_jsonl_dict_rows
+from aippocampus_runtime.source.io_kernel import load_jsonl_dict_rows, write_json_atomic
 
 EMERGENCY_SNAPSHOT_SCHEMA_VERSION = 1
 DEFAULT_MAX_MESSAGES = 12
@@ -36,17 +36,6 @@ DEFAULT_MAX_BYTES = 24_000
 SNAPSHOT_DIR_NAME = "emergency-snapshots"
 LATEST_POINTER_NAME = "latest.json"
 LEASE_NAME = ".emergency-snapshot.lock"
-
-
-def _write_json_atomic(path: Path, payload: Mapping[str, Any]) -> None:
-    canonical_write_json_atomic(path, payload)
-
-
-def _stable_id(*parts: object, prefix: str, length: int = 20) -> str:
-    digest = hashlib.sha256(
-        "\0".join(str(part or "") for part in parts).encode("utf-8", errors="replace")
-    ).hexdigest()[:length]
-    return f"{prefix}_{digest}"
 
 
 def _rollout_ref_hash(path: Path, stat: os.stat_result) -> str:
@@ -160,7 +149,7 @@ def _public_message(
     role = str(item.get("role") or "")
     phase = str(item.get("phase") or "")
     text_sha1 = str(item.get("sha1") or "")
-    message_id = _stable_id(thread_key, line, role, phase, text_sha1, prefix="emsg")
+    message_id = stable_json_id("emsg", thread_key, line, role, phase, text_sha1, length=20)
     return {
         "id": message_id,
         "message_id": message_id,
@@ -251,13 +240,13 @@ def create_emergency_snapshot(
         max_bytes=max_bytes,
     )
     stat = source_path.stat()
-    source_id = _stable_id(thread_key, prefix="esrc")
+    source_id = stable_json_id("esrc", thread_key, length=20)
     snapshot_messages = [
         _public_message(item, source_id=source_id, thread_key=thread_key) for item in selected
     ]
     created_at = now_utc()
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    snapshot_id = _stable_id(thread_key, stamp, time.time_ns(), prefix="precompact", length=16)
+    snapshot_id = stable_json_id("precompact", thread_key, stamp, time.time_ns(), length=16)
     store_dir = default_thread_store_dir(cwd_path, source_path)
     snapshot_path, latest_path = _snapshot_paths(store_dir, snapshot_id)
     text_bytes = sum(int(item.get("text_bytes") or 0) for item in snapshot_messages)
@@ -307,8 +296,8 @@ def create_emergency_snapshot(
         "clean_source_jsonl_loss": clean_source_jsonl_loss,
     }
     with artifact_lease(snapshot_path.parent, LEASE_NAME, wait_timeout_seconds=0.0):
-        _write_json_atomic(snapshot_path, payload)
-        _write_json_atomic(latest_path, pointer)
+        write_json_atomic(snapshot_path, payload)
+        write_json_atomic(latest_path, pointer)
 
     result = {
         "ok": True,

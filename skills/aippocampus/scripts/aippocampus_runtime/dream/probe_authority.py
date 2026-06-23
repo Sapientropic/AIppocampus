@@ -8,15 +8,7 @@ from typing import Any
 
 from aippocampus_runtime.core import compact_text
 from aippocampus_runtime.dream.risk_terms import dream_text_hard_risk
-
-
-def _source_ref_key(ref: Mapping[str, Any]) -> tuple[str, str, str, str]:
-    return (
-        str(ref.get("thread_key") or ref.get("thread_id") or ""),
-        str(ref.get("message_id") or ""),
-        str(ref.get("turn_id") or ""),
-        str(ref.get("source_id") or ref.get("source_line") or ref.get("line") or ""),
-    )
+from aippocampus_runtime.source.io_kernel import source_ref_key
 
 
 def _normalize_refs(value: object) -> list[dict[str, Any]]:
@@ -26,7 +18,7 @@ def _normalize_refs(value: object) -> list[dict[str, Any]]:
     for item in items:
         if not isinstance(item, Mapping):
             continue
-        key = _source_ref_key(item)
+        key = source_ref_key(item)
         if any(key) and key not in seen:
             seen.add(key)
             refs.append(dict(item))

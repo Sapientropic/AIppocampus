@@ -31,6 +31,7 @@ from aippocampus_runtime.model.routing import (
 )
 from aippocampus_runtime.recall.query_policy import split_query_terms
 from aippocampus_runtime.registry.api import registry_paths, unique_preserve
+from aippocampus_runtime.source.io_kernel import load_jsonl_dict_rows
 from aippocampus_runtime.subconscious.candidate_router import activation_cues_for
 from aippocampus_runtime.subconscious.job_validation import (
     estimate_finding_quality,
@@ -78,21 +79,6 @@ def default_review_output_path(
     return json_path.resolve().parent / DEFAULT_REVIEW_OUTPUT_NAME
 
 
-def iter_jsonl(path: Path) -> list[dict[str, Any]]:
-    if not path.exists():
-        return []
-    rows: list[dict[str, Any]] = []
-    with path.open("r", encoding="utf-8") as fh:
-        for line in fh:
-            try:
-                item = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if isinstance(item, dict):
-                rows.append(item)
-    return rows
-
-
 def normalize_finding(row: dict[str, Any]) -> dict[str, Any]:
     finding = dict(row)
     if finding.get("kind") == "aippocampus_subconscious_job_finding":
@@ -111,7 +97,7 @@ def recent_findings(
     path: Path, *, max_findings: int = 80, jobs: list[str] | None = None
 ) -> list[dict[str, Any]]:
     job_filter = {job for job in jobs or [] if job and job != "all"}
-    rows = [normalize_finding(row) for row in iter_jsonl(path)]
+    rows = [normalize_finding(row) for row in load_jsonl_dict_rows(path).rows]
     if job_filter:
         rows = [row for row in rows if str(row.get("job") or "") in job_filter]
     else:

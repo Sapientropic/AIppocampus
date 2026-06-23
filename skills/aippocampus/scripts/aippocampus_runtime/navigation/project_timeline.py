@@ -18,6 +18,7 @@ from aippocampus_runtime.navigation.associations import (
 )
 from aippocampus_runtime.registry.api import load_registry, registry_paths, unique_preserve
 from aippocampus_runtime.source.clean_source import SCOPE_LABEL_ORDER
+from aippocampus_runtime.source.io_kernel import load_jsonl_dict_rows
 from aippocampus_runtime.source.registry_paths import (
     resolve_registry_member_path as resolve_registry_member_path,
 )
@@ -79,19 +80,10 @@ def default_timeline_path(registry_path: Path) -> Path:
     return registry_path.resolve().parent / "project_timeline.json"
 
 
-def iter_jsonl(path: Path) -> list[dict[str, Any]]:
+def load_timeline_rows(path: Path) -> list[dict[str, Any]]:
     if not path.exists():
         return []
-    rows: list[dict[str, Any]] = []
-    with path.open("r", encoding="utf-8") as fh:
-        for line in fh:
-            try:
-                item = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if isinstance(item, dict):
-                rows.append(item)
-    return rows
+    return load_jsonl_dict_rows(path).rows
 
 
 def sortable_turn_value(turn: dict[str, Any]) -> tuple[int, int]:
@@ -207,7 +199,7 @@ def latest_turns_for_entry(
         return []
     semantic_sidecar = load_semantic_scope_labels(messages_path.parent)
     messages = []
-    for item in iter_jsonl(messages_path):
+    for item in load_timeline_rows(messages_path):
         semantic_labels = semantic_labels_for_message(item, semantic_sidecar)
         if semantic_labels:
             item = dict(item)
@@ -224,7 +216,7 @@ def latest_turns_for_entry(
         if turns_path_value
         else None
     )
-    turns = iter_jsonl(turns_path) if turns_path else []
+    turns = load_timeline_rows(turns_path) if turns_path else []
     if not turns:
         seen_turn_ids = unique_preserve(
             [str(item.get("turn_id") or "") for item in messages if item.get("turn_id")]

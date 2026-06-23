@@ -32,6 +32,7 @@ from aippocampus_runtime.ops.route_readiness import (
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 from aippocampus_runtime.public_output import emit_public_text
 from aippocampus_runtime.recall.why_diagnostics import recall_diagnostic_report
+from aippocampus_runtime.source.io_kernel import load_json_dict, load_jsonl_dict_rows
 from aippocampus_runtime.warm_ambient.query_pattern_routes import query_pattern_routes_report
 
 OBSERVATORY_KIND = "aippocampus_cognitive_observatory_readout"
@@ -235,10 +236,10 @@ def _campus_usefulness_panels(
     }
 
 
-def _load_json(path: str | Path | None) -> Any:
+def _load_observatory_input(path: str | Path | None) -> Any:
     if not path:
         return None
-    return json.loads(Path(path).read_text(encoding="utf-8"))
+    return load_json_dict(Path(path), missing_is_loss=True).data
 
 
 def _load_json_or_jsonl(path: str | Path | None) -> Any:
@@ -246,18 +247,11 @@ def _load_json_or_jsonl(path: str | Path | None) -> Any:
         return None
     source = Path(path)
     if source.suffix.casefold() == ".jsonl":
-        rows: list[dict[str, Any]] = []
-        for line in source.read_text(encoding="utf-8").splitlines():
-            if not line.strip():
-                continue
-            item = json.loads(line)
-            if isinstance(item, Mapping):
-                rows.append(dict(item))
-        return rows
-    return _load_json(source)
+        return load_jsonl_dict_rows(source).rows
+    return _load_observatory_input(source)
 
 
-def _as_list(value: Any, key: str) -> list[dict[str, Any]]:
+def _rows_from_observatory_input(value: Any, key: str) -> list[dict[str, Any]]:
     payload = value
     if isinstance(value, Mapping):
         payload = value.get(key) or value.get("rows") or value.get("route_candidates")
@@ -933,19 +927,25 @@ Operator/audit inputs:
         report = fixture_cognitive_observatory_readout()
     else:
         report = cognitive_observatory_readout(
-            route_candidates=_as_list(_load_json(args.route_candidates), "candidates"),
-            route_readiness=_as_mapping(_load_json(args.route_readiness)),
-            active_lock_roi=_as_mapping(_load_json(args.active_lock_roi)),
-            activation_surfaces=_as_list(_load_json(args.activation_surfaces), "surfaces"),
-            recall_diagnostic=_as_mapping(_load_json(args.recall_diagnostic)),
-            sleep_cycle_payload=_as_mapping(_load_json(args.sleep_cycle)),
+            route_candidates=_rows_from_observatory_input(
+                _load_observatory_input(args.route_candidates),
+                "candidates",
+            ),
+            route_readiness=_as_mapping(_load_observatory_input(args.route_readiness)),
+            active_lock_roi=_as_mapping(_load_observatory_input(args.active_lock_roi)),
+            activation_surfaces=_rows_from_observatory_input(
+                _load_observatory_input(args.activation_surfaces),
+                "surfaces",
+            ),
+            recall_diagnostic=_as_mapping(_load_observatory_input(args.recall_diagnostic)),
+            sleep_cycle_payload=_as_mapping(_load_observatory_input(args.sleep_cycle)),
             query_pattern_routes=(
-                _as_list(_load_json_or_jsonl(args.query_pattern_routes), "routes")
+                _rows_from_observatory_input(_load_json_or_jsonl(args.query_pattern_routes), "routes")
                 if args.query_pattern_routes
                 else None
             ),
             cognitive_load_calibration=_as_mapping(
-                _load_json(args.cognitive_load_calibration)
+                _load_observatory_input(args.cognitive_load_calibration)
             ),
             min_roi_score=args.min_roi_score,
         )

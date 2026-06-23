@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.core import now_utc, safe_path_name
+from aippocampus_runtime.source.io_kernel import load_json_dict
 from aippocampus_runtime.sync import bundle as sync_bundle
 from aippocampus_runtime.sync.encrypted import key_providers, recovery_diagnostics
 from aippocampus_runtime.sync.encrypted.crypto import issue, validate_recipients
@@ -63,7 +64,7 @@ def default_device_keys() -> dict[str, Any]:
 
 def load_device_keys(registry_dir: str | Path) -> dict[str, Any]:
     path = device_keys_path(registry_dir)
-    data = sync_bundle.load_json(path)
+    data = load_json_dict(path).data
     if not data:
         return default_device_keys()
     merged = default_device_keys()

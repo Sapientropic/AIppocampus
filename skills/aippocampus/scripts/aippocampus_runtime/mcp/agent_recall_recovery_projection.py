@@ -12,22 +12,10 @@ from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_v
 DeepenActionBuilder = Callable[..., dict[str, Any]]
 
 
-def _without_empty(value: Any) -> Any:
-    if isinstance(value, dict):
-        return {
-            key: cleaned
-            for key, item in value.items()
-            if (cleaned := _without_empty(item)) not in (None, "", [])
-        }
-    if isinstance(value, list):
-        return [cleaned for item in value if (cleaned := _without_empty(item)) not in (None, "", [])]
-    return value
-
-
 def compact_associative_path_fallback_card(value: Any) -> dict[str, Any] | None:
     if not isinstance(value, Mapping):
         return None
-    return _without_empty(
+    return core.strip_empty(
         {
             "kind": value.get("kind"),
             "schema_version": value.get("schema_version"),
@@ -42,7 +30,6 @@ def compact_associative_path_fallback_card(value: Any) -> dict[str, Any] | None:
             "request_index": value.get("request_index"),
             "source_ref_digest": value.get("source_ref_digest"),
             "selected_source_ref_count": value.get("selected_source_ref_count"),
-            "apw_route_identity": value.get("apw_route_identity"),
             "label": value.get("label"),
             "why_this_route": value.get("why_this_route"),
             "matched_cue_anchors": value.get("matched_cue_anchors"),
@@ -65,7 +52,7 @@ def compact_associative_path_fallback_card(value: Any) -> dict[str, Any] | None:
 def compact_associative_path_policy(value: Any) -> dict[str, Any] | None:
     if not isinstance(value, Mapping):
         return None
-    return _without_empty(
+    return core.strip_empty(
         {
             "kind": value.get("kind"),
             "schema_version": value.get("schema_version"),
@@ -113,7 +100,7 @@ def associative_path_recovery_state(
         state = "not_needed"
     else:
         state = "available"
-    return _without_empty(
+    return core.strip_empty(
         {
             "state": state,
             "available": available,
@@ -163,13 +150,6 @@ def associative_path_fallback_action(
     action["route_choice_posture"] = str(
         card.get("route_choice_posture") or "associative_path_opt_in_fallback"
     )
-    identity = card.get("apw_route_identity")
-    if isinstance(identity, Mapping):
-        action_identity = dict(identity)
-        if recall_selector:
-            action_identity["recall_selector"] = recall_selector
-        action_identity["request_index"] = request_index
-        action["apw_route_identity"] = _without_empty(action_identity)
     return action
 
 
@@ -231,7 +211,7 @@ def apw_should_replace_foreground_action(action: Mapping[str, Any]) -> bool:
 def compact_repo_familiarity_fallback_card(value: Any) -> dict[str, Any] | None:
     if not isinstance(value, Mapping):
         return None
-    return _without_empty(
+    return core.strip_empty(
         {
             "kind": value.get("kind"),
             "schema_version": value.get("schema_version"),

@@ -44,11 +44,11 @@ from aippocampus_runtime.registry.store import (
     registry_root,
     thread_store_dir,
 )
+from aippocampus_runtime.source.io_kernel import load_jsonl_dict_rows
 from aippocampus_runtime.subconscious.candidate_router import (
     DREAM_HYPOTHESIS_TYPE,
     default_jobs_path,
     default_working_memory_path,
-    iter_jsonl,
     load_working_memory,
     match_working_memory,
 )
@@ -83,7 +83,7 @@ TEMPORAL_NOISE_PATTERNS = (
 )
 
 
-def stable_hash(value: object, *, prefix: str, salt: str = DEFAULT_SALT, length: int = 16) -> str:
+def shadow_fingerprint(value: object, *, prefix: str, salt: str = DEFAULT_SALT, length: int = 16) -> str:
     raw = json.dumps(value, ensure_ascii=False, sort_keys=True, default=str)
     return stable_text_fingerprint(
         f"{salt}\n{raw}",
@@ -187,7 +187,7 @@ def load_shadow_working_memory_rows(
     if generated_dream_max_packs > 0:
         if registry_path is None:
             registry_path, _ = registry_paths(registry_dir)
-        jobs = iter_jsonl(default_jobs_path(registry_path))
+        jobs = load_jsonl_dict_rows(default_jobs_path(registry_path)).rows
         packs = dream_eval.select_real_history_packs(
             job_rows=jobs,
             working_memory_rows=rows,
@@ -539,13 +539,13 @@ def build_shadow_prompt_event(
         "delivery_decision": delivery_fields["delivery_decision"],
         "delivery_block_reasons": block_reasons
         + (["rollout_excluded"] if delivery_fields["delivery_decision"] == "rollout_excluded" else []),
-        "event_id": stable_hash([session_id, turn_id, prompt_hash], prefix="shadowevt", salt=salt),
-        "thread_fingerprint": stable_hash(session_id or "unknown", prefix="threadfp", salt=salt, length=12),
-        "turn_fingerprint": stable_hash(turn_id or user_turn_index or prompt_hash, prefix="turnfp", salt=salt, length=12),
+        "event_id": shadow_fingerprint([session_id, turn_id, prompt_hash], prefix="shadowevt", salt=salt),
+        "thread_fingerprint": shadow_fingerprint(session_id or "unknown", prefix="threadfp", salt=salt, length=12),
+        "turn_fingerprint": shadow_fingerprint(turn_id or user_turn_index or prompt_hash, prefix="turnfp", salt=salt, length=12),
         "user_turn_index": user_turn_index,
         "prompt_sha1": prompt_hash,
         "assignment_unit": unit,
-        "assignment_key_hash": stable_hash(assignment_key_parts, prefix="assign", salt=salt, length=12),
+        "assignment_key_hash": shadow_fingerprint(assignment_key_parts, prefix="assign", salt=salt, length=12),
         "rollout_rate": rate,
         "rollout_bucket": bucket,
         "assigned_arm": assigned_arm,
@@ -580,7 +580,7 @@ def append_event(path: Path, event: Mapping[str, Any]) -> None:
 
 
 def load_events(path: Path) -> list[dict[str, Any]]:
-    return [row for row in iter_jsonl(path) if row.get("kind") == EVENT_KIND]
+    return [row for row in load_jsonl_dict_rows(path).rows if row.get("kind") == EVENT_KIND]
 
 
 def default_event_log(registry_dir: Path | None = None) -> Path:
@@ -877,7 +877,7 @@ def clean_source_message_thread_key(message: Mapping[str, Any], *, dataset_id: s
         or ""
     )
     if not source_id:
-        source_id = stable_hash(
+        source_id = shadow_fingerprint(
             [message.get("message_id"), message.get("turn_id"), message.get("source_line")],
             prefix="source",
             length=12,
@@ -928,7 +928,7 @@ def replay_clean_source_dir_events(
     messages_path = clean_source_dir_messages_path(clean_source_dir)
     target_thread_count = max(1, int(max_threads))
     target_message_count = max(1, int(max_user_messages))
-    for message in iter_jsonl(messages_path):
+    for message in load_jsonl_dict_rows(messages_path).rows:
         if len(events) >= target_message_count:
             break
         if str(message.get("role") or "") != "user":
@@ -1000,7 +1000,7 @@ def replay_clean_source_events(
         if not thread_key:
             continue
         path = clean_source_messages_path(entry, thread_key, registry_dir)
-        for message in iter_jsonl(path):
+        for message in load_jsonl_dict_rows(path).rows:
             if len(events) >= max_user_messages:
                 break
             if str(message.get("role") or "") != "user":
@@ -1230,7 +1230,7 @@ def test_event(
         "created_at": f"2026-05-30T00:00:{index:02d}Z",
         "source": "unit_test",
         "event_id": f"event-{thread}-{index}",
-        "thread_fingerprint": stable_hash(thread, prefix="threadfp", salt="unit-test"),
+        "thread_fingerprint": shadow_fingerprint(thread, prefix="threadfp", salt="unit-test"),
         "user_turn_index": index,
         "assigned_arm": arm,
         "delivered_arm": None,
