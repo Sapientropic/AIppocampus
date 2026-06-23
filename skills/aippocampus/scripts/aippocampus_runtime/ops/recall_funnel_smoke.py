@@ -19,6 +19,7 @@ from typing import Any
 from aippocampus_runtime.contracts import (
     canonical_foreground_action_fields,
 )
+from aippocampus_runtime.core import dict_or_empty, list_or_empty
 from aippocampus_runtime.mcp import tool_handlers as mcp_tools
 from aippocampus_runtime.mcp.compact_profile import mcp_tool_result_payload
 from aippocampus_runtime.mcp.recall_navigation import NAVIGATION_SCHEMA_VERSION
@@ -75,14 +76,6 @@ def _field_names(payload: dict[str, Any], names: list[str]) -> list[str]:
     return [name for name in names if name in payload]
 
 
-def _as_dict(value: Any) -> dict[str, Any]:
-    return value if isinstance(value, dict) else {}
-
-
-def _as_list(value: Any) -> list[Any]:
-    return value if isinstance(value, list) else []
-
-
 def _recall_args(
     *,
     cue: str,
@@ -109,7 +102,7 @@ def _recall_args(
 def _safe_error(result: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any] | None:
     if not result.get("isError") and not payload.get("error"):
         return None
-    error = _as_dict(payload.get("error"))
+    error = dict_or_empty(payload.get("error"))
     return {
         "code": error.get("code") or "tool_error",
         "message": error.get("message") or "MCP tool returned an error.",
@@ -154,7 +147,7 @@ def build_recall_funnel_smoke(
     context_result = mcp_tools.call_recall_context(context_args)
     context_payload = _tool_payload(context_result)
     context_error = _safe_error(context_result, context_payload)
-    routes = _as_list(context_payload.get("routes"))
+    routes = list_or_empty(context_payload.get("routes"))
     selected_index, selected_route = _select_route(routes)
 
     deepen_payload: dict[str, Any] = {}
@@ -179,11 +172,11 @@ def build_recall_funnel_smoke(
             "message": "recall_context returned no reopenable route handle for recall_deepen.",
         }
 
-    source_window = _as_dict(deepen_payload.get("source_window"))
-    source_refs = _as_list(deepen_payload.get("source_refs"))
-    metrics = _as_dict(deepen_payload.get("metrics"))
-    context_metrics = _as_dict(context_payload.get("metrics"))
-    selected_suggested_next = _as_dict(selected_route.get("suggested_next")) if selected_route else {}
+    source_window = dict_or_empty(deepen_payload.get("source_window"))
+    source_refs = list_or_empty(deepen_payload.get("source_refs"))
+    metrics = dict_or_empty(deepen_payload.get("metrics"))
+    context_metrics = dict_or_empty(context_payload.get("metrics"))
+    selected_suggested_next = dict_or_empty(selected_route.get("suggested_next")) if selected_route else {}
     wrong_or_stale = bool(
         metrics.get("wrong_or_stale_handle")
         or (deepen_error or {}).get("code") in {"stale_recall_handle", "source_ref_not_found"}
@@ -268,7 +261,7 @@ def render_text(report: dict[str, Any]) -> str:
     context = report["context"]
     selected = report["selected_route"]
     deepen = report["deepen"]
-    live_gate = _as_dict(report.get("live_agent_usefulness_gate"))
+    live_gate = dict_or_empty(report.get("live_agent_usefulness_gate"))
     lines = [
         "AIppocampus recall funnel smoke",
         f"- OK: {str(report['ok']).lower()}",
@@ -278,9 +271,9 @@ def render_text(report: dict[str, Any]) -> str:
         f"- Wrong/stale handle: {str(deepen['wrong_or_stale_handle']).lower()}",
         (
             f"- Live agent usefulness: {live_gate.get('status')}; "
-            f"route {_as_dict(live_gate.get('route_existence')).get('status')}, "
-            f"specificity {_as_dict(live_gate.get('route_specificity')).get('status')}, "
-            f"reopen {_as_dict(live_gate.get('source_reopen')).get('status')}"
+            f"route {dict_or_empty(live_gate.get('route_existence')).get('status')}, "
+            f"specificity {dict_or_empty(live_gate.get('route_specificity')).get('status')}, "
+            f"reopen {dict_or_empty(live_gate.get('source_reopen')).get('status')}"
         ),
         f"- Evidence fields: {', '.join(deepen['field_names']) or 'none'}",
         "- Privacy: cue not echoed; source text not printed; local paths redacted unless requested",

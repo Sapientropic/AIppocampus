@@ -7,20 +7,14 @@ import re
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+from aippocampus_runtime.core import dict_or_empty, list_or_empty
+
 DEFAULT_TOPIC = "graded trust semantics for ambient source-backed packets"
 DEFAULT_TOPIC_TERMS = (
     "graded trust",
     "bounded evidence",
     "source-backed packet",
 )
-
-
-def _as_dict(value: Any) -> dict[str, Any]:
-    return value if isinstance(value, dict) else {}
-
-
-def _as_list(value: Any) -> list[Any]:
-    return value if isinstance(value, list) else []
 
 
 def _text(value: Any) -> str:
@@ -33,7 +27,7 @@ def _contains_all(haystack: str, needles: Sequence[str]) -> bool:
 
 
 def _comment_items(payload: Mapping[str, Any]) -> list[dict[str, Any]]:
-    return [item for item in _as_list(payload.get("comments")) if isinstance(item, dict)]
+    return [item for item in list_or_empty(payload.get("comments")) if isinstance(item, dict)]
 
 
 def _parent_issue_present(text: str, parent_issue_number: int) -> bool:
@@ -140,9 +134,9 @@ def evaluate_same_thread_issue_comment_route_quality(
 def same_thread_issue_comment_readout(
     route_quality: Mapping[str, Any] | None,
 ) -> dict[str, Any]:
-    quality = _as_dict(route_quality)
-    route = _as_dict(quality.get("route"))
-    precision = _as_dict(quality.get("precision"))
+    quality = dict_or_empty(route_quality)
+    route = dict_or_empty(quality.get("route"))
+    precision = dict_or_empty(quality.get("precision"))
     measured = bool(quality.get("measured"))
     precise_route = bool(
         measured
