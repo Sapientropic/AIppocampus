@@ -273,6 +273,7 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/mcp/agent_deepen_projection.py",
     "skills/aippocampus/scripts/aippocampus_runtime/mcp/agent_recall_projection.py",
     "skills/aippocampus/scripts/aippocampus_runtime/mcp/agent_recall_recovery_projection.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/mcp/compact_profile.py",
     "skills/aippocampus/scripts/aippocampus_runtime/mcp/domain_handles.py",
     "skills/aippocampus/scripts/aippocampus_runtime/mcp/memory_health_recovery.py",
     "skills/aippocampus/scripts/aippocampus_runtime/mcp/mutation_boundary.py",

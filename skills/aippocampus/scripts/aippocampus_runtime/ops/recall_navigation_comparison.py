@@ -18,6 +18,7 @@ from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime import core
 from aippocampus_runtime.mcp import tool_handlers as mcp_tools
 from aippocampus_runtime.mcp.compact_profile import mcp_tool_result_payload
 from aippocampus_runtime.mcp.recall_navigation import NAVIGATION_SCHEMA_VERSION
@@ -41,18 +42,10 @@ def _tool_payload(result: Mapping[str, Any]) -> dict[str, Any]:
     return mcp_tool_result_payload(result)
 
 
-def _as_list(value: Any) -> list[Any]:
-    return value if isinstance(value, list) else []
-
-
-def _as_dict(value: Any) -> dict[str, Any]:
-    return value if isinstance(value, dict) else {}
-
-
 def _safe_error(result: Mapping[str, Any], payload: Mapping[str, Any]) -> dict[str, Any] | None:
     if not result.get("isError") and not payload.get("error"):
         return None
-    error = _as_dict(payload.get("error"))
+    error = core.dict_or_empty(payload.get("error"))
     return {
         "code": str(error.get("code") or "tool_error"),
         "message": str(error.get("message") or "MCP tool returned an error."),
@@ -99,7 +92,11 @@ def _run_direct_search(
     max_matches: int,
 ) -> dict[str, Any]:
     expected_source_id = str(case.get("expected_source_id") or "")
-    queries = [str(item) for item in _as_list(case.get("direct_search_queries")) if str(item)]
+    queries = [
+        str(item)
+        for item in core.list_or_empty(case.get("direct_search_queries"))
+        if str(item)
+    ]
     start = time.perf_counter()
     attempts = 0
     first_success_at: int | None = None
@@ -113,6 +110,7 @@ def _run_direct_search(
                 "cwd": str(cwd),
                 "clean_source_dir": str(clean_source_dir),
                 "max": max_matches,
+                "detail": "full",
                 "include_private_paths": False,
                 "include_source_snippets": True,
             }
@@ -122,7 +120,7 @@ def _run_direct_search(
         if error is not None:
             error_code = error["code"]
             break
-        matches = _as_list(payload.get("matches"))
+        matches = core.list_or_empty(payload.get("matches"))
         match_count += len(matches)
         if expected_source_id in _source_ids(matches):
             first_success_at = attempts
@@ -152,8 +150,8 @@ def _run_direct_search(
 
 
 def _run_hook_only(case: Mapping[str, Any]) -> dict[str, Any]:
-    hook = _as_dict(case.get("hook_card"))
-    source_refs = _as_list(hook.get("source_refs"))
+    hook = core.dict_or_empty(case.get("hook_card"))
+    source_refs = core.list_or_empty(hook.get("source_refs"))
     has_source = bool(source_refs)
     accepts_as_fact = bool(hook.get("accepts_as_fact"))
     stale_or_irrelevant = bool(hook.get("stale_or_irrelevant_route"))
@@ -204,7 +202,7 @@ def _run_progressive_recall(
     context_payload = _tool_payload(context_result)
     context_error = _safe_error(context_result, context_payload)
     route_count = int(context_payload.get("route_count") or 0)
-    routes = _as_list(context_payload.get("routes"))
+    routes = core.list_or_empty(context_payload.get("routes"))
     selected_index, selected_route = _select_deepen_route(routes)
     tool_calls = 1
     if context_error is not None:
@@ -253,8 +251,8 @@ def _run_progressive_recall(
         }
     if after_context is not None:
         after_context()
-    suggested_next = _as_dict(selected_route.get("suggested_next"))
-    context_source_ref_count = len(_as_list(selected_route.get("source_refs")))
+    suggested_next = core.dict_or_empty(selected_route.get("suggested_next"))
+    context_source_ref_count = len(core.list_or_empty(selected_route.get("source_refs")))
     deepen_result = mcp_tools.call_recall_deepen(
         {
             "handle": selected_route.get("handle"),
@@ -267,9 +265,9 @@ def _run_progressive_recall(
     tool_calls += 1
     deepen_payload = _tool_payload(deepen_result)
     deepen_error = _safe_error(deepen_result, deepen_payload)
-    source_refs = _as_list(deepen_payload.get("source_refs"))
+    source_refs = core.list_or_empty(deepen_payload.get("source_refs"))
     source_ref_ids = _source_ids(source_refs)
-    metrics = _as_dict(deepen_payload.get("metrics"))
+    metrics = core.dict_or_empty(deepen_payload.get("metrics"))
     error_code = deepen_error["code"] if deepen_error is not None else ""
     wrong_or_stale = bool(
         metrics.get("wrong_or_stale_handle")
@@ -318,7 +316,10 @@ def _avg(values: Sequence[int]) -> float:
 def _aggregate(cases: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     arms: dict[str, dict[str, Any]] = {}
     for arm in ARMS:
-        rows = [_as_dict(_as_dict(case.get("arms")).get(arm)) for case in cases]
+        rows = [
+            core.dict_or_empty(core.dict_or_empty(case.get("arms")).get(arm))
+            for case in cases
+        ]
         total = len(rows)
         success_count = sum(1 for row in rows if row.get("source_backed_success"))
         actionable_count = sum(1 for row in rows if row.get("route_actionable"))
@@ -349,7 +350,7 @@ def _aggregate(cases: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
 def _candidate_funnel_items(row: Mapping[str, Any]) -> list[dict[str, Any]]:
     case_id = str(row.get("case_id") or "case")
     case_family = str(row.get("case_family") or "unspecified")
-    progressive = _as_dict(_as_dict(row.get("arms")).get(ARM_PROGRESSIVE))
+    progressive = core.dict_or_empty(core.dict_or_empty(row.get("arms")).get(ARM_PROGRESSIVE))
     source_ref_count = int(progressive.get("source_ref_count") or 0)
     route_actionable = bool(progressive.get("route_actionable"))
     source_joined = route_actionable and source_ref_count > 0
@@ -470,11 +471,11 @@ def _issue_readouts(
     presence_first_fixture_matrix: Mapping[str, Any] | None = None,
     same_thread_issue_comment_route_quality: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-    arms = _as_dict(aggregate.get("arms"))
-    progressive = _as_dict(arms.get(ARM_PROGRESSIVE))
-    foreground = _as_dict(foreground_lift)
+    arms = core.dict_or_empty(aggregate.get("arms"))
+    progressive = core.dict_or_empty(arms.get(ARM_PROGRESSIVE))
+    foreground = core.dict_or_empty(foreground_lift)
     foreground_measured = bool(foreground.get("measured"))
-    foreground_reopen = _as_dict(foreground.get("source_reopen_after_packet"))
+    foreground_reopen = core.dict_or_empty(foreground.get("source_reopen_after_packet"))
     foreground_reopen_measured = bool(foreground_reopen.get("measured"))
     bounded_evidence_measured = bool(foreground_reopen.get("bounded_evidence_context_emitted"))
     bounded_evidence_card_count = (
@@ -503,11 +504,11 @@ def _issue_readouts(
         and foreground_reopen.get("source_reopen_follow_through")
         and foreground_manual_query_count == 0
     )
-    funnel = _as_dict(candidate_funnel)
+    funnel = core.dict_or_empty(candidate_funnel)
     funnel_measured = bool(funnel.get("measured"))
-    funnel_metrics = _as_dict(funnel.get("metrics"))
-    presence_matrix = _as_dict(presence_first_fixture_matrix)
-    presence_cases = _as_dict(presence_matrix.get("cases_by_family"))
+    funnel_metrics = core.dict_or_empty(funnel.get("metrics"))
+    presence_matrix = core.dict_or_empty(presence_first_fixture_matrix)
+    presence_cases = core.dict_or_empty(presence_matrix.get("cases_by_family"))
     required_presence_families = {
         "memory_atmosphere",
         "working_continuity_brief",
@@ -520,12 +521,12 @@ def _issue_readouts(
     presence_behavior_assertions = bool(
         presence_matrix.get("checks_behavior_not_just_fields")
         and all(
-            bool(_as_dict(case).get("agent_behavior"))
-            and bool(_as_dict(case).get("current_posture_pass"))
+            bool(core.dict_or_empty(case).get("agent_behavior"))
+            and bool(core.dict_or_empty(case).get("current_posture_pass"))
             for case in presence_cases.values()
         )
     )
-    source_court_case = _as_dict(presence_cases.get("source_court"))
+    source_court_case = core.dict_or_empty(presence_cases.get("source_court"))
     presence_source_court_measured = bool(
         source_court_case.get("blocked_route_does_not_shape_answer")
         and source_court_case.get("requires_reopen_or_abstain")
@@ -535,7 +536,7 @@ def _issue_readouts(
         presence_matrix.get("old_everything_is_scent_baseline_fails")
         and int(presence_matrix.get("old_posture_failure_count") or 0) >= 1
     )
-    presence_privacy = _as_dict(presence_matrix.get("privacy"))
+    presence_privacy = core.dict_or_empty(presence_matrix.get("privacy"))
     presence_public_safe = bool(
         presence_matrix.get("public_safe")
         and not presence_privacy.get("raw_source_window_serialized")
@@ -544,8 +545,8 @@ def _issue_readouts(
     same_thread_readout = issue_route_quality.same_thread_issue_comment_readout(
         same_thread_issue_comment_route_quality
     )
-    attention_activation = _as_dict(attention_router_activation)
-    attention_metrics = _as_dict(attention_activation.get("metrics"))
+    attention_activation = core.dict_or_empty(attention_router_activation)
+    attention_metrics = core.dict_or_empty(attention_activation.get("metrics"))
     return {
         "github_201": {
             "route_actionability_measured": True,
@@ -664,7 +665,7 @@ def _issue_readouts(
             ),
             "semantic_only_scent_not_factual_evidence": bool(
                 foreground_measured
-                and _as_dict(foreground.get("first_turn")).get("evidence_count") == 0
+                and core.dict_or_empty(foreground.get("first_turn")).get("evidence_count") == 0
             ),
             "bounded_evidence_card_count": bounded_evidence_card_count,
             "foreground_manual_query_invention_count": foreground_manual_query_count,
@@ -884,15 +885,15 @@ def build_recall_navigation_comparison(
 
 
 def render_text(report: Mapping[str, Any]) -> str:
-    aggregate = _as_dict(report.get("aggregate"))
-    arms = _as_dict(aggregate.get("arms"))
+    aggregate = core.dict_or_empty(report.get("aggregate"))
+    arms = core.dict_or_empty(aggregate.get("arms"))
     lines = [
         "AIppocampus recall navigation comparison",
         f"- OK: {str(bool(report.get('ok'))).lower()}",
-        f"- Cases: {len(_as_list(report.get('cases')))}",
+        f"- Cases: {len(core.list_or_empty(report.get('cases')))}",
     ]
     for arm in ARMS:
-        row = _as_dict(arms.get(arm))
+        row = core.dict_or_empty(arms.get(arm))
         lines.append(
             "- "
             + arm
@@ -907,9 +908,9 @@ def render_text(report: Mapping[str, Any]) -> str:
             + "; wrong-route drag "
             + str(row.get("wrong_route_drag_rate", 0))
         )
-    foreground = _as_dict(report.get("foreground_lift"))
+    foreground = core.dict_or_empty(report.get("foreground_lift"))
     if foreground.get("measured"):
-        foreground_reopen = _as_dict(foreground.get("source_reopen_after_packet"))
+        foreground_reopen = core.dict_or_empty(foreground.get("source_reopen_after_packet"))
         lines.append(
             "- foreground_lift: first turn "
             + str(foreground.get("first_turn_lift"))
@@ -920,9 +921,9 @@ def render_text(report: Mapping[str, Any]) -> str:
             + "; packet source reopen "
             + str(bool(foreground_reopen.get("source_reopen_follow_through"))).lower()
         )
-    funnel = _as_dict(report.get("vague_cue_candidate_funnel"))
+    funnel = core.dict_or_empty(report.get("vague_cue_candidate_funnel"))
     if funnel.get("measured"):
-        metrics = _as_dict(funnel.get("metrics"))
+        metrics = core.dict_or_empty(funnel.get("metrics"))
         lines.append(
             "- vague_cue_candidate_funnel: core "
             + str(metrics.get("core_candidate_count", 0))

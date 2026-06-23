@@ -513,7 +513,6 @@ class AippocampusMcpServerOpsTests(unittest.TestCase):
         self.assertEqual(payload["kind"], "aippocampus_search_result")
         self.assertEqual(payload["detail"], "compact")
         self.assertEqual(payload["surface"], "mcp_search_memory_compact")
-        self.assertEqual(payload["entry_state"], "explicit_search_invoked")
         self.assertEqual(payload["source_boundary"]["authority"], "reopenable_route")
         self.assertTrue(payload["source_boundary"]["capped_snippets_are_bounded_receipts"])
         self.assertEqual(payload["foreground_action"]["id"], "recall_context_from_search")
@@ -522,6 +521,8 @@ class AippocampusMcpServerOpsTests(unittest.TestCase):
         self.assertEqual(payload["foreground_action"]["claim_boundary"], "source_reopen_required_before_claim")
         self.assertIsInstance(payload["foreground_action"], dict)
         self.assertIn("foreground_action", payload)
+        self.assertNotIn("matches", payload)
+        self.assertTrue(payload["source_hits"][0]["snippet_omitted"])
         self.assertNotIn(payload["foreground_action"], payload.get("safe_next_actions", []))
         self.assertNotIn("runtime_provenance", payload)
         self.assertNotIn("output_boundary", payload)
@@ -804,7 +805,10 @@ class AippocampusMcpServerOpsTests(unittest.TestCase):
         payload = responses[2]["result"].get("structuredContent")
         if not isinstance(payload, dict):
             payload = json.loads(responses[2]["result"]["content"][0]["text"])
-        self.assertEqual(payload["matches"][0]["message_id"], "msg_final")
+        self.assertNotIn("matches", payload)
+        self.assertEqual(payload["source_hits"][0]["index"], 1)
+        self.assertFalse(payload["source_hits"][0]["snippet_omitted"])
+        self.assertIn("clean source", payload["source_hits"][0]["snippet_preview"])
 
 if __name__ == "__main__":
     unittest.main()

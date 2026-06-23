@@ -4,6 +4,9 @@ Compact MCP output is a foreground control surface, not an operator console.
 This module centralizes the deny-by-default boundary so new diagnostics do not
 silently leak into recall/deepen/search/health compact cards whenever another
 routing subsystem grows a useful but backstage field family.
+
+aippocampus-stage-map: strip backstage fields first, then project compact
+foreground cards; full/detail profiles remain the route for diagnostics.
 """
 
 from __future__ import annotations
@@ -94,6 +97,17 @@ MCP_CLAIM_BOUNDARY_KEYS = frozenset(
     }
 )
 
+MCP_SEARCH_SOURCE_BOUNDARY_KEYS = frozenset(
+    {
+        "authority",
+        "source_reopen_required_before_claim",
+        "search_miss_is_not_absence_of_memory",
+        "demoted_artifact_matches_are_diagnostic",
+        "capped_snippets_are_bounded_receipts",
+        "snippets_are_source_open",
+    }
+)
+
 
 def strip_compact_foreground_debug_fields(value: Any) -> Any:
     """Remove backstage field families from compact foreground payloads."""
@@ -181,6 +195,125 @@ def _compact_claim_boundary(boundary: Any) -> dict[str, Any]:
         for key, value in boundary.items()
         if key in MCP_CLAIM_BOUNDARY_KEYS and value not in (None, "")
     }
+
+
+def _search_hit_label(match: Mapping[str, Any]) -> str:
+    thread = match.get("thread")
+    thread_map = thread if isinstance(thread, Mapping) else {}
+    label = str(thread_map.get("title") or match.get("source") or "source hit").strip()
+    line = match.get("line") or match.get("source_line")
+    role = str(match.get("role") or "").strip()
+    suffix = " ".join(part for part in (f"line {line}" if line else "", role) if part)
+    return core.compact_text(f"{label} {suffix}".strip(), 120)
+
+
+def _compact_search_hit(match: Any, *, include_source_snippets: bool) -> dict[str, Any]:
+    if not isinstance(match, Mapping):
+        return {}
+    index = match.get("hit_index") or match.get("match_index") or match.get("request_index")
+    hit: dict[str, Any] = {
+        key: value
+        for key, value in {
+            "index": index,
+            "request_index": match.get("request_index"),
+            "label": _search_hit_label(match),
+            "source": match.get("source"),
+            "role": match.get("role"),
+            "phase": match.get("phase"),
+            "snippet_omitted": True,
+        }.items()
+        if value not in (None, "", [], {})
+    }
+    duplicate_count = int(match.get("duplicate_count") or 0)
+    source_count = int(match.get("source_count") or 0)
+    if duplicate_count > 0:
+        hit["duplicate_count"] = duplicate_count
+    if source_count > 1:
+        hit["source_count"] = source_count
+    if include_source_snippets:
+        snippet = str(match.get("snippet") or "").strip()
+        if snippet and not match.get("search_noise"):
+            hit["snippet_preview"] = core.compact_text(snippet, 180)
+            hit["snippet_omitted"] = False
+    return hit
+
+
+def _compact_source_boundary(boundary: Any) -> dict[str, Any]:
+    if not isinstance(boundary, Mapping):
+        return {}
+    return {
+        key: strip_compact_foreground_debug_fields(value)
+        for key, value in boundary.items()
+        if key in MCP_SEARCH_SOURCE_BOUNDARY_KEYS and value not in (None, "")
+    }
+
+
+def compact_search_memory_payload(
+    payload: dict[str, Any],
+    *,
+    include_source_snippets: bool = False,
+) -> dict[str, Any]:
+    """Project MCP search results as an action card, not a source table.
+
+    Search often has useful receipts, but MCP compact structuredContent is
+    foreground context that agents ingest by default. Keep the full match list,
+    snippets, duplicate refs, and diagnostic counters in `detail=full`; compact
+    gets only the state, first open action, and a tiny hit sketch so it can act
+    without spending a turn parsing a source-search dump.
+    """
+
+    matches = [item for item in payload.get("matches") or [] if isinstance(item, Mapping)]
+    match_count = payload.get("match_count")
+    count = len(matches)
+    if isinstance(match_count, (int, str)):
+        try:
+            count = int(match_count)
+        except ValueError:
+            count = len(matches)
+    card: dict[str, Any] = {
+        key: payload[key]
+        for key in (
+            "detail",
+            "kind",
+            "schema_version",
+            "mcp_search_scope",
+            "ok",
+            "query_text",
+            "search_scope",
+            "status",
+            "surface",
+            "useful_target_hit",
+        )
+        if key in payload and payload[key] not in (None, "")
+    }
+    card["match_count"] = count
+    if count:
+        card["summary"] = f"{count} source hit{'s' if count != 1 else ''}; open source before claiming."
+    else:
+        card["summary"] = "No source hit; refine the cue or broaden scope."
+    action = _compact_action(payload.get("foreground_action"))
+    if action:
+        card["foreground_action"] = action
+    if not action:
+        safe_next_actions = [
+            _compact_action(action)
+            for action in payload.get("safe_next_actions") or []
+            if isinstance(action, Mapping)
+        ]
+        safe_next_actions = [action for action in safe_next_actions if action][:1]
+        if safe_next_actions:
+            card["safe_next_actions"] = safe_next_actions
+    source_boundary = _compact_source_boundary(payload.get("source_boundary"))
+    if source_boundary:
+        card["source_boundary"] = source_boundary
+    hits = [
+        _compact_search_hit(match, include_source_snippets=include_source_snippets)
+        for match in matches[:2]
+    ]
+    hits = [hit for hit in hits if hit]
+    if hits:
+        card["source_hits"] = hits
+    return strip_compact_foreground_debug_fields(card)
 
 
 def compact_mcp_structured_content(payload: Any) -> Any:

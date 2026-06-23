@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Tool-family handlers for the AIppocampus MCP server."""
+"""Tool-family handlers for the AIppocampus MCP server.
+
+aippocampus-stage-map: handlers collect raw tool payloads and route them
+through render_profiled_result/text_result; compact/detail redaction belongs in
+the shared MCP profile layer, not in per-tool JSON assembly.
+"""
 
 from __future__ import annotations
 
@@ -17,7 +22,10 @@ from aippocampus_runtime.mcp.agent_deepen_projection import compact_agent_deepen
 from aippocampus_runtime.mcp.agent_explain_projection import compact_agent_explain_payload
 from aippocampus_runtime.mcp.agent_recall_projection import compact_agent_recall_payload
 from aippocampus_runtime.mcp.clean_source_resolution import resolve_mcp_clean_source_dir
-from aippocampus_runtime.mcp.compact_profile import compact_mcp_tool_result
+from aippocampus_runtime.mcp.compact_profile import (
+    compact_mcp_tool_result,
+    compact_search_memory_payload,
+)
 from aippocampus_runtime.mcp.foreground_recovery import (
     missing_input_recovery_card,
 )
@@ -245,6 +253,12 @@ def call_search_memory(arguments: dict[str, Any]) -> dict[str, Any]:
         return render_profiled_result(
             arguments,
             payload,
+            compact_projector=lambda raw: compact_search_memory_payload(
+                raw,
+                include_source_snippets=bool(
+                    arguments.get("include_source_snippets") or arguments.get("include_snippets")
+                ),
+            ),
             runtime_provenance_context=RuntimeProvenanceContext(
                 clean_source_dir=clean_source_dir_for(arguments),
                 registry_dir=registry_dir_arg(arguments),
@@ -275,6 +289,12 @@ def call_search_memory(arguments: dict[str, Any]) -> dict[str, Any]:
             arguments,
             payload,
             is_error=not bool(payload.get("ok")),
+            compact_projector=lambda raw: compact_search_memory_payload(
+                raw,
+                include_source_snippets=bool(
+                    arguments.get("include_source_snippets") or arguments.get("include_snippets")
+                ),
+            ),
             runtime_provenance_context=RuntimeProvenanceContext(
                 clean_source_dir=clean_source_dir_for(arguments),
                 registry_dir=registry_dir_arg(arguments),
@@ -321,6 +341,10 @@ def call_search_memory(arguments: dict[str, Any]) -> dict[str, Any]:
     return render_profiled_result(
         arguments,
         payload,
+        compact_projector=lambda raw: compact_search_memory_payload(
+            raw,
+            include_source_snippets=include_source_snippets,
+        ),
         runtime_provenance_context=RuntimeProvenanceContext(
             clean_source_dir=source_dir,
             registry_dir=registry_dir_arg(arguments),
@@ -629,8 +653,18 @@ def call_agent_deepen(arguments: dict[str, Any]) -> dict[str, Any]:
                 path=selector_cache_path,
                 outcome="source_open",
             )
-        except Exception:
-            pass
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            # aippocampus-debt-ok: broad-exception-boundary
+            # Best-effort selector-cache receipt writes must not break a
+            # successful source-open payload or force cache diagnostics into
+            # compact MCP output. The reopen result above remains authoritative.
+            payload.setdefault("detail_warnings", []).append(
+                {
+                    "code": "last_recall_open_receipt_not_marked",
+                    "message": "source opened, but the local selector cache receipt was not updated",
+                    "error_type": type(exc).__name__,
+                }
+            )
     def _compact_deepen(raw: dict[str, Any]) -> dict[str, Any]:
         return compact_agent_deepen_payload(
             raw,
