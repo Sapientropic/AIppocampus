@@ -18,7 +18,7 @@ from aippocampus_runtime.mcp import agent_recall_discussion_projection as discus
 from aippocampus_runtime.mcp import agent_recall_recovery_projection as recovery_projection
 from aippocampus_runtime.mcp import agent_recall_repo_projection as repo_projection
 from aippocampus_runtime.mcp import agent_recall_result_projection as result_projection
-from aippocampus_runtime.mcp.runtime_provenance import compact_runtime_provenance
+from aippocampus_runtime.mcp.compact_profile import strip_compact_foreground_debug_fields
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 
 
@@ -46,9 +46,11 @@ def _compact_claim_boundary(
         "must_reopen_for": must_reopen_for,
     }
     if detail_command:
-        boundary["detail_available_with"] = detail_command
+        boundary["detail_available"] = True
+        boundary["detail_mode"] = "full"
     elif detail_command_template:
-        boundary["detail_available_with_template"] = detail_command_template
+        boundary["detail_available"] = True
+        boundary["detail_mode"] = "full"
         boundary["detail_requires"] = ["cue"]
     return boundary
 
@@ -408,26 +410,6 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
             cache_available
             and str(packet.get("output_mode") or "") == "reopenable_route"
         )
-        callable_selector = (
-            {
-                "kind": "recall_selector_request_index" if recall_selector else "last_recall_request_index",
-                "request_index": index,
-                **(
-                    {"recall_selector": recall_selector}
-                    if recall_selector
-                    else {"last_recall": True}
-                ),
-            }
-            if route_is_callable
-            else {
-                "kind": "not_callable_from_compact_card",
-                "reason": (
-                    "route_already_opened_in_this_session"
-                    if already_opened
-                    else "route_not_reopenable_or_last_recall_cache_missing"
-                ),
-            }
-        )
         route_receipts.append(
             _without_empty(
                 {
@@ -439,13 +421,10 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
                         route_count=len(memory_packets),
                         labels_low_specificity=labels_low_specificity,
                     ),
-                    "callable_selector": callable_selector,
-                    "private_handle_boundary": (
-                        "compact_output_redacts_local_private_handle_use_callable_selector"
-                    ),
+                    "request_index": index if route_is_callable else None,
+                    "recall_selector": recall_selector if route_is_callable and recall_selector else None,
                     "already_opened": already_opened or None,
-                    "claim_permission": packet.get("claim_permission"),
-                    "next_action_boundary": "reopen_required_before_claim",
+                    "source_boundary": "reopen_required_before_claim",
                     "action": route_deepen_action(
                         index,
                         recall_selector=recall_selector,
@@ -468,19 +447,6 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
             receipt["route_choice_posture"] = "labels_low_specificity"
             receipt["confidence"] = "low_confidence_navigation"
             receipt["claim_boundary"] = "no_claim_before_reopen"
-    semantic = payload.get("semantic_gate_diagnostics")
-    semantic_compact = None
-    if isinstance(semantic, dict):
-        semantic_compact = _without_empty(
-            {
-                "requested": semantic.get("requested"),
-                "mode": semantic.get("mode"),
-                "overall_recall_diagnostic": semantic.get("overall_recall_diagnostic"),
-                "semantic_sidecar": semantic.get("semantic_sidecar"),
-                "foreground_action": semantic.get("foreground_action"),
-                "boundary": semantic.get("boundary"),
-            }
-        )
     status = str(payload.get("status") or "")
     miss_recovery_card = None if memory_packets else _recall_miss_recovery_card(status)
     weak_route_recovery_card = None
@@ -695,7 +661,6 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "surface": "mcp_agent_recall_compact",
         "status": status,
         "apw_recovery_state": apw_recovery.get("state") if isinstance(apw_recovery, dict) else None,
-        "apw_recovery": apw_recovery,
         "last_recall_cache_available": cache_available,
         "recall_selector_available": bool(recall_selector),
         "recall_selector_id": recall_selector or None,
@@ -710,21 +675,17 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
             int(row["omitted_count"]) for row in duplicate_omission_rows
         )
         or None,
-        "omitted_duplicate_route_labels": duplicate_omission_rows[:3] or None,
-        "semantic_gate_diagnostics": semantic_compact,
-        "associative_path_policy": associative_path_policy,
-        "associative_path_fallback": associative_path_fallback,
+        "route_label_omissions": {"duplicate_label_count": len(duplicate_omission_rows)}
+        if duplicate_omission_rows
+        else None,
         "repo_familiarity_fallback": repo_familiarity_fallback,
         "discussion_atlas_pointer": discussion_atlas_pointer,
-        "provider_key_bridge": payload.get("provider_key_bridge"),
-        "runtime_provenance": compact_runtime_provenance(payload.get("runtime_provenance")),
         "claim_boundary": _compact_claim_boundary(
             can_use_for=can_use_for,
             must_reopen_for=["source_backed_claims", "exact_wording", "sensitive_or_stale_facts"],
             detail_command=detail_command or None,
             detail_command_template=detail_command_template or None,
         ),
-        **detail_fields,
     }
     result.update(
         canonical_foreground_action_fields(
@@ -732,4 +693,4 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
             safe_next_actions=safe_next_actions,
         )
     )
-    return _without_empty(result)
+    return strip_compact_foreground_debug_fields(_without_empty(result))

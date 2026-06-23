@@ -9,6 +9,7 @@ from pathlib import Path
 from aippocampus_runtime.cli import facade
 from aippocampus_runtime.contracts import foreground_action_contract_violations
 from aippocampus_runtime.mcp import server as mcp
+from aippocampus_runtime.mcp.compact_profile import mcp_tool_result_payload
 from aippocampus_runtime.recall import why_diagnostics as why
 from aippocampus_runtime.recall import why_reason_codes as reason_codes
 from aippocampus_runtime.recall import why_surfaces as surfaces
@@ -529,7 +530,7 @@ class RecallWhyDiagnosticsTests(unittest.TestCase):
 
         self.assertTrue(cli_result.ok, cli_result.stderr)
         cli_payload = json.loads(cli_result.stdout)
-        payload = json.loads(response["result"]["content"][0]["text"])
+        payload = mcp_tool_result_payload(response["result"])
         encoded = json.dumps(payload, ensure_ascii=False)
         self.assertFalse(response["result"].get("isError", False))
         self.assertEqual(payload["kind"], "aippocampus_recall_diagnostic")
@@ -583,7 +584,7 @@ class RecallWhyDiagnosticsTests(unittest.TestCase):
 
         self.assertTrue(cli_result.ok, cli_result.stderr)
         cli_payload = json.loads(cli_result.stdout)
-        payload = json.loads(response["result"]["content"][0]["text"])
+        payload = mcp_tool_result_payload(response["result"])
         encoded = json.dumps(payload, ensure_ascii=False)
         self.assertFalse(response["result"].get("isError", False))
         self.assertEqual(payload["decision"], "missing")

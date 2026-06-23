@@ -11,6 +11,7 @@ from unittest import mock
 from aippocampus_runtime import core
 from aippocampus_runtime.mcp import server as mcp
 from aippocampus_runtime.mcp.clean_source_resolution import resolve_mcp_clean_source_dir
+from aippocampus_runtime.mcp.compact_profile import mcp_tool_result_payload
 
 
 class McpDefaultCleanSourceResolutionTests(unittest.TestCase):
@@ -65,8 +66,7 @@ class McpDefaultCleanSourceResolutionTests(unittest.TestCase):
                 "params": {"name": name, "arguments": arguments},
             }
         )
-        text = response["result"]["content"][0]["text"]
-        return json.loads(text)
+        return mcp_tool_result_payload(response["result"])
 
     def _write_manifest_clean_source(
         self,

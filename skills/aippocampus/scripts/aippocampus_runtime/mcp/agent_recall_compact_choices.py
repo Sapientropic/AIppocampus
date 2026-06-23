@@ -179,7 +179,7 @@ def registry_source_search_fallback_action(cue: str | None) -> dict[str, Any] | 
         return None
     return {
         "id": "search_registry_sources_for_original_cue_anchors",
-        "label": "Search all registered source for cue anchors",
+        "label": "Search registered sources for cue anchors",
         "tool_name": "search_memory",
         "arguments": {"query": query, "scope": "all_registered_sources", "max": 5},
         "command": f"aippocampus search --all {shell_quote(query)} --json",
@@ -188,7 +188,7 @@ def registry_source_search_fallback_action(cue: str | None) -> dict[str, Any] | 
         "claim_boundary": "source_reopen_required_before_claim",
         "why": (
             "Recall could not choose a route safely from compact labels; search all registered "
-            "source for the original cue anchors before asking the user for a brand-new cue."
+            "sources for the original cue anchors before asking the user for a brand-new cue."
         ),
     }
 

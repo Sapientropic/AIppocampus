@@ -15,6 +15,7 @@ from aippocampus_runtime.recall.retrieval import (
     extract_rag_terms,
     search_hybrid_index,
 )
+from aippocampus_runtime.recall.source_anchor_gate import distinctive_query_anchors
 
 
 def _message(*, line: int, text: str) -> dict:
@@ -85,6 +86,26 @@ class RetrievalQueryPolicyTests(unittest.TestCase):
         self.assertNotIn("上次", terms)
         self.assertNotIn("那个", terms)
         self.assertEqual(policy.cjk_query_sidecar_terms("之前 那个 记忆"), [])
+
+    def test_cjk_query_terms_suppress_low_value_fragments_before_anchor_gates(self) -> None:
+        bad_prompt = "graph这个事看来 很多基础层粗糙 影响召回质量"
+        sidecars = policy.cjk_query_sidecar_terms(bad_prompt)
+        query_terms = policy.split_query_terms([bad_prompt])
+        anchors = distinctive_query_anchors(bad_prompt)
+
+        for fragment in ["这个", "事看来", "很多基础层粗糙", "基础层粗", "础层粗糙", "刚刚对", "有帮助", "实际都好差劲"]:
+            self.assertNotIn(fragment, sidecars)
+            self.assertNotIn(fragment, query_terms)
+            self.assertNotIn(fragment, anchors)
+        self.assertIn("graph", query_terms)
+
+        domain_prompt = "最早那条机械飞升和海马体的讨论，以及黏菌 联想回忆 探索算法"
+        domain_terms = policy.split_query_terms([domain_prompt])
+        domain_anchors = distinctive_query_anchors(domain_prompt)
+        for term in ["机械飞升", "海马体", "黏菌", "联想回忆", "探索算法"]:
+            self.assertIn(term, domain_terms)
+            self.assertIn(term, domain_anchors)
+        self.assertNotIn("最早那条机械飞升", domain_terms)
 
     def test_cjk_retrieval_and_query_terms_share_extension_ranges(self) -> None:
         samples = [

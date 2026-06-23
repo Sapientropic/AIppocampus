@@ -25,3 +25,11 @@ Keep-with-reason fields:
 
 Guardrail: `foreground_action_contract_violations()` rejects top-level legacy
 primary aliases for `foreground-action-v2`.
+
+Compact MCP/foreground debug-field families are intentionally not mirrored in
+this table. Their executable guard lives in
+`skills/aippocampus/scripts/aippocampus_runtime/mcp/compact_profile.py`, with
+cross-surface regression assertions in `tests/aippocampus/frontstage_assertions.py`
+and the MCP compact tests. Add new compact fields there first so the renderer
+can classify them as foreground, boundary, or detail/operator-only instead of
+letting another diagnostic noun leak into default product output.

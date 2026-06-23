@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.navigation.associations import (
+    association_is_prompt_noise,
     default_associations_path,
     load_associations,
     match_associations,
@@ -76,6 +77,7 @@ class RecallDecisionContext:
     project_label: str | None
     associations: dict[str, Any]
     association_matches: list[dict[str, Any]]
+    association_diagnostics: dict[str, Any]
     cognitive_map: dict[str, Any]
     cognitive_map_matches: list[dict[str, Any]]
     working_memory_all_rows: list[dict[str, Any]]
@@ -215,6 +217,11 @@ def build_recall_decision_context(
     project_label: str | None = None
     associations: dict[str, Any] = {}
     association_matches: list[dict[str, Any]] = []
+    association_diagnostics: dict[str, Any] = {
+        "association_match_count": 0,
+        "association_suppressed_noise_count": 0,
+        "association_generic_demoted_count": 0,
+    }
     cognitive_map: dict[str, Any] = {}
     cognitive_map_matches: list[dict[str, Any]] = []
     working_memory_all_rows: list[dict[str, Any]] = []
@@ -283,11 +290,18 @@ def build_recall_decision_context(
             else []
         )
         associations = load_associations(association_file)
-        association_matches = [
-            match
-            for match in (match_associations(prompt, associations) if prompt else [])
-            if not association_term_is_generic(match)
-        ]
+        raw_association_matches = match_associations(prompt, associations, limit=12) if prompt else []
+        association_diagnostics["association_match_count"] = len(raw_association_matches)
+        total_threads = len(registry.get("threads") or [])
+        for match in raw_association_matches:
+            if association_term_is_generic(match):
+                association_diagnostics["association_generic_demoted_count"] += 1
+                continue
+            if association_is_prompt_noise(match, total_threads=total_threads):
+                association_diagnostics["association_suppressed_noise_count"] += 1
+                continue
+            association_matches.append(match)
+        association_matches = association_matches[:6]
         semantic_trigger_matches = (
             prompt_relevant_triggers(
                 prompt=prompt,
@@ -339,6 +353,7 @@ def build_recall_decision_context(
         project_label=project_label,
         associations=associations,
         association_matches=association_matches,
+        association_diagnostics=association_diagnostics,
         cognitive_map=cognitive_map,
         cognitive_map_matches=cognitive_map_matches,
         working_memory_all_rows=working_memory_all_rows,

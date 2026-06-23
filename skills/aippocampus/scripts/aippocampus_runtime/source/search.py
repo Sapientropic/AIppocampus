@@ -159,6 +159,8 @@ def search_clean_source(
             metadata={
                 "role": message.get("role"),
                 "phase": message.get("phase"),
+                "material_class": message.get("material_class"),
+                "source_claim_policy": message.get("source_claim_policy"),
                 "scope_labels": message_scope_labels,
                 "semantic_scope_labels": semantic_scope_labels,
             },
@@ -178,6 +180,8 @@ def search_clean_source(
             "phase": message.get("phase") or "",
             "turn_index": message.get("turn_index"),
             "is_final": bool(message.get("is_final")),
+            "material_class": message.get("material_class"),
+            "source_claim_policy": message.get("source_claim_policy"),
             "scope_labels": message_scope_labels,
             "semantic_scope_labels": semantic_scope_labels,
             "score": round(score, 3),

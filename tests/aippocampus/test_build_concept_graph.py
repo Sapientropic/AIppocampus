@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
@@ -30,7 +31,10 @@ class ConceptGraphTests(unittest.TestCase):
                             "confidence": 1.0,
                             "hit_count": 100,
                             "related_terms": ["Go runtime"],
-                            "threads": [],
+                            "threads": [
+                                {"thread_key": "session:a"},
+                                {"thread_key": "session:b"},
+                            ],
                         },
                         "Go runtime": {
                             "term": "Go runtime",
@@ -38,7 +42,10 @@ class ConceptGraphTests(unittest.TestCase):
                             "confidence": 1.0,
                             "hit_count": 100,
                             "related_terms": ["gotd"],
-                            "threads": [],
+                            "threads": [
+                                {"thread_key": "session:a"},
+                                {"thread_key": "session:b"},
+                            ],
                         },
                     },
                 },
@@ -57,6 +64,218 @@ class ConceptGraphTests(unittest.TestCase):
         gotd = next(item for item in expansions if item["term"] == "gotd")
         self.assertEqual(gotd["depth"], 2)
         self.assertIn(gotd["score_bucket"], {"very_low", "low", "medium", "high", "very_high"})
+
+    def test_low_diversity_auto_cooccurs_is_parked_before_expansion(self) -> None:
+        self.associations.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "terms": {
+                        "黏菌": {
+                            "term": "黏菌",
+                            "status": "staging",
+                            "confidence": 1.0,
+                            "hit_count": 999,
+                            "related_terms": ["探索算法"],
+                            "threads": [{"thread_key": "session:single"}],
+                        }
+                    },
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        result = graph.build_concept_graph(self.associations, self.output)
+        expansions = graph.expand_concepts(self.output, ["黏菌"], depth=1)
+
+        self.assertEqual(expansions, [])
+        self.assertEqual(
+            result["quality_gate"]["reason_counts"]["low_source_diversity_auto_co_occurs"],
+            1,
+        )
+        self.assertEqual(result["lifecycle"]["edge_status_counts"]["parked"], 2)
+
+    def test_cross_thread_auto_cooccurs_remains_navigation_expansion(self) -> None:
+        self.associations.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "terms": {
+                        "黏菌": {
+                            "term": "黏菌",
+                            "status": "staging",
+                            "confidence": 0.9,
+                            "hit_count": 4,
+                            "related_terms": ["探索算法"],
+                            "threads": [
+                                {"thread_key": "session:a"},
+                                {"thread_key": "session:b"},
+                            ],
+                        }
+                    },
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        result = graph.build_concept_graph(self.associations, self.output)
+        expansions = graph.expand_concepts(self.output, ["黏菌"], depth=1)
+
+        self.assertEqual(expansions[0]["term"], "探索算法")
+        self.assertEqual(result["lifecycle"]["edge_status_counts"]["staging"], 2)
+        self.assertNotIn("low_source_diversity_auto_co_occurs", result["quality_gate"]["reason_counts"])
+
+    def test_query_gate_excludes_legacy_low_diversity_staging_cooccurs(self) -> None:
+        con = graph.connect(self.output)
+        try:
+            graph.init_schema(con)
+            src = graph.upsert_concept(
+                con,
+                "黏菌",
+                status="staging",
+                lifecycle_reason="legacy_staging",
+                hit_count=999,
+                thread_count=1,
+            )
+            dst = graph.upsert_concept(
+                con,
+                "探索算法",
+                status="staging",
+                lifecycle_reason="legacy_staging",
+                hit_count=999,
+                thread_count=1,
+            )
+            self.assertIsNotNone(src)
+            self.assertIsNotNone(dst)
+            graph.upsert_edge(
+                con,
+                str(src),
+                str(dst),
+                edge_type="co_occurs",
+                confidence=1.0,
+                status="staging",
+                evidence_count=999,
+                thread_count=1,
+                lifecycle_reason="legacy_ungated_row",
+            )
+            con.commit()
+        finally:
+            con.close()
+
+        self.assertEqual(graph.expand_concepts(self.output, ["黏菌"], depth=1), [])
+
+    def test_graph_health_reports_quality_without_source_labels(self) -> None:
+        self.associations.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "terms": {
+                        "黏菌": {
+                            "term": "黏菌",
+                            "status": "staging",
+                            "confidence": 0.62,
+                            "hit_count": 8,
+                            "related_terms": ["探索算法"],
+                            "threads": [{"thread_key": "session:single"}],
+                        }
+                    },
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        graph.build_concept_graph(self.associations, self.output)
+
+        health = graph.concept_graph_health(self.output)
+        encoded = json.dumps(health, ensure_ascii=False, sort_keys=True)
+
+        self.assertTrue(health["ok"])
+        self.assertEqual(health["recall_useful_claimed"], False)
+        self.assertEqual(health["edge_scope_key_distribution"]["global"], 2)
+        self.assertIn("co_occurs", health["edge_type_status_counts"])
+        self.assertIn("count_semantics", health)
+        self.assertIn("statistical_unit_collapse", {item["code"] for item in health["warnings"]})
+        self.assertNotIn("黏菌", encoded)
+        self.assertNotIn("探索算法", encoded)
+        self.assertNotIn(str(self.output), encoded)
+
+    def test_concept_graph_schema_has_quality_indexes(self) -> None:
+        con = graph.connect(self.output)
+        try:
+            graph.init_schema(con)
+            edge_indexes = {
+                row["name"] if isinstance(row, sqlite3.Row) else row[1]
+                for row in con.execute("PRAGMA index_list(concept_edges)").fetchall()
+            }
+            concept_indexes = {
+                row["name"] if isinstance(row, sqlite3.Row) else row[1]
+                for row in con.execute("PRAGMA index_list(concepts)").fetchall()
+            }
+        finally:
+            con.close()
+
+        self.assertIn("idx_concept_edges_quality", edge_indexes)
+        self.assertIn("idx_concepts_health", concept_indexes)
+
+    def test_graph_rejects_sliding_window_cjk_fragments_from_association_input(self) -> None:
+        self.associations.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "terms": {
+                        "机械飞升": {
+                            "term": "机械飞升",
+                            "status": "verified",
+                            "confidence": 0.95,
+                            "hit_count": 3,
+                            "related_terms": ["海马体", "仍按新流程保持手动触发"],
+                            "threads": [{"thread_key": "session:real"}],
+                        },
+                        "仍按新流程保持手动触发": {
+                            "term": "仍按新流程保持手动触发",
+                            "status": "verified",
+                            "confidence": 0.99,
+                            "hit_count": 99,
+                            "related_terms": ["动触发"],
+                            "threads": [{"thread_key": "session:noise"}],
+                        },
+                        "动触发": {
+                            "term": "动触发",
+                            "status": "verified",
+                            "confidence": 0.99,
+                            "hit_count": 99,
+                            "related_terms": ["机械飞升"],
+                            "threads": [{"thread_key": "session:noise"}],
+                        },
+                        "海马体": {
+                            "term": "海马体",
+                            "status": "verified",
+                            "confidence": 0.9,
+                            "hit_count": 2,
+                            "related_terms": ["机械飞升"],
+                            "threads": [{"thread_key": "session:real"}],
+                        },
+                    },
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        result = graph.build_concept_graph(self.associations, self.output)
+        con = sqlite3.connect(self.output)
+        try:
+            labels = {row[0] for row in con.execute("SELECT label FROM concepts").fetchall()}
+        finally:
+            con.close()
+
+        self.assertIn("机械飞升", labels)
+        self.assertIn("海马体", labels)
+        self.assertNotIn("仍按新流程保持手动触发", labels)
+        self.assertNotIn("动触发", labels)
+        self.assertGreaterEqual(result["concept_count"], 2)
 
     def test_build_graph_ingests_subconscious_staging_edges(self) -> None:
         self.associations.write_text(

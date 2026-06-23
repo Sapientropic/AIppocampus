@@ -99,7 +99,10 @@ class AgentDeepenCompactProjectionTests(unittest.TestCase):
         )
 
     def _tool_payload(self, response: dict) -> dict:
-        return json.loads(response["result"]["content"][0]["text"])
+        result = response["result"]
+        if isinstance(result.get("structuredContent"), dict):
+            return result["structuredContent"]
+        return json.loads(result["content"][0]["text"])
 
     def _call_tool_payload(self, name: str, arguments: dict[str, object]) -> dict:
         response = mcp.handle_request(
@@ -163,9 +166,9 @@ class AgentDeepenCompactProjectionTests(unittest.TestCase):
             compact_payload["primary_source_snippet"]["claim_boundary"],
             "exact_wording_inside_this_snippet_only",
         )
-        action_ids = [action["id"] for action in compact_payload["safe_next_actions"]]
-        self.assertIn("choose_export_for_next_thread", action_ids)
-        self.assertIn("choose_sync_for_next_device", action_ids)
+        self.assertNotIn("carry_next_actions", compact_payload)
+        self.assertNotIn("choose_export_for_next_thread", compact_encoded)
+        self.assertNotIn("choose_sync_for_next_device", compact_encoded)
         self.assertNotIn("AIppocampus 使用 clean source", compact_encoded)
         self.assertNotIn(str(self.cwd), compact_encoded)
 
@@ -331,18 +334,12 @@ class AgentDeepenCompactProjectionTests(unittest.TestCase):
         self.assertEqual(route_action["arguments"]["request_index"], 1)
         self.assertIn("recall_selector", route_action["arguments"])
         self.assertIn("--request 1 --recall-selector", route_action["command"])
-        self.assertEqual(route["callable_selector"]["kind"], "recall_selector_request_index")
-        self.assertEqual(route["callable_selector"]["request_index"], 1)
-        self.assertEqual(
-            route["callable_selector"]["recall_selector"],
-            route_action["arguments"]["recall_selector"],
-        )
+        self.assertEqual(route["request_index"], 1)
+        self.assertEqual(route["recall_selector"], route_action["arguments"]["recall_selector"])
         self.assertNotIn("display_id", route)
         self.assertNotIn("feedback_id", route)
-        self.assertEqual(
-            route["private_handle_boundary"],
-            "compact_output_redacts_local_private_handle_use_callable_selector",
-        )
+        self.assertNotIn("callable_selector", route)
+        self.assertNotIn("private_handle_boundary", route)
         self.assertNotIn('"handle":', encoded_recall)
         self.assertNotIn('"callable_handle":', encoded_recall)
         self.assertNotIn('"source_refs":', encoded_recall)
@@ -366,17 +363,8 @@ class AgentDeepenCompactProjectionTests(unittest.TestCase):
         self.assertEqual(compact_payload["source_window_summary"]["message_count"], 2)
         self.assertEqual(compact_payload["foreground_action_contract"], "foreground-action-v2")
         self.assertEqual(compact_payload["foreground_action"]["id"], "use_opened_source_window")
-        self.assertNotIn(compact_payload["foreground_action"], compact_payload["safe_next_actions"])
-        feedback_ids = [action["id"] for action in compact_payload["feedback_actions"]]
-        self.assertEqual(
-            feedback_ids,
-            ["mark_route_helpful", "mark_route_wrong", "keep_route_quiet"],
-        )
-        for action in compact_payload["feedback_actions"]:
-            self.assertEqual(action["mutation_risk"], "durable_low_authority_feedback_write")
-            self.assertEqual(action["claim_boundary"], "feedback_is_not_source_truth")
-            self.assertIn("aippocampus agent feedback", action["command"])
-            self.assertNotIn("feedback_id", action["command"])
+        self.assertNotIn("feedback_actions", compact_payload)
+        self.assertNotIn("feedback_boundary", compact_payload)
         self.assertNotIn("result", compact_payload)
         self.assertNotIn("source_window", compact_payload)
         self.assertNotIn('"messages"', compact_encoded)
@@ -388,8 +376,7 @@ class AgentDeepenCompactProjectionTests(unittest.TestCase):
             compact_payload["primary_source_snippet"]["source_scope"],
             "opened_window_primary_message",
         )
-        carry_ids = [action["id"] for action in compact_payload["carry_next_actions"]]
-        self.assertEqual(carry_ids, ["choose_export_for_next_thread", "choose_sync_for_next_device"])
+        self.assertNotIn("carry_next_actions", compact_payload)
         self.assertNotIn("AIppocampus 使用 clean source", compact_encoded)
 
         full_payload = self._call_tool_payload(
@@ -402,7 +389,7 @@ class AgentDeepenCompactProjectionTests(unittest.TestCase):
         self.assertIn("AIppocampus 使用 clean source", full_encoded)
         self.assertNotIn(str(self.cwd), full_encoded)
 
-    def test_mcp_deepen_carries_blocked_recall_gate_context(self) -> None:
+    def test_mcp_deepen_translates_blocked_recall_gate_to_diagnostic_posture(self) -> None:
         cache_path = self.cwd / "blocked-gate-last-recall.json"
         self.assertTrue(
             write_last_recall_cache(
@@ -453,9 +440,14 @@ class AgentDeepenCompactProjectionTests(unittest.TestCase):
             },
         )
 
-        self.assertEqual(payload["source_anchor_gate"]["status"], "blocked")
-        self.assertFalse(payload["target_source_matched"])
-        self.assertFalse(payload["recommended_evidence_route"])
+        encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertEqual(payload["source_open_posture"], "opened_diagnostic_only")
+        self.assertEqual(payload["evidence_level"], "not_target_evidence")
+        self.assertNotIn("source_anchor_gate", payload)
+        self.assertNotIn("recall_gate_context", payload)
+        self.assertNotIn("target_source_matched", payload)
+        self.assertNotIn("recommended_evidence_route", payload)
+        self.assertNotIn("source_anchor_gate", encoded)
         self.assertEqual(payload["foreground_action"]["id"], "treat_opened_source_as_diagnostic")
 
     def test_selector_ids_do_not_collide_for_identical_fast_cache_writes(self) -> None:

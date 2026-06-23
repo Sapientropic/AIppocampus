@@ -7,6 +7,7 @@ from typing import Any
 
 from aippocampus_runtime import core
 from aippocampus_runtime.contracts import canonical_foreground_action_fields, shell_quote
+from aippocampus_runtime.mcp.compact_profile import strip_compact_foreground_debug_fields
 from aippocampus_runtime.privacy import (
     SENSITIVE_ASSIGNMENT_RE,
     SENSITIVE_VALUE_REDACTION,
@@ -224,7 +225,6 @@ def compact_agent_deepen_payload(
     message_count = int(source_window.get("message_count") or len(messages))
     primary_snippet = _primary_source_snippet(messages)
     why = core.compact_text(str(result.get("why_this_may_matter") or ""), 180)
-    route_id = result.get("route_id")
     apw_identity = result.get("apw_route_identity") or source.get("apw_route_identity")
     apw_identity = dict(apw_identity) if isinstance(apw_identity, Mapping) else {}
     recall_gate_context = _as_dict(
@@ -249,8 +249,9 @@ def compact_agent_deepen_payload(
         if "recommended_evidence_route" in source
         else recall_gate_context.get("recommended_evidence_route")
     )
-    feedback_route_id = apw_identity.get("feedback_target_id") or route_id
-    if source_anchor_gate.get("status") == "blocked" or recommended_evidence_route is False:
+    diagnostic_only = source_anchor_gate.get("status") == "blocked" or recommended_evidence_route is False
+    source_open_posture = "opened_diagnostic_only" if diagnostic_only else "target_evidence_opened"
+    if diagnostic_only:
         primary_action = {
             "id": "treat_opened_source_as_diagnostic",
             "label": "Treat opened source as diagnostic",
@@ -269,13 +270,11 @@ def compact_agent_deepen_payload(
             "claim_boundary": "source_open_within_returned_window",
             "why": "Source has been reopened; use only the returned window unless you deepen or request full detail.",
         }
-    feedback = _feedback_actions(feedback_route_id)
-    carry_actions = _carry_next_actions()
     foreground_fields = canonical_foreground_action_fields(
         primary_action,
-        safe_next_actions=[primary_action, *carry_actions],
+        safe_next_actions=[primary_action],
     )
-    return _without_empty(
+    compact = _without_empty(
         {
             "detail": "compact",
             "kind": source.get("kind"),
@@ -284,35 +283,35 @@ def compact_agent_deepen_payload(
             "surface": surface,
             "status": source.get("status"),
             "ok": True,
-            "evidence_level": result.get("evidence_level") or result.get("support_level"),
+            "source_open_posture": source_open_posture,
+            "evidence_level": (
+                result.get("evidence_level") or result.get("support_level")
+                if source_open_posture == "target_evidence_opened"
+                else "not_target_evidence"
+            ),
             "route_id": result.get("route_id"),
-            "apw_route_identity": apw_identity,
-            "recall_gate_context": recall_gate_context,
-            "source_anchor_gate": source_anchor_gate,
-            "target_source_matched": target_source_matched,
             "source_chain_role": (
                 result.get("source_chain_role")
                 or source.get("source_chain_role")
                 or recall_gate_context.get("source_chain_role")
             ),
-            "route_choice_posture": (
-                result.get("route_choice_posture")
-                or source.get("route_choice_posture")
-                or recall_gate_context.get("route_choice_posture")
-            ),
-            "recommended_evidence_route": recommended_evidence_route,
             "summary": why,
             "source_window_summary": {
                 "message_count": message_count,
                 "source_ref_count": len(source_refs),
                 "source_classes": _source_classes(messages),
                 "has_exact_source": bool(message_count or source_refs),
+                "target_source_matched": bool(target_source_matched),
             },
             "primary_source_snippet": primary_snippet,
             "claim_boundary": {
                 "can_use_for": [
-                    "source_open_within_returned_window",
-                    "exact_wording_inside_opened_window",
+                    "diagnostic_orientation"
+                    if source_open_posture == "opened_diagnostic_only"
+                    else "source_open_within_returned_window",
+                    "exact_wording_inside_opened_window"
+                    if source_open_posture == "target_evidence_opened"
+                    else "no_source_backed_claim_from_this_window",
                 ],
                 "must_reopen_for": [
                     "facts_outside_opened_window",
@@ -323,20 +322,6 @@ def compact_agent_deepen_payload(
                 "source_summary_is_not_quote": True,
             },
             **foreground_fields,
-            "feedback_id": feedback_route_id,
-            "feedback_actions": feedback,
-            "carry_next_actions": carry_actions,
-            "feedback_boundary": {
-                "feedback_is_source_truth": False,
-                "feedback_can_adjust_future_route_ordering": True,
-                "feedback_does_not_expand_opened_source_scope": True,
-            },
-            "operator_detail_command": _operator_detail_command(
-                request_index,
-                last_recall=last_recall,
-                recall_selector=recall_selector,
-            ),
-            "output_boundary": "compact_source_court_primary_snippet_no_operator_diagnostics",
-            "policy_boundary": source.get("policy_boundary"),
         }
     )
+    return strip_compact_foreground_debug_fields(compact)

@@ -12,12 +12,10 @@ import time
 from pathlib import Path
 from typing import Any, Callable
 
-from aippocampus_runtime.navigation.concept_graph import expand_concepts
+from aippocampus_runtime.recall import prompt_concept_graph_bridge as concept_bridge
 from aippocampus_runtime.recall.agent_surface_intent import classify_agent_surface_intent
 from aippocampus_runtime.recall.ambient_policy import policy_update_for_prompt
 from aippocampus_runtime.recall.prompt_cues import (
-    CONCEPT_EXPANSION_MAX_TERMS,
-    concept_expansion_terms,
     current_checkout_live_fact_intent,
     expand_query_terms,
     low_value_casual_prompt,
@@ -264,7 +262,7 @@ def _candidate_matches_for_prompt(
     use_concept_graph: bool,
     start: float,
     max_elapsed_ms: int | None,
-) -> tuple[list[dict[str, Any]], list[str], list[dict[str, Any]]]:
+) -> tuple[list[dict[str, Any]], list[str], list[dict[str, Any]], dict[str, Any]]:
     query_terms = seed_terms
     concept_expansions: list[dict[str, Any]] = []
     timeline = load_project_timeline(default_project_timeline_path(registry_path))
@@ -290,36 +288,42 @@ def _candidate_matches_for_prompt(
         and concept_file.exists()
         and budget_allows(start, max_elapsed_ms, PROBE_MIN_REMAINING_MS)
     ):
-        return candidates, query_terms, concept_expansions
-
-    # Concept BFS is a recall bridge for prompts whose surface words miss
-    # registry associations. Once direct association/timeline candidates
-    # already exist, expanding concepts can easily introduce semantic drift
-    # and corrupt clean-source probe ranking, so keep it as a fallback.
-    concept_expansions = expand_concepts(
-        concept_file, seed_terms, depth=2, max_terms=CONCEPT_EXPANSION_MAX_TERMS
-    )
-    if concept_expansions:
-        query_terms = unique_preserve(
-            seed_terms + concept_expansion_terms(concept_expansions), limit=40
+        concept_expansion_diagnostic = concept_bridge.concept_graph_skip_diagnostic(
+            candidates=candidates,
+            use_concept_graph=use_concept_graph,
+            prompt=prompt,
+            concept_file=concept_file,
         )
-        candidates = _score_recall_candidates(
+        return candidates, query_terms, concept_expansions, concept_expansion_diagnostic
+
+    def score_expanded_terms(expanded_query_terms: list[str]) -> list[dict[str, Any]]:
+        expanded_candidates = _score_recall_candidates(
             prompt=prompt,
             registry=registry,
             timeline=timeline,
             cwd_path=cwd_path,
-            query_terms=query_terms,
+            query_terms=expanded_query_terms,
             cognitive_map_matches=cognitive_map_matches,
             association_matches=association_matches,
         )
-        candidates = _merge_semantic_trigger_source_candidates(
-            candidates,
+        return _merge_semantic_trigger_source_candidates(
+            expanded_candidates,
             registry,
             semantic_trigger_matches,
-            query_terms,
+            expanded_query_terms,
             scent_threshold=scent_threshold,
         )
-    return candidates, query_terms, concept_expansions
+
+    expanded_candidates, expanded_query_terms, concept_expansions, diagnostic = (
+        concept_bridge.apply_concept_graph_bridge(
+            concept_file=concept_file,
+            seed_terms=seed_terms,
+            score_candidates=score_expanded_terms,
+        )
+    )
+    if not expanded_candidates:
+        return candidates, query_terms, concept_expansions, diagnostic
+    return expanded_candidates, expanded_query_terms, concept_expansions, diagnostic
 
 
 def _noise_prompt_result(context: Any, start: float) -> dict[str, Any]:
@@ -549,6 +553,7 @@ def _prompt_result(
     query_terms: list[str],
     cognitive_map_matches: list[dict[str, Any]],
     concept_expansions: list[dict[str, Any]],
+    concept_expansion_diagnostic: dict[str, Any],
     reasons: list[str],
     candidates: list[dict[str, Any]],
     evidence: list[dict[str, Any]],
@@ -575,11 +580,13 @@ def _prompt_result(
         "query_terms": query_terms[:16],
         "cognitive_map": cognitive_map_matches[:4],
         "concept_expansions": concept_expansions[:8],
+        "concept_expansion_diagnostic": concept_expansion_diagnostic,
         "reasons": reasons or ["no ambient recall cue"],
         "candidates": strip_private_fields(candidates[:3]),
         "evidence": evidence[:search_budget],
         "working_memory": strip_for_hook(working_memory_matches[:3]),
         "ambient_policy": context.ambient_policy_diagnostics,
+        "association_diagnostics": context.association_diagnostics,
         "dream_delivery_prefilter": context.dream_delivery_prefilter,
         "semantic_gate": strip_semantic_gate(semantic_result),
         "semantic_gate_reuse": semantic_gate_reuse,
@@ -653,15 +660,11 @@ def assess_prompt(
     )
     if policy_result is not None:
         return policy_result
-    registry = context.registry
-    cognitive_map_matches = context.cognitive_map_matches
+    registry, cognitive_map_matches = context.registry, context.cognitive_map_matches
     working_memory_matches = _limit_dream_matches(context.working_memory_matches, dream_hypothesis_limit)
-    association_matches = context.association_matches
-    pre_explicit = context.pre_explicit
-    pre_associative = context.pre_associative
-    pre_important = context.pre_important
-    natural_evidence = natural_evidence_intent(prompt)
-    source_evidence = source_evidence_intent(prompt)
+    association_matches, pre_explicit = context.association_matches, context.pre_explicit
+    pre_associative, pre_important = context.pre_associative, context.pre_important
+    natural_evidence, source_evidence = natural_evidence_intent(prompt), source_evidence_intent(prompt)
     negative_evidence = negative_evidence_intent(prompt)
     current_checkout_live_fact = current_checkout_live_fact_intent(prompt)
     agent_surface_intent = classify_agent_surface_intent(prompt)
@@ -702,11 +705,14 @@ def assess_prompt(
     threshold_adjustment_reasons = route_context["threshold_adjustment_reasons"]
     threshold_memory_cue = bool(route_context["threshold_memory_cue"])
     seed_terms = route_context["seed_terms"]
-    explicit = pre_explicit
-    associative = pre_associative
-    important = pre_important
+    explicit, associative, important = pre_explicit, pre_associative, pre_important
     scent_threshold = float(threshold_policy["effective_threshold"])
-    candidates, query_terms, concept_expansions = _candidate_matches_for_prompt(
+    (
+        candidates,
+        query_terms,
+        concept_expansions,
+        concept_expansion_diagnostic,
+    ) = _candidate_matches_for_prompt(
         prompt=prompt,
         registry=registry,
         registry_path=path,
@@ -833,6 +839,7 @@ def assess_prompt(
         query_terms=query_terms,
         cognitive_map_matches=cognitive_map_matches,
         concept_expansions=concept_expansions,
+        concept_expansion_diagnostic=concept_expansion_diagnostic,
         reasons=reasons,
         candidates=candidates,
         evidence=evidence,

@@ -20,6 +20,7 @@ from aippocampus_runtime.contracts import (
     canonical_foreground_action_fields,
 )
 from aippocampus_runtime.mcp import tool_handlers as mcp_tools
+from aippocampus_runtime.mcp.compact_profile import mcp_tool_result_payload
 from aippocampus_runtime.mcp.recall_navigation import NAVIGATION_SCHEMA_VERSION
 from aippocampus_runtime.ops.recall_funnel_live_agent_gate import (
     build_live_agent_usefulness_gate,
@@ -67,14 +68,7 @@ def cue_required_recovery_card() -> dict[str, Any]:
 
 
 def _tool_payload(result: dict[str, Any]) -> dict[str, Any]:
-    content = result.get("content") or []
-    if not content or not isinstance(content[0], dict):
-        return {}
-    try:
-        data = json.loads(str(content[0].get("text") or "{}"))
-    except json.JSONDecodeError:
-        return {}
-    return data if isinstance(data, dict) else {}
+    return mcp_tool_result_payload(result)
 
 
 def _field_names(payload: dict[str, Any], names: list[str]) -> list[str]:

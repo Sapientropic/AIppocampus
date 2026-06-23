@@ -92,7 +92,10 @@ DEFAULT_MAX_TRIGGER_ITEMS = int(os.environ.get("AIPPOCAMPUS_SEMANTIC_TRIGGER_LIM
 DEFAULT_MAX_PROMPT_RELEVANT_TRIGGER_ITEMS = 8
 GENERIC_TRIGGER_PROMPT_TERMS = frozenset(
     {
+        "agent",
+        "agents",
         "backed",
+        "but",
         "candidate",
         "candidates",
         "claim",
@@ -104,10 +107,14 @@ GENERIC_TRIGGER_PROMPT_TERMS = frozenset(
         "decision",
         "decisions",
         "evidence",
+        "full",
+        "has",
         "issue",
         "issues",
+        "local",
         "memory",
         "memories",
+        "not",
         "project",
         "projects",
         "recall",
@@ -115,8 +122,10 @@ GENERIC_TRIGGER_PROMPT_TERMS = frozenset(
         "refs",
         "route",
         "routes",
+        "runtime",
         "source",
         "sources",
+        "system",
         "thread",
         "threads",
         "上下文",
@@ -374,6 +383,20 @@ def trigger_from_working_memory(row: dict[str, Any]) -> dict[str, Any]:
 
 
 def trigger_from_association(term: str, row: dict[str, Any]) -> dict[str, Any]:
+    source_refs = [
+        {
+            key: value
+            for key, value in {
+                "thread_key": source.get("thread_key"),
+                "title": source.get("title"),
+                "line": source.get("line"),
+                "turn_index": source.get("turn_index"),
+            }.items()
+            if value not in {None, ""}
+        }
+        for source in row.get("threads") or []
+        if isinstance(source, dict) and source.get("thread_key")
+    ][:8]
     return {
         "source": "association",
         "title": term,
@@ -381,7 +404,20 @@ def trigger_from_association(term: str, row: dict[str, Any]) -> dict[str, Any]:
         "when_to_use": "Use as an ambient recall association only; search source before treating as evidence.",
         "status": row.get("status"),
         "confidence": row.get("confidence"),
+        "source_refs": source_refs,
     }
+
+
+def _trigger_alias_allowed(value: str) -> bool:
+    text = str(value or "").strip()
+    key = re.sub(r"[\s\-_]+", " ", text.casefold()).strip()
+    if not key:
+        return False
+    if key in GENERIC_TRIGGER_PROMPT_TERMS:
+        return False
+    if re.fullmatch(r"(not|but|has|full|the|and|for|with|this|that)", key):
+        return False
+    return True
 
 
 def trigger_overlap_score(trigger: dict[str, Any], prompt_terms: list[str]) -> int:
@@ -390,17 +426,28 @@ def trigger_overlap_score(trigger: dict[str, Any], prompt_terms: list[str]) -> i
     activation_cues = trigger.get("activation_cues") or []
     if activation_cues:
         # Sidecar cues are the prompt route surface; prose stays context only.
-        trigger_values = collect_exact_aliases([*activation_cues, *(trigger.get("aliases") or [])], 32)
+        trigger_values = [
+            value
+            for value in collect_exact_aliases(
+                [*activation_cues, *(trigger.get("aliases") or [])],
+                32,
+            )
+            if _trigger_alias_allowed(value)
+        ]
     else:
-        trigger_values = collect_aliases(
-            [
-                trigger.get("title"),
-                trigger.get("aliases") or [],
-                trigger.get("when_to_use"),
-                trigger.get("project_label"),
-            ],
-            limit=32,
-        )
+        trigger_values = [
+            value
+            for value in collect_aliases(
+                [
+                    trigger.get("title"),
+                    trigger.get("aliases") or [],
+                    trigger.get("when_to_use"),
+                    trigger.get("project_label"),
+                ],
+                limit=32,
+            )
+            if _trigger_alias_allowed(value)
+        ]
     # `when_not_to_use` is reviewer guidance, not an activation surface. Treating
     # it as positive text made prompts such as "fixture 名字太误导" wake the Atlas
     # trigger only because the trigger warned not to use it for fixture edits.
@@ -456,10 +503,20 @@ def load_semantic_triggers(path: Path | None) -> list[dict[str, Any]]:
             continue
         if row.get("kind") not in {None, "aippocampus_semantic_trigger"}:
             continue
-        activation_cues = collect_exact_aliases(row.get("activation_cues") or [], limit=24)
+        activation_cues = [
+            value
+            for value in collect_exact_aliases(row.get("activation_cues") or [], limit=24)
+            if _trigger_alias_allowed(value)
+        ]
         source_refs = [ref for ref in row.get("source_refs") or [] if isinstance(ref, dict)]
         fallback_inputs = [row.get("aliases") or [], row.get("trigger_terms") or [], row.get("concept")]
-        aliases = activation_cues or collect_aliases(fallback_inputs, limit=40)
+        aliases = activation_cues or [
+            value
+            for value in collect_aliases(fallback_inputs, limit=40)
+            if _trigger_alias_allowed(value)
+        ]
+        if not aliases:
+            continue
         out.append(
             {
                 "source": "semantic_triggers",
@@ -505,7 +562,9 @@ def all_trigger_rows(
             if not isinstance(row, dict):
                 continue
             if row.get("status") == "verified" or float(row.get("confidence") or 0.0) >= 0.82:
-                rows.append(trigger_from_association(str(term), row))
+                trigger = trigger_from_association(str(term), row)
+                if trigger.get("source_refs") and _trigger_alias_allowed(str(term)):
+                    rows.append(trigger)
     return rows
 
 

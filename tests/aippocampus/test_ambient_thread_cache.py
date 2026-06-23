@@ -10,6 +10,7 @@ from pathlib import Path
 
 from aippocampus_runtime.recall import ambient_cache as cache
 from aippocampus_runtime.recall import ambient_cache_compaction as compaction
+from aippocampus_runtime.recall.ambient_cards import ambient_recall_from_decision
 
 
 class AmbientThreadCacheTests(unittest.TestCase):
@@ -57,6 +58,50 @@ class AmbientThreadCacheTests(unittest.TestCase):
         self.assertEqual(loaded["cards"][0]["theme"], "continuity")
         self.assertNotIn("private/workspace", raw.replace("\\", "/"))
         self.assertNotIn("prompt", raw.casefold())
+
+    def test_no_source_self_echo_cards_are_silent_residue_not_active_nudges(self) -> None:
+        ambient = ambient_recall_from_decision(
+            {
+                "decision": "scent",
+                "confidence": "medium",
+                "candidates": [
+                    {
+                        "title": "刚刚对你有帮助吗",
+                        "matched_terms": ["刚刚对你有帮助吗"],
+                    }
+                ],
+            },
+            prompt="刚刚对你有帮助吗",
+        )
+
+        self.assertEqual(ambient["mode"], "silent_tuning")
+        self.assertEqual(ambient["cards"][0]["visibility"], "silent_tuning")
+        self.assertEqual(ambient["cards"][0]["source_refs"], [])
+        self.assertEqual(ambient["cards"][0]["foreground_residue_reason"], "no_source_ref_or_reopen_plan")
+        self.assertEqual(ambient["brief_precision"]["no_ref_active_card_count"], 1)
+        self.assertEqual(ambient["brief_precision"]["no_ref_residue_count"], 1)
+        self.assertEqual(ambient["brief_precision"]["self_echo_suppressed_count"], 1)
+
+    def test_candidate_with_thread_key_remains_active_reopenable_navigation(self) -> None:
+        ambient = ambient_recall_from_decision(
+            {
+                "decision": "scent",
+                "confidence": "medium",
+                "candidates": [
+                    {
+                        "title": "机械飞升源头",
+                        "thread_key": "session:mechanical",
+                        "message_id": "msg-1",
+                        "matched_terms": ["机械飞升", "海马体"],
+                    }
+                ],
+            },
+            prompt="机械飞升和海马体",
+        )
+
+        self.assertEqual(ambient["mode"], "active_gentle_nudge")
+        self.assertEqual(ambient["cards"][0]["source_refs"][0]["thread_key"], "session:mechanical")
+        self.assertEqual(ambient["brief_precision"]["no_ref_active_card_count"], 0)
 
     def test_thread_cache_key_canonicalizes_equivalent_posix_workspace_paths(self) -> None:
         cache_path = self.root / "ambient-thread-cache.json"

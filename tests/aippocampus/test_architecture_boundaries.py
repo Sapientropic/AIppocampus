@@ -44,6 +44,9 @@ PROVIDER_ENTRYPOINT_INVENTORY = (
 )
 RUNTIME_SCRIPT_MAP = REPO_ROOT / "docs" / "architecture" / "runtime-script-map.md"
 ENCRYPTED_SYNC_V2 = REPO_ROOT / "docs" / "architecture" / "ops" / "encrypted-sync-v2.md"
+SOURCE_BACKED_PRODUCT_DISCIPLINE = (
+    REPO_ROOT / "docs" / "architecture" / "recall" / "source-backed-product-discipline.md"
+)
 LARGE_RUNTIME_THRESHOLD = 600
 LARGE_TEST_THRESHOLD = 1500
 LARGE_BENCHMARK_THRESHOLD = 1200
@@ -281,6 +284,25 @@ class ArchitectureBoundaryTests(unittest.TestCase):
             "source ids/source refs",
             "not a tagless-final architecture",
             "`ConversationProvider`",
+        ):
+            self.assertIn(phrase, text)
+
+    def test_advanced_graph_rankers_have_foreground_adoption_gate(self) -> None:
+        text = SOURCE_BACKED_PRODUCT_DISCIPLINE.read_text(encoding="utf-8")
+
+        for phrase in (
+            "## Advanced Graph Ranker Adoption Gate",
+            "PageRank",
+            "random-walk",
+            "Physarum-like flow",
+            "operator-only and experimental",
+            "must not influence default foreground recall",
+            "ranking, foreground action selection",
+            "constant-confidence dominance",
+            "source-diversity gating",
+            "agent recall -> agent deepen/open -> opened source anchor",
+            "hits` improves against exact or current-source search",
+            "separate issue review",
         ):
             self.assertIn(phrase, text)
 

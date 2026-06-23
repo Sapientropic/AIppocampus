@@ -26,6 +26,7 @@ except ImportError:  # pragma: no cover - direct script fallback
 ensure_paths()
 
 from aippocampus_runtime.mcp import server as mcp  # noqa: E402
+from aippocampus_runtime.mcp.compact_profile import mcp_tool_result_payload  # noqa: E402
 
 
 MARKER = "generic-jsonl-internal-agent-marker-399"
@@ -117,8 +118,7 @@ def mcp_search(cwd: Path, clean_source_dir: Path, query: str) -> dict[str, Any]:
             },
         }
     )
-    text = response["result"]["content"][0]["text"]
-    return json.loads(text)
+    return mcp_tool_result_payload(response["result"])
 
 
 def mcp_list_threads(registry_dir: Path) -> dict[str, Any]:
@@ -136,8 +136,7 @@ def mcp_list_threads(registry_dir: Path) -> dict[str, Any]:
             },
         }
     )
-    text = response["result"]["content"][0]["text"]
-    return json.loads(text)
+    return mcp_tool_result_payload(response["result"])
 
 
 def source_refs_with_prefix(payload: dict[str, Any], prefix: str) -> list[str]:

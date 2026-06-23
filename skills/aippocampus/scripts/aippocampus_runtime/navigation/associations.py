@@ -19,155 +19,35 @@ from typing import Any
 
 from aippocampus_runtime.core import now_utc
 from aippocampus_runtime.io_mtime_cache import load_json_object
+from aippocampus_runtime.navigation.association_phrase_mining import (
+    corpus_cjk_terms_for_text,
+    mine_corpus_cjk_phrases,
+)
+from aippocampus_runtime.navigation.association_terms import (
+    ASCII_BOUNDARY_CHARS,
+    ascii_term_is_simple,
+    extract_terms_from_text,
+    normalize_term,
+    term_is_noise,
+)
+from aippocampus_runtime.navigation.association_terms import (
+    source_text_is_noise as source_text_is_noise,  # re-export for older runtime modules
+)
 from aippocampus_runtime.registry.api import load_registry, registry_paths, unique_preserve
-from aippocampus_runtime.text import has_cjk_ideograph, iter_cjk_sequences
+from aippocampus_runtime.text import has_cjk_ideograph
 
 ASSOCIATION_SCHEMA_VERSION = 1
 DEFAULT_MAX_MESSAGES_PER_THREAD = 120
+DEFAULT_MAX_PHRASE_MINING_MESSAGES_PER_THREAD = 24
+DEFAULT_MAX_PHRASE_MINING_ROWS = 24000
+DEFAULT_CORPUS_CJK_PHRASE_LIMIT = 400
 MAX_TERMS_PER_SOURCE = 18
 MAX_RELATED_TERMS = 12
 
 
-ASCII_STOP_TERMS = {
-    "and",
-    "are",
-    "codex",
-    "for",
-    "from",
-    "goal",
-    "mode",
-    "status",
-    "that",
-    "the",
-    "this",
-    "thread",
-    "token",
-    "true",
-    "false",
-    "with",
-}
-
-TRIVIAL_PHRASES = {
-    "好",
-    "好的",
-    "好开干",
-    "开干",
-    "再想想",
-    "继续",
-    "好继续",
-    "开始吧",
-    "嗯",
-    "关于",
-    "当前线程",
-    "前线程",
-    "主题是什么",
-    "ok",
-    "okay",
-}
-
-SOURCE_NOISE_PATTERNS = [
-    re.compile(pattern, re.IGNORECASE)
-    for pattern in [
-        r"#\s*AGENTS\.md instructions",
-        r"<permissions instructions>",
-        r"<environment_context>",
-        r"\bcurrent goal\b",
-        r"\btoken budget\b",
-        r"\bremaining token\b",
-        r"\bgoal mode\b",
-        r"\bstatus\s+(active|paused|complete)\b",
-        r"\bhookSpecificOutput\b",
-    ]
-]
-
-WHITESPACE_RE = re.compile(r"\s+")
 ASCII_TERM_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
 NUMERIC_TERM_RE = re.compile(r"\d+")
 LOCAL_PATH_TERM_RE = re.compile(r"[A-Za-z]:\\|/(Users|home|tmp|var)/")
-ASCII_BOUNDARY_CHARS = frozenset(
-    "abcdefghijklmnopqrstuvwxyz"
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-    "0123456789"
-    "_.-"
-)
-
-CJK_BOUNDARY_WORDS = [
-    "UserPromptSubmit",
-    "associations",
-    "我们",
-    "你们",
-    "他们",
-    "这个",
-    "那个",
-    "一种",
-    "一个",
-    "把",
-    "靠",
-    "通过",
-    "读取",
-    "做成",
-    "变成",
-    "都要",
-    "同一条",
-    "需要",
-    "可以",
-    "已经",
-    "以及",
-    "然后",
-    "接着",
-    "最后",
-    "和",
-    "与",
-    "的",
-    "了",
-]
-
-CJK_GLUE_NOISE = {
-    "我们",
-    "你们",
-    "他们",
-    "这个",
-    "那个",
-    "把",
-    "靠",
-    "读取",
-    "做成",
-    "通过",
-    "更像",
-    "的",
-    "了",
-    "是",
-    "在",
-    "和",
-    "与",
-    "或",
-    "而",
-    "但",
-}
-
-# This is not a user-facing alias table. It is a coarse source-side salience
-# filter for CJK n-grams, so automatic extraction does not turn every ordinary
-# sentence into hundreds of association terms.
-DURABLE_CJK_HINTS = {
-    "记忆",
-    "联想",
-    "召回",
-    "海马",
-    "触发",
-    "钩子",
-    "生命",
-    "自我",
-    "连续",
-    "线程",
-    "索引",
-    "压缩",
-    "归档",
-    "证据",
-    "结论",
-    "轮次",
-    "阶段",
-    "工具",
-}
 
 
 def default_associations_path(
@@ -198,148 +78,6 @@ def save_associations(path: Path, data: dict[str, Any]) -> None:
     tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8", newline="\n")
     tmp.replace(path)
-
-
-def normalize_term(value: str) -> str:
-    value = WHITESPACE_RE.sub(" ", str(value)).strip(
-        " \t\r\n\"'`.,;:!?，。；：！？、()[]{}<>《》"
-    )
-    return value
-
-
-def source_text_is_noise(text: str) -> bool:
-    stripped = "".join(text.split()).casefold()
-    if stripped in TRIVIAL_PHRASES:
-        return True
-    return any(pattern.search(text) for pattern in SOURCE_NOISE_PATTERNS)
-
-
-def ascii_term_is_simple(term: str) -> bool:
-    return bool(term) and all(ch in ASCII_BOUNDARY_CHARS for ch in term)
-
-
-def has_local_path_marker(term: str) -> bool:
-    low = term.casefold()
-    if any(marker in low for marker in ("/users/", "/home/", "/tmp/", "/var/")):
-        return True
-    return any(
-        index + 2 < len(term)
-        and term[index].isalpha()
-        and term[index + 1] == ":"
-        and term[index + 2] == "\\"
-        for index in range(len(term))
-    )
-
-
-def term_is_noise(term: str) -> bool:
-    term = normalize_term(term)
-    if not term:
-        return True
-    low = term.casefold()
-    squashed = "".join(low.split())
-    if squashed in TRIVIAL_PHRASES:
-        return True
-    if low in ASCII_STOP_TERMS:
-        return True
-    if low in {"goals", "budget", "remaining", "active", "paused", "complete"}:
-        return True
-    if has_cjk_ideograph(term):
-        if squashed in CJK_GLUE_NOISE:
-            return True
-        if any(squashed.startswith(marker) for marker in ("我们", "你们", "他们", "这个", "那个")):
-            return True
-        if len(squashed) <= 4 and any(squashed.endswith(marker) for marker in ("的", "了")):
-            return True
-        if any(marker in squashed for marker in ("更像", "读取", "做成", "通过")):
-            return True
-    if len(term) < 3 and not has_cjk_ideograph(term):
-        return True
-    if term.isdigit():
-        return True
-    if has_local_path_marker(term):
-        return True
-    return False
-
-
-def extract_ascii_terms(text: str) -> list[str]:
-    terms: list[str] = []
-    for token in re.findall(r"[A-Za-z][A-Za-z0-9_.-]{2,}", text):
-        if not term_is_noise(token):
-            terms.append(token)
-        # Domain/repo-like terms often appear in retrieved final answers as
-        # `gogram.fun`, `gotd-runtime-spike`, or `foo_bar.py`, while the user's
-        # later prompt naturally says only `gogram` or `gotd`. Add conservative
-        # component aliases so ambient recall can smell those proper nouns
-        # without hand-maintained query aliases.
-        if re.search(r"[._-]", token):
-            for part in re.split(r"[._-]+", token):
-                part = normalize_term(part)
-                if len(part) >= 4 and not term_is_noise(part):
-                    terms.append(part)
-    return terms
-
-
-def component_aliases(term: str) -> list[str]:
-    if not re.search(r"[._-]", term):
-        return []
-    aliases: list[str] = []
-    for part in re.split(r"[._-]+", term):
-        part = normalize_term(part)
-        if len(part) >= 4 and not term_is_noise(part):
-            aliases.append(part)
-    return unique_preserve(aliases, limit=6)
-
-
-def extract_cjk_terms(text: str) -> list[str]:
-    terms: list[str] = []
-    sequences = iter_cjk_sequences(text, min_len=3, max_len=48)
-    boundary_pattern = "|".join(
-        re.escape(word) for word in sorted(CJK_BOUNDARY_WORDS, key=len, reverse=True)
-    )
-    for seq in sequences:
-        if source_text_is_noise(seq):
-            continue
-        for phrase in re.split(boundary_pattern, seq):
-            phrase = normalize_term(phrase)
-            if 3 <= len(phrase) <= 12:
-                if not term_is_noise(phrase):
-                    terms.append(phrase)
-            if len(phrase) > 12:
-                # Long Chinese clauses need one useful handle, not every
-                # possible n-gram. Keep durable hints as a ranking/selection
-                # aid by opening a small local window around them, so the
-                # association map stays sparse while still preserving phrases
-                # like "进入被动联想范围" from clean-source fallback rows.
-                for hint in DURABLE_CJK_HINTS:
-                    index = phrase.find(hint)
-                    if index < 0:
-                        continue
-                    start = max(0, index - 4)
-                    end = min(len(phrase), index + len(hint) + 2)
-                    term = normalize_term(phrase[start:end])
-                    if 3 <= len(term) <= 12 and not term_is_noise(term):
-                        terms.append(term)
-    return terms
-
-
-def term_rank(term: str) -> tuple[int, int, str]:
-    cjk_bonus = 3 if has_cjk_ideograph(term) else 0
-    durable_bonus = 4 if any(hint in term for hint in DURABLE_CJK_HINTS) else 0
-    tech_bonus = 2 if re.search(r"[A-Z][A-Za-z]+|[._-]", term) else 0
-    return (durable_bonus + tech_bonus + cjk_bonus, min(len(term), 24), term.casefold())
-
-
-def extract_terms_from_text(text: str, *, limit: int = MAX_TERMS_PER_SOURCE) -> list[str]:
-    if not text or source_text_is_noise(text):
-        return []
-    terms = extract_ascii_terms(text) + extract_cjk_terms(text)
-    terms = unique_preserve([term for term in terms if not term_is_noise(term)], limit=None)
-    terms.sort(key=term_rank, reverse=True)
-    selected = terms[:limit]
-    aliases: list[str] = []
-    for term in selected:
-        aliases.extend(component_aliases(term))
-    return unique_preserve(selected + aliases, limit=limit + 8)
 
 
 def source_record(
@@ -431,7 +169,7 @@ def add_association(
         item["threads"] = item["threads"][:8]
 
 
-def sqlite_final_messages(sqlite_path: Path, limit: int) -> list[dict[str, Any]]:
+def sqlite_source_messages(sqlite_path: Path, limit: int) -> list[dict[str, Any]]:
     if not sqlite_path.is_file():
         return []
     con = sqlite3.connect(sqlite_path)
@@ -441,8 +179,8 @@ def sqlite_final_messages(sqlite_path: Path, limit: int) -> list[dict[str, Any]]
             """
             SELECT line, role, phase, turn_index, text
             FROM messages
-            WHERE role = 'assistant'
-              AND (phase = 'final_answer' OR is_final = 1)
+            WHERE role = 'user'
+               OR (role = 'assistant' AND (phase = 'final_answer' OR is_final = 1))
             ORDER BY id DESC
             LIMIT ?
             """,
@@ -455,7 +193,7 @@ def sqlite_final_messages(sqlite_path: Path, limit: int) -> list[dict[str, Any]]
         con.close()
 
 
-def clean_source_final_messages(messages_path: Path, limit: int) -> list[dict[str, Any]]:
+def clean_source_messages(messages_path: Path, limit: int) -> list[dict[str, Any]]:
     if not messages_path.exists():
         return []
     rows: list[dict[str, Any]] = []
@@ -465,26 +203,70 @@ def clean_source_final_messages(messages_path: Path, limit: int) -> list[dict[st
                 item = json.loads(line)
             except json.JSONDecodeError:
                 continue
-            if item.get("role") != "assistant":
-                continue
-            if not (item.get("is_final") or item.get("phase") == "final_answer"):
+            role = item.get("role")
+            if role != "user" and not (
+                role == "assistant" and (item.get("is_final") or item.get("phase") == "final_answer")
+            ):
                 continue
             rows.append(
                 {
                     "line": item.get("source_line"),
                     "role": item.get("role"),
-                    "phase": item.get("phase") or "final_answer",
+                    "phase": item.get("phase") or ("user" if role == "user" else "final_answer"),
                     "turn_index": item.get("turn_index"),
                     "text": item.get("text") or "",
-                    "source": "clean_source_final_answer",
+                    "source": "clean_source_user_turn" if role == "user" else "clean_source_final_answer",
                 }
             )
     rows.sort(key=lambda item: int(item.get("line") or 0), reverse=True)
     return rows[: max(1, int(limit))]
 
 
+def source_messages_for_entry(entry: dict[str, Any], limit: int) -> list[dict[str, Any]]:
+    paths = entry.get("paths") or {}
+    sqlite_path = Path(paths.get("sqlite") or "")
+    messages = sqlite_source_messages(sqlite_path, limit)
+    if messages:
+        return messages
+    clean_messages = paths.get("clean_source_messages_jsonl")
+    return clean_source_messages(Path(clean_messages), limit) if clean_messages else []
+
+
+def phrase_mining_rows(
+    entry_messages: list[tuple[dict[str, Any], list[dict[str, Any]]]],
+    *,
+    max_messages_per_thread: int = DEFAULT_MAX_PHRASE_MINING_MESSAGES_PER_THREAD,
+    max_rows: int = DEFAULT_MAX_PHRASE_MINING_ROWS,
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for entry, messages in entry_messages:
+        thread_key = str(entry.get("thread_key") or entry.get("title") or "")
+        for index, message in enumerate(messages[: max(0, int(max_messages_per_thread))]):
+            if len(rows) >= max_rows:
+                return rows
+            text = str(message.get("text") or "")
+            if not text:
+                continue
+            doc_line = message.get("line") or message.get("turn_index") or index
+            rows.append(
+                {
+                    "text": text,
+                    "thread_key": thread_key,
+                    "document_id": f"{thread_key}:{doc_line}",
+                    "role": message.get("role"),
+                }
+            )
+    return rows
+
+
 def collect_from_entry(
-    entry: dict[str, Any], terms: dict[str, dict[str, Any]], *, max_messages_per_thread: int
+    entry: dict[str, Any],
+    terms: dict[str, dict[str, Any]],
+    *,
+    max_messages_per_thread: int,
+    diagnostics: dict[str, int] | None = None,
+    messages: list[dict[str, Any]] | None = None,
+    corpus_cjk_phrases: dict[str, dict[str, Any]] | None = None,
 ) -> None:
     curated = unique_preserve(
         list(entry.get("anchor_titles") or []) + list(entry.get("keywords") or []),
@@ -502,18 +284,25 @@ def collect_from_entry(
             confidence=0.95,
         )
 
-    paths = entry.get("paths") or {}
-    sqlite_path = Path(paths.get("sqlite") or "")
-    messages = sqlite_final_messages(sqlite_path, max_messages_per_thread)
-    if not messages:
-        clean_messages = paths.get("clean_source_messages_jsonl")
-        messages = (
-            clean_source_final_messages(Path(clean_messages), max_messages_per_thread)
-            if clean_messages
-            else []
-        )
+    if messages is None:
+        messages = source_messages_for_entry(entry, max_messages_per_thread)
     for message in messages:
-        source_terms = extract_terms_from_text(str(message.get("text") or ""))
+        role = str(message.get("role") or "")
+        source_terms = extract_terms_from_text(
+            str(message.get("text") or ""),
+            diagnostics=diagnostics,
+            source_role="user" if role == "user" else "assistant",
+        )
+        mined_terms = corpus_cjk_terms_for_text(
+            str(message.get("text") or ""),
+            corpus_cjk_phrases,
+            limit=6,
+        )
+        if mined_terms and diagnostics is not None:
+            diagnostics["cjk_phrase_miner_attached_count"] = int(
+                diagnostics.get("cjk_phrase_miner_attached_count") or 0
+            ) + len(mined_terms)
+        source_terms = unique_preserve(source_terms + mined_terms, limit=MAX_TERMS_PER_SOURCE + 8)
         if not source_terms:
             continue
         for term in source_terms:
@@ -522,7 +311,8 @@ def collect_from_entry(
                 term,
                 related_terms=[item for item in source_terms if item != term],
                 entry=entry,
-                source=message.get("source") or "final_answer",
+                source=message.get("source")
+                or ("user_turn" if role == "user" else "final_answer"),
                 status="staging",
                 confidence=0.62,
                 line=message.get("line"),
@@ -532,12 +322,50 @@ def collect_from_entry(
 
 
 def build_associations(
-    registry_path: Path, *, max_messages_per_thread: int = DEFAULT_MAX_MESSAGES_PER_THREAD
+    registry_path: Path,
+    *,
+    max_messages_per_thread: int = DEFAULT_MAX_MESSAGES_PER_THREAD,
+    max_phrase_mining_messages_per_thread: int = DEFAULT_MAX_PHRASE_MINING_MESSAGES_PER_THREAD,
+    max_phrase_mining_rows: int = DEFAULT_MAX_PHRASE_MINING_ROWS,
+    corpus_cjk_phrase_limit: int = DEFAULT_CORPUS_CJK_PHRASE_LIMIT,
+    include_phrase_report: bool = False,
 ) -> dict[str, Any]:
     registry = load_registry(registry_path)
     terms: dict[str, dict[str, Any]] = {}
+    diagnostics: dict[str, int] = {
+        "user_turn_term_count": 0,
+        "assistant_final_term_count": 0,
+        "salient_cjk_phrase_count": 0,
+        "cjk_fragment_suppressed_count": 0,
+        "cjk_phrase_miner_attached_count": 0,
+    }
+    registry_entries = list(registry.get("threads") or [])
+    entry_messages = [
+        (entry, source_messages_for_entry(entry, max_messages_per_thread))
+        for entry in registry_entries
+    ]
+    corpus_cjk_phrases = mine_corpus_cjk_phrases(
+        phrase_mining_rows(
+            entry_messages,
+            max_messages_per_thread=max_phrase_mining_messages_per_thread,
+            max_rows=max_phrase_mining_rows,
+        ),
+        diagnostics=diagnostics,
+        limit=corpus_cjk_phrase_limit,
+    )
     for entry in registry.get("threads") or []:
-        collect_from_entry(entry, terms, max_messages_per_thread=max_messages_per_thread)
+        messages = next(
+            (items for candidate, items in entry_messages if candidate is entry),
+            None,
+        )
+        collect_from_entry(
+            entry,
+            terms,
+            max_messages_per_thread=max_messages_per_thread,
+            diagnostics=diagnostics,
+            messages=messages,
+            corpus_cjk_phrases=corpus_cjk_phrases,
+        )
 
     sorted_terms = sorted(
         terms.values(),
@@ -548,14 +376,23 @@ def build_associations(
             str(item.get("term") or "").casefold(),
         ),
     )
-    return {
+    result = {
         "schema_version": ASSOCIATION_SCHEMA_VERSION,
         "updated_at": now_utc(),
         "source_registry": str(registry_path),
         "thread_count": len(registry.get("threads") or []),
         "term_count": len(sorted_terms),
+        "diagnostics": diagnostics,
         "terms": {item["term"]: item for item in sorted_terms},
     }
+    if include_phrase_report:
+        result["phrase_mining_report"] = {
+            "schema_version": 1,
+            "candidate_count": diagnostics.get("cjk_phrase_miner_candidate_count", 0),
+            "accepted_count": diagnostics.get("cjk_phrase_miner_accepted_count", 0),
+            "phrases": corpus_cjk_phrases,
+        }
+    return result
 
 
 def ascii_tokens_for_match(text: str) -> set[str]:
@@ -646,6 +483,42 @@ def match_associations(
     return matches[:limit]
 
 
+def association_thread_count(item: dict[str, Any]) -> int:
+    return len(
+        {
+            str(source.get("thread_key") or "")
+            for source in item.get("threads") or []
+            if isinstance(source, dict) and source.get("thread_key")
+        }
+    )
+
+
+def association_is_prompt_noise(item: dict[str, Any], *, total_threads: int = 0) -> bool:
+    """Return whether a matched association should stay out of prompt ranking.
+
+    Association rows are staging navigation hints. A rare but clause-shaped CJK
+    fragment can look excellent under IDF, so the prompt path rechecks phrase
+    quality and broad fanout before `merge_association_candidates()` can boost a
+    thread. Verified curated anchors still pass unless they are explicit noise.
+    """
+
+    term = str(item.get("term") or "")
+    if term_is_noise(term):
+        return True
+    if item.get("status") == "verified":
+        return False
+    thread_count = association_thread_count(item)
+    hit_count = int(item.get("hit_count") or 0)
+    broad_floor = max(8, int(max(total_threads, 1) * 0.25))
+    if total_threads and thread_count >= broad_floor and hit_count >= broad_floor:
+        return True
+    if has_cjk_ideograph(term) and len("".join(term.split())) >= 7:
+        related = [str(value) for value in item.get("related_terms") or []]
+        if not related and thread_count <= 1:
+            return True
+    return False
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--registry")
@@ -654,6 +527,22 @@ def main() -> int:
     parser.add_argument(
         "--max-messages-per-thread", type=int, default=DEFAULT_MAX_MESSAGES_PER_THREAD
     )
+    parser.add_argument(
+        "--max-phrase-mining-messages-per-thread",
+        type=int,
+        default=DEFAULT_MAX_PHRASE_MINING_MESSAGES_PER_THREAD,
+    )
+    parser.add_argument(
+        "--max-phrase-mining-rows",
+        type=int,
+        default=DEFAULT_MAX_PHRASE_MINING_ROWS,
+    )
+    parser.add_argument(
+        "--corpus-cjk-phrase-limit",
+        type=int,
+        default=DEFAULT_CORPUS_CJK_PHRASE_LIMIT,
+    )
+    parser.add_argument("--phrase-report-output")
     parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args()
 
@@ -665,9 +554,28 @@ def main() -> int:
     output_path = (
         Path(args.output).resolve() if args.output else default_associations_path(registry_path)
     )
-    result = build_associations(registry_path, max_messages_per_thread=args.max_messages_per_thread)
-    save_associations(output_path, result)
+    result = build_associations(
+        registry_path,
+        max_messages_per_thread=args.max_messages_per_thread,
+        max_phrase_mining_messages_per_thread=args.max_phrase_mining_messages_per_thread,
+        max_phrase_mining_rows=args.max_phrase_mining_rows,
+        corpus_cjk_phrase_limit=args.corpus_cjk_phrase_limit,
+        include_phrase_report=bool(args.phrase_report_output),
+    )
+    saved_result = dict(result)
+    saved_result.pop("phrase_mining_report", None)
+    save_associations(output_path, saved_result)
+    if args.phrase_report_output:
+        report_path = Path(args.phrase_report_output).resolve()
+        report_path.parent.mkdir(parents=True, exist_ok=True)
+        report_path.write_text(
+            json.dumps(result.get("phrase_mining_report") or {}, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+            newline="\n",
+        )
     payload = {"output": str(output_path), **result}
+    if args.phrase_report_output:
+        payload["phrase_report_output"] = str(Path(args.phrase_report_output).resolve())
     if args.json_output:
         print(json.dumps(payload, ensure_ascii=False, indent=2))
     else:

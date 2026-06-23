@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.mcp import tool_handlers as mcp_tools
+from aippocampus_runtime.mcp.compact_profile import mcp_tool_result_payload
 from aippocampus_runtime.mcp.recall_navigation import NAVIGATION_SCHEMA_VERSION
 from aippocampus_runtime.ops import issue_route_quality, reopen_follow_through
 from aippocampus_runtime.ops.recall_navigation_attention import (
@@ -37,17 +38,7 @@ ARMS = (ARM_DIRECT, ARM_HOOK, ARM_PROGRESSIVE, ARM_ATTENTION_NAV)
 
 
 def _tool_payload(result: Mapping[str, Any]) -> dict[str, Any]:
-    content = result.get("content") or []
-    if not content or not isinstance(content, Sequence):
-        return {}
-    first = content[0]
-    if not isinstance(first, Mapping):
-        return {}
-    try:
-        data = json.loads(str(first.get("text") or "{}"))
-    except json.JSONDecodeError:
-        return {}
-    return data if isinstance(data, dict) else {}
+    return mcp_tool_result_payload(result)
 
 
 def _as_list(value: Any) -> list[Any]:

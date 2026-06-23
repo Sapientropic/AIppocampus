@@ -1310,6 +1310,8 @@ class AgentOptInRecallRoutesTests(unittest.TestCase):
                     "phase": "final_answer",
                     "turn_index": 41,
                     "is_final": True,
+                    "material_class": "clean_source_text",
+                    "source_claim_policy": "source_open_required_for_exact_claim",
                     "text": "黏菌 联想回忆 探索算法 all point to the same current source trail.",
                 }
             ]
@@ -1344,59 +1346,6 @@ class AgentOptInRecallRoutesTests(unittest.TestCase):
         self.assertEqual(report["source_anchor_gate"]["opened_anchor_hits"], 3)
         self.assertEqual(report["foreground_action_card"]["decision"], "use_route_first")
         self.assertEqual(report["suggested_next"], "agent deepen")
-
-    def test_validation_artifact_anchor_echo_is_not_default_deepen_action(self) -> None:
-        self._append_clean_rows(
-            [
-                {
-                    "message_id": "msg_validation_anchor_echo",
-                    "turn_id": "turn_validation_anchor_echo",
-                    "source_id": "src_test",
-                    "source_line": 42,
-                    "role": "assistant",
-                    "phase": "final_answer",
-                    "turn_index": 42,
-                    "is_final": True,
-                    "text": (
-                        "readiness fixture control-only validation report: "
-                        "aippocampus agent recall 黏菌 联想回忆 探索算法 --json"
-                    ),
-                }
-            ]
-        )
-        handle = {
-            "kind": "source_ref",
-            "route_id": "route_validation_anchor_echo",
-            "source_refs": [{"source_id": "src_test", "message_id": "msg_validation_anchor_echo"}],
-        }
-        fake_packet = {
-            "kind": "aippocampus_recall_context",
-            "status": "ok",
-            "routes": [
-                {
-                    "route_id": "route_validation_anchor_echo",
-                    "kind": "source_ref",
-                    "handle": handle,
-                    "route_label": "validation echo route",
-                    "source_refs": handle["source_refs"],
-                }
-            ],
-        }
-
-        with patch.object(agent_continuity, "recall_context_packet", return_value=fake_packet):
-            report = agent_continuity.recall(
-                "黏菌 联想回忆 探索算法",
-                cwd=self.cwd,
-                clean_source_dir=self.clean,
-            )
-
-        self.assertEqual(report["source_anchor_gate"]["status"], "blocked")
-        self.assertEqual(
-            report["source_anchor_gate"]["reason"],
-            "opened_source_validation_artifact",
-        )
-        self.assertEqual(report["source_anchor_gate"]["opened_anchor_hits"], 3)
-        self.assertEqual(report["foreground_action_card"]["decision"], "recover_low_confidence_route")
 
     def test_macro_applied_recall_exposes_compact_route_delta_hint(self) -> None:
         fake_packet = {

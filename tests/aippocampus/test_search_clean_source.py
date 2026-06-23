@@ -125,6 +125,72 @@ class SearchCleanSourceTests(unittest.TestCase):
         self.assertEqual(public["status"], "matches_need_broadened_source_search")
         self.assertEqual(public["foreground_action"]["arguments"]["scope"], "all_registered_sources")
 
+    def test_clean_source_policy_metadata_does_not_demote_real_source(self) -> None:
+        with (self.source / "messages.jsonl").open("a", encoding="utf-8", newline="\n") as f:
+            f.write(
+                json.dumps(
+                    {
+                        "id": "msg_product_memory",
+                        "source_line": 45,
+                        "role": "assistant",
+                        "phase": "final_answer",
+                        "turn_index": 4,
+                        "is_final": True,
+                        "scope_labels": ["technical_work"],
+                        "material_class": "clean_source_text",
+                        "source_claim_policy": "source_open_required_for_exact_claim",
+                        "text": "黏菌式探索可以帮助联想回忆寻找探索算法的下一条路线。",
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n"
+            )
+
+        result = search.search_clean_source(self.cwd, ["黏菌 联想回忆 探索算法"], limit=5)
+        public = search.public_search_result(
+            result,
+            query_text="黏菌 联想回忆 探索算法",
+            metadata_only=True,
+        )
+
+        self.assertEqual(result["matches"][0]["message_id"], "msg_product_memory")
+        self.assertFalse(result["matches"][0].get("artifact_demoted", False))
+        self.assertTrue(public["useful_target_hit"])
+        self.assertEqual(public["status"], "ok")
+
+    def test_private_operator_policy_metadata_is_demoted_before_search_authority(self) -> None:
+        with (self.source / "messages.jsonl").open("a", encoding="utf-8", newline="\n") as f:
+            f.write(
+                json.dumps(
+                    {
+                        "id": "msg_private_operator_echo",
+                        "source_line": 46,
+                        "role": "assistant",
+                        "phase": "final_answer",
+                        "turn_index": 4,
+                        "is_final": True,
+                        "scope_labels": ["technical_work"],
+                        "material_class": "private_operator_detail",
+                        "source_claim_policy": "not_source_evidence_without_private_reopen",
+                        "text": "黏菌 联想回忆 探索算法 出现在一次 issue-batch implementation summary 里。",
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n"
+            )
+
+        result = search.search_clean_source(self.cwd, ["黏菌 联想回忆 探索算法"], limit=5)
+        public = search.public_search_result(
+            result,
+            query_text="黏菌 联想回忆 探索算法",
+            metadata_only=True,
+        )
+
+        self.assertTrue(result["matches"][0]["artifact_demoted"])
+        self.assertEqual(result["matches"][0]["artifact_role"]["role"], "validation_or_fixture_artifact")
+        self.assertFalse(public["useful_target_hit"])
+        self.assertEqual(public["first_match_usefulness"]["status"], "demoted_artifact")
+
     def test_goal_context_control_block_is_demoted_below_real_source(self) -> None:
         with (self.source / "messages.jsonl").open("a", encoding="utf-8", newline="\n") as f:
             for message in (

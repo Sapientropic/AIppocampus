@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.mcp import server as mcp
+from aippocampus_runtime.mcp.compact_profile import mcp_tool_result_payload
 from aippocampus_runtime.source.registry_search import search_registry_sources
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -341,8 +342,7 @@ class RelationshipOriginRecallTests(unittest.TestCase):
                 "params": {"name": name, "arguments": arguments},
             }
         )
-        text = response["result"]["content"][0]["text"]
-        return json.loads(text)
+        return mcp_tool_result_payload(response["result"])
 
     def test_registry_origin_cue_demotes_generic_hippocampus_research(self) -> None:
         exact_payload = search_registry_sources(

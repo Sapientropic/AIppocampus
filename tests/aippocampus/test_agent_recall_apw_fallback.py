@@ -313,9 +313,9 @@ class AgentRecallApwFallbackTests(unittest.TestCase):
         self.assertEqual(public["foreground_action"]["arguments"]["request_index"], 1)
         self.assertEqual(public["foreground_action"]["arguments"]["recall_selector"], selector_id)
         self.assertIn("--recall-selector", public["foreground_action"]["command"])
-        self.assertIn("associative_path_opt_in_fallback", public["foreground_action"]["route_choice_posture"])
-        self.assertEqual(public["associative_path_policy"]["current_build_posture"], "semi_default_recovery")
-        self.assertTrue(public["associative_path_fallback"]["opt_in_required"])
+        self.assertNotIn("route_choice_posture", public["foreground_action"])
+        self.assertNotIn("associative_path_policy", public)
+        self.assertNotIn("associative_path_fallback", public)
         self.assertIn("search_registry_sources_for_original_cue_anchors", encoded)
         self.assertNotIn("source_refs", encoded)
         self.assertNotIn("msg-apw", encoded)
@@ -421,11 +421,8 @@ class AgentRecallApwFallbackTests(unittest.TestCase):
         self.assertEqual(action["id"], "deepen_associative_path_fallback")
         self.assertIn("APW source route", action["label"])
         self.assertIn("黏菌 / 联想回忆 / 探索算法", action["why"])
-        self.assertEqual(
-            action["apw_route_identity"]["source_ref_digest"],
-            fallback["source_ref_digest"],
-        )
-        self.assertEqual(public["associative_path_fallback"]["candidate_source_kind"], "current_clean_source")
+        self.assertNotIn("apw_route_identity", action)
+        self.assertNotIn("associative_path_fallback", public)
         self.assertNotIn("source_refs", encoded)
         self.assertNotIn("msg-clean-apw", encoded)
         self.assertEqual(executable_command_violations(public), [])
@@ -456,10 +453,7 @@ class AgentRecallApwFallbackTests(unittest.TestCase):
             request_index=int(fallback["request_index"]),
             last_recall=True,
         )
-        self.assertEqual(
-            compact_deepened["apw_route_identity"]["source_ref_digest"],
-            fallback["source_ref_digest"],
-        )
+        self.assertNotIn("apw_route_identity", compact_deepened)
         self.assertIn("黏菌 联想回忆 探索算法", compact_deepened["primary_source_snippet"]["text"])
         self.assertNotIn("<goal_context>", compact_deepened["primary_source_snippet"]["text"])
 
@@ -582,7 +576,8 @@ class AgentRecallApwFallbackTests(unittest.TestCase):
         payload = json.loads(proc.stdout)
         encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True)
         self.assertEqual(payload["foreground_action"]["id"], "deepen_associative_path_fallback")
-        self.assertEqual(payload["associative_path_fallback"]["status"], "route_candidate")
+        self.assertNotIn("associative_path_fallback", payload)
+        self.assertNotIn("associative_path_policy", payload)
         self.assertNotIn("source_refs", encoded)
         self.assertEqual(executable_command_violations(payload), [])
 
@@ -624,12 +619,9 @@ class AgentRecallApwFallbackTests(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stderr)
         payload = json.loads(proc.stdout)
         self.assertEqual(payload["foreground_action"]["id"], "deepen_associative_path_fallback")
-        self.assertEqual(
-            payload["foreground_action"]["route_choice_posture"],
-            "associative_path_semi_default_recovery",
-        )
-        self.assertEqual(payload["associative_path_policy"]["promotion_mode"], "semi_default_recovery")
-        self.assertFalse(payload["associative_path_fallback"]["opt_in_required"])
+        self.assertNotIn("route_choice_posture", payload["foreground_action"])
+        self.assertNotIn("associative_path_policy", payload)
+        self.assertNotIn("associative_path_fallback", payload)
         self.assertEqual(executable_command_violations(payload), [])
 
     def test_cli_current_clean_source_apw_fallback_uses_diagnostic_candidates(self) -> None:
@@ -681,10 +673,8 @@ class AgentRecallApwFallbackTests(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stderr)
         payload = json.loads(proc.stdout)
         encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True)
-        self.assertTrue(payload["associative_path_policy"]["apw_candidate_input_available"])
-        self.assertNotEqual(payload["associative_path_policy"]["run_reason"], "apw_candidate_input_missing")
-        self.assertEqual(payload["associative_path_fallback"]["status"], "route_candidate")
-        self.assertEqual(payload["associative_path_fallback"]["candidate_source_kind"], "current_clean_source")
+        self.assertNotIn("associative_path_policy", payload)
+        self.assertNotIn("associative_path_fallback", payload)
         self.assertEqual(payload["foreground_action"]["id"], "deepen_associative_path_fallback")
         self.assertIn("黏菌 / 联想回忆 / 探索算法", payload["foreground_action"]["why"])
         self.assertNotIn("source_refs", encoded)

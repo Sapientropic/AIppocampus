@@ -11,6 +11,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 
 from aippocampus_runtime.mcp import server as mcp
+from aippocampus_runtime.mcp.compact_profile import mcp_tool_result_payload
 from aippocampus_runtime.recall import (
     active_recall,
     ambient_cards,
@@ -43,6 +44,10 @@ from tests.aippocampus.continuity_domain_fixtures import (
 
 def _write_clean_source(clean: Path) -> None:
     write_continuity_domain_clean_source(clean)
+
+
+def _mcp_payload(response: dict) -> dict:
+    return mcp_tool_result_payload(response["result"])
 
 def _write_registry_clean_source_fixture(root: Path) -> tuple[Path, Path]:
     registry_dir = root / "registry"
@@ -364,7 +369,7 @@ class ContinuityDomainTests(unittest.TestCase):
                     },
                 }
             )
-            payload = json.loads(response["result"]["content"][0]["text"])
+            payload = _mcp_payload(response)
 
         self.assertTrue(response["result"]["isError"])
         self.assertEqual(payload["error"]["code"], "stale_recall_handle")
@@ -410,7 +415,7 @@ class ContinuityDomainTests(unittest.TestCase):
                     },
                 }
             )
-            payload = json.loads(response["result"]["content"][0]["text"])
+            payload = _mcp_payload(response)
 
         self.assertEqual(active["surface_counts"]["continuity_domains"], 0)
         self.assertNotIn("continuity_domain", {route.get("kind") for route in active["source_reopen_routes"]})
@@ -437,7 +442,7 @@ class ContinuityDomainTests(unittest.TestCase):
                     },
                 }
             )
-            context_payload = json.loads(context_response["result"]["content"][0]["text"])
+            context_payload = _mcp_payload(context_response)
             raw_context = json.dumps(context_payload, ensure_ascii=False)
             handle = context_payload["routes"][0]["handle"]
 
@@ -457,7 +462,7 @@ class ContinuityDomainTests(unittest.TestCase):
                     },
                 }
             )
-            deepen_payload = json.loads(deepen_response["result"]["content"][0]["text"])
+            deepen_payload = _mcp_payload(deepen_response)
 
         self.assertEqual(context_payload["routes"][0]["kind"], "continuity_domain")
         self.assertEqual(context_payload["routes"][0]["suggested_next"]["tool"], "recall_deepen")
@@ -506,7 +511,7 @@ class ContinuityDomainTests(unittest.TestCase):
                     },
                 }
             )
-            context_payload = json.loads(context_response["result"]["content"][0]["text"])
+            context_payload = _mcp_payload(context_response)
             pathlet_route = next(
                 route for route in context_payload["routes"] if route.get("kind") == "pathlet"
             )
@@ -525,7 +530,7 @@ class ContinuityDomainTests(unittest.TestCase):
                     },
                 }
             )
-            deepen_payload = json.loads(deepen_response["result"]["content"][0]["text"])
+            deepen_payload = _mcp_payload(deepen_response)
 
         self.assertEqual(pathlet_route["suggested_next"]["tool"], "recall_deepen")
         self.assertEqual(pathlet_route["action_grammar"], "reopenable_route")
@@ -561,7 +566,7 @@ class ContinuityDomainTests(unittest.TestCase):
                     },
                 }
             )
-            context_payload = json.loads(context_response["result"]["content"][0]["text"])
+            context_payload = _mcp_payload(context_response)
 
         self.assertEqual(context_payload["status"], "no_routes")
         self.assertEqual(context_payload["continuity_route_status"]["snapshot_status"], "missing")
@@ -590,7 +595,7 @@ class ContinuityDomainTests(unittest.TestCase):
                     },
                 }
             )
-            payload = json.loads(response["result"]["content"][0]["text"])
+            payload = _mcp_payload(response)
 
         self.assertTrue(response["result"]["isError"])
         self.assertEqual(payload["error"]["code"], "malformed_recall_handle")
@@ -621,7 +626,7 @@ class ContinuityDomainTests(unittest.TestCase):
                     },
                 }
             )
-            payload = json.loads(response["result"]["content"][0]["text"])
+            payload = _mcp_payload(response)
 
         self.assertTrue(response["result"]["isError"])
         self.assertEqual(payload["error"]["code"], "malformed_recall_handle")
@@ -662,7 +667,7 @@ class ContinuityDomainTests(unittest.TestCase):
                     },
                 }
             )
-            payload = json.loads(response["result"]["content"][0]["text"])
+            payload = _mcp_payload(response)
 
         self.assertTrue(response["result"]["isError"])
         self.assertEqual(payload["error"]["code"], "continuity_domain_blocked")
@@ -693,7 +698,7 @@ class ContinuityDomainTests(unittest.TestCase):
                         },
                     }
                 )
-                payload = json.loads(response["result"]["content"][0]["text"])
+                payload = _mcp_payload(response)
 
                 self.assertTrue(response["result"]["isError"])
                 self.assertEqual(payload["error"]["code"], "continuity_domain_blocked")
@@ -779,7 +784,7 @@ class ContinuityDomainTests(unittest.TestCase):
                     },
                 }
             )
-            context_payload = json.loads(context_response["result"]["content"][0]["text"])
+            context_payload = _mcp_payload(context_response)
             deepen_response = mcp.handle_request(
                 {
                     "jsonrpc": "2.0",
@@ -798,7 +803,7 @@ class ContinuityDomainTests(unittest.TestCase):
                     },
                 }
             )
-            deepen_payload = json.loads(deepen_response["result"]["content"][0]["text"])
+            deepen_payload = _mcp_payload(deepen_response)
 
         self.assertEqual(deepen_payload["status"], "ok")
         self.assertEqual(deepen_payload["source_refs"][0]["thread_key"], "foreign-thread")
@@ -888,7 +893,7 @@ class ContinuityDomainTests(unittest.TestCase):
                     },
                 }
             )
-            context_payload = json.loads(context_response["result"]["content"][0]["text"])
+            context_payload = _mcp_payload(context_response)
             deepen_response = mcp.handle_request(
                 {
                     "jsonrpc": "2.0",
@@ -907,7 +912,7 @@ class ContinuityDomainTests(unittest.TestCase):
                     },
                 }
             )
-            deepen_payload = json.loads(deepen_response["result"]["content"][0]["text"])
+            deepen_payload = _mcp_payload(deepen_response)
             encoded_window = json.dumps(deepen_payload["source_window"], ensure_ascii=False)
 
         self.assertIn("FOREIGN THREAD TEXT", encoded_window)
@@ -983,7 +988,7 @@ class ContinuityDomainTests(unittest.TestCase):
                     },
                 }
             )
-            context_payload = json.loads(context_response["result"]["content"][0]["text"])
+            context_payload = _mcp_payload(context_response)
             write_jsonl(
                 foreign_messages,
                 [
@@ -1016,7 +1021,7 @@ class ContinuityDomainTests(unittest.TestCase):
                     },
                 }
             )
-            payload = json.loads(deepen_response["result"]["content"][0]["text"])
+            payload = _mcp_payload(deepen_response)
 
         self.assertTrue(deepen_response["result"]["isError"])
         self.assertEqual(payload["error"]["code"], "stale_recall_handle")
@@ -1094,7 +1099,7 @@ class ContinuityDomainTests(unittest.TestCase):
                     },
                 }
             )
-            context_payload = json.loads(context_response["result"]["content"][0]["text"])
+            context_payload = _mcp_payload(context_response)
             deepen_response = mcp.handle_request(
                 {
                     "jsonrpc": "2.0",
@@ -1112,7 +1117,7 @@ class ContinuityDomainTests(unittest.TestCase):
                     },
                 }
             )
-            payload = json.loads(deepen_response["result"]["content"][0]["text"])
+            payload = _mcp_payload(deepen_response)
 
         self.assertFalse(deepen_response["result"]["isError"])
         self.assertEqual(payload["status"], "ok")

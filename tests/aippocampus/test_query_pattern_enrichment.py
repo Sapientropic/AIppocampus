@@ -282,6 +282,45 @@ class QueryPatternEnrichmentTests(unittest.TestCase):
         self.assertNotIn("旧 generation", encoded)
         self.assertNotIn("上次那个海马体预热", json.dumps(packet, ensure_ascii=False))
 
+    def test_generic_high_fanout_registry_aliases_do_not_select_hot_path_routes(self) -> None:
+        routes = [
+            {
+                "query_pattern_route_id": f"route-generic-{index}",
+                "query_aliases": ["AIppocampus", "source", "plugin", "maintenance"],
+                "alias_source": "registry_metadata",
+                "source_refs": [{"thread_key": f"session:{index}", "message_id": "m"}],
+                "confidence": 0.91,
+            }
+            for index in range(12)
+        ]
+
+        packet = select_query_pattern_packet("source 这个问题怎么处理", routes)
+
+        self.assertEqual(packet["decision"], "skip")
+        self.assertEqual(packet["selected_count"], 0)
+        self.assertEqual(packet["diagnostics"]["cache_hit_count"], 12)
+        self.assertGreater(packet["diagnostics"]["generic_alias_demoted_count"], 0)
+        self.assertGreater(packet["diagnostics"]["suppressed_high_fanout_alias_count"], 0)
+        self.assertEqual(packet["diagnostics"]["selected_distinctive_alias_count"], 0)
+
+    def test_distinctive_registry_aliases_can_still_select_query_pattern_routes(self) -> None:
+        packet = select_query_pattern_packet(
+            "机械飞升和海马体",
+            [
+                {
+                    "query_pattern_route_id": "route-mechanical-ascension",
+                    "query_aliases": ["机械飞升", "海马体"],
+                    "source_refs": [{"thread_key": "session:mechanical", "message_id": "m"}],
+                    "confidence": 0.91,
+                }
+            ],
+        )
+
+        self.assertEqual(packet["decision"], "scent")
+        self.assertEqual(packet["selected_count"], 1)
+        self.assertEqual(packet["candidate_refs"][0]["thread_key"], "session:mechanical")
+        self.assertEqual(packet["diagnostics"]["selected_distinctive_alias_count"], 2)
+
     def test_registry_query_pattern_sidecar_publishes_default_routes_without_public_aliases(
         self,
     ) -> None:

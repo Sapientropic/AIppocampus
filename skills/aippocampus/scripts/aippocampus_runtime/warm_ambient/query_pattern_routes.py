@@ -23,6 +23,12 @@ from aippocampus_runtime.artifacts.publish import artifact_lease
 from aippocampus_runtime.core import sanitize_external_model_text
 from aippocampus_runtime.ops.route_readiness import safe_source_refs
 from aippocampus_runtime.registry.api import unique_preserve
+from aippocampus_runtime.warm_ambient.query_pattern_alias_hygiene import (
+    alias_fanout as _alias_fanout,
+)
+from aippocampus_runtime.warm_ambient.query_pattern_alias_hygiene import (
+    route_match_quality,
+)
 
 QUERY_PATTERN_ROUTE_KIND = "aippocampus_query_pattern_route"
 QUERY_PATTERN_PACKET_KIND = "aippocampus_query_pattern_route_packet"
@@ -879,22 +885,6 @@ def _query_terms(prompt: str) -> list[str]:
     return unique_preserve(terms, limit=32)
 
 
-def _matched(route: dict[str, Any], query_terms: list[str]) -> bool:
-    aliases = [
-        re.sub(r"[\s\-_]+", " ", str(alias or "").casefold()).strip()
-        for alias in route.get("query_aliases") or []
-    ]
-    aliases = [alias for alias in aliases if alias]
-    for term in query_terms:
-        query = re.sub(r"[\s\-_]+", " ", term).strip()
-        if not query:
-            continue
-        for alias in aliases:
-            if alias in query or query in alias:
-                return True
-    return False
-
-
 def _empty_packet(diagnostics: dict[str, Any]) -> dict[str, Any]:
     _alias_quality_rates(diagnostics)
     return {
@@ -933,6 +923,9 @@ def _diagnostics() -> dict[str, Any]:
         "privacy_suppressed_count": 0,
         "low_confidence_suppressed_count": 0,
         "missing_source_ref_count": 0,
+        "suppressed_high_fanout_alias_count": 0,
+        "generic_alias_demoted_count": 0,
+        "selected_distinctive_alias_count": 0,
         "live_llm_call_count": 0,
         "alias_text_publicly_serialized": False,
         "output_boundary": "query_pattern_packet_no_raw_alias_text",
@@ -950,18 +943,34 @@ def select_query_pattern_packet(
     normalized_routes = [normalize_query_pattern_route(route) for route in routes]
     now_value = time.time() if now_unix is None else now_unix
     terms = _query_terms(prompt)
+    fanout = _alias_fanout(normalized_routes)
     diagnostics = _diagnostics()
-    scored: list[tuple[float, dict[str, Any]]] = []
+    scored: list[tuple[float, int, dict[str, Any]]] = []
 
     for route in normalized_routes:
         diagnostics["route_seen_count"] += 1
-        if not _matched(route, terms):
+        quality = route_match_quality(
+            route,
+            terms,
+            alias_fanout_counts=fanout,
+            route_count=len(normalized_routes),
+            registry_alias_source=REGISTRY_ALIAS_SOURCE,
+            unspecified_alias_source=UNSPECIFIED_ALIAS_SOURCE,
+        )
+        if not quality["matched"]:
             continue
         diagnostics["cache_hit_count"] += 1
         alias_source = str(route.get("alias_source") or UNSPECIFIED_ALIAS_SOURCE)
         _increment_count(diagnostics["cache_hit_count_by_alias_source"], alias_source)
         if _has_multilingual_alias(route):
             diagnostics["multilingual_alias_route_hit_count"] += 1
+        diagnostics["generic_alias_demoted_count"] += int(quality["generic_alias_count"])
+        diagnostics["suppressed_high_fanout_alias_count"] += int(
+            quality["high_fanout_alias_count"]
+        )
+        distinctive_count = int(quality["distinctive_alias_count"])
+        if distinctive_count <= 0:
+            continue
         ttl_remaining = _ttl_remaining(route, now_unix=now_value)
         if route.get("state") in STALE_STATES or (ttl_remaining is not None and ttl_remaining <= 0):
             diagnostics["stale_suppressed_count"] += 1
@@ -976,7 +985,7 @@ def select_query_pattern_packet(
         if confidence < min_confidence:
             diagnostics["low_confidence_suppressed_count"] += 1
             continue
-        scored.append((confidence, route))
+        scored.append((confidence, distinctive_count, route))
 
     if diagnostics["cache_hit_count"] == 0:
         diagnostics["cache_miss_count"] = 1
@@ -985,8 +994,11 @@ def select_query_pattern_packet(
     if not scored:
         return _empty_packet(diagnostics)
 
-    scored.sort(key=lambda item: (item[0], str(item[1].get("query_pattern_route_id"))), reverse=True)
-    selected = [route for _, route in scored[: max(0, int(max_routes))]]
+    scored.sort(
+        key=lambda item: (item[0], item[1], str(item[2].get("query_pattern_route_id"))),
+        reverse=True,
+    )
+    selected = [route for _, _distinctive, route in scored[: max(0, int(max_routes))]]
     refs: list[dict[str, Any]] = []
     for route in selected:
         refs.extend(route.get("source_refs") or [])
@@ -995,6 +1007,9 @@ def select_query_pattern_packet(
             str(route.get("alias_source") or UNSPECIFIED_ALIAS_SOURCE),
         )
     diagnostics["selected_count"] = len(selected)
+    diagnostics["selected_distinctive_alias_count"] = sum(
+        distinctive for _confidence, distinctive, route in scored[: max(0, int(max_routes))]
+    )
     _alias_quality_rates(diagnostics)
     return {
         "kind": QUERY_PATTERN_PACKET_KIND,

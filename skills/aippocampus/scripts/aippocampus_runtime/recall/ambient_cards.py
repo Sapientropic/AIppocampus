@@ -13,6 +13,7 @@ import re
 from typing import Any
 
 from aippocampus_runtime.core import compact_text, sanitize_external_model_text
+from aippocampus_runtime.recall.ambient_card_hygiene import demote_no_ref_active_cards
 from aippocampus_runtime.recall.ambient_policy import policy_payload_for_working_memory
 from aippocampus_runtime.recall.authority import with_authority_fields, with_trust_fields
 from aippocampus_runtime.recall.continuity_domains import CONTINUITY_DOMAIN_POINTER_KIND
@@ -104,6 +105,19 @@ def _clean_source_ref(ref: dict[str, Any], *, fallback_thread: str = "", fallbac
         "message_id": ref.get("message_id"),
     }
     return {key: value for key, value in clean.items() if value not in {None, ""}}
+
+
+def _source_ref_from_item(item: dict[str, Any]) -> dict[str, Any]:
+    if not any(
+        item.get(key) not in (None, "")
+        for key in ("thread_key", "source_id", "message_id", "turn_id", "turn_index", "line")
+    ):
+        return {}
+    return _clean_source_ref(
+        item,
+        fallback_thread=str(item.get("thread_key") or ""),
+        fallback_title=str(item.get("title") or ""),
+    )
 
 
 def _brief_tokens(text: str) -> set[str]:
@@ -596,6 +610,7 @@ def _candidate_card(item: dict[str, Any], *, support_level: str = SCENT) -> dict
     theme = _theme_from_item(item, "related prior context")
     nudge_theme = safe_nudge_topic(theme)
     terms = _clean_terms(item.get("matched_terms") or item.get("keywords") or [])
+    ref = _source_ref_from_item(item)
     return with_card_provenance({
         "card_id": _stable_id([support_level, theme, item.get("thread_key"), ",".join(terms)]),
         "theme": theme,
@@ -606,7 +621,7 @@ def _candidate_card(item: dict[str, Any], *, support_level: str = SCENT) -> dict
         "nudge": f"This may touch the old thread around {nudge_theme}.",
         "key_line": str((item.get("anchors") or [""])[0] or ""),
         "matched_terms": terms,
-        "source_refs": [],
+        "source_refs": [ref] if ref else [],
         "expand_if": "User asks for memory, exact context, or source-backed support.",
     }, DETERMINISTIC_CUE)
 
@@ -798,6 +813,7 @@ def ambient_recall_from_decision(
             if isinstance(card, dict)
         )
 
+    cards, no_ref_diagnostics = demote_no_ref_active_cards(cards, prompt=prompt)
     cards, brief_precision = _rank_cards_for_brief(cards, prompt=prompt)
     cards = _dedupe_cards(cards, limit=max(0, max_cards))
     mode = _mode_for_cards(decision, cards)
@@ -811,7 +827,7 @@ def ambient_recall_from_decision(
         "avoid": list(DEFAULT_AVOID),
         "latency_ms": result.get("elapsed_ms"),
         "cache_status": effective_cache_status,
-        "brief_precision": brief_precision,
+        "brief_precision": {**brief_precision, **no_ref_diagnostics},
         "late_update_policy": "warm_scouts_deferred",
         "late_warm_handoff": {
             "default_path": "next_turn_thread_cache",

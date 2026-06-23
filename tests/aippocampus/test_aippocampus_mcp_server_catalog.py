@@ -71,7 +71,10 @@ class AippocampusMcpServerCatalogTests(unittest.TestCase):
         self.tmp.cleanup()
 
     def tool_payload(self, response: dict) -> dict:
-        text = response["result"]["content"][0]["text"]
+        result = response["result"]
+        if isinstance(result.get("structuredContent"), dict):
+            return result["structuredContent"]
+        text = result["content"][0]["text"]
         return json.loads(text)
 
     def call_tool_payload(self, name: str, arguments: dict[str, object]) -> dict:
@@ -328,13 +331,16 @@ class AippocampusMcpServerCatalogTests(unittest.TestCase):
         payload = self.tool_payload(recall_response)
         encoded = json.dumps(payload, ensure_ascii=False)
         self.assertFalse(recall_response["result"].get("isError", False), payload)
+        self.assertIn("structuredContent", recall_response["result"])
+        self.assertEqual(recall_response["result"]["structuredContent"], payload)
+        self.assertFalse(recall_response["result"]["content"][0]["text"].lstrip().startswith("{"))
+        self.assertLessEqual(len(recall_response["result"]["content"][0]["text"]), 360)
         self.assertEqual(payload["kind"], "aippocampus_agent_continuity_path")
         self.assertEqual(payload["mode"], "recall")
         self.assertEqual(payload["surface"], "mcp_agent_recall_compact")
         self.assertNotIn("opt_in_required", payload)
         self.assertIn("apw_recovery_state", payload)
-        self.assertEqual(payload["runtime_provenance"]["runtime"], "mcp_stdio_handler")
-        self.assertTrue(payload["runtime_provenance"]["clean_source_available"])
+        self.assertNotIn("runtime_provenance", payload)
         self.assertEqual(payload["schema_version"], "agent-continuity-path-v1")
         self.assertEqual(payload["detail"], "compact")
         self.assertNotIn("output_boundary", payload)
@@ -361,6 +367,9 @@ class AippocampusMcpServerCatalogTests(unittest.TestCase):
         self.assertLessEqual(len(payload), 20)
         self.assertLessEqual(field_path_count(payload), 120)
         self.assertNotIn("policy_boundary", payload)
+        self.assertNotIn("operator_detail_command", payload)
+        self.assertNotIn("associative_path_policy", payload)
+        self.assertNotIn("source_anchor_gate", payload)
         self.assertNotIn(str(self.cwd), encoded)
 
         deepen_response = mcp.handle_request(
@@ -377,6 +386,8 @@ class AippocampusMcpServerCatalogTests(unittest.TestCase):
         deepen_payload = self.tool_payload(deepen_response)
         deepen_encoded = json.dumps(deepen_payload, ensure_ascii=False)
         self.assertFalse(deepen_response["result"].get("isError", False), deepen_payload)
+        self.assertIn("structuredContent", deepen_response["result"])
+        self.assertFalse(deepen_response["result"]["content"][0]["text"].lstrip().startswith("{"))
         self.assertEqual(deepen_payload["mode"], "deepen")
         self.assertEqual(deepen_payload["status"], "ok")
         self.assertEqual(deepen_payload["detail"], "compact")
@@ -722,6 +733,7 @@ class AippocampusMcpServerCatalogTests(unittest.TestCase):
                         "query": "vague continuity cue",
                         "run_semantic_gate": True,
                         "semantic": "on",
+                        "detail": "full",
                     }
                 )
         finally:

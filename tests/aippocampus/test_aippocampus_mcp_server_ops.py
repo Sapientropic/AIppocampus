@@ -76,6 +76,9 @@ class AippocampusMcpServerOpsTests(unittest.TestCase):
         self.tmp.cleanup()
 
     def tool_payload(self, response: dict) -> dict:
+        structured = response["result"].get("structuredContent")
+        if isinstance(structured, dict):
+            return structured
         text = response["result"]["content"][0]["text"]
         return json.loads(text)
 
@@ -503,11 +506,14 @@ class AippocampusMcpServerOpsTests(unittest.TestCase):
         encoded = json.dumps(payload, ensure_ascii=False)
 
         self.assertFalse(response["result"].get("isError", False), payload)
+        self.assertIn("structuredContent", response["result"])
+        self.assertFalse(response["result"]["content"][0]["text"].lstrip().startswith("{"))
         self.assertTrue(payload["ok"])
         self.assertEqual(payload["status"], "ok")
         self.assertEqual(payload["kind"], "aippocampus_search_result")
+        self.assertEqual(payload["detail"], "compact")
+        self.assertEqual(payload["surface"], "mcp_search_memory_compact")
         self.assertEqual(payload["entry_state"], "explicit_search_invoked")
-        self.assertEqual(payload["claim_permission"], "capped_search_snippet_no_claim_before_reopen")
         self.assertEqual(payload["source_boundary"]["authority"], "reopenable_route")
         self.assertTrue(payload["source_boundary"]["capped_snippets_are_bounded_receipts"])
         self.assertEqual(payload["foreground_action"]["id"], "recall_context_from_search")
@@ -516,7 +522,9 @@ class AippocampusMcpServerOpsTests(unittest.TestCase):
         self.assertEqual(payload["foreground_action"]["claim_boundary"], "source_reopen_required_before_claim")
         self.assertIsInstance(payload["foreground_action"], dict)
         self.assertIn("foreground_action", payload)
-        self.assertNotIn(payload["foreground_action"], payload["safe_next_actions"])
+        self.assertNotIn(payload["foreground_action"], payload.get("safe_next_actions", []))
+        self.assertNotIn("runtime_provenance", payload)
+        self.assertNotIn("output_boundary", payload)
         self.assertNotIn(str(self.cwd), encoded)
 
     def test_memory_health_runs_in_process_for_frozen_binary_entrypoints(self) -> None:
@@ -643,6 +651,8 @@ class AippocampusMcpServerOpsTests(unittest.TestCase):
 
         payload = self.tool_payload(response)
         encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertIn("structuredContent", response["result"])
+        self.assertFalse(response["result"]["content"][0]["text"].lstrip().startswith("{"))
         self.assertEqual(payload["detail"], "compact")
         self.assertEqual(payload["kind"], "aippocampus_health_card")
         self.assertEqual(payload["ok"], False)
@@ -662,6 +672,8 @@ class AippocampusMcpServerOpsTests(unittest.TestCase):
         self.assertEqual(executable_command_violations(payload), [])
         self.assertNotIn(str(self.cwd), encoded)
         self.assertNotIn("debug", encoded)
+        self.assertNotIn("runtime_provenance", payload)
+        self.assertNotIn("operator_detail_command", payload)
         self.assertNotIn("checks", payload)
         self.assertNotIn("recommended_actions", payload)
         self.assertNotIn("freshness", payload)
@@ -689,6 +701,8 @@ class AippocampusMcpServerOpsTests(unittest.TestCase):
         self.assertFalse(response["result"].get("isError", False))
         payload = self.tool_payload(response)
         encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertIn("structuredContent", response["result"])
+        self.assertFalse(response["result"]["content"][0]["text"].lstrip().startswith("{"))
         self.assertEqual(payload["kind"], "aippocampus_memory_health_recovery")
         self.assertFalse(payload["ok"])
         self.assertEqual(payload["status"], "degraded")
@@ -700,6 +714,7 @@ class AippocampusMcpServerOpsTests(unittest.TestCase):
         self.assertEqual(payload["foreground_action"]["tool_name"], "agent_recall")
         self.assertEqual(payload["safe_next_actions"][0]["tool_name"], "agent_deepen")
         self.assertEqual(executable_command_violations(payload), [])
+        self.assertNotIn("runtime_provenance", payload)
         self.assertNotIn(str(self.cwd), encoded)
 
     def test_agent_recall_import_failure_returns_foreground_runtime_recovery_card(self) -> None:
@@ -786,7 +801,9 @@ class AippocampusMcpServerOpsTests(unittest.TestCase):
         self.assertEqual([item["id"] for item in responses], [1, 2, 3])
         tool_names = {tool["name"] for tool in responses[1]["result"]["tools"]}
         self.assertIn("search_memory", tool_names)
-        payload = json.loads(responses[2]["result"]["content"][0]["text"])
+        payload = responses[2]["result"].get("structuredContent")
+        if not isinstance(payload, dict):
+            payload = json.loads(responses[2]["result"]["content"][0]["text"])
         self.assertEqual(payload["matches"][0]["message_id"], "msg_final")
 
 if __name__ == "__main__":
