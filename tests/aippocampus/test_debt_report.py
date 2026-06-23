@@ -269,6 +269,7 @@ class DebtReportTests(unittest.TestCase):
         self.assertIn("helper_duplication", report)
         self.assertIn("broad_exception_debt", report)
         self.assertIn("compact_debug_field_leaks", report)
+        self.assertIn("instruction_surface_debt", report)
         self.assertIn("giant_hot_path_functions", report)
         self.assertIn("test_debt_indicators", report)
         helper_families = {
@@ -295,9 +296,13 @@ class DebtReportTests(unittest.TestCase):
         self.assertEqual(clean["status"], "pass")
 
         projection_owner = debt_report.changed_surface_debt(
-            ["skills/aippocampus/scripts/aippocampus_runtime/mcp/agent_deepen_projection.py"]
+            ["skills/aippocampus/scripts/aippocampus_runtime/mcp/agent_recall_projection.py"]
         )
         self.assertEqual(projection_owner["status"], "pass")
+        self.assertEqual(
+            projection_owner["instruction_surface"]["classified_file_count"],
+            1,
+        )
 
         changed = debt_report.changed_surface_debt(
             ["skills/aippocampus/scripts/aippocampus_runtime/ops/recall_navigation_attention.py"]

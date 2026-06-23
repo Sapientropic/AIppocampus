@@ -11,16 +11,29 @@ from collections import Counter
 from functools import lru_cache
 from pathlib import Path
 
+try:
+    from tools.aippocampus.docs.instruction_surface import (
+        COMPACT_DEBUG_FIELD_LITERALS,
+        INSTRUCTION_SURFACE_POLICY_DOC,
+        changed_file_instruction_surface,
+        changed_file_instruction_surface_warning,
+        instruction_surface_classification,
+        instruction_surface_inventory,
+    )
+except ModuleNotFoundError:
+    from instruction_surface import (
+        COMPACT_DEBUG_FIELD_LITERALS,
+        INSTRUCTION_SURFACE_POLICY_DOC,
+        changed_file_instruction_surface,
+        changed_file_instruction_surface_warning,
+        instruction_surface_classification,
+        instruction_surface_inventory,
+    )
+
 REPO_ROOT = Path(__file__).resolve().parents[3]
-ARCHITECTURE_DEBT_REGISTER = (
-    REPO_ROOT / "docs" / "architecture" / "architecture-debt-register.md"
-)
+ARCHITECTURE_DEBT_REGISTER = REPO_ROOT / "docs" / "architecture" / "architecture-debt-register.md"
 ARCHITECTURE_DEBT_SNAPSHOT = (
-    REPO_ROOT
-    / "docs"
-    / "evidence"
-    / "reports"
-    / "architecture-debt-snapshot-2026-06-04.md"
+    REPO_ROOT / "docs" / "evidence" / "reports" / "architecture-debt-snapshot-2026-06-04.md"
 )
 BUDGET_ROW = re.compile(
     r"^\|\s*`(?P<path>[^`]+\.py)`\s*"
@@ -32,9 +45,7 @@ REGISTER_COUNT_ROW = re.compile(
     r"(?P<count>\d+)"
     r"(?P<suffix>\s*\|\s*\d+\s*\|.*)$"
 )
-REFRESH_REGISTER_COUNTS_COMMAND = (
-    "python tools\\aippocampus\\docs\\debt_report.py --refresh-register-counts --write"
-)
+REFRESH_REGISTER_COUNTS_COMMAND = "python tools\\aippocampus\\docs\\debt_report.py --refresh-register-counts --write"
 SMALL_DRIFT_LIMIT = 5
 STALE_ALLOWANCE_MIN_BUDGET = 1000
 STALE_ALLOWANCE_MAX_CURRENT = 300
@@ -85,17 +96,6 @@ CANONICAL_HELPER_PATHS = {
     "safe_float": {"skills/aippocampus/scripts/aippocampus_runtime/source/io_kernel.py"},
     "parse_utc": {"skills/aippocampus/scripts/aippocampus_runtime/source/io_kernel.py"},
 }
-COMPACT_DEBUG_FIELD_LITERALS = (
-    "runtime_provenance",
-    "source_anchor_gate",
-    "operator_detail_command",
-    "safe_next_actions",
-    "weak_route_recovery_card",
-    "apw_recovery_state",
-    "last_recall_cache_available",
-    "recall_selector_id",
-    "route_count",
-)
 BROAD_EXCEPTION_BOUNDARY_MARKER = "aippocampus-debt-ok: broad-exception-boundary"
 GIANT_FUNCTION_STAGE_MAP_MARKER = "aippocampus-stage-map:"
 DIAGNOSTIC_BOUNDARY_TOKENS = (
@@ -155,12 +155,7 @@ def budget_entries() -> dict[str, int]:
 
 
 def registered_current_counts() -> dict[str, int]:
-    """Return human-written current counts from the action register only.
-
-    Budgets are contractual. The current-count column is just a convenience
-    for readers, so this report warns on drift instead of letting stale copied
-    numbers become another source of truth.
-    """
+    """Return human-written current counts from the action register only."""
 
     counts: dict[str, int] = {}
     text = ARCHITECTURE_DEBT_REGISTER.read_text(encoding="utf-8")
@@ -330,19 +325,15 @@ def function_has_stage_map(node: ast.FunctionDef | ast.AsyncFunctionDef, path: P
 
 
 def mcp_compact_debug_literals_guarded(path: Path) -> bool:
-    """Return whether MCP debug-like field literals live in a render boundary.
-
-    Projection modules are allowed to name compact/detail fields because they
-    are the owner that translates internal proof into the small foreground card.
-    Handler and orchestration modules still need to delegate instead of
-    hand-assembling proof-heavy foreground payloads.
-    """
+    """Return whether MCP debug-like literals live in an owned render boundary."""
 
     rel_path = repo_relative(path)
     text = path.read_text(encoding="utf-8")
-    if rel_path.startswith("skills/aippocampus/scripts/aippocampus_runtime/mcp/") and (
-        path.name.endswith("_projection.py")
-        or path.name in {"public_projection.py", "compact_profile.py"}
+    classification = instruction_surface_classification(rel_path, text)
+    if (
+        rel_path.startswith("skills/aippocampus/scripts/aippocampus_runtime/mcp/")
+        and classification
+        and str(classification.get("classification") or "").endswith("_owner")
     ):
         return True
     return (
@@ -514,8 +505,10 @@ def changed_surface_debt(changed_files: list[str] | None = None) -> dict[str, ob
     broad_handlers: list[dict[str, object]] = []
     giant_functions: list[dict[str, object]] = []
     compact_occurrences: list[dict[str, object]] = []
+    instruction_occurrences: list[dict[str, object]] = []
     for path in changed_paths:
         rel_path = repo_relative(path)
+        text = path.read_text(encoding="utf-8")
         tree = parse_python(path)
         if tree is not None:
             for node in ast.walk(tree):
@@ -572,13 +565,15 @@ def changed_surface_debt(changed_files: list[str] | None = None) -> dict[str, ob
                         }
                     )
         if "/mcp/" in f"/{rel_path}" and not mcp_compact_debug_literals_guarded(path):
-            text = path.read_text(encoding="utf-8")
             for field in COMPACT_DEBUG_FIELD_LITERALS:
                 count = text.count(field)
                 if count:
                     compact_occurrences.append(
                         {"path": rel_path, "field": field, "count": count}
                     )
+        instruction_surface = changed_file_instruction_surface(path, repo_root=REPO_ROOT)
+        if instruction_surface:
+            instruction_occurrences.append(instruction_surface)
     for item in helper_defs:
         warnings.append(
             {
@@ -638,11 +633,26 @@ def changed_surface_debt(changed_files: list[str] | None = None) -> dict[str, ob
                 "message": "Touched MCP file contains compact/debug field literals; prove compact profile output stays clean or move diagnostics behind detail/operator.",
             }
         )
+    for item in instruction_occurrences:
+        warning = changed_file_instruction_surface_warning(item)
+        if warning:
+            warnings.append(warning)
     return {
         "changed_files": normalized,
         "status": "fail" if warnings else "pass",
         "acceptance_bearing_warning_count": len(warnings),
         "warnings": warnings,
+        "instruction_surface": {
+            "policy_doc": INSTRUCTION_SURFACE_POLICY_DOC,
+            "changed_file_count": len(instruction_occurrences),
+            "unclassified_file_count": sum(
+                1 for item in instruction_occurrences if not item.get("classification")
+            ),
+            "classified_file_count": sum(
+                1 for item in instruction_occurrences if item.get("classification")
+            ),
+            "files": instruction_occurrences,
+        },
         "policy": (
             "Changed-surface debt warnings are acceptance-bearing; do not treat "
             "readiness as passed until they are resolved or explicitly justified."
@@ -1099,6 +1109,10 @@ def build_report(
     compact_debug_fields = compact_debug_field_inventory()
     giant_functions = giant_function_inventory()
     test_debt = test_debt_inventory(detail=full_detail)
+    instruction_surface = instruction_surface_inventory(
+        scan_python_files(),
+        repo_root=REPO_ROOT,
+    )
     changed_surface = changed_surface_debt(changed_files)
     warnings = list(headroom["warnings"])
     if changed_surface["acceptance_bearing_warning_count"]:
@@ -1130,6 +1144,7 @@ def build_report(
         "helper_duplication": helper_duplication,
         "broad_exception_debt": broad_exceptions,
         "compact_debug_field_leaks": compact_debug_fields,
+        "instruction_surface_debt": instruction_surface,
         "giant_hot_path_functions": giant_functions,
         "test_debt_indicators": test_debt,
         "changed_surface": changed_surface,
