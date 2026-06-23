@@ -109,10 +109,6 @@ def _messages_fingerprint(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _write_jsonl_atomic(path: Path, rows: list[dict[str, Any]]) -> None:
-    write_jsonl_dict_rows(path, rows, sort_keys=True)
-
-
 def _safe_term(term: str) -> str:
     value = str(term or "").strip().casefold()
     if not value or value in _STOP_TERMS:
@@ -191,7 +187,7 @@ def materialize_source_factual_aliases(
     out_path = Path(output_path) if output_path else clean_dir / SOURCE_FACTUAL_ALIASES_FILENAME
     read_result = load_jsonl_dict_rows(messages_path)
     rows = [row for message in read_result.rows if (row := factual_alias_row(message))]
-    _write_jsonl_atomic(out_path, rows)
+    write_jsonl_dict_rows(out_path, rows, sort_keys=True)
     manifest = {
         "schema_version": 1,
         "kind": "aippocampus_source_factual_aliases_manifest",

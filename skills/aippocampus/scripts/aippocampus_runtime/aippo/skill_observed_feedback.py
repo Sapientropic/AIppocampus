@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import json
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.core import compact_text
+from aippocampus_runtime.source.io_kernel import load_jsonl_dict_rows
 
 TRACE_BACKED_ORIGINS = {"trace_backed", "replay_backed"}
 TRACE_POSITIVE_SIGNALS = {
@@ -107,23 +107,8 @@ def load_jsonl_rows(path: str | Path | None) -> tuple[list[dict[str, Any]], int]
     source = Path(path).expanduser().resolve()
     if not source.exists():
         return [], 0
-    rows: list[dict[str, Any]] = []
-    invalid = 0
-    with source.open("r", encoding="utf-8") as handle:
-        for line in handle:
-            text = line.strip()
-            if not text:
-                continue
-            try:
-                value = json.loads(text)
-            except json.JSONDecodeError:
-                invalid += 1
-                continue
-            if isinstance(value, Mapping):
-                rows.append(dict(value))
-            else:
-                invalid += 1
-    return rows, invalid
+    result = load_jsonl_dict_rows(source)
+    return result.rows, int(result.loss.get("total_loss_count") or 0)
 
 
 def observed_use_rows_from_foreground_feedback(

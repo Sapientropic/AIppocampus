@@ -21,7 +21,7 @@ from aippocampus_runtime.coding import episode_arcs as episode_runtime
 from aippocampus_runtime.ops.route_readiness import safe_source_refs
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 from aippocampus_runtime.recall import background_findings
-from aippocampus_runtime.source.jsonl_reader import load_jsonl_dict_rows
+from aippocampus_runtime.source.io_kernel import load_jsonl_dict_rows
 
 KIND = "aippocampus_orientation_sidecar_load"
 SCHEMA_VERSION = 1

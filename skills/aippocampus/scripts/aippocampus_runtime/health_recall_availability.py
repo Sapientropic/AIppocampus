@@ -2,20 +2,12 @@
 
 from __future__ import annotations
 
-import json
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.first_recall_readiness import health_readiness_fields
-
-
-def _load_json_fail_open(path: Path) -> dict[str, Any]:
-    try:
-        data = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
-    except Exception:
-        return {}
-    return data if isinstance(data, dict) else {}
+from aippocampus_runtime.source.io_kernel import load_json_dict
 
 
 def registry_recall_availability(registry_path: Path) -> dict[str, Any]:
@@ -28,7 +20,7 @@ def registry_recall_availability(registry_path: Path) -> dict[str, Any]:
     as maintenance needed before exact latest/current-thread claims.
     """
 
-    payload = _load_json_fail_open(registry_path)
+    payload = load_json_dict(registry_path).data
     raw_threads = payload.get("threads")
     threads = [item for item in raw_threads if isinstance(item, Mapping)] if isinstance(raw_threads, list) else []
     with_clean_source = 0

@@ -19,7 +19,7 @@ from aippocampus_runtime.source.clean_source_resolver import resolve_clean_sourc
 from aippocampus_runtime.source.current_source_window import (
     open_current_thread_source_window,
 )
-from aippocampus_runtime.source.jsonl_reader import jsonl_loss_warning
+from aippocampus_runtime.source.io_kernel import jsonl_loss_warning
 from aippocampus_runtime.source.registry_search import (
     add_registry_search_arguments,
     run_registry_search_cli,

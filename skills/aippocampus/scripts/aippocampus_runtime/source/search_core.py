@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from aippocampus_runtime.source.jsonl_reader import load_jsonl_dict_rows
+from aippocampus_runtime.source.io_kernel import load_jsonl_dict_rows
 
 
 def load_clean_messages_with_loss(path: Path) -> tuple[list[dict[str, Any]], dict[str, Any]]:

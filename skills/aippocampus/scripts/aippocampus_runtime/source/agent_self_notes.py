@@ -3,18 +3,21 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 import re
 from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
-from aippocampus_runtime.core import compact_text, now_utc, sanitize_external_model_text
+from aippocampus_runtime.core import (
+    compact_text,
+    now_utc,
+    sanitize_external_model_text,
+    stable_text_id,
+)
 from aippocampus_runtime.recall.authority import with_trust_fields
 from aippocampus_runtime.recall.query_policy import split_query_terms
 from aippocampus_runtime.registry.api import registry_paths, unique_preserve
-from aippocampus_runtime.source.jsonl_reader import load_jsonl_dict_rows
+from aippocampus_runtime.source.io_kernel import load_jsonl_dict_rows, write_jsonl_dict_rows
 
 AGENT_SELF_NOTE_SCHEMA_VERSION = 1
 AGENT_SELF_NOTE_KIND = "agent_self_note"
@@ -130,20 +133,10 @@ def default_agent_self_notes_path(
     return json_path.resolve().parent / AGENT_SELF_NOTES_FILE
 
 
-def _stable_id(prefix: str, *parts: Any) -> str:
-    raw = "\n".join(str(part or "") for part in parts)
-    digest = hashlib.sha256(raw.encode("utf-8", errors="replace")).hexdigest()[:20]
-    return f"{prefix}_{digest}"
-
-
 def project_scope_id(project_root: str | Path | None) -> str:
     if project_root is None or str(project_root).strip() == "":
         return ""
-    return _stable_id("project", Path(project_root).resolve())
-
-
-def _load_jsonl(path: Path) -> list[dict[str, Any]]:
-    return load_jsonl_dict_rows(path).rows
+    return stable_text_id("project", Path(project_root).resolve())
 
 
 def load_agent_self_notes_diagnostics(path: Path) -> dict[str, Any]:
@@ -155,16 +148,13 @@ def load_agent_self_notes_diagnostics(path: Path) -> dict[str, Any]:
 
 
 def write_agent_self_notes(path: Path, rows: list[dict[str, Any]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    with tmp.open("w", encoding="utf-8", newline="\n") as handle:
-        for row in rows:
-            handle.write(json.dumps(row, ensure_ascii=False) + "\n")
-    tmp.replace(path)
+    write_jsonl_dict_rows(path, rows)
 
 
 def load_agent_self_notes(path: Path) -> list[dict[str, Any]]:
-    return [row for row in _load_jsonl(path) if row.get("kind") == AGENT_SELF_NOTE_KIND]
+    return [
+        row for row in load_jsonl_dict_rows(path).rows if row.get("kind") == AGENT_SELF_NOTE_KIND
+    ]
 
 
 def _clean_source_ref(ref: Mapping[str, Any]) -> dict[str, Any]:
@@ -272,7 +262,7 @@ def build_agent_self_note_row(
         project_root=project_root,
     )
     timestamp = created_at or now_utc()
-    note_id = _stable_id("asn", thread_key, timestamp, sanitized_text, cleaned_refs)
+    note_id = stable_text_id("asn", thread_key, timestamp, sanitized_text, cleaned_refs)
     # Source refs are a route back to the surrounding source neighborhood, not
     # proof of the note's wording or any claim made by the foreground agent.
     row: dict[str, Any] = {

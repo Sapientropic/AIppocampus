@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
+from aippocampus_runtime.source.io_kernel import load_json_dict
 
 PLUGIN_SECTION_RE = re.compile(r'^\s*\[plugins\."([^"]+)"\]\s*$')
 MCP_SECTION_RE = re.compile(r'^\s*\[(?:mcp_servers|mcpServers)\."?([^"\]]+)"?\]\s*$')
@@ -112,15 +113,16 @@ def mcp_command_preflight(command: str = "aippocampus") -> dict[str, Any]:
 def load_json_file(path: Path | None) -> dict[str, Any] | None:
     if path is None or not path.exists():
         return None
-    try:
-        value = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
+    result = load_json_dict(path)
+    if int(result.loss.get("non_object_json_count") or 0):
+        return None
+    if int(result.loss.get("total_loss_count") or 0):
         return {
             "status": "invalid_probe_report",
             "ok": False,
             "source": "host_probe_report",
         }
-    return value if isinstance(value, dict) else None
+    return result.data if result.data else None
 
 
 def _read_config_text(codex_home_path: Path) -> str:

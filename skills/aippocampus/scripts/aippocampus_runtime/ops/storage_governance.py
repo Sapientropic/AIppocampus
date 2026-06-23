@@ -55,16 +55,17 @@ from aippocampus_runtime.ops.storage_governance_projection import (
     render_apply_text,
     render_text,
 )
+from aippocampus_runtime.source.io_kernel import load_json_dict
 
 
 def load_json_file(path: Path) -> dict[str, Any]:
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except Exception as exc:
-        raise ValueError(f"could not read JSON report {path}: {exc}") from exc
-    if not isinstance(data, dict):
+    result = load_json_dict(path, missing_is_loss=True)
+    loss = result.loss
+    if int(loss.get("non_object_json_count") or 0):
         raise ValueError(f"JSON report {path} must contain an object")
-    return data
+    if int(loss.get("total_loss_count") or 0):
+        raise ValueError(f"could not read JSON report {path}")
+    return result.data
 
 
 def _path_projection(
