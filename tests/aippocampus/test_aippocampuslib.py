@@ -111,6 +111,32 @@ class AippocampusLibTests(unittest.TestCase):
         self.assertEqual(metrics["miss_tokens"], 20)
         self.assertEqual(metrics["hit_rate"], 0.8)
 
+    def test_strip_empty_preserves_empty_dicts_by_default(self) -> None:
+        payload = {
+            "keep": {"boundary": {}},
+            "drop_none": None,
+            "drop_empty_string": "",
+            "drop_empty_list": [],
+            "items": [{"a": ""}, {"b": "value"}, []],
+        }
+
+        self.assertEqual(
+            aippocampuslib.strip_empty(payload),
+            {"keep": {"boundary": {}}, "items": [{}, {"b": "value"}]},
+        )
+
+    def test_strip_empty_can_drop_empty_dicts_for_legacy_projection_callers(self) -> None:
+        payload = {
+            "keep": {"value": "present"},
+            "drop_nested": {"empty": {}},
+            "items": [{"a": ""}, {"b": "value"}, {}],
+        }
+
+        self.assertEqual(
+            aippocampuslib.strip_empty(payload, drop_empty_dicts=True),
+            {"keep": {"value": "present"}, "items": [{"b": "value"}]},
+        )
+
     def test_safety_owner_preserves_redaction_and_transport_behavior(self) -> None:
         project_path = REPO_ROOT / "skills" / "aippocampus" / "scripts" / "aippocampus_runtime" / "safety.py"
         sanitized, policy = safety.sanitize_external_model_text(

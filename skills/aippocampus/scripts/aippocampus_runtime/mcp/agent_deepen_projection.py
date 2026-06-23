@@ -18,22 +18,6 @@ from aippocampus_runtime.privacy import (
 SOURCE_SNIPPET_CHAR_LIMIT = 420
 
 
-def _as_dict(value: Any) -> dict[str, Any]:
-    return dict(value) if isinstance(value, Mapping) else {}
-
-
-def _without_empty(value: Any) -> Any:
-    if isinstance(value, dict):
-        return {
-            key: cleaned
-            for key, item in value.items()
-            if (cleaned := _without_empty(item)) not in (None, "", [])
-        }
-    if isinstance(value, list):
-        return [cleaned for item in value if (cleaned := _without_empty(item)) not in (None, "", [])]
-    return value
-
-
 def _source_classes(messages: list[dict[str, Any]]) -> list[str]:
     classes: list[str] = []
     for message in messages:
@@ -187,9 +171,9 @@ def compact_agent_deepen_payload(
         # entrypoints. Keep the actionable error and canonical v2 foreground
         # action up front, while any heavier local diagnostics stay behind
         # detail fields.
-        result = _as_dict(source.get("result"))
-        primary_action = _as_dict(source.get("foreground_action"))
-        follow_up_action = _as_dict(source.get("follow_up_action"))
+        result = core.dict_or_empty(source.get("result"))
+        primary_action = core.dict_or_empty(source.get("foreground_action"))
+        follow_up_action = core.dict_or_empty(source.get("follow_up_action"))
         safe_next_actions = [primary_action] if primary_action else []
         if follow_up_action and follow_up_action != primary_action:
             safe_next_actions.append(follow_up_action)
@@ -201,7 +185,7 @@ def compact_agent_deepen_payload(
             if primary_action
             else {}
         )
-        return _without_empty(
+        return core.strip_empty(
             {
                 "detail": "compact",
                 "kind": source.get("kind"),
@@ -218,8 +202,8 @@ def compact_agent_deepen_payload(
         )
     if source.get("status") != "ok" or source.get("surface") != "recall":
         return source
-    result = _as_dict(source.get("result"))
-    source_window = _as_dict(result.get("source_window"))
+    result = core.dict_or_empty(source.get("result"))
+    source_window = core.dict_or_empty(result.get("source_window"))
     messages = [item for item in source_window.get("messages") or [] if isinstance(item, dict)]
     source_refs = [item for item in result.get("source_refs") or [] if isinstance(item, dict)]
     message_count = int(source_window.get("message_count") or len(messages))
@@ -227,10 +211,10 @@ def compact_agent_deepen_payload(
     why = core.compact_text(str(result.get("why_this_may_matter") or ""), 180)
     apw_identity = result.get("apw_route_identity") or source.get("apw_route_identity")
     apw_identity = dict(apw_identity) if isinstance(apw_identity, Mapping) else {}
-    recall_gate_context = _as_dict(
+    recall_gate_context = core.dict_or_empty(
         result.get("recall_gate_context") or source.get("recall_gate_context")
     )
-    source_anchor_gate = _as_dict(
+    source_anchor_gate = core.dict_or_empty(
         result.get("source_anchor_gate")
         or source.get("source_anchor_gate")
         or recall_gate_context.get("source_anchor_gate")
@@ -274,7 +258,7 @@ def compact_agent_deepen_payload(
         primary_action,
         safe_next_actions=[primary_action],
     )
-    compact = _without_empty(
+    compact = core.strip_empty(
         {
             "detail": "compact",
             "kind": source.get("kind"),

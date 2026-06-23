@@ -359,7 +359,7 @@ def compact_health_payload(payload: dict[str, Any]) -> dict[str, Any]:
         isinstance(readiness, dict)
         and readiness.get("storage_pressure_cleanup_recommended")
     ) or bool(storage_pressure.get("pressure"))
-    freshness_summary = _without_empty(
+    freshness_summary = core.strip_empty(
         {
             "degraded": True if freshness_degraded else None,
             "latest_current_thread_may_be_missing": True
@@ -376,14 +376,14 @@ def compact_health_payload(payload: dict[str, Any]) -> dict[str, Any]:
             "clean_source_turn_delta": freshness.get("clean_source_turn_delta"),
         }
     )
-    storage_summary = _without_empty(
+    storage_summary = core.strip_empty(
         {
             "cleanup_recommended": True if storage_cleanup_recommended else None,
             "pressure": storage_pressure.get("pressure") if storage_pressure.get("pressure") else None,
             "bounded_audit_available": True if storage_cleanup_recommended else None,
         }
     )
-    host_state_summary = _without_empty(
+    host_state_summary = core.strip_empty(
         {
             "confounds_detected": True if host_confounds.get("confounds_detected") else None,
             "available": host_confounds.get("available") if host_confounds.get("available") else None,
@@ -393,7 +393,7 @@ def compact_health_payload(payload: dict[str, Any]) -> dict[str, Any]:
     # This card is the default foreground JSON surface. Keep only decision fields
     # here; freshness/storage/host-state objects are operator diagnostics and
     # belong behind the full detail command below.
-    maintenance_summary = _without_empty(
+    maintenance_summary = core.strip_empty(
         {
             "recommended_action_count": len(all_recommended),
             "blocking_action_count": (
@@ -474,7 +474,7 @@ def compact_health_payload(payload: dict[str, Any]) -> dict[str, Any]:
         safe_next_actions=[foreground_action, *followup_actions],
     )
     card.update(foreground_fields)
-    return _without_empty(card)
+    return core.strip_empty(card)
 
 
 def compact_register_thread_payload(payload: dict[str, Any]) -> dict[str, Any]:
@@ -538,18 +538,6 @@ def compact_register_thread_payload(payload: dict[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in result.items() if value not in (None, "", [])}
 
 
-def _without_empty(value: Any) -> Any:
-    if isinstance(value, dict):
-        return {
-            key: cleaned
-            for key, item in value.items()
-            if (cleaned := _without_empty(item)) not in (None, "", [])
-        }
-    if isinstance(value, list):
-        return [cleaned for item in value if (cleaned := _without_empty(item)) not in (None, "", [])]
-    return value
-
-
 def _compact_claim_boundary(
     *,
     can_use_for: list[str],
@@ -598,7 +586,7 @@ def compact_recall_context_payload(payload: dict[str, Any]) -> dict[str, Any]:
     compact_routes: list[dict[str, Any]] = []
     for index, route in enumerate(routes[:5], start=1):
         compact_routes.append(
-            _without_empty(
+            core.strip_empty(
                 {
                     "route_index": index,
                     "route_id": route.get("route_id"),
@@ -643,4 +631,4 @@ def compact_recall_context_payload(payload: dict[str, Any]) -> dict[str, Any]:
         ),
         "warnings": payload.get("warnings"),
     }
-    return _without_empty(result)
+    return core.strip_empty(result)

@@ -69,17 +69,37 @@ def list_or_empty(value: Any) -> list[Any]:
     return list(value) if isinstance(value, list) else []
 
 
-def strip_empty(value: Any) -> Any:
-    """Recursively remove empty projection fields without changing truth state."""
+def _projection_value_is_empty(value: Any, *, drop_empty_dicts: bool) -> bool:
+    return value in (None, "", []) or (drop_empty_dicts and value == {})
+
+
+def strip_empty(value: Any, *, drop_empty_dicts: bool = False) -> Any:
+    """Recursively remove empty projection fields without changing truth state.
+
+    Empty dictionaries are kept by default because some compact cards use an
+    empty object as a deliberate boundary marker. Callers that previously
+    treated empty dicts as noise must opt in explicitly so projection cleanup
+    does not quietly change foreground semantics.
+    """
 
     if isinstance(value, dict):
         return {
             key: cleaned
             for key, item in value.items()
-            if (cleaned := strip_empty(item)) not in (None, "", [])
+            if not _projection_value_is_empty(
+                cleaned := strip_empty(item, drop_empty_dicts=drop_empty_dicts),
+                drop_empty_dicts=drop_empty_dicts,
+            )
         }
     if isinstance(value, list):
-        return [cleaned for item in value if (cleaned := strip_empty(item)) not in (None, "", [])]
+        return [
+            cleaned
+            for item in value
+            if not _projection_value_is_empty(
+                cleaned := strip_empty(item, drop_empty_dicts=drop_empty_dicts),
+                drop_empty_dicts=drop_empty_dicts,
+            )
+        ]
     return value
 
 
