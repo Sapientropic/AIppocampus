@@ -138,6 +138,20 @@ def py_script(script: str, args: str = "", *, local_executable: bool = False) ->
     return f"{python_command(local_executable=local_executable)} {script}{suffix}"
 
 
+def shell_arg(value: str) -> str:
+    if not value or any(char.isspace() or char in {'"', "'"} for char in value):
+        return '"' + value.replace('"', '\\"') + '"'
+    return value
+
+
+def debt_report_args(changed_files: Iterable[str]) -> str:
+    changed_args = " ".join(
+        f"--changed-file {shell_arg(path)}" for path in sorted(set(changed_files))
+    )
+    prefix = "--changed-surface-only --json"
+    return prefix if not changed_args else f"{prefix} {changed_args}"
+
+
 def architecture_debt_tracked_paths() -> set[str]:
     paths: set[str] = set()
     for source in DEBT_REGISTER_SOURCES:
@@ -164,7 +178,7 @@ def architecture_debt_low_margin_paths() -> set[str]:
 
 def _debt_report_is_red() -> bool:
     completed = subprocess.run(
-        [sys.executable, str(REPO_ROOT / DEBT_REPORT_SCRIPT), "--json"],
+        [sys.executable, str(REPO_ROOT / DEBT_REPORT_SCRIPT), "--headroom-only", "--json"],
         cwd=REPO_ROOT,
         text=True,
         capture_output=True,
@@ -206,6 +220,19 @@ def architecture_debt_plan_reason(changed_files: Iterable[str]) -> str:
             "owner growth. This is not a substitute for functional tests."
         )
     return ""
+
+
+def changed_surface_debt_plan_reason(changed_files: Iterable[str]) -> str:
+    changed_python = sorted(path for path in changed_files if _is_static_python_surface(path))
+    if not changed_python:
+        return ""
+    preview = ", ".join(changed_python[:3])
+    suffix = "" if len(changed_python) <= 3 else f", +{len(changed_python) - 3} more"
+    return (
+        f"Python changed surface touched: {preview}{suffix}. Run the lightweight "
+        "debt gate so duplicate helpers, hot-path broad exceptions, compact debug "
+        "field literals, and giant-function growth are acceptance-bearing before closeout."
+    )
 
 
 def _load_pyproject() -> dict[str, object]:
@@ -547,6 +574,7 @@ def build_test_plan(
     changed_test_modules = _changed_test_modules(normalized_files)
     changed_test_groups: list[dict[str, object]] = []
     debt_reason = architecture_debt_plan_reason(normalized_files)
+    changed_surface_debt_reason = changed_surface_debt_plan_reason(normalized_files)
     environment = python_environment_summary()
     warnings = planner_warnings(environment)
     large_dirty_surface = (
@@ -556,6 +584,8 @@ def build_test_plan(
         warnings.append(_large_dirty_surface_warning(changed_test_modules))
     if debt_reason:
         categories.add("architecture_debt")
+    if changed_surface_debt_reason:
+        categories.add("changed_surface_debt")
 
     if not normalized_files:
         _add_command(
@@ -606,11 +636,25 @@ def build_test_plan(
             PlannedCommand(
                 command=py_script(
                     DEBT_REPORT_SCRIPT,
-                    "--json",
+                    "--headroom-only --json",
                     local_executable=local_executable,
                 ),
                 reason=debt_reason,
                 scope="architecture-debt",
+            ),
+        )
+
+    if changed_surface_debt_reason:
+        _add_command(
+            commands,
+            PlannedCommand(
+                command=py_script(
+                    DEBT_REPORT_SCRIPT,
+                    debt_report_args(normalized_files),
+                    local_executable=local_executable,
+                ),
+                reason=changed_surface_debt_reason,
+                scope="changed-surface-debt",
             ),
         )
 

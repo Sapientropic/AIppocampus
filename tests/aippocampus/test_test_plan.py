@@ -40,11 +40,23 @@ class ChangedSurfaceTestPlanTests(unittest.TestCase):
         reasons = [command["reason"] for command in payload["commands"]]
 
         self.assertIn("architecture_debt", payload["categories"])
+        self.assertIn("changed_surface_debt", payload["categories"])
         self.assertIn("static_gates", payload["categories"])
         self.assertIn("type_check", payload["categories"])
         self.assertIn(test_plan.CI_RUFF_COMMAND, commands)
         self.assertIn(test_plan.CI_MYPY_COMMAND, commands)
-        self.assertIn(py_script("tools/aippocampus/docs/debt_report.py", "--json"), commands)
+        self.assertIn(
+            py_script("tools/aippocampus/docs/debt_report.py", "--headroom-only --json"),
+            commands,
+        )
+        self.assertIn(
+            py_script(
+                "tools/aippocampus/docs/debt_report.py",
+                "--changed-surface-only --json "
+                "--changed-file skills/aippocampus/scripts/aippocampus_runtime/cli/facade.py",
+            ),
+            commands,
+        )
         self.assertTrue(any("headroom preflight" in reason for reason in reasons))
         self.assertTrue(any("count refresh" in reason for reason in reasons))
         self.assertTrue(any("not a substitute for functional tests" in reason for reason in reasons))
@@ -71,7 +83,10 @@ class ChangedSurfaceTestPlanTests(unittest.TestCase):
         reasons = [command["reason"] for command in payload["commands"]]
 
         self.assertIn("architecture_debt", payload["categories"])
-        self.assertIn(py_script("tools/aippocampus/docs/debt_report.py", "--json"), commands)
+        self.assertIn(
+            py_script("tools/aippocampus/docs/debt_report.py", "--headroom-only --json"),
+            commands,
+        )
         self.assertTrue(any("already red" in reason for reason in reasons))
         self.assertTrue(any("count-only drift" in reason for reason in reasons))
         self.assertIn(py_script("tools/aippocampus/docs/check_docs_health.py", "--json"), commands)
@@ -83,6 +98,23 @@ class ChangedSurfaceTestPlanTests(unittest.TestCase):
             py_script(
                 "tools/aippocampus/run_tests.py",
                 "--tier benchmark-smoke --benchmark-suite-profile public-fast",
+            ),
+            commands,
+        )
+
+    def test_python_change_gets_changed_surface_debt_gate(self) -> None:
+        with mock.patch.object(test_plan, "_debt_report_is_red", return_value=False):
+            payload = test_plan.build_test_plan(
+                ["skills/aippocampus/scripts/aippocampus_runtime/source/io_kernel.py"]
+            )
+        commands = [command["command"] for command in payload["commands"]]
+
+        self.assertIn("changed_surface_debt", payload["categories"])
+        self.assertIn(
+            py_script(
+                "tools/aippocampus/docs/debt_report.py",
+                "--changed-surface-only --json "
+                "--changed-file skills/aippocampus/scripts/aippocampus_runtime/source/io_kernel.py",
             ),
             commands,
         )
@@ -281,7 +313,8 @@ class ChangedSurfaceTestPlanTests(unittest.TestCase):
         self.assertTrue(all(command in commands for command in grouped_commands))
         self.assertFalse(
             any(
-                "test_active_recall" in command
+                "debt_report.py" not in command
+                and "test_active_recall" in command
                 and "test_agent_background" in command
                 and "test_benchmark_graph_extraction_boundary" in command
                 for command in commands
