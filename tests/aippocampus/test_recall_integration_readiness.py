@@ -236,6 +236,78 @@ class RecallIntegrationReadinessTests(unittest.TestCase):
             by_id["mcp_agent_recall_deepen_parity"]["source_chain_identity_probe"]["failure_reasons"],
         )
 
+    def test_live_source_chain_prerequisite_absent_does_not_claim_useful(self) -> None:
+        report = readiness.build_recall_integration_readiness(
+            source_chain_probe={
+                "ok": True,
+                "status": "prerequisite_absent",
+                "probe_label": "live_registry_source_chain:private",
+                "cue": "最早那条机械飞升和海马体的讨论",
+                "failures": [],
+                "prerequisite": {
+                    "status": "expected_source_missing",
+                    "present": False,
+                    "missing_count": 1,
+                    "missing": [{"reason": "expected_thread_missing"}],
+                },
+                "claim_boundary": "private source-chain probe skipped",
+            }
+        )
+        by_id = {surface["surface_id"]: surface for surface in report["surfaces"]}
+
+        self.assertTrue(report["ok"])
+        parity = by_id["mcp_agent_recall_deepen_parity"]
+        self.assertEqual(parity["status"], "callable")
+        self.assertIn("expected private source", parity["reason"])
+        self.assertEqual(
+            parity["source_chain_identity_probe"]["status"],
+            "prerequisite_absent",
+        )
+        self.assertFalse(
+            parity["source_chain_identity_probe"]["prerequisite"]["present"],
+        )
+        self.assertEqual(parity["warnings"][0]["code"], "expected_source_missing")
+        self.assertFalse(parity["warnings"][0]["acceptance_bearing"])
+
+    def test_live_source_chain_probe_skips_before_recall_when_expected_source_missing(self) -> None:
+        calls: list[list[str]] = []
+
+        def fake_source_cli(
+            repo_root: Path,
+            args: list[str],
+            *,
+            timeout: float = 30,
+            stdin: str | None = None,
+        ) -> dict:
+            del repo_root, timeout, stdin
+            calls.append(args)
+            if args[:2] == ["registry", "show"]:
+                return {"returncode": 1, "error": "thread not found"}
+            return {"status": "unexpected_recall_after_missing_prerequisite"}
+
+        with mock.patch.object(
+            readiness,
+            "_run_source_cli_json",
+            side_effect=fake_source_cli,
+        ):
+            probe = readiness._source_chain_identity_probe(
+                REPO_ROOT,
+                cue="最早那条机械飞升和海马体的讨论",
+                anchors=["机械飞升", "基因飞升"],
+                expected_source_refs=[
+                    {
+                        "thread_key": "session:missing-private-source",
+                        "message_id": "msg_missing",
+                    }
+                ],
+            )
+
+        self.assertEqual(probe["status"], "prerequisite_absent")
+        self.assertTrue(probe["ok"])
+        self.assertEqual(probe["prerequisite"]["missing"][0]["reason"], "expected_thread_missing")
+        self.assertTrue(calls)
+        self.assertTrue(all(args[:2] == ["registry", "show"] for args in calls))
+
     def test_foreground_mcp_transport_failure_blocks_parity_claim(self) -> None:
         report = readiness.build_recall_integration_readiness(
             foreground_mcp_failure="Transport closed"

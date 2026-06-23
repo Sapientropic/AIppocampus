@@ -13,6 +13,10 @@ from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any, cast
 
+from recall_readiness_source_chain import (
+    expected_source_ref_prerequisite,
+    prerequisite_absent_probe,
+)
 from report_provenance import git_worktree_evidence
 
 READY_STATUSES = {
@@ -499,6 +503,19 @@ def _source_chain_identity_probe(
     anchors = list(anchors)
     expected_refs = list(expected_source_refs)
     failures: list[dict[str, Any]] = []
+    prerequisite = expected_source_ref_prerequisite(
+        repo_root,
+        expected_refs,
+        run_source_cli_json=_run_source_cli_json,
+    )
+    if not prerequisite.get("present"):
+        return prerequisite_absent_probe(
+            probe_label=probe_label,
+            cue=cue,
+            anchors=anchors,
+            expected_refs=expected_refs,
+            prerequisite=prerequisite,
+        )
 
     cli_recall_args = [
         "agent",
@@ -634,6 +651,7 @@ def _source_chain_identity_probe(
         "status": status,
         "ok": not failures,
         "failures": failures,
+        "prerequisite": prerequisite,
         "commands": {
             "cli_recall": " ".join(["aippocampus", *cli_recall_args]),
             "cli_deepen": " ".join(["aippocampus", *cli_deepen_args]) if cli_deepen_args else "",
@@ -676,13 +694,22 @@ def _source_chain_identity_probe_suite(repo_root: Path) -> dict[str, Any]:
                     "cue": probe.get("cue"),
                 }
             )
-    status = "blocked" if failures else "passed"
+    prerequisite_absent_count = sum(
+        1 for probe in probes if probe.get("status") == "prerequisite_absent"
+    )
+    if failures:
+        status = "blocked"
+    elif prerequisite_absent_count:
+        status = "prerequisite_absent"
+    else:
+        status = "passed"
     return {
         "kind": "aippocampus_source_chain_identity_probe_suite",
         "probe_label": "live_registry_source_chain_suite",
         "cue": " | ".join(str(probe.get("cue") or "") for probe in probes),
         "status": status,
         "ok": not failures,
+        "prerequisite_absent_count": prerequisite_absent_count,
         "failures": failures,
         "probes": probes,
         "commands": {
@@ -1092,6 +1119,8 @@ def _apply_source_chain_probe(
             "ok": bool(source_chain_probe.get("ok")),
             "probe_label": source_chain_probe.get("probe_label"),
             "cue": source_chain_probe.get("cue"),
+            "prerequisite": source_chain_probe.get("prerequisite"),
+            "prerequisite_absent_count": source_chain_probe.get("prerequisite_absent_count"),
             "failure_reasons": [
                 failure.get("reason") for failure in failures if failure.get("reason")
             ],
@@ -1103,12 +1132,25 @@ def _apply_source_chain_probe(
             "probes": source_chain_probe.get("probes"),
             "claim_boundary": source_chain_probe.get("claim_boundary"),
         }
-        if failures:
+        status = str(source_chain_probe.get("status") or "")
+        if status == "prerequisite_absent":
+            surface["reason"] = (
+                "live source-chain dogfood probe skipped because expected private source "
+                "is absent from this registry"
+            )
+            surface.setdefault("warnings", []).append(
+                {
+                    "code": "expected_source_missing",
+                    "acceptance_bearing": False,
+                    "claim_boundary": "diagnostic_only_not_useful_readiness",
+                }
+            )
+        elif failures:
             surface["status"] = "blocked"
             surface["foreground_callable"] = False
             surface["mcp_wired"] = False
             surface["reason"] = "live source-chain identity probe failed"
-        else:
+        elif status == "passed":
             surface["status"] = "useful"
             surface["reason"] = (
                 "live source-chain cue passed CLI and MCP recall->deepen identity checks"
