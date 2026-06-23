@@ -147,6 +147,48 @@ class SubconsciousReviewTests(unittest.TestCase):
 
         self.assertEqual([finding["job"] for finding in findings], ["project_drift"])
 
+    def test_validate_review_keeps_source_alias_candidate_as_navigation_semantic_type(self) -> None:
+        findings_by_id = {
+            "sf_alias": {
+                "fingerprint": "sf_alias",
+                "job": "source_alias_mining",
+                "finding_kind": "source_semantic_candidate",
+                "canonical_label": "foreground consumes; background audits",
+                "aliases": ["background organizes source"],
+                "activation_cues": ["foreground consumes background audits"],
+                "negative_cues": ["generic source agent memory"],
+                "term_type": "decision_label",
+                "surface_status": "lightly_normalized",
+                "claim_authority": "navigation_only",
+                "summary": "Design split for product-facing recall.",
+                "confidence": 0.82,
+                "source_refs": [{"thread_key": "session:design", "assistant_line": 44}],
+            }
+        }
+        parsed = {
+            "promotion_candidates": [
+                {
+                    "candidate_type": "project_memory",
+                    "title": "Design split",
+                    "summary": "Use this as a route, not a fact claim.",
+                    "activation_cues": ["foreground consumes background audits"],
+                    "confidence": 0.8,
+                    "source_finding_ids": ["sf_alias"],
+                }
+            ]
+        }
+
+        validated = review.validate_review(parsed, findings_by_id)
+        candidate = validated["promotion_candidates"][0]
+
+        self.assertEqual(candidate["candidate_type"], "source_semantic_candidate")
+        self.assertEqual(candidate["claim_authority"], "navigation_only")
+        self.assertTrue(candidate["structural_valid"])
+        self.assertTrue(candidate["semantic_candidate"])
+        self.assertEqual(candidate["term_type"], "decision_label")
+        self.assertIn("foreground consumes background audits", candidate["activation_cues"])
+        self.assertIn("generic source agent memory", candidate["negative_cues"])
+
     def test_openai_compatible_route_reports_provider_neutral_review_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

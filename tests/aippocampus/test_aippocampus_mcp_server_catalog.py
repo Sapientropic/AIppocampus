@@ -339,7 +339,9 @@ class AippocampusMcpServerCatalogTests(unittest.TestCase):
         self.assertEqual(payload["mode"], "recall")
         self.assertEqual(payload["surface"], "mcp_agent_recall_compact")
         self.assertNotIn("opt_in_required", payload)
-        self.assertIn("apw_recovery_state", payload)
+        self.assertIn("foreground_action", payload)
+        self.assertIn("routes", payload)
+        self.assertNotIn("apw_recovery_state", payload)
         self.assertNotIn("runtime_provenance", payload)
         self.assertEqual(payload["schema_version"], "agent-continuity-path-v1")
         self.assertEqual(payload["detail"], "compact")
@@ -391,7 +393,8 @@ class AippocampusMcpServerCatalogTests(unittest.TestCase):
         self.assertEqual(deepen_payload["mode"], "deepen")
         self.assertEqual(deepen_payload["status"], "ok")
         self.assertEqual(deepen_payload["detail"], "compact")
-        self.assertEqual(deepen_payload["source_window_summary"]["message_count"], 2)
+        self.assertEqual(deepen_payload["source_open_posture"], "target_evidence_opened")
+        self.assertNotIn("source_window_summary", deepen_payload)
         self.assertEqual(
             deepen_payload["primary_source_snippet"]["text"],
             "小海马体需要 source-backed continuity。",
@@ -508,7 +511,9 @@ class AippocampusMcpServerCatalogTests(unittest.TestCase):
             }
         )
         self.assertFalse(valid["result"].get("isError", False), self.tool_payload(valid))
-        self.assertEqual(self.tool_payload(valid)["route_count"], 1)
+        valid_payload = self.tool_payload(valid)
+        self.assertEqual(len(valid_payload["routes"]), 1)
+        self.assertNotIn("route_count", valid_payload)
         self.assertNotIn("metrics", self.tool_payload(valid))
 
         for request_id, value, message in [

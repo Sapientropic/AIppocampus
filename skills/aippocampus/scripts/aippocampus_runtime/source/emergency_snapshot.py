@@ -27,6 +27,7 @@ from aippocampus_runtime.core import (
     default_thread_store_dir,
     now_utc,
 )
+from aippocampus_runtime.source.io_kernel import write_json_atomic as canonical_write_json_atomic
 from aippocampus_runtime.source.jsonl_reader import load_jsonl_dict_rows
 
 EMERGENCY_SNAPSHOT_SCHEMA_VERSION = 1
@@ -38,14 +39,7 @@ LEASE_NAME = ".emergency-snapshot.lock"
 
 
 def _write_json_atomic(path: Path, payload: Mapping[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(f".{path.name}.tmp-{os.getpid()}-{time.time_ns()}")
-    tmp.write_text(
-        json.dumps(payload, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-        newline="\n",
-    )
-    os.replace(tmp, path)
+    canonical_write_json_atomic(path, payload)
 
 
 def _stable_id(*parts: object, prefix: str, length: int = 20) -> str:

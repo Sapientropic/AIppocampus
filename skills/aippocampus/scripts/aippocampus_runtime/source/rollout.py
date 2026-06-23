@@ -8,6 +8,10 @@ import re
 from pathlib import Path
 from typing import Any, Iterable
 
+from aippocampus_runtime.source.io_kernel import (
+    empty_jsonl_loss,
+    iter_jsonl_dict_rows_with_line_numbers,
+)
 from aippocampus_runtime.source.normalization_loss import (
     count_provider_loss,
     empty_provider_normalization_loss,
@@ -35,17 +39,15 @@ def iter_jsonl(
     *,
     normalization_loss: dict[str, Any] | None = None,
 ) -> Iterable[tuple[int, dict[str, Any]]]:
-    with path.open("r", encoding="utf-8") as f:
-        for line_no, line in enumerate(f, start=1):
-            try:
-                item = json.loads(line)
-            except json.JSONDecodeError:
-                if normalization_loss is not None:
-                    count_provider_loss(normalization_loss, "invalid_json_line_count")
-                continue
-            if isinstance(item, dict):
-                yield line_no, item
-            elif normalization_loss is not None:
+    loss = empty_jsonl_loss()
+    try:
+        for line_no, item in iter_jsonl_dict_rows_with_line_numbers(path, loss=loss):
+            yield line_no, item
+    finally:
+        if normalization_loss is not None:
+            for _ in range(int(loss.get("invalid_json_line_count") or 0)):
+                count_provider_loss(normalization_loss, "invalid_json_line_count")
+            for _ in range(int(loss.get("non_object_line_count") or 0)):
                 count_provider_loss(normalization_loss, "non_object_line_count")
 
 

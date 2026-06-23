@@ -1512,6 +1512,13 @@ pasting raw JSON into multiple docs.
 - **Entrypoint:** `tools/aippocampus/smoke/smoke_source_evidence_recall_eval.py`
 - **Primary evidence owner:** `docs/evidence/readiness/stage-0-5-readiness.md`, `docs/evidence/benchmarks/design/memory-decision-benchmark-plan.md`, #458
 
+### Source-semantic candidate recall eval
+
+- **Entrypoint:** `tools/aippocampus/smoke/smoke_source_semantic_candidate_recall.py`
+- **Primary evidence owner:** #2639, #2641, #2642; recorded/no-key smoke for
+  source-backed semantic candidate lift, source-ref/anchor follow-through, and
+  generic false-positive controls. It is not a live provider quality claim.
+
 ### Known-artifact recall dogfood probes
 
 - **Entrypoint:** `tools/aippocampus/smoke/known_artifact_recall_dogfood.py`

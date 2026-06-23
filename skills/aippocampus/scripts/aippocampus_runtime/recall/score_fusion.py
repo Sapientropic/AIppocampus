@@ -21,6 +21,7 @@ from aippocampus_runtime.recall.scoring_policy import (
     SCORE_FUSION_POLICY,
     SOURCE_SIGNAL_POLICY,
 )
+from aippocampus_runtime.source.io_kernel import safe_float, source_ref_key
 
 SCHEMA_VERSION = 1
 FUSION_KIND = "aippocampus_retrieval_score_fusion"
@@ -35,32 +36,6 @@ def sha1_text(value: str) -> str:
 def stable_id(prefix: str, *parts: Any, length: int = 18) -> str:
     raw = "\n".join(json.dumps(part, ensure_ascii=False, sort_keys=True) for part in parts)
     return f"{prefix}_{sha1_text(raw)[:length]}"
-
-
-def source_ref_key(ref: Mapping[str, Any]) -> tuple[str, str, str, str]:
-    line = (
-        ref.get("source_line")
-        or ref.get("assistant_line")
-        or ref.get("user_line")
-        or ref.get("line")
-        or ""
-    )
-    return (
-        str(ref.get("thread_key") or ""),
-        str(ref.get("message_id") or ""),
-        str(ref.get("turn_id") or ref.get("turn_index") or ""),
-        str(line),
-    )
-
-
-def safe_float(value: Any, default: float = 0.0) -> float:
-    try:
-        number = float(value)
-    except (TypeError, ValueError):
-        return default
-    if number != number or number in {float("inf"), float("-inf")}:
-        return default
-    return number
 
 
 def safe_int(value: Any, default: int = 0) -> int:

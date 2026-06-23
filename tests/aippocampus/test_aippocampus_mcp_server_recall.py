@@ -231,6 +231,11 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
         self.assertIn("recall_selector", action["arguments"])
         self.assertNotIn("associative_path_policy", compact_recall_payload)
         self.assertNotIn("associative_path_fallback", compact_recall_payload)
+        self.assertNotIn("last_recall_cache_available", compact_recall_payload)
+        self.assertNotIn("route_count", compact_recall_payload)
+        self.assertNotIn("safe_next_actions", compact_recall_payload)
+        self.assertNotIn("weak_route_recovery_card", compact_recall_payload)
+        self.assertLessEqual(field_path_count(compact_recall_payload), 60)
         self.assertEqual(executable_command_violations(compact_recall_payload), [])
 
         deepen_payload = self.call_tool_payload(

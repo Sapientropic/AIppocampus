@@ -78,6 +78,12 @@ def public_jobs_payload(result: Mapping[str, Any]) -> dict[str, Any]:
         "cache": public_cache(result.get("cache")),
         "usage": public_usage(result.get("usage")),
         "model_route": public_model_route(result.get("model_route")),
+        "semantic_worker_available": result.get("semantic_worker_available"),
+        "semantic_worker_unavailable": bool(result.get("semantic_worker_unavailable")),
+        "semantic_worker_unavailable_reason": str(
+            result.get("semantic_worker_unavailable_reason") or ""
+        ),
+        "semantic_worker_mode": str(result.get("semantic_worker_mode") or ""),
         "thinking": str(result.get("thinking") or "provider"),
         "reasoning_effort": str(result.get("reasoning_effort") or "provider"),
         "output_private_artifacts": bool(result.get("jobs_output") or result.get("edges_output")),
@@ -145,7 +151,10 @@ def feedback_inputs_from_job_results(results: Sequence[Mapping[str, Any]]) -> li
         job = str(result.get("job") or "unknown_job")
         ok = result.get("ok") is not False
         finding_count = public_count(result.get("finding_count"))
-        if not ok:
+        if result.get("semantic_worker_unavailable"):
+            outcome = "semantic_worker_unavailable"
+            severity = 2
+        elif not ok:
             outcome = "validation_fail"
             severity = 3
         elif finding_count == 0:

@@ -6,6 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from aippocampus_runtime.recall import feedback_events
 from aippocampus_runtime.recall import semantic_trigger_router as router
 
 
@@ -115,6 +116,203 @@ class SemanticTriggerRouterTests(unittest.TestCase):
         self.assertIn("что меня раздражало недавно", rows[0]["aliases"])
         self.assertEqual(rows[0]["activation_cues"][0], "最近让我很烦")
         self.assertNotIn("source-backed hook", " ".join(rows[0]["aliases"]).casefold())
+
+    def test_source_semantic_candidate_becomes_navigation_trigger_with_authority(self) -> None:
+        self.write_candidates(
+            [
+                {
+                    "kind": "aippocampus_promotion_candidate",
+                    "status": "staging",
+                    "candidate_type": "source_semantic_candidate",
+                    "title": "小海马体",
+                    "canonical_label": "小海马体",
+                    "summary": "A source-backed continuity cue for relationship-origin recall.",
+                    "aliases": ["外置小海马", "little hippocampus"],
+                    "activation_cues": ["小海马体 continuity"],
+                    "negative_cues": ["source agent memory"],
+                    "claim_authority": "navigation_only",
+                    "semantic_candidate": True,
+                    "term_type": "relationship_cue",
+                    "surface_status": "exact_surface",
+                    "confidence": 0.84,
+                    "source_refs": [
+                        {"thread_key": "session:origin", "title": "Origin", "line": 12}
+                    ],
+                }
+            ]
+        )
+
+        result = router.build_semantic_triggers(
+            candidates_path=self.candidates,
+            output_path=self.output,
+            seed_triggers_path=None,
+        )
+        rows = [json.loads(line) for line in self.output.read_text(encoding="utf-8").splitlines()]
+
+        self.assertEqual(result["trigger_count"], 1)
+        self.assertEqual(rows[0]["source_candidate_type"], "source_semantic_candidate")
+        self.assertEqual(rows[0]["claim_authority"], "navigation_only")
+        self.assertTrue(rows[0]["semantic_candidate"])
+        self.assertEqual(rows[0]["term_type"], "relationship_cue")
+        self.assertIn("小海马体 continuity", rows[0]["aliases"])
+        self.assertIn("source agent memory", rows[0]["when_not_to_use"])
+
+    def test_feedback_can_suppress_semantic_trigger_without_removing_source_refs(self) -> None:
+        candidate = {
+            "kind": "aippocampus_promotion_candidate",
+            "status": "staging",
+            "candidate_type": "source_semantic_candidate",
+            "title": "source agent memory",
+            "canonical_label": "source agent memory",
+            "summary": "A generic route that should be suppressible by feedback.",
+            "aliases": ["source agent memory"],
+            "activation_cues": ["source agent memory"],
+            "claim_authority": "navigation_only",
+            "semantic_candidate": True,
+            "confidence": 0.84,
+            "source_finding_ids": ["sf_generic"],
+            "source_refs": [{"thread_key": "session:generic", "line": 12}],
+        }
+        self.write_candidates([candidate])
+        feedback_path = self.root / "feedback.jsonl"
+        feedback_path.write_text(
+            json.dumps(
+                feedback_events.active_flow_event(
+                    route_id=router.trigger_key(candidate),
+                    route_kind="active_path",
+                    signal="wrong_route",
+                    source_id="source:generic",
+                ),
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        result = router.build_semantic_triggers(
+            candidates_path=self.candidates,
+            output_path=self.output,
+            seed_triggers_path=None,
+            feedback_path=feedback_path,
+        )
+        rows = [json.loads(line) for line in self.output.read_text(encoding="utf-8").splitlines()]
+
+        self.assertEqual(result["trigger_count"], 1)
+        self.assertEqual(rows[0]["status"], "parked")
+        self.assertTrue(rows[0]["feedback_suppressed"])
+        self.assertEqual(rows[0]["source_refs"][0]["thread_key"], "session:generic")
+        self.assertFalse(rows[0]["feedback_adjustment"]["source_truth_changed"])
+
+    def test_helped_feedback_promotes_semantic_trigger_confidence_only(self) -> None:
+        candidate = {
+            "kind": "aippocampus_promotion_candidate",
+            "status": "staging",
+            "candidate_type": "source_semantic_candidate",
+            "title": "小海马体",
+            "canonical_label": "小海马体",
+            "summary": "A fuzzy continuity cue.",
+            "aliases": ["小海马体"],
+            "activation_cues": ["小海马体"],
+            "claim_authority": "navigation_only",
+            "semantic_candidate": True,
+            "confidence": 0.62,
+            "source_finding_ids": ["sf_origin"],
+            "source_refs": [{"thread_key": "session:origin", "line": 12}],
+        }
+        self.write_candidates([candidate])
+        feedback_path = self.root / "feedback.jsonl"
+        feedback_path.write_text(
+            json.dumps(
+                feedback_events.active_flow_event(
+                    route_id=router.trigger_key(candidate),
+                    route_kind="active_path",
+                    signal="helped",
+                    source_id="source:origin",
+                ),
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        router.build_semantic_triggers(
+            candidates_path=self.candidates,
+            output_path=self.output,
+            seed_triggers_path=None,
+            feedback_path=feedback_path,
+        )
+        row = json.loads(self.output.read_text(encoding="utf-8").splitlines()[0])
+
+        self.assertTrue(row["feedback_promoted"])
+        self.assertGreater(row["confidence"], 0.62)
+        self.assertEqual(row["claim_authority"], "navigation_only")
+
+    def test_alias_and_context_feedback_rewrites_trigger_navigation_not_source_truth(self) -> None:
+        candidate = {
+            "kind": "aippocampus_promotion_candidate",
+            "status": "staging",
+            "candidate_type": "source_semantic_candidate",
+            "title": "小海马体",
+            "canonical_label": "小海马体",
+            "summary": "A fuzzy continuity cue.",
+            "aliases": ["小海马体"],
+            "activation_cues": ["小海马体"],
+            "claim_authority": "navigation_only",
+            "semantic_candidate": True,
+            "confidence": 0.72,
+            "source_finding_ids": ["sf_origin"],
+            "source_refs": [{"thread_key": "session:origin", "line": 12}],
+        }
+        self.write_candidates([candidate])
+        feedback_path = self.root / "feedback.jsonl"
+        trigger_id = router.trigger_key(candidate)
+        feedback_path.write_text(
+            "".join(
+                json.dumps(row, ensure_ascii=False) + "\n"
+                for row in [
+                    feedback_events.alias_merge_event(
+                        route_id=trigger_id,
+                        route_kind="active_path",
+                        aliases=["外置海马体"],
+                        source_id="source:origin",
+                    ),
+                    feedback_events.suppress_context_event(
+                        route_id=trigger_id,
+                        route_kind="active_path",
+                        context_cues=["普通数据库选型"],
+                        source_id="source:origin",
+                    ),
+                    feedback_events.active_flow_event(
+                        route_id=trigger_id,
+                        route_kind="active_path",
+                        signal="helped",
+                        source_id="source:origin",
+                    ),
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        result = router.build_semantic_triggers(
+            candidates_path=self.candidates,
+            output_path=self.output,
+            seed_triggers_path=None,
+            feedback_path=feedback_path,
+        )
+        row = json.loads(self.output.read_text(encoding="utf-8").splitlines()[0])
+
+        self.assertIn("外置海马体", row["aliases"])
+        self.assertIn("普通数据库选型", row["negative_cues"])
+        self.assertIn("普通数据库选型", row["when_not_to_use"])
+        self.assertEqual(row["feedback_adjustment"]["alias_merge_count"], 1)
+        self.assertEqual(row["feedback_adjustment"]["context_suppression_count"], 1)
+        self.assertGreater(row["feedback_adjustment"]["activation_score"], 0)
+        self.assertTrue(row["feedback_adjustment"]["source_refs_preserved"])
+        self.assertFalse(row["feedback_adjustment"]["source_truth_changed"])
+        self.assertEqual(row["claim_authority"], "navigation_only")
+        self.assertEqual(result["feedback_changed_count"], 1)
+        self.assertEqual(result["feedback_alias_merge_count"], 1)
+        self.assertEqual(result["feedback_context_suppression_count"], 1)
 
     def test_fallback_aliases_drop_semigeneric_phrases_and_canonical_duplicates(self) -> None:
         self.write_candidates(

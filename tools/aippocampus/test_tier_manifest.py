@@ -43,6 +43,7 @@ PR_STEMS = frozenset(
         "test_semantic_subregion_budget",
         "test_semantic_candidate_context_bridge_effectiveness",
         "test_source_anchor_artifact_demotion",
+        "test_source_io_kernel",
         "test_source_shape_projection",
         "test_update_agent_status",
     }
@@ -430,6 +431,8 @@ TEST_MODULE_STEMS = frozenset(
         "test_source_evidence_recall_eval",
         "test_source_factual_aliases",
         "test_source_intake_health",
+        "test_source_io_kernel",
+        "test_source_semantic_candidate_recall_eval",
         "test_source_backed_lessons",
         "test_learning_loop",
         "test_source_reopen_budget",
