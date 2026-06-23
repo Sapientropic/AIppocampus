@@ -7,28 +7,14 @@ from collections.abc import Mapping
 from typing import Any
 
 from aippocampus_runtime.core import compact_text
-
-
-def source_ref_key(ref: Mapping[str, Any]) -> tuple[str, str, str, str]:
-    return (
-        str(ref.get("thread_key") or ref.get("thread_id") or ""),
-        str(ref.get("message_id") or ""),
-        str(ref.get("turn_id") or ""),
-        str(ref.get("source_id") or ref.get("source_line") or ref.get("line") or ""),
-    )
+from aippocampus_runtime.source.io_kernel import (
+    clean_source_ref as canonical_clean_source_ref,
+)
+from aippocampus_runtime.source.io_kernel import source_ref_key
 
 
 def clean_source_ref(ref: Mapping[str, Any]) -> dict[str, Any]:
-    clean = {
-        "thread_key": ref.get("thread_key") or ref.get("thread_id"),
-        "message_id": ref.get("message_id"),
-        "turn_id": ref.get("turn_id"),
-        "line": ref.get("line") or ref.get("source_line"),
-        "turn_index": ref.get("turn_index"),
-        "project_label": ref.get("project_label"),
-        "title": ref.get("title"),
-    }
-    return {key: value for key, value in clean.items() if value not in {None, ""}}
+    return canonical_clean_source_ref(ref, require_anchor=False) or {}
 
 
 def source_ref_inventory(pack: Mapping[str, Any]) -> list[dict[str, Any]]:

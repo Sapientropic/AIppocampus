@@ -117,8 +117,37 @@ class McpMemoryHealthRecoveryTests(unittest.TestCase):
         self.assertEqual(deepen_payload["status"], "ok")
         self.assertEqual(deepen_payload["detail"], "compact")
         self.assertEqual(deepen_payload["evidence_level"], "source_backed")
-        self.assertTrue(deepen_payload["source_window_summary"]["has_exact_source"])
+        self.assertEqual(deepen_payload["source_open_posture"], "target_evidence_opened")
+        self.assertNotIn("source_window_summary", deepen_payload)
         self.assertNotIn("result", deepen_payload)
+
+        full_deepen_response = mcp.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 58220,
+                "method": "tools/call",
+                "params": {
+                    "name": "agent_deepen",
+                    "arguments": {
+                        **recall_payload["foreground_action"]["arguments"],
+                        "detail": "full",
+                    },
+                },
+            }
+        )
+        full_deepen_payload = self.tool_payload(full_deepen_response)
+        self.assertFalse(
+            full_deepen_response["result"].get("isError", False),
+            full_deepen_payload,
+        )
+        self.assertEqual(full_deepen_payload["detail"], "full")
+        full_result = full_deepen_payload["result"]
+        self.assertGreaterEqual(full_result["source_window"]["message_count"], 1)
+        self.assertTrue(full_result["source_refs"])
+        self.assertIn(
+            "source-backed continuity",
+            json.dumps(full_result["source_window"], ensure_ascii=False),
+        )
 
         with mock.patch.object(
             mcp_tools.aippocampus_health,

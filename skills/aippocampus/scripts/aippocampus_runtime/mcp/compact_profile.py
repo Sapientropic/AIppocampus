@@ -46,6 +46,54 @@ COMPACT_DEBUG_FIELD_DENYLIST = frozenset(
     }
 )
 
+MCP_COMPACT_CARD_SURFACES = frozenset(
+    {
+        "mcp_agent_recall_compact",
+        "mcp_agent_deepen_compact",
+        "mcp_agent_explain_compact",
+    }
+)
+
+MCP_ACTION_KEYS = frozenset(
+    {
+        "id",
+        "tool_name",
+        "arguments",
+        "arguments_template",
+        "mutation_risk",
+        "claim_boundary",
+        "label",
+        "why",
+        "command",
+        "command_template",
+        "followup_arguments_template",
+        "requires",
+        "template_only",
+        "continue_without_command",
+    }
+)
+
+MCP_ROUTE_KEYS = frozenset(
+    {
+        "index",
+        "label",
+        "why_this_route",
+        "source_boundary",
+        "claim_boundary",
+        "action",
+    }
+)
+
+MCP_CLAIM_BOUNDARY_KEYS = frozenset(
+    {
+        "can_use_for",
+        "must_reopen_for",
+        "detail_available",
+        "detail_mode",
+        "source_summary_is_not_quote",
+    }
+)
+
 
 def strip_compact_foreground_debug_fields(value: Any) -> Any:
     """Remove backstage field families from compact foreground payloads."""
@@ -104,6 +152,89 @@ def compact_foreground_summary(payload: Any) -> str:
     return core.compact_text(" | ".join(parts), 360)
 
 
+def _compact_action(action: Any) -> dict[str, Any]:
+    if not isinstance(action, Mapping):
+        return {}
+    return {
+        key: strip_compact_foreground_debug_fields(value)
+        for key, value in action.items()
+        if key in MCP_ACTION_KEYS and value not in (None, "")
+    }
+
+
+def _compact_route(route: Any) -> dict[str, Any]:
+    if not isinstance(route, Mapping):
+        return {}
+    result: dict[str, Any] = {}
+    for key, value in route.items():
+        if key not in MCP_ROUTE_KEYS or value in (None, ""):
+            continue
+        result[key] = _compact_action(value) if key == "action" else strip_compact_foreground_debug_fields(value)
+    return result
+
+
+def _compact_claim_boundary(boundary: Any) -> dict[str, Any]:
+    if not isinstance(boundary, Mapping):
+        return {}
+    return {
+        key: strip_compact_foreground_debug_fields(value)
+        for key, value in boundary.items()
+        if key in MCP_CLAIM_BOUNDARY_KEYS and value not in (None, "")
+    }
+
+
+def compact_mcp_structured_content(payload: Any) -> Any:
+    """Shrink MCP compact structuredContent to the foreground card.
+
+    The CLI compact JSON can remain a richer operator/test artifact. MCP compact
+    is different: models ingest structuredContent by default, so keeping route
+    counts, cache state, policy matrices, or acceptance breadcrumbs there turns
+    the foreground tool into a token-heavy debug console. Full/detail output is
+    the escape hatch for that audit material.
+    """
+
+    if not isinstance(payload, dict):
+        return payload
+    surface = str(payload.get("surface") or "").strip()
+    if surface not in MCP_COMPACT_CARD_SURFACES:
+        return payload
+    card: dict[str, Any] = {
+        key: payload[key]
+        for key in (
+            "detail",
+            "kind",
+            "schema_version",
+            "mode",
+            "surface",
+            "status",
+            "ok",
+            "source_open_posture",
+            "evidence_level",
+            "summary",
+        )
+        if key in payload and payload[key] not in (None, "")
+    }
+    action = _compact_action(payload.get("foreground_action"))
+    if action:
+        card["foreground_action"] = action
+    follow_up_action = _compact_action(payload.get("follow_up_action"))
+    if follow_up_action and follow_up_action != action:
+        card["follow_up_action"] = follow_up_action
+    routes = [_compact_route(route) for route in payload.get("routes") or []]
+    routes = [route for route in routes if route][:2]
+    if routes:
+        card["routes"] = routes
+    snippet = payload.get("primary_source_snippet")
+    if isinstance(snippet, Mapping):
+        card["primary_source_snippet"] = strip_compact_foreground_debug_fields(dict(snippet))
+    boundary = _compact_claim_boundary(payload.get("claim_boundary"))
+    if boundary:
+        card["claim_boundary"] = boundary
+    if "foreground_action_contract" in payload:
+        card["foreground_action_contract"] = payload["foreground_action_contract"]
+    return strip_compact_foreground_debug_fields(card)
+
+
 def compact_mcp_tool_result(payload: Any, *, is_error: bool = False) -> dict[str, Any]:
     """Return an MCP result shape agents can read without parsing a JSON wall."""
 
@@ -117,7 +248,9 @@ def compact_mcp_tool_result(payload: Any, *, is_error: bool = False) -> dict[str
             ],
             "isError": is_error,
         }
-    compact_payload = strip_compact_foreground_debug_fields(payload)
+    compact_payload = compact_mcp_structured_content(
+        strip_compact_foreground_debug_fields(payload)
+    )
     return {
         "content": [{"type": "text", "text": compact_foreground_summary(compact_payload)}],
         "structuredContent": compact_payload,

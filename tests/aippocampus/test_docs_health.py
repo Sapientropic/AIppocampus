@@ -402,6 +402,12 @@ class DocsHealthTests(unittest.TestCase):
                         "Dream, Journey, subconscious jobs, semantic sidecars, ambient recall, sync,",
                         "vault, Observatory",
                         "Generated findings must not replace clean source.",
+                        "### Derived-Layer Authority Contract",
+                        "Reject the ladder `source > deterministic rules > LLM findings`.",
+                        "LLM or human semantic workers produce meaning-bearing candidates.",
+                        "deterministic scripts validate source reachability, safety, structure, routing, and drift risk.",
+                        "Statistical features such as df, AV, PMI, source diversity, confidence, and fanout are evidence for routing/review, not final semantic validity.",
+                        "`detached`, `reviewable`, and `discardable` are governance properties.",
                     ]
                 ),
                 encoding="utf-8",
@@ -429,6 +435,51 @@ class DocsHealthTests(unittest.TestCase):
         self.assertIn(
             "docs claim generated findings replace clean source; route them as navigation: "
             "docs/bad.md",
+            issues,
+        )
+
+    def test_source_kernel_contract_blocks_deterministic_semantic_supremacy(self) -> None:
+        with docs_health_repo() as repo:
+            overview = repo / "docs" / "architecture" / "architecture-overview.md"
+            overview.parent.mkdir(parents=True)
+            overview.write_text(
+                "\n".join(
+                    [
+                        "## Source-Backed Kernel Contract",
+                        "ConversationProvider -> CleanSource -> SourceRef/Registry -> "
+                        "Rebuildable Index -> RecallCandidate -> RecallDecision -> "
+                        "SourceReopen -> BoundedEvidence",
+                        "Clean source is the truth substrate.",
+                        "Indexes are rebuildable caches, not truth.",
+                        "Source reopen is the transition from route/context to "
+                        "claim-supporting evidence.",
+                        "Authority rings",
+                        "Truth substrate",
+                        "Rebuildable cache",
+                        "Navigation sidecar",
+                        "Foreground packet",
+                        "Bounded / source-open evidence",
+                        "Dream, Journey, subconscious jobs, semantic sidecars, ambient recall, sync,",
+                        "vault, Observatory",
+                        "Generated findings must not replace clean source.",
+                        "### Derived-Layer Authority Contract",
+                        "Reject the ladder `source > deterministic rules > LLM findings`.",
+                        "LLM or human semantic workers produce meaning-bearing candidates.",
+                        "deterministic scripts validate source reachability, safety, structure, routing, and drift risk.",
+                        "Statistical features such as df, AV, PMI, source diversity, confidence, and fanout are evidence for routing/review, not final semantic validity.",
+                        "`detached`, `reviewable`, and `discardable` are governance properties.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            (repo / "docs" / "bad.md").write_text(
+                "Deterministic heuristics decide semantic truth.\n", encoding="utf-8"
+            )
+
+            issues = docs_health.source_kernel_contract_issues(repo)
+
+        self.assertIn(
+            "docs claim deterministic heuristics decide semantic truth: docs/bad.md",
             issues,
         )
 

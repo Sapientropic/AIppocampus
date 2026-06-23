@@ -379,6 +379,13 @@ def trigger_from_working_memory(row: dict[str, Any]) -> dict[str, Any]:
         "confidence": row.get("confidence"),
         "route": row.get("route"),
         "project_label": row.get("project_label"),
+        "claim_authority": row.get("claim_authority"),
+        "foreground_policy": row.get("foreground_policy"),
+        "semantic_candidate": bool(row.get("semantic_candidate")),
+        "negative_cues": row.get("negative_cues") or [],
+        "term_type": row.get("term_type"),
+        "surface_status": row.get("surface_status"),
+        "source_refs": [ref for ref in row.get("source_refs") or [] if isinstance(ref, dict)][:8],
     }
 
 
@@ -532,6 +539,21 @@ def load_semantic_triggers(path: Path | None) -> list[dict[str, Any]]:
                 ),
                 "when_not_to_use": compact_text(str(row.get("when_not_to_use") or ""), 180),
                 "confidence": row.get("confidence"),
+                "source_candidate_type": row.get("source_candidate_type"),
+                "claim_authority": row.get("claim_authority"),
+                "foreground_policy": row.get("foreground_policy"),
+                "semantic_candidate": bool(row.get("semantic_candidate")),
+                "negative_cues": [
+                    value
+                    for value in collect_exact_aliases(row.get("negative_cues") or [], limit=12)
+                    if _trigger_alias_allowed(value)
+                ],
+                "term_type": row.get("term_type"),
+                "surface_status": row.get("surface_status"),
+                "feedback_adjustment": row.get("feedback_adjustment")
+                if isinstance(row.get("feedback_adjustment"), dict)
+                else None,
+                "feedback_promoted": bool(row.get("feedback_promoted")),
                 "source_refs": source_refs[:8],
             }
         )

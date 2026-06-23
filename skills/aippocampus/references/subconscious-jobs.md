@@ -187,7 +187,12 @@ defined in `retrieval-and-storage.md`. Subconscious jobs may emit lifecycle
 signals, but graph status is still navigation metadata: it must not rewrite
 staging JSONL, delete source refs, or become source truth.
 
-Every accepted finding also gets deterministic metadata before it is written:
+Every accepted finding also gets deterministic metadata before it is written.
+This follows the canonical derived-layer contract in
+`docs/architecture/architecture-overview.md#derived-layer-authority-contract`:
+LLM or human workers may produce meaning-bearing candidates, while scripts
+validate source reachability, safety, structure, routing, and drift risk.
+Deterministic metadata is instrumentation, not semantic supremacy.
 
 - `fingerprint`: stable-ish finding id for dedup/review.
 - `quality.evidence_strength`: source count/thread/final-answer support.

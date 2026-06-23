@@ -8,6 +8,13 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from aippocampus_runtime.registry.api import load_registry
+from aippocampus_runtime.source.io_kernel import (
+    clean_source_ref as canonical_clean_source_ref,
+)
+from aippocampus_runtime.source.io_kernel import (
+    source_message_keys,
+    source_ref_key,
+)
 from aippocampus_runtime.source.search import iter_clean_messages
 
 
@@ -37,39 +44,8 @@ class SourceRefIndex:
         return False
 
 
-def source_ref_key(ref: Mapping[str, Any]) -> tuple[str, str, str, str]:
-    line = (
-        ref.get("source_line")
-        or ref.get("assistant_line")
-        or ref.get("user_line")
-        or ref.get("line")
-        or ""
-    )
-    return (
-        str(ref.get("thread_key") or ""),
-        str(ref.get("message_id") or ""),
-        str(ref.get("turn_id") or ref.get("turn_index") or ""),
-        str(line),
-    )
-
-
 def message_source_keys(thread_key: str, message: Mapping[str, Any]) -> list[tuple[str, str, str, str]]:
-    message_id = str(message.get("message_id") or message.get("id") or "")
-    turn_id = str(message.get("turn_id") or "")
-    turn_index = str(message.get("turn_index") or "")
-    line = str(message.get("source_line") or "")
-    keys = [
-        (thread_key, message_id, turn_id, line),
-        (thread_key, message_id, "", line),
-        (thread_key, message_id, turn_id, ""),
-        (thread_key, message_id, "", ""),
-        (thread_key, "", turn_id, line),
-        (thread_key, "", turn_id, ""),
-        (thread_key, "", turn_index, line),
-        (thread_key, "", turn_index, ""),
-        (thread_key, "", "", line),
-    ]
-    return [key for key in keys if any(key[1:])]
+    return source_message_keys(thread_key, message)
 
 
 def build_source_ref_index(registry_path: Path | None) -> SourceRefIndex | None:
@@ -99,25 +75,7 @@ def build_source_ref_index(registry_path: Path | None) -> SourceRefIndex | None:
 
 
 def clean_source_ref(ref: Any) -> dict[str, Any] | None:
-    if not isinstance(ref, dict):
-        return None
-    thread_key, message_id, turn_id, line = source_ref_key(ref)
-    if not thread_key or not (message_id or turn_id or line):
-        return None
-    clean = {
-        "thread_key": thread_key,
-        "title": ref.get("title"),
-        "project_label": ref.get("project_label"),
-        "turn_id": ref.get("turn_id"),
-        "turn_index": ref.get("turn_index"),
-        "message_id": ref.get("message_id"),
-        "source_line": ref.get("source_line"),
-        "assistant_line": ref.get("assistant_line"),
-        "user_line": ref.get("user_line"),
-        "line": ref.get("line"),
-        "timestamp": ref.get("timestamp"),
-    }
-    return {key: value for key, value in clean.items() if value not in {None, ""}}
+    return canonical_clean_source_ref(ref, require_anchor=True)
 
 
 def compact_source_refs(

@@ -103,11 +103,38 @@ layers may route attention, compress interpretation, schedule review, explain
 activation, or move source-backed artifacts across devices. They must not
 replace clean source, raw audit source, or source reopen. Generated findings
 must not replace clean source; summaries can be useful maps only when they keep
-a route back to source and remain lower authority than reopened evidence.
+a route back to source and require reopened evidence before claims.
 
 This contract is deliberately not search-only memory. Higher-level cognition is
 allowed, but its product job is to help a later agent find and use source with
 care, not to create a second memory truth layer.
+
+### Derived-Layer Authority Contract
+
+Reject the ladder `source > deterministic rules > LLM findings`. The product
+contract is narrower and more useful:
+
+```text
+source decides factual claims
+LLM or human semantic workers produce meaning-bearing candidates
+deterministic scripts validate source reachability, safety, structure, routing, and drift risk
+foreground consumers use the best source-reachable route for the current task
+```
+
+Clean source / raw source decide factual claims and exact wording. LLM or human
+semantic workers produce meaning-bearing candidates: conclusions, aliases,
+metaphors, decisions, preferences, action cues, relationship continuity, and
+unresolved lines of thought. Deterministic scripts validate operations: source
+refs resolve, text is redacted, fanout/genericness is visible, candidates are
+deduped, caches are rebuildable, and routes stay cheap and safe.
+
+Statistical features such as df, AV, PMI, source diversity, confidence, and
+fanout are evidence for routing/review, not final semantic validity.
+`detached`, `reviewable`, and `discardable` are governance properties of
+derived artifacts, not a statement that model or human semantic output is lower
+quality than scripts. A deterministic gate may block unsafe, unsourced, or
+unusable activation, but it must not silently delete source-backed meaning just
+because the phrase is unusual, low-frequency, multilingual, or hard to score.
 
 ## Metaphor Discipline
 
@@ -122,7 +149,7 @@ currently supports the claim.
 | Scent / ambient recall | Prompt-time hooks, thread ambient cache, warm recall cards, and small source-backed cards. | Scent can preactivate a route before evidence, but factual claims still need source refs or an explicit uncertainty label. | Selected prompts can receive tentative recall cues or source-backed cards, with benchmark, smoke, and field-report evidence tracked in `docs/evidence/`. | Do not treat a scent as a fact, user profile, or permission to inject private context into unrelated work. |
 | Staging / materialization / consolidation | Clean-source materialization, registry rows, staging findings, review gates, and source-ref validation. | Model-organized candidates remain navigation until they are tied back to source and accepted by the owning flow. | Clean source and selected staging flows preserve source refs while allowing provisional organization. | Do not call summaries, candidates, or concept edges memory truth by themselves. |
 | Cognitive map | Concept edges, semantic sidecars, route cues, and source-reopen pressure. | The map should improve wayfinding through old source, not replace the source or decide what is true. | Navigation sidecars can suggest routes back into source; broader map quality remains roadmap/prototype direction. | Do not imply a complete mental model, neuroscience fidelity, or a solved personal ontology. |
-| Dream / subconscious jobs | Background job circuits, dream input packs, adjudication rules, and optional staging writes. | Detached synthesis must be labeled, reviewable, discardable, and lower authority than source-backed recall. | Implemented slices and dated evidence exist for selected paths; broader Dream quality remains research. | Do not claim predictive dream quality, privileged user simulation, or solved proactive replay. |
+| Dream / subconscious jobs | Background job circuits, dream input packs, adjudication rules, and optional staging writes. | Detached synthesis must be labeled, reviewable, discardable, and source-routed before claims. | Implemented slices and dated evidence exist for selected paths; broader Dream quality remains research. | Do not claim predictive dream quality, privileged user simulation, or solved proactive replay. |
 
 ## Activation-Surface Authority Budget
 

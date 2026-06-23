@@ -11,14 +11,13 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import re
-import time
 from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.core import now_utc
 from aippocampus_runtime.privacy import OPENAI_KEY_RE, SENSITIVE_ASSIGNMENT_RE
+from aippocampus_runtime.source.io_kernel import write_json_atomic, write_jsonl_dict_rows
 from aippocampus_runtime.source.jsonl_reader import load_jsonl_dict_rows
 
 SOURCE_FACTUAL_ALIASES_FILENAME = "source-factual-aliases.jsonl"
@@ -108,20 +107,11 @@ def _messages_fingerprint(path: Path) -> str:
 
 
 def _write_json_atomic(path: Path, payload: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(f".{path.name}.{os.getpid()}.{time.time_ns()}.tmp")
-    tmp.write_text(json.dumps(payload, ensure_ascii=False, sort_keys=True) + "\n", encoding="utf-8")
-    tmp.replace(path)
+    write_json_atomic(path, payload, indent=None, sort_keys=True)
 
 
 def _write_jsonl_atomic(path: Path, rows: list[dict[str, Any]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(f".{path.name}.{os.getpid()}.{time.time_ns()}.tmp")
-    tmp.write_text(
-        "".join(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n" for row in rows),
-        encoding="utf-8",
-    )
-    tmp.replace(path)
+    write_jsonl_dict_rows(path, rows, sort_keys=True)
 
 
 def _safe_term(term: str) -> str:

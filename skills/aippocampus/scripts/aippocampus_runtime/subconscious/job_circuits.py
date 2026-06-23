@@ -120,6 +120,32 @@ JOB_SPECS: dict[str, dict[str, Any]] = {
         "must_include": ["title", "summary", "confidence", "source_refs"],
         "notes": "Avoid trivial utterances, Goal/system injection, and broad personalizing triggers.",
     },
+    "source_alias_mining": {
+        "purpose": (
+            "Mine source-backed salient terms, aliases, and activation cues from bounded clean-source "
+            "windows for recall/navigation."
+        ),
+        "finding_kind": "source_semantic_candidate",
+        "must_include": [
+            "canonical_label",
+            "aliases",
+            "activation_cues",
+            "negative_cues",
+            "term_type",
+            "source_refs",
+            "confidence",
+            "surface_status",
+            "authority",
+        ],
+        "notes": (
+            "This is a semantic producer, not a source truth writer. Read clean source only; propose user "
+            "phrases, project concepts, metaphors, decisions, preferences, action cues, relationship cues, "
+            "and avoidance cues that later agents can use as navigation. Exact-surface labels must be tied "
+            "to provided source_refs. Inferred labels are allowed only as navigation_only and must tell a "
+            "foreground agent to reopen/deepen before claims. Deterministic statistics may select windows "
+            "or add diagnostics, but must not be the final semantic judge."
+        ),
+    },
     "cognitive_map": {
         "purpose": "Propose source-backed mental-map landmarks, regions, and routes for ambient recall navigation.",
         "finding_kind": "cognitive_map_route",
@@ -305,7 +331,7 @@ def jobs_initial_payload(
                     "landmarks": "required for cognitive_map only; list of durable concepts/places",
                     "regions": "required for cognitive_map only; list of topic/decision spaces",
                     "route_cues": "required for cognitive_map only; prompts or semantic cues that should navigate here",
-                    "negative_cues": "optional for cognitive_map; contexts that should not trigger this route",
+                    "negative_cues": "optional for cognitive_map/source_alias_mining; contexts that should not trigger this route",
                     "target_thread_keys": "required for cognitive_map only; must be backed by source_refs",
                     "route_kind": "optional for cognitive_map: association|preplay|detour|blocked_route",
                     "message_id": "required for semantic_scope_labeling only; clean-source message_id being labeled",
@@ -330,6 +356,13 @@ def jobs_initial_payload(
                     "link_type": "required for question_link only: recurring|evolving|parent_of|child_of|related",
                     "dependency_edges": "required for question_link only; auditable ordering hints between linked questions",
                     "match_evidence": "required for question_link only; deterministic scores and optional confirmation audit",
+                    "canonical_label": "required for source_alias_mining only; short source-backed semantic label",
+                    "aliases": "required for source_alias_mining only; safe alternate labels or phrases",
+                    "activation_cues": "required for source_alias_mining only; prompt meanings that should activate this route",
+                    "term_type": "required for source_alias_mining only: user_phrase|project_concept|decision_label|metaphor|tool|action|preference|relationship_cue|avoidance_cue",
+                    "surface_status": "required for source_alias_mining only: exact_surface|lightly_normalized|inferred_label",
+                    "authority": "required for source_alias_mining only; usually navigation_only until source reopen",
+                    "when_not_to_use": "optional for source_alias_mining; compact over-trigger boundary",
                     "theme_cluster_id": "required for theme_candidate only; stable id for deterministic cluster",
                     "theme_label": "required for theme_candidate only; readable label derived from shared source concepts",
                     "theme_short": "required for theme_candidate only; compact source-derived concept label",

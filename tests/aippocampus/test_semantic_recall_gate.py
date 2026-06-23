@@ -602,6 +602,47 @@ class SemanticRecallGateTests(unittest.TestCase):
             )
         )
 
+    def test_source_semantic_trigger_is_prompt_relevant_without_generic_alias_spillover(self) -> None:
+        triggers_path = self.root / "source_semantic_triggers.jsonl"
+        triggers_path.write_text(
+            json.dumps(
+                {
+                    "kind": "aippocampus_semantic_trigger",
+                    "title": "小海马体",
+                    "concept": "小海马体",
+                    "source_candidate_type": "source_semantic_candidate",
+                    "aliases": ["小海马体 continuity"],
+                    "activation_cues": ["小海马体 continuity"],
+                    "negative_cues": ["source agent memory"],
+                    "claim_authority": "navigation_only",
+                    "semantic_candidate": True,
+                    "term_type": "relationship_cue",
+                    "surface_status": "exact_surface",
+                    "status": "active",
+                    "confidence": 0.86,
+                    "source_refs": [{"thread_key": "session:origin", "line": 12}],
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        relevant = gate.prompt_relevant_triggers(
+            prompt="小海马体 continuity 那条关系源头继续一下",
+            semantic_triggers_path=triggers_path,
+        )
+        generic = gate.prompt_relevant_triggers(
+            prompt="source agent memory",
+            semantic_triggers_path=triggers_path,
+        )
+
+        self.assertEqual(len(relevant), 1)
+        self.assertEqual(relevant[0]["claim_authority"], "navigation_only")
+        self.assertTrue(relevant[0]["semantic_candidate"])
+        self.assertEqual(relevant[0]["source_candidate_type"], "source_semantic_candidate")
+        self.assertEqual(generic, [])
+
     def test_reviewed_trigger_keeps_late_domain_aliases_prompt_relevant(self) -> None:
         triggers_path = self.root / "semantic_triggers.jsonl"
         aliases = [f"filler alias {index}" for index in range(18)]

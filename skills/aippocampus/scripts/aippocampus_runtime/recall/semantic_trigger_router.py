@@ -21,19 +21,25 @@ from aippocampus_runtime.navigation.associations import (
     source_text_is_noise,
     term_is_noise,
 )
+from aippocampus_runtime.recall import feedback_events
 from aippocampus_runtime.recall.query_policy import split_query_terms
 from aippocampus_runtime.recall.semantic_recall_gate import default_semantic_triggers_path
 from aippocampus_runtime.registry.api import registry_paths, unique_preserve
 from aippocampus_runtime.subconscious.candidate_router import (
+    SOURCE_SEMANTIC_TYPES,
     activation_cue_terms_for,
     activation_cues_for,
     default_candidates_path,
     iter_jsonl,
     write_jsonl,
 )
+from aippocampus_runtime.subconscious.candidate_router_feedback import (
+    apply_alias_merge_feedback,
+    apply_context_suppression_feedback,
+)
 
 TRIGGER_SCHEMA_VERSION = 1
-TRIGGER_TYPES = {"hook_trigger", "project_memory", "concept_edge"}
+TRIGGER_TYPES = {"hook_trigger", "project_memory", "concept_edge", *SOURCE_SEMANTIC_TYPES}
 MIN_CONFIDENCE = 0.62
 TRIGGER_ID_DIGEST_LENGTH = 24
 MAX_PROMOTED_ALIASES = 16
@@ -201,6 +207,16 @@ def alias_candidates(
             limit=MAX_SEED_ALIASES,
             diagnostics=diagnostics,
         )
+    if str(candidate.get("candidate_type") or "") in SOURCE_SEMANTIC_TYPES:
+        semantic_aliases = [
+            str(candidate.get("canonical_label") or ""),
+            *(str(value) for value in candidate.get("aliases") or []),
+        ]
+        return clean_aliases(
+            semantic_aliases,
+            limit=MAX_PROMOTED_ALIASES,
+            diagnostics=diagnostics,
+        )
     text = "\n".join(
         [
             str(candidate.get("title") or ""),
@@ -289,7 +305,10 @@ def iter_seed_triggers(
 
 
 def route_candidate(
-    candidate: dict[str, Any], *, diagnostics: dict[str, Any] | None = None
+    candidate: dict[str, Any],
+    *,
+    diagnostics: dict[str, Any] | None = None,
+    feedback_rows: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any] | None:
     if candidate.get("kind") != "aippocampus_promotion_candidate":
         return None
@@ -305,11 +324,28 @@ def route_candidate(
     aliases = alias_candidates(candidate, diagnostics=diagnostics)
     if not aliases:
         return None
+    negative_cues = clean_aliases(
+        [str(value or "") for value in candidate.get("negative_cues") or []],
+        limit=10,
+        diagnostics=diagnostics,
+    )
+    when_not_to_use = compact_text(str(candidate.get("when_not_to_use") or ""), 220)
+    if not when_not_to_use:
+        if negative_cues:
+            when_not_to_use = (
+                "Do not activate for: " + "; ".join(negative_cues[:4])
+                + ". Reopen source before presenting exact claims as facts."
+            )
+        else:
+            when_not_to_use = (
+                "Use as a semantic recall hint only; search clean source before "
+                "presenting exact claims as facts."
+            )
     if diagnostics is not None:
         diagnostics["promoted_candidate_count"] = (
             int(diagnostics.get("promoted_candidate_count") or 0) + 1
         )
-    return {
+    trigger = {
         "schema_version": TRIGGER_SCHEMA_VERSION,
         "kind": "aippocampus_semantic_trigger",
         "trigger_id": trigger_key(candidate),
@@ -318,14 +354,103 @@ def route_candidate(
         "source": "semantic_trigger_router",
         "source_candidate_type": candidate_type,
         "title": compact_text(str(candidate.get("title") or ""), 100),
-        "concept": compact_text(str(candidate.get("title") or ""), 100),
+        "concept": compact_text(
+            str(candidate.get("canonical_label") or candidate.get("title") or ""), 100
+        ),
         "aliases": aliases,
         "when_to_use": compact_text(str(candidate.get("summary") or ""), 320),
-        "when_not_to_use": "Use as a semantic recall hint only; search clean source before presenting exact claims as facts.",
+        "when_not_to_use": when_not_to_use,
         "confidence": round(confidence, 4),
         "activation_cues": activation_cues_for(candidate),
+        "negative_cues": negative_cues,
+        "claim_authority": str(candidate.get("claim_authority") or "navigation_only"),
+        "foreground_policy": str(candidate.get("foreground_policy") or "reopenable_route"),
+        "semantic_candidate": bool(candidate.get("semantic_candidate"))
+        or candidate_type in SOURCE_SEMANTIC_TYPES,
+        "term_type": candidate.get("term_type"),
+        "surface_status": candidate.get("surface_status"),
         "source_refs": refs,
     }
+    apply_feedback_adjustment(trigger, candidate, feedback_rows or [])
+    return trigger
+
+
+def _feedback_ids_for_trigger(trigger: dict[str, Any], candidate: dict[str, Any]) -> set[str]:
+    ids = {
+        str(trigger.get("trigger_id") or ""),
+        str(candidate.get("candidate_id") or ""),
+        str(candidate.get("route_id") or ""),
+    }
+    ids.update(str(value) for value in candidate.get("source_finding_ids") or [])
+    return {value for value in ids if value}
+
+
+def apply_feedback_adjustment(
+    trigger: dict[str, Any], candidate: dict[str, Any], rows: list[dict[str, Any]]
+) -> None:
+    ids = _feedback_ids_for_trigger(trigger, candidate)
+    relevant = [
+        row
+        for row in rows
+        if isinstance(row, dict)
+        and str(row.get("route_id") or row.get("candidate_id") or "") in ids
+    ]
+    apply_alias_merge_feedback(trigger, candidate, relevant)
+    apply_context_suppression_feedback(trigger, candidate, relevant)
+    if trigger.get("routing_diagnostics", {}).get("feedback_alias_merged"):
+        trigger["aliases"] = unique_preserve(
+            clean_aliases(
+                [str(alias or "") for alias in trigger.get("aliases") or []],
+                limit=MAX_PROMOTED_ALIASES,
+            ),
+            limit=MAX_PROMOTED_ALIASES,
+        )
+    if trigger.get("routing_diagnostics", {}).get("feedback_context_suppressed"):
+        trigger["negative_cues"] = unique_preserve(
+            clean_aliases(
+                [str(cue or "") for cue in trigger.get("negative_cues") or []],
+                limit=10,
+            ),
+            limit=10,
+        )
+        if trigger["negative_cues"]:
+            trigger["when_not_to_use"] = compact_text(
+                "Do not activate for: "
+                + "; ".join(trigger["negative_cues"][:4])
+                + ". "
+                + str(trigger.get("when_not_to_use") or ""),
+                220,
+            )
+    prior_adjustment = dict(trigger.get("feedback_adjustment") or {})
+    if not relevant:
+        return
+    report = feedback_events.active_flow_activation_report(relevant)
+    routes = report.get("routes") or []
+    if not routes:
+        return
+    route = routes[0]
+    score = float(route.get("activation_score") or 0.0)
+    trigger["feedback_adjustment"] = {
+        **prior_adjustment,
+        "activation_score": route.get("activation_score"),
+        "event_count": route.get("event_count"),
+        "signal_counts": route.get("signal_counts") or {},
+        "foreground_eligible": bool(route.get("foreground_eligible")),
+        "reason_codes": route.get("reason_codes") or [],
+        "source_refs_preserved": True,
+        "source_truth_changed": False,
+    }
+    if not route.get("foreground_eligible") and score <= 0:
+        trigger["status"] = "parked"
+        trigger["feedback_suppressed"] = True
+        trigger["when_not_to_use"] = compact_text(
+            "Suppressed by same-route feedback; source refs remain auditable. "
+            + str(trigger.get("when_not_to_use") or ""),
+            220,
+        )
+    elif score > 0:
+        trigger["feedback_promoted"] = True
+        trigger["confidence"] = round(min(1.0, float(trigger.get("confidence") or 0.0) + 0.05), 4)
 
 
 def build_semantic_triggers(
@@ -333,6 +458,7 @@ def build_semantic_triggers(
     candidates_path: Path,
     output_path: Path,
     seed_triggers_path: Path | None = None,
+    feedback_path: Path | None = None,
 ) -> dict[str, Any]:
     rows: list[dict[str, Any]] = []
     by_key: dict[str, dict[str, Any]] = {}
@@ -344,10 +470,15 @@ def build_semantic_triggers(
         "skipped_seed_reasons": {},
     }
     seed_triggers = iter_seed_triggers(seed_triggers_path, diagnostics=diagnostics)
+    feedback_rows = iter_jsonl(feedback_path) if feedback_path else []
     for trigger in seed_triggers:
         by_key[str(trigger.get("trigger_id"))] = trigger
     for candidate in iter_jsonl(candidates_path):
-        routed = route_candidate(candidate, diagnostics=diagnostics)
+        routed = route_candidate(
+            candidate,
+            diagnostics=diagnostics,
+            feedback_rows=feedback_rows,
+        )
         if not routed:
             continue
         key = str(routed.get("trigger_id"))
@@ -369,6 +500,7 @@ def build_semantic_triggers(
         "created_at": now_utc(),
         "source_candidates": str(candidates_path),
         "seed_triggers": str(seed_triggers_path) if seed_triggers_path else None,
+        "source_feedback": str(feedback_path) if feedback_path else "",
         "seed_trigger_count": len(seed_triggers),
         "promoted_candidate_count": diagnostics["promoted_candidate_count"],
         "dropped_alias_count": diagnostics["dropped_alias_count"],
@@ -378,6 +510,19 @@ def build_semantic_triggers(
         ],
         "skipped_seed_reasons": diagnostics["skipped_seed_reasons"],
         "trigger_count": len(rows),
+        "feedback_changed_count": sum(
+            1 for row in rows if isinstance(row.get("feedback_adjustment"), dict)
+        ),
+        "feedback_alias_merge_count": sum(
+            int((row.get("feedback_adjustment") or {}).get("alias_merge_count") or 0)
+            for row in rows
+            if isinstance(row.get("feedback_adjustment"), dict)
+        ),
+        "feedback_context_suppression_count": sum(
+            int((row.get("feedback_adjustment") or {}).get("context_suppression_count") or 0)
+            for row in rows
+            if isinstance(row.get("feedback_adjustment"), dict)
+        ),
         "output": str(output_path),
     }
     return summary
@@ -391,6 +536,7 @@ def main() -> int:
     parser.add_argument("--output")
     parser.add_argument("--seed-triggers")
     parser.add_argument("--no-seed-triggers", action="store_true")
+    parser.add_argument("--feedback-jsonl")
     parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args()
 
@@ -417,7 +563,10 @@ def main() -> int:
         else default_seed_triggers_path()
     )
     result = build_semantic_triggers(
-        candidates_path=candidates, output_path=output, seed_triggers_path=seed_triggers_path
+        candidates_path=candidates,
+        output_path=output,
+        seed_triggers_path=seed_triggers_path,
+        feedback_path=Path(args.feedback_jsonl).resolve() if args.feedback_jsonl else None,
     )
     if args.json_output:
         print(json.dumps(result, ensure_ascii=False, indent=2))

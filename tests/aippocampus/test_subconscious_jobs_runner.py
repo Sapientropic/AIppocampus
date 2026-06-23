@@ -24,6 +24,75 @@ SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 JOBS_RUNNER = SCRIPTS / "aippocampus_runtime" / "subconscious" / "jobs.py"
 
 class SubconsciousJobsRunnerTests(unittest.TestCase):
+    def test_source_semantic_worker_no_key_reports_unavailable_without_blocking_deterministic_jobs(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            timeline_path = root / "project_timeline.json"
+            timeline_path.write_text(
+                json.dumps(
+                    {
+                        "projects": {
+                            "project:ai": {
+                                "project_label": "AIppocampus",
+                                "latest_turns": [
+                                    {
+                                        "thread_key": "session:origin",
+                                        "title": "AIppocampus origin",
+                                        "project_label": "AIppocampus",
+                                        "turn_index": 1,
+                                        "user": "我们把这个叫小海马体。",
+                                        "assistant": "机械飞升也是一个连续性隐喻。",
+                                    }
+                                ],
+                            }
+                        }
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            registry_path = root / "threads.json"
+            registry_path.write_text(json.dumps({"threads": []}), encoding="utf-8")
+            missing_env = "MISSING_SOURCE_ALIAS_KEY_FOR_TEST"
+            with patch.dict(os.environ, {}, clear=False):
+                os.environ.pop(missing_env, None)
+                result = jobs.run_jobs(
+                    jobs=["source_alias_mining", "question_tracking"],
+                    registry_path=registry_path,
+                    timeline_path=timeline_path,
+                    concept_graph_path=root / "missing.sqlite",
+                    jobs_output_path=root / "subconscious_jobs.jsonl",
+                    edges_output_path=root / "subconscious_edges.jsonl",
+                    project="AIppocampus",
+                    objective="test source semantic no-key behavior",
+                    max_turns=4,
+                    max_steps=1,
+                    min_tool_steps=0,
+                    model="deepseek-v4-flash",
+                    base_url="https://example.invalid",
+                    api_key=None,
+                    api_key_env=missing_env,
+                    max_tokens=None,
+                    timeout=1,
+                    temperature=0.2,
+                    concurrency=1,
+                    samples_per_job=1,
+                    no_write=True,
+                )
+
+        by_job = {row["job"]: row for row in result["jobs"]}
+        public = jobs.public_jobs_payload(result)
+
+        self.assertFalse(result["ok"])
+        self.assertTrue(result["semantic_worker_unavailable"])
+        self.assertEqual(result["semantic_worker_mode"], "semantic_worker_unavailable_deterministic_only")
+        self.assertTrue(by_job["source_alias_mining"]["semantic_worker_unavailable"])
+        self.assertTrue(by_job["question_tracking"]["ok"])
+        self.assertTrue(public["semantic_worker_unavailable"])
+        self.assertEqual(public["semantic_worker_unavailable_reason"], "missing_provider_key")
+
     def test_run_jobs_can_execute_samples_concurrently_without_parallel_writes(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

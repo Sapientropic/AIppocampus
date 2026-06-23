@@ -44,10 +44,12 @@ from aippocampus_runtime.subconscious.jobs import (
 from aippocampus_runtime.subconscious.jobs import (
     default_jobs_output_path,
 )
+from aippocampus_runtime.subconscious.review_prompt import REVIEW_SYSTEM_PROMPT
 from aippocampus_runtime.subconscious.review_public_output import (
     public_review_cli_payload,
     public_review_event,
 )
+from aippocampus_runtime.subconscious.review_quality import review_quality_diagnostics
 from aippocampus_runtime.subconscious.runtime import (
     DEFAULT_TEMPERATURE,
     call_chat_json,
@@ -63,35 +65,8 @@ from aippocampus_runtime.subconscious.worker import (
 PROMPT_VERSION = "aippocampus-subconscious-review-v0"
 DEFAULT_REVIEW_OUTPUT_NAME = "promotion_candidates.jsonl"
 NAVIGATION_ONLY_JOBS = {"semantic_scope_labeling"}
-
-REVIEW_SYSTEM_PROMPT = """You are AIppocampus subconscious review.
-You review staging findings from prior subconscious jobs and decide what is
-worth promoting into later workflows. You do not write formal memory. You do not
-delete anything. Return only JSON.
-
-Final schema:
-{
-  "action": "final",
-    "promotion_candidates": [
-    {
-      "candidate_type": "concept_edge|hook_trigger|project_memory|preference_review|contradiction_review|dedup_review|question_candidate|frontier_marker|question_link|theme_candidate|archive",
-      "title": "short title",
-      "summary": "why this candidate matters",
-      "recommendation": "what should consume or review it next",
-      "activation_cues": ["prompt meanings that should activate this candidate; required for hook_trigger routes and recommended for project_memory routes; do not copy generic title or summary words"],
-      "confidence": 0.0,
-      "source_finding_ids": ["sf_..."],
-      "source_refs": [{"thread_key": "...", "line": 123}]
-    }
-  ],
-  "duplicate_groups": [
-    {"canonical_finding_id": "sf_...", "duplicate_finding_ids": ["sf_..."], "reason": "..."}
-  ],
-  "weak_findings": [
-    {"finding_id": "sf_...", "reason": "why weak/noisy"}
-  ]
-}
-"""
+SOURCE_SEMANTIC_JOBS = {"source_alias_mining"}
+SOURCE_SEMANTIC_CANDIDATE_TYPE = "source_semantic_candidate"
 
 
 def default_review_output_path(
@@ -168,78 +143,6 @@ def deterministic_duplicate_groups(findings: list[dict[str, Any]]) -> list[dict[
     return out
 
 
-def _quality_bucket_for_finding(finding: dict[str, Any]) -> str:
-    raw_quality = finding.get("quality")
-    quality = raw_quality if isinstance(raw_quality, dict) else {}
-    bucket = str(quality.get("bucket") or "unknown")
-    if bucket not in {"strong", "usable", "weak", "noise"}:
-        return "unknown"
-    return bucket
-
-
-def _ordered_nonzero_counts(counts: dict[str, int]) -> dict[str, int]:
-    ordered: dict[str, int] = {}
-    for key in ("strong", "usable", "weak", "noise", "unknown"):
-        value = int(counts.get(key) or 0)
-        if value:
-            ordered[key] = value
-    return ordered
-
-
-def review_quality_diagnostics(
-    findings: list[dict[str, Any]], review: dict[str, Any] | None = None
-) -> dict[str, Any]:
-    bucket_counts: dict[str, int] = defaultdict(int)
-    bucket_by_id: dict[str, str] = {}
-    outcomes: dict[str, dict[str, int]] = defaultdict(
-        lambda: {
-            "input_findings": 0,
-            "promotion_candidate_source": 0,
-            "weak_finding": 0,
-            "duplicate_canonical": 0,
-            "duplicate_duplicate": 0,
-        }
-    )
-    for finding in findings:
-        bucket = _quality_bucket_for_finding(finding)
-        bucket_counts[bucket] += 1
-        outcomes[bucket]["input_findings"] += 1
-        finding_id = str(finding.get("fingerprint") or "")
-        if finding_id:
-            bucket_by_id[finding_id] = bucket
-
-    if review:
-        for candidate in review.get("promotion_candidates") or []:
-            for finding_id in candidate.get("source_finding_ids") or []:
-                bucket = bucket_by_id.get(str(finding_id), "unknown")
-                outcomes[bucket]["promotion_candidate_source"] += 1
-        for weak in review.get("weak_findings") or []:
-            bucket = bucket_by_id.get(str(weak.get("finding_id") or ""), "unknown")
-            outcomes[bucket]["weak_finding"] += 1
-        for group in review.get("duplicate_groups") or []:
-            canonical = str(group.get("canonical_finding_id") or "")
-            if canonical:
-                outcomes[bucket_by_id.get(canonical, "unknown")]["duplicate_canonical"] += 1
-            for finding_id in group.get("duplicate_finding_ids") or []:
-                outcomes[bucket_by_id.get(str(finding_id), "unknown")][
-                    "duplicate_duplicate"
-                ] += 1
-
-    return {
-        "score_contract": quality_score_contract(),
-        "bucket_distribution": _ordered_nonzero_counts(bucket_counts),
-        "review_outcomes_by_bucket": {
-            bucket: {name: count for name, count in counts.items() if count}
-            for bucket, counts in outcomes.items()
-            if any(counts.values())
-        },
-        "interpretation": (
-            "Bucket outcomes are audit diagnostics for heuristic score behavior; "
-            "they are not calibration proof."
-        ),
-    }
-
-
 def compact_review_payload(
     findings: list[dict[str, Any]], duplicate_groups: list[dict[str, Any]], focus: str = ""
 ) -> dict[str, Any]:
@@ -266,6 +169,13 @@ def compact_review_payload(
                 "src": finding.get("src"),
                 "dst": finding.get("dst"),
                 "edge_type": finding.get("edge_type"),
+                "canonical_label": finding.get("canonical_label"),
+                "aliases": finding.get("aliases") or [],
+                "activation_cues": finding.get("activation_cues") or [],
+                "negative_cues": finding.get("negative_cues") or [],
+                "term_type": finding.get("term_type"),
+                "surface_status": finding.get("surface_status"),
+                "claim_authority": finding.get("claim_authority") or finding.get("authority"),
                 "question_cluster_id": finding.get("question_cluster_id"),
                 "linked_question_short": finding.get("linked_question_short"),
                 "question_count": finding.get("question_count"),
@@ -295,6 +205,46 @@ def compact_review_payload(
     return sanitize_external_model_payload(payload)
 
 
+def _source_semantic_source(source_findings: list[dict[str, Any]]) -> dict[str, Any] | None:
+    for finding in source_findings:
+        if str(finding.get("job") or "") in SOURCE_SEMANTIC_JOBS:
+            return finding
+    return None
+
+
+def _candidate_type_for_item(
+    item: dict[str, Any], source_findings: list[dict[str, Any]]
+) -> str:
+    if _source_semantic_source(source_findings):
+        return SOURCE_SEMANTIC_CANDIDATE_TYPE
+    return str(item.get("candidate_type") or "project_memory")
+
+
+def _candidate_list_from_item_and_source(
+    key: str,
+    item: dict[str, Any],
+    source_findings: list[dict[str, Any]],
+    *,
+    limit: int = 12,
+) -> list[str]:
+    values: list[str] = []
+    raw = item.get(key)
+    if isinstance(raw, str):
+        values.append(raw)
+    elif isinstance(raw, list):
+        values.extend(str(value) for value in raw)
+    for finding in source_findings:
+        raw_finding = finding.get(key)
+        if isinstance(raw_finding, str):
+            values.append(raw_finding)
+        elif isinstance(raw_finding, list):
+            values.extend(str(value) for value in raw_finding)
+    return unique_preserve(
+        [compact_text(str(value or ""), 100) for value in values if str(value or "").strip()],
+        limit=limit,
+    )
+
+
 def validate_review(
     parsed: dict[str, Any], findings_by_id: dict[str, dict[str, Any]]
 ) -> dict[str, Any]:
@@ -318,9 +268,31 @@ def validate_review(
         confidence = clamp_confidence(item.get("confidence"))
         if confidence < 0.45:
             continue
-        activation_cues = activation_cues_for(item)
-        if str(item.get("candidate_type") or "").strip() == "hook_trigger" and not activation_cues:
+        candidate_type = _candidate_type_for_item(item, source_findings)
+        source_semantic = _source_semantic_source(source_findings)
+        activation_source = dict(item)
+        if source_semantic:
+            activation_source["activation_cues"] = _candidate_list_from_item_and_source(
+                "activation_cues", item, source_findings, limit=16
+            ) or _candidate_list_from_item_and_source("aliases", item, source_findings, limit=16)
+        activation_cues = activation_cues_for(activation_source)
+        if candidate_type == "hook_trigger" and not activation_cues:
             continue
+        negative_cues = _candidate_list_from_item_and_source(
+            "negative_cues", item, source_findings, limit=10
+        )
+        claim_authority = compact_text(
+            str(
+                item.get("claim_authority")
+                or item.get("authority")
+                or (source_semantic or {}).get("claim_authority")
+                or (source_semantic or {}).get("authority")
+                or ("navigation_only" if source_semantic else "reopenable_route")
+            ),
+            40,
+        )
+        if source_semantic:
+            claim_authority = "navigation_only"
         refs = []
         for finding in source_findings:
             for ref in finding.get("source_refs") or []:
@@ -337,16 +309,46 @@ def validate_review(
                     )
         candidates.append(
             {
-                "candidate_type": str(item.get("candidate_type") or "project_memory"),
-                "title": compact_text(str(item.get("title") or ""), 160),
-                "summary": compact_text(str(item.get("summary") or ""), 700),
-                "recommendation": compact_text(str(item.get("recommendation") or ""), 360),
+                "candidate_type": candidate_type,
+                "title": compact_text(
+                    str(item.get("title") or (source_semantic or {}).get("canonical_label") or ""),
+                    160,
+                ),
+                "summary": compact_text(
+                    str(item.get("summary") or (source_semantic or {}).get("summary") or ""),
+                    700,
+                ),
+                "recommendation": compact_text(
+                    str(
+                        item.get("recommendation")
+                        or (source_semantic or {}).get("recommendation")
+                        or ""
+                    ),
+                    360,
+                ),
                 "activation_cues": activation_cues,
+                "negative_cues": negative_cues,
                 "confidence": round(confidence, 4),
+                "structural_valid": True,
+                "semantic_candidate": bool(source_semantic),
+                "claim_authority": claim_authority,
                 "source_finding_ids": source_ids,
                 "source_refs": refs[:8],
             }
         )
+        if source_semantic:
+            candidates[-1].update(
+                {
+                    "canonical_label": source_semantic.get("canonical_label"),
+                    "aliases": _candidate_list_from_item_and_source(
+                        "aliases", item, source_findings, limit=14
+                    ),
+                    "term_type": source_semantic.get("term_type"),
+                    "surface_status": source_semantic.get("surface_status"),
+                    "source_anchor_status": source_semantic.get("source_anchor_status"),
+                    "foreground_policy": "reopen_source_before_claim",
+                }
+            )
     duplicate_groups = []
     for item in parsed.get("duplicate_groups") or []:
         if not isinstance(item, dict):

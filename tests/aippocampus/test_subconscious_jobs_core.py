@@ -243,6 +243,102 @@ class SubconsciousJobsCoreTests(unittest.TestCase):
         self.assertNotIn("def validation_audit", runner_source)
         self.assertNotIn("def estimate_finding_quality", runner_source)
 
+    def test_source_alias_mining_accepts_source_backed_semantic_candidate(self) -> None:
+        source_bank = {
+            "t0": {
+                "turn_ref": "t0",
+                "thread_key": "session:origin",
+                "title": "Relationship origin",
+                "user_line": 12,
+                "user": "我们把这个叫小海马体；机械飞升是另一个连续性隐喻。",
+            }
+        }
+        parsed = {
+            "findings": [
+                {
+                    "canonical_label": "小海马体",
+                    "aliases": ["外置小海马", "机械飞升"],
+                    "activation_cues": ["小海马体 continuity", "机械飞升 记忆隐喻"],
+                    "negative_cues": ["普通数据库选型"],
+                    "term_type": "relationship_cue",
+                    "surface_status": "exact_surface",
+                    "authority": "navigation_only",
+                    "summary": "A source-backed continuity metaphor for later recall.",
+                    "confidence": 0.82,
+                    "source_refs": [{"ref": "t0"}],
+                }
+            ]
+        }
+
+        findings = jobs.validate_findings("source_alias_mining", parsed, source_bank)
+
+        self.assertEqual(len(findings), 1)
+        finding = findings[0]
+        self.assertEqual(finding["kind"], "source_semantic_candidate")
+        self.assertEqual(finding["canonical_label"], "小海马体")
+        self.assertEqual(finding["claim_authority"], "navigation_only")
+        self.assertTrue(finding["structural_valid"])
+        self.assertTrue(finding["semantic_candidate"])
+        self.assertIn("机械飞升 记忆隐喻", finding["activation_cues"])
+
+    def test_source_alias_mining_rejects_unanchored_exact_surface(self) -> None:
+        source_bank = {
+            "t0": {
+                "turn_ref": "t0",
+                "thread_key": "session:origin",
+                "title": "Unrelated",
+                "user_line": 12,
+                "user": "这里只讨论普通测试计划。",
+            }
+        }
+        parsed = {
+            "findings": [
+                {
+                    "canonical_label": "机械飞升",
+                    "aliases": ["机械飞升"],
+                    "activation_cues": ["机械飞升"],
+                    "term_type": "metaphor",
+                    "surface_status": "exact_surface",
+                    "summary": "Should not be accepted as exact surface without matching source text.",
+                    "confidence": 0.82,
+                    "source_refs": [{"ref": "t0"}],
+                }
+            ]
+        }
+
+        findings = jobs.validate_findings("source_alias_mining", parsed, source_bank)
+
+        self.assertEqual(findings, [])
+
+    def test_source_alias_mining_rejects_secret_shaped_label(self) -> None:
+        source_bank = {
+            "t0": {
+                "turn_ref": "t0",
+                "thread_key": "session:secret",
+                "title": "Secret-shaped input",
+                "user_line": 12,
+                "user": "token=SECRET_TEST_VALUE_1234567890 should never become a semantic cue.",
+            }
+        }
+        parsed = {
+            "findings": [
+                {
+                    "canonical_label": "token=SECRET_TEST_VALUE_1234567890",
+                    "aliases": ["token=SECRET_TEST_VALUE_1234567890"],
+                    "activation_cues": ["token=SECRET_TEST_VALUE_1234567890"],
+                    "term_type": "tool",
+                    "surface_status": "exact_surface",
+                    "summary": "Unsafe surface.",
+                    "confidence": 0.9,
+                    "source_refs": [{"ref": "t0"}],
+                }
+            ]
+        }
+
+        findings = jobs.validate_findings("source_alias_mining", parsed, source_bank)
+
+        self.assertEqual(findings, [])
+
     def test_jobs_initial_payload_keeps_static_contract_before_turns_and_variable_objective_after_turns(
         self,
     ) -> None:

@@ -155,6 +155,27 @@ class RecallFeedbackEventTests(unittest.TestCase):
             )
         self.assertEqual(context.exception.field, "route_kind")
 
+    def test_alias_and_context_feedback_events_are_navigation_only_and_public_safe(self) -> None:
+        alias_event = feedback.alias_merge_event(
+            route_id="route:test",
+            route_kind="active_path",
+            aliases=["外置海马体", r"C:\Users\someone\secret.txt"],
+            source_id="source:test",
+        )
+        suppress_event = feedback.suppress_context_event(
+            route_id="route:test",
+            route_kind="active_path",
+            context_cues=["普通数据库选型", "/tmp/private-source.txt"],
+            source_id="source:test",
+        )
+
+        self.assertEqual(alias_event["aliases"], ["外置海马体"])
+        self.assertEqual(suppress_event["context_cues"], ["普通数据库选型"])
+        self.assertTrue(alias_event["policy_boundary"]["alias_feedback_is_navigation_only"])
+        self.assertTrue(suppress_event["policy_boundary"]["context_feedback_is_navigation_only"])
+        self.assertFalse(alias_event["privacy_boundary"]["stores_private_source_excerpt"])
+        self.assertFalse(suppress_event["privacy_boundary"]["stores_local_path"])
+
     def test_feedback_calibration_report_lifts_demotes_and_falls_back_on_sparse_conflict(self) -> None:
         events = [
             feedback.active_flow_event(

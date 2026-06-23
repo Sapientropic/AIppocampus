@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 
 from aippocampus_runtime.dream import working_memory_publication
+from aippocampus_runtime.recall import feedback_events
 from aippocampus_runtime.subconscious import candidate_router as router
 
 
@@ -159,6 +160,226 @@ class MemoryCandidateRouterTests(unittest.TestCase):
         self.assertNotIn("source-backed hook", " ".join(row["trigger_terms"]).casefold())
         self.assertEqual(len(matched), 1)
         self.assertEqual(matched[0]["matched_terms"], ["最近让我很烦"])
+
+    def test_source_semantic_candidate_survives_low_strength_as_navigation_route(self) -> None:
+        self.write_jsonl(
+            self.jobs,
+            [
+                {
+                    "kind": "aippocampus_subconscious_job_finding",
+                    "fingerprint": "sf_weird",
+                    "job": "source_alias_mining",
+                    "finding_kind": "source_semantic_candidate",
+                    "source_refs": [
+                        {
+                            "thread_key": "session:origin",
+                            "title": "Origin",
+                            "project_label": "AIppocampus",
+                            "user_line": 12,
+                        }
+                    ],
+                }
+            ],
+        )
+        self.write_jsonl(
+            self.candidates,
+            [
+                self.base_candidate(
+                    candidate_type="source_semantic_candidate",
+                    title="黏菌启发式联想",
+                    summary="A weird but meaningful source-backed cue for associative recall.",
+                    activation_cues=["黏菌启发式联想"],
+                    aliases=["slime mould association"],
+                    confidence=0.6,
+                    source_finding_ids=["sf_weird"],
+                    source_refs=[
+                        {"thread_key": "session:origin", "title": "Origin", "line": 12}
+                    ],
+                    structural_valid=True,
+                    semantic_candidate=True,
+                    claim_authority="navigation_only",
+                    term_type="metaphor",
+                    surface_status="lightly_normalized",
+                )
+            ],
+        )
+
+        result = router.route_candidates(self.candidates, self.jobs)
+        row = result["rows"][0]
+        matched = router.match_working_memory(
+            "黏菌启发式联想那条路线还在吗？",
+            [row],
+            project_label="AIppocampus",
+        )
+
+        self.assertEqual(row["route"], router.USE_WITH_SOURCE)
+        self.assertEqual(row["claim_authority"], "navigation_only")
+        self.assertTrue(row["semantic_candidate"])
+        self.assertEqual(row["routing_reason_class"], "routing_policy")
+        self.assertEqual(result["routing_reason_counts"]["routing_policy"], 1)
+        self.assertEqual(len(matched), 1)
+
+    def test_source_semantic_negative_cue_suppresses_route_activation_only(self) -> None:
+        self.write_finding()
+        row = router.route_entry(
+            self.base_candidate(
+                candidate_type="source_semantic_candidate",
+                title="小海马体",
+                activation_cues=["小海马体"],
+                negative_cues=["普通数据库选型"],
+                confidence=0.72,
+                structural_valid=True,
+                semantic_candidate=True,
+                claim_authority="navigation_only",
+            ),
+            router.load_findings_by_id(self.jobs),
+            {"session:app": "T-Sense", "session:core": "T-Sense"},
+        )
+
+        matched = router.match_working_memory(
+            "小海马体 这条连续性线索还在吗？",
+            [row],
+            project_label="T-Sense",
+        )
+        suppressed = router.match_working_memory(
+            "普通数据库选型 小海马体",
+            [row],
+            project_label="T-Sense",
+        )
+
+        self.assertEqual(len(matched), 1)
+        self.assertEqual(suppressed, [])
+
+    def test_route_feedback_suppresses_semantic_candidate_without_deleting_source_refs(self) -> None:
+        self.write_finding()
+        candidate = self.base_candidate(
+            candidate_type="source_semantic_candidate",
+            title="source agent memory",
+            activation_cues=["source agent memory"],
+            confidence=0.72,
+            structural_valid=True,
+            semantic_candidate=True,
+            claim_authority="navigation_only",
+        )
+        route_id = router.candidate_key(candidate)
+        feedback = [
+            feedback_events.active_flow_event(
+                route_id=route_id,
+                route_kind="active_path",
+                signal="wrong_route",
+                source_id="source:generic",
+            )
+        ]
+
+        row = router.route_entry(
+            candidate,
+            router.load_findings_by_id(self.jobs),
+            {"session:app": "T-Sense", "session:core": "T-Sense"},
+            feedback,
+        )
+
+        self.assertEqual(row["status"], "parked")
+        self.assertEqual(row["route"], router.PARK)
+        self.assertEqual(row["routing_reason_class"], "feedback_suppressed")
+        self.assertTrue(row["source_refs"])
+        self.assertFalse(row["feedback_adjustment"]["source_truth_changed"])
+
+    def test_helped_feedback_promotes_weak_semantic_candidate_without_fact_authority(self) -> None:
+        self.write_finding()
+        candidate = self.base_candidate(
+            candidate_type="source_semantic_candidate",
+            title="小海马体",
+            activation_cues=["小海马体"],
+            confidence=0.5,
+            structural_valid=True,
+            semantic_candidate=True,
+            claim_authority="navigation_only",
+        )
+        route_id = router.candidate_key(candidate)
+        feedback = [
+            feedback_events.active_flow_event(
+                route_id=route_id,
+                route_kind="active_path",
+                signal="helped",
+                source_id="source:origin",
+            )
+        ]
+
+        row = router.route_entry(
+            candidate,
+            router.load_findings_by_id(self.jobs),
+            {"session:app": "T-Sense", "session:core": "T-Sense"},
+            feedback,
+        )
+
+        self.assertEqual(row["route"], router.USE_WITH_SOURCE)
+        self.assertEqual(row["claim_authority"], "navigation_only")
+        self.assertTrue(row["routing_diagnostics"]["feedback_promoted"])
+
+    def test_alias_and_context_feedback_teach_route_without_changing_source_truth(self) -> None:
+        self.write_finding()
+        candidate = self.base_candidate(
+            candidate_type="source_semantic_candidate",
+            title="小海马体",
+            activation_cues=["小海马体"],
+            aliases=["little hippocampus"],
+            confidence=0.72,
+            structural_valid=True,
+            semantic_candidate=True,
+            claim_authority="navigation_only",
+        )
+        route_id = router.candidate_key(candidate)
+        feedback = [
+            feedback_events.alias_merge_event(
+                route_id=route_id,
+                route_kind="active_path",
+                aliases=["外置海马体"],
+                source_id="source:origin",
+            ),
+            feedback_events.suppress_context_event(
+                route_id=route_id,
+                route_kind="active_path",
+                context_cues=["普通数据库选型"],
+                source_id="source:origin",
+            ),
+            feedback_events.active_flow_event(
+                route_id=route_id,
+                route_kind="active_path",
+                signal="helped",
+                source_id="source:origin",
+            ),
+        ]
+        feedback_path = self.root / "feedback.jsonl"
+        self.write_jsonl(self.candidates, [candidate])
+        self.write_jsonl(feedback_path, feedback)
+
+        result = router.route_candidates(self.candidates, self.jobs, feedback_path)
+        row = result["rows"][0]
+        matched = router.match_working_memory(
+            "外置海马体 那条线索还在吗？",
+            [row],
+            project_label="T-Sense",
+        )
+        suppressed = router.match_working_memory(
+            "普通数据库选型 外置海马体",
+            [row],
+            project_label="T-Sense",
+        )
+
+        self.assertIn("外置海马体", row["aliases"])
+        self.assertIn("外置海马体", row["trigger_terms"])
+        self.assertIn("普通数据库选型", row["negative_cues"])
+        self.assertEqual(row["feedback_adjustment"]["alias_merge_count"], 1)
+        self.assertEqual(row["feedback_adjustment"]["context_suppression_count"], 1)
+        self.assertGreater(row["feedback_adjustment"]["activation_score"], 0)
+        self.assertTrue(row["feedback_adjustment"]["source_refs_preserved"])
+        self.assertFalse(row["feedback_adjustment"]["source_truth_changed"])
+        self.assertEqual(row["claim_authority"], "navigation_only")
+        self.assertEqual(len(matched), 1)
+        self.assertEqual(suppressed, [])
+        self.assertEqual(result["feedback_changed_count"], 1)
+        self.assertEqual(result["feedback_alias_merge_count"], 1)
+        self.assertEqual(result["feedback_context_suppression_count"], 1)
 
     def test_working_memory_ignores_generic_app_term(self) -> None:
         self.write_finding()

@@ -36,18 +36,50 @@ from aippocampus_runtime.navigation.associations import (
     term_is_noise,
 )
 from aippocampus_runtime.recall.query_policy import split_query_terms
-from aippocampus_runtime.registry.api import registry_paths, unique_preserve
+from aippocampus_runtime.registry.api import unique_preserve
 from aippocampus_runtime.subconscious import match_terms
 from aippocampus_runtime.subconscious.candidate_router_dream import (
     DREAM_HYPOTHESIS_TYPE,
     dream_hypothesis_block_reason,
 )
+from aippocampus_runtime.subconscious.candidate_router_feedback import (
+    apply_feedback_adjustment,
+)
+from aippocampus_runtime.subconscious.candidate_router_feedback import (
+    feedback_ids_for as feedback_ids_for,
+)
+from aippocampus_runtime.subconscious.candidate_router_feedback import (
+    relevant_feedback_rows as relevant_feedback_rows,
+)
+from aippocampus_runtime.subconscious.candidate_router_io import (
+    DEFAULT_CANDIDATES_NAME as DEFAULT_CANDIDATES_NAME,
+)
+from aippocampus_runtime.subconscious.candidate_router_io import (
+    DEFAULT_JOBS_NAME as DEFAULT_JOBS_NAME,
+)
+from aippocampus_runtime.subconscious.candidate_router_io import (
+    DEFAULT_SUMMARY_NAME as DEFAULT_SUMMARY_NAME,
+)
+from aippocampus_runtime.subconscious.candidate_router_io import (
+    DEFAULT_WORKING_MEMORY_NAME as DEFAULT_WORKING_MEMORY_NAME,
+)
+from aippocampus_runtime.subconscious.candidate_router_io import (
+    default_candidates_path,
+    default_jobs_path,
+    default_summary_path,
+    default_working_memory_path,
+    iter_jsonl,
+    load_candidates,
+    load_findings_by_id,
+    load_thread_projects,
+    write_json,
+    write_jsonl,
+)
+from aippocampus_runtime.subconscious.candidate_router_projection import (
+    strip_for_hook as strip_for_hook,
+)
 
 ROUTER_SCHEMA_VERSION = 1
-DEFAULT_CANDIDATES_NAME = "promotion_candidates.jsonl"
-DEFAULT_JOBS_NAME = "subconscious_jobs.jsonl"
-DEFAULT_WORKING_MEMORY_NAME = "working_memory.jsonl"
-DEFAULT_SUMMARY_NAME = "working_memory_summary.json"
 
 USE_SILENTLY = "use_silently"
 USE_WITH_SOURCE = "use_with_source"
@@ -62,6 +94,7 @@ REVIEW_TYPES = {"contradiction_review"}
 QUESTION_SILENT_TYPES = {"question_candidate", "theme_candidate"}
 QUESTION_LINK_TYPES = {"question_link"}
 FRONTIER_TYPES = {"frontier_marker"}
+SOURCE_SEMANTIC_TYPES = {"source_semantic_candidate"}
 PARK_TYPES = {"archive", "dedup_review"}
 
 GENERIC_TRIGGER_TERMS = {
@@ -119,73 +152,6 @@ def activation_cue_terms_for(candidate: dict[str, Any], *, limit: int = 18) -> l
     return unique_preserve(activation_cues_for(candidate, limit=limit), limit=limit)
 
 
-def default_candidates_path(
-    registry_path: Path | None = None, registry_dir: Path | None = None
-) -> Path:
-    if registry_path:
-        return registry_path.resolve().parent / DEFAULT_CANDIDATES_NAME
-    json_path, _ = registry_paths(registry_dir)
-    return json_path.resolve().parent / DEFAULT_CANDIDATES_NAME
-
-
-def default_jobs_path(registry_path: Path | None = None, registry_dir: Path | None = None) -> Path:
-    if registry_path:
-        return registry_path.resolve().parent / DEFAULT_JOBS_NAME
-    json_path, _ = registry_paths(registry_dir)
-    return json_path.resolve().parent / DEFAULT_JOBS_NAME
-
-
-def default_working_memory_path(
-    registry_path: Path | None = None, registry_dir: Path | None = None
-) -> Path:
-    if registry_path:
-        return registry_path.resolve().parent / DEFAULT_WORKING_MEMORY_NAME
-    json_path, _ = registry_paths(registry_dir)
-    return json_path.resolve().parent / DEFAULT_WORKING_MEMORY_NAME
-
-
-def default_summary_path(
-    registry_path: Path | None = None, registry_dir: Path | None = None
-) -> Path:
-    if registry_path:
-        return registry_path.resolve().parent / DEFAULT_SUMMARY_NAME
-    json_path, _ = registry_paths(registry_dir)
-    return json_path.resolve().parent / DEFAULT_SUMMARY_NAME
-
-
-def iter_jsonl(path: Path) -> list[dict[str, Any]]:
-    if not path.exists():
-        return []
-    rows: list[dict[str, Any]] = []
-    with path.open("r", encoding="utf-8") as fh:
-        for line in fh:
-            if not line.strip():
-                continue
-            try:
-                item = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if isinstance(item, dict):
-                rows.append(item)
-    return rows
-
-
-def write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    with tmp.open("w", encoding="utf-8", newline="\n") as fh:
-        for row in rows:
-            fh.write(json.dumps(row, ensure_ascii=False) + "\n")
-    tmp.replace(path)
-
-
-def write_json(path: Path, data: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8", newline="\n")
-    tmp.replace(path)
-
-
 def candidate_key(candidate: dict[str, Any]) -> str:
     source_ids = "|".join(sorted(str(value) for value in candidate.get("source_finding_ids") or []))
     raw = "\n".join(
@@ -197,40 +163,6 @@ def candidate_key(candidate: dict[str, Any]) -> str:
         ]
     )
     return "wm_" + hashlib.sha1(raw.encode("utf-8")).hexdigest()[:18]
-
-
-def load_candidates(path: Path) -> list[dict[str, Any]]:
-    return [row for row in iter_jsonl(path) if row.get("kind") == "aippocampus_promotion_candidate"]
-
-
-def load_findings_by_id(path: Path) -> dict[str, dict[str, Any]]:
-    out: dict[str, dict[str, Any]] = {}
-    for row in iter_jsonl(path):
-        if row.get("kind") != "aippocampus_subconscious_job_finding":
-            continue
-        key = str(row.get("fingerprint") or "")
-        if key:
-            out[key] = row
-    return out
-
-
-def load_thread_projects(path: Path) -> dict[str, str]:
-    registry_path = path.parent / "threads.json"
-    if not registry_path.exists():
-        return {}
-    try:
-        data = json.loads(registry_path.read_text(encoding="utf-8"))
-    except Exception:
-        return {}
-    out: dict[str, str] = {}
-    for entry in data.get("threads") or []:
-        if not isinstance(entry, dict):
-            continue
-        key = str(entry.get("thread_key") or "")
-        label = str(entry.get("project_label") or entry.get("workspace_name") or "")
-        if key and label:
-            out[key] = label
-    return out
 
 
 def merged_source_refs(
@@ -333,6 +265,18 @@ def route_candidate(candidate: dict[str, Any], strength: dict[str, Any]) -> tupl
     thread_count = int(strength.get("source_thread_count") or 0)
     if ref_count <= 0 or confidence < 0.45:
         return PARK, "high", "insufficient source support or low confidence"
+    if candidate_type in SOURCE_SEMANTIC_TYPES:
+        if confidence >= 0.58:
+            return (
+                USE_WITH_SOURCE,
+                "medium",
+                "source-backed semantic candidate is navigation; reopen source before claims",
+            )
+        return (
+            USE_SILENTLY,
+            "medium",
+            "weak source-backed semantic candidate can help rerank but should stay quiet",
+        )
     if candidate_type in PARK_TYPES:
         return PARK, "medium", f"{candidate_type} is not foreground recall material"
     if candidate_type in QUESTION_LINK_TYPES:
@@ -412,6 +356,36 @@ def ask_policy_for(route: str) -> str:
     return "do_not_use_in_foreground"
 
 
+def routing_reason_class(
+    candidate: dict[str, Any], route: str, strength: dict[str, Any]
+) -> str:
+    candidate_type = str(candidate.get("candidate_type") or "")
+    ref_count = int(strength.get("source_ref_count") or 0)
+    confidence = float(candidate.get("confidence") or 0.0)
+    if ref_count <= 0:
+        return "missing_source"
+    if confidence < 0.45:
+        return "semantic_review_needed"
+    if route == PARK:
+        if candidate_type in PARK_TYPES:
+            return "unsupported_surface_claim"
+        if candidate_type in SOURCE_SEMANTIC_TYPES:
+            return "semantic_review_needed"
+        return "semantic_review_needed"
+    return "routing_policy"
+
+
+def claim_authority_for(candidate: dict[str, Any], route: str) -> str:
+    explicit = str(candidate.get("claim_authority") or candidate.get("authority") or "").strip()
+    if explicit:
+        return explicit
+    if str(candidate.get("candidate_type") or "") in SOURCE_SEMANTIC_TYPES:
+        return "navigation_only"
+    if route in {USE_WITH_SOURCE, CONFIRM_WHEN_RELEVANT}:
+        return "reopenable_route"
+    return "navigation_only"
+
+
 def trigger_terms_for(
     candidate: dict[str, Any], concepts: list[str], project_label: str | None
 ) -> list[str]:
@@ -422,11 +396,16 @@ def trigger_terms_for(
         # here reintroduces broad lexical triggers and makes semantic judgment
         # look deterministic while hiding that it was guessed from prose.
         return activation_terms
+    source_semantic_terms: list[str] = []
+    if str(candidate.get("candidate_type") or "") in SOURCE_SEMANTIC_TYPES:
+        source_semantic_terms.extend(str(value) for value in candidate.get("aliases") or [])
+        source_semantic_terms.append(str(candidate.get("canonical_label") or ""))
     text = "\n".join(
         [
             str(candidate.get("title") or ""),
             str(candidate.get("summary") or ""),
             str(candidate.get("recommendation") or ""),
+            " ".join(source_semantic_terms),
             " ".join(concepts),
         ]
     )
@@ -450,6 +429,7 @@ def route_entry(
     candidate: dict[str, Any],
     findings_by_id: dict[str, dict[str, Any]],
     thread_projects: dict[str, str] | None = None,
+    feedback_rows: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     refs = merged_source_refs(candidate, findings_by_id, thread_projects)
     concepts = concepts_from_findings(candidate, findings_by_id)
@@ -457,7 +437,10 @@ def route_entry(
     strength = source_strength(candidate, refs)
     route, risk, reason = route_candidate(candidate, strength)
     active = route in ACTIVE_ROUTES
-    return {
+    candidate_type = str(candidate.get("candidate_type") or "project_memory")
+    reason_class = routing_reason_class(candidate, route, strength)
+    claim_authority = claim_authority_for(candidate, route)
+    entry = {
         "schema_version": ROUTER_SCHEMA_VERSION,
         "kind": "aippocampus_working_memory",
         "created_at": now_utc(),
@@ -466,8 +449,14 @@ def route_entry(
         "ask_policy": ask_policy_for(route),
         "risk": risk,
         "route_reason": reason,
+        "routing_reason_class": reason_class,
+        "foreground_policy": route,
+        "claim_authority": claim_authority,
+        "structural_valid": bool(refs),
+        "semantic_candidate": bool(candidate.get("semantic_candidate"))
+        or candidate_type in SOURCE_SEMANTIC_TYPES,
         "candidate_key": candidate_key(candidate),
-        "candidate_type": str(candidate.get("candidate_type") or "project_memory"),
+        "candidate_type": candidate_type,
         "title": compact_text(str(candidate.get("title") or ""), 180),
         "summary": compact_text(str(candidate.get("summary") or ""), 760),
         "recommendation": compact_text(str(candidate.get("recommendation") or ""), 420),
@@ -475,15 +464,38 @@ def route_entry(
         "project_label": project_label,
         "trigger_terms": trigger_terms_for(candidate, concepts, project_label),
         "activation_cues": activation_cues_for(candidate),
+        "negative_cues": unique_preserve(
+            [
+                normalize_term(str(value))
+                for value in candidate.get("negative_cues") or []
+                if normalize_term(str(value))
+            ],
+            limit=10,
+        ),
+        "canonical_label": compact_text(str(candidate.get("canonical_label") or ""), 120),
+        "aliases": unique_preserve(
+            [normalize_term(str(value)) for value in candidate.get("aliases") or [] if str(value)],
+            limit=14,
+        ),
+        "term_type": compact_text(str(candidate.get("term_type") or ""), 60),
+        "surface_status": compact_text(str(candidate.get("surface_status") or ""), 60),
         "concepts": concepts,
         "source_finding_ids": unique_preserve(
             [str(value) for value in candidate.get("source_finding_ids") or []], limit=12
         ),
         "source_refs": refs[:8],
         "source_strength": strength,
+        "routing_diagnostics": {
+            "source_strength": strength,
+            "reason_class": reason_class,
+            "claim_authority": claim_authority,
+            "heuristic_score_is_routing_signal": True,
+        },
         "source_candidate_batch_id": candidate.get("batch_id"),
         "source_candidate_created_at": candidate.get("created_at"),
     }
+    apply_feedback_adjustment(entry, candidate, feedback_rows or [], ask_policy_for=ask_policy_for)
+    return entry
 
 
 def better_entry(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
@@ -502,12 +514,15 @@ def better_entry(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
     return a if a_rank >= b_rank else b
 
 
-def route_candidates(candidates_path: Path, jobs_path: Path) -> dict[str, Any]:
+def route_candidates(
+    candidates_path: Path, jobs_path: Path, feedback_path: Path | None = None
+) -> dict[str, Any]:
     findings_by_id = load_findings_by_id(jobs_path)
     thread_projects = load_thread_projects(candidates_path)
+    feedback_rows = iter_jsonl(feedback_path) if feedback_path else []
     routed_by_key: dict[str, dict[str, Any]] = {}
     for candidate in load_candidates(candidates_path):
-        entry = route_entry(candidate, findings_by_id, thread_projects)
+        entry = route_entry(candidate, findings_by_id, thread_projects, feedback_rows)
         key = entry["candidate_key"]
         if key in routed_by_key:
             routed_by_key[key] = better_entry(routed_by_key[key], entry)
@@ -525,17 +540,34 @@ def route_candidates(candidates_path: Path, jobs_path: Path) -> dict[str, Any]:
         reverse=True,
     )
     route_counts = Counter(str(row.get("route") or "") for row in rows)
+    reason_counts = Counter(str(row.get("routing_reason_class") or "") for row in rows)
     active_count = sum(1 for row in rows if row.get("status") == "active")
+    feedback_changed_count = sum(1 for row in rows if isinstance(row.get("feedback_adjustment"), dict))
+    feedback_alias_merge_count = sum(
+        int((row.get("feedback_adjustment") or {}).get("alias_merge_count") or 0)
+        for row in rows
+        if isinstance(row.get("feedback_adjustment"), dict)
+    )
+    feedback_context_suppression_count = sum(
+        int((row.get("feedback_adjustment") or {}).get("context_suppression_count") or 0)
+        for row in rows
+        if isinstance(row.get("feedback_adjustment"), dict)
+    )
     return {
         "schema_version": ROUTER_SCHEMA_VERSION,
         "kind": "aippocampus_working_memory_routing",
         "created_at": now_utc(),
         "source_candidates": str(candidates_path),
         "source_jobs": str(jobs_path),
+        "source_feedback": str(feedback_path) if feedback_path else "",
         "candidate_count": len(load_candidates(candidates_path)),
         "working_memory_count": len(rows),
         "active_count": active_count,
         "route_counts": dict(route_counts),
+        "routing_reason_counts": dict(reason_counts),
+        "feedback_changed_count": feedback_changed_count,
+        "feedback_alias_merge_count": feedback_alias_merge_count,
+        "feedback_context_suppression_count": feedback_context_suppression_count,
         "rows": rows,
     }
 
@@ -561,6 +593,19 @@ def match_working_memory(
         ):
             continue
         if row_project and not project_label and str(row_project).casefold() not in prompt_low:
+            continue
+        negative_match = False
+        for cue in row.get("negative_cues") or []:
+            if match_terms.trigger_matches_prompt(
+                str(cue),
+                prompt_low=prompt_low,
+                prompt_parts=prompt_parts,
+                generic_terms=GENERIC_TRIGGER_TERMS,
+                project_label=str(row_project or ""),
+            ):
+                negative_match = True
+                break
+        if negative_match:
             continue
         matched: list[str] = []
         for term in row.get("trigger_terms") or []:
@@ -614,38 +659,6 @@ def match_working_memory(
     return matches[:limit]
 
 
-def strip_for_hook(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    out: list[dict[str, Any]] = []
-    for row in rows:
-        out.append(
-            {
-                "route": row.get("route"),
-                "ask_policy": row.get("ask_policy"),
-                "risk": row.get("risk"),
-                "candidate_key": row.get("candidate_key"),
-                "candidate_type": row.get("candidate_type"),
-                "title": row.get("title"),
-                "summary": row.get("summary"),
-                "recommendation": row.get("recommendation"),
-                "confidence": row.get("confidence"),
-                "project_label": row.get("project_label"),
-                "matched_terms": row.get("matched_terms") or [],
-                "source_finding_ids": row.get("source_finding_ids") or [],
-                "source_refs": row.get("source_refs") or [],
-                "score": row.get("score"),
-                "truth_boundary": row.get("truth_boundary"),
-                "dream_function": row.get("dream_function"),
-                "foreground_use": row.get("foreground_use"),
-                "sensitive_use_gate": row.get("sensitive_use_gate"),
-                "dream_hypothesis_use": row.get("dream_hypothesis_use"),
-                "constructive_artifact": row.get("constructive_artifact"),
-                "prospective_invitation": row.get("prospective_invitation"),
-                "journey_bridge_hypothesis": row.get("journey_bridge_hypothesis"),
-            }
-        )
-    return out
-
-
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--registry-dir")
@@ -654,6 +667,7 @@ def main() -> int:
     parser.add_argument("--jobs")
     parser.add_argument("--output")
     parser.add_argument("--summary")
+    parser.add_argument("--feedback-jsonl")
     parser.add_argument("--no-write", action="store_true")
     parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args()
@@ -678,7 +692,8 @@ def main() -> int:
         if args.summary
         else default_summary_path(registry_path, registry_dir)
     )
-    result = route_candidates(candidates, jobs)
+    feedback_path = Path(args.feedback_jsonl).resolve() if args.feedback_jsonl else None
+    result = route_candidates(candidates, jobs, feedback_path=feedback_path)
     rows = result.pop("rows")
     if not args.no_write:
         write_jsonl(output, rows)

@@ -139,6 +139,11 @@ def _search_recovery_action(query: Any, *, registry_wide: bool = False) -> dict[
     base = {
         "action_id": "recover_recall_miss",
         "tool_name": "search_memory",
+        "label": (
+            "Search registered sources for cue anchors"
+            if registry_wide
+            else "Search current clean source for exact wording"
+        ),
         "why": (
             "Search registered source for a topic-bearing hit before trusting the low-confidence route."
             if registry_wide

@@ -334,8 +334,8 @@ class AgentDeepenCompactProjectionTests(unittest.TestCase):
         self.assertEqual(route_action["arguments"]["request_index"], 1)
         self.assertIn("recall_selector", route_action["arguments"])
         self.assertIn("--request 1 --recall-selector", route_action["command"])
-        self.assertEqual(route["request_index"], 1)
-        self.assertEqual(route["recall_selector"], route_action["arguments"]["recall_selector"])
+        self.assertNotIn("request_index", route)
+        self.assertNotIn("recall_selector", route)
         self.assertNotIn("display_id", route)
         self.assertNotIn("feedback_id", route)
         self.assertNotIn("callable_selector", route)
@@ -360,7 +360,8 @@ class AgentDeepenCompactProjectionTests(unittest.TestCase):
         compact_encoded = json.dumps(compact_payload, ensure_ascii=False)
         self.assertEqual(compact_payload["detail"], "compact")
         self.assertEqual(compact_payload["surface"], "mcp_agent_deepen_compact")
-        self.assertEqual(compact_payload["source_window_summary"]["message_count"], 2)
+        self.assertEqual(compact_payload["source_open_posture"], "target_evidence_opened")
+        self.assertNotIn("source_window_summary", compact_payload)
         self.assertEqual(compact_payload["foreground_action_contract"], "foreground-action-v2")
         self.assertEqual(compact_payload["foreground_action"]["id"], "use_opened_source_window")
         self.assertNotIn("feedback_actions", compact_payload)
@@ -531,7 +532,8 @@ class AgentDeepenCompactProjectionTests(unittest.TestCase):
                 "max": 2,
             },
         )
-        selector = str(recall_payload.get("recall_selector_id") or "")
+        action_args = recall_payload["foreground_action"]["arguments"]
+        selector = str(action_args.get("recall_selector") or "")
         self.assertTrue(selector, recall_payload)
         self.assertTrue((custom_last_recall.parent / "recall-selectors" / f"{selector}.json").exists())
         self.assertTrue((registry_dir / "agent" / "recall-selectors" / f"{selector}.json").exists())
@@ -549,7 +551,8 @@ class AgentDeepenCompactProjectionTests(unittest.TestCase):
 
         self.assertEqual(payload["status"], "ok")
         self.assertEqual(payload["surface"], "mcp_agent_deepen_compact")
-        self.assertEqual(payload["source_window_summary"]["message_count"], 2)
+        self.assertEqual(payload["source_open_posture"], "target_evidence_opened")
+        self.assertIn("primary_source_snippet", payload)
 
     def test_mcp_selector_uses_explicit_registry_without_private_cache_path(self) -> None:
         old_registry = os.environ.get("AIPPOCAMPUS_REGISTRY_DIR")
@@ -580,7 +583,8 @@ class AgentDeepenCompactProjectionTests(unittest.TestCase):
                 "max": 2,
             },
         )
-        selector = str(recall_payload.get("recall_selector_id") or "")
+        action_args = recall_payload["foreground_action"]["arguments"]
+        selector = str(action_args.get("recall_selector") or "")
         self.assertTrue(selector, recall_payload)
         explicit_selector = registry_dir / "agent" / "recall-selectors" / f"{selector}.json"
         default_selector = recall_selector_cache_path(selector)
@@ -610,7 +614,8 @@ class AgentDeepenCompactProjectionTests(unittest.TestCase):
 
         self.assertEqual(payload["status"], "ok")
         self.assertEqual(payload["surface"], "mcp_agent_deepen_compact")
-        self.assertEqual(payload["source_window_summary"]["message_count"], 2)
+        self.assertEqual(payload["source_open_posture"], "target_evidence_opened")
+        self.assertIn("primary_source_snippet", payload)
 
 if __name__ == "__main__":
     unittest.main()

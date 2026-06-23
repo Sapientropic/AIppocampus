@@ -24,6 +24,8 @@ SCHEMA_VERSION = 1
 RECALL_FEEDBACK_KIND = "aippocampus_recall_feedback_event"
 RECALL_FEEDBACK_REPORT_KIND = "aippocampus_recall_feedback_report"
 ACTIVE_FLOW_EVENT_KIND = "aippocampus_active_flow_event"
+ALIAS_MERGE_EVENT_KIND = "aippocampus_alias_merge_feedback_event"
+CONTEXT_SUPPRESSION_EVENT_KIND = "aippocampus_context_suppression_feedback_event"
 ACTIVE_FLOW_REPORT_KIND = "aippocampus_active_flow_activation_report"
 FEEDBACK_CALIBRATION_REPORT_KIND = "aippocampus_feedback_calibration_report"
 PUBLIC_FIXTURE_KIND = "public_route_feedback_fixture"
@@ -103,6 +105,16 @@ def _safe_token(value: Any, *, fallback_prefix: str) -> str:
     if safe != text or "\\" in safe or "/" in safe:
         return _stable_hash(fallback_prefix, safe)
     return safe[:160]
+
+
+def _safe_alias_value(value: Any) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    safe = redact_sensitive_values(redact_private_paths(text)).strip()
+    if safe != text or "\\" in safe or "/" in safe:
+        return ""
+    return safe[:72]
 
 
 def _safe_kind(value: Any, accepted: set[str], default: str) -> str:
@@ -270,6 +282,79 @@ def active_flow_event(
             "activation_weight_is_route_context": True,
             "activation_weight_is_not_source_truth": True,
             "does_not_delete_source_refs": True,
+        },
+    }
+
+
+def alias_merge_event(
+    *,
+    route_id: str,
+    aliases: list[str],
+    route_kind: str = "active_path",
+    source_id: str = "",
+    timestamp: str | None = None,
+    reason: str = "",
+) -> dict[str, Any]:
+    """Return route-local alias feedback without mutating source truth."""
+
+    safe_route_kind = _validated_kind(route_kind, ROUTE_KINDS, field="route_kind")
+    safe_aliases = [alias for alias in (_safe_alias_value(alias) for alias in aliases) if alias][:12]
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "kind": ALIAS_MERGE_EVENT_KIND,
+        "created_at": timestamp or now_utc(),
+        "route_id": _safe_token(route_id, fallback_prefix="route"),
+        "route_kind": safe_route_kind,
+        "aliases": safe_aliases,
+        "source_id": _safe_token(source_id, fallback_prefix="source") if source_id else "",
+        "reason": _safe_token(reason, fallback_prefix="reason") if reason else "",
+        "privacy_boundary": {
+            "stores_raw_prompt_text": False,
+            "stores_private_source_excerpt": False,
+            "stores_local_path": False,
+        },
+        "policy_boundary": {
+            "alias_feedback_is_navigation_only": True,
+            "activation_weight_is_not_source_truth": True,
+            "does_not_delete_source_refs": True,
+        },
+    }
+
+
+def suppress_context_event(
+    *,
+    route_id: str,
+    context_cues: list[str],
+    route_kind: str = "active_path",
+    source_id: str = "",
+    timestamp: str | None = None,
+    reason: str = "",
+) -> dict[str, Any]:
+    """Return route-local context suppression without adding static blacklists."""
+
+    safe_route_kind = _validated_kind(route_kind, ROUTE_KINDS, field="route_kind")
+    safe_context_cues = [
+        cue for cue in (_safe_alias_value(cue) for cue in context_cues) if cue
+    ][:12]
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "kind": CONTEXT_SUPPRESSION_EVENT_KIND,
+        "created_at": timestamp or now_utc(),
+        "route_id": _safe_token(route_id, fallback_prefix="route"),
+        "route_kind": safe_route_kind,
+        "context_cues": safe_context_cues,
+        "source_id": _safe_token(source_id, fallback_prefix="source") if source_id else "",
+        "reason": _safe_token(reason, fallback_prefix="reason") if reason else "",
+        "privacy_boundary": {
+            "stores_raw_prompt_text": False,
+            "stores_private_source_excerpt": False,
+            "stores_local_path": False,
+        },
+        "policy_boundary": {
+            "context_feedback_is_navigation_only": True,
+            "activation_weight_is_not_source_truth": True,
+            "does_not_delete_source_refs": True,
+            "does_not_add_static_blacklist": True,
         },
     }
 

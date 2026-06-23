@@ -10,7 +10,6 @@ remain search hints only; clean source and source refs stay the truth surface.
 from __future__ import annotations
 
 import hashlib
-import json
 import re
 import time
 import unicodedata
@@ -19,6 +18,11 @@ from typing import Any
 
 from aippocampus_runtime.core import compact_text, now_utc, sanitize_external_model_text
 from aippocampus_runtime.registry.api import registry_paths, unique_preserve
+from aippocampus_runtime.source.io_kernel import (
+    load_jsonl_dict_rows,
+    source_ref_key,
+    write_jsonl_dict_rows,
+)
 
 SEMANTIC_CUE_SCHEMA_VERSION = 1
 SEMANTIC_CUE_KIND = "aippocampus_semantic_cue"
@@ -118,15 +122,6 @@ def compact_source_ref(ref: dict[str, Any]) -> dict[str, Any]:
     return {key: ref.get(key) for key in allowed if ref.get(key) not in {None, ""}}
 
 
-def source_ref_key(ref: dict[str, Any]) -> tuple[str, str, str, str]:
-    return (
-        str(ref.get("thread_key") or ""),
-        str(ref.get("message_id") or ""),
-        str(ref.get("turn_id") or ""),
-        str(ref.get("source_line") or ref.get("line") or ""),
-    )
-
-
 def merge_source_refs(existing: list[Any], incoming: list[dict[str, Any]]) -> list[dict[str, Any]]:
     refs: list[dict[str, Any]] = []
     seen: set[tuple[str, str, str, str]] = set()
@@ -147,31 +142,11 @@ def merge_source_refs(existing: list[Any], incoming: list[dict[str, Any]]) -> li
 
 
 def iter_jsonl(path: Path) -> list[dict[str, Any]]:
-    if not path.exists():
-        return []
-    rows: list[dict[str, Any]] = []
-    with path.open("r", encoding="utf-8") as fh:
-        for line in fh:
-            if not line.strip():
-                continue
-            try:
-                item = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if isinstance(item, dict):
-                rows.append(item)
-    return rows
+    return load_jsonl_dict_rows(path).rows
 
 
 def write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(
-        "".join(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n" for row in rows),
-        encoding="utf-8",
-        newline="\n",
-    )
-    tmp.replace(path)
+    write_jsonl_dict_rows(path, rows, sort_keys=True)
 
 
 def all_semantic_cues(path: Path) -> list[dict[str, Any]]:

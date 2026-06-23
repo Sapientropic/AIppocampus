@@ -13,7 +13,11 @@ import hashlib
 import re
 from typing import Any
 
-from aippocampus_runtime.core import compact_text
+from aippocampus_runtime.core import compact_text, sanitize_external_model_text
+from aippocampus_runtime.navigation.associations import (
+    source_text_is_noise,
+    term_is_noise,
+)
 from aippocampus_runtime.source.clean_source import SCOPE_LABEL_ORDER
 from aippocampus_runtime.source.semantic_scope_labels import (
     filtered_semantic_scope_labels,
@@ -41,6 +45,24 @@ QUALITY_SCORE_WEIGHTS = {
     "novelty": 0.08,
     "drift_risk_penalty": -0.12,
 }
+SOURCE_SEMANTIC_FINDING_KIND = "source_semantic_candidate"
+SOURCE_SEMANTIC_AUTHORITY = "navigation_only"
+ALLOWED_SOURCE_SEMANTIC_TERM_TYPES = {
+    "user_phrase",
+    "project_concept",
+    "decision_label",
+    "metaphor",
+    "tool",
+    "action",
+    "preference",
+    "relationship_cue",
+    "avoidance_cue",
+}
+ALLOWED_SOURCE_SEMANTIC_SURFACE_STATUS = {
+    "exact_surface",
+    "lightly_normalized",
+    "inferred_label",
+}
 
 
 def normalize_for_fingerprint(value: str) -> str:
@@ -60,6 +82,8 @@ def finding_fingerprint(finding: dict[str, Any]) -> str:
         normalize_for_fingerprint(str(finding.get("theme_cluster_id") or "")),
         normalize_for_fingerprint(str(finding.get("theme_label") or "")),
         normalize_for_fingerprint(str(finding.get("message_id") or "")),
+        normalize_for_fingerprint(str(finding.get("canonical_label") or "")),
+        normalize_for_fingerprint(str(finding.get("term_type") or "")),
         normalize_for_fingerprint(
             " ".join(str(label) for label in finding.get("scope_labels") or [])
         ),
@@ -143,6 +167,8 @@ def estimate_finding_quality(job: str, finding: dict[str, Any]) -> dict[str, Any
         actionability += 0.12
     if job == "cognitive_map":
         actionability += 0.10
+    if job == "source_alias_mining":
+        actionability += 0.12
     novelty = 0.58
     if job == "concept_edges":
         novelty += 0.08 if finding.get("src") and finding.get("dst") else -0.12
@@ -264,6 +290,49 @@ def compact_string_list(values: Any, *, limit: int = 12, chars: int = 90) -> lis
     return list(dict.fromkeys(out))[:limit]
 
 
+def compact_safe_semantic_list(values: Any, *, limit: int = 12, chars: int = 90) -> list[str]:
+    if isinstance(values, str):
+        source = [values]
+    elif isinstance(values, list):
+        source = values
+    else:
+        source = []
+    out: list[str] = []
+    for value in source:
+        text = compact_text(str(value or "").strip(), chars)
+        if not text:
+            continue
+        sanitized, policy = sanitize_external_model_text(text)
+        if policy.get("redacted") or policy.get("hard_block"):
+            continue
+        sanitized = compact_text(str(sanitized or "").strip(), chars)
+        if not sanitized or term_is_noise(sanitized) or source_text_is_noise(sanitized):
+            continue
+        out.append(sanitized)
+    return list(dict.fromkeys(out))[:limit]
+
+
+def source_texts_for_finding(
+    item: dict[str, Any], source_bank: dict[str, dict[str, Any]]
+) -> list[str]:
+    texts: list[str] = []
+    for ref_item in item.get("source_refs") or []:
+        ref_id = normalize_ref_id(ref_item)
+        source = source_bank.get(ref_id)
+        if not source:
+            continue
+        pieces = [
+            source.get("user"),
+            source.get("assistant"),
+            source.get("summary"),
+            " ".join(str(term) for term in source.get("topic_terms") or []),
+        ]
+        text = "\n".join(str(piece or "") for piece in pieces if str(piece or "").strip())
+        if text:
+            texts.append(text.casefold())
+    return texts[:5]
+
+
 def where_context_from_source_refs(refs: list[dict[str, Any]] | None) -> list[str]:
     """Derive only non-semantic location labels that already exist in refs.
 
@@ -308,6 +377,71 @@ def validate_cognitive_map_fields(
         "negative_cues": compact_string_list(item.get("negative_cues"), limit=10),
         "target_thread_keys": target_thread_keys,
         "route_kind": route_kind,
+    }
+
+
+def validate_source_semantic_candidate_fields(
+    item: dict[str, Any],
+    refs: list[dict[str, Any]],
+    source_bank: dict[str, dict[str, Any]],
+) -> dict[str, Any] | None:
+    canonical_values = [
+        item.get("canonical_label"),
+        item.get("label"),
+        item.get("title"),
+    ]
+    canonical_label = next(
+        iter(compact_safe_semantic_list(canonical_values, limit=1, chars=100)),
+        "",
+    )
+    if not canonical_label:
+        return None
+    aliases = compact_safe_semantic_list(
+        [canonical_label, *(item.get("aliases") or [])],
+        limit=14,
+        chars=96,
+    )
+    activation_cues = compact_safe_semantic_list(
+        item.get("activation_cues") or item.get("route_cues") or aliases,
+        limit=16,
+        chars=96,
+    )
+    if not aliases and not activation_cues:
+        return None
+    negative_cues = compact_safe_semantic_list(
+        item.get("negative_cues") or item.get("when_not_to_use"),
+        limit=10,
+        chars=110,
+    )
+    term_type = str(item.get("term_type") or "project_concept").strip()
+    if term_type not in ALLOWED_SOURCE_SEMANTIC_TERM_TYPES:
+        term_type = "project_concept"
+    surface_status = str(item.get("surface_status") or "inferred_label").strip()
+    if surface_status not in ALLOWED_SOURCE_SEMANTIC_SURFACE_STATUS:
+        surface_status = "inferred_label"
+
+    source_texts = source_texts_for_finding(item, source_bank)
+    source_anchor_status = "source_ref_backed"
+    if surface_status == "exact_surface":
+        alias_lows = [alias.casefold() for alias in [canonical_label, *aliases, *activation_cues]]
+        if source_texts and not any(alias in text for alias in alias_lows for text in source_texts):
+            return None
+        source_anchor_status = "source_text_surface_checked" if source_texts else "source_ref_backed"
+
+    return {
+        "kind": SOURCE_SEMANTIC_FINDING_KIND,
+        "canonical_label": canonical_label,
+        "aliases": aliases,
+        "activation_cues": activation_cues,
+        "negative_cues": negative_cues,
+        "term_type": term_type,
+        "surface_status": surface_status,
+        "authority": SOURCE_SEMANTIC_AUTHORITY,
+        "claim_authority": SOURCE_SEMANTIC_AUTHORITY,
+        "source_anchor_status": source_anchor_status,
+        "when_not_to_use": compact_text(str(item.get("when_not_to_use") or ""), 220),
+        "semantic_candidate": True,
+        "structural_valid": True,
     }
 
 
@@ -609,6 +743,13 @@ def validate_findings(
             if not semantic_scope_fields:
                 continue
             finding.update(semantic_scope_fields)
+        if job == "source_alias_mining":
+            source_semantic_fields = validate_source_semantic_candidate_fields(
+                item, refs, source_bank
+            )
+            if not source_semantic_fields:
+                continue
+            finding.update(source_semantic_fields)
         if job == "theme_emergence":
             theme_fields = validate_theme_candidate_fields(item)
             if not theme_fields:
@@ -622,6 +763,8 @@ def validate_findings(
             elif job == "cognitive_map":
                 landmark_titles = [str(value) for value in finding.get("landmarks") or []]
                 finding["title"] = " -> ".join(landmark_titles)[:120]
+            elif job == "source_alias_mining" and finding.get("canonical_label"):
+                finding["title"] = compact_text(str(finding["canonical_label"]), 120)
             else:
                 finding["title"] = compact_text(str(finding["summary"]), 120)
         if not finding["summary"] and job != "concept_edges":

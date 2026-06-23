@@ -61,6 +61,12 @@ Core rule:
 Source is the ground. Summaries are weather.
 ```
 
+Derived layers follow the authority split in
+[`docs/architecture/architecture-overview.md#derived-layer-authority-contract`](architecture/architecture-overview.md#derived-layer-authority-contract):
+source is fact authority; LLM or human semantic workers can be better meaning
+producers; scripts are instruments and guards for reachability, safety,
+dedupe, routing, and drift risk.
+
 Use source-reachable action grammar when memory packets or route handles are
 available: `direction_only` for scent and summaries, `reopenable_route` for
 existing source handles, `bounded_evidence` within declared scope, `source_open`

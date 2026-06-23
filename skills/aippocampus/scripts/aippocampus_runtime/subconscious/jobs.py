@@ -548,6 +548,34 @@ def run_jobs(
             "error": compact_text(f"{type(exc).__name__}: {exc}", 500),
         }
 
+    def semantic_worker_unavailable_result(task: JobRunTask) -> dict[str, Any]:
+        return {
+            "ok": False,
+            "dry_run": False,
+            "job": task.job,
+            "sample_index": task.sample_index,
+            "sample_count": task.sample_count,
+            "model": resolved_model,
+            "model_route": route_payload,
+            "finding_count": 0,
+            "edge_count": 0,
+            "findings": [],
+            "tool_steps": [],
+            "final_attempts": [],
+            "usage": {},
+            "jobs_output": str(jobs_output_path),
+            "edges_output": str(edges_output_path),
+            "wrote": False,
+            "deferred_write": False,
+            "semantic_worker_unavailable": True,
+            "unavailable_reason": "missing_provider_key",
+            "degraded_mode": "deterministic_only_available",
+            "error": (
+                f"semantic worker unavailable: missing {route_service_name(route)} key; "
+                f"set {resolved_api_key_env} or pass --api-key-env"
+            ),
+        }
+
     def run_task(task: JobRunTask) -> dict[str, Any]:
         return run_one_job(
             job=task.job,
@@ -581,12 +609,18 @@ def run_jobs(
         )
 
     max_workers = worker_count(concurrency=effective_concurrency, task_count=len(task_specs))
-    indexed_results = run_tasks_in_sample_waves(
-        task_specs,
-        max_workers=max_workers,
-        run_task=run_task,
-        failed_task=lambda task, exc: failed_result(task.job, task.sample_index, exc),
-    )
+    semantic_worker_unavailable = bool(task_specs and not key_value and not dry_run)
+    if semantic_worker_unavailable:
+        indexed_results = [
+            (task.index, semantic_worker_unavailable_result(task)) for task in task_specs
+        ]
+    else:
+        indexed_results = run_tasks_in_sample_waves(
+            task_specs,
+            max_workers=max_workers,
+            run_task=run_task,
+            failed_task=lambda task, exc: failed_result(task.job, task.sample_index, exc),
+        )
     indexed_results.sort(key=lambda item: item[0])
     results = [result for _, result in indexed_results]
 
@@ -713,6 +747,14 @@ def run_jobs(
         "thinking": resolved_thinking,
         "reasoning_effort": resolved_reasoning_effort,
         "model_route": route_payload,
+        "semantic_worker_available": bool(key_value) if semantic_jobs else None,
+        "semantic_worker_unavailable": bool(semantic_worker_unavailable),
+        "semantic_worker_unavailable_reason": "missing_provider_key"
+        if semantic_worker_unavailable
+        else "",
+        "semantic_worker_mode": "semantic_worker_unavailable_deterministic_only"
+        if semantic_worker_unavailable
+        else ("semantic_worker_available" if semantic_jobs else "deterministic_only"),
         "finding_count": sum(int(result.get("finding_count") or 0) for result in results),
         "edge_count": sum(int(result.get("edge_count") or 0) for result in results),
         "usage": usage_total,

@@ -40,6 +40,24 @@ REQUIRED_SOURCE_KERNEL_CONTRACT_TERMS = {
     "Generated findings must not replace clean source": (
         "source-backed kernel contract missing generated-finding replacement guard"
     ),
+    "### Derived-Layer Authority Contract": (
+        "source-backed kernel contract missing derived-layer authority section"
+    ),
+    "Reject the ladder `source > deterministic rules > LLM findings`": (
+        "derived-layer authority contract must reject deterministic-rule supremacy"
+    ),
+    "LLM or human semantic workers produce meaning-bearing candidates": (
+        "derived-layer authority contract missing semantic-worker producer role"
+    ),
+    "deterministic scripts validate source reachability, safety, structure, routing, and drift risk": (
+        "derived-layer authority contract missing deterministic validation role"
+    ),
+    "Statistical features such as df, AV, PMI, source diversity, confidence, and fanout are evidence for routing/review, not final semantic validity": (
+        "derived-layer authority contract missing statistical-feature boundary"
+    ),
+    "`detached`, `reviewable`, and `discardable` are governance properties": (
+        "derived-layer authority contract missing governance-property boundary"
+    ),
 }
 
 SOURCE_KERNEL_POINTER_DOCS = {
@@ -70,6 +88,15 @@ UNSUPPORTED_SOURCE_KERNEL_REPLACEMENT_PHRASES = {
     ),
     "generated sidecars as source truth": (
         "docs claim generated sidecars are source truth; reopen source instead"
+    ),
+    "deterministic rules are higher authority than llm findings": (
+        "docs claim deterministic rules outrank source-backed semantic synthesis"
+    ),
+    "deterministic heuristics decide semantic truth": (
+        "docs claim deterministic heuristics decide semantic truth"
+    ),
+    "statistical features decide semantic validity": (
+        "docs claim statistical features decide semantic validity"
     ),
 }
 
