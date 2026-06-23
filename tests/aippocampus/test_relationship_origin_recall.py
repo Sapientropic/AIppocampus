@@ -1,20 +1,17 @@
 from __future__ import annotations
 
 import json
-import os
-import subprocess
-import sys
 import tempfile
 import unittest
 from pathlib import Path
-from typing import Any
 
-from aippocampus_runtime.mcp import server as mcp
-from aippocampus_runtime.mcp.compact_profile import mcp_tool_result_payload
 from aippocampus_runtime.source.registry_search import search_registry_sources
-
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
+from tests.aippocampus.product_probe_helpers import (
+    SourceOpenExpectation,
+    assert_cli_recall_deepens_to_source,
+    assert_mcp_recall_deepens_to_source,
+    write_clean_source_thread,
+)
 
 
 class RelationshipOriginRecallTests(unittest.TestCase):
@@ -25,7 +22,7 @@ class RelationshipOriginRecallTests(unittest.TestCase):
         self.registry = self.cwd / "registry"
         self.clean.mkdir(parents=True)
         self.registry.mkdir()
-        self._write_clean_thread(
+        write_clean_source_thread(
             self.clean,
             [
                 {
@@ -48,7 +45,7 @@ class RelationshipOriginRecallTests(unittest.TestCase):
         origin_reflection_clean = self.cwd / "origin-reflection" / "clean-source"
         registry_source_clean = self.cwd / "registry-source-technical" / "clean-source"
         semantic_source_clean = self.cwd / "semantic-source" / "clean-source"
-        self._write_clean_thread(
+        write_clean_source_thread(
             origin_clean,
             [
                 {
@@ -69,7 +66,7 @@ class RelationshipOriginRecallTests(unittest.TestCase):
                 }
             ],
         )
-        self._write_clean_thread(
+        write_clean_source_thread(
             original_20260524_clean,
             [
                 {
@@ -106,7 +103,7 @@ class RelationshipOriginRecallTests(unittest.TestCase):
                 },
             ],
         )
-        self._write_clean_thread(
+        write_clean_source_thread(
             origin_reflection_clean,
             [
                 {
@@ -145,7 +142,7 @@ class RelationshipOriginRecallTests(unittest.TestCase):
                 }
             ],
         )
-        self._write_clean_thread(
+        write_clean_source_thread(
             registry_source_clean,
             [
                 {
@@ -163,7 +160,7 @@ class RelationshipOriginRecallTests(unittest.TestCase):
                 }
             ],
         )
-        self._write_clean_thread(
+        write_clean_source_thread(
             semantic_source_clean,
             [
                 {
@@ -183,7 +180,7 @@ class RelationshipOriginRecallTests(unittest.TestCase):
                 }
             ],
         )
-        self._write_clean_thread(
+        write_clean_source_thread(
             generic_clean,
             [
                 {
@@ -300,50 +297,6 @@ class RelationshipOriginRecallTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.tmp.cleanup()
 
-    def _write_clean_thread(self, clean_dir: Path, rows: list[dict[str, object]]) -> None:
-        clean_dir.mkdir(parents=True, exist_ok=True)
-        with (clean_dir / "messages.jsonl").open("w", encoding="utf-8", newline="\n") as f:
-            for row in rows:
-                f.write(json.dumps(row, ensure_ascii=False) + "\n")
-        with (clean_dir / "turns.jsonl").open("w", encoding="utf-8", newline="\n") as f:
-            for row in rows:
-                f.write(
-                    json.dumps(
-                        {
-                            "turn_id": row["turn_id"],
-                            "turn_index": row["turn_index"],
-                            "message_ids": [row["message_id"]],
-                            "assistant_phase": row.get("phase") or row.get("role"),
-                        },
-                        ensure_ascii=False,
-                    )
-                    + "\n"
-                )
-
-    def _cli(self, *args: str) -> dict[str, Any]:
-        env = {**os.environ, "PYTHONPATH": str(SCRIPTS)}
-        proc = subprocess.run(
-            [sys.executable, "-m", "aippocampus_runtime.cli.facade", *args],
-            cwd=REPO_ROOT,
-            env=env,
-            text=True,
-            capture_output=True,
-            check=False,
-        )
-        self.assertEqual(proc.returncode, 0, proc.stderr + proc.stdout)
-        return json.loads(proc.stdout)
-
-    def _mcp_tool_payload(self, name: str, arguments: dict[str, object]) -> dict[str, Any]:
-        response = mcp.handle_request(
-            {
-                "jsonrpc": "2.0",
-                "id": f"call-{name}",
-                "method": "tools/call",
-                "params": {"name": name, "arguments": arguments},
-            }
-        )
-        return mcp_tool_result_payload(response["result"])
-
     def test_registry_origin_cue_demotes_generic_hippocampus_research(self) -> None:
         exact_payload = search_registry_sources(
             ["最早那条机械飞升和海马体的讨论"],
@@ -370,27 +323,20 @@ class RelationshipOriginRecallTests(unittest.TestCase):
 
     def test_cli_agent_recall_origin_route_deepens_source(self) -> None:
         cache = self.cwd / "cli-last-recall.json"
-        recall = self._cli(
-            "agent",
-            "recall",
-            "小海马体 agent 持续性 用户关系 可以回去 初心",
-            "--cwd",
-            str(self.cwd),
-            "--clean-source-dir",
-            str(self.clean),
-            "--registry-dir",
-            str(self.registry),
-            "--last-recall-path",
-            str(cache),
-            "--detail",
-            "full",
-            "--json",
-        )
-        self.assertEqual(recall["status"], "ok")
-        self.assertEqual(recall["memory_packets"][0]["matched_cue_family"], "relationship_origin")
-        self.assertEqual(
-            recall["memory_packets"][0]["source_chain_role"],
-            "original_external_hippocampus_design",
+        recall, _deepen = assert_cli_recall_deepens_to_source(
+            self,
+            cue="小海马体 agent 持续性 用户关系 可以回去 初心",
+            cwd=self.cwd,
+            clean_source_dir=self.clean,
+            registry_dir=self.registry,
+            last_recall_path=cache,
+            expectation=SourceOpenExpectation(
+                recall_matched_cue_family="relationship_origin",
+                recall_source_chain_role="original_external_hippocampus_design",
+                thread_key="session:019e5aea-a7ea-78f1-bb9c-b51df0837343",
+                message_id="msg_c1d289e0359648aa0194",
+                window_terms=("thread-memory-index", "外置小海马体"),
+            ),
         )
         self.assertIn(
             "origin_reflection",
@@ -403,63 +349,25 @@ class RelationshipOriginRecallTests(unittest.TestCase):
         semantic = recall["recall_context_diagnostics"]["semantic_trigger_diagnostics"]
         self.assertGreaterEqual(semantic["reviewed_seed_trigger_match_count"], 1)
         self.assertTrue(semantic["reviewed_seed_triggers_are_query_scent_only"])
-        self.assertTrue(recall["recall_selector_available"])
-
-        deepen = self._cli(
-            "agent",
-            "deepen",
-            "--request",
-            "1",
-            "--recall-selector",
-            recall["recall_selector_id"],
-            "--last-recall-path",
-            str(cache),
-            "--cwd",
-            str(self.cwd),
-            "--clean-source-dir",
-            str(self.clean),
-            "--registry-dir",
-            str(self.registry),
-            "--detail",
-            "full",
-            "--json",
-        )
-        window_text = json.dumps(deepen["result"]["source_window"], ensure_ascii=False)
-        self.assertEqual(deepen["status"], "ok")
-        self.assertEqual(
-            deepen["result"]["source_refs"][0]["thread_key"],
-            "session:019e5aea-a7ea-78f1-bb9c-b51df0837343",
-        )
-        self.assertEqual(
-            deepen["result"]["source_refs"][0]["message_id"],
-            "msg_c1d289e0359648aa0194",
-        )
-        self.assertIn("thread-memory-index", window_text)
-        self.assertIn("外置小海马体", window_text)
 
     def test_origin_essay_cue_prefers_canonical_doc_handoff_in_cli_and_mcp(self) -> None:
         cue = "未干的地图 origin essay source-backed continuity"
         cli_cache = self.cwd / "cli-origin-essay-last-recall.json"
-        cli_recall = self._cli(
-            "agent",
-            "recall",
-            cue,
-            "--cwd",
-            str(self.cwd),
-            "--clean-source-dir",
-            str(self.clean),
-            "--registry-dir",
-            str(self.registry),
-            "--last-recall-path",
-            str(cli_cache),
-            "--detail",
-            "full",
-            "--json",
+        expectation = SourceOpenExpectation(
+            recall_source_chain_role="canonical_doc",
+            deepen_source_chain_role="canonical_doc",
+            target_source_matched=True,
+            message_id="msg_ea1e9e5ea23db0e8519e",
+            window_terms=("《未干的地图》", "origin essay", "source-backed continuity"),
         )
-        self.assertEqual(cli_recall["status"], "ok")
-        self.assertEqual(
-            cli_recall["memory_packets"][0]["source_chain_role"],
-            "canonical_doc",
+        cli_recall, _cli_deepen = assert_cli_recall_deepens_to_source(
+            self,
+            cue=cue,
+            cwd=self.cwd,
+            clean_source_dir=self.clean,
+            registry_dir=self.registry,
+            last_recall_path=cli_cache,
+            expectation=expectation,
         )
         self.assertEqual(cli_recall["source_anchor_gate"]["status"], "passed")
         self.assertEqual(
@@ -468,264 +376,86 @@ class RelationshipOriginRecallTests(unittest.TestCase):
         )
         self.assertGreaterEqual(cli_recall["source_anchor_gate"]["opened_anchor_hits"], 2)
 
-        cli_deepen = self._cli(
-            "agent",
-            "deepen",
-            "--request",
-            "1",
-            "--recall-selector",
-            cli_recall["recall_selector_id"],
-            "--last-recall-path",
-            str(cli_cache),
-            "--cwd",
-            str(self.cwd),
-            "--clean-source-dir",
-            str(self.clean),
-            "--registry-dir",
-            str(self.registry),
-            "--detail",
-            "full",
-            "--json",
-        )
-        self.assertEqual(cli_deepen["status"], "ok")
-        self.assertEqual(cli_deepen["source_chain_role"], "canonical_doc")
-        self.assertTrue(cli_deepen["target_source_matched"])
-        self.assertEqual(
-            cli_deepen["result"]["source_refs"][0]["message_id"],
-            "msg_ea1e9e5ea23db0e8519e",
-        )
-        cli_window = json.dumps(cli_deepen["result"]["source_window"], ensure_ascii=False)
-        self.assertIn("《未干的地图》", cli_window)
-        self.assertIn("origin essay", cli_window)
-        self.assertIn("source-backed continuity", cli_window)
-
         mcp_cache = self.cwd / "mcp-origin-essay-last-recall.json"
-        mcp_recall = self._mcp_tool_payload(
-            "agent_recall",
-            {
-                "query": cue,
-                "cwd": str(self.cwd),
-                "clean_source_dir": str(self.clean),
-                "registry_dir": str(self.registry),
-                "last_recall_path": str(mcp_cache),
-                "detail": "full",
-            },
-        )
-        self.assertEqual(mcp_recall["status"], "ok")
-        self.assertEqual(
-            mcp_recall["memory_packets"][0]["source_chain_role"],
-            "canonical_doc",
+        mcp_recall, _mcp_deepen = assert_mcp_recall_deepens_to_source(
+            self,
+            cue=cue,
+            cwd=self.cwd,
+            clean_source_dir=self.clean,
+            registry_dir=self.registry,
+            last_recall_path=mcp_cache,
+            expectation=expectation,
         )
         self.assertEqual(mcp_recall["source_anchor_gate"]["status"], "passed")
 
-        mcp_deepen = self._mcp_tool_payload(
-            "agent_deepen",
-            {
-                "request_index": 1,
-                "recall_selector": mcp_recall["recall_selector_id"],
-                "last_recall_path": str(mcp_cache),
-                "cwd": str(self.cwd),
-                "clean_source_dir": str(self.clean),
-                "registry_dir": str(self.registry),
-                "detail": "full",
-            },
-        )
-        self.assertEqual(mcp_deepen["status"], "ok")
-        self.assertEqual(mcp_deepen["source_chain_role"], "canonical_doc")
-        self.assertTrue(mcp_deepen["target_source_matched"])
-        self.assertEqual(
-            mcp_deepen["result"]["source_refs"][0]["message_id"],
-            "msg_ea1e9e5ea23db0e8519e",
-        )
-
     def test_mcp_agent_recall_origin_route_deepens_source(self) -> None:
         cache = self.cwd / "mcp-last-recall.json"
-        recall = self._mcp_tool_payload(
-            "agent_recall",
-            {
-                "query": "最早那条机械飞升和海马体的讨论",
-                "cwd": str(self.cwd),
-                "clean_source_dir": str(self.clean),
-                "registry_dir": str(self.registry),
-                "last_recall_path": str(cache),
-                "detail": "full",
-            },
+        assert_mcp_recall_deepens_to_source(
+            self,
+            cue="最早那条机械飞升和海马体的讨论",
+            cwd=self.cwd,
+            clean_source_dir=self.clean,
+            registry_dir=self.registry,
+            last_recall_path=cache,
+            expectation=SourceOpenExpectation(
+                recall_matched_cue_family="relationship_origin",
+                recall_source_chain_role="original_mechanical_ascension_source",
+                thread_key="session:019e5aea-a7ea-78f1-bb9c-b51df0837343",
+                message_id="msg_b2dfe27431403cdc8ffa",
+                window_terms=("机械飞升", "机仆"),
+            ),
         )
-        self.assertEqual(recall["status"], "ok")
-        self.assertEqual(recall["memory_packets"][0]["matched_cue_family"], "relationship_origin")
-        self.assertEqual(
-            recall["memory_packets"][0]["source_chain_role"],
-            "original_mechanical_ascension_source",
-        )
-        self.assertTrue(recall["recall_selector_available"])
-
-        deepen = self._mcp_tool_payload(
-            "agent_deepen",
-            {
-                "request_index": 1,
-                "recall_selector": recall["recall_selector_id"],
-                "last_recall_path": str(cache),
-                "cwd": str(self.cwd),
-                "clean_source_dir": str(self.clean),
-                "registry_dir": str(self.registry),
-                "detail": "full",
-            },
-        )
-        window_text = json.dumps(deepen["result"]["source_window"], ensure_ascii=False)
-        self.assertEqual(deepen["status"], "ok")
-        self.assertEqual(
-            deepen["result"]["source_refs"][0]["thread_key"],
-            "session:019e5aea-a7ea-78f1-bb9c-b51df0837343",
-        )
-        self.assertEqual(
-            deepen["result"]["source_refs"][0]["message_id"],
-            "msg_b2dfe27431403cdc8ffa",
-        )
-        self.assertIn("机械飞升", window_text)
-        self.assertIn("机仆", window_text)
 
     def test_registry_wide_source_hit_becomes_cli_and_mcp_deepen_route(self) -> None:
         cli_cache = self.cwd / "cli-registry-source-last-recall.json"
-        cli_recall = self._cli(
-            "agent",
-            "recall",
-            "黏菌 联想回忆 探索算法",
-            "--cwd",
-            str(self.cwd),
-            "--clean-source-dir",
-            str(self.clean),
-            "--registry-dir",
-            str(self.registry),
-            "--last-recall-path",
-            str(cli_cache),
-            "--detail",
-            "full",
-            "--json",
+        expectation = SourceOpenExpectation(
+            recall_matched_cue_family="registry_source_search",
+            thread_key="session:registry-technical-source",
+            window_terms=("黏菌", "探索算法"),
         )
-        self.assertEqual(cli_recall["status"], "ok")
-        self.assertEqual(
-            cli_recall["memory_packets"][0]["matched_cue_family"],
-            "registry_source_search",
+        cli_recall, _cli_deepen = assert_cli_recall_deepens_to_source(
+            self,
+            cue="黏菌 联想回忆 探索算法",
+            cwd=self.cwd,
+            clean_source_dir=self.clean,
+            registry_dir=self.registry,
+            last_recall_path=cli_cache,
+            expectation=expectation,
         )
         self.assertEqual(
             cli_recall["foreground_action_card"]["canonical_action"]["action_id"],
             "agent_deepen_selected_route",
         )
 
-        cli_deepen = self._cli(
-            "agent",
-            "deepen",
-            "--request",
-            "1",
-            "--recall-selector",
-            cli_recall["recall_selector_id"],
-            "--last-recall-path",
-            str(cli_cache),
-            "--cwd",
-            str(self.cwd),
-            "--clean-source-dir",
-            str(self.clean),
-            "--registry-dir",
-            str(self.registry),
-            "--detail",
-            "full",
-            "--json",
-        )
-        self.assertEqual(cli_deepen["status"], "ok")
-        self.assertEqual(
-            cli_deepen["result"]["source_refs"][0]["thread_key"],
-            "session:registry-technical-source",
-        )
-        cli_window = json.dumps(cli_deepen["result"]["source_window"], ensure_ascii=False)
-        self.assertIn("黏菌", cli_window)
-        self.assertIn("探索算法", cli_window)
-
         mcp_cache = self.cwd / "mcp-registry-source-last-recall.json"
-        mcp_recall = self._mcp_tool_payload(
-            "agent_recall",
-            {
-                "query": "黏菌 联想回忆 探索算法",
-                "cwd": str(self.cwd),
-                "clean_source_dir": str(self.clean),
-                "registry_dir": str(self.registry),
-                "last_recall_path": str(mcp_cache),
-                "detail": "full",
-            },
-        )
-        self.assertEqual(mcp_recall["status"], "ok")
-        self.assertEqual(
-            mcp_recall["memory_packets"][0]["matched_cue_family"],
-            "registry_source_search",
-        )
-        mcp_deepen = self._mcp_tool_payload(
-            "agent_deepen",
-            {
-                "request_index": 1,
-                "recall_selector": mcp_recall["recall_selector_id"],
-                "last_recall_path": str(mcp_cache),
-                "cwd": str(self.cwd),
-                "clean_source_dir": str(self.clean),
-                "registry_dir": str(self.registry),
-                "detail": "full",
-            },
-        )
-        self.assertEqual(mcp_deepen["status"], "ok")
-        self.assertEqual(
-            mcp_deepen["result"]["source_refs"][0]["thread_key"],
-            "session:registry-technical-source",
+        assert_mcp_recall_deepens_to_source(
+            self,
+            cue="黏菌 联想回忆 探索算法",
+            cwd=self.cwd,
+            clean_source_dir=self.clean,
+            registry_dir=self.registry,
+            last_recall_path=mcp_cache,
+            expectation=expectation,
         )
 
     def test_source_backed_semantic_trigger_becomes_deepen_route(self) -> None:
         cache = self.cwd / "semantic-trigger-last-recall.json"
-        recall = self._cli(
-            "agent",
-            "recall",
-            "桥接语义航标",
-            "--cwd",
-            str(self.cwd),
-            "--clean-source-dir",
-            str(self.clean),
-            "--registry-dir",
-            str(self.registry),
-            "--last-recall-path",
-            str(cache),
-            "--detail",
-            "full",
-            "--json",
-        )
-        self.assertEqual(recall["status"], "ok")
-        self.assertEqual(
-            recall["memory_packets"][0]["matched_cue_family"],
-            "semantic_trigger_source",
+        recall, _deepen = assert_cli_recall_deepens_to_source(
+            self,
+            cue="桥接语义航标",
+            cwd=self.cwd,
+            clean_source_dir=self.clean,
+            registry_dir=self.registry,
+            last_recall_path=cache,
+            expectation=SourceOpenExpectation(
+                recall_matched_cue_family="semantic_trigger_source",
+                thread_key="session:semantic-source-backed",
+                window_terms=("Source-backed semantic trigger route",),
+            ),
         )
         semantic = recall["recall_context_diagnostics"]["semantic_trigger_diagnostics"]
         self.assertEqual(semantic["trigger_source_routes"], 1)
         self.assertIn("桥接语义航标", semantic["matched_trigger_terms"])
-
-        deepen = self._cli(
-            "agent",
-            "deepen",
-            "--request",
-            "1",
-            "--recall-selector",
-            recall["recall_selector_id"],
-            "--last-recall-path",
-            str(cache),
-            "--cwd",
-            str(self.cwd),
-            "--clean-source-dir",
-            str(self.clean),
-            "--registry-dir",
-            str(self.registry),
-            "--detail",
-            "full",
-            "--json",
-        )
-        self.assertEqual(deepen["status"], "ok")
-        self.assertEqual(
-            deepen["result"]["source_refs"][0]["thread_key"],
-            "session:semantic-source-backed",
-        )
 
 
 if __name__ == "__main__":
