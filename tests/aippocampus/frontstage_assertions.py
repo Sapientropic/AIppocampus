@@ -5,6 +5,8 @@ import re
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+from aippocampus_runtime.mcp.compact_profile import COMPACT_DEBUG_FIELD_DENYLIST
+
 PathComponent = str | int
 
 COMPACT_DIAGNOSTIC_TOP_LEVEL_KEYS = {
@@ -192,6 +194,42 @@ def assert_compact_frontstage_payload(
     test.assertNotIn("red_lines", payload)
     for marker in PRIVATE_PATH_MARKERS:
         test.assertNotIn(marker, encoded)
+
+
+def compact_debug_field_paths(
+    value: Any,
+    path: tuple[PathComponent, ...] = (),
+) -> list[str]:
+    if isinstance(value, Mapping):
+        paths: list[str] = []
+        for key, child in value.items():
+            child_path = (*path, str(key))
+            if key in COMPACT_DEBUG_FIELD_DENYLIST:
+                paths.append(_format_path(child_path))
+            paths.extend(compact_debug_field_paths(child, child_path))
+        return paths
+    if isinstance(value, Sequence) and not isinstance(value, str | bytes | bytearray):
+        paths = []
+        for index, child in enumerate(value):
+            paths.extend(compact_debug_field_paths(child, (*path, index)))
+        return paths
+    return []
+
+
+def assert_no_compact_debug_fields(
+    test: Any,
+    payload: Mapping[str, Any],
+    *,
+    surface: str,
+) -> None:
+    """Assert MCP compact structuredContent is a product card, not proof dump."""
+
+    test.assertEqual(
+        compact_debug_field_paths(payload),
+        [],
+        f"compact surface {surface} leaked detail/operator fields",
+    )
+
 
 def assert_semantic_human_output(
     test: Any,
