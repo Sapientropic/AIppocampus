@@ -20,6 +20,7 @@ from aippocampus_runtime.contracts import (
     canonical_foreground_action_fields,
     foreground_shell_action,
 )
+from aippocampus_runtime.hooks import claude_code_events
 from aippocampus_runtime.hooks.claude_code_handler import (
     SUPPORTED_HANDLER_EVENTS,
     handler_command_report,
@@ -33,6 +34,8 @@ from aippocampus_runtime.hooks.claude_code_handler import (
 
 HOST = "claude-code"
 handler_command = _handler_command
+read_observed_event_log = claude_code_events.read_observed_event_log
+read_observed_events = claude_code_events.read_observed_events
 CONFIG_SURFACE = "claude_settings_json"
 OFFICIAL_HOOKS_REFERENCE = "https://code.claude.com/docs/en/hooks"
 OFFICIAL_HOOKS_GUIDE = "https://code.claude.com/docs/en/hooks-guide"
@@ -375,22 +378,6 @@ def _uninstall_hooks_one(*, settings_path: Path, scope: str) -> dict[str, Any]:
     return result
 
 
-def read_observed_events(event_log_path: Path | None) -> set[str]:
-    if event_log_path is None or not event_log_path.exists():
-        return set()
-    seen: set[str] = set()
-    with event_log_path.open("r", encoding="utf-8") as handle:
-        for line in handle:
-            try:
-                item = json.loads(line)
-            except Exception:
-                continue
-            event_name = str(item.get("hook_event_name") or item.get("event") or "")
-            if event_name:
-                seen.add(event_name)
-    return seen
-
-
 def event_status(
     event: str,
     *,
@@ -597,7 +584,8 @@ def status_report(
     settings_path = default_settings_path() if settings_path is None else settings_path
     settings, settings_blocker = read_settings_for_status(settings_path)
     installed = installed_events(settings)
-    observed = read_observed_events(event_log_path)
+    observed_event_log = read_observed_event_log(event_log_path)
+    observed = set(observed_event_log.get("events") or [])
     events = {
         event: event_report(
             event,
@@ -633,6 +621,17 @@ def status_report(
             "contract_only_events": list(CONTRACT_ONLY_EVENTS),
         },
         "events": events,
+        "event_log": {
+            key: observed_event_log[key]
+            for key in (
+                "status",
+                "event_count",
+                "malformed_line_count",
+                "unsupported_row_count",
+                "error_code",
+            )
+            if key in observed_event_log
+        },
         "foreground_action_card": foreground_action,
         **canonical_foreground_action_fields(
             foreground_action["primary"],

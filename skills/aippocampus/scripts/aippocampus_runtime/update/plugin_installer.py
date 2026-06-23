@@ -212,7 +212,7 @@ class CodexAppServerClient:
             try:
                 assert self._proc.stdin is not None
                 self._proc.stdin.close()
-            except Exception:
+            except (OSError, ValueError):
                 pass
             try:
                 self._proc.terminate()
@@ -437,7 +437,7 @@ def _installed_source_current(item: dict[str, Any], package_root: Path) -> bool 
         return False
     try:
         return _tree_fingerprint(source_root) == _tree_fingerprint(package_root)
-    except Exception:
+    except OSError:
         return False
 
 
@@ -639,6 +639,8 @@ def run_codex_host_probe(
         result["validation_ok"] = not failures
         return result
     except Exception as exc:
+        result["error_code"] = type(exc).__name__
+        result["error_message"] = str(exc)
         result["exception"] = f"{type(exc).__name__}: {exc}"
         result["failures"] = [result["exception"]]
         return result

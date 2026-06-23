@@ -281,6 +281,15 @@ class DebtReportTests(unittest.TestCase):
             report["broad_exception_debt"]["summary"]["pure_silent_broad_except_total"],
         )
 
+    def test_hot_path_pure_silent_broad_exceptions_stay_zero(self) -> None:
+        inventory = debt_report.broad_exception_inventory()
+
+        self.assertEqual(
+            inventory["summary"]["hot_path_pure_silent_total"],
+            0,
+            "hot-path broad exceptions must degrade visibly instead of silently continuing",
+        )
+
     def test_changed_surface_debt_is_acceptance_bearing_only_for_touched_files(self) -> None:
         clean = debt_report.changed_surface_debt(["docs/guides/install-guide.md"])
         self.assertEqual(clean["status"], "pass")

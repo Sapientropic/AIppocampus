@@ -68,6 +68,34 @@ class ClaudeCodeHooksTests(unittest.TestCase):
         self.assertNotIn("copy the dry-run handlers", dry_run["next_operator_step"])
         self.assertNotIn(str(settings), encoded)
 
+    def test_status_counts_malformed_event_log_rows_without_foreground_noise(self) -> None:
+        from aippocampus_runtime.hooks import claude_code
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            settings = root / "settings.json"
+            event_log = root / "events.jsonl"
+            settings.write_text("{}", encoding="utf-8")
+            event_log.write_text(
+                '{"hook_event_name":"UserPromptSubmit"}\n'
+                "not-json\n"
+                "[]\n"
+                '{"event":""}\n',
+                encoding="utf-8",
+            )
+
+            status = claude_code.status_report(
+                settings_path=settings,
+                event_log_path=event_log,
+            )
+
+        self.assertEqual(status["events"]["UserPromptSubmit"]["status"], "firing")
+        self.assertEqual(status["event_log"]["status"], "loaded_with_loss")
+        self.assertEqual(status["event_log"]["event_count"], 1)
+        self.assertEqual(status["event_log"]["malformed_line_count"], 1)
+        self.assertEqual(status["event_log"]["unsupported_row_count"], 2)
+        self.assertNotIn("not-json", json.dumps(status["foreground_action"], ensure_ascii=False))
+
     def test_install_is_idempotent_and_uninstall_preserves_unrelated_settings(self) -> None:
         from aippocampus_runtime.hooks import claude_code
 

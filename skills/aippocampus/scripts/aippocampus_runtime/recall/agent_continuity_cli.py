@@ -80,6 +80,8 @@ def _route_limit_arg(value: str) -> int:
 
 
 def _parser() -> argparse.ArgumentParser:
+    """aippocampus-stage-map: build argparse contract; command execution stays in main."""
+
     parser = argparse.ArgumentParser(
         prog="aippocampus agent",
         description=(
@@ -345,6 +347,8 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """aippocampus-stage-map: parse args -> dispatch command -> render compact/detail output."""
+
     parser = _parser()
     args = parser.parse_args(argv)
     if args.command == "recall":
@@ -588,8 +592,15 @@ def main(argv: list[str] | None = None) -> int:
                     path=selector_cache_path,
                     outcome="source_open",
                 )
-            except Exception:
-                pass
+            except (OSError, ValueError, json.JSONDecodeError) as exc:
+                payload.setdefault("detail_warnings", []).append(
+                    {
+                        "code": "last_recall_opened_marker_unavailable",
+                        "error_code": type(exc).__name__,
+                        "recovery": "source_open_succeeded_marker_not_written",
+                        "claim_boundary": "detail_only_cache_diagnostic",
+                    }
+                )
         if args.json:
             if args.detail == "full":
                 payload = {"detail": "full", "output_boundary": "local_private_diagnostic_full", **payload}
