@@ -12,6 +12,7 @@ from typing import Any, Iterable, Mapping
 
 from aippocampus_runtime.core import compact_text
 from aippocampus_runtime.registry.api import unique_preserve
+from aippocampus_runtime.source.io_kernel import safe_float
 
 HASH_VECTOR_DIMS = 96
 
@@ -200,16 +201,6 @@ def axis_overlap(left: Iterable[str], right: Iterable[str]) -> float:
     return token_jaccard(normalize_tokens(" ".join(left)), normalize_tokens(" ".join(right)))
 
 
-def safe_float(value: Any, default: float = 0.0) -> float:
-    try:
-        number = float(value)
-    except (TypeError, ValueError):
-        return default
-    if number != number or number in {float("inf"), float("-inf")}:
-        return default
-    return number
-
-
 def candidate_salience(
     row: Mapping[str, Any],
     *,
@@ -320,4 +311,3 @@ def match_score(left: QuestionCandidate, right: QuestionCandidate) -> float:
     score = lexical * 0.68 + what * 0.16 + where * 0.07 + phase * 0.04 + collab * 0.03
     score += orientation_bonus
     return round(max(0.0, min(1.0, score)), 6)
-

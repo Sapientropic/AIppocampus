@@ -8,11 +8,13 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime import core
-from aippocampus_runtime.recall.query_policy import (
-    normalize_term,
-    split_query_terms,
-    unique_preserve,
+from aippocampus_runtime.recall.apw_anchor_coverage import (
+    low_actual_anchor_coverage_reason,
+    matched_terms_from_text,
+    query_anchor_terms,
+    source_anchor_gate,
 )
+from aippocampus_runtime.recall.query_policy import unique_preserve
 from aippocampus_runtime.source.clean_source_resolver import resolve_clean_source_dir
 from aippocampus_runtime.source.search import process_noise_reason
 from aippocampus_runtime.source.search_core import iter_clean_messages, score_message
@@ -100,27 +102,6 @@ VALIDATION_REPORT_MARKERS = (
     "验收失败",
     "关闭 issue",
 )
-GENERIC_FLOW_ANCHORS = {
-    "agent",
-    "apw",
-    "benchmark",
-    "ci",
-    "cli",
-    "deepen",
-    "dogfood",
-    "issue",
-    "issues",
-    "key",
-    "llm",
-    "mcp",
-    "pr",
-    "recall",
-    "source",
-    "test",
-    "tests",
-}
-
-
 def _compact(value: Any, limit: int = 120) -> str:
     sanitized, _ = core.sanitize_external_model_text(str(value or ""))
     return core.compact_text(sanitized, limit)
@@ -141,31 +122,6 @@ def _component(name: str, *, status: str, row_count: int, malformed_count: int =
 
 def _clean_source_root(cwd: str | Path | None, clean_source_dir: str | Path | None) -> Path:
     return resolve_clean_source_dir(cwd, clean_source_dir)
-
-
-def _query_anchor_terms(query: str, *, limit: int = 12) -> list[str]:
-    normalized_query = normalize_term(query).casefold()
-    split_terms = split_query_terms([query])
-    anchors = [
-        term
-        for term in split_terms
-        if term.casefold() != normalized_query or len(split_terms) == 1
-    ]
-    if not anchors:
-        anchors = split_terms
-    return unique_preserve(anchors, limit=limit)
-
-
-def _matched_terms_from_text(text: str, terms: Sequence[str], *, limit: int = 8) -> list[str]:
-    haystack = str(text or "").casefold()
-    matched: list[str] = []
-    for term in terms:
-        clean = normalize_term(str(term or ""))
-        if not clean:
-            continue
-        if clean.casefold() in haystack:
-            matched.append(clean)
-    return unique_preserve(matched, limit=limit)
 
 
 def _message_scope_bucket(message: Mapping[str, Any]) -> str:
@@ -281,38 +237,6 @@ def _task_echo_reason(
     return "same_thread_task_echo_no_anchor"
 
 
-def _low_actual_anchor_coverage_reason(
-    *,
-    matched_terms: Sequence[str],
-    anchor_terms: Sequence[str],
-) -> str:
-    """Require APW current-source candidates to carry the advertised cue anchors.
-
-    APW may use sidecar or label terms for navigation, but a foreground
-    current-clean-source route must not claim anchors that are absent from the
-    exact source message it will reopen. Keep one- or two-anchor cues permissive;
-    for multi-anchor cues, one generic overlap such as "benchmark" is not enough
-    to become the primary source-open action.
-    """
-
-    anchors = {str(term).strip().casefold() for term in anchor_terms if str(term).strip()}
-    matched = {str(term).strip().casefold() for term in matched_terms if str(term).strip()}
-    if len(anchors) <= 2:
-        return "" if matched & anchors else "low_actual_source_anchor_coverage"
-    meaningful_anchors = {
-        term
-        for term in anchors
-        if term not in GENERIC_FLOW_ANCHORS and (not term.isascii() or len(term) >= 6)
-    }
-    if meaningful_anchors and not (matched & meaningful_anchors):
-        return "low_actual_source_anchor_coverage"
-    required = min(3, max(2, (len(anchors) + 1) // 2))
-    coverage = len(matched & anchors) / max(1, len(anchors))
-    if len(matched & anchors) >= required or coverage >= 0.5:
-        return ""
-    return "low_actual_source_anchor_coverage"
-
-
 def _self_referential_validation_reason(
     message: Mapping[str, Any],
     text: str,
@@ -384,7 +308,7 @@ def clean_source_candidate_rows(
     messages_path = source_dir / "messages.jsonl"
     if not messages_path.is_file():
         return [], _component("current_clean_source_candidates", status="missing", row_count=0)
-    anchor_terms = _query_anchor_terms(query)
+    anchor_terms = query_anchor_terms(query)
     if not anchor_terms:
         return [], _component("current_clean_source_candidates", status="needs_query", row_count=0)
     search_terms = search_query_terms([query])
@@ -404,9 +328,9 @@ def clean_source_candidate_rows(
         score = score_message(message, search_terms)
         if score <= 0:
             continue
-        matched_terms = _matched_terms_from_text(text, anchor_terms)
+        matched_terms = matched_terms_from_text(text, anchor_terms)
         if not matched_terms:
-            matched_terms = _matched_terms_from_text(text, search_terms)
+            matched_terms = matched_terms_from_text(text, search_terms)
         if not matched_terms:
             continue
         control_reason = _control_message_reason(message, text)
@@ -434,7 +358,7 @@ def clean_source_candidate_rows(
             control_reason_counts[validation_reason] += 1
             self_referential_validation_filtered_count += 1
             continue
-        low_anchor_reason = _low_actual_anchor_coverage_reason(
+        low_anchor_reason = low_actual_anchor_coverage_reason(
             matched_terms=matched_terms,
             anchor_terms=anchor_terms,
         )
@@ -464,6 +388,10 @@ def clean_source_candidate_rows(
                     "route_terms": route_terms,
                     "query_anchor_terms": unique_preserve(anchor_terms, limit=12),
                     "actual_source_matched_terms": route_terms,
+                    "source_anchor_gate": source_anchor_gate(
+                        matched_terms=matched_terms,
+                        anchor_terms=anchor_terms,
+                    ),
                     "route_label": "APW source route: " + " / ".join(matched_terms[:3]),
                     "source_refs": [ref],
                     "scope_bucket": _message_scope_bucket(message),

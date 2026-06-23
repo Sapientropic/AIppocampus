@@ -9,35 +9,17 @@ then lets the retrospective lifecycle bucket the result.
 
 from __future__ import annotations
 
-import hashlib
-import json
 from collections.abc import Iterable, Mapping
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from aippocampus_runtime.core import compact_text, now_utc
+from aippocampus_runtime.core import compact_text, now_utc, stable_json_id
 from aippocampus_runtime.dream import retrospective_lifecycle as dream_retrospective_lifecycle
+from aippocampus_runtime.source.io_kernel import parse_utc, source_ref_key
 
 PROBE_KIND = "aippocampus_dream_finding"
 PROBE_FAMILY = "coding_rejected_route"
 ELIGIBLE_EVENT_TYPES = {"rejected_route", "do_not_repeat", "scope_narrowing", "user_correction"}
-
-
-def stable_id(*parts: object, prefix: str, length: int = 18) -> str:
-    raw = "\n".join(json.dumps(part, ensure_ascii=False, sort_keys=True, default=str) for part in parts)
-    return f"{prefix}_{hashlib.sha1(raw.encode('utf-8', errors='replace')).hexdigest()[:length]}"
-
-
-def parse_utc(value: object) -> datetime | None:
-    text = str(value or "")
-    if not text:
-        return None
-    try:
-        if text.endswith("Z"):
-            text = text[:-1] + "+00:00"
-        return datetime.fromisoformat(text).astimezone(timezone.utc)
-    except ValueError:
-        return None
 
 
 def format_utc(value: datetime) -> str:
@@ -47,15 +29,6 @@ def format_utc(value: datetime) -> str:
 def future_utc(created_at: object, *, days: int) -> str:
     base = parse_utc(created_at) or parse_utc(now_utc()) or datetime.now(timezone.utc)
     return format_utc(base + timedelta(days=max(1, int(days))))
-
-
-def source_ref_key(ref: Mapping[str, Any]) -> tuple[str, str, str, str]:
-    return (
-        str(ref.get("thread_key") or ref.get("thread_id") or ""),
-        str(ref.get("message_id") or ""),
-        str(ref.get("turn_id") or ""),
-        str(ref.get("source_id") or ref.get("source_line") or ref.get("line") or ""),
-    )
 
 
 def normalize_source_refs(value: object) -> list[dict[str, Any]]:
@@ -100,9 +73,15 @@ def build_rejected_route_probe(
     refs = normalize_source_refs(event.get("source_refs"))
     if not refs:
         raise ValueError("coding rejected-route probe requires source refs")
-    decision_id = str(event.get("decision_id") or stable_id(event, prefix="decision", length=18))
+    decision_id = str(event.get("decision_id") or stable_json_id("decision", event, length=18))
     route = rejected_route_surface(event)
-    fingerprint = stable_id(decision_id, route, "coding_rejected_route_probe", prefix="dream_probe", length=20)
+    fingerprint = stable_json_id(
+        "dream_probe",
+        decision_id,
+        route,
+        "coding_rejected_route_probe",
+        length=20,
+    )
     created_at = str(event.get("created_at") or now_utc())
     return {
         "schema_version": 1,

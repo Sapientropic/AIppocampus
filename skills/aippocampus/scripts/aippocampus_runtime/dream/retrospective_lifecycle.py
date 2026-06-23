@@ -18,6 +18,7 @@ from typing import Any
 
 from aippocampus_runtime.core import now_utc
 from aippocampus_runtime.dream import precision_policy as precision
+from aippocampus_runtime.source.io_kernel import load_jsonl_dict_rows
 
 LIFECYCLE_KIND = "aippocampus_dream_retrospective_lifecycle"
 SUMMARY_KIND = "aippocampus_dream_retrospective_lifecycle_summary"
@@ -33,21 +34,10 @@ REGISTRY_LATER_ROW_FILES = (
 )
 
 
-def iter_jsonl(path: Path | None) -> list[dict[str, Any]]:
+def load_retrospective_rows(path: Path | None) -> list[dict[str, Any]]:
     if not path or not path.exists():
         return []
-    rows: list[dict[str, Any]] = []
-    with path.open("r", encoding="utf-8") as fh:
-        for line in fh:
-            if not line.strip():
-                continue
-            try:
-                item = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if isinstance(item, dict):
-                rows.append(item)
-    return rows
+    return load_jsonl_dict_rows(path).rows
 
 
 def probe_id(probe: Mapping[str, Any]) -> str:
@@ -217,7 +207,7 @@ def public_lifecycle_summary(payload: Mapping[str, Any]) -> dict[str, Any]:
 def load_registry_rows(root: Path, *, project: str | None = None) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for name in REGISTRY_LATER_ROW_FILES:
-        for row in iter_jsonl(root / name):
+        for row in load_retrospective_rows(root / name):
             if row_mentions_project(row, project):
                 rows.append(row)
     return rows
@@ -235,8 +225,12 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     root = Path(args.registry_dir).resolve() if args.registry_dir else None
-    probes = iter_jsonl(args.probes_jsonl or (root / "dream_findings.jsonl" if root else None))
-    later_rows = iter_jsonl(args.later_jsonl) if args.later_jsonl else (load_registry_rows(root, project=args.project) if root else [])
+    probes = load_retrospective_rows(args.probes_jsonl or (root / "dream_findings.jsonl" if root else None))
+    later_rows = (
+        load_retrospective_rows(args.later_jsonl)
+        if args.later_jsonl
+        else (load_registry_rows(root, project=args.project) if root else [])
+    )
     payload = run_retrospective_lifecycle(probes, later_rows, now=args.now)
     output = public_lifecycle_summary(payload) if args.summary else payload
     print(json.dumps(output, ensure_ascii=False, indent=None if args.json_output else 2))

@@ -18,6 +18,7 @@ from aippocampus_runtime.artifacts.publish import (
     segment_generation_diagnostics,
 )
 from aippocampus_runtime.core import aippocampus_registry_dir, now_utc
+from aippocampus_runtime.source.io_kernel import load_json_dict
 from aippocampus_runtime.sync.bundle import iter_clean_source_sync_files, iter_registry_sync_files
 
 CANONICAL_CLEAN_FILES = ("manifest.json", "messages.jsonl", "turns.jsonl")
@@ -57,16 +58,6 @@ def ratio(numerator: int, denominator: int) -> float:
     return round(float(numerator) / float(denominator), 4)
 
 
-def load_json(path: Path) -> dict[str, Any]:
-    if not path.exists():
-        return {}
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        return {}
-    return data if isinstance(data, dict) else {}
-
-
 def relative_path(path: Path, root: Path) -> str:
     try:
         return path.resolve().relative_to(root.resolve()).as_posix()
@@ -90,7 +81,7 @@ def iter_files(path: Path) -> Iterable[Path]:
 
 
 def registry_threads(registry_dir: Path) -> list[dict[str, Any]]:
-    registry = load_json(registry_dir / "threads.json")
+    registry = load_json_dict(registry_dir / "threads.json").data
     threads = registry.get("threads") or []
     return [thread for thread in threads if isinstance(thread, dict)]
 
@@ -127,7 +118,7 @@ def clean_source_bytes(clean_dir: Path) -> tuple[int, int]:
 
 def _segment_sqlite_paths(index_dir: Path) -> list[Path]:
     segments_dir = index_dir / "segments"
-    manifest = load_json(segments_dir / "manifest.json")
+    manifest = load_json_dict(segments_dir / "manifest.json").data
     paths: dict[str, Path] = {}
     for item in manifest.get("segments") or []:
         if not isinstance(item, dict):
@@ -160,7 +151,7 @@ def sqlite_stats(index_dir: Path) -> dict[str, int]:
 
 
 def segment_manifest_count(index_dir: Path) -> int:
-    manifest = load_json(index_dir / "segments" / "manifest.json")
+    manifest = load_json_dict(index_dir / "segments" / "manifest.json").data
     try:
         return int(manifest.get("segment_count") or 0)
     except (TypeError, ValueError):

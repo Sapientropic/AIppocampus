@@ -16,8 +16,10 @@ import sys
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+from aippocampus_runtime.core import dict_or_empty, list_or_empty
 from aippocampus_runtime.ops import recall_navigation_comparison_fixtures
 from aippocampus_runtime.recall import score_fusion
+from aippocampus_runtime.source.io_kernel import safe_float as kernel_safe_float
 
 DECISION_KIND = "aippocampus_source_joined_routing_decision"
 DECISION_SCHEMA_VERSION = 1
@@ -44,26 +46,11 @@ FORBIDDEN_PUBLIC_OUTPUT_FRAGMENTS = (
 LOCAL_PATH_PATTERN = re.compile(r"[A-Za-z]:\\|/home/|/Users/")
 
 
-def _as_dict(value: Any) -> dict[str, Any]:
-    return value if isinstance(value, dict) else {}
-
-
-def _as_list(value: Any) -> list[Any]:
-    return value if isinstance(value, list) else []
-
-
 def _safe_int(value: Any) -> int:
     try:
         return int(value)
     except (TypeError, ValueError):
         return 0
-
-
-def _safe_float(value: Any) -> float:
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return 0.0
 
 
 def _public_score_metrics(metrics: Mapping[str, Any]) -> dict[str, Any]:
@@ -126,7 +113,7 @@ def _average_ms(
     for case in cases:
         if not isinstance(case, Mapping):
             continue
-        row = _as_dict(_as_dict(case.get("arms")).get(arm))
+        row = dict_or_empty(dict_or_empty(case.get("arms")).get(arm))
         value = row.get("time_to_first_useful_source_observed_ms")
         if isinstance(value, (int, float)):
             values.append(max(0, int(round(value))))
@@ -144,10 +131,10 @@ def _variant_matrix(
     score_metrics: Mapping[str, Any],
     attention_claim_without_source_reopen_count: int,
 ) -> list[dict[str, Any]]:
-    arms = _as_dict(navigation_aggregate.get("arms"))
-    direct = _as_dict(arms.get("direct_search"))
-    progressive = _as_dict(arms.get("progressive_recall"))
-    attention = _as_dict(arms.get("attention_router_navigation_only"))
+    arms = dict_or_empty(navigation_aggregate.get("arms"))
+    direct = dict_or_empty(arms.get("direct_search"))
+    progressive = dict_or_empty(arms.get("progressive_recall"))
+    attention = dict_or_empty(arms.get("attention_router_navigation_only"))
     return [
         {
             "variant": "text_direct_search_baseline",
@@ -218,7 +205,7 @@ def _sum_arm_field(cases: Sequence[Any], *, arm: str, field: str) -> int:
     for case in cases:
         if not isinstance(case, Mapping):
             continue
-        row = _as_dict(_as_dict(case.get("arms")).get(arm))
+        row = dict_or_empty(dict_or_empty(case.get("arms")).get(arm))
         total += _safe_int(row.get(field))
     return total
 
@@ -240,15 +227,15 @@ def build_source_joined_routing_decision(
         if score_fusion_report is not None
         else score_fusion.build_public_score_fusion_calibration_report()
     )
-    navigation_aggregate = _as_dict(navigation.get("aggregate"))
-    arms = _as_dict(navigation_aggregate.get("arms"))
-    progressive = _as_dict(arms.get("progressive_recall"))
-    direct = _as_dict(arms.get("direct_search"))
-    attention = _as_dict(arms.get("attention_router_navigation_only"))
-    funnel = _as_dict(navigation.get("vague_cue_candidate_funnel"))
-    funnel_metrics = _as_dict(funnel.get("metrics"))
-    score_metrics = _public_score_metrics(_as_dict(score_report.get("metrics")))
-    cases = _as_list(navigation.get("cases"))
+    navigation_aggregate = dict_or_empty(navigation.get("aggregate"))
+    arms = dict_or_empty(navigation_aggregate.get("arms"))
+    progressive = dict_or_empty(arms.get("progressive_recall"))
+    direct = dict_or_empty(arms.get("direct_search"))
+    attention = dict_or_empty(arms.get("attention_router_navigation_only"))
+    funnel = dict_or_empty(navigation.get("vague_cue_candidate_funnel"))
+    funnel_metrics = dict_or_empty(funnel.get("metrics"))
+    score_metrics = _public_score_metrics(dict_or_empty(score_report.get("metrics")))
+    cases = list_or_empty(navigation.get("cases"))
     attention_claim_without_source_reopen_count = _sum_arm_field(
         cases,
         arm="attention_router_navigation_only",
@@ -266,10 +253,10 @@ def build_source_joined_routing_decision(
     wrong_route_drag_from_sentinel_count = _safe_int(
         funnel_metrics.get("wrong_route_drag_from_sentinel_count")
     )
-    source_reopen_success_rate = _safe_float(
+    source_reopen_success_rate = kernel_safe_float(
         progressive.get("source_reopen_follow_through_rate")
     )
-    source_ref_rejoin_rate = _safe_float(funnel_metrics.get("source_ref_rejoin_rate"))
+    source_ref_rejoin_rate = kernel_safe_float(funnel_metrics.get("source_ref_rejoin_rate"))
     source_join_gate_reject_count = _safe_int(
         score_metrics.get("source_join_gate_reject_count")
     )
@@ -472,10 +459,10 @@ def build_source_joined_routing_decision(
 
 
 def render_markdown(report: Mapping[str, Any]) -> str:
-    metrics = _as_dict(report.get("measured_consumer_metrics"))
-    decision = _as_dict(report.get("default_policy_decision"))
-    latency = _as_dict(report.get("latency_and_cost_notes"))
-    progressive_latency = _as_dict(
+    metrics = dict_or_empty(report.get("measured_consumer_metrics"))
+    decision = dict_or_empty(report.get("default_policy_decision"))
+    latency = dict_or_empty(report.get("latency_and_cost_notes"))
+    progressive_latency = dict_or_empty(
         latency.get("progressive_recall_time_to_first_useful_source_ms")
     )
     lines = [
@@ -544,7 +531,7 @@ def render_markdown(report: Mapping[str, Any]) -> str:
         "## Cannot Claim",
         "",
     ]
-    for claim in _as_list(report.get("cannot_claim")):
+    for claim in list_or_empty(report.get("cannot_claim")):
         lines.append(f"- `{claim}`")
     return "\n".join(lines) + "\n"
 

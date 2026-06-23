@@ -10,7 +10,6 @@ delivery. Later UI/AAR layers may consume the adjustments after source review.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 from collections.abc import Iterable, Mapping, Sequence
 from datetime import datetime, timezone
@@ -21,10 +20,8 @@ from aippocampus_runtime.contracts import (
     canonical_foreground_action_fields,
     foreground_shell_action,
 )
-from aippocampus_runtime.core import compact_text, now_utc
-from aippocampus_runtime.journey.tracking import (
-    source_ref_key,
-)
+from aippocampus_runtime.core import compact_text, now_utc, stable_json_id
+from aippocampus_runtime.source.io_kernel import parse_utc, source_ref_key
 
 SCHEMA_VERSION = 1
 TOPOLOGY_KIND = "aippocampus_reflection_topology"
@@ -60,12 +57,6 @@ BASE_STATUS_METRICS = {
     "arrived": {"ranking_weight": 0.42, "confidence": 0.7, "visibility_score": 0.32},
     "abandoned": {"ranking_weight": 0.12, "confidence": 0.46, "visibility_score": 0.08},
 }
-
-
-def stable_id(prefix: str, *parts: Any, length: int = 18) -> str:
-    raw = "\n".join(json.dumps(part, ensure_ascii=False, sort_keys=True, default=str) for part in parts)
-    digest = hashlib.sha1(raw.encode("utf-8", errors="replace")).hexdigest()
-    return f"{prefix}_{digest[:length]}"
 
 
 def clamp(value: float, low: float, high: float) -> float:
@@ -107,16 +98,6 @@ def merge_refs(*groups: object, limit: int = 12) -> tuple[dict[str, Any], ...]:
             if len(refs) >= limit:
                 return tuple(refs)
     return tuple(refs)
-
-
-def parse_utc(value: str | None) -> datetime | None:
-    if not value:
-        return None
-    try:
-        text = value[:-1] + "+00:00" if value.endswith("Z") else value
-        return datetime.fromisoformat(text).astimezone(timezone.utc)
-    except ValueError:
-        return None
 
 
 def source_ref_keys(refs: Iterable[Mapping[str, Any]]) -> set[tuple[str, str, str, str]]:
@@ -217,7 +198,16 @@ def make_adjustment(
     return {
         "schema_version": SCHEMA_VERSION,
         "kind": ADJUSTMENT_KIND,
-        "adjustment_id": stable_id("reflection_adj", target_id, surface, delta, action, refs, length=20),
+        "adjustment_id": stable_json_id(
+            "reflection_adj",
+            "reflection-space-id",
+            target_id,
+            surface,
+            delta,
+            action,
+            refs,
+            length=20,
+        ),
         "created_at": now_utc(),
         "target_scope": scope,
         "target_id": target_id,
@@ -423,7 +413,10 @@ def waypoint_nodes_and_edges(journey: Mapping[str, Any]) -> tuple[list[dict[str,
     for index, waypoint in enumerate(journey.get("waypoints") or []):
         if not isinstance(waypoint, Mapping):
             continue
-        waypoint_id = str(waypoint.get("waypoint_id") or stable_id("wp", journey_node_id, index))
+        waypoint_id = str(
+            waypoint.get("waypoint_id")
+            or stable_json_id("wp", "reflection-space-id", journey_node_id, index)
+        )
         node_id = f"waypoint:{waypoint_id}"
         refs = normalize_source_refs(waypoint.get("source_refs") or [])
         nodes.append(
@@ -516,7 +509,7 @@ def dream_hypothesis_nodes_and_edges(
         node_id = "dream_hypothesis:" + str(
             row.get("candidate_key")
             or (row.get("source_finding_ids") or [""])[0]
-            or stable_id("dream", row.get("title") or "", refs, length=18)
+            or stable_json_id("dream", "reflection-space-id", row.get("title") or "", refs, length=18)
         )
         nodes.append(
             {

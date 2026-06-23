@@ -33,6 +33,7 @@ from aippocampus_runtime.model.routing import (
 )
 from aippocampus_runtime.navigation.concept_graph import default_concept_graph_path
 from aippocampus_runtime.registry.api import registry_paths
+from aippocampus_runtime.source.io_kernel import load_json_dict
 from aippocampus_runtime.subconscious.edge_validation import (
     AGENT_EDGE_POLICY,
     validate_source_backed_edges,
@@ -61,7 +62,6 @@ from aippocampus_runtime.subconscious.worker import (
     append_staging_edges,
     default_project_timeline_path,
     default_staging_path,
-    load_json,
     select_timeline_turns,
 )
 
@@ -333,7 +333,7 @@ def run_agent(
     dry_run: bool = False,
     no_write: bool = False,
 ) -> dict[str, Any]:
-    timeline = load_json(timeline_path)
+    timeline = load_json_dict(timeline_path).data
     turns = select_timeline_turns(timeline, project=project, max_turns=max_turns)
     state = AgentState(source_bank=source_bank_from_turns(turns))
     batch_id = f"subconscious-agent-{int(time.time())}"

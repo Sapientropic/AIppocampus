@@ -12,8 +12,6 @@ reorders ordinary recall routes.
 
 from __future__ import annotations
 
-import hashlib
-import json
 import os
 from collections.abc import Mapping
 from pathlib import Path
@@ -46,11 +44,6 @@ def _code(value: Any, *, fallback: str = "", limit: int = 80) -> str:
     text = _text(value, limit).casefold().replace(" ", "_").replace("-", "_")
     safe = "".join(ch for ch in text if ch.isalnum() or ch in {"_", ":"}).strip("_")
     return safe or fallback
-
-
-def _stable_id(prefix: str, *parts: Any) -> str:
-    raw = json.dumps(parts, ensure_ascii=False, sort_keys=True, default=str)
-    return f"{prefix}_{hashlib.sha256(raw.encode('utf-8')).hexdigest()[:16]}"
 
 
 def _source_ref_digest(refs: list[dict[str, Any]]) -> str:
@@ -304,7 +297,7 @@ def _route_label(candidate: Mapping[str, Any]) -> str:
 
 
 def _source_shape_projection(candidate: Mapping[str, Any], refs: list[dict[str, Any]]) -> dict[str, Any]:
-    route_id = _text(candidate.get("route_id"), 120) or _stable_id("apw", candidate)
+    route_id = _text(candidate.get("route_id"), 120) or core.stable_json_id("apw", candidate, length=16)
     shaped = build_associative_path_source_shape(candidate, refs=refs, route_id=route_id)
     projection = shaped["projection"]
     return projection if isinstance(projection, dict) else {}
@@ -317,7 +310,7 @@ def _candidate_to_route(
     projection: Mapping[str, Any],
     reason_code: str,
 ) -> dict[str, Any]:
-    route_id = _text(candidate.get("route_id"), 120) or _stable_id("apw", candidate)
+    route_id = _text(candidate.get("route_id"), 120) or core.stable_json_id("apw", candidate, length=16)
     public_route_id = route_id if route_id.startswith("apw:") else f"apw:{route_id}"
     reason_codes = unique_preserve(
         [
@@ -364,6 +357,7 @@ def _candidate_to_route(
         "route_topic": "associative_path_recovery",
         "matched_cue_family": "associative_path_fallback",
         "matched_cue_anchors": matched_terms,
+        "source_anchor_gate": candidate.get("source_anchor_gate"),
         "apw_candidate_route_id": route_id,
         "apw_candidate_id": _text(candidate.get("candidate_id"), 120),
         "source_ref_digest": source_ref_digest,
@@ -398,6 +392,7 @@ def _abstention(
     ordinary_status: str,
     policy: Mapping[str, Any],
 ) -> dict[str, Any]:
+    metrics = core.dict_or_empty(diagnostic.get("metrics"))
     return {
         "kind": KIND,
         "schema_version": SCHEMA_VERSION,
@@ -423,6 +418,7 @@ def _abstention(
             ],
             limit=8,
         ),
+        "registry_match_count": int(metrics.get("registry_match_count") or 0),
         "summary": "APW fallback was requested, but it did not produce a source-reopenable route.",
         "source_reopen_required_before_claim": True,
     }
@@ -513,6 +509,7 @@ def build_associative_path_agent_fallback(
                 "candidate_source_kind": route.get("candidate_source_kind"),
                 "source_ref_digest": route.get("source_ref_digest"),
                 "selected_source_ref_count": route.get("selected_source_ref_count"),
+                "source_anchor_gate": route.get("source_anchor_gate"),
                 "apw_candidate_route_id": route.get("apw_candidate_route_id"),
                 "apw_candidate_id": route.get("apw_candidate_id"),
                 "apw_route_identity": route.get("apw_route_identity"),
@@ -543,6 +540,7 @@ def build_associative_path_agent_fallback(
             "apw_candidate_id": route.get("apw_candidate_id"),
             "source_ref_digest": route.get("source_ref_digest"),
             "selected_source_ref_count": route.get("selected_source_ref_count"),
+            "source_anchor_gate": route.get("source_anchor_gate"),
             "apw_route_identity": route.get("apw_route_identity"),
             "label": route["route_label"],
             "why_this_route": route["why_this_may_matter"],

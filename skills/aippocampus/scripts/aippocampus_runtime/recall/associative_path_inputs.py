@@ -500,6 +500,11 @@ def build_associative_path_input_pack(
     )
     if low_actual_anchor_filtered_count:
         reason_codes.append("low_actual_source_anchor_coverage")
+    registry_low_actual_anchor_filtered_count = int(
+        registry_source_component.get("low_actual_source_anchor_coverage_filtered_count") or 0
+    )
+    if registry_low_actual_anchor_filtered_count:
+        reason_codes.append("registry_source_low_actual_anchor_coverage")
     registry_source_candidate_count = int(
         registry_source_component.get("source_reopenable_candidate_count") or 0
     )
@@ -548,6 +553,10 @@ def build_associative_path_input_pack(
             "same_thread_task_echo_filtered_count": task_echo_filtered_count,
             "self_referential_validation_report_demoted_count": validation_report_demoted_count,
             "low_actual_source_anchor_coverage_filtered_count": low_actual_anchor_filtered_count,
+            "registry_low_actual_source_anchor_coverage_filtered_count": (
+                registry_low_actual_anchor_filtered_count
+            ),
+            "registry_match_count": int(registry_source_component.get("registry_match_count") or 0),
             "registry_source_candidate_count": registry_source_candidate_count,
             "registry_demoted_artifact_match_count": registry_demoted_artifact_count,
             "candidate_source_counts": dict(sorted(candidate_source_counts.items())),

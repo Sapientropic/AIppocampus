@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any, Iterator
 
 from aippocampus_runtime.artifacts.generation_pins import generation_cleanup_contract
+from aippocampus_runtime.source.io_kernel import write_json_atomic
 
 DEFAULT_ARTIFACT_LEASE_STALE_SECONDS = 6 * 60 * 60
 DEFAULT_ARTIFACT_LEASE_WAIT_SECONDS = 1.0
@@ -557,12 +558,6 @@ def resolve_sqlite_index_path(sqlite_or_pointer_path: Path) -> Path:
     return sqlite_or_pointer_path
 
 
-def _write_json_atomic(path: Path, payload: dict) -> None:
-    tmp_path = path.with_name(f".{path.name}.tmp-{os.getpid()}-{time.time_ns()}")
-    tmp_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-    os.replace(tmp_path, path)
-
-
 def _unique_generation_sqlite_path(destination: Path) -> tuple[str, Path]:
     generations_dir = destination.parent / INDEX_GENERATIONS_DIR
     generations_dir.mkdir(parents=True, exist_ok=True)
@@ -759,7 +754,7 @@ def publish_sqlite_with_pointer(
             "stable_publish",
         ],
     }
-    _write_json_atomic(pointer_path, pointer)
+    write_json_atomic(pointer_path, pointer)
     _prune_published_sqlites(destination, {current_path, last_known_good})
 
     return {

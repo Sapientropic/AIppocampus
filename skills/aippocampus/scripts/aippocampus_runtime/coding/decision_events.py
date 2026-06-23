@@ -9,7 +9,6 @@ code index, not a hook policy, and not formal memory.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import re
 from pathlib import Path
@@ -25,13 +24,13 @@ from aippocampus_runtime.core import (
     compact_text,
     now_utc,
     sanitize_external_model_text,
+    stable_json_id,
 )
 from aippocampus_runtime.navigation.associations import (
     extract_terms_from_text,
     normalize_term,
     source_text_is_noise,
 )
-from aippocampus_runtime.question.source_refs import source_ref_key
 from aippocampus_runtime.recall.query_policy import split_query_terms
 from aippocampus_runtime.reflection.reconsolidation import (
     ADJUDICATION_KIND,
@@ -40,6 +39,7 @@ from aippocampus_runtime.reflection.reconsolidation import (
     should_surface_candidate,
 )
 from aippocampus_runtime.registry.api import unique_preserve
+from aippocampus_runtime.source.io_kernel import load_jsonl_dict_rows, source_ref_key
 
 SCHEMA_VERSION = 1
 PROMPT_VERSION = "aippocampus-coding-decision-events-v1"
@@ -128,32 +128,6 @@ LOCAL_ONLY_PATTERNS = [r"\bbranch[- ]local\b", r"\bthis branch\b", r"\bthis task
 
 PATH_RE = re.compile(r"(?<![\w:/\\])[\w./\\-]+\.(?:py|ts|tsx|js|jsx|rs|md|json|toml|ya?ml)")
 SYMBOL_RE = re.compile(r"`([^`]{2,80})`")
-
-
-def sha1_text(value: str) -> str:
-    return hashlib.sha1(value.encode("utf-8", errors="replace")).hexdigest()
-
-
-def stable_id(prefix: str, *parts: Any, length: int = 18) -> str:
-    raw = "\n".join(json.dumps(part, ensure_ascii=False, sort_keys=True) for part in parts)
-    return f"{prefix}_{sha1_text(raw)[:length]}"
-
-
-def iter_jsonl(path: Path) -> list[dict[str, Any]]:
-    if not path.exists():
-        return []
-    rows: list[dict[str, Any]] = []
-    with path.open("r", encoding="utf-8") as fh:
-        for line in fh:
-            if not line.strip():
-                continue
-            try:
-                item = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if isinstance(item, dict):
-                rows.append(item)
-    return rows
 
 
 def sanitize_text(value: Any, *, max_chars: int = 520) -> tuple[str, dict[str, Any]]:
@@ -362,7 +336,7 @@ def build_decision_candidate(
         constraints.append(surface)
     if event_type == "accepted_decision":
         chosen_path = surface
-    decision_id = stable_id(
+    decision_id = stable_json_id(
         "decision",
         event_type,
         surface,
@@ -638,7 +612,7 @@ def build_decision_state_assessment(
     return {
         "schema_version": SCHEMA_VERSION,
         "kind": ASSESSMENT_KIND,
-        "assessment_id": stable_id(
+        "assessment_id": stable_json_id(
             "decision_state",
             decision_id,
             source_status,
@@ -808,7 +782,7 @@ def render_coding_continuity_ticket(
             {
                 "schema_version": SCHEMA_VERSION,
                 "kind": TICKET_KIND,
-                "ticket_id": stable_id("coding_ticket", trigger, prompt, decision_id, length=20),
+                "ticket_id": stable_json_id("coding_ticket", trigger, prompt, decision_id, length=20),
                 "trigger": trigger,
                 "intervention_level": intervention_level,
                 "relevant_decisions": [decision_id],
@@ -863,7 +837,7 @@ def run_extraction(
     ticket_trigger: str = "compaction_loss",
     visible_context_has_source: bool = False,
 ) -> dict[str, Any]:
-    messages = iter_jsonl(messages_path)
+    messages = load_jsonl_dict_rows(messages_path).rows
     candidates = review_decision_candidates(
         extract_decision_candidates(messages, thread_key=thread_key, workspace=workspace)
     )

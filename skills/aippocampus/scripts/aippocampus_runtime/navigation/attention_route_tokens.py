@@ -7,9 +7,12 @@ authority on their own.
 
 from __future__ import annotations
 
-import hashlib
+import math
 from collections.abc import Iterable, Mapping
 from typing import Any
+
+from aippocampus_runtime.core import stable_json_id
+from aippocampus_runtime.source.io_kernel import safe_float
 
 ROUTE_METADATA_FIELDS = ("salience", "currentness", "privacy", "conflict")
 TOKEN_LEVELS = ("source_span_token", "event_token", "episode_or_question_token")
@@ -52,11 +55,6 @@ ALLOWED_ROUTE_HINT_FIELDS: dict[str, tuple[str, ...]] = {
         "source_reopen_required_before_claim",
     ),
 }
-
-
-def _stable_id(*parts: Any, prefix: str = "tok") -> str:
-    payload = "|".join(str(part) for part in parts if part is not None)
-    return f"{prefix}_{hashlib.sha256(payload.encode('utf-8')).hexdigest()[:16]}"
 
 
 def _text(value: Any, default: str = "") -> str:
@@ -106,17 +104,16 @@ def _safe_strings(value: Any, *, limit: int = 8) -> list[str]:
     return out
 
 
-def _safe_float(value: Any) -> float | None:
-    try:
-        parsed = float(value)
-    except (TypeError, ValueError):
+def _route_score_float(value: Any) -> float | None:
+    parsed = safe_float(value, math.nan)
+    if math.isnan(parsed):
         return None
     return max(0.0, min(1.0, round(parsed, 3)))
 
 
 def _compact_hint_value(field: str, value: Any) -> Any:
     if field == "semantic_score":
-        return _safe_float(value)
+        return _route_score_float(value)
     if field == "severity":
         try:
             return max(0, min(3, int(value)))
@@ -267,10 +264,11 @@ def _source_handles_from_refs(event: Mapping[str, Any]) -> list[dict[str, Any]]:
 
 
 def project_event_route_tokens(event: Mapping[str, Any]) -> dict[str, Any]:
-    event_token_id = _text(event.get("event_token_id") or event.get("event_id")) or _stable_id(
+    event_token_id = _text(event.get("event_token_id") or event.get("event_id")) or stable_json_id(
+        "event",
         event.get("source_id"),
         event.get("turn_id"),
-        prefix="event",
+        length=16,
     )
     source_handles = _source_handles_from_refs(event)
     source_refs = [_source_ref(ref) for ref in _list_of_mappings(event.get("source_refs"))]
@@ -311,11 +309,12 @@ def _span_token(
     event: Mapping[str, Any],
     event_token_id: str,
 ) -> dict[str, Any]:
-    token_id = _text(span.get("span_token_id") or span.get("span_id")) or _stable_id(
+    token_id = _text(span.get("span_token_id") or span.get("span_id")) or stable_json_id(
+        "span",
         event_token_id,
         span.get("kind"),
         span.get("char_range"),
-        prefix="span",
+        length=16,
     )
     handle = _source_handle(
         source_id=_text(span.get("source_id"), _text(event.get("source_id"), "unknown_source")),
@@ -372,7 +371,7 @@ def project_episode_or_question_token(
         "kind": "aippocampus_attention_route_token",
         "schema_version": "attention-route-token-v0",
         "token_id": _text(group.get("token_id") or group.get("group_id"))
-        or _stable_id(member_event_ids, member_span_ids, prefix="episode"),
+        or stable_json_id("episode", member_event_ids, member_span_ids, length=16),
         "route_token_level": "episode_or_question_token",
         "group_kind": _text(group.get("group_kind"), "episode"),
         "member_event_token_ids": member_event_ids,

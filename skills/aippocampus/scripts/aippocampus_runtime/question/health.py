@@ -31,7 +31,7 @@ from aippocampus_runtime.question.tracking import (
     QUESTION_LINK_KIND,
     candidate_from_row,
     frontier_from_row,
-    iter_jsonl,
+    load_tracking_rows,
 )
 from aippocampus_runtime.question.tracking_types import (
     parse_timestamp,
@@ -508,7 +508,7 @@ def question_health_stats(
         return {"available": False, "reason": "jobs_missing", "jobs": str(path)}
     source_index = build_source_ref_index(Path(registry_path)) if registry_path else None
     payload = build_question_health_stats(
-        iter_jsonl(path),
+        load_tracking_rows(path),
         source_index=source_index,
         now=now,
         dormant_after_days=dormant_after_days,

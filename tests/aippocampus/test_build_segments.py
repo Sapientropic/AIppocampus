@@ -314,14 +314,14 @@ class BuildSegmentsTests(unittest.TestCase):
             (staged_segment / "messages.jsonl").write_text("{}", encoding="utf-8")
             generation_dir = output_dir / "generations" / "gen_new"
             generation_dir.mkdir(parents=True)
-            original_write = build_segments._write_json_atomic
+            original_write = build_segments.write_json_atomic
 
             def fail_on_pointer(path: Path, payload: dict) -> None:
                 if path.name == "segments.pointer.json":
                     raise RuntimeError("simulated pointer write failure")
                 original_write(path, payload)
 
-            with patch.object(build_segments, "_write_json_atomic", side_effect=fail_on_pointer):
+            with patch.object(build_segments, "write_json_atomic", side_effect=fail_on_pointer):
                 with self.assertRaisesRegex(RuntimeError, "pointer write failure"):
                     build_segments.install_staged_segments(
                         staging,

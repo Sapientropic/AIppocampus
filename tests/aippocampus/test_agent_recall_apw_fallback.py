@@ -523,6 +523,35 @@ class AgentRecallApwFallbackTests(unittest.TestCase):
         self.assertNotIn("source_refs", encoded)
         self.assertNotIn("msg-registry-apw", encoded)
 
+    def test_registry_source_apw_fallback_rejects_thin_cjk_anchor_coverage(self) -> None:
+        self._write_registry_clean_source(
+            thread_key="session:thin-registry-apw",
+            message_id="msg-thin-registry-apw",
+            source_text=(
+                "我们聊过黏菌式探索记忆，也聊过召回算法，"
+                "但这里没有 later cue 里的另两个中文锚点。"
+            ),
+        )
+
+        diagnostic = build_associative_path_diagnostic(
+            query="黏菌 联想回忆 探索算法",
+            cwd=self.root,
+            registry_dir=self.registry,
+        )
+        payload = self._recall(include_apw=True)
+
+        self.assertFalse(payload["associative_path_policy"]["apw_candidate_input_available"])
+        self.assertEqual(diagnostic["metrics"]["registry_low_actual_source_anchor_coverage_filtered_count"], 1)
+        self.assertIn(
+            "registry_source_low_actual_anchor_coverage",
+            diagnostic["reason_codes"],
+        )
+        public = agent_continuity_cli_support.public_recall_projection(
+            payload,
+            query="黏菌 联想回忆 探索算法",
+        )
+        self.assertNotEqual(public["foreground_action"]["id"], "deepen_associative_path_fallback")
+
     def test_opt_in_apw_fallback_preserves_shadowed_source_shape_posture(self) -> None:
         self._write_apw_sidecars(freshness="unknown")
 

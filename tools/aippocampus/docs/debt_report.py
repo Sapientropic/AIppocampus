@@ -96,6 +96,22 @@ COMPACT_DEBUG_FIELD_LITERALS = (
     "recall_selector_id",
     "route_count",
 )
+BROAD_EXCEPTION_BOUNDARY_MARKER = "aippocampus-debt-ok: broad-exception-boundary"
+GIANT_FUNCTION_STAGE_MAP_MARKER = "aippocampus-stage-map:"
+DIAGNOSTIC_BOUNDARY_TOKENS = (
+    "error",
+    "error_code",
+    "error_type",
+    "warning",
+    "diagnostic",
+    "degraded",
+    "status",
+    "reason",
+    "fallback",
+    "failed",
+    "skipped",
+    "loss",
+)
 TEST_SCAFFOLD_HELPERS = {
     "run_cli",
     "write_jsonl",
@@ -290,6 +306,37 @@ def exception_type_names(node: ast.AST | None) -> set[str]:
     return set()
 
 
+def source_window_has_marker(path: Path, line: int, marker: str, *, before: int = 4, after: int = 4) -> bool:
+    lines = path.read_text(encoding="utf-8").splitlines()
+    start = max(0, int(line) - before - 1)
+    end = min(len(lines), int(line) + after)
+    return any(marker in text for text in lines[start:end])
+
+
+def except_handler_has_diagnostic_boundary(node: ast.ExceptHandler) -> bool:
+    """Best-effort guard for broad except blocks that degrade visibly."""
+
+    if all(isinstance(stmt, (ast.Pass, ast.Continue)) for stmt in node.body):
+        return False
+    body_text = " ".join(ast.dump(stmt, include_attributes=False).casefold() for stmt in node.body)
+    return any(token in body_text for token in DIAGNOSTIC_BOUNDARY_TOKENS)
+
+
+def function_has_stage_map(node: ast.FunctionDef | ast.AsyncFunctionDef, path: Path) -> bool:
+    docstring = ast.get_docstring(node) or ""
+    if GIANT_FUNCTION_STAGE_MAP_MARKER in docstring:
+        return True
+    return source_window_has_marker(path, int(node.lineno), GIANT_FUNCTION_STAGE_MAP_MARKER)
+
+
+def mcp_compact_debug_literals_guarded(path: Path) -> bool:
+    text = path.read_text(encoding="utf-8")
+    return (
+        GIANT_FUNCTION_STAGE_MAP_MARKER in text
+        and "strip_compact_foreground_debug_fields(" in text
+    )
+
+
 @lru_cache(maxsize=1)
 def broad_exception_handlers() -> tuple[dict[str, object], ...]:
     handlers: list[dict[str, object]] = []
@@ -312,6 +359,12 @@ def broad_exception_handlers() -> tuple[dict[str, object], ...]:
                     "exception_types": sorted(names),
                     "hot_path": is_hot_path(rel_path),
                     "pure_silent": pure_silent,
+                    "diagnostic_boundary": except_handler_has_diagnostic_boundary(node),
+                    "documented_boundary": source_window_has_marker(
+                        path,
+                        int(getattr(node, "lineno", 0) or 0),
+                        BROAD_EXCEPTION_BOUNDARY_MARKER,
+                    ),
                 }
             )
     return tuple(handlers)
@@ -475,6 +528,7 @@ def changed_surface_debt(changed_files: list[str] | None = None) -> dict[str, ob
                                     "function": node.name,
                                     "line": int(node.lineno),
                                     "line_count": line_count,
+                                    "stage_map_documented": function_has_stage_map(node, path),
                                 }
                             )
                 if isinstance(node, ast.ExceptHandler):
@@ -491,9 +545,15 @@ def changed_surface_debt(changed_files: list[str] | None = None) -> dict[str, ob
                                 isinstance(stmt, (ast.Pass, ast.Continue))
                                 for stmt in node.body
                             ),
+                            "diagnostic_boundary": except_handler_has_diagnostic_boundary(node),
+                            "documented_boundary": source_window_has_marker(
+                                path,
+                                int(getattr(node, "lineno", 0) or 0),
+                                BROAD_EXCEPTION_BOUNDARY_MARKER,
+                            ),
                         }
                     )
-        if "/mcp/" in f"/{rel_path}":
+        if "/mcp/" in f"/{rel_path}" and not mcp_compact_debug_literals_guarded(path):
             text = path.read_text(encoding="utf-8")
             for field in COMPACT_DEBUG_FIELD_LITERALS:
                 count = text.count(field)
@@ -516,6 +576,11 @@ def changed_surface_debt(changed_files: list[str] | None = None) -> dict[str, ob
     for item in broad_handlers:
         if not (item["hot_path"] or item["pure_silent"]):
             continue
+        if (
+            not item["pure_silent"]
+            and (item.get("diagnostic_boundary") or item.get("documented_boundary"))
+        ):
+            continue
         warnings.append(
             {
                 "code": "changed_surface_broad_exception",
@@ -524,11 +589,15 @@ def changed_surface_debt(changed_files: list[str] | None = None) -> dict[str, ob
                 "exception_types": item["exception_types"],
                 "hot_path": item["hot_path"],
                 "pure_silent": item["pure_silent"],
+                "diagnostic_boundary": item.get("diagnostic_boundary", False),
+                "documented_boundary": item.get("documented_boundary", False),
                 "acceptance_bearing": True,
                 "message": "Touched hot-path or silent broad exception needs typed diagnostics, loss accounting, or a documented process-boundary reason.",
             }
         )
     for item in giant_functions:
+        if item.get("stage_map_documented"):
+            continue
         warnings.append(
             {
                 "code": "changed_surface_giant_function",

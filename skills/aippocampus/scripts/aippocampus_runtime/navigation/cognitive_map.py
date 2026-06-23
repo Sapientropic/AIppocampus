@@ -17,7 +17,7 @@ import hashlib
 import json
 import sys
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 # Prefer this checkout's runtime package when the script is invoked by path.
 # Otherwise a locally installed older skill can satisfy package imports and miss
@@ -39,6 +39,7 @@ from aippocampus_runtime.navigation.cognitive_map_overview import (
 )
 from aippocampus_runtime.recall.query_policy import split_query_terms
 from aippocampus_runtime.registry.api import load_registry, registry_paths, unique_preserve
+from aippocampus_runtime.source.io_kernel import load_jsonl_dict_rows
 
 COGNITIVE_MAP_SCHEMA_VERSION = 1
 DEFAULT_COGNITIVE_MAP_NAME = "cognitive_map.json"
@@ -87,21 +88,10 @@ def default_jobs_path(registry_path: Path | None = None, registry_dir: Path | No
     return json_path.resolve().parent / DEFAULT_JOBS_NAME
 
 
-def iter_jsonl(path: Path) -> Iterable[dict[str, Any]]:
+def load_cognitive_map_rows(path: Path) -> list[dict[str, Any]]:
     if not path.exists():
         return []
-    rows: list[dict[str, Any]] = []
-    with path.open("r", encoding="utf-8") as fh:
-        for line in fh:
-            if not line.strip():
-                continue
-            try:
-                item = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if isinstance(item, dict):
-                rows.append(item)
-    return rows
+    return load_jsonl_dict_rows(path).rows
 
 
 def write_json(path: Path, data: dict[str, Any]) -> None:
@@ -131,7 +121,7 @@ def load_cognitive_map(path: Path | str) -> dict[str, Any]:
 
 def load_cognitive_map_findings(path: Path) -> list[dict[str, Any]]:
     findings: list[dict[str, Any]] = []
-    for row in iter_jsonl(path):
+    for row in load_cognitive_map_rows(path):
         if row.get("kind") != "aippocampus_subconscious_job_finding":
             continue
         if row.get("job") != "cognitive_map":

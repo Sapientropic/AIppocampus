@@ -12,7 +12,7 @@ import argparse
 import json
 import shutil
 import tempfile
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -28,68 +28,15 @@ from aippocampus_runtime.recall.ambient_cache_compaction import (
 from aippocampus_runtime.recall.semantic_trigger_compaction import (
     compact_semantic_trigger_payloads_from_dead_letter_manifest,
 )
+from aippocampus_runtime.source.io_kernel import (
+    load_json_dict,
+    load_jsonl_dict_rows,
+    write_json_atomic,
+    write_jsonl_dict_rows,
+)
 
 RUN_SCHEMA_VERSION = 1
 RUN_KIND = "aippocampus_activation_payload_compaction_run"
-
-
-def _load_json(path: Path) -> dict[str, Any]:
-    data = json.loads(path.read_text(encoding="utf-8"))
-    return data if isinstance(data, dict) else {}
-
-
-def _load_jsonl(path: Path) -> list[dict[str, Any]]:
-    rows: list[dict[str, Any]] = []
-    for line in path.read_text(encoding="utf-8").splitlines():
-        if not line.strip():
-            continue
-        item = json.loads(line)
-        if isinstance(item, dict):
-            rows.append(item)
-    return rows
-
-
-def _write_jsonl_atomic(path: Path, rows: Sequence[Mapping[str, Any]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    handle = tempfile.NamedTemporaryFile(
-        "w",
-        encoding="utf-8",
-        dir=path.parent,
-        prefix=f".{path.name}.",
-        suffix=".tmp",
-        delete=False,
-    )
-    tmp_path = Path(handle.name)
-    try:
-        with handle:
-            for row in rows:
-                handle.write(json.dumps(dict(row), ensure_ascii=False, sort_keys=True))
-                handle.write("\n")
-        tmp_path.replace(path)
-    except Exception:
-        tmp_path.unlink(missing_ok=True)
-        raise
-
-
-def _write_json_atomic(path: Path, data: Mapping[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    handle = tempfile.NamedTemporaryFile(
-        "w",
-        encoding="utf-8",
-        dir=path.parent,
-        prefix=f".{path.name}.",
-        suffix=".tmp",
-        delete=False,
-    )
-    tmp_path = Path(handle.name)
-    try:
-        with handle:
-            json.dump(dict(data), handle, ensure_ascii=False, sort_keys=True)
-            handle.write("\n")
-        tmp_path.replace(path)
-    except Exception:
-        tmp_path.unlink(missing_ok=True)
-        raise
 
 
 def _missing_owner_report(owner: str) -> dict[str, Any]:
@@ -159,14 +106,14 @@ def _run_working_memory(
         return _not_requested_report("working_memory")
     if not path.exists():
         return _missing_owner_report("working_memory")
-    rows = _load_jsonl(path)
+    rows = load_jsonl_dict_rows(path).rows
     next_rows, report = compact_dream_working_memory_payloads_from_dead_letter_manifest(
         rows,
         dead_letter_manifest,
         compacted_at=compacted_at,
     )
     if apply and _safe_int(_owner_metrics(report).get("payload_compacted_count")) > 0:
-        _write_jsonl_atomic(path, next_rows)
+        write_jsonl_dict_rows(path, next_rows, sort_keys=True)
     return report
 
 
@@ -181,14 +128,14 @@ def _run_semantic_triggers(
         return _not_requested_report("semantic_triggers")
     if not path.exists():
         return _missing_owner_report("semantic_triggers")
-    rows = _load_jsonl(path)
+    rows = load_jsonl_dict_rows(path).rows
     next_rows, report = compact_semantic_trigger_payloads_from_dead_letter_manifest(
         rows,
         dead_letter_manifest,
         compacted_at=compacted_at,
     )
     if apply and _safe_int(_owner_metrics(report).get("payload_compacted_count")) > 0:
-        _write_jsonl_atomic(path, next_rows)
+        write_jsonl_dict_rows(path, next_rows, sort_keys=True)
     return report
 
 
@@ -203,14 +150,14 @@ def _run_active_recall_locks(
         return _not_requested_report("active_recall_locks")
     if not path.exists():
         return _missing_owner_report("active_recall_locks")
-    store = _load_json(path)
+    store = load_json_dict(path).data
     next_store, report = compact_active_recall_lock_payloads_from_dead_letter_manifest(
         store,
         dead_letter_manifest,
         compacted_at=compacted_at,
     )
     if apply and _safe_int(_owner_metrics(report).get("payload_compacted_count")) > 0:
-        _write_json_atomic(path, next_store)
+        write_json_atomic(path, next_store, sort_keys=True)
     return report
 
 
@@ -243,7 +190,7 @@ def run_activation_payload_compaction(
     raw activation payloads, source refs, or local filesystem paths.
     """
 
-    manifest = _load_json(Path(dead_letter_manifest_path))
+    manifest = load_json_dict(Path(dead_letter_manifest_path)).data
     owner_reports: dict[str, dict[str, Any]] = {
         "ambient_cache": _run_ambient_cache(
             Path(ambient_cache_path) if ambient_cache_path is not None else None,

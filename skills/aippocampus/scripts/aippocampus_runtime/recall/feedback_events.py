@@ -19,6 +19,7 @@ from typing import Any
 
 from aippocampus_runtime.core import now_utc
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
+from aippocampus_runtime.source.io_kernel import safe_float
 
 SCHEMA_VERSION = 1
 RECALL_FEEDBACK_KIND = "aippocampus_recall_feedback_event"
@@ -137,16 +138,6 @@ def _validated_kind(
     raise InvalidFeedbackValue(field, text, accepted, aliases)
 
 
-def _safe_float(value: Any, default: float = 0.0) -> float:
-    try:
-        number = float(value)
-    except (TypeError, ValueError):
-        return default
-    if number != number or number in {float("inf"), float("-inf")}:
-        return default
-    return number
-
-
 def recall_feedback_event(
     *,
     candidate_id: str,
@@ -261,7 +252,7 @@ def active_flow_event(
         aliases=OUTCOME_ALIASES,
     )
     safe_route_kind = _validated_kind(route_kind, ROUTE_KINDS, field="route_kind")
-    delta = DEFAULT_SIGNAL_DELTAS[safe_signal] if weight_delta is None else _safe_float(weight_delta)
+    delta = DEFAULT_SIGNAL_DELTAS[safe_signal] if weight_delta is None else safe_float(weight_delta)
     return {
         "schema_version": SCHEMA_VERSION,
         "kind": ACTIVE_FLOW_EVENT_KIND,
@@ -399,7 +390,7 @@ def active_flow_activation_report(events: Iterable[Mapping[str, Any]]) -> dict[s
                 "source_ids": set(),
             },
         )
-        row["activation_score"] += _safe_float(event.get("weight_delta"), DEFAULT_SIGNAL_DELTAS[signal])
+        row["activation_score"] += safe_float(event.get("weight_delta"), DEFAULT_SIGNAL_DELTAS[signal])
         row["event_count"] += 1
         row["signals"][signal] += 1
         if event.get("source_id"):

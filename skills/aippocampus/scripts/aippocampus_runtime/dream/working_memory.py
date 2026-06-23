@@ -27,6 +27,7 @@ from aippocampus_runtime.dream.constructive_outputs import (
     prospective_invitation_silent_plan,
 )
 from aippocampus_runtime.dream.risk_terms import dream_text_hard_risk
+from aippocampus_runtime.source.io_kernel import parse_utc, safe_float, source_ref_key
 from aippocampus_runtime.subconscious.candidate_router import (
     USE_WITH_SOURCE,
     ask_policy_for,
@@ -114,36 +115,11 @@ def text_terms(text: str) -> list[str]:
     return [term for term in terms if term not in LOW_SIGNAL_TERMS]
 
 
-def parse_utc(value: str | None) -> datetime | None:
-    if not value:
-        return None
-    try:
-        text = value[:-1] + "+00:00" if value.endswith("Z") else value
-        return datetime.fromisoformat(text).astimezone(timezone.utc)
-    except ValueError:
-        return None
-
-
 def normalize_now(now: str | datetime | None) -> datetime:
     if isinstance(now, datetime):
         return now.astimezone(timezone.utc)
     parsed = parse_utc(str(now)) if now else parse_utc(now_utc())
     return parsed or datetime.now(timezone.utc)
-
-
-def source_ref_key(ref: Mapping[str, Any]) -> tuple[str, str, str, str]:
-    return (
-        str(ref.get("thread_key") or ref.get("thread_id") or ""),
-        str(ref.get("message_id") or ""),
-        str(ref.get("turn_id") or ""),
-        str(
-            ref.get("source_id")
-            or ref.get("source_line")
-            or ref.get("line")
-            or ref.get("source_ref")
-            or ""
-        ),
-    )
 
 
 def source_ref_keys(refs: Iterable[Mapping[str, Any]]) -> set[tuple[str, str, str, str]]:
@@ -206,16 +182,6 @@ def source_pack_overlaps_finding(
     finding_keys = source_ref_keys(normalize_source_refs(finding.get("source_refs")))
     pack_keys = source_ref_keys(normalize_source_refs(source_pack.get("source_refs")))
     return bool(finding_keys and pack_keys and finding_keys & pack_keys)
-
-
-def safe_float(value: Any, default: float = 0.0) -> float:
-    try:
-        number = float(value)
-    except (TypeError, ValueError):
-        return default
-    if number != number or number in {float("inf"), float("-inf")}:
-        return default
-    return number
 
 
 def sensitive_dream_hypothesis(finding: Mapping[str, Any]) -> bool:

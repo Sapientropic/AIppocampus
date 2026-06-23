@@ -18,6 +18,10 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.registry.api import unique_preserve
+from aippocampus_runtime.source.io_kernel import (
+    empty_jsonl_loss,
+    iter_jsonl_dict_rows_with_line_numbers,
+)
 from aippocampus_runtime.subconscious import candidate_router, review
 
 RESULT_KIND = "aippocampus_agent_fallback_result"
@@ -33,22 +37,15 @@ def default_results_path(registry_path: Path | None = None, registry_dir: Path |
     return candidate_router.default_jobs_path(None, registry_dir).parent / DEFAULT_RESULTS_NAME
 
 
-def iter_jsonl(path: Path) -> list[dict[str, Any]]:
-    if not path.exists():
-        return []
+def result_rows(path: Path) -> list[dict[str, Any]]:
+    loss = empty_jsonl_loss()
     rows: list[dict[str, Any]] = []
-    with path.open("r", encoding="utf-8", errors="replace") as fh:
-        for line_number, line in enumerate(fh, start=1):
-            if not line.strip():
-                continue
-            try:
-                item = json.loads(line)
-            except json.JSONDecodeError:
-                rows.append({"kind": RESULT_KIND, "_line_number": line_number, "_invalid_json": True})
-                continue
-            if isinstance(item, dict):
-                item["_line_number"] = line_number
-                rows.append(item)
+    for line_number, item in iter_jsonl_dict_rows_with_line_numbers(path, loss=loss):
+        row = dict(item)
+        row["_line_number"] = line_number
+        rows.append(row)
+    for line_number in loss.get("invalid_json_line_numbers") or []:
+        rows.append({"kind": RESULT_KIND, "_line_number": line_number, "_invalid_json": True})
     return rows
 
 
@@ -107,11 +104,11 @@ def build_review_from_results(
     parsed: dict[str, Any] = {"promotion_candidates": [], "duplicate_groups": [], "weak_findings": []}
     rejections: Counter[str] = Counter()
     raw_candidate_count = 0
-    result_rows = 0
-    for row in iter_jsonl(results_path):
+    result_row_count = 0
+    for row in result_rows(results_path):
         if row.get("kind") != RESULT_KIND:
             continue
-        result_rows += 1
+        result_row_count += 1
         if row.get("_invalid_json"):
             rejections["invalid_json_result_row"] += 1
             continue
@@ -133,7 +130,7 @@ def build_review_from_results(
     return {
         "review": validated,
         "stats": {
-            "result_row_count": result_rows,
+            "result_row_count": result_row_count,
             "raw_candidate_count": raw_candidate_count,
             "accepted_candidate_count": len(validated["promotion_candidates"]),
             "diagnostic_only_count": sum(rejections.values()),

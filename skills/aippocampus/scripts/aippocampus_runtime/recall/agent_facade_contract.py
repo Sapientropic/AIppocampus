@@ -15,6 +15,7 @@ from typing import Any
 
 from aippocampus_runtime.navigation import attention_router_contract
 from aippocampus_runtime.recall import authority
+from aippocampus_runtime.source.io_kernel import safe_float as kernel_safe_float
 
 SCHEMA_VERSION = "agent-native-recall-facade-v0"
 # #1125 owns the stricter foreground UX budget. This facade fixture keeps only
@@ -137,10 +138,10 @@ def _safe_code_list(values: Any, *, limit: int = 4) -> list[str]:
     return result
 
 
-def _safe_float(value: Any) -> float | None:
+def _confidence_float(value: Any) -> float | None:
     if not isinstance(value, int | float) or isinstance(value, bool):
         return None
-    return round(max(0.0, min(1.0, float(value))), 3)
+    return round(max(0.0, min(1.0, kernel_safe_float(value))), 3)
 
 
 def _router_reason_codes(packet: Mapping[str, Any]) -> list[str]:
@@ -355,7 +356,7 @@ def memory_packet_from_route_packet(
         route_topic = _safe_code(packet.get("route_topic"))
         scope_bucket = _safe_code(packet.get("scope_bucket"))
         label_granularity = _safe_code(packet.get("label_granularity"))
-        specificity = _safe_float(packet.get("route_label_specificity_score"))
+        specificity = _confidence_float(packet.get("route_label_specificity_score"))
         if route_topic:
             result["route_topic"] = route_topic
         if scope_bucket:

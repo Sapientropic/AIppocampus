@@ -2,17 +2,23 @@
 
 from __future__ import annotations
 
-import json
 import os
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Iterable, Mapping
+from typing import Any, Mapping
 
 from aippocampus_runtime import core as runtime_core
 from aippocampus_runtime.ops.spend_doctor_card import compact_spend_doctor_card
 from aippocampus_runtime.ops.spend_doctor_compact import build_compact_spend_doctor_report
 from aippocampus_runtime.recall.semantic_recall_gate import semantic_gate_mode
+from aippocampus_runtime.source.io_kernel import (
+    load_json_dict,
+    load_jsonl_dict_rows,
+)
+from aippocampus_runtime.source.io_kernel import (
+    safe_float as kernel_safe_float,
+)
 from aippocampus_runtime.warm_ambient.scheduler import warm_background_enabled, warm_status_payload
 
 __all__ = [
@@ -110,11 +116,8 @@ def _safe_int(value: Any) -> int:
         return 0
 
 
-def _safe_float(value: Any) -> float:
-    try:
-        return max(0.0, float(value or 0.0))
-    except (TypeError, ValueError):
-        return 0.0
+def _nonnegative_float(value: Any) -> float:
+    return max(0.0, kernel_safe_float(value, default=0.0))
 
 
 def _parse_time(value: Any) -> datetime | None:
@@ -226,11 +229,11 @@ def _usage_missing_reason(row: Mapping[str, Any]) -> str:
 def _latency_ms_from_row(row: Mapping[str, Any]) -> float:
     for key in ("latency_ms", "elapsed_ms", "duration_ms"):
         if key in row:
-            return _safe_float(row.get(key))
+            return _nonnegative_float(row.get(key))
     for container_key in ("model_telemetry", "worker", "worker_run", "worker_result", "result", "summary"):
         value = _nested_mapping(row, container_key).get("latency_ms")
         if value is not None:
-            return _safe_float(value)
+            return _nonnegative_float(value)
     return 0.0
 
 
@@ -374,30 +377,14 @@ def _latest(route: dict[str, Any], key: str, row: Mapping[str, Any]) -> None:
 
 
 def _read_json(path: Path) -> dict[str, Any] | None:
-    try:
-        parsed = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
+    result = load_json_dict(path)
+    if int(result.loss.get("total_loss_count") or 0) > 0:
         return None
-    return parsed if isinstance(parsed, dict) else None
+    return result.data
 
 
-def _iter_jsonl(path: Path) -> Iterable[dict[str, Any]]:
-    if not path.exists():
-        return
-    try:
-        with path.open("r", encoding="utf-8") as fh:
-            for line in fh:
-                text = line.strip()
-                if not text:
-                    continue
-                try:
-                    parsed = json.loads(text)
-                except json.JSONDecodeError:
-                    continue
-                if isinstance(parsed, dict):
-                    yield parsed
-    except OSError:
-        return
+def _jsonl_rows(path: Path) -> list[dict[str, Any]]:
+    return load_jsonl_dict_rows(path).rows
 
 
 def _artifact(root: Path, name: str, *, exists: bool, scanned_rows: int = 0) -> dict[str, Any]:
@@ -490,7 +477,7 @@ def _aggregate_subconscious(route: dict[str, Any], root: Path, *, since: datetim
     for name in ("subconscious_jobs.jsonl", "subconscious_edges.jsonl"):
         path = root / name
         local_rows = 0
-        for row in _iter_jsonl(path):
+        for row in _jsonl_rows(path):
             if not _in_window(row, since=since):
                 continue
             scanned += 1
@@ -506,7 +493,7 @@ def _aggregate_subconscious(route: dict[str, Any], root: Path, *, since: datetim
     for name in ("promotion_candidates.jsonl", "working_memory.jsonl", "semantic_triggers.jsonl"):
         path = root / name
         local_rows = 0
-        for row in _iter_jsonl(path):
+        for row in _jsonl_rows(path):
             if not _in_window(row, since=since):
                 continue
             status = str(row.get("status") or row.get("promotion_status") or "").casefold()
@@ -528,7 +515,7 @@ def _aggregate_dream(route: dict[str, Any], root: Path, *, since: datetime) -> N
     for name in ("dream_queue.jsonl", "dream_findings.jsonl", "working_memory.jsonl"):
         path = root / name
         local_rows = 0
-        for row in _iter_jsonl(path):
+        for row in _jsonl_rows(path):
             if not _in_window(row, since=since):
                 continue
             if not _is_dream_row(row):
@@ -675,10 +662,10 @@ def _finalize_model_telemetry(routes: Mapping[str, dict[str, Any]]) -> None:
         latency = telemetry.get("latency_ms")
         if isinstance(latency, dict):
             count = _safe_int(latency.get("count"))
-            total_latency = _safe_float(latency.get("total"))
+            total_latency = _nonnegative_float(latency.get("total"))
             latency["average"] = round(total_latency / count, 2) if count else None
             latency["total"] = round(total_latency, 2)
-            latency["max"] = round(_safe_float(latency.get("max")), 2)
+            latency["max"] = round(_nonnegative_float(latency.get("max")), 2)
         reasons = telemetry.get("usage_missing_reason_counts")
         if telemetry.get("usage_available"):
             telemetry["usage_missing_reason"] = None
@@ -779,8 +766,8 @@ def _route_spend_summary(route_name: str, route: Mapping[str, Any]) -> dict[str,
         "effective_tokens": _safe_int(spend.get("effective_tokens")),
         "request_count": _safe_int(spend.get("request_count")),
         "known_usage": bool(spend.get("known_usage")),
-        "foreground_value_rate": _safe_float(y.get("foreground_value_rate")),
-        "foreground_value_ratio": _safe_float(y.get("foreground_value_ratio")),
+        "foreground_value_rate": _nonnegative_float(y.get("foreground_value_rate")),
+        "foreground_value_ratio": _nonnegative_float(y.get("foreground_value_ratio")),
         "foreground_value_count": _safe_int(y.get("foreground_value_count")),
         "generated_candidates": _safe_int(y.get("generated_candidates")),
     }
@@ -894,7 +881,7 @@ def build_spend_doctor_report(
     warnings = _attach_route_metrics_and_warnings(
         routes,
         warn_effective_tokens=max(1, int(warn_effective_tokens)),
-        warn_min_foreground_value_rate=max(0.0, _safe_float(warn_min_foreground_value_rate)),
+        warn_min_foreground_value_rate=max(0.0, _nonnegative_float(warn_min_foreground_value_rate)),
     )
     warm_queue_blocked = bool(warm_queue_health.get("status") == "blocked")
     warning_codes = [str(item["code"]) for item in warnings]
@@ -928,7 +915,7 @@ def build_spend_doctor_report(
         "budget_guardrails": _budget_guardrails(
             warnings,
             warn_effective_tokens=max(1, int(warn_effective_tokens)),
-            warn_min_foreground_value_rate=max(0.0, _safe_float(warn_min_foreground_value_rate)),
+            warn_min_foreground_value_rate=max(0.0, _nonnegative_float(warn_min_foreground_value_rate)),
         ),
         "reporting_boundary": reporting_boundary,
     }
@@ -966,7 +953,7 @@ def render_text(report: Mapping[str, Any]) -> str:
             )
         if lowest_route:
             lines.append(
-                f"- Lowest yield: {lowest_route.get('route')} (rate {_safe_float(lowest_route.get('foreground_value_rate'))})"
+                f"- Lowest yield: {lowest_route.get('route')} (rate {_nonnegative_float(lowest_route.get('foreground_value_rate'))})"
             )
         lines.append(f"- Cost: {decision.get('cost_explanation') or 'token volume only'}")
         if decision.get("safe_next_command"):

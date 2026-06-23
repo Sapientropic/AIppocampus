@@ -26,6 +26,7 @@ from aippocampus_runtime.recall.agent_continuity_cli_support import (
     feedback_lane_resolution,
     last_recall_route_choices,
 )
+from aippocampus_runtime.source.io_kernel import append_jsonl_dict_rows
 
 KIND = "aippocampus_personal_control"
 SCHEMA_VERSION = 1
@@ -304,10 +305,8 @@ def _ticket_feedback_row(*, ticket_id: str, outcome: str, reason_code: str) -> d
     }
 
 
-def _write_jsonl(path: Path, row: Mapping[str, Any]) -> None:
-    path.resolve().parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8", newline="\n") as handle:
-        handle.write(json.dumps(dict(row), ensure_ascii=False, sort_keys=True) + "\n")
+def _append_control_feedback(path: Path, row: Mapping[str, Any]) -> None:
+    append_jsonl_dict_rows(path, [row], sort_keys=True)
 
 
 def _load_ticket_json(path: str | None) -> dict[str, Any] | None:
@@ -449,7 +448,7 @@ def do_not_use_here_payload(args: argparse.Namespace) -> tuple[dict[str, Any], i
     )
     wrote_event = path is not None
     if path is not None:
-        _write_jsonl(path, row)
+        _append_control_feedback(path, row)
     ticket = _load_ticket_json(args.ticket_json)
     action_time_decision = {}
     activation_tuning = {}

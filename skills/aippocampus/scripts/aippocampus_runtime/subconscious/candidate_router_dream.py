@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from aippocampus_runtime.dream import constructive_outputs as dream_constructive
+from aippocampus_runtime.source.io_kernel import parse_utc
 
 DREAM_HYPOTHESIS_TYPE = "dream_hypothesis"
 
@@ -22,16 +23,6 @@ ADJUDICATED_DREAM_STATES = (
     "auto_adjudicated",
     "source_adjudicated",
 )
-
-
-def parse_utc(value: str | None) -> datetime | None:
-    if not value:
-        return None
-    try:
-        text = value[:-1] + "+00:00" if value.endswith("Z") else value
-        return datetime.fromisoformat(text).astimezone(timezone.utc)
-    except ValueError:
-        return None
 
 
 def dream_horizon_timestamps(row: dict[str, Any], key: str) -> list[datetime]:

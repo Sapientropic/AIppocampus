@@ -8,14 +8,9 @@ from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
-from aippocampus_runtime.subconscious import time_maintenance
+from aippocampus_runtime.source.io_kernel import write_jsonl_dict_rows
+from aippocampus_runtime.subconscious import time_maintenance, time_maintenance_plan
 
-
-def write_jsonl(path: Path, rows: list[dict[str, object]]) -> None:
-    path.write_text(
-        "".join(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n" for row in rows),
-        encoding="utf-8",
-    )
 
 class TimeDrivenMaintenanceTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -66,7 +61,7 @@ class TimeDrivenMaintenanceTests(unittest.TestCase):
         }
 
     def write_due_sidecars(self) -> None:
-        write_jsonl(
+        write_jsonl_dict_rows(
             self.root / "scheduled_revisits.jsonl",
             [
                 {
@@ -80,7 +75,7 @@ class TimeDrivenMaintenanceTests(unittest.TestCase):
                 }
             ],
         )
-        write_jsonl(
+        write_jsonl_dict_rows(
             self.root / "journeys.jsonl",
             [
                 {
@@ -103,7 +98,7 @@ class TimeDrivenMaintenanceTests(unittest.TestCase):
                 },
             ],
         )
-        write_jsonl(
+        write_jsonl_dict_rows(
             self.root / "subconscious_jobs.jsonl",
             [
                 {
@@ -187,6 +182,39 @@ class TimeDrivenMaintenanceTests(unittest.TestCase):
         self.assertNotIn("RAW_PRIVATE_SENTINEL", encoded)
         self.assertNotIn(str(self.cwd), encoded)
         self.assertFalse((self.root / time_maintenance.CANDIDATES_FILE_NAME).exists())
+
+    def test_private_plan_reports_scan_loss_without_frontstage_diagnostics(self) -> None:
+        self.write_due_sidecars()
+        with (self.root / "scheduled_revisits.jsonl").open("a", encoding="utf-8") as handle:
+            handle.write("{not valid json\n")
+            handle.write("[]\n")
+
+        with patch.object(
+            time_maintenance_plan.question_health,
+            "question_health_stats",
+            side_effect=RuntimeError("RAW_PRIVATE_SENTINEL health exploded"),
+        ):
+            payload = time_maintenance.run_time_maintenance(
+                registry_dir=self.root,
+                cwd=self.cwd,
+                now="2026-06-07T00:00:00Z",
+                dry_run=True,
+            )
+
+        diagnostics = payload["diagnostics"]
+        by_code = {str(item["code"]): item for item in diagnostics}
+        self.assertEqual(by_code["jsonl_read_degraded"]["path"], "scheduled_revisits.jsonl")
+        self.assertEqual(by_code["jsonl_read_degraded"]["invalid_json_line_numbers"], [2])
+        self.assertEqual(by_code["jsonl_read_degraded"]["non_object_line_numbers"], [3])
+        self.assertEqual(
+            by_code["question_health_scan_failed"]["skipped_candidate_family"],
+            "dormant_question_due",
+        )
+        public = time_maintenance.public_time_maintenance_payload(payload)
+        self.assertNotIn("diagnostics", public)
+        encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True)
+        self.assertNotIn(str(self.root), encoded)
+        self.assertNotIn("RAW_PRIVATE_SENTINEL", encoded)
 
     def test_cli_default_dry_run_emits_public_reason_codes(self) -> None:
         self.write_due_sidecars()

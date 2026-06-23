@@ -3,13 +3,13 @@
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
 from aippocampus_runtime.registry.api import unique_preserve
+from aippocampus_runtime.source.io_kernel import load_jsonl_dict_rows
 
 FEEDBACK_EVENT_KIND = "aippocampus_ambient_policy_event"
 DISMISS = "dismiss"
@@ -36,21 +36,6 @@ def _parse_time(value: str) -> datetime:
     return parsed.astimezone(timezone.utc)
 
 
-def _iter_jsonl(path: Path) -> Iterable[dict[str, Any]]:
-    if not path.exists():
-        return
-    with path.open("r", encoding="utf-8") as fh:
-        for line in fh:
-            if not line.strip():
-                continue
-            try:
-                item = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if isinstance(item, dict):
-                yield item
-
-
 def _source_ids(row: Mapping[str, Any]) -> tuple[str, ...]:
     return tuple(
         unique_preserve(
@@ -64,7 +49,7 @@ def load_question_pair_feedback(path: Path | None) -> tuple[QuestionPairFeedback
     if path is None or not path.exists():
         return ()
     latest_by_source_ids: dict[frozenset[str], QuestionPairFeedback] = {}
-    for row in _iter_jsonl(path):
+    for row in load_jsonl_dict_rows(path).rows:
         if row.get("kind") != FEEDBACK_EVENT_KIND:
             continue
         action = str(row.get("action") or "")

@@ -20,6 +20,7 @@ from typing import Any
 from aippocampus_runtime.core import compact_text, now_utc
 from aippocampus_runtime.dream.input_pack_summary import public_pack_summary as _public_pack_summary
 from aippocampus_runtime.dream.macro_guidance import line_topology_dream_seed_payload
+from aippocampus_runtime.source.io_kernel import load_jsonl_dict_rows, source_ref_key
 from aippocampus_runtime.source.texture_consumption import (
     select_texture_signals,
     texture_signal_summary,
@@ -100,21 +101,6 @@ def string_values(value: object) -> tuple[str, ...]:
     if isinstance(value, Iterable):
         return tuple(str(item) for item in value if is_present(item))
     return ()
-
-
-def source_ref_key(ref: Mapping[str, Any]) -> tuple[str, str, str, str]:
-    return (
-        str(ref.get("thread_key") or ref.get("thread_id") or ""),
-        str(ref.get("message_id") or ""),
-        str(ref.get("turn_id") or ""),
-        str(
-            ref.get("source_id")
-            or ref.get("source_line")
-            or ref.get("line")
-            or ref.get("source_ref")
-            or ""
-        ),
-    )
 
 
 def source_ref_thread(ref: Mapping[str, Any]) -> str:
@@ -847,21 +833,6 @@ def build_dream_input_pack(
     }
 
 
-def iter_jsonl(path: Path) -> Iterable[dict[str, Any]]:
-    if not path.exists():
-        return
-    with path.open("r", encoding="utf-8") as fh:
-        for line in fh:
-            if not line.strip():
-                continue
-            try:
-                item = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if isinstance(item, dict):
-                yield item
-
-
 def public_pack_summary(payload: Mapping[str, Any]) -> dict[str, Any]:
     return _public_pack_summary(payload, schema_version=SCHEMA_VERSION)
 
@@ -882,7 +853,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_arg_parser().parse_args(argv)
-    payload = build_dream_input_pack(iter_jsonl(args.input), objective=args.objective)
+    payload = build_dream_input_pack(load_jsonl_dict_rows(args.input).rows, objective=args.objective)
     output_payload = payload if args.internal_full else public_pack_summary(payload)
     text = json.dumps(output_payload, ensure_ascii=False, indent=None if args.json else 2)
     if args.output:

@@ -193,6 +193,7 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/artifacts/import_bundle.py",
     "skills/aippocampus/scripts/aippocampus_runtime/artifacts/publish.py",
     "skills/aippocampus/scripts/aippocampus_runtime/source/__init__.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/source/io_kernel.py",
     "skills/aippocampus/scripts/aippocampus_runtime/source/anchors.py",
     "skills/aippocampus/scripts/aippocampus_runtime/source/agent_self_note_cli.py",
     "skills/aippocampus/scripts/aippocampus_runtime/source/agent_self_notes.py",

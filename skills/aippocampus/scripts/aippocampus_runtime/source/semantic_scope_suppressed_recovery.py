@@ -35,13 +35,13 @@ from aippocampus_runtime.model.routing import (
 )
 from aippocampus_runtime.registry.api import load_registry
 from aippocampus_runtime.source.clean_source import SCOPE_LABEL_ORDER
+from aippocampus_runtime.source.io_kernel import load_jsonl_dict_rows
 from aippocampus_runtime.source.registry_paths import resolve_registry_member_path
 from aippocampus_runtime.source.semantic_scope_labels import (
     canonical_scope_labels,
     clean_messages_by_id,
     filtered_semantic_scope_labels,
     is_semantic_scope_label_finding,
-    iter_jsonl,
     label_evidence_map,
     label_evidence_min_confidence,
     semantic_scope_label_rows_from_findings,
@@ -82,7 +82,9 @@ def selected_suppressed_cases(
 ) -> list[dict[str, Any]]:
     registry = load_registry(registry_path)
     findings = [
-        item for item in iter_jsonl(jobs_output_path) if is_semantic_scope_label_finding(item)
+        item
+        for item in load_jsonl_dict_rows(jobs_output_path).rows
+        if is_semantic_scope_label_finding(item)
     ]
     candidates: list[dict[str, Any]] = []
     for entry in registry.get("threads") or []:

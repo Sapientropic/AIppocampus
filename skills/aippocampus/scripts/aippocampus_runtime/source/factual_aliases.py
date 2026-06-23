@@ -17,8 +17,11 @@ from typing import Any
 
 from aippocampus_runtime.core import now_utc
 from aippocampus_runtime.privacy import OPENAI_KEY_RE, SENSITIVE_ASSIGNMENT_RE
-from aippocampus_runtime.source.io_kernel import write_json_atomic, write_jsonl_dict_rows
-from aippocampus_runtime.source.jsonl_reader import load_jsonl_dict_rows
+from aippocampus_runtime.source.io_kernel import (
+    load_jsonl_dict_rows,
+    write_json_atomic,
+    write_jsonl_dict_rows,
+)
 
 SOURCE_FACTUAL_ALIASES_FILENAME = "source-factual-aliases.jsonl"
 SOURCE_FACTUAL_ALIASES_MANIFEST_FILENAME = "source-factual-aliases.manifest.json"
@@ -104,10 +107,6 @@ def _messages_fingerprint(path: Path) -> str:
         for chunk in iter(lambda: fh.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
-
-
-def _write_json_atomic(path: Path, payload: dict[str, Any]) -> None:
-    write_json_atomic(path, payload, indent=None, sort_keys=True)
 
 
 def _write_jsonl_atomic(path: Path, rows: list[dict[str, Any]]) -> None:
@@ -212,7 +211,12 @@ def materialize_source_factual_aliases(
         "raw_source_text_emitted": False,
         "public_report_safe": False,
     }
-    _write_json_atomic(out_path.with_name(SOURCE_FACTUAL_ALIASES_MANIFEST_FILENAME), manifest)
+    write_json_atomic(
+        out_path.with_name(SOURCE_FACTUAL_ALIASES_MANIFEST_FILENAME),
+        manifest,
+        indent=None,
+        sort_keys=True,
+    )
     return {
         "ok": True,
         "artifact": str(out_path),

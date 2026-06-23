@@ -75,6 +75,7 @@ from aippocampus_runtime.recall.semantic_result_cache import (
     write_cache,
 )
 from aippocampus_runtime.registry.api import load_registry, registry_paths, unique_preserve
+from aippocampus_runtime.source.io_kernel import load_json_dict, load_jsonl_dict_rows
 from aippocampus_runtime.subconscious.runtime import add_usage, call_chat_json, compact_usage
 
 DEFAULT_CACHE_NAME = "semantic_recall_cache.json"
@@ -220,33 +221,6 @@ def normalize_worker_names(workers: tuple[str, ...] | list[str] | None) -> tuple
     return tuple(unique_preserve(expanded)), tuple(unique_preserve(invalid))
 
 
-def load_json(path: Path) -> dict[str, Any]:
-    if not path.exists():
-        return {}
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        return {}
-    return data if isinstance(data, dict) else {}
-
-
-def load_jsonl(path: Path) -> list[dict[str, Any]]:
-    if not path.exists():
-        return []
-    rows: list[dict[str, Any]] = []
-    with path.open("r", encoding="utf-8") as fh:
-        for line in fh:
-            if not line.strip():
-                continue
-            try:
-                item = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if isinstance(item, dict):
-                rows.append(item)
-    return rows
-
-
 def current_project_hint(registry: dict[str, Any], cwd: Path) -> str | None:
     target = str(cwd.resolve()).casefold()
     best: tuple[int, str] | None = None
@@ -259,7 +233,7 @@ def current_project_hint(registry: dict[str, Any], cwd: Path) -> str | None:
             continue
         try:
             workspace_low = str(Path(workspace).resolve()).casefold()
-        except Exception:
+        except (OSError, RuntimeError, ValueError):
             workspace_low = workspace.casefold()
         score = 0
         if workspace_low == target:
@@ -503,7 +477,7 @@ def load_semantic_triggers(path: Path | None) -> list[dict[str, Any]]:
     if not path or not path.exists():
         return []
     out: list[dict[str, Any]] = []
-    for row in load_jsonl(path):
+    for row in load_jsonl_dict_rows(path).rows:
         if row.get("payload_compacted"):
             continue
         if row.get("status") in {"inactive", "parked"}:
@@ -817,6 +791,14 @@ def run_semantic_gate(
     use_cache: bool = True,
     chat_fn: ChatFn = call_chat_json,
 ) -> dict[str, Any]:
+    """Run semantic recall in named stages.
+
+    aippocampus-stage-map: resolve registry/cache/trigger inputs -> enforce
+    provider and foreground budget -> run gate/alias/scope workers -> merge
+    cached and live results -> return public semantic gate payload while
+    keeping diagnostics out of compact recall surfaces.
+    """
+
     start = time.perf_counter()
     prompt = str(prompt or "").strip()
     cwd_path = Path(cwd).resolve()
@@ -1125,8 +1107,8 @@ def main() -> int:
         args.prompt,
         cwd=Path(args.cwd),
         registry_path=registry_path,
-        associations=load_json(Path(args.associations).resolve()) if args.associations else None,
-        working_memory=load_jsonl(Path(args.working_memory).resolve())
+        associations=load_json_dict(Path(args.associations).resolve()).data if args.associations else None,
+        working_memory=load_jsonl_dict_rows(Path(args.working_memory).resolve()).rows
         if args.working_memory
         else None,
         semantic_triggers_path=Path(args.semantic_triggers).resolve()

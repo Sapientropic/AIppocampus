@@ -49,6 +49,24 @@ class SourceIoKernelTests(unittest.TestCase):
         self.assertEqual(result.rows, [{"a": "字", "b": 2}])
         self.assertEqual(result.loss["total_loss_count"], 0)
 
+    def test_jsonl_append_writer_returns_row_count_and_preserves_existing_rows(self) -> None:
+        path = self.root / "nested" / "events.jsonl"
+        io_kernel.write_jsonl_dict_rows(path, [{"kind": "first"}])
+
+        written = io_kernel.append_jsonl_dict_rows(
+            path,
+            [{"kind": "second", "value": 2}, {"kind": "third"}],
+            sort_keys=True,
+        )
+        result = io_kernel.load_jsonl_dict_rows(path)
+
+        self.assertEqual(written, 2)
+        self.assertEqual(
+            result.rows,
+            [{"kind": "first"}, {"kind": "second", "value": 2}, {"kind": "third"}],
+        )
+        self.assertEqual(result.loss["total_loss_count"], 0)
+
     def test_source_ref_key_normalizes_historical_field_variants(self) -> None:
         self.assertEqual(
             io_kernel.source_ref_key(
@@ -71,6 +89,41 @@ class SourceIoKernelTests(unittest.TestCase):
                 }
             ),
             ("thread-a", "msg-1", "turn-7", "42"),
+        )
+
+    def test_source_ref_identity_key_preserves_source_id_and_line_anchor(self) -> None:
+        self.assertEqual(
+            io_kernel.source_ref_identity_key(
+                {
+                    "source_id": "src-1",
+                    "thread_key": "thread-a",
+                    "message_id": "msg-1",
+                    "turn_id": "turn-7",
+                    "line": 42,
+                }
+            ),
+            ("src-1", "thread-a", "msg-1", "turn-7", "42"),
+        )
+        self.assertEqual(
+            io_kernel.source_ref_key(
+                {
+                    "source_id": "src-1",
+                    "thread_key": "thread-a",
+                    "message_id": "msg-1",
+                    "turn_id": "turn-7",
+                    "line": 42,
+                }
+            ),
+            ("thread-a", "msg-1", "turn-7", "src-1"),
+        )
+        self.assertEqual(
+            io_kernel.source_ref_identity_key(
+                {
+                    "source_ref": "clean-source/messages.jsonl:2",
+                    "thread_key": "thread-a",
+                }
+            ),
+            ("clean-source/messages.jsonl:2", "thread-a", "", "", ""),
         )
 
     def test_clean_source_ref_requires_thread_and_anchor_by_default(self) -> None:

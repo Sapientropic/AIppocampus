@@ -34,6 +34,7 @@ from aippocampus_runtime.core import (
 )
 from aippocampus_runtime.recall.index_builder import make_sqlite
 from aippocampus_runtime.recall.structure_time import iso_z, parse_datetime_utc
+from aippocampus_runtime.source.io_kernel import write_json_atomic
 from aippocampus_runtime.source.rollout import normalize_rollout
 
 DEFAULT_SEGMENT_BYTES = 64 * 1024 * 1024
@@ -231,12 +232,6 @@ def remap_staged_sqlite_status(status: dict, staging_dir: Path, final_dir: Path)
     return remapped
 
 
-def _write_json_atomic(path: Path, payload: dict) -> None:
-    tmp_path = path.with_name(f".{path.name}.tmp-{os.getpid()}-{time.time_ns()}")
-    tmp_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-    os.replace(tmp_path, path)
-
-
 def _pointer_value(pointer_path: Path, path: Path) -> str:
     try:
         return path.relative_to(pointer_path.parent).as_posix()
@@ -349,8 +344,8 @@ def install_staged_segments(
         generation_manifest["generation_layout"] = (
             f"{SEGMENTS_GENERATIONS_DIR}/<generation>/seg-*"
         )
-        _write_json_atomic(generation_manifest_path, generation_manifest)
-        _write_json_atomic(compatibility_manifest_path, generation_manifest)
+        write_json_atomic(generation_manifest_path, generation_manifest)
+        write_json_atomic(compatibility_manifest_path, generation_manifest)
 
         last_known_good = previous_good or generation_manifest_path
         last_known_good_generation = _generation_id_for_manifest(pointer_path, last_known_good)
@@ -380,7 +375,7 @@ def install_staged_segments(
                 "source_rollout_mtime",
             ],
         }
-        _write_json_atomic(pointer_path, pointer)
+        write_json_atomic(pointer_path, pointer)
     except Exception:
         if had_compatibility_manifest:
             compatibility_manifest_path.write_bytes(compatibility_manifest_bytes)

@@ -26,6 +26,7 @@ from aippocampus_runtime.navigation.concept_graph import (
 )
 from aippocampus_runtime.question.source_refs import source_ref_key
 from aippocampus_runtime.registry.api import registry_paths, unique_preserve
+from aippocampus_runtime.source.io_kernel import load_jsonl_dict_rows
 from aippocampus_runtime.subconscious.jobs_config import default_jobs_output_path
 from aippocampus_runtime.subconscious.theme_emergence_inputs import (
     FrontierMarker,
@@ -53,21 +54,6 @@ THEME_RESONANCE_CANNOT_CLAIM = (
     "llm_theme_naming_supported",
 )
 
-def iter_jsonl(path: Path) -> Iterable[dict[str, Any]]:
-    if not path.exists():
-        return
-    with path.open("r", encoding="utf-8") as fh:
-        for line in fh:
-            if not line.strip():
-                continue
-            try:
-                item = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if isinstance(item, dict):
-                yield item
-
-
 def stable_digest(*parts: str, prefix: str, length: int = 18) -> str:
     raw = "\n".join(parts)
     return f"{prefix}_{hashlib.sha1(raw.encode('utf-8')).hexdigest()[:length]}"
@@ -87,7 +73,7 @@ def existing_theme_ids(rows: Iterable[Mapping[str, Any]]) -> set[str]:
 
 
 def load_theme_inputs(path: Path) -> tuple[list[QuestionLink], list[FrontierMarker], list[dict[str, Any]]]:
-    rows = list(iter_jsonl(path))
+    rows = load_jsonl_dict_rows(path).rows
     links: list[QuestionLink] = []
     frontiers: list[FrontierMarker] = []
     for row in rows:
@@ -464,7 +450,9 @@ def run_theme_emergence(
         concept_graph_path=concept_graph_path,
         min_links=min_links,
     )
-    existing_ids = existing_theme_ids(rows if output == jobs_path else iter_jsonl(output))
+    existing_ids = existing_theme_ids(
+        rows if output == jobs_path else load_jsonl_dict_rows(output).rows
+    )
     fresh_themes = [
         theme for theme in themes if str(theme.get("theme_cluster_id") or "") not in existing_ids
     ]

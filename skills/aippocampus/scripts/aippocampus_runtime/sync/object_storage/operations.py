@@ -9,6 +9,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.source.io_kernel import load_json_dict
 from aippocampus_runtime.sync import bundle as sync_bundle
 from aippocampus_runtime.sync import contract as sync_contract
 from aippocampus_runtime.sync.object_storage.client import (
@@ -33,7 +34,7 @@ def load_object_manifest(client: HttpObjectStoreClient) -> dict[str, Any]:
 
 
 def local_manifest_for_object_storage(manifest_path: Path, *, prefix: str) -> dict[str, Any]:
-    manifest = sync_bundle.load_json(manifest_path)
+    manifest = load_json_dict(manifest_path).data
     if not manifest:
         raise FileNotFoundError(f"missing local sync manifest: {manifest_path}")
     rewritten = dict(manifest)

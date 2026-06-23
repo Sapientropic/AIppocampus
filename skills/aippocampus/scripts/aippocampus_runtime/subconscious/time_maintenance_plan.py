@@ -12,6 +12,11 @@ from aippocampus_runtime.core import compact_text, stable_text_fingerprint
 from aippocampus_runtime.journey import tracking as journey_tracking
 from aippocampus_runtime.question import health as question_health
 from aippocampus_runtime.question.constants import DEFAULT_DORMANT_AFTER_DAYS
+from aippocampus_runtime.source.io_kernel import (
+    jsonl_loss_warning,
+    load_json_dict,
+    load_jsonl_dict_rows,
+)
 from aippocampus_runtime.subconscious import scheduler
 
 SCHEMA_VERSION = 1
@@ -88,29 +93,19 @@ def append_jsonl(path: Path, rows: Sequence[Mapping[str, Any]]) -> int:
     return len(rows)
 
 
-def _iter_jsonl(path: Path) -> Iterable[dict[str, Any]]:
-    if not path.exists():
-        return
-    with path.open("r", encoding="utf-8", errors="replace") as fh:
-        for line in fh:
-            if not line.strip():
-                continue
-            try:
-                item = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if isinstance(item, dict):
-                yield item
-
-
-def _load_json(path: Path) -> dict[str, Any]:
-    if not path.exists():
-        return {}
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        return {}
-    return data if isinstance(data, dict) else {}
+def _scan_sidecar_rows(
+    path: Path,
+    *,
+    diagnostics: list[dict[str, Any]],
+    scan: str,
+) -> Iterable[dict[str, Any]]:
+    result = load_jsonl_dict_rows(path)
+    warning = jsonl_loss_warning(result.loss, stage=f"time_maintenance:{scan}", path_label=path.name)
+    if warning:
+        warning["warning"] = warning.pop("message")
+        warning["local_path_included"] = False
+        diagnostics.append(warning)
+    yield from result.rows
 
 
 def _project_hash(label: str) -> str:
@@ -220,10 +215,11 @@ def _scheduled_revisit_candidates(
     *,
     now_dt: datetime,
     generated_at: str,
+    diagnostics: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     candidates: list[dict[str, Any]] = []
     for name in SCHEDULED_REVISIT_FILES:
-        for row in _iter_jsonl(root / name):
+        for row in _scan_sidecar_rows(root / name, diagnostics=diagnostics, scan=name):
             if not _matches_project(row, stats):
                 continue
             if _row_trigger(row) != "scheduled_revisit":
@@ -264,11 +260,12 @@ def _journey_candidates(
     now_dt: datetime,
     generated_at: str,
     stale_frontier_days: int,
+    diagnostics: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     candidates: list[dict[str, Any]] = []
     stale_delta_days = max(0, int(stale_frontier_days))
     for name in JOURNEY_FILES:
-        for row in _iter_jsonl(root / name):
+        for row in _scan_sidecar_rows(root / name, diagnostics=diagnostics, scan=name):
             if row.get("kind") != journey_tracking.JOURNEY_KIND or not _matches_project(row, stats):
                 continue
             status = str(row.get("status") or "")
@@ -313,9 +310,14 @@ def _frontier_marker_candidates(
     now_dt: datetime,
     generated_at: str,
     stale_frontier_days: int,
+    diagnostics: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     candidates: list[dict[str, Any]] = []
-    for row in _iter_jsonl(root / "subconscious_jobs.jsonl"):
+    for row in _scan_sidecar_rows(
+        root / "subconscious_jobs.jsonl",
+        diagnostics=diagnostics,
+        scan="frontier_markers",
+    ):
         if row.get("finding_kind") != "frontier_marker" or not _matches_project(row, stats):
             continue
         created = parse_time(row.get("created_at"))
@@ -343,6 +345,7 @@ def _question_candidates(
     now_dt: datetime,
     generated_at: str,
     dormant_after_days: int,
+    diagnostics: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     jobs_path = root / "subconscious_jobs.jsonl"
     if not jobs_path.exists():
@@ -353,7 +356,21 @@ def _question_candidates(
             now=now_dt,
             dormant_after_days=dormant_after_days,
         )
-    except Exception:
+    # Question health is an optional side scan. If it fails, keep the plan
+    # usable but make the skipped candidate family visible in the private plan
+    # diagnostics instead of silently producing fewer maintenance candidates.
+    except Exception as exc:
+        diagnostics.append(
+            {
+                "code": "question_health_scan_failed",
+                "stage": "time_maintenance:question_health",
+                "file_name": jobs_path.name,
+                "warning": "Dormant-question candidates skipped because question health stats failed.",
+                "error_type": type(exc).__name__,
+                "skipped_candidate_family": "dormant_question_due",
+                "local_path_included": False,
+            }
+        )
         return []
     candidates: list[dict[str, Any]] = []
     for item in payload.get("lifecycle") or []:
@@ -375,9 +392,14 @@ def _question_candidates(
     return candidates
 
 
-def _latest_jsonl_time(path: Path) -> datetime | None:
+def _latest_jsonl_time(
+    path: Path,
+    *,
+    diagnostics: list[dict[str, Any]],
+    scan: str,
+) -> datetime | None:
     latest: datetime | None = None
-    for row in _iter_jsonl(path):
+    for row in _scan_sidecar_rows(path, diagnostics=diagnostics, scan=scan):
         parsed = _first_time(row, ("updated_at", "created_at", "timestamp"))
         if parsed and (latest is None or parsed > latest):
             latest = parsed
@@ -396,6 +418,7 @@ def _association_candidates(
     now_dt: datetime,
     generated_at: str,
     stale_association_days: int,
+    diagnostics: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     stale_after = max(0, int(stale_association_days))
     candidates: list[dict[str, Any]] = []
@@ -403,7 +426,11 @@ def _association_candidates(
         path = root / name
         if not path.exists():
             continue
-        updated = parse_time(_load_json(path).get("updated_at")) if path.suffix == ".json" else _latest_jsonl_time(path)
+        updated = (
+            parse_time(load_json_dict(path).data.get("updated_at"))
+            if path.suffix == ".json"
+            else _latest_jsonl_time(path, diagnostics=diagnostics, scan=name)
+        )
         if not updated or (now_dt - updated).days < stale_after:
             continue
         candidates.append(
@@ -514,7 +541,8 @@ def build_time_maintenance_plan(
     root = Path(registry_dir).resolve()
     now_dt = normalize_now(now)
     generated_at = iso_utc(now_dt)
-    registry = scheduler.load_json(scheduler.registry_path(root))
+    registry = load_json_dict(scheduler.registry_path(root)).data
+    diagnostics: list[dict[str, Any]] = []
     projects = _selected_projects(
         registry,
         cwd=Path(cwd).resolve() if cwd else None,
@@ -524,7 +552,13 @@ def build_time_maintenance_plan(
     candidates: list[dict[str, Any]] = []
     for stats in projects:
         candidates.extend(
-            _scheduled_revisit_candidates(root, stats, now_dt=now_dt, generated_at=generated_at)
+            _scheduled_revisit_candidates(
+                root,
+                stats,
+                now_dt=now_dt,
+                generated_at=generated_at,
+                diagnostics=diagnostics,
+            )
         )
         candidates.extend(
             _journey_candidates(
@@ -533,6 +567,7 @@ def build_time_maintenance_plan(
                 now_dt=now_dt,
                 generated_at=generated_at,
                 stale_frontier_days=stale_frontier_days,
+                diagnostics=diagnostics,
             )
         )
         candidates.extend(
@@ -542,6 +577,7 @@ def build_time_maintenance_plan(
                 now_dt=now_dt,
                 generated_at=generated_at,
                 stale_frontier_days=stale_frontier_days,
+                diagnostics=diagnostics,
             )
         )
         candidates.extend(
@@ -551,6 +587,7 @@ def build_time_maintenance_plan(
                 now_dt=now_dt,
                 generated_at=generated_at,
                 dormant_after_days=dormant_after_days,
+                diagnostics=diagnostics,
             )
         )
         candidates.extend(
@@ -560,11 +597,12 @@ def build_time_maintenance_plan(
                 now_dt=now_dt,
                 generated_at=generated_at,
                 stale_association_days=stale_association_days,
+                diagnostics=diagnostics,
             )
         )
         candidates.extend(_health_candidates(registry, stats, generated_at=generated_at))
     candidates = _dedupe_candidates(candidates)
-    return {
+    payload = {
         "schema_version": SCHEMA_VERSION,
         "kind": PLAN_KIND,
         "mode": "dry_run" if dry_run else "write",
@@ -581,3 +619,6 @@ def build_time_maintenance_plan(
             "provider_backed_work_optional": True,
         },
     }
+    if diagnostics:
+        payload["diagnostics"] = diagnostics
+    return payload

@@ -4,11 +4,13 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import re
+from collections.abc import Mapping
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterable
+from typing import Any, Iterable
 
 from aippocampus_runtime import anchor_graph as _anchor_graph
 from aippocampus_runtime import safety as _safety
@@ -34,7 +36,7 @@ is_loopback_host = _safety.is_loopback_host
 empty_turn = _rollout.empty_turn
 extract_message = _rollout.extract_message
 is_injected_instruction_text = _rollout.is_injected_instruction_text
-iter_jsonl = _rollout.iter_jsonl
+iter_jsonl = _rollout.iter_rollout_jsonl
 iter_messages = _rollout.iter_messages
 message_phase = _rollout.message_phase
 normalize_rollout = _rollout.normalize_rollout
@@ -48,6 +50,37 @@ validate_private_credential_transport = _safety.validate_private_credential_tran
 
 def now_utc() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def dict_or_empty(value: Any) -> dict[str, Any]:
+    """Normalize untrusted nested payload values without cloning local helpers.
+
+    Runtime and smoke paths often inspect optional JSON sections. Keeping this
+    primitive central prevents copied `_as_dict` helpers from drifting while
+    still making callers spell the domain field they are reading.
+    """
+
+    return dict(value) if isinstance(value, Mapping) else {}
+
+
+def list_or_empty(value: Any) -> list[Any]:
+    """Normalize optional JSON arrays at report/projection boundaries."""
+
+    return list(value) if isinstance(value, list) else []
+
+
+def strip_empty(value: Any) -> Any:
+    """Recursively remove empty projection fields without changing truth state."""
+
+    if isinstance(value, dict):
+        return {
+            key: cleaned
+            for key, item in value.items()
+            if (cleaned := strip_empty(item)) not in (None, "", [])
+        }
+    if isinstance(value, list):
+        return [cleaned for item in value if (cleaned := strip_empty(item)) not in (None, "", [])]
+    return value
 
 
 def _codex_home_from_installed_skill() -> Path | None:
@@ -183,6 +216,14 @@ def stable_text_fingerprint(
         8192,
     ).hex()[:length]
     return f"{prefix}_{digest}" if prefix else digest
+
+
+def stable_json_id(prefix: str, *parts: object, length: int = 18) -> str:
+    """Return a stable id for local structural metadata, not proof of content truth."""
+
+    raw = "\0".join(json.dumps(part, sort_keys=True, default=str) for part in parts)
+    digest = hashlib.sha256(raw.encode("utf-8", errors="replace")).hexdigest()[:length]
+    return f"{prefix}_{digest}"
 
 
 def norm_path(path: str | Path) -> str:

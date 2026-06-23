@@ -19,13 +19,13 @@ from aippocampus_runtime.registry.common import (
     run_json,
 )
 from aippocampus_runtime.registry.store import (
-    load_json,
     load_registry,
     registry_paths,
     thread_store_dir,
     update_registry,
     upsert_thread,
 )
+from aippocampus_runtime.source.io_kernel import load_json_dict
 from conversation_sources import (
     ConversationProvider,
     GenericConversationProvider,
@@ -129,7 +129,7 @@ def register_rollout_thread(
             ]
         )
     else:
-        index_manifest = load_json(index_dir / "manifest.json")
+        index_manifest = load_json_dict(index_dir / "manifest.json").data
 
     anchors_path = cwd / "thread-anchors.md"
     anchors = parse_anchor_file(anchors_path)

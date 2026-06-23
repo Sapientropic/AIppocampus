@@ -19,6 +19,7 @@ from typing import Any
 
 from aippocampus_runtime.core import now_utc
 from aippocampus_runtime.dream.macro_guidance import priority_with_macro_momentum
+from aippocampus_runtime.source.io_kernel import load_jsonl_dict_rows, parse_utc
 
 QUEUE_KIND = "aippocampus_dream_queue"
 QUEUE_ITEM_KIND = "aippocampus_dream_queue_item"
@@ -54,16 +55,6 @@ FORBIDDEN_JOURNEY_PROJECTION_ACTIONS = [
 def stable_digest(*parts: object, prefix: str, length: int = 18) -> str:
     raw = "\n".join(json.dumps(part, ensure_ascii=False, sort_keys=True, default=str) for part in parts)
     return f"{prefix}_{hashlib.sha1(raw.encode('utf-8', errors='replace')).hexdigest()[:length]}"
-
-
-def parse_utc(value: str | None) -> datetime | None:
-    if not value:
-        return None
-    try:
-        text = value[:-1] + "+00:00" if value.endswith("Z") else value
-        return datetime.fromisoformat(text).astimezone(timezone.utc)
-    except ValueError:
-        return None
 
 
 def format_utc(value: datetime) -> str:
@@ -440,21 +431,10 @@ def public_queue_summary(payload: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
-def iter_jsonl(path: Path | None) -> list[dict[str, Any]]:
+def load_queue_rows(path: Path | None) -> list[dict[str, Any]]:
     if not path or not path.exists():
         return []
-    rows: list[dict[str, Any]] = []
-    with path.open("r", encoding="utf-8") as fh:
-        for line in fh:
-            if not line.strip():
-                continue
-            try:
-                item = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if isinstance(item, dict):
-                rows.append(item)
-    return rows
+    return load_jsonl_dict_rows(path).rows
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -469,9 +449,9 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     payload = build_dream_queue(
-        iter_jsonl(args.packs_jsonl),
-        previous_items=iter_jsonl(args.previous_queue_jsonl),
-        existing_findings=iter_jsonl(args.findings_jsonl),
+        load_queue_rows(args.packs_jsonl),
+        previous_items=load_queue_rows(args.previous_queue_jsonl),
+        existing_findings=load_queue_rows(args.findings_jsonl),
         now=args.now,
     )
     output_payload = public_queue_summary(payload) if args.summary else payload

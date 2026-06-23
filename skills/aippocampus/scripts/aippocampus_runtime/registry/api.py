@@ -54,7 +54,6 @@ from aippocampus_runtime.registry.store import (
     RegistryWriteBusyError,
     default_registry_dir,
     load_existing_json_object,
-    load_json,
     load_registry,
     registry_paths,
     registry_root,
@@ -65,6 +64,7 @@ from aippocampus_runtime.registry.store import (
     update_registry,
     upsert_thread,
 )
+from aippocampus_runtime.source.io_kernel import load_json_dict
 from aippocampus_runtime.warm_ambient.hook_seen_threads import (
     DEFAULT_HOOK_SEEN_STALE_AFTER_SECONDS,
     hook_seen_ledger_path_for_registry,
@@ -85,7 +85,6 @@ __all__ = [
     "default_registry_dir",
     "registry_paths",
     "registry_root",
-    "load_json",
     "load_existing_json_object",
     "safe_slug",
     "thread_store_dir",
@@ -282,8 +281,8 @@ def register_current_thread(
     if build_index and not (clean_source_dir / "manifest.json").exists():
         run_json(current_thread_build_cmd(SCRIPT_DIR, "build_clean_source.py", cwd, rollout, active_provider.name))
 
-    manifest = load_json(index_dir / "manifest.json")
-    clean_manifest = load_json(clean_source_dir / "manifest.json")
+    manifest = load_json_dict(index_dir / "manifest.json").data
+    clean_manifest = load_json_dict(clean_source_dir / "manifest.json").data
     if health is None:
         try:
             health_module = importlib.import_module("aippocampus_runtime.health")
@@ -598,6 +597,14 @@ def safe_registry_search_payload(
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Dispatch registry/import subcommands.
+
+    aippocampus-stage-map: parse public/import command shape -> route to
+    source registration, current-thread registration, listing, search, or
+    reconciliation -> render JSON/text. Subcommand handlers own source-backed
+    evidence; this dispatcher should not grow product proof payloads.
+    """
+
     raw_args = list(sys.argv[1:] if argv is None else argv)
     public_import_conversation = _subcommand_index(raw_args, "register-source") is not None
     usage_exit = maybe_handle_import_conversation_usage(raw_args)

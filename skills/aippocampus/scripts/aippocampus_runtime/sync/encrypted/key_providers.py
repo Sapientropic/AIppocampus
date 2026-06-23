@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.core import now_utc
+from aippocampus_runtime.source.io_kernel import load_json_dict
 from aippocampus_runtime.sync import bundle as sync_bundle
 from aippocampus_runtime.sync.encrypted.crypto import issue
 
@@ -76,7 +77,7 @@ def normalize_key_provider(provider: str | None) -> tuple[str, dict[str, Any] | 
 
 def load_key_provider_config(registry_dir: str | Path) -> dict[str, Any]:
     path = key_provider_config_path(registry_dir)
-    data = sync_bundle.load_json(path)
+    data = load_json_dict(path).data
     if not data:
         return default_key_provider_config()
     merged = default_key_provider_config()

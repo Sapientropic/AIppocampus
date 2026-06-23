@@ -34,6 +34,7 @@ from aippocampus_runtime.model.routing import (
 )
 from aippocampus_runtime.recall.active_recall_lock import start_or_update_recall_lock
 from aippocampus_runtime.recall.ambient_cache import default_ambient_cache_path
+from aippocampus_runtime.source.io_kernel import write_json_atomic
 from aippocampus_runtime.warm_ambient.config import (
     DEFAULT_WARM_DETACHED_JOB_CONFIG,
     WarmDetachedJobConfig,
@@ -84,13 +85,6 @@ def default_warm_job_dir(
         registry_dir=Path(registry_dir).resolve() if registry_dir else None,
     )
     return cache_path.resolve().parent / DEFAULT_JOB_DIR_NAME
-
-
-def _write_json_atomic(path: Path, payload: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8", newline="\n")
-    tmp.replace(path)
 
 
 def _job_id(*, thread_id: str, workspace: Path, topic_epoch: str | None, prompt: str) -> str:
@@ -589,7 +583,7 @@ def schedule_warm_ambient_recall(
         "no_write": False,
         "result_path": str(result_path),
     }
-    _write_json_atomic(job_path, job)
+    write_json_atomic(job_path, job, indent=2)
 
     launch = {"spawned": False}
     if spawn:

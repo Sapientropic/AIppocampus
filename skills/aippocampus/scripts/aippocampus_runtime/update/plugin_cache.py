@@ -10,6 +10,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.source.io_kernel import load_json_dict
 from aippocampus_runtime.update import status_actions
 
 PLUGIN_NAME = "aippocampus"
@@ -58,18 +59,17 @@ def _tree_fingerprint(root: Path | None) -> str | None:
     return digest.hexdigest()
 
 
-def _load_json(path: Path) -> Mapping[str, Any] | None:
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
+def _load_manifest_object(path: Path) -> Mapping[str, Any] | None:
+    result = load_json_dict(path, missing_is_loss=True)
+    if result.loss.get("total_loss_count"):
         return None
-    return data if isinstance(data, Mapping) else None
+    return result.data
 
 
 def _mcp_server_config(root: Path | None) -> Mapping[str, Any] | None:
     if root is None:
         return None
-    data = _load_json(root / ".mcp.json")
+    data = _load_manifest_object(root / ".mcp.json")
     if data is None:
         return None
     server = (data.get("mcpServers") or {}).get(PLUGIN_NAME)
@@ -155,7 +155,7 @@ def _manifest_info(root: Path | None) -> dict[str, Any]:
             "tree_hash": None,
             "mcp_launch": _mcp_launch_info(root),
         }
-    data = _load_json(manifest)
+    data = _load_manifest_object(manifest)
     if data is None:
         return {
             "status": "missing_manifest",
@@ -192,7 +192,7 @@ def _resolve_plugin_root(path: Path | None, *, plugin_name: str = PLUGIN_NAME) -
     candidates = sorted(
         candidate.parent.parent
         for candidate in path.glob(f"*/{MANIFEST_RELATIVE.as_posix()}")
-        if (_load_json(candidate) or {}).get("name") == plugin_name
+        if (_load_manifest_object(candidate) or {}).get("name") == plugin_name
     )
     return candidates[-1] if candidates else path
 
@@ -220,7 +220,7 @@ def _cached_plugin_roots(
             continue
         for version_dir in sorted(item for item in plugin_parent.iterdir() if item.is_dir()):
             manifest = version_dir / MANIFEST_RELATIVE
-            if manifest.exists() and (_load_json(manifest) or {}).get("name") == plugin_name:
+            if manifest.exists() and (_load_manifest_object(manifest) or {}).get("name") == plugin_name:
                 roots.append(version_dir)
     return roots
 
@@ -452,7 +452,7 @@ def _path_is_under(child: Path, parent: Path) -> bool:
 
 
 def _portable_mcp_config(path: Path) -> bool:
-    data = _load_json(path)
+    data = _load_manifest_object(path)
     if data is None:
         return False
     server = ((data.get("mcpServers") or {}).get(PLUGIN_NAME) or {}) if isinstance(data, Mapping) else {}
@@ -475,7 +475,7 @@ def _ensure_installed_mcp_host_launch(
     codex_home_path: Path | None,
 ) -> dict[str, Any]:
     mcp_path = installed_root / ".mcp.json"
-    data = dict(_load_json(mcp_path) or {})
+    data = dict(_load_manifest_object(mcp_path) or {})
     servers = data.get("mcpServers")
     if not isinstance(servers, Mapping):
         servers = {}

@@ -7,7 +7,7 @@ from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
-from aippocampus_runtime.subconscious.candidate_router import iter_jsonl
+from aippocampus_runtime.source.io_kernel import load_jsonl_dict_rows
 
 MANUAL_SOURCE_REVIEW_KIND = "dream_manual_source_review"
 MANUAL_REVIEW_STATUSES = {
@@ -37,7 +37,7 @@ def load_manual_source_review_rows(path: Path | None) -> list[dict[str, Any]]:
         raise FileNotFoundError(f"manual source-review file not found: {path}")
     return [
         row
-        for row in iter_jsonl(path)
+        for row in load_jsonl_dict_rows(path).rows
         if row.get("kind") == MANUAL_SOURCE_REVIEW_KIND
     ]
 

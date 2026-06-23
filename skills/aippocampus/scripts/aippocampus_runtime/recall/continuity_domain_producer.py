@@ -10,7 +10,6 @@ author durable domain events while the user is typing.
 from __future__ import annotations
 
 import hashlib
-import json
 import re
 from collections import Counter, defaultdict
 from collections.abc import Mapping
@@ -36,6 +35,7 @@ from aippocampus_runtime.recall.query_policy import (
     unique_preserve,
 )
 from aippocampus_runtime.registry.api import load_registry, registry_paths
+from aippocampus_runtime.source.io_kernel import load_jsonl_dict_rows
 from aippocampus_runtime.source.search import iter_clean_messages
 from aippocampus_runtime.warm_ambient.query_pattern_routes import (
     publish_registry_query_pattern_routes,
@@ -486,21 +486,6 @@ def _registry_terms(entry: Mapping[str, Any]) -> list[str]:
     )
 
 
-def _iter_jsonl(path: Path) -> list[dict[str, Any]]:
-    if not path.exists():
-        return []
-    rows: list[dict[str, Any]] = []
-    with path.open("r", encoding="utf-8") as fh:
-        for line in fh:
-            try:
-                item = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if isinstance(item, dict):
-                rows.append(item)
-    return rows
-
-
 def _signal_term_values(
     row: Mapping[str, Any],
     *,
@@ -751,7 +736,7 @@ def propose_continuity_domain_events_from_registry(
     # not become evidence here. They are accepted only as label producers after
     # their refs resolve back to registered clean-source messages.
     for file_name in SIGNAL_CANDIDATE_FILES:
-        for row in _iter_jsonl(registry_root / file_name):
+        for row in load_jsonl_dict_rows(registry_root / file_name).rows:
             raw_refs = row.get("source_refs") or row.get("source_ref") or row.get("representative_sources")
             refs = _resolving_signal_refs(raw_refs, known_refs=known_refs)
             if not refs:

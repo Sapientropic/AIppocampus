@@ -63,6 +63,7 @@ from aippocampus_runtime.question.tracking_types import (
 )
 from aippocampus_runtime.recall.ambient_policy import default_ambient_policy_path
 from aippocampus_runtime.registry.api import registry_paths, unique_preserve
+from aippocampus_runtime.source.io_kernel import load_jsonl_dict_rows
 from aippocampus_runtime.subconscious.jobs_config import default_jobs_output_path
 
 SCHEMA_VERSION = 1
@@ -75,19 +76,10 @@ DEFAULT_STRONG_THRESHOLD = 0.80
 DEFAULT_BORDERLINE_THRESHOLD = 0.66
 
 
-def iter_jsonl(path: Path) -> Iterable[dict[str, Any]]:
+def load_tracking_rows(path: Path) -> list[dict[str, Any]]:
     if not path.exists():
-        return
-    with path.open("r", encoding="utf-8") as fh:
-        for line in fh:
-            if not line.strip():
-                continue
-            try:
-                item = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if isinstance(item, dict):
-                yield item
+        return []
+    return load_jsonl_dict_rows(path).rows
 
 def question_source_id(row: Mapping[str, Any], refs: Iterable[Mapping[str, Any]]) -> str:
     existing = str(row.get("fingerprint") or "").strip()
@@ -680,7 +672,7 @@ def existing_question_link_ids(rows: Iterable[Mapping[str, Any]]) -> set[str]:
 def load_tracking_inputs(
     path: Path, *, source_index: SourceRefIndex | None = None
 ) -> tuple[list[QuestionCandidate], list[FrontierMarker], dict[str, int], list[dict[str, Any]]]:
-    rows = list(iter_jsonl(path))
+    rows = load_tracking_rows(path)
     candidates: list[QuestionCandidate] = []
     frontiers: list[FrontierMarker] = []
     stale_candidates = 0
@@ -861,7 +853,7 @@ def run_question_tracking(
         auto_accept_borderline=auto_accept_borderline,
         feedback=feedback,
     )
-    existing_ids = existing_question_link_ids(rows if output == jobs_path else iter_jsonl(output))
+    existing_ids = existing_question_link_ids(rows if output == jobs_path else load_tracking_rows(output))
     fresh_links = [
         link for link in links if str(link.get("question_cluster_id") or "") not in existing_ids
     ]

@@ -5,14 +5,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from aippocampus_runtime.source.io_kernel import write_jsonl_dict_rows
 from aippocampus_runtime.subconscious import question_resolution as qr
 
-
-def write_jsonl(path: Path, rows: list[dict]) -> None:
-    path.write_text(
-        "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows),
-        encoding="utf-8",
-    )
 
 class QuestionResolutionTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -64,7 +59,7 @@ class QuestionResolutionTests(unittest.TestCase):
         clean_dir = self.root / "clean"
         clean_dir.mkdir()
         messages_path = clean_dir / "messages.jsonl"
-        write_jsonl(messages_path, messages)
+        write_jsonl_dict_rows(messages_path, messages)
         registry_path = self.root / "threads.json"
         registry_path.write_text(
             json.dumps(
@@ -86,7 +81,7 @@ class QuestionResolutionTests(unittest.TestCase):
 
     def test_extracts_explicit_user_followup_resolution_without_raw_text(self) -> None:
         jobs_path = self.root / "jobs.jsonl"
-        write_jsonl(jobs_path, [self.question_candidate()])
+        write_jsonl_dict_rows(jobs_path, [self.question_candidate()])
         registry_path = self.registry_for_messages(
             [
                 {
@@ -127,7 +122,7 @@ class QuestionResolutionTests(unittest.TestCase):
 
     def test_ignores_negative_assistant_and_unrelated_resolution_mentions(self) -> None:
         jobs_path = self.root / "jobs.jsonl"
-        write_jsonl(jobs_path, [self.question_candidate()])
+        write_jsonl_dict_rows(jobs_path, [self.question_candidate()])
         registry_path = self.registry_for_messages(
             [
                 {
@@ -180,7 +175,7 @@ class QuestionResolutionTests(unittest.TestCase):
 
     def test_appends_and_deduplicates_resolution_signal_rows(self) -> None:
         jobs_path = self.root / "jobs.jsonl"
-        write_jsonl(jobs_path, [self.question_candidate()])
+        write_jsonl_dict_rows(jobs_path, [self.question_candidate()])
         registry_path = self.registry_for_messages(
             [
                 {
@@ -207,7 +202,7 @@ class QuestionResolutionTests(unittest.TestCase):
         first = qr.run_question_resolution(jobs_path=jobs_path, registry_path=registry_path)
         second = qr.run_question_resolution(jobs_path=jobs_path, registry_path=registry_path)
 
-        rows = list(qr.iter_jsonl(jobs_path))
+        rows = qr.load_tracking_rows(jobs_path)
         signal_rows = [row for row in rows if row.get("finding_kind") == "question_resolution_signal"]
         self.assertEqual(first["wrote_count"], 1)
         self.assertEqual(second["wrote_count"], 0)

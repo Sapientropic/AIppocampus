@@ -45,6 +45,8 @@ from aippocampus_runtime.model.client import (
     cache_metrics_from_response,
     chat_json,
 )
+from aippocampus_runtime.source.io_kernel import parse_utc
+from aippocampus_runtime.source.io_kernel import safe_float as kernel_safe_float
 from aippocampus_runtime.source.texture_consumption import (
     select_texture_signals,
     texture_signal_summary,
@@ -91,26 +93,8 @@ def stable_digest(*parts: object, prefix: str, length: int = 18) -> str:
     return f"{prefix}_{hashlib.sha1(raw.encode('utf-8', errors='replace')).hexdigest()[:length]}"
 
 
-def safe_float(value: object, default: float = 0.0) -> float:
-    if not isinstance(value, (int, float, str)):
-        return default
-    try:
-        number = float(value)
-    except (TypeError, ValueError):
-        return default
-    if number != number or number in {float("inf"), float("-inf")}:
-        return default
-    return max(0.0, min(1.0, number))
-
-
-def parse_utc(value: str | None) -> datetime | None:
-    if not value:
-        return None
-    try:
-        text = value[:-1] + "+00:00" if value.endswith("Z") else value
-        return datetime.fromisoformat(text).astimezone(timezone.utc)
-    except ValueError:
-        return None
+def confidence_float(value: object, default: float = 0.0) -> float:
+    return max(0.0, min(1.0, kernel_safe_float(value, default)))
 
 
 def format_utc(value: datetime) -> str:
@@ -263,7 +247,7 @@ def finding_from_candidate(
     if not title or not summary:
         return None, {"reason": "missing_title_or_summary", "candidate_kind": candidate_kind}
 
-    confidence = safe_float(candidate.get("confidence"), 0.0)
+    confidence = confidence_float(candidate.get("confidence"), 0.0)
     activation_cues = string_list(
         candidate.get("activation_cues") or candidate.get("route_cues"),
         limit=8,

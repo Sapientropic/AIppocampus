@@ -6,10 +6,11 @@ from __future__ import annotations
 import json
 import sqlite3
 import tempfile
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.core import dict_or_empty
 from aippocampus_runtime.ops.issue_route_quality import (
     fixture_same_thread_issue_comment_route_quality,
 )
@@ -22,12 +23,7 @@ from aippocampus_runtime.ops.recall_navigation_comparison import (
 from aippocampus_runtime.recall import ambient_cards
 from aippocampus_runtime.recall.prompt_context_render import context_for_hook
 from aippocampus_runtime.recall.prompt_recall_decision import assess_prompt
-
-
-def _write_jsonl(path: Path, rows: Sequence[Mapping[str, Any]]) -> None:
-    with path.open("w", encoding="utf-8", newline="\n") as f:
-        for row in rows:
-            f.write(json.dumps(dict(row), ensure_ascii=False) + "\n")
+from aippocampus_runtime.source.io_kernel import write_jsonl_dict_rows
 
 
 def _message(
@@ -143,8 +139,8 @@ def _write_fixture(clean_source_dir: Path) -> None:
         _turn("turn_ru", 4, ["msg_ru_final"]),
         _turn("turn_ar_little_hippocampus", 5, ["msg_ar_little_hippocampus_final"]),
     ]
-    _write_jsonl(clean_source_dir / "messages.jsonl", messages)
-    _write_jsonl(clean_source_dir / "turns.jsonl", turns)
+    write_jsonl_dict_rows(clean_source_dir / "messages.jsonl", messages)
+    write_jsonl_dict_rows(clean_source_dir / "turns.jsonl", turns)
 
 
 def _append_fixture_mutation(clean_source_dir: Path) -> None:
@@ -242,12 +238,8 @@ def _semantic_timeout_gate(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
     }
 
 
-def _as_dict(value: Any) -> dict[str, Any]:
-    return value if isinstance(value, dict) else {}
-
-
 def _foreground_card_count(result: Mapping[str, Any], *, provenance: str | None = None) -> int:
-    ambient = _as_dict(result.get("ambient_recall"))
+    ambient = dict_or_empty(result.get("ambient_recall"))
     count = 0
     for card in ambient.get("cards") or []:
         if not isinstance(card, dict):
@@ -259,7 +251,7 @@ def _foreground_card_count(result: Mapping[str, Any], *, provenance: str | None 
 
 
 def _cards_are_navigation_only(result: Mapping[str, Any]) -> bool:
-    ambient = _as_dict(result.get("ambient_recall"))
+    ambient = dict_or_empty(result.get("ambient_recall"))
     for card in ambient.get("cards") or []:
         if not isinstance(card, dict):
             continue
@@ -273,8 +265,8 @@ def _foreground_source_reopen_after_packet(
     *,
     registry_path: Path,
 ) -> dict[str, Any]:
-    ambient = _as_dict(result.get("ambient_recall"))
-    packet = _as_dict(ambient.get("fresh_thread_packet"))
+    ambient = dict_or_empty(result.get("ambient_recall"))
+    packet = dict_or_empty(ambient.get("fresh_thread_packet"))
     candidate_refs = [ref for ref in packet.get("candidate_refs") or [] if isinstance(ref, dict)]
     selected_ref = next((ref for ref in candidate_refs if ref.get("thread_key")), None)
     # This follow-through intentionally uses the packet ref, not a text query;
@@ -288,7 +280,7 @@ def _foreground_source_reopen_after_packet(
     expected_source_found = False
     rows: list[tuple[Any, ...]] = []
     if matched_threads:
-        sqlite_path = Path(str(_as_dict(matched_threads[0].get("paths")).get("sqlite") or ""))
+        sqlite_path = Path(str(dict_or_empty(matched_threads[0].get("paths")).get("sqlite") or ""))
         if sqlite_path.exists():
             con = sqlite3.connect(sqlite_path)
             try:
@@ -355,7 +347,9 @@ def _foreground_source_reopen_after_packet(
         "bounded_evidence_context_emitted": bool(bounded_context.get("source_reopen_success")),
         "bounded_evidence_card_count": int(bounded_context.get("card_count") or 0),
         "bounded_evidence_separate_from_packet": bool(
-            _as_dict(bounded_context.get("source_boundary")).get("separate_from_fresh_thread_packet")
+            dict_or_empty(bounded_context.get("source_boundary")).get(
+                "separate_from_fresh_thread_packet"
+            )
         ),
         "fresh_thread_packet_contains_raw_source_text": (
             "audio and lesson-loop closure" in packet_serialized
@@ -411,12 +405,12 @@ def fixture_foreground_lift_measurement(root: Path) -> dict[str, Any]:
         search_budget=0,
     )
 
-    first_hot_path = _as_dict(first.get("hot_path_funnel"))
-    first_route = _as_dict(first.get("route_delivery_diagnostic"))
-    first_ambient = _as_dict(first.get("ambient_recall"))
-    first_cache = _as_dict(first_ambient.get("cache_status"))
-    second_ambient = _as_dict(second.get("ambient_recall"))
-    second_cache = _as_dict(second_ambient.get("cache_status"))
+    first_hot_path = dict_or_empty(first.get("hot_path_funnel"))
+    first_route = dict_or_empty(first.get("route_delivery_diagnostic"))
+    first_ambient = dict_or_empty(first.get("ambient_recall"))
+    first_cache = dict_or_empty(first_ambient.get("cache_status"))
+    second_ambient = dict_or_empty(second.get("ambient_recall"))
+    second_cache = dict_or_empty(second_ambient.get("cache_status"))
     first_context = context_for_hook(first)
     second_context = context_for_hook(second)
     first_route_actionable = bool(
@@ -463,7 +457,7 @@ def fixture_foreground_lift_measurement(root: Path) -> dict[str, Any]:
             "semantic_reuse_source": str(first_route.get("semantic_reuse_source") or ""),
             "hot_path_candidate_count": int(first_hot_path.get("candidate_count") or 0),
             "hot_path_stage": str(
-                ((_as_dict((first_hot_path.get("stages") or [{}])[0])).get("stage"))
+                (dict_or_empty((first_hot_path.get("stages") or [{}])[0]).get("stage"))
                 or ""
             ),
             "evidence_count": len(first.get("evidence") or []),

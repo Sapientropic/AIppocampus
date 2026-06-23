@@ -284,7 +284,7 @@ class QuestionTrackingTests(unittest.TestCase):
             pending_confirmations_output_path=request_path,
             auto_accept_borderline=False,
         )
-        requests = list(tracking.iter_jsonl(request_path))
+        requests = tracking.load_tracking_rows(request_path)
         self.assertEqual(request_result["pending_confirmation_wrote_count"], 1)
         self.assertEqual(len(requests), 1)
         self.assertEqual(requests[0]["kind"], "question_pair_confirmation_request")
@@ -680,7 +680,7 @@ class QuestionTrackingTests(unittest.TestCase):
 
         first = tracking.run_question_tracking(jobs_path=self.jobs_path)
         second = tracking.run_question_tracking(jobs_path=self.jobs_path)
-        rows = list(tracking.iter_jsonl(self.jobs_path))
+        rows = tracking.load_tracking_rows(self.jobs_path)
         link_rows = [row for row in rows if row.get("finding_kind") == "question_link"]
 
         self.assertEqual(first["wrote_count"], 1)

@@ -9,7 +9,6 @@ be surfaced.
 from __future__ import annotations
 
 import contextlib
-import json
 import os
 import time
 from collections.abc import Iterator
@@ -18,6 +17,7 @@ from typing import Any, Mapping
 
 from aippocampus_runtime.core import now_utc
 from aippocampus_runtime.io_integrity import atomic_write_json
+from aippocampus_runtime.source.io_kernel import load_json_dict
 
 SCHEMA_VERSION = 1
 DEFAULT_MAX_CACHE_ENTRIES = 256
@@ -36,16 +36,6 @@ _VALID_DECISIONS = {"skip", "background_only", "scent", "evidence"}
 _DECISION_RANK = {"skip": 0, "background_only": 1, "scent": 2, "evidence": 3}
 _LOCK_TIMEOUT_SECONDS = 5.0
 _LOCK_STALE_AFTER_SECONDS = 60.0
-
-
-def _load_json(path: Path) -> dict[str, Any]:
-    if not path.exists():
-        return {}
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return {}
-    return data if isinstance(data, dict) else {}
 
 
 def _write_json(path: Path, data: dict[str, Any]) -> None:
@@ -243,7 +233,7 @@ def read_cache(
     diagnostics: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
     with _cache_file_lock(path):
-        data = _load_json(path)
+        data = load_json_dict(path).data
         entries = _cache_entries(data)
         entry = entries.get(key)
         _bump_cache_telemetry(data, "lookups")
@@ -290,7 +280,7 @@ def write_cache(
     max_entries: int = DEFAULT_MAX_CACHE_ENTRIES,
 ) -> None:
     with _cache_file_lock(path):
-        data = _load_json(path)
+        data = load_json_dict(path).data
         entries = _cache_entries(data)
         entries[key] = _cache_entry_for_result(result, previous=entries.get(key))
         _bump_cache_telemetry(data, "writes")
@@ -323,7 +313,7 @@ def write_cache(
 def semantic_cache_report(
     path: Path, *, ttl_seconds: int = DEFAULT_CACHE_TTL_SECONDS
 ) -> dict[str, Any]:
-    data = _load_json(path)
+    data = load_json_dict(path).data
     entries = _cache_entries(data)
     active = 0
     expired = 0

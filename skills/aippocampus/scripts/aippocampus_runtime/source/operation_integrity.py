@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from aippocampus_runtime.source.jsonl_reader import load_jsonl_dict_rows
+from aippocampus_runtime.source.io_kernel import load_jsonl_dict_rows
 from aippocampus_runtime.source.operation_integrity_conflicts import (
     SUPPLEMENTAL_SUPERSESSION_FIELDS,
     conflict_gap_events,
@@ -116,10 +116,6 @@ PLACEHOLDER_VALUES = {
     "placeholder",
 }
 MAX_PLAUSIBLE_EXIT_STATUS = 2_147_483_647
-
-
-def _iter_jsonl(path: Path) -> list[dict[str, Any]]:
-    return load_jsonl_dict_rows(path).rows
 
 
 def _read_manifest(path: Path) -> dict[str, Any]:

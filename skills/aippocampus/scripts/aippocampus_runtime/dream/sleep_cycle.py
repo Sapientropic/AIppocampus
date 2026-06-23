@@ -44,6 +44,7 @@ from aippocampus_runtime.model.routing import (
     route_cache_contract,
     route_service_name,
 )
+from aippocampus_runtime.source.io_kernel import load_jsonl_dict_rows
 
 SLEEP_CYCLE_KIND = "aippocampus_dream_sleep_cycle"
 SUMMARY_KIND = "aippocampus_dream_sleep_cycle_summary"
@@ -64,21 +65,10 @@ REGISTRY_SEED_FILES = (
 )
 
 
-def iter_jsonl(path: Path | None) -> list[dict[str, Any]]:
+def load_sleep_cycle_rows(path: Path | None) -> list[dict[str, Any]]:
     if not path or not path.exists():
         return []
-    rows: list[dict[str, Any]] = []
-    with path.open("r", encoding="utf-8") as fh:
-        for line in fh:
-            if not line.strip():
-                continue
-            try:
-                item = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if isinstance(item, dict):
-                rows.append(item)
-    return rows
+    return load_jsonl_dict_rows(path).rows
 
 
 def append_jsonl(path: Path | None, rows: Iterable[Mapping[str, Any]]) -> int:
@@ -127,10 +117,6 @@ def write_json(path: Path | None, payload: Mapping[str, Any]) -> None:
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
-def parse_utc(value: object) -> Any:
-    return dream_queue.parse_utc(str(value or ""))
-
-
 def format_utc(value: Any) -> str:
     return dream_queue.format_utc(value)
 
@@ -170,10 +156,10 @@ def select_runnable_queue_items(
             continue
         if item.get("foreground_eligible") is not False:
             continue
-        expires_at = parse_utc(item.get("expires_at"))
+        expires_at = dream_queue.parse_utc(item.get("expires_at"))
         if expires_at and expires_at <= now_dt:
             continue
-        review_after = parse_utc(item.get("review_after"))
+        review_after = dream_queue.parse_utc(item.get("review_after"))
         if not run_ready and review_after and review_after > now_dt:
             continue
         dedup_key = str(item.get("dedup_key") or "")
@@ -580,7 +566,7 @@ def row_mentions_project(row: Mapping[str, Any], project: str | None) -> bool:
 def load_registry_seed_rows(root: Path, *, project: str | None = None) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for name in REGISTRY_SEED_FILES:
-        for row in iter_jsonl(root / name):
+        for row in load_sleep_cycle_rows(root / name):
             if row_mentions_project(row, project):
                 rows.append(row)
     return rows
@@ -588,7 +574,7 @@ def load_registry_seed_rows(root: Path, *, project: str | None = None) -> list[d
 
 def packs_from_args(args: argparse.Namespace) -> list[dict[str, Any]]:
     if args.packs_jsonl:
-        return iter_jsonl(Path(args.packs_jsonl))
+        return load_sleep_cycle_rows(Path(args.packs_jsonl))
     if not args.registry_dir:
         raise ValueError("--packs-jsonl or --registry-dir is required")
     root = Path(args.registry_dir)
@@ -717,8 +703,12 @@ def main(argv: list[str] | None = None) -> int:
     try:
         root = Path(args.registry_dir).resolve() if args.registry_dir else None
         packs = packs_from_args(args)
-        previous = iter_jsonl(args.previous_queue_jsonl or default_path(root, "dream_queue.jsonl", None))
-        existing = iter_jsonl(args.findings_jsonl or default_path(root, "dream_findings.jsonl", None))
+        previous = load_sleep_cycle_rows(
+            args.previous_queue_jsonl or default_path(root, "dream_queue.jsonl", None)
+        )
+        existing = load_sleep_cycle_rows(
+            args.findings_jsonl or default_path(root, "dream_findings.jsonl", None)
+        )
         if args.write and args.write_staging:
             raise ValueError("--write and --write-staging are mutually exclusive")
         no_write = not bool(args.write or args.write_staging)

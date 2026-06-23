@@ -14,9 +14,10 @@ from collections import Counter
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
-from aippocampus_runtime.core import compact_text, now_utc, stable_text_fingerprint
+from aippocampus_runtime.core import compact_text, now_utc, stable_json_id
 from aippocampus_runtime.reflection import reconsolidation as correction_reconsolidation
 from aippocampus_runtime.registry.api import unique_preserve
+from aippocampus_runtime.source.io_kernel import load_jsonl_dict_rows
 
 SCHEMA_VERSION = 1
 PROMPT_VERSION = "aippocampus-retrieval-lifecycle-v1"
@@ -46,31 +47,10 @@ CONFLICT_OUTCOME_CATEGORIES = {
 USED_OUTCOME_CATEGORIES = {"opened", "pinned", "still_current"}
 
 
-def stable_id(prefix: str, *parts: Any, length: int = 20) -> str:
-    raw = "\n".join(json.dumps(part, ensure_ascii=False, sort_keys=True) for part in parts)
-    return stable_text_fingerprint(
-        raw,
-        namespace="retrieval-reconsolidation-id",
-        prefix=prefix,
-        length=length,
-    )
-
-
-def iter_jsonl(path: Path) -> list[dict[str, Any]]:
+def load_retrieval_rows(path: Path) -> list[dict[str, Any]]:
     if not path.exists():
         return []
-    rows: list[dict[str, Any]] = []
-    with path.open("r", encoding="utf-8") as fh:
-        for line in fh:
-            if not line.strip():
-                continue
-            try:
-                item = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if isinstance(item, dict):
-                rows.append(item)
-    return rows
+    return load_jsonl_dict_rows(path).rows
 
 
 def append_candidate_events(path: Path, events: Iterable[Mapping[str, Any]]) -> int:
@@ -166,8 +146,9 @@ def build_reconsolidation_candidate(
         "kind": RECONSOLIDATION_CANDIDATE_KIND,
         "created_at": now_utc(),
         "prompt_version": PROMPT_VERSION,
-        "candidate_id": stable_id(
+        "candidate_id": stable_json_id(
             "retr_recon",
+            "retrieval-reconsolidation-id",
             retrieval_id,
             outcome_id,
             category,
@@ -303,7 +284,7 @@ def run_reconsolidation_review(
     output_path: Path | None = None,
     no_write: bool = False,
 ) -> dict[str, Any]:
-    events = iter_jsonl(events_path)
+    events = load_retrieval_rows(events_path)
     candidates = build_reconsolidation_candidates(events)
     wrote_count = 0
     if output_path and not no_write and candidates:

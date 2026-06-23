@@ -9,6 +9,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
+from aippocampus_runtime.source.io_kernel import safe_float
+
 ShellDecision = Literal[
     "deterministic_only",
     "worker",
@@ -111,7 +113,7 @@ def staging_signals(root: Path, project_label: str) -> dict[str, int]:
                 backlog += 1
             if (
                 row.get("source") == "deepseek_subconscious"
-                and _safe_float(row.get("confidence")) < LOW_CONFIDENCE_PRIOR_THRESHOLD
+                and _nonnegative_float(row.get("confidence")) < LOW_CONFIDENCE_PRIOR_THRESHOLD
             ):
                 low_confidence_prior += 1
     return {
@@ -199,11 +201,8 @@ def _private_report_reason(value: Any) -> str:
     return reason if reason in PRIVATE_REPORT_REASONS else ("runtime_reason_redacted" if reason else "")
 
 
-def _safe_float(value: Any) -> float:
-    try:
-        return max(0.0, float(value or 0.0))
-    except (TypeError, ValueError):
-        return 0.0
+def _nonnegative_float(value: Any) -> float:
+    return max(0.0, safe_float(value, 0.0))
 
 
 def select_shell(

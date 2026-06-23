@@ -28,7 +28,7 @@ from aippocampus_runtime.question.tracking import (
     QUESTION_CANDIDATE_KIND,
     QUESTION_LINK_KIND,
     candidate_from_row,
-    iter_jsonl,
+    load_tracking_rows,
 )
 from aippocampus_runtime.question.tracking_types import (
     normalize_tokens,
@@ -468,12 +468,12 @@ def run_question_resolution(
     no_write: bool = False,
 ) -> dict[str, Any]:
     output = output_path or jobs_path
-    rows = list(iter_jsonl(jobs_path))
+    rows = load_tracking_rows(jobs_path)
     source_index = build_source_ref_index(registry_path)
     questions = tracked_questions_from_rows(rows, source_index=source_index)
     messages = load_registry_clean_messages(registry_path)
     signals = build_resolution_signals(questions, messages)
-    existing_rows = rows if output == jobs_path else list(iter_jsonl(output))
+    existing_rows = rows if output == jobs_path else load_tracking_rows(output)
     existing = existing_resolution_fingerprints(existing_rows)
     fresh_signals = [
         signal for signal in signals if str(signal.get("fingerprint") or "") not in existing

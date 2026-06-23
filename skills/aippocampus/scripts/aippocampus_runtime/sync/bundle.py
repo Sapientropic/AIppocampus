@@ -16,6 +16,7 @@ from aippocampus_runtime.cli.human_io import exit_code_for_payload
 from aippocampus_runtime.contracts import canonical_foreground_action_fields, write_boundary
 from aippocampus_runtime.core import aippocampus_registry_dir, file_sha256, now_utc, safe_path_name
 from aippocampus_runtime.io_integrity import stale_tmp_recovery_card
+from aippocampus_runtime.source.io_kernel import load_json_dict
 from aippocampus_runtime.sync.bundle_recovery import (
     managed_sync_dir_collision_payload,
     missing_manifest_recovery_payload,
@@ -75,15 +76,6 @@ THREAD_FILES = (
 
 class SyncManifestError(ValueError):
     """Raised when an existing sync manifest is present but cannot be trusted."""
-
-
-def load_json(path: Path) -> dict:
-    if not path.exists():
-        return {}
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        return {}
 
 
 def load_sync_manifest(path: Path, *, missing_ok: bool = False) -> dict[str, Any]:
@@ -218,7 +210,7 @@ def iter_clean_source_sync_files(registry_dir: Path) -> Iterable[tuple[Path, Pat
 
 
 def iter_raw_rollout_files(registry_dir: Path) -> Iterable[tuple[Path, Path]]:
-    registry = load_json(registry_dir / "threads.json")
+    registry = load_json_dict(registry_dir / "threads.json").data
     for entry in registry.get("threads") or []:
         rollout = (entry.get("paths") or {}).get("rollout")
         if not rollout:
@@ -255,7 +247,7 @@ def clean_source_path_fields(
 
 
 def portable_registry_for_sync(registry_dir: Path, *, include_raw: bool) -> dict[str, Any]:
-    registry = load_json(registry_dir / "threads.json")
+    registry = load_json_dict(registry_dir / "threads.json").data
     portable = dict(registry)
     threads = []
     for entry in registry.get("threads") or []:
@@ -571,7 +563,7 @@ def verify_clean_source_delta_file(sync_root: Path, file_manifest: dict[str, Any
 
 def repair_registry_locators(target_registry: Path) -> dict[str, Any]:
     registry_path = target_registry / "threads.json"
-    registry = load_json(registry_path)
+    registry = load_json_dict(registry_path).data
     if not registry:
         return {
             "ok": False,
@@ -714,7 +706,7 @@ def rollback_sync_pull(
     target_registry = Path(target_registry_dir).resolve()
     rollback_root = _sync_pull_rollback_root(target_registry, rollback_id)
     manifest_path = rollback_root / "manifest.json"
-    manifest = load_json(manifest_path)
+    manifest = load_json_dict(manifest_path).data
     if not manifest:
         return {
             "ok": False,
