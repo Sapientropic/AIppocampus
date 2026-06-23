@@ -300,7 +300,7 @@ class DebtReportTests(unittest.TestCase):
         self.assertEqual(projection_owner["status"], "pass")
 
         changed = debt_report.changed_surface_debt(
-            ["skills/aippocampus/scripts/aippocampus_runtime/ops/issue_route_quality.py"]
+            ["skills/aippocampus/scripts/aippocampus_runtime/ops/recall_navigation_attention.py"]
         )
         self.assertGreater(changed["acceptance_bearing_warning_count"], 0)
         self.assertTrue(

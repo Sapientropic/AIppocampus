@@ -15,16 +15,9 @@ from io import StringIO
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.core import dict_or_empty, list_or_empty
 from aippocampus_runtime.recall import agent_continuity
 from aippocampus_runtime.update import cli as update_cli
-
-
-def _as_dict(value: Any) -> dict[str, Any]:
-    return value if isinstance(value, dict) else {}
-
-
-def _as_list(value: Any) -> list[Any]:
-    return value if isinstance(value, list) else []
 
 
 def _as_int(value: Any) -> int:
@@ -100,7 +93,7 @@ def _agent_deepen_argv(
     max_deepen_matches: int,
     last_recall_path: Path,
 ) -> list[str] | None:
-    arguments = _as_dict(action.get("arguments"))
+    arguments = dict_or_empty(action.get("arguments"))
     request_index = _as_int(arguments.get("request_index") or action.get("request_index") or 1) or 1
     argv = [
         "deepen",
@@ -129,7 +122,7 @@ def _agent_deepen_argv(
 
 
 def _can_drive_agent_deepen(action: dict[str, Any]) -> bool:
-    arguments = _as_dict(action.get("arguments"))
+    arguments = dict_or_empty(action.get("arguments"))
     return bool(
         arguments.get("recall_selector")
         or action.get("recall_selector")
@@ -139,18 +132,18 @@ def _can_drive_agent_deepen(action: dict[str, Any]) -> bool:
 
 
 def _selected_agent_action(recall_payload: dict[str, Any]) -> dict[str, Any]:
-    foreground = _as_dict(recall_payload.get("foreground_action"))
-    secondary = _as_dict(foreground.get("secondary_action"))
+    foreground = dict_or_empty(recall_payload.get("foreground_action"))
+    secondary = dict_or_empty(foreground.get("secondary_action"))
     candidates: list[dict[str, Any]] = []
     if secondary:
         candidates.append(secondary)
-    for route in _as_list(recall_payload.get("routes")):
+    for route in list_or_empty(recall_payload.get("routes")):
         if not isinstance(route, dict):
             continue
-        action = _as_dict(route.get("action"))
+        action = dict_or_empty(route.get("action"))
         if action:
             candidates.append(action)
-    if _as_dict(foreground.get("arguments")):
+    if dict_or_empty(foreground.get("arguments")):
         candidates.append(foreground)
     for action in candidates:
         if _can_drive_agent_deepen(action):
@@ -173,9 +166,9 @@ def _ambient_hook_readiness() -> dict[str, Any]:
             "error": {"code": "ambient_readiness_unavailable"},
             "counts_toward_task_usefulness": False,
         }
-    prompt = _as_dict(hooks.get("prompt_hook_status"))
-    warm = _as_dict(hooks.get("warm_ambient"))
-    warm_activity = _as_dict(warm.get("job_activity"))
+    prompt = dict_or_empty(hooks.get("prompt_hook_status"))
+    warm = dict_or_empty(hooks.get("warm_ambient"))
+    warm_activity = dict_or_empty(warm.get("job_activity"))
     red_lines = _as_int(prompt.get("foreground_latency_red_line_violation_count"))
     near_timeout = _as_int(prompt.get("near_timeout_event_count"))
     prompt_latency_status = str(prompt.get("prompt_hook_latency_risk_status") or "")
@@ -250,9 +243,9 @@ def build_live_agent_usefulness_gate(
         if deepen_argv is not None:
             deepen_code, deepen_payload, deepen_parse_error = _agent_json(deepen_argv)
 
-    routes = [route for route in _as_list(recall_payload.get("routes")) if isinstance(route, dict)]
+    routes = [route for route in list_or_empty(recall_payload.get("routes")) if isinstance(route, dict)]
     route_count = _as_int(recall_payload.get("route_count") or len(routes))
-    foreground = _as_dict(recall_payload.get("foreground_action"))
+    foreground = dict_or_empty(recall_payload.get("foreground_action"))
     foreground_action_id = str(foreground.get("id") or foreground.get("action_id") or "")
     route_choice_posture = str(
         foreground.get("route_choice_posture")
@@ -265,7 +258,7 @@ def build_live_agent_usefulness_gate(
         or route_choice_posture == "labels_low_specificity"
         or action_confidence == "low_confidence_navigation"
     )
-    selected_arguments = _as_dict(selected_action.get("arguments"))
+    selected_arguments = dict_or_empty(selected_action.get("arguments"))
     selected_selector_kind = (
         "recall_selector"
         if selected_arguments.get("recall_selector")
@@ -273,7 +266,7 @@ def build_live_agent_usefulness_gate(
         if selected_arguments.get("last_recall")
         else ""
     )
-    deepen_summary = _as_dict(deepen_payload.get("source_window_summary"))
+    deepen_summary = dict_or_empty(deepen_payload.get("source_window_summary"))
     source_opened = bool(
         deepen_payload.get("status") == "ok"
         and (
@@ -283,10 +276,10 @@ def build_live_agent_usefulness_gate(
         )
     )
     recall_error = recall_parse_error or (
-        _as_dict(recall_payload.get("error")) if recall_code and recall_payload.get("error") else None
+        dict_or_empty(recall_payload.get("error")) if recall_code and recall_payload.get("error") else None
     )
     deepen_error = deepen_parse_error or (
-        _as_dict(deepen_payload.get("error")) if deepen_code and deepen_payload.get("error") else None
+        dict_or_empty(deepen_payload.get("error")) if deepen_code and deepen_payload.get("error") else None
     )
     route_existence = _gate_item(
         "pass" if route_count > 0 else "fail",
