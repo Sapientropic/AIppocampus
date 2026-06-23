@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 from aippocampus_runtime.recall import retrieval as retrieval_impl
 from aippocampus_runtime.registry import search as registry_search
+from aippocampus_runtime.source import registry_search as source_registry_search
 
 
 class RegistrySearchBudgetTests(unittest.TestCase):
@@ -160,6 +161,74 @@ class RegistrySearchBudgetTests(unittest.TestCase):
         self.assertEqual(result["hits"][0]["message_id"], "msg_real")
         self.assertTrue(result["hits"][1]["search_noise"])
         self.assertEqual(result["hits"][1]["noise_reason"], "process_notification")
+
+
+class RegistrySourceSearchUsefulnessTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        self.clean = self.root / "clean"
+        self.clean.mkdir()
+        self.messages = self.clean / "messages.jsonl"
+        self.messages.write_text("", encoding="utf-8")
+        (self.root / "threads.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "threads": [
+                        {
+                            "thread_key": "session:test",
+                            "title": "continuity route",
+                            "paths": {"clean_source_messages_jsonl": str(self.messages)},
+                        }
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+    def tearDown(self) -> None:
+        self.tmp.cleanup()
+
+    def test_useful_target_hit_requires_top_hit_query_anchor(self) -> None:
+        def fake_deep_search_entry_result(
+            entry: dict,
+            terms: list[str],
+            *,
+            max_hits: int,
+            search_budget: object = None,
+        ) -> dict:
+            del entry, terms, max_hits, search_budget
+            return {
+                "hits": [
+                    {
+                        "message_id": "msg_nearby",
+                        "line": 12,
+                        "role": "assistant",
+                        "phase": "final_answer",
+                        "is_final": True,
+                        "score": 10.0,
+                        "snippet": "这是一条附近讨论，但没有用户正在找的罕见锚点。",
+                    }
+                ]
+            }
+
+        with patch.object(
+            registry_search,
+            "deep_search_entry_result",
+            side_effect=fake_deep_search_entry_result,
+        ):
+            result = source_registry_search.search_registry_sources(
+                ["机械飞升 基因飞升"],
+                registry_dir=self.root,
+                cwd=self.root,
+            )
+
+        self.assertFalse(result["useful_target_hit"])
+        self.assertEqual(result["status"], "matches_need_broadened_source_search")
+        self.assertEqual(result["first_match_usefulness"]["status"], "query_anchor_missing")
+        self.assertEqual(result["source_boundary"]["authority"], "direction_only")
 
 if __name__ == "__main__":
     unittest.main()

@@ -56,10 +56,6 @@ from aippocampus_runtime.source.search_terms import search_query_terms
 DEFAULT_PUBLIC_SNIPPET_CHARS = 260
 
 
-def _without_empty(value: Mapping[str, Any]) -> dict[str, Any]:
-    return {key: item for key, item in value.items() if item not in (None, "", {})}
-
-
 def as_float(value: Any, default: float = 0.0) -> float:
     try:
         return float(value)
@@ -82,6 +78,21 @@ def _query_anchor_rank(match: Mapping[str, Any]) -> tuple[int, int, float]:
         as_int(profile.get("matched_distinctive_anchor_count")),
         as_float(profile.get("distinctive_anchor_coverage")),
     )
+
+
+def _match_is_useful_registry_target(match: Mapping[str, Any]) -> bool:
+    if match_is_demoted_artifact(match):
+        return False
+    profile_value = match.get("query_match_profile")
+    profile: Mapping[str, Any] = profile_value if isinstance(profile_value, Mapping) else {}
+    anchor_count = as_int(profile.get("distinctive_anchor_count"))
+    if anchor_count == 0:
+        return True
+    if profile.get("exact_phrase_match"):
+        return True
+    if profile.get("relationship_origin_override"):
+        return True
+    return as_int(profile.get("matched_distinctive_anchor_count")) > 0
 
 
 def add_registry_search_arguments(parser: Any) -> None:
@@ -251,7 +262,14 @@ def search_registry_sources(
     record_last_search: bool = False,
     cwd: str | Path | None = None,
 ) -> dict[str, Any]:
-    """Search registered clean-source/index entries without exposing raw paths by default."""
+    """Search registered clean-source/index entries without exposing raw paths by default.
+
+    aippocampus-stage-map: load registry/searchable entries -> evaluate query
+    coverage, artifact demotion, and relationship-origin overrides -> rank and
+    collapse source routes -> render compact foreground-safe output with detail
+    diagnostics behind opt-in flags. Keep proof/follow-through evidence out of
+    the default card; this function only selects source-open routes.
+    """
 
     from aippocampus_runtime.registry.search import (
         REGISTRY_SEARCH_DEEP_BUDGET,
@@ -414,7 +432,19 @@ def search_registry_sources(
             query_text=query_text,
             matches=matches,
         )
-    useful_target_hit = bool(matches) and not match_is_demoted_artifact(matches[0])
+    first_match = matches[0] if matches else None
+    raw_first_match_profile = (
+        first_match.get("query_match_profile") if isinstance(first_match, Mapping) else None
+    )
+    first_match_profile: Mapping[str, Any] = (
+        raw_first_match_profile if isinstance(raw_first_match_profile, Mapping) else {}
+    )
+    first_match_useful = (
+        _match_is_useful_registry_target(first_match)
+        if isinstance(first_match, Mapping)
+        else False
+    )
+    useful_target_hit = bool(first_match and first_match_useful)
     discussion_pointer = discussion_atlas_pointer_for_query(
         query_text,
         cwd=registry_root or Path.cwd(),
@@ -430,7 +460,7 @@ def search_registry_sources(
     no_phrase_like_matches = bool(query_gate.get("phrase_like_query")) and not matches and bool(suppressed_matches)
     diagnostic_output = include_paths or search_budget == "deep"
     output_matches = matches if diagnostic_output else [compact_registry_match(match) for match in matches]
-    payload: dict[str, Any] = _without_empty({
+    raw_payload: dict[str, Any] = {
         "kind": "aippocampus_registry_source_search",
         "ok": useful_target_hit,
         "status": (
@@ -457,12 +487,19 @@ def search_registry_sources(
         "first_match_usefulness": (
             {
                 "status": "demoted_artifact"
-                if match_is_demoted_artifact(matches[0])
+                if first_match is not None and match_is_demoted_artifact(first_match)
+                else "query_anchor_missing"
+                if not first_match_useful
                 else "topic_bearing_candidate",
-                "artifact_role": matches[0].get("artifact_role"),
-                "first_hit_demoted": match_is_demoted_artifact(matches[0]),
+                "artifact_role": first_match.get("artifact_role") if first_match else None,
+                "first_hit_demoted": bool(
+                    first_match is not None and match_is_demoted_artifact(first_match)
+                ),
+                "matched_distinctive_anchor_count": first_match_profile.get(
+                    "matched_distinctive_anchor_count"
+                ),
             }
-            if matches
+            if first_match
             else None
         ),
         "duplicate_cluster_count": duplicate_metrics["duplicate_cluster_count"],
@@ -501,7 +538,7 @@ def search_registry_sources(
             else "foreground_safe_registry_source_routes"
         ),
         "source_boundary": {
-            "authority": "bounded_evidence" if matches else "direction_only",
+            "authority": "bounded_evidence" if useful_target_hit else "direction_only",
             "registry_wide_search": True,
             "source_backed_claim_allowed": useful_target_hit,
             "source_reopen_required_before_claim": True,
@@ -517,7 +554,10 @@ def search_registry_sources(
             "full_session_metadata_emitted": False,
             "last_search_cache_contains_paths": False,
         },
-    })
+    }
+    payload: dict[str, Any] = {
+        key: item for key, item in raw_payload.items() if item not in (None, "", {})
+    }
     if actions:
         payload.update(
             canonical_foreground_action_fields(
