@@ -210,6 +210,7 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/source/provenance_codebook_economics.py",
     "skills/aippocampus/scripts/aippocampus_runtime/source/registry_paths.py",
     "skills/aippocampus/scripts/aippocampus_runtime/source/registry_search.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/source/registry_search_pipeline.py",
     "skills/aippocampus/scripts/aippocampus_runtime/source/last_recall_search.py",
     "skills/aippocampus/scripts/aippocampus_runtime/source/search.py",
     "skills/aippocampus/scripts/aippocampus_runtime/source/search_output.py",
