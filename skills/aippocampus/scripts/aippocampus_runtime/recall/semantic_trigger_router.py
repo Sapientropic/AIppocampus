@@ -42,9 +42,18 @@ DEFAULT_SEED_TRIGGERS_PATH = (
     Path(__file__).resolve().parents[3] / "references" / "reviewed-semantic-triggers.seed.jsonl"
 )
 GENERIC_ALIASES = {
+    "agent",
+    "but",
+    "core",
+    "full",
+    "has",
+    "local",
     "memory",
+    "not",
     "recall",
     "project",
+    "runtime",
+    "system",
     "candidate",
     "trigger",
     "cue",

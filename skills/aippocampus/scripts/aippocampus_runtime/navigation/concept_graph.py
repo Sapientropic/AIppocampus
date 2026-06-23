@@ -17,12 +17,16 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.core import now_utc
+from aippocampus_runtime.navigation import concept_graph_edge_policy as edge_policy
 from aippocampus_runtime.navigation.associations import (
     load_associations,
     normalize_term,
     term_is_noise,
 )
 from aippocampus_runtime.navigation.concept_edge_utility import score_bucket
+from aippocampus_runtime.navigation.concept_graph_health import (  # noqa: F401
+    concept_graph_health as concept_graph_health,
+)
 from aippocampus_runtime.navigation.concept_graph_schema import (
     connect,
     init_schema,
@@ -95,6 +99,7 @@ BIDIRECTIONAL_EDGE_TYPES = {
     "project_topic",
     "related",
 }
+
 
 def load_json(path: Path) -> dict[str, Any]:
     if not path.exists():
@@ -352,19 +357,23 @@ def add_bidirectional_edge(
     lifecycle_reason: str = "staging_default",
     source_thread_key: str | None = None,
 ) -> None:
+    concept_status, concept_lifecycle_reason = edge_policy.concept_lifecycle_for_edge(
+        status=status,
+        lifecycle_reason=lifecycle_reason,
+    )
     a_id = upsert_concept(
         con,
         a,
-        status=status,
-        lifecycle_reason=lifecycle_reason,
+        status=concept_status,
+        lifecycle_reason=concept_lifecycle_reason,
         hit_count=evidence_count,
         thread_count=thread_count,
     )
     b_id = upsert_concept(
         con,
         b,
-        status=status,
-        lifecycle_reason=lifecycle_reason,
+        status=concept_status,
+        lifecycle_reason=concept_lifecycle_reason,
         hit_count=evidence_count,
         thread_count=thread_count,
     )
@@ -586,6 +595,12 @@ def build_concept_graph(
         init_schema(con)
         reset_graph(con)
         term_items = list((associations.get("terms") or {}).values())
+        quality_gate: dict[str, Any] = {
+            "schema_version": "concept_graph_quality_gate_v1",
+            "min_auto_co_occurs_thread_count": edge_policy.MIN_AUTO_COOCCURS_THREAD_COUNT,
+            "edge_type_status_counts": {},
+            "reason_counts": {},
+        }
         for item in term_items:
             if not isinstance(item, dict):
                 continue
@@ -624,14 +639,23 @@ def build_concept_graph(
             for related in list(item.get("related_terms") or [])[
                 : max(0, int(max_related_per_term))
             ]:
+                edge_status, gate_reason = edge_policy.automatic_co_occurs_expansion_status(
+                    edge_type=edge_type,
+                    status=status,
+                    thread_count=len(source_threads),
+                )
+                edge_reason = gate_reason or lifecycle_reason
+                edge_policy.quality_gate_bucket(quality_gate, edge_type, edge_status)
+                if gate_reason:
+                    edge_policy.quality_gate_reason(quality_gate, gate_reason)
                 add_bidirectional_edge(
                     con,
                     term,
                     str(related),
                     edge_type=edge_type,
                     confidence=confidence,
-                    status=status,
-                    lifecycle_reason=lifecycle_reason,
+                    status=edge_status,
+                    lifecycle_reason=edge_reason,
                     evidence_count=int(item.get("hit_count") or 0),
                     thread_count=len(source_threads),
                     source_thread_key=source_threads[0] if source_threads else None,
@@ -669,6 +693,7 @@ def build_concept_graph(
             "concept_kind_counts": count_by_column(con, "kind"),
             "concept_kind_source_counts": count_by_column(con, "kind_source"),
             "lifecycle": lifecycle_diagnostics(con),
+            "quality_gate": quality_gate,
             "source_boundary": graph_source_boundary(),
         }
     finally:
@@ -712,13 +737,18 @@ def edge_rows(
           AND e.status IN ('verified', 'staging')
           AND sc.status IN ('verified', 'staging')
           AND c.status IN ('verified', 'staging')
+          AND NOT (
+            e.edge_type = 'co_occurs'
+            AND e.status = 'staging'
+            AND e.thread_count < ?
+          )
         ORDER BY
           CASE e.status WHEN 'verified' THEN 0 ELSE 1 END,
           e.weight DESC,
           e.confidence DESC
         LIMIT ?
         """,
-        (src_id, max(1, int(max_degree))),
+        (src_id, edge_policy.MIN_AUTO_COOCCURS_THREAD_COUNT, max(1, int(max_degree))),
     ).fetchall()
     if depth <= 1:
         return rows

@@ -16,6 +16,7 @@ from aippocampus_runtime.recall.prompt_route_blocks import (
     old_route_negation_has_later_source_request,
 )
 from aippocampus_runtime.recall.query_policy import RECALL_TRIGGERS, split_query_terms
+from aippocampus_runtime.text import has_cjk_ideograph, is_low_value_cjk_fragment
 
 # Keep these assignments as the legacy public surface for callers that imported
 # static cue catalogs from prompt_cues.py before the hot-path split.
@@ -299,6 +300,30 @@ def negative_evidence_intent(prompt: str) -> list[str]:
 def association_term_is_generic(match: dict[str, Any]) -> bool:
     term = str(match.get("term") or "").casefold().strip()
     if term in {value.casefold() for value in GENERIC_ASSOCIATION_TERMS}:
+        return True
+    if term in {
+        "source",
+        "sources",
+        "plugin",
+        "plugins",
+        "hook",
+        "hooks",
+        "runtime",
+        "agent",
+        "agents",
+        "system",
+        "health",
+        "clean",
+        "maintenance",
+        "rollout",
+        "graph",
+        "test",
+        "tests",
+        "issue",
+        "issues",
+    }:
+        return True
+    if has_cjk_ideograph(term) and is_low_value_cjk_fragment(term):
         return True
     return False
 

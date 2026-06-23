@@ -424,7 +424,10 @@ class PromptHookWorkingMemoryTests(AmbientRecallHookCase):
                             "confidence": 1.0,
                             "hit_count": 100,
                             "related_terms": ["Go runtime"],
-                            "threads": [],
+                            "threads": [
+                                {"thread_key": "session:a"},
+                                {"thread_key": "session:b"},
+                            ],
                         },
                         "Go runtime": {
                             "term": "Go runtime",
@@ -432,7 +435,10 @@ class PromptHookWorkingMemoryTests(AmbientRecallHookCase):
                             "confidence": 1.0,
                             "hit_count": 100,
                             "related_terms": ["gotd"],
-                            "threads": [],
+                            "threads": [
+                                {"thread_key": "session:a"},
+                                {"thread_key": "session:b"},
+                            ],
                         },
                     },
                 },
@@ -464,7 +470,56 @@ class PromptHookWorkingMemoryTests(AmbientRecallHookCase):
         self.assertEqual(with_graph["decision"], "scent")
         self.assertEqual(with_graph["candidates"][0]["thread_key"], "session:runtime-memory")
         self.assertIn("Go runtime", with_graph["query_terms"])
+        self.assertEqual(with_graph["concept_expansion_diagnostic"]["state"], "used")
         self.assertIn("concept graph expansion", " ".join(with_graph["reasons"]))
+
+    def test_concept_graph_expansion_abstains_when_it_does_not_lift_recall(self) -> None:
+        registry_path = self.root / "concept-no-lift-registry" / "threads.json"
+        registry_path.parent.mkdir()
+        registry_path.write_text(
+            json.dumps({"schema_version": 1, "threads": []}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        associations = registry_path.parent / "associations.json"
+        associations.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "terms": {
+                        "本地底座": {
+                            "term": "本地底座",
+                            "status": "staging",
+                            "confidence": 1.0,
+                            "hit_count": 10,
+                            "related_terms": ["Go runtime"],
+                            "threads": [
+                                {"thread_key": "session:a"},
+                                {"thread_key": "session:b"},
+                            ],
+                        }
+                    },
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        concept_graph_path = concept_graph.default_concept_graph_path(registry_path=registry_path)
+        concept_graph.build_concept_graph(associations, concept_graph_path)
+
+        result = hook.assess_prompt(
+            "本地底座换语言是不是更好？",
+            cwd=self.workspace,
+            registry_path=registry_path,
+            associations_path=associations,
+            concept_graph_path=concept_graph_path,
+            search_budget=0,
+        )
+
+        self.assertEqual(result["decision"], "skip")
+        self.assertEqual(result["concept_expansions"], [])
+        self.assertNotIn("Go runtime", result["query_terms"])
+        self.assertEqual(result["concept_expansion_diagnostic"]["state"], "no_useful_expansion")
+        self.assertNotIn("concept graph expansion", " ".join(result["reasons"]))
 
     def test_weak_deictic_reviewed_trigger_does_not_force_evidence(self) -> None:
         triggers_path = self.root / "weak_deictic_semantic_triggers.jsonl"

@@ -11,6 +11,7 @@ from aippocampus_runtime.contracts import normalize_foreground_action
 from aippocampus_runtime.mcp import agent_recall_compact_choices as recall_choices
 from aippocampus_runtime.mcp import agent_recall_recovery_projection as recovery_projection
 from aippocampus_runtime.navigation import repo_familiarity
+from aippocampus_runtime.recall.query_policy import distinctive_cjk_query_terms
 from aippocampus_runtime.source.search import search_clean_source
 
 _ANCHOR_RE = re.compile(r"[\u4e00-\u9fff]{2,}|[A-Za-z0-9][A-Za-z0-9_-]{3,}")
@@ -32,9 +33,17 @@ _LOW_SIGNAL_ANCHORS = {
 def _query_anchor_stats(query: str, card: Mapping[str, Any]) -> dict[str, Any]:
     tokens: list[str] = []
     seen: set[str] = set()
+    for raw in distinctive_cjk_query_terms(str(query or ""), limit=8):
+        token = _NORMALIZE_RE.sub("", raw.casefold())
+        if not token or token in _LOW_SIGNAL_ANCHORS or token in seen:
+            continue
+        seen.add(token)
+        tokens.append(token)
     for match in _ANCHOR_RE.finditer(str(query or "")):
         token = _NORMALIZE_RE.sub("", match.group(0).casefold())
         if not token or token in _LOW_SIGNAL_ANCHORS or token in seen:
+            continue
+        if re.search(r"[\u4e00-\u9fff]", match.group(0)) and token not in seen:
             continue
         seen.add(token)
         tokens.append(token)
@@ -108,11 +117,20 @@ def repo_familiarity_fallback_card(query: str, cwd: Path) -> dict[str, Any] | No
     card = cards[0]
     refs = [ref for ref in card.get("source_refs") or [] if isinstance(ref, Mapping)]
     anchor_stats = _query_anchor_stats(query, card)
+    route_status = (
+        "no_query_overlap"
+        if anchor_stats.get("query_anchor_alignment") == "no_overlap"
+        else "route_candidate"
+    )
     return {
         "kind": "aippocampus_repo_familiarity_fallback",
         "schema_version": repo_familiarity.SCHEMA_VERSION,
-        "status": "route_candidate",
-        "route_choice_posture": "repo_familiarity_current_checkout_fallback",
+        "status": route_status,
+        "route_choice_posture": (
+            "repo_familiarity_withheld_no_query_overlap"
+            if route_status == "no_query_overlap"
+            else "repo_familiarity_current_checkout_fallback"
+        ),
         "landmark": card.get("landmark"),
         "category": card.get("category"),
         "why_now": card.get("why_now"),
@@ -125,7 +143,11 @@ def repo_familiarity_fallback_card(query: str, cwd: Path) -> dict[str, Any] | No
         "invalidation_present": bool(card.get("invalidation")),
         **anchor_stats,
         "source_reopen_required_before_claim": True,
-        "claim_boundary": "repo_familiarity_navigation_only_until_source_opened",
+        "claim_boundary": (
+            "repo_familiarity_diagnostic_only_no_query_overlap"
+            if route_status == "no_query_overlap"
+            else "repo_familiarity_navigation_only_until_source_opened"
+        ),
     }
 
 

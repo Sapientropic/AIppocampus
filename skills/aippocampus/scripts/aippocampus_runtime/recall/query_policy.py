@@ -12,7 +12,14 @@ import re
 from pathlib import Path
 
 from aippocampus_runtime.core import parse_anchor_file
-from aippocampus_runtime.text import cjk_ngrams, iter_cjk_sequences
+from aippocampus_runtime.text import (
+    cjk_ngrams,
+    cjk_phrase_candidates,
+    is_distinctive_cjk_anchor,
+    is_low_value_cjk_fragment,
+    iter_cjk_sequences,
+    strip_cjk_deictic_prefix,
+)
 
 RECALL_TRIGGERS = [
     "还记得",
@@ -148,13 +155,30 @@ def normalize_term(term: str) -> str:
     return re.sub(r"\s+", " ", term).strip(" \t\r\n\"'`.,;:!?，。；：！？、()[]{}<>《》")
 
 
+def query_term_is_noise(term: str) -> bool:
+    value = normalize_term(term)
+    if not value:
+        return True
+    if value.casefold() in STOP_TERMS:
+        return True
+    if re.search(r"[\u4e00-\u9fff]", value):
+        compact = strip_cjk_deictic_prefix(value)
+        if compact in CJK_QUERY_SIDE_CAR_STOP:
+            return True
+        return is_low_value_cjk_fragment(compact)
+    return False
+
+
 def split_query_terms(patterns: list[str]) -> list[str]:
     terms: list[str] = []
     for pattern in patterns:
         cleaned = normalize_term(pattern)
         if not cleaned:
             continue
-        if len(cleaned) <= 32:
+        cleaned_has_cjk = bool(re.search(r"[\u4e00-\u9fff]", cleaned))
+        if len(cleaned) <= 32 and not (
+            cleaned_has_cjk and is_low_value_cjk_fragment(cleaned)
+        ):
             terms.append(cleaned)
         for trigger in RECALL_TRIGGERS:
             if trigger.casefold() in cleaned.casefold() and len(trigger) >= 2:
@@ -170,6 +194,11 @@ def split_query_terms(patterns: list[str]) -> list[str]:
         for part in re.split(r"[\s,/|+]+", cleaned):
             part = normalize_term(part)
             if len(part) >= 3 and part.casefold() not in STOP_TERMS:
+                if re.search(r"[\u4e00-\u9fff]", part):
+                    if is_low_value_cjk_fragment(part):
+                        continue
+                    terms.extend(distinctive_cjk_query_terms(part, limit=4))
+                    continue
                 terms.append(part)
         terms.extend(re.findall(r"[A-Za-z][A-Za-z0-9_.-]{1,}", cleaned))
         cjk = cleaned
@@ -183,9 +212,20 @@ def split_query_terms(patterns: list[str]) -> list[str]:
         )
         for chunk in re.split(r"[\s的了和与、，。；：！？,.!?/|+]+", cjk):
             chunk = normalize_term(chunk)
+            chunk = strip_cjk_deictic_prefix(chunk)
             if 2 <= len(chunk) <= 12 and chunk.casefold() not in STOP_TERMS:
-                terms.append(chunk)
-    return unique_preserve(terms)
+                if not is_low_value_cjk_fragment(chunk):
+                    terms.append(chunk)
+        terms.extend(distinctive_cjk_query_terms(cleaned, limit=8))
+    return unique_preserve([term for term in terms if not query_term_is_noise(term)])
+
+
+def distinctive_cjk_query_terms(query: str, limit: int = 12) -> list[str]:
+    terms: list[str] = []
+    for term in cjk_phrase_candidates(query, max_len=12):
+        if is_distinctive_cjk_anchor(term):
+            terms.append(term)
+    return unique_preserve(terms, limit=limit)
 
 
 def cjk_query_sidecar_terms(query: str, limit: int = 24) -> list[str]:
@@ -203,14 +243,17 @@ def cjk_query_sidecar_terms(query: str, limit: int = 24) -> list[str]:
         for stop in CJK_QUERY_SIDE_CAR_STOP:
             normalized = normalized.replace(stop, " ")
         for part in re.split(r"[\s的了和与、，。；：！？,.!?/|+]+", normalized):
-            part = normalize_term(part)
+            part = strip_cjk_deictic_prefix(normalize_term(part))
             if len(part) < 2:
+                continue
+            if is_low_value_cjk_fragment(part):
                 continue
             terms.append(part)
             if len(part) <= 4:
                 terms.extend(cjk_ngrams(part, sizes=(2, 3, 4)))
                 continue
-            terms.extend(cjk_ngrams(part, sizes=(4,)))
+            if is_distinctive_cjk_anchor(part):
+                terms.extend(cjk_ngrams(part, sizes=(4,)))
             terms.extend(signal for signal in CJK_QUERY_SIDE_CAR_SHORT_SIGNALS if signal in part)
     return unique_preserve(terms, limit=limit)
 

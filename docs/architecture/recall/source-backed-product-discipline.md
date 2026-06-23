@@ -95,6 +95,34 @@ listed thresholds. That gate permits only the recovery surface above. Default
 ranking or claim-authority promotion still requires separate live/private-history
 evidence and issue review.
 
+## Advanced Graph Ranker Adoption Gate
+
+Advanced graph ranking, including PageRank, random-walk, Physarum-like flow, or
+other multi-hop optimization, is operator-only and experimental until the graph
+quality gates have passed. It must not influence default foreground recall
+ranking, foreground action selection, or source authority while automatic
+`co_occurs` edges still show constant-confidence dominance, CJK fragment
+pollution, globally flattened `scope_key` rows, or missing source-diversity
+diagnostics.
+
+Before any advanced graph ranker can become a default foreground path, the
+implementation must show all of the following:
+
+- #2612 source-diversity gating for automatic `co_occurs` expansion is active.
+- #2613 CJK sliding-window fragments are suppressed before associations and
+  concept graph materialization.
+- #2615 concept-graph health reports bounded edge/status/confidence/source-
+  diversity diagnostics without exposing private source text.
+- Real probes show `agent recall -> agent deepen/open -> opened source anchor
+  hits` improves against exact or current-source search, rather than merely
+  returning more graph terms.
+
+APW remains an associative path ranker/fallback, not a claim that the runtime is
+using a true slime-mold or Physarum solver. Operator experiments may compare
+filtered BFS, personalized PageRank, random walks, or Physarum-like flow behind
+explicit flags, but those experiments cannot become default foreground recall
+without the evidence above and a separate issue review.
+
 ## Task Orientation Packet Boundary
 
 `aippocampus agent orient "<task>" --json` is the current fresh-thread

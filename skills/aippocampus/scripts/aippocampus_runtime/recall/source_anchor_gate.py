@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.mcp.recall_navigation import RecallNavigationError, recall_deepen_packet
+from aippocampus_runtime.recall.query_policy import distinctive_cjk_query_terms
 from aippocampus_runtime.source.artifact_role import artifact_role_profile
 from aippocampus_runtime.source.relationship_origin import canonical_origin_doc_intent
 
@@ -75,10 +76,20 @@ def distinctive_query_anchors(query: str, *, limit: int = 8) -> list[str]:
             anchors.append(phrase)
             if len(anchors) >= limit:
                 return anchors
+    cjk_anchors = set(distinctive_cjk_query_terms(str(query or ""), limit=limit))
+    for anchor in cjk_anchors:
+        key = _NORMALIZE_RE.sub("", anchor.casefold())
+        if key and key not in seen and key not in _LOW_SIGNAL_ANCHORS:
+            seen.add(key)
+            anchors.append(anchor)
+            if len(anchors) >= limit:
+                return anchors
     for match in _ANCHOR_RE.finditer(str(query or "")):
         raw = match.group(0)
         key = _NORMALIZE_RE.sub("", raw.casefold())
         if not key or key in _LOW_SIGNAL_ANCHORS or key in seen:
+            continue
+        if re.search(r"[\u4e00-\u9fff]", raw) and raw not in cjk_anchors:
             continue
         seen.add(key)
         anchors.append(raw)
@@ -202,7 +213,7 @@ def top_route_source_anchor_gate(
 
     opened_source_text = _source_text(opened)
     hits = _anchor_hits(opened_source_text, anchors)
-    required_hits = 2 if len(anchors) >= 3 else 1
+    required_hits = 2
     artifact_role = artifact_role_profile(text=opened_source_text, query_text=query)
     artifact_blocked = bool(artifact_role.get("demote"))
     status = "passed" if len(hits) >= required_hits and not artifact_blocked else "blocked"

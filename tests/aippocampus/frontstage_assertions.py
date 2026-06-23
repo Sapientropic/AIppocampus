@@ -8,13 +8,28 @@ from typing import Any
 PathComponent = str | int
 
 COMPACT_DIAGNOSTIC_TOP_LEVEL_KEYS = {
+    "apw_route_identity",
+    "associative_path_fallback",
+    "associative_path_policy",
     "cannot_claim",
+    "diagnostic_detail_command",
+    "feedback_actions",
+    "feedback_boundary",
     "red_lines",
     "detail_deferred",
     "source_boundary",
     "product_boundary",
     "route_availability_summary",
     "operator_diagnostics",
+    "operator_detail_command",
+    "operator_detail_command_template",
+    "output_boundary",
+    "policy_boundary",
+    "provider_key_bridge",
+    "recall_gate_context",
+    "runtime_provenance",
+    "semantic_gate_diagnostics",
+    "source_anchor_gate",
 }
 
 PRIVATE_PATH_MARKERS = (

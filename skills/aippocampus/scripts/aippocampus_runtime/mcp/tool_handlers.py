@@ -17,6 +17,7 @@ from aippocampus_runtime.mcp.agent_deepen_projection import compact_agent_deepen
 from aippocampus_runtime.mcp.agent_explain_projection import compact_agent_explain_payload
 from aippocampus_runtime.mcp.agent_recall_projection import compact_agent_recall_payload
 from aippocampus_runtime.mcp.clean_source_resolution import resolve_mcp_clean_source_dir
+from aippocampus_runtime.mcp.compact_profile import compact_mcp_tool_result
 from aippocampus_runtime.mcp.foreground_recovery import (
     missing_input_recovery_card,
 )
@@ -145,15 +146,7 @@ def read_jsonl(path: Path) -> list[dict[str, Any]]:
 
 
 def text_result(payload: Any, *, is_error: bool = False) -> dict[str, Any]:
-    return {
-        "content": [
-            {
-                "type": "text",
-                "text": json.dumps(payload, ensure_ascii=False, indent=2),
-            }
-        ],
-        "isError": is_error,
-    }
+    return compact_mcp_tool_result(payload, is_error=is_error)
 
 
 def tool_error(
@@ -308,6 +301,8 @@ def call_search_memory(arguments: dict[str, Any]) -> dict[str, Any]:
         )
         payload["limit"] = limit
         payload["mcp_search_scope"] = scope
+        payload["detail"] = "compact"
+        payload["surface"] = "mcp_search_memory_compact"
         payload["runtime_provenance"] = mcp_runtime_provenance(
             arguments,
             clean_source_dir=clean_source_dir_for(arguments),
@@ -333,6 +328,8 @@ def call_search_memory(arguments: dict[str, Any]) -> dict[str, Any]:
         )
         payload["limit"] = limit
         payload["mcp_search_scope"] = scope
+        payload["detail"] = "compact"
+        payload["surface"] = "mcp_search_memory_compact"
         payload["runtime_provenance"] = mcp_runtime_provenance(
             arguments,
             clean_source_dir=clean_source_dir_for(arguments),
@@ -375,6 +372,8 @@ def call_search_memory(arguments: dict[str, Any]) -> dict[str, Any]:
         query_text=query,
     )
     payload["mcp_search_scope"] = "current"
+    payload["detail"] = "compact"
+    payload["surface"] = "mcp_search_memory_compact"
     payload["runtime_provenance"] = mcp_runtime_provenance(
         arguments,
         clean_source_dir=source_dir,

@@ -1039,6 +1039,70 @@ class SemanticRecallGateTests(unittest.TestCase):
         self.assertEqual(payload["telemetry"]["evictions"], 1)
         self.assertEqual(payload["telemetry"]["eviction_reasons"], {"low_value_churn": 1})
 
+    def test_association_triggers_require_source_refs_and_non_generic_aliases(self) -> None:
+        rows = gate.all_trigger_rows(
+            associations={
+                "terms": {
+                    "system": {
+                        "term": "system",
+                        "status": "verified",
+                        "confidence": 0.99,
+                        "threads": [{"thread_key": "session:system"}],
+                    },
+                    "source": {
+                        "term": "source",
+                        "status": "verified",
+                        "confidence": 0.99,
+                        "threads": [{"thread_key": "session:source"}],
+                    },
+                    "联想回忆": {
+                        "term": "联想回忆",
+                        "status": "verified",
+                        "confidence": 0.99,
+                        "threads": [],
+                    },
+                    "机械飞升": {
+                        "term": "机械飞升",
+                        "status": "verified",
+                        "confidence": 0.99,
+                        "threads": [{"thread_key": "session:mechanical", "line": 12}],
+                    },
+                }
+            }
+        )
+
+        titles = {row["title"] for row in rows}
+        self.assertEqual(titles, {"机械飞升"})
+        self.assertEqual(rows[0]["source_refs"][0]["thread_key"], "session:mechanical")
+
+    def test_generic_stopword_prompt_does_not_activate_reviewed_semantic_trigger(self) -> None:
+        trigger_path = self.root / "semantic_triggers.jsonl"
+        trigger_path.write_text(
+            json.dumps(
+                {
+                    "kind": "aippocampus_semantic_trigger",
+                    "status": "active",
+                    "title": "Generic debug words",
+                    "activation_cues": ["not", "but", "system", "agent", "source"],
+                    "aliases": ["not", "but", "system", "agent", "source"],
+                    "source_refs": [{"thread_key": "session:trigger"}],
+                    "confidence": 0.95,
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        loaded = gate.load_semantic_triggers(trigger_path)
+        relevant = gate.prompt_relevant_triggers(
+            prompt="not but system agent source 这个问题怎么处理",
+            semantic_triggers_path=trigger_path,
+        )
+
+        self.assertEqual(loaded, [])
+        self.assertEqual(relevant, [])
+
     def test_concurrent_cache_writers_do_not_share_fixed_tmp_path(self) -> None:
         cache = self.root / "semantic_recall_cache.json"
 

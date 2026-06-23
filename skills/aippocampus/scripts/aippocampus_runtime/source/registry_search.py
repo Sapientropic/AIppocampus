@@ -161,6 +161,8 @@ def _registry_match(
         metadata={
             "role": hit.get("role"),
             "phase": hit.get("phase"),
+            "material_class": hit.get("material_class"),
+            "source_claim_policy": hit.get("source_claim_policy"),
             "scope_labels": hit.get("scope_labels") or [],
             "semantic_scope_labels": hit.get("semantic_scope_labels") or [],
         },
@@ -174,6 +176,8 @@ def _registry_match(
         "line": hit.get("line"),
         "role": hit.get("role"),
         "phase": hit.get("phase") or "",
+        "material_class": hit.get("material_class"),
+        "source_claim_policy": hit.get("source_claim_policy"),
         "turn_index": hit.get("turn_index"),
         "is_final": bool(hit.get("is_final")),
         "scope_labels": hit.get("scope_labels") or [],
@@ -318,6 +322,8 @@ def search_registry_sources(
                     metadata={
                         "role": match.get("role"),
                         "phase": match.get("phase"),
+                        "material_class": match.get("material_class"),
+                        "source_claim_policy": match.get("source_claim_policy"),
                         "scope_labels": match.get("scope_labels") or [],
                         "semantic_scope_labels": match.get("semantic_scope_labels") or [],
                     },

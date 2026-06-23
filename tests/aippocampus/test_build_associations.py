@@ -182,6 +182,147 @@ class BuildAssociationsTests(unittest.TestCase):
         self.assertIn("数据库迁移", matched_terms)
         self.assertIn("支付接口", matched_terms)
 
+    def test_user_cjk_salient_terms_survive_without_sliding_window_noise(self) -> None:
+        con = sqlite3.connect(self.sqlite)
+        try:
+            con.executemany(
+                """
+                INSERT INTO messages
+                (id, line, timestamp, role, kind, phase, turn_index, is_final, text)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    (
+                        5,
+                        14,
+                        "2026-05-25T01:04:00Z",
+                        "user",
+                        "message",
+                        "user_prompt",
+                        6,
+                        0,
+                        "黏菌 联想回忆 探索算法，最早那条机械飞升和海马体的讨论。",
+                    ),
+                    (
+                        6,
+                        15,
+                        "2026-05-25T01:05:00Z",
+                        "assistant",
+                        "message",
+                        "final_answer",
+                        6,
+                        1,
+                        "仍按新流程保持手动触发，流程保持手动触发，持手动触发，动触发。",
+                    ),
+                ],
+            )
+            con.commit()
+        finally:
+            con.close()
+
+        result = assoc.build_associations(self.registry, max_messages_per_thread=50)
+        terms = result["terms"]
+        flattened = "\n".join(terms)
+
+        for term in ["黏菌", "联想回忆", "探索算法", "机械飞升", "海马体"]:
+            self.assertIn(term, terms)
+        for fragment in ["仍按新流程保持手动触发", "流程保持手动触发", "持手动触发", "动触发", "最早那条机械飞升"]:
+            self.assertNotIn(fragment, flattened)
+        self.assertGreaterEqual(result["diagnostics"]["user_turn_term_count"], 5)
+        self.assertGreaterEqual(result["diagnostics"]["salient_cjk_phrase_count"], 5)
+        self.assertGreaterEqual(result["diagnostics"]["cjk_fragment_suppressed_count"], 1)
+
+    def test_corpus_phrase_miner_uses_accessor_variety_before_association_materialization(self) -> None:
+        con = sqlite3.connect(self.sqlite)
+        try:
+            con.executemany(
+                """
+                INSERT INTO messages
+                (id, line, timestamp, role, kind, phase, turn_index, is_final, text)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    (
+                        5,
+                        14,
+                        "2026-05-25T01:04:00Z",
+                        "user",
+                        "message",
+                        "user_prompt",
+                        6,
+                        0,
+                        "今天继续从黏菌启发的联想回忆和探索算法讲起。",
+                    ),
+                    (
+                        6,
+                        15,
+                        "2026-05-25T01:05:00Z",
+                        "assistant",
+                        "message",
+                        "final_answer",
+                        6,
+                        1,
+                        "黏菌启发式联想可以帮助探索算法保持可复开的路线。",
+                    ),
+                    (
+                        7,
+                        16,
+                        "2026-05-25T01:06:00Z",
+                        "user",
+                        "message",
+                        "user_prompt",
+                        7,
+                        0,
+                        "机械飞升和联想回忆不要被流程保持手动触发这种碎片盖住。",
+                    ),
+                    (
+                        8,
+                        17,
+                        "2026-05-25T01:07:00Z",
+                        "assistant",
+                        "message",
+                        "final_answer",
+                        7,
+                        1,
+                        "我们把机械飞升、小海马体、未干的地图作为同一条连续性线索。",
+                    ),
+                    (
+                        9,
+                        18,
+                        "2026-05-25T01:08:00Z",
+                        "assistant",
+                        "message",
+                        "final_answer",
+                        8,
+                        1,
+                        "仍按新流程保持手动触发，流程保持手动触发，实际都好差劲。",
+                    ),
+                ],
+            )
+            con.commit()
+        finally:
+            con.close()
+
+        result = assoc.build_associations(
+            self.registry,
+            max_messages_per_thread=50,
+            include_phrase_report=True,
+        )
+        terms = result["terms"]
+        flattened = "\n".join(terms)
+        report = result["phrase_mining_report"]["phrases"]
+
+        for term in ["黏菌", "联想回忆", "探索算法", "机械飞升", "小海马体", "未干的地图"]:
+            self.assertIn(term, terms)
+        self.assertIn("联想回忆", report)
+        self.assertGreaterEqual(report["联想回忆"]["frequency"], 2)
+        self.assertGreaterEqual(report["联想回忆"]["document_count"], 2)
+        for fragment in ["流程保持手动触发", "程保持手动触发", "实际都好差劲"]:
+            self.assertNotIn(fragment, flattened)
+            self.assertNotIn(fragment, report)
+        self.assertGreater(result["diagnostics"]["cjk_phrase_miner_candidate_count"], 0)
+        self.assertGreater(result["diagnostics"]["cjk_phrase_miner_accepted_count"], 0)
+
     def test_ascii_domain_and_repo_terms_emit_component_aliases(self) -> None:
         text = " ".join(
             [

@@ -70,6 +70,10 @@ class McpLatestReplyTests(unittest.TestCase):
 
     def tool_payload(self, response: dict) -> dict:
         text = response["result"]["content"][0]["text"]
+        structured = response["result"].get("structuredContent")
+        if isinstance(structured, dict):
+            self.assertFalse(text.lstrip().startswith("{"))
+            return structured
         return json.loads(text)
 
     def call_latest_reply(self, **arguments: object) -> dict:

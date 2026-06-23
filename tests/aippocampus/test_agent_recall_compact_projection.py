@@ -10,17 +10,14 @@ from aippocampus_runtime.recall import (
     agent_continuity_cli_support,
     foreground_action_card,
 )
-from tests.aippocampus.frontstage_assertions import (
-    assert_compact_detail_affordances,
-    assert_compact_frontstage_payload,
-)
+from tests.aippocampus.frontstage_assertions import assert_compact_frontstage_payload
 
 
 def assert_command_args(test: unittest.TestCase, command: str, expected: list[str]) -> None:
     test.assertEqual(shlex.split(command), expected)
 
 class AgentRecallCompactProjectionTests(unittest.TestCase):
-    def test_compact_detail_command_uses_safe_recall_cue_or_template(self) -> None:
+    def test_compact_detail_boundary_does_not_serialize_operator_commands(self) -> None:
         safe = agent_continuity_cli_support.public_recall_projection(
             {
                 "kind": "aippocampus_agent_continuity_path",
@@ -51,24 +48,10 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
             query="AIppocampus compact recall detail cue",
         )
 
-        assert_command_args(
-            self,
-            safe["operator_detail_command"],
-            [
-                "aippocampus",
-                "agent",
-                "recall",
-                "AIppocampus compact recall detail cue",
-                "--json",
-                "--detail",
-                "full",
-            ],
-        )
-        self.assertEqual(
-            safe["claim_boundary"]["detail_available_with"],
-            safe["operator_detail_command"],
-        )
-        assert_compact_detail_affordances(self, safe, surface="agent_recall.safe_cue_detail")
+        self.assertNotIn("operator_detail_command", safe)
+        self.assertNotIn("operator_detail_command_template", safe)
+        self.assertTrue(safe["claim_boundary"]["detail_available"])
+        self.assertEqual(safe["claim_boundary"]["detail_mode"], "full")
         self.assertNotIn("old decision or handoff cue", json.dumps(safe, ensure_ascii=False))
 
         template_only = agent_continuity_cli_support.public_recall_projection(
@@ -85,17 +68,11 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
         )
 
         self.assertNotIn("operator_detail_command", template_only)
-        self.assertEqual(
-            template_only["operator_detail_command_template"],
-            'aippocampus agent recall "{cue}" --json --detail full',
-        )
-        self.assertEqual(template_only["operator_detail_requires"], ["cue"])
-        self.assertEqual(
-            template_only["claim_boundary"]["detail_available_with_template"],
-            'aippocampus agent recall "{cue}" --json --detail full',
-        )
+        self.assertNotIn("operator_detail_command_template", template_only)
+        self.assertNotIn("operator_detail_requires", template_only)
+        self.assertTrue(template_only["claim_boundary"]["detail_available"])
+        self.assertEqual(template_only["claim_boundary"]["detail_mode"], "full")
         self.assertEqual(template_only["claim_boundary"]["detail_requires"], ["cue"])
-        assert_compact_detail_affordances(self, template_only, surface="agent_recall.template_detail")
         self.assertEqual(executable_command_violations(template_only), [])
 
     def test_low_specificity_thread_candidate_choices_get_public_safe_differentiators(
@@ -182,7 +159,7 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
         )
         self.assertEqual(action["route_label_specificity_floor"], 0.0)
         self.assertEqual(action["topic_label_present_count"], 0)
-        self.assertIn("Search all registered source", action["label"])
+        self.assertIn("Search registered sources", action["label"])
         self.assertEqual(deepen_action["original_id"], "agent_deepen_selected_route")
         self.assertEqual(deepen_action["id"], "deepen_top_route_low_confidence")
         self.assertEqual(deepen_action["tool_name"], "agent_deepen")
@@ -191,14 +168,13 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
         self.assertNotIn("hidden_low_confidence_route_count", public)
         self.assertEqual(len(public["routes"]), 3)
         first_route = public["routes"][0]
-        self.assertEqual(first_route["route_choice_posture"], "labels_low_specificity")
-        self.assertEqual(first_route["confidence"], "low_confidence_navigation")
         self.assertEqual(first_route["claim_boundary"], "no_claim_before_reopen")
-        self.assertEqual(first_route["action"]["route_choice_posture"], "labels_low_specificity")
-        self.assertEqual(first_route["action"]["confidence"], "low_confidence_navigation")
         self.assertEqual(first_route["action"]["arguments"], {"request_index": 1})
         self.assertIn("--recall-selector {recall_selector}", first_route["action"]["command_template"])
         self.assertEqual(first_route["action"]["requires"], ["request_index", "recall_selector"])
+        encoded_route = json.dumps(first_route, ensure_ascii=False)
+        self.assertNotIn("route_choice_posture", encoded_route)
+        self.assertNotIn("low_confidence_navigation", encoded_route)
         self.assertNotIn("route_selection", public["claim_boundary"]["can_use_for"])
         recovery = public["weak_route_recovery_card"]
         self.assertEqual(recovery["posture"], "labels_low_specificity")
@@ -286,14 +262,11 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
         self.assertEqual(secondary["arguments"]["apw_fallback"], True)
         self.assertIn("--apw-fallback", secondary["command"])
         self.assertIn("before broad manual search", secondary["why"])
-        self.assertEqual(
-            public["associative_path_policy"]["secondary_action"],
-            "run_apw_opt_in_recovery",
-        )
         self.assertNotIn("opt_in_required", public)
         self.assertEqual(public["apw_recovery_state"], "available_requires_explicit_opt_in")
-        self.assertTrue(public["apw_recovery"]["requires_explicit_opt_in"])
-        self.assertFalse(public["associative_path_policy"]["run_fallback"])
+        self.assertNotIn("apw_recovery", public)
+        self.assertNotIn("associative_path_policy", public)
+        self.assertNotIn("associative_path_fallback", public)
         encoded = json.dumps(public, ensure_ascii=False, sort_keys=True)
         self.assertNotIn("source_refs", encoded)
         self.assertNotIn("deepen_associative_path_fallback", encoded)
@@ -419,26 +392,16 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
         self.assertEqual(public["omitted_route_count"], 4)
         self.assertEqual(public["hidden_low_confidence_route_count"], 4)
         self.assertEqual(public["omitted_duplicate_route_label_count"], 4)
-        self.assertEqual(
-            public["omitted_duplicate_route_labels"],
-            [
-                {
-                    "route_label": "Benchmark claim posture",
-                    "kept_route_index": 1,
-                    "omitted_count": 4,
-                }
-            ],
-        )
+        self.assertEqual(public["route_label_omissions"]["duplicate_label_count"], 1)
         self.assertEqual(len(public["routes"]), 1)
-        self.assertEqual(public["routes"][0]["route_choice_posture"], "labels_low_specificity")
-        self.assertEqual(public["routes"][0]["confidence"], "low_confidence_navigation")
+        self.assertNotIn("route_choice_posture", public["routes"][0])
+        self.assertNotIn("confidence", public["routes"][0])
         self.assertEqual(
             public["routes"][0]["why_this_route"],
             "Potential route, but compact labels are not specific enough; refine or search source before choosing.",
         )
         action = public["foreground_action"]
         self.assertEqual(action["id"], "search_registry_sources_for_original_cue_anchors")
-        self.assertEqual(action["route_choice_posture"], "labels_low_specificity")
         self.assertEqual(action["topic_label_present_count"], 5)
         self.assertEqual(action["packet_triage_distinctiveness"], 0.4)
         self.assertEqual(action["repeated_route_label"], "benchmark_claim_posture")
@@ -609,8 +572,8 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
         self.assertEqual(safe_by_id["deepen_top_route_low_confidence"]["id"], "deepen_top_route_low_confidence")
         self.assertIn("original cue anchors", action["why"])
         self.assertEqual(len(public["routes"]), 1)
-        self.assertEqual(public["routes"][0]["route_choice_posture"], "labels_low_specificity")
-        self.assertEqual(public["routes"][0]["confidence"], "low_confidence_navigation")
+        self.assertNotIn("route_choice_posture", public["routes"][0])
+        self.assertNotIn("confidence", public["routes"][0])
         self.assertEqual(public["displayed_route_count"], 1)
         self.assertNotIn("hidden_low_confidence_route_count", public)
         self.assertEqual(public["weak_route_recovery_card"]["displayed_as_choices"], 1)
