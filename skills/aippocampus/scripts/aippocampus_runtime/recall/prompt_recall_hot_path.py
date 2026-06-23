@@ -21,15 +21,11 @@ from aippocampus_runtime.recall.living_cue_cache import select_living_cue_packet
 from aippocampus_runtime.recall.prompt_recall_core import candidate_summary, sort_candidates
 from aippocampus_runtime.recall.retrieval import search_hybrid_index
 from aippocampus_runtime.registry.api import unique_preserve
-from aippocampus_runtime.source.jsonl_reader import load_jsonl_dict_rows
+from aippocampus_runtime.source.io_kernel import load_jsonl_dict_rows
 from aippocampus_runtime.warm_ambient.query_pattern_routes import select_query_pattern_packet
 
 MAX_STAGE_CANDIDATES = 3
 SOURCE_FACTUAL_ALIASES_FILENAME = "source-factual-aliases.jsonl"
-
-
-def _iter_jsonl_dicts(path: Path) -> list[dict[str, Any]]:
-    return load_jsonl_dict_rows(path).rows
 
 
 def _source_factual_aliases_path(paths: dict[str, Any]) -> Path | None:
@@ -53,7 +49,7 @@ def candidate_indexes_from_registry(registry: dict[str, Any]) -> list[dict[str, 
         raw_paths = entry.get("paths")
         paths: dict[str, Any] = raw_paths if isinstance(raw_paths, dict) else {}
         alias_path = _source_factual_aliases_path(paths)
-        source_factual_aliases = _iter_jsonl_dicts(alias_path) if alias_path else []
+        source_factual_aliases = load_jsonl_dict_rows(alias_path).rows if alias_path else []
         rows.append(
             {
                 "thread_key": entry.get("thread_key"),
@@ -420,7 +416,7 @@ def _index_path(candidate: dict[str, Any]) -> Path | None:
         path = Path(value)
         try:
             resolved = resolve_sqlite_index_path(path)
-        except Exception:
+        except (OSError, TypeError, ValueError):
             resolved = path
         if resolved.exists():
             return resolved

@@ -19,7 +19,7 @@ from aippocampus_runtime.recall.semantic_bridge_map import (
     SEMANTIC_BRIDGE_SOURCE,
     semantic_bridge_expansion_terms,
 )
-from aippocampus_runtime.source.jsonl_reader import empty_jsonl_loss, load_jsonl_dict_rows
+from aippocampus_runtime.source.io_kernel import empty_jsonl_loss, load_jsonl_dict_rows
 
 SOURCE_FACTUAL_ALIAS_SOURCE = "source_factual_alias"
 QUERY_EXPANSION_BOUNDARY = "navigation_only_source_reopen_required"

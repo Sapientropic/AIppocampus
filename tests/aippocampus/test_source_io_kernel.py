@@ -15,7 +15,7 @@ class SourceIoKernelTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.tmp.cleanup()
 
-    def test_jsonl_reader_counts_malformed_rows_without_retaining_payload(self) -> None:
+    def test_io_kernel_counts_malformed_rows_without_retaining_payload(self) -> None:
         path = self.root / "rows.jsonl"
         path.write_text(
             '{"kind":"ok","value":1}\n'

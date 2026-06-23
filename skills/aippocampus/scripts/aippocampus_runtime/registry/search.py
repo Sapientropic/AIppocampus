@@ -126,7 +126,7 @@ def deep_search_entry_result(
     clean_messages = paths.get("clean_source_messages_jsonl")
     if clean_messages:
         try:
-            from aippocampus_runtime.source.jsonl_reader import jsonl_loss_warning
+            from aippocampus_runtime.source.io_kernel import jsonl_loss_warning
             from aippocampus_runtime.source.search_core import (
                 load_clean_messages_with_loss,
                 score_message,

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
@@ -10,6 +9,7 @@ from typing import Any
 from aippocampus_runtime.mcp.source_ref_matching import message_matches_ref
 from aippocampus_runtime.mcp.source_ref_registry import source_candidate_dirs_for_ref
 from aippocampus_runtime.recall.query_policy import semantic_trigger_terms
+from aippocampus_runtime.source.io_kernel import load_jsonl_dict_rows
 from aippocampus_runtime.source.registry_search import search_registry_sources
 from aippocampus_runtime.source.search import iter_clean_messages
 
@@ -229,6 +229,11 @@ def registry_clean_source_routes(
             cwd=cwd,
         )
     except Exception:
+        # aippocampus-debt-ok: broad-exception-boundary
+        # Registry clean-source routes are an optional navigation supplement.
+        # If broad registry search trips over a stale local index, fail closed
+        # to no supplemental route; primary current-source and deepen paths
+        # remain available and must not inherit this exception as evidence.
         return []
     routes: list[dict[str, Any]] = []
     seen: set[str] = set()
@@ -258,24 +263,6 @@ def registry_clean_source_routes(
     return routes
 
 
-def _load_jsonl_objects(path: Path) -> list[dict[str, Any]]:
-    rows: list[dict[str, Any]] = []
-    try:
-        lines = path.read_text(encoding="utf-8").splitlines()
-    except OSError:
-        return []
-    for line in lines:
-        if not line.strip():
-            continue
-        try:
-            row = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(row, dict):
-            rows.append(row)
-    return rows
-
-
 def semantic_trigger_source_routes(
     *,
     intent: str,
@@ -289,14 +276,14 @@ def semantic_trigger_source_routes(
     safe_text: SafeText,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     if semantic_triggers_path is None or not semantic_triggers_path.exists():
-        return [], {"trigger_source_route_count": 0, "seed_trigger_match_count": 0}
+        return [], {"trigger_source_routes": 0, "seed_trigger_match_count": 0}
     intent_low = str(intent or "").casefold()
     routes: list[dict[str, Any]] = []
     source_free_matches = 0
     source_matches = 0
     matched_terms: list[str] = []
     matched_trigger_ids: list[str] = []
-    rows = _load_jsonl_objects(semantic_triggers_path)
+    rows = load_jsonl_dict_rows(semantic_triggers_path).rows
     for row in rows:
         terms = semantic_trigger_terms([row], limit=12)
         if not any(term.casefold() in intent_low for term in terms if term):
@@ -338,7 +325,7 @@ def semantic_trigger_source_routes(
         if len(routes) >= max_routes:
             break
     return routes, {
-        "trigger_source_route_count": len(routes),
+        "trigger_source_routes": len(routes),
         "source_backed_trigger_match_count": source_matches,
         "source_free_trigger_match_count": source_free_matches,
         "seed_trigger_match_count": source_free_matches,

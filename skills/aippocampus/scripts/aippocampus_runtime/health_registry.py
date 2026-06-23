@@ -4,13 +4,13 @@
 from __future__ import annotations
 
 import hashlib
-import json
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.artifacts.publish import resolve_sqlite_index_path
 from aippocampus_runtime.registry.store import registry_paths
+from aippocampus_runtime.source.io_kernel import load_json_dict
 from aippocampus_runtime.warm_ambient.hook_seen_threads import (
     hook_seen_ledger_path_for_registry,
     hook_seen_registry_diagnostic,
@@ -18,13 +18,7 @@ from aippocampus_runtime.warm_ambient.hook_seen_threads import (
 
 
 def load_json_fail_open(path: Path) -> dict[str, Any]:
-    try:
-        if not path.exists():
-            return {}
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        return {}
-    return data if isinstance(data, dict) else {}
+    return load_json_dict(path).data
 
 
 def safe_int(value: Any, default: int = 0) -> int:

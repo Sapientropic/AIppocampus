@@ -246,6 +246,20 @@ def stable_json_id(prefix: str, *parts: object, length: int = 18) -> str:
     return f"{prefix}_{digest}"
 
 
+def stable_text_id(prefix: str, *parts: object, length: int = 20) -> str:
+    """Return the legacy text-joined stable id without cloning local helpers.
+
+    Some older low-authority rows used newline-joined `str(part or "")` material
+    before `stable_json_id()` existed. Keep that exact compatibility shape in
+    one canonical helper so migrations can reduce local `_stable_id` copies
+    without silently changing persisted ids.
+    """
+
+    raw = "\n".join(str(part or "") for part in parts)
+    digest = hashlib.sha256(raw.encode("utf-8", errors="replace")).hexdigest()[:length]
+    return f"{prefix}_{digest}"
+
+
 def norm_path(path: str | Path) -> str:
     return path_identity_key(path)
 

@@ -8,6 +8,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.source.io_kernel import load_jsonl_dict_rows
 from aippocampus_runtime.source.source_texture import source_texture_health_summary
 
 SCHEMA_VERSION = "source-intake-health-v0"
@@ -38,23 +39,10 @@ def _mapping(value: Any) -> Mapping[str, Any]:
 
 
 def _load_jsonl(path: Path) -> list[dict[str, Any]]:
-    if not path.exists():
-        return []
-    rows: list[dict[str, Any]] = []
-    with path.open("r", encoding="utf-8") as handle:
-        for line in handle:
-            text = line.strip()
-            if not text:
-                continue
-            try:
-                parsed = json.loads(text)
-            except json.JSONDecodeError:
-                rows.append({"_malformed_json": True})
-                continue
-            if isinstance(parsed, dict):
-                rows.append(parsed)
-            else:
-                rows.append({"_non_object_json": True})
+    result = load_jsonl_dict_rows(path)
+    rows = list(result.rows)
+    rows.extend({"_malformed_json": True} for _ in range(_safe_int(result.loss.get("invalid_json_line_count"))))
+    rows.extend({"_non_object_json": True} for _ in range(_safe_int(result.loss.get("non_object_line_count"))))
     return rows
 
 

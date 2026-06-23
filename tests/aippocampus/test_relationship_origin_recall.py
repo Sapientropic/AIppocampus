@@ -699,7 +699,7 @@ class RelationshipOriginRecallTests(unittest.TestCase):
             "semantic_trigger_source",
         )
         semantic = recall["recall_context_diagnostics"]["semantic_trigger_diagnostics"]
-        self.assertEqual(semantic["trigger_source_route_count"], 1)
+        self.assertEqual(semantic["trigger_source_routes"], 1)
         self.assertIn("桥接语义航标", semantic["matched_trigger_terms"])
 
         deepen = self._cli(

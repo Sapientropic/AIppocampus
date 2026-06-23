@@ -13,6 +13,7 @@ from typing import Any, Iterable, Mapping
 
 from aippocampus_runtime.core import now_utc
 from aippocampus_runtime.registry.api import unique_preserve
+from aippocampus_runtime.source.io_kernel import write_jsonl_dict_rows
 from aippocampus_runtime.subconscious import staging_maintenance as maintenance
 
 
@@ -29,11 +30,11 @@ def strip_maintenance_fields(row: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def write_jsonl_rows(path: Path, rows: Iterable[Mapping[str, Any]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8", newline="\n") as fh:
-        for row in rows:
-            fh.write(json.dumps(strip_maintenance_fields(row), ensure_ascii=False, sort_keys=True))
-            fh.write("\n")
+    write_jsonl_dict_rows(
+        path,
+        (strip_maintenance_fields(row) for row in rows),
+        sort_keys=True,
+    )
 
 
 def atomic_write_jsonl_rows(path: Path, rows: Iterable[Mapping[str, Any]]) -> None:

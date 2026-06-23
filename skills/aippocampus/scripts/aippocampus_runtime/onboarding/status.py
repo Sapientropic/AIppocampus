@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.registry.api import load_registry, registry_paths
+from aippocampus_runtime.source.io_kernel import load_json_dict
 
 
 def path_exists(value: Any) -> bool:
@@ -26,13 +27,7 @@ def path_exists(value: Any) -> bool:
 
 
 def load_json_file(path: Path) -> dict[str, Any]:
-    if not path.exists():
-        return {}
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        return {}
-    return data if isinstance(data, dict) else {}
+    return load_json_dict(path).data
 
 
 def maybe_int(value: Any) -> int | None:
