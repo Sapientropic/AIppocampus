@@ -424,15 +424,15 @@ def build_task_orientation_packet(
             "whether issue comments changed acceptance criteria",
             "whether private replay aggregate is opted in for evaluation",
         ],
-        "operator_detail_command": (
-            "aippocampus agent orient "
-            f"{shell_quote(clean_task)} --json --detail full"
-        ),
     }
     if full_detail:
         packet: dict[str, Any] = {
             **base_packet,
             **full_action_fields,
+            "operator_detail_command": (
+                "aippocampus agent orient "
+                f"{shell_quote(clean_task)} --json --detail full"
+            ),
             "source_boundary": _source_boundary(),
             "product_boundary": (
                 "Orientation is navigation for choosing the next source route; reopen recall/deepen "

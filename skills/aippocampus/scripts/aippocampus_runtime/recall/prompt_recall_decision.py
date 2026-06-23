@@ -660,15 +660,11 @@ def assess_prompt(
     )
     if policy_result is not None:
         return policy_result
-    registry = context.registry
-    cognitive_map_matches = context.cognitive_map_matches
+    registry, cognitive_map_matches = context.registry, context.cognitive_map_matches
     working_memory_matches = _limit_dream_matches(context.working_memory_matches, dream_hypothesis_limit)
-    association_matches = context.association_matches
-    pre_explicit = context.pre_explicit
-    pre_associative = context.pre_associative
-    pre_important = context.pre_important
-    natural_evidence = natural_evidence_intent(prompt)
-    source_evidence = source_evidence_intent(prompt)
+    association_matches, pre_explicit = context.association_matches, context.pre_explicit
+    pre_associative, pre_important = context.pre_associative, context.pre_important
+    natural_evidence, source_evidence = natural_evidence_intent(prompt), source_evidence_intent(prompt)
     negative_evidence = negative_evidence_intent(prompt)
     current_checkout_live_fact = current_checkout_live_fact_intent(prompt)
     agent_surface_intent = classify_agent_surface_intent(prompt)
@@ -709,9 +705,7 @@ def assess_prompt(
     threshold_adjustment_reasons = route_context["threshold_adjustment_reasons"]
     threshold_memory_cue = bool(route_context["threshold_memory_cue"])
     seed_terms = route_context["seed_terms"]
-    explicit = pre_explicit
-    associative = pre_associative
-    important = pre_important
+    explicit, associative, important = pre_explicit, pre_associative, pre_important
     scent_threshold = float(threshold_policy["effective_threshold"])
     (
         candidates,

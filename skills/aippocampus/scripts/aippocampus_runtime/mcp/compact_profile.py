@@ -9,6 +9,7 @@ routing subsystem grows a useful but backstage field family.
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 from aippocampus_runtime import core
@@ -122,3 +123,27 @@ def compact_mcp_tool_result(payload: Any, *, is_error: bool = False) -> dict[str
         "structuredContent": compact_payload,
         "isError": is_error,
     }
+
+
+def mcp_tool_result_payload(result: Mapping[str, Any]) -> dict[str, Any]:
+    """Read a tool result without forcing compact foreground text to be JSON.
+
+    MCP compact text is the user/agent-facing card. Tests and diagnostic
+    harnesses that need the machine payload should consume structuredContent
+    first, otherwise they pressure compact UX back into becoming a JSON dump.
+    """
+
+    structured = result.get("structuredContent")
+    if isinstance(structured, dict):
+        return structured
+    content = result.get("content") or []
+    if not isinstance(content, Sequence):
+        return {}
+    first = content[0] if content else {}
+    if not isinstance(first, Mapping):
+        return {}
+    try:
+        payload = json.loads(str(first.get("text") or "{}"))
+    except json.JSONDecodeError:
+        return {}
+    return payload if isinstance(payload, dict) else {}

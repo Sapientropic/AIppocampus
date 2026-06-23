@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import json
 import time
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.mcp import tool_handlers as mcp_tools
+from aippocampus_runtime.mcp.compact_profile import mcp_tool_result_payload
 from aippocampus_runtime.navigation import attention_hot_router
 from aippocampus_runtime.navigation.attention_route_projection import (
     attention_token_for_route,
@@ -31,17 +31,7 @@ def _as_dict(value: Any) -> dict[str, Any]:
 
 
 def _tool_payload(result: Mapping[str, Any]) -> dict[str, Any]:
-    content = result.get("content") or []
-    if not content or not isinstance(content, Sequence):
-        return {}
-    first = content[0]
-    if not isinstance(first, Mapping):
-        return {}
-    try:
-        data = json.loads(str(first.get("text") or "{}"))
-    except json.JSONDecodeError:
-        return {}
-    return data if isinstance(data, dict) else {}
+    return mcp_tool_result_payload(result)
 
 
 def _safe_error(result: Mapping[str, Any], payload: Mapping[str, Any]) -> dict[str, Any] | None:

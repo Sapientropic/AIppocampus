@@ -578,9 +578,14 @@ class AmbientRecallCardTests(unittest.TestCase):
 
         payload = cards.ambient_recall_from_decision(result)
 
-        self.assertEqual(payload["mode"], "active_gentle_nudge")
-        self.assertEqual(payload["cards"][0]["visibility"], "active_gentle_nudge")
+        self.assertEqual(payload["mode"], "silent_tuning")
+        self.assertEqual(payload["cards"][0]["visibility"], "silent_tuning")
         self.assertEqual(payload["cards"][0]["support_level"], "scent")
+        self.assertEqual(
+            payload["cards"][0]["foreground_residue_reason"],
+            "no_source_ref_or_reopen_plan",
+        )
+        self.assertEqual(payload["brief_precision"]["no_ref_active_card_count"], 1)
 
     def test_scent_decision_becomes_active_gentle_nudge_without_evidence_claim(self) -> None:
         result = {
@@ -607,11 +612,11 @@ class AmbientRecallCardTests(unittest.TestCase):
         self.assertEqual(payload["cards"][0]["support_level"], "scent")
         self.assertEqual(payload["cards"][0]["provenance_class"], "deterministic_cue")
         self.assertTrue(payload["cards"][0]["source_reopen_required"])
-        self.assertEqual(payload["cards"][0]["reopenable_ref_count"], 0)
+        self.assertEqual(payload["cards"][0]["reopenable_ref_count"], 1)
         self.assertEqual(payload["fresh_thread_packet"]["support_level"], "soft_hypothesis")
         self.assertEqual(payload["fresh_thread_packet"]["suggested_action"], "active_recall")
         self.assertEqual(payload["cards"][0]["visibility"], "active_gentle_nudge")
-        self.assertEqual(payload["cards"][0]["source_refs"], [])
+        self.assertEqual(payload["cards"][0]["source_refs"][0]["thread_key"], "session:old")
         self.assertIn("Ambient recall design", payload["cards"][0]["theme"])
 
     def test_cognitive_map_card_is_wayfinding_provenance_not_evidence(self) -> None:
@@ -676,7 +681,9 @@ class AmbientRecallCardTests(unittest.TestCase):
         self.assertEqual(card["action_grammar"], "direction_only")
         self.assertEqual(card["source_refs"], [])
         self.assertTrue(card["source_boundary"]["registry_derived_navigation_only"])
-        self.assertIn("registry", card["suggested_use"])
+        self.assertEqual(card["visibility"], "silent_tuning")
+        self.assertEqual(card["foreground_residue_reason"], "no_source_ref_or_reopen_plan")
+        self.assertIn("background resonance", card["suggested_use"])
 
     def test_candidate_nudge_does_not_echo_instruction_like_theme(self) -> None:
         payload = cards.ambient_recall_from_decision(

@@ -112,11 +112,7 @@ COMPACT_DETAIL_AFFORDANCE_ALLOWLIST: dict[
             "operator_detail_command",
         ): "The MCP recovery card needs one full-detail CLI command for operators debugging selector state.",
     },
-    "task_orientation.compact": {
-        (
-            "operator_detail_command",
-        ): "The compact orientation packet stays thin but keeps one explicit full-detail reopen command.",
-    },
+    "task_orientation.compact": {},
 }
 
 

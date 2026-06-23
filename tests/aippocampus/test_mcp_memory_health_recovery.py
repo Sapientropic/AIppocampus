@@ -11,6 +11,7 @@ from aippocampus_runtime import core
 from aippocampus_runtime.contracts import executable_command_violations
 from aippocampus_runtime.mcp import server as mcp
 from aippocampus_runtime.mcp import tool_handlers as mcp_tools
+from aippocampus_runtime.mcp.compact_profile import mcp_tool_result_payload
 
 
 class McpMemoryHealthRecoveryTests(unittest.TestCase):
@@ -69,7 +70,10 @@ class McpMemoryHealthRecoveryTests(unittest.TestCase):
         self.tmp.cleanup()
 
     def tool_payload(self, response: dict) -> dict:
-        return json.loads(response["result"]["content"][0]["text"])
+        result = response["result"]
+        if isinstance(result.get("structuredContent"), dict):
+            self.assertFalse(result["content"][0]["text"].lstrip().startswith("{"))
+        return mcp_tool_result_payload(result)
 
     def test_memory_health_split_state_when_recall_can_reopen_source(self) -> None:
         last_recall_env = "AIPPOCAMPUS_AGENT_LAST_RECALL_PATH"

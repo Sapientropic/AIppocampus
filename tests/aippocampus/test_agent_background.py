@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 
 from aippocampus_runtime.mcp import server as mcp
+from aippocampus_runtime.mcp.compact_profile import mcp_tool_result_payload
 from aippocampus_runtime.recall import background_findings
 
 
@@ -61,8 +62,10 @@ def write_generic_issue_working_memory(path: Path) -> None:
 
 class AgentBackgroundTests(unittest.TestCase):
     def tool_payload(self, response: dict) -> dict:
-        text = response["result"]["content"][0]["text"]
-        return json.loads(text)
+        result = response["result"]
+        if isinstance(result.get("structuredContent"), dict):
+            self.assertFalse(result["content"][0]["text"].lstrip().startswith("{"))
+        return mcp_tool_result_payload(result)
 
     def test_agent_background_describes_generic_reviewed_finding_shape(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
