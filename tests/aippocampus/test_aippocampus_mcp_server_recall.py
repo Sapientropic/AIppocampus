@@ -726,15 +726,17 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
         self.assertEqual(payload["surface"], "mcp_search_memory_compact")
         self.assertNotIn("runtime_provenance", payload)
         self.assertNotIn("output_boundary", payload)
-        self.assertEqual(payload["matches"][0]["match_index"], 1)
-        self.assertFalse(payload["matches"][0]["snippet_omitted"])
-        self.assertIn("不是摘要替代事实", payload["matches"][0]["snippet"])
-        self.assertTrue(payload["matches"][0]["source_refs_omitted"])
-        self.assertNotIn("message_id", payload["matches"][0])
+        self.assertGreaterEqual(payload["match_count"], 1)
+        self.assertNotIn("matches", payload)
+        self.assertEqual(payload["source_hits"][0]["index"], 1)
+        self.assertLessEqual(len(payload["source_hits"]), 2)
+        self.assertTrue(payload["source_hits"][0]["snippet_omitted"])
+        self.assertNotIn("message_id", payload["source_hits"][0])
+        self.assertNotIn("snippet_preview", payload["source_hits"][0])
         self.assertIn("foreground_action", payload)
         self.assertNotIn("agent_next_action", payload)
 
-    def test_search_memory_can_emit_source_snippets_when_explicitly_requested(self) -> None:
+    def test_search_memory_can_emit_source_preview_when_explicitly_requested(self) -> None:
         response = mcp.handle_request(
             {
                 "jsonrpc": "2.0",
@@ -754,8 +756,31 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
 
         payload = self.tool_payload(response)
         self.assertFalse(response["result"].get("isError", False))
-        self.assertEqual(payload["matches"][0]["message_id"], "msg_final")
-        self.assertIn("不是摘要替代事实", payload["matches"][0]["snippet"])
+        self.assertNotIn("matches", payload)
+        self.assertEqual(payload["source_hits"][0]["index"], 1)
+        self.assertFalse(payload["source_hits"][0]["snippet_omitted"])
+        self.assertIn("不是摘要替代事实", payload["source_hits"][0]["snippet_preview"])
+
+        full_response = mcp.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 32,
+                "method": "tools/call",
+                "params": {
+                    "name": "search_memory",
+                    "arguments": {
+                        "query": "clean source 摘要",
+                        "cwd": str(self.cwd),
+                        "max": 3,
+                        "include_source_snippets": True,
+                        "detail": "full",
+                    },
+                },
+            }
+        )
+        full_payload = self.tool_payload(full_response)
+        self.assertEqual(full_payload["matches"][0]["message_id"], "msg_final")
+        self.assertIn("不是摘要替代事实", full_payload["matches"][0]["snippet"])
 
     def test_search_memory_all_registered_sources_scope_matches_cli_projection(self) -> None:
         registry_clean = self.cwd / "registry-thread" / "clean-source"
@@ -821,10 +846,15 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
         self.assertEqual(payload["kind"], "aippocampus_registry_source_search")
         self.assertEqual(payload["mcp_search_scope"], "all_registered_sources")
         self.assertEqual(payload["match_count"], 1)
-        self.assertEqual(payload["matches"][0]["thread"]["thread_key"], "session:registry")
-        self.assertIn("aippocampus search --hit 1 --last-search --json", encoded)
+        self.assertNotIn("matches", payload)
+        self.assertEqual(payload["source_hits"][0]["index"], 1)
+        self.assertIn("--thread-key session:registry", payload["foreground_action"]["command"])
+        self.assertIn(
+            "aippocampus search --open-source --thread-key session:registry",
+            encoded,
+        )
         self.assertNotIn(str(self.cwd), encoded)
-        self.assertFalse(payload["privacy"]["paths_included"])
+        self.assertNotIn("privacy", payload)
 
     def test_search_memory_all_registered_sources_uses_configured_registry_when_registry_dir_omitted(self) -> None:
         registry_clean = self.cwd / "registry-cwd-thread" / "clean-source"
@@ -886,7 +916,8 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
         self.assertFalse(response["result"].get("isError", False))
         self.assertEqual(payload["mcp_search_scope"], "all_registered_sources")
         self.assertEqual(payload["match_count"], 1)
-        self.assertEqual(payload["matches"][0]["thread"]["thread_key"], "session:registry-cwd")
+        self.assertNotIn("matches", payload)
+        self.assertIn("--thread-key session:registry-cwd", payload["foreground_action"]["command"])
 
     def test_search_memory_last_recall_scope_searches_cached_route_set(self) -> None:
         route_clean = self.cwd / "route-thread" / "clean-source"
@@ -978,7 +1009,8 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
         self.assertEqual(payload["kind"], "aippocampus_last_recall_source_search")
         self.assertEqual(payload["mcp_search_scope"], "last_recall_candidates")
         self.assertEqual(payload["match_count"], 1)
-        self.assertEqual(payload["matches"][0]["request_index"], 1)
+        self.assertNotIn("matches", payload)
+        self.assertEqual(payload["source_hits"][0]["request_index"], 1)
         self.assertIn(
             "aippocampus search --open-source --thread-key session:last-recall "
             "--message-id msg_route --line 5 --json",
@@ -1459,7 +1491,26 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
         )
 
         payload = self.tool_payload(response)
-        self.assertEqual(payload["limit"], 25)
+        self.assertNotIn("limit", payload)
+
+        full_response = mcp.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 3301,
+                "method": "tools/call",
+                "params": {
+                    "name": "search_memory",
+                    "arguments": {
+                        "query": "source",
+                        "cwd": str(self.cwd),
+                        "max": 9999,
+                        "detail": "full",
+                    },
+                },
+            }
+        )
+        full_payload = self.tool_payload(full_response)
+        self.assertEqual(full_payload["limit"], 25)
 
     def test_search_memory_redacts_local_source_path_by_default(self) -> None:
         response = mcp.handle_request(
@@ -1475,7 +1526,8 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
         )
 
         payload = self.tool_payload(response)
-        self.assertEqual(payload["source"], mcp_handlers.LOCAL_PATH_REDACTION)
+        self.assertNotIn("source", payload)
+        self.assertNotIn(str(self.clean), json.dumps(payload, ensure_ascii=False))
 
         private_response = mcp.handle_request(
             {

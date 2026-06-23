@@ -333,7 +333,11 @@ def mcp_compact_debug_literals_guarded(path: Path) -> bool:
     text = path.read_text(encoding="utf-8")
     return (
         GIANT_FUNCTION_STAGE_MAP_MARKER in text
-        and "strip_compact_foreground_debug_fields(" in text
+        and (
+            "strip_compact_foreground_debug_fields(" in text
+            or "render_profiled_result(" in text
+            or "compact_mcp_tool_result(" in text
+        )
     )
 
 
