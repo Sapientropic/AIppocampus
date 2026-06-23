@@ -47,6 +47,9 @@ ENCRYPTED_SYNC_V2 = REPO_ROOT / "docs" / "architecture" / "ops" / "encrypted-syn
 SOURCE_BACKED_PRODUCT_DISCIPLINE = (
     REPO_ROOT / "docs" / "architecture" / "recall" / "source-backed-product-discipline.md"
 )
+INSTRUCTION_SURFACE_POLICY = (
+    REPO_ROOT / "docs" / "architecture" / "runtime" / "instruction-surface-policy.md"
+)
 LARGE_RUNTIME_THRESHOLD = 600
 LARGE_TEST_THRESHOLD = 1500
 LARGE_BENCHMARK_THRESHOLD = 1200
@@ -305,6 +308,77 @@ class ArchitectureBoundaryTests(unittest.TestCase):
             "separate issue review",
         ):
             self.assertIn(phrase, text)
+
+    def test_instruction_surface_policy_is_canonical_runtime_contract(self) -> None:
+        text = INSTRUCTION_SURFACE_POLICY.read_text(encoding="utf-8")
+        runtime_index = (REPO_ROOT / "docs" / "architecture" / "runtime" / "README.md").read_text(
+            encoding="utf-8",
+        )
+
+        for phrase in (
+            "Role: current contract.",
+            "canonical policy for instruction-shaped text",
+            "Local invariant comment",
+            "Runtime prompt owner",
+            "Compact foreground projection",
+            "Detail/operator/explain",
+            "Test contract text",
+            "Changed-Surface Gate",
+            "compact_projection_owner",
+            "runtime_prompt_and_route_owner",
+            "test_contract_owner",
+        ):
+            self.assertIn(phrase, text)
+        self.assertIn("instruction-surface-policy.md", runtime_index)
+
+    def test_instruction_surface_changed_surface_gate_uses_owner_classification(self) -> None:
+        classified = subprocess.run(
+            [
+                sys.executable,
+                str(DEBT_REPORT),
+                "--changed-surface-only",
+                "--json",
+                "--changed-file",
+                "skills/aippocampus/scripts/aippocampus_runtime/mcp/agent_recall_projection.py",
+            ],
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(classified.returncode, 0, classified.stderr)
+        classified_report = json.loads(classified.stdout)
+        classified_codes = {
+            warning["code"] for warning in classified_report["changed_surface"]["warnings"]
+        }
+        self.assertNotIn("changed_surface_instruction_surface_unclassified", classified_codes)
+        self.assertEqual(
+            classified_report["changed_surface"]["instruction_surface"]["classified_file_count"],
+            1,
+        )
+
+        unclassified = subprocess.run(
+            [
+                sys.executable,
+                str(DEBT_REPORT),
+                "--changed-surface-only",
+                "--json",
+                "--changed-file",
+                "skills/aippocampus/scripts/aippocampus_runtime/mcp/tool_handlers.py",
+            ],
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            check=False,
+        )
+        self.assertNotEqual(unclassified.returncode, 0, unclassified.stdout)
+        unclassified_report = json.loads(unclassified.stdout)
+        unclassified_codes = {
+            warning["code"] for warning in unclassified_report["changed_surface"]["warnings"]
+        }
+        self.assertIn("changed_surface_instruction_surface_unclassified", unclassified_codes)
 
     def test_ops_recall_hook_orchestration_boundary_is_documented_and_allowlisted(self) -> None:
         edges = same_dir_import_edges()
