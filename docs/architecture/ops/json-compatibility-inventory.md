@@ -33,3 +33,16 @@ cross-surface regression assertions in `tests/aippocampus/frontstage_assertions.
 and the MCP compact tests. Add new compact fields there first so the renderer
 can classify them as foreground, boundary, or detail/operator-only instead of
 letting another diagnostic noun leak into default product output.
+
+Executable local checks:
+
+```powershell
+python -m unittest tests.aippocampus.test_runtime_contracts_and_config_registry tests.aippocampus.test_aippocampus_mcp_server_catalog -v
+python tools\aippocampus\docs\compat_shim_inventory.py --json
+```
+
+Use the first command for retired public JSON aliases and MCP compact
+debug-field leaks. Use the second command for flat compatibility shims; it is
+listed here because public JSON compatibility and import/path compatibility are
+usually reviewed together during closeout, but their field lists stay in their
+own canonical inventories.

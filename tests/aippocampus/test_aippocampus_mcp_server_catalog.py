@@ -12,6 +12,7 @@ from aippocampus_runtime.mcp import server as mcp
 from aippocampus_runtime.mcp import tool_handlers as mcp_handlers
 from aippocampus_runtime.mcp import tool_readiness
 from aippocampus_runtime.ops import provider_key_bridge
+from tests.aippocampus.frontstage_assertions import assert_no_compact_debug_fields
 from tests.aippocampus.mcp_server_fixtures import (
     assert_recall_template_action,
     field_path_count,
@@ -19,6 +20,7 @@ from tests.aippocampus.mcp_server_fixtures import (
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
+
 
 class AippocampusMcpServerCatalogTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -73,7 +75,14 @@ class AippocampusMcpServerCatalogTests(unittest.TestCase):
     def tool_payload(self, response: dict) -> dict:
         result = response["result"]
         if isinstance(result.get("structuredContent"), dict):
-            return result["structuredContent"]
+            payload = result["structuredContent"]
+            if payload.get("detail") == "compact":
+                assert_no_compact_debug_fields(
+                    self,
+                    payload,
+                    surface=str(payload.get("surface") or payload.get("kind") or "mcp_compact"),
+                )
+            return payload
         text = result["content"][0]["text"]
         return json.loads(text)
 
@@ -423,10 +432,27 @@ class AippocampusMcpServerCatalogTests(unittest.TestCase):
         full_payload = self.tool_payload(full_response)
         self.assertEqual(full_payload["detail"], "full")
         self.assertEqual(full_payload["surface"], "agent_cli_or_mcp_adapter")
+        self.assertIn("runtime_provenance", full_payload)
         self.assertIn("memory_packets", full_payload)
         self.assertIn("deepen_requests", full_payload)
         self.assertIn("handle", full_payload["deepen_requests"][0])
 
+    def test_mcp_runtime_provenance_is_profile_rendered_not_handler_injected(self) -> None:
+        handler_source = (
+            REPO_ROOT
+            / "skills"
+            / "aippocampus"
+            / "scripts"
+            / "aippocampus_runtime"
+            / "mcp"
+            / "tool_handlers.py"
+        ).read_text(encoding="utf-8")
+
+        self.assertNotIn("mcp_runtime_provenance", handler_source)
+        self.assertNotIn('["runtime_provenance"]', handler_source)
+        self.assertNotIn('["source_anchor_gate"]', handler_source)
+
+    def test_agent_aippo_guidance_card_stays_compact(self) -> None:
         aippo_response = mcp.handle_request(
             {
                 "jsonrpc": "2.0",
