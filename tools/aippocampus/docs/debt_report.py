@@ -330,7 +330,21 @@ def function_has_stage_map(node: ast.FunctionDef | ast.AsyncFunctionDef, path: P
 
 
 def mcp_compact_debug_literals_guarded(path: Path) -> bool:
+    """Return whether MCP debug-like field literals live in a render boundary.
+
+    Projection modules are allowed to name compact/detail fields because they
+    are the owner that translates internal proof into the small foreground card.
+    Handler and orchestration modules still need to delegate instead of
+    hand-assembling proof-heavy foreground payloads.
+    """
+
+    rel_path = repo_relative(path)
     text = path.read_text(encoding="utf-8")
+    if rel_path.startswith("skills/aippocampus/scripts/aippocampus_runtime/mcp/") and (
+        path.name.endswith("_projection.py")
+        or path.name in {"public_projection.py", "compact_profile.py"}
+    ):
+        return True
     return (
         GIANT_FUNCTION_STAGE_MAP_MARKER in text
         and (

@@ -285,11 +285,14 @@ class DebtReportTests(unittest.TestCase):
         clean = debt_report.changed_surface_debt(["docs/guides/install-guide.md"])
         self.assertEqual(clean["status"], "pass")
 
-        changed = debt_report.changed_surface_debt(
+        projection_owner = debt_report.changed_surface_debt(
             ["skills/aippocampus/scripts/aippocampus_runtime/mcp/agent_deepen_projection.py"]
         )
+        self.assertEqual(projection_owner["status"], "pass")
 
-        self.assertEqual(changed["status"], "fail")
+        changed = debt_report.changed_surface_debt(
+            ["skills/aippocampus/scripts/aippocampus_runtime/source/registry_search.py"]
+        )
         self.assertGreater(changed["acceptance_bearing_warning_count"], 0)
         self.assertTrue(
             all(warning["acceptance_bearing"] for warning in changed["warnings"])

@@ -5,12 +5,9 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
+from aippocampus_runtime import core
 from aippocampus_runtime.contracts import normalize_foreground_action
 from aippocampus_runtime.source.discussion_atlas_pointer import discussion_atlas_action
-
-
-def _without_empty(value: Mapping[str, Any]) -> dict[str, Any]:
-    return {key: item for key, item in value.items() if item not in (None, "", {})}
 
 
 def current_source_probe_has_match(payload: Mapping[str, Any]) -> bool:
@@ -51,7 +48,10 @@ def maybe_promote_discussion_atlas_action(
     )
     if not should_promote:
         return foreground_action, safe_next_actions, pointer
-    ordinary = _without_empty(normalize_foreground_action(foreground_action))
+    ordinary = core.strip_empty(
+        normalize_foreground_action(foreground_action),
+        drop_empty_dicts=True,
+    )
     if ordinary:
         safe_next_actions = [ordinary, *safe_next_actions]
     return action, safe_next_actions, pointer

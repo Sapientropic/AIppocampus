@@ -9,26 +9,6 @@ from aippocampus_runtime import core
 from aippocampus_runtime.contracts import canonical_foreground_action_fields, shell_quote
 
 
-def _as_dict(value: Any) -> dict[str, Any]:
-    return dict(value) if isinstance(value, Mapping) else {}
-
-
-def _as_list(value: Any) -> list[Any]:
-    return list(value) if isinstance(value, list) else []
-
-
-def _without_empty(value: Any) -> Any:
-    if isinstance(value, dict):
-        return {
-            key: cleaned
-            for key, item in value.items()
-            if (cleaned := _without_empty(item)) not in (None, "", [])
-        }
-    if isinstance(value, list):
-        return [cleaned for item in value if (cleaned := _without_empty(item)) not in (None, "", [])]
-    return value
-
-
 def _detail_command(
     request_index: int | None,
     *,
@@ -140,8 +120,8 @@ def compact_agent_explain_payload(
     source = dict(payload)
     if source.get("surface") != "recall":
         return source
-    explanation = _as_dict(source.get("explanation"))
-    action = _as_dict(source.get("foreground_action"))
+    explanation = core.dict_or_empty(source.get("explanation"))
+    action = core.dict_or_empty(source.get("foreground_action"))
     if source.get("status") != "ok":
         primary = action or _deepen_action(
             request_index,
@@ -150,20 +130,20 @@ def compact_agent_explain_payload(
         )
         safe_actions = [
             dict(item)
-            for item in _as_list(source.get("safe_next_actions"))
+            for item in core.list_or_empty(source.get("safe_next_actions"))
             if isinstance(item, Mapping)
         ] or [primary]
-        result = _as_dict(source.get("result"))
+        result = core.dict_or_empty(source.get("result"))
         error = (
-            _as_dict(source.get("error"))
-            or _as_dict(result.get("error"))
-            or _as_dict(explanation.get("error"))
+            core.dict_or_empty(source.get("error"))
+            or core.dict_or_empty(result.get("error"))
+            or core.dict_or_empty(explanation.get("error"))
         )
         action_fields = canonical_foreground_action_fields(
             primary,
             safe_next_actions=safe_actions,
         )
-        return _without_empty(
+        return core.strip_empty(
             {
                 "detail": "compact",
                 "kind": "aippocampus_route_explain_card",
@@ -185,7 +165,7 @@ def compact_agent_explain_payload(
                 "policy_boundary": source.get("policy_boundary"),
             }
         )
-    reason_codes = _as_list(explanation.get("reason_codes"))
+    reason_codes = core.list_or_empty(explanation.get("reason_codes"))
     primary = _deepen_action(
         request_index,
         last_recall=last_recall,
@@ -201,7 +181,7 @@ def compact_agent_explain_payload(
         220,
     )
     action_fields = canonical_foreground_action_fields(primary, safe_next_actions=[primary])
-    return _without_empty(
+    return core.strip_empty(
         {
             "detail": "compact",
             "kind": "aippocampus_route_explain_card",

@@ -5,13 +5,10 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
+from aippocampus_runtime import core
 from aippocampus_runtime.contracts import normalize_foreground_action
 from aippocampus_runtime.mcp import agent_recall_discussion_projection as discussion_projection
 from aippocampus_runtime.mcp import agent_recall_recovery_projection as recovery_projection
-
-
-def _without_empty(value: Mapping[str, Any]) -> dict[str, Any]:
-    return {key: item for key, item in value.items() if item not in (None, "", {})}
 
 
 def maybe_promote_repo_familiarity_action(
@@ -34,7 +31,10 @@ def maybe_promote_repo_familiarity_action(
         )
     ):
         return foreground_action, safe_next_actions, None
-    ordinary = _without_empty(normalize_foreground_action(foreground_action))
+    ordinary = core.strip_empty(
+        normalize_foreground_action(foreground_action),
+        drop_empty_dicts=True,
+    )
     ordinary_action_id = str(ordinary.get("id") or ordinary.get("action_id") or "")
     if ordinary:
         safe_next_actions = [ordinary, *safe_next_actions]

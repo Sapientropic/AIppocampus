@@ -5,9 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-
-def _without_empty(value: Mapping[str, Any]) -> dict[str, Any]:
-    return {key: item for key, item in value.items() if item not in (None, "", [])}
+from aippocampus_runtime import core
 
 
 def hidden_route_count_fields(
@@ -55,7 +53,7 @@ def low_specificity_weak_route_recovery_card(
         None,
     )
     primary_action = foreground_action.get("id") or foreground_action.get("action_id")
-    return _without_empty(
+    return core.strip_empty(
         {
             **(weak_route_recovery_card or {}),
             "posture": "labels_low_specificity",
