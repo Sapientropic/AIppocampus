@@ -263,5 +263,41 @@ class DebtReportTests(unittest.TestCase):
         )
         self.assertIn("| `tests/aippocampus/test_update_sync.py` | 2126 | 2290 | #1307 |", refreshed)
 
+    def test_debt_report_emits_code_debt_inventories(self) -> None:
+        report = debt_report.build_report()
+
+        self.assertIn("helper_duplication", report)
+        self.assertIn("broad_exception_debt", report)
+        self.assertIn("compact_debug_field_leaks", report)
+        self.assertIn("giant_hot_path_functions", report)
+        self.assertIn("test_debt_indicators", report)
+        helper_families = {
+            family["family"]
+            for family in report["helper_duplication"]["families"]
+        }
+        self.assertIn("jsonl_read", helper_families)
+        self.assertGreaterEqual(
+            report["broad_exception_debt"]["summary"]["broad_total"],
+            report["broad_exception_debt"]["summary"]["pure_silent_broad_except_total"],
+        )
+
+    def test_changed_surface_debt_is_acceptance_bearing_only_for_touched_files(self) -> None:
+        clean = debt_report.changed_surface_debt(["docs/guides/install-guide.md"])
+        self.assertEqual(clean["status"], "pass")
+
+        changed = debt_report.changed_surface_debt(
+            ["skills/aippocampus/scripts/aippocampus_runtime/mcp/agent_recall_projection.py"]
+        )
+
+        self.assertEqual(changed["status"], "fail")
+        self.assertGreater(changed["acceptance_bearing_warning_count"], 0)
+        self.assertTrue(
+            all(warning["acceptance_bearing"] for warning in changed["warnings"])
+        )
+        self.assertIn(
+            "changed_surface_duplicate_helper",
+            {warning["code"] for warning in changed["warnings"]},
+        )
+
 if __name__ == "__main__":
     unittest.main()

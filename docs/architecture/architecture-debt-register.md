@@ -14,6 +14,19 @@ Generate the current count/status report with:
 python tools\aippocampus\docs\debt_report.py --json
 ```
 
+For PR closeout, prefer the changed-surface command emitted by
+`python tools\aippocampus\test_plan.py --json`:
+
+```powershell
+python tools\aippocampus\docs\debt_report.py --changed-surface-only --json --changed-file <repo-relative-file>
+```
+
+This is the acceptance-bearing local gate for touched Python surfaces. It is
+kept separate from the full inventory so ordinary agents see duplicate helpers,
+hot-path broad exceptions, compact/debug field literals, and giant-function
+growth without receiving a wall of historical debt. Use `--detail full` on the
+default report only when an operator needs every helper/exception row.
+
 For contributor onboarding, dependency flow, maintenance/core-recall separation,
 and recall test visibility, use
 [`runtime-script-map.md`](./runtime-script-map.md). This register only answers

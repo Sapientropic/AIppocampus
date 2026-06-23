@@ -4,8 +4,11 @@
 from __future__ import annotations
 
 import argparse
+import ast
 import json
 import re
+from collections import Counter
+from functools import lru_cache
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -37,6 +40,69 @@ STALE_ALLOWANCE_MIN_BUDGET = 1000
 STALE_ALLOWANCE_MAX_CURRENT = 300
 STALE_ALLOWANCE_MAX_RATIO = 0.25
 SINGLE_DIGIT_GUARD_MARGIN_LIMIT = 9
+GIANT_FUNCTION_LINE_LIMIT = 250
+SCAN_ROOTS = (
+    "skills/aippocampus/scripts/aippocampus_runtime",
+    "tests/aippocampus",
+    "tools/aippocampus",
+    "benchmarks/aippocampus",
+)
+HOT_PATH_PREFIXES = (
+    "skills/aippocampus/scripts/aippocampus_runtime/source/",
+    "skills/aippocampus/scripts/aippocampus_runtime/recall/",
+    "skills/aippocampus/scripts/aippocampus_runtime/mcp/",
+    "skills/aippocampus/scripts/aippocampus_runtime/hooks/",
+    "skills/aippocampus/scripts/aippocampus_runtime/update/",
+    "skills/aippocampus/scripts/aippocampus_runtime/subconscious/",
+)
+HELPER_NAME_TO_FAMILY = {
+    "_without_empty": "without_empty",
+    "_as_list": "as_list",
+    "_as_dict": "as_dict",
+    "_stable_id": "stable_id",
+    "stable_id": "stable_id",
+    "stable_hash": "stable_hash",
+    "load_json": "json_load",
+    "load_json_dict": "json_load",
+    "iter_jsonl": "jsonl_read",
+    "iter_jsonl_dict_rows": "jsonl_read",
+    "iter_jsonl_dict_rows_with_line_numbers": "jsonl_read",
+    "load_jsonl_dict_rows": "jsonl_read",
+    "write_jsonl": "jsonl_write",
+    "write_jsonl_dict_rows": "jsonl_write",
+    "_write_json_atomic": "json_atomic_write",
+    "write_json_atomic": "json_atomic_write",
+    "source_ref_key": "source_ref_key",
+    "safe_float": "safe_float",
+    "parse_utc": "parse_utc",
+}
+CANONICAL_HELPER_PATHS = {
+    "json_load": {"skills/aippocampus/scripts/aippocampus_runtime/source/io_kernel.py"},
+    "jsonl_read": {"skills/aippocampus/scripts/aippocampus_runtime/source/io_kernel.py"},
+    "jsonl_write": {"skills/aippocampus/scripts/aippocampus_runtime/source/io_kernel.py"},
+    "json_atomic_write": {"skills/aippocampus/scripts/aippocampus_runtime/source/io_kernel.py"},
+    "source_ref_key": {"skills/aippocampus/scripts/aippocampus_runtime/source/io_kernel.py"},
+    "safe_float": {"skills/aippocampus/scripts/aippocampus_runtime/source/io_kernel.py"},
+    "parse_utc": {"skills/aippocampus/scripts/aippocampus_runtime/source/io_kernel.py"},
+}
+COMPACT_DEBUG_FIELD_LITERALS = (
+    "runtime_provenance",
+    "source_anchor_gate",
+    "operator_detail_command",
+    "safe_next_actions",
+    "weak_route_recovery_card",
+    "apw_recovery_state",
+    "last_recall_cache_available",
+    "recall_selector_id",
+    "route_count",
+)
+TEST_SCAFFOLD_HELPERS = {
+    "run_cli",
+    "write_jsonl",
+    "source_ref",
+    "fake_urlopen",
+    "tearDown",
+}
 LOW_MARGIN_OWNER_ISSUES = {
     "skills/aippocampus/scripts/aippocampus_runtime/dream/input_pack.py": "#2548",
     "skills/aippocampus/scripts/aippocampus_runtime/hooks/install_action_hint.py": "#2548",
@@ -114,6 +180,387 @@ def layer_for_path(rel_path: str) -> str:
     if rel_path.startswith("tools/"):
         return "tools"
     return "other"
+
+
+def repo_relative(path: Path) -> str:
+    return path.relative_to(REPO_ROOT).as_posix()
+
+
+@lru_cache(maxsize=1)
+def scan_python_files() -> tuple[Path, ...]:
+    files: list[Path] = []
+    for root in SCAN_ROOTS:
+        base = REPO_ROOT / root
+        if not base.exists():
+            continue
+        files.extend(
+            path
+            for path in base.rglob("*.py")
+            if "__pycache__" not in path.parts
+        )
+    return tuple(sorted(files, key=repo_relative))
+
+
+@lru_cache(maxsize=None)
+def parse_python(path: Path) -> ast.AST | None:
+    try:
+        return ast.parse(path.read_text(encoding="utf-8"), filename=repo_relative(path))
+    except (OSError, SyntaxError):
+        return None
+
+
+def is_hot_path(rel_path: str) -> bool:
+    return rel_path.startswith(HOT_PATH_PREFIXES)
+
+
+@lru_cache(maxsize=1)
+def helper_definitions() -> tuple[dict[str, object], ...]:
+    definitions: list[dict[str, object]] = []
+    for path in scan_python_files():
+        rel_path = repo_relative(path)
+        tree = parse_python(path)
+        if tree is None:
+            continue
+        for node in ast.walk(tree):
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            family = HELPER_NAME_TO_FAMILY.get(node.name)
+            if family is None:
+                continue
+            definitions.append(
+                {
+                    "family": family,
+                    "name": node.name,
+                    "path": rel_path,
+                    "line": int(getattr(node, "lineno", 0) or 0),
+                    "canonical_owner": rel_path in CANONICAL_HELPER_PATHS.get(family, set()),
+                    "hot_path": is_hot_path(rel_path),
+                }
+            )
+    return tuple(definitions)
+
+
+def helper_duplication_inventory(*, detail: bool = False) -> dict[str, object]:
+    definitions = list(helper_definitions())
+    families: list[dict[str, object]] = []
+    for family in sorted({str(item["family"]) for item in definitions}):
+        family_defs = [item for item in definitions if item["family"] == family]
+        local_defs = [item for item in family_defs if not item["canonical_owner"]]
+        families.append(
+            {
+                "family": family,
+                "definition_count": len(family_defs),
+                "local_copy_count": len(local_defs),
+                "hot_path_local_copy_count": sum(1 for item in local_defs if item["hot_path"]),
+                "canonical_paths": sorted(CANONICAL_HELPER_PATHS.get(family, set())),
+                "sample_definitions": family_defs[:20],
+            }
+        )
+    return {
+        "summary": {
+            "family_count": len(families),
+            "definition_count": len(definitions),
+            "local_copy_count": sum(
+                1 for item in definitions if not bool(item["canonical_owner"])
+            ),
+            "hot_path_local_copy_count": sum(
+                1
+                for item in definitions
+                if not bool(item["canonical_owner"]) and bool(item["hot_path"])
+            ),
+        },
+        "families": families,
+        "definition_sample": definitions[:80],
+        **({"definitions": definitions} if detail else {}),
+    }
+
+
+def exception_type_names(node: ast.AST | None) -> set[str]:
+    if node is None:
+        return {"bare"}
+    if isinstance(node, ast.Name):
+        return {node.id}
+    if isinstance(node, ast.Attribute):
+        return {node.attr}
+    if isinstance(node, ast.Tuple):
+        names: set[str] = set()
+        for element in node.elts:
+            names.update(exception_type_names(element))
+        return names
+    return set()
+
+
+@lru_cache(maxsize=1)
+def broad_exception_handlers() -> tuple[dict[str, object], ...]:
+    handlers: list[dict[str, object]] = []
+    for path in scan_python_files():
+        rel_path = repo_relative(path)
+        tree = parse_python(path)
+        if tree is None:
+            continue
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ExceptHandler):
+                continue
+            names = exception_type_names(node.type)
+            if not ({"Exception", "BaseException", "bare"} & names):
+                continue
+            pure_silent = all(isinstance(stmt, (ast.Pass, ast.Continue)) for stmt in node.body)
+            handlers.append(
+                {
+                    "path": rel_path,
+                    "line": int(getattr(node, "lineno", 0) or 0),
+                    "exception_types": sorted(names),
+                    "hot_path": is_hot_path(rel_path),
+                    "pure_silent": pure_silent,
+                }
+            )
+    return tuple(handlers)
+
+
+def broad_exception_inventory(*, detail: bool = False) -> dict[str, object]:
+    handlers = list(broad_exception_handlers())
+    by_file = Counter(str(item["path"]) for item in handlers)
+    return {
+        "summary": {
+            "broad_total": len(handlers),
+            "hot_path_broad_total": sum(1 for item in handlers if item["hot_path"]),
+            "pure_silent_broad_except_total": sum(1 for item in handlers if item["pure_silent"]),
+            "hot_path_pure_silent_total": sum(
+                1 for item in handlers if item["hot_path"] and item["pure_silent"]
+            ),
+        },
+        "top_files": [
+            {"path": path, "count": count}
+            for path, count in by_file.most_common(20)
+        ],
+        "handler_sample": handlers[:80],
+        **({"handlers": handlers} if detail else {}),
+    }
+
+
+@lru_cache(maxsize=1)
+def compact_debug_field_inventory() -> dict[str, object]:
+    occurrences: list[dict[str, object]] = []
+    mcp_root = REPO_ROOT / "skills" / "aippocampus" / "scripts" / "aippocampus_runtime" / "mcp"
+    if mcp_root.exists():
+        for path in sorted(mcp_root.rglob("*.py"), key=repo_relative):
+            rel_path = repo_relative(path)
+            text = path.read_text(encoding="utf-8")
+            for field in COMPACT_DEBUG_FIELD_LITERALS:
+                count = text.count(field)
+                if count:
+                    occurrences.append({"path": rel_path, "field": field, "count": count})
+    return {
+        "summary": {
+            "field_family_count": len({str(item["field"]) for item in occurrences}),
+            "occurrence_total": sum(int(item["count"]) for item in occurrences),
+            "file_count": len({str(item["path"]) for item in occurrences}),
+        },
+        "occurrences": occurrences,
+        "note": (
+            "Static literal inventory only; compact/default behavior is enforced by "
+            "MCP profile tests and changed-surface checks."
+        ),
+    }
+
+
+@lru_cache(maxsize=1)
+def giant_function_inventory() -> dict[str, object]:
+    functions: list[dict[str, object]] = []
+    for path in scan_python_files():
+        rel_path = repo_relative(path)
+        if not rel_path.startswith("skills/aippocampus/scripts/aippocampus_runtime/"):
+            continue
+        tree = parse_python(path)
+        if tree is None:
+            continue
+        for node in ast.walk(tree):
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            end = getattr(node, "end_lineno", None)
+            if end is None:
+                continue
+            line_count = int(end) - int(node.lineno) + 1
+            if line_count >= GIANT_FUNCTION_LINE_LIMIT:
+                functions.append(
+                    {
+                        "path": rel_path,
+                        "function": node.name,
+                        "line": int(node.lineno),
+                        "line_count": line_count,
+                    }
+                )
+    functions.sort(key=lambda item: (-int(item["line_count"]), str(item["path"])))
+    return {
+        "threshold_lines": GIANT_FUNCTION_LINE_LIMIT,
+        "summary": {"function_count": len(functions)},
+        "functions": functions,
+    }
+
+
+def test_debt_inventory(*, detail: bool = False) -> dict[str, object]:
+    definitions: list[dict[str, object]] = []
+    for path in scan_python_files():
+        rel_path = repo_relative(path)
+        if not rel_path.startswith("tests/aippocampus/"):
+            continue
+        tree = parse_python(path)
+        if tree is None:
+            continue
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name in TEST_SCAFFOLD_HELPERS:
+                definitions.append(
+                    {
+                        "name": node.name,
+                        "path": rel_path,
+                        "line": int(getattr(node, "lineno", 0) or 0),
+                    }
+                )
+    counts = Counter(str(item["name"]) for item in definitions)
+    return {
+        "summary": {
+            "scaffold_definition_count": len(definitions),
+            "duplicate_scaffold_family_count": sum(1 for count in counts.values() if count > 1),
+        },
+        "families": [
+            {"name": name, "definition_count": count}
+            for name, count in sorted(counts.items())
+        ],
+        "definition_sample": definitions[:80],
+        **({"definitions": definitions} if detail else {}),
+    }
+
+
+def changed_surface_debt(changed_files: list[str] | None = None) -> dict[str, object]:
+    normalized = sorted({path.replace("\\", "/") for path in changed_files or [] if path})
+    warnings: list[dict[str, object]] = []
+    changed_paths = [
+        REPO_ROOT / path
+        for path in normalized
+        if path.endswith(".py") and (REPO_ROOT / path).is_file()
+    ]
+    helper_defs: list[dict[str, object]] = []
+    broad_handlers: list[dict[str, object]] = []
+    giant_functions: list[dict[str, object]] = []
+    compact_occurrences: list[dict[str, object]] = []
+    for path in changed_paths:
+        rel_path = repo_relative(path)
+        tree = parse_python(path)
+        if tree is not None:
+            for node in ast.walk(tree):
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    family = HELPER_NAME_TO_FAMILY.get(node.name)
+                    if family is not None:
+                        item = {
+                            "family": family,
+                            "name": node.name,
+                            "path": rel_path,
+                            "line": int(getattr(node, "lineno", 0) or 0),
+                            "canonical_owner": rel_path
+                            in CANONICAL_HELPER_PATHS.get(family, set()),
+                            "hot_path": is_hot_path(rel_path),
+                        }
+                        if not bool(item["canonical_owner"]):
+                            helper_defs.append(item)
+                    end = getattr(node, "end_lineno", None)
+                    if (
+                        end is not None
+                        and rel_path.startswith("skills/aippocampus/scripts/aippocampus_runtime/")
+                    ):
+                        line_count = int(end) - int(node.lineno) + 1
+                        if line_count >= GIANT_FUNCTION_LINE_LIMIT:
+                            giant_functions.append(
+                                {
+                                    "path": rel_path,
+                                    "function": node.name,
+                                    "line": int(node.lineno),
+                                    "line_count": line_count,
+                                }
+                            )
+                if isinstance(node, ast.ExceptHandler):
+                    names = exception_type_names(node.type)
+                    if not ({"Exception", "BaseException", "bare"} & names):
+                        continue
+                    broad_handlers.append(
+                        {
+                            "path": rel_path,
+                            "line": int(getattr(node, "lineno", 0) or 0),
+                            "exception_types": sorted(names),
+                            "hot_path": is_hot_path(rel_path),
+                            "pure_silent": all(
+                                isinstance(stmt, (ast.Pass, ast.Continue))
+                                for stmt in node.body
+                            ),
+                        }
+                    )
+        if "/mcp/" in f"/{rel_path}":
+            text = path.read_text(encoding="utf-8")
+            for field in COMPACT_DEBUG_FIELD_LITERALS:
+                count = text.count(field)
+                if count:
+                    compact_occurrences.append(
+                        {"path": rel_path, "field": field, "count": count}
+                    )
+    for item in helper_defs:
+        warnings.append(
+            {
+                "code": "changed_surface_duplicate_helper",
+                "path": item["path"],
+                "line": item["line"],
+                "family": item["family"],
+                "name": item["name"],
+                "acceptance_bearing": True,
+                "message": "Touched file defines a duplicate helper; migrate to the canonical owner or document a removal-bound exception.",
+            }
+        )
+    for item in broad_handlers:
+        if not (item["hot_path"] or item["pure_silent"]):
+            continue
+        warnings.append(
+            {
+                "code": "changed_surface_broad_exception",
+                "path": item["path"],
+                "line": item["line"],
+                "exception_types": item["exception_types"],
+                "hot_path": item["hot_path"],
+                "pure_silent": item["pure_silent"],
+                "acceptance_bearing": True,
+                "message": "Touched hot-path or silent broad exception needs typed diagnostics, loss accounting, or a documented process-boundary reason.",
+            }
+        )
+    for item in giant_functions:
+        warnings.append(
+            {
+                "code": "changed_surface_giant_function",
+                "path": item["path"],
+                "line": item["line"],
+                "function": item["function"],
+                "line_count": item["line_count"],
+                "acceptance_bearing": True,
+                "message": "Touched giant runtime function; split or record a responsibility-map decision before growing it.",
+            }
+        )
+    for item in compact_occurrences:
+        warnings.append(
+            {
+                "code": "changed_surface_compact_debug_literal",
+                "path": item["path"],
+                "field": item["field"],
+                "count": item["count"],
+                "acceptance_bearing": True,
+                "message": "Touched MCP file contains compact/debug field literals; prove compact profile output stays clean or move diagnostics behind detail/operator.",
+            }
+        )
+    return {
+        "changed_files": normalized,
+        "status": "fail" if warnings else "pass",
+        "acceptance_bearing_warning_count": len(warnings),
+        "warnings": warnings,
+        "policy": (
+            "Changed-surface debt warnings are acceptance-bearing; do not treat "
+            "readiness as passed until they are resolved or explicitly justified."
+        ),
+    }
 
 
 def build_system_weight(
@@ -497,7 +944,7 @@ def report_warnings(
     return warnings
 
 
-def build_report() -> dict[str, object]:
+def build_headroom_report(*, detail: str = "summary") -> dict[str, object]:
     entries = budget_entries()
     split_boundaries = split_boundary_entries()
     rows: list[dict[str, object]] = []
@@ -522,7 +969,15 @@ def build_report() -> dict[str, object]:
     headroom_summary = dict(system_weight["guard_headroom_summary"])
     count_drifts = count_drift_entries(rows)
     stale_allowances = stale_allowance_entries(rows)
-    return {
+    warnings = report_warnings(
+        headroom_summary=headroom_summary,
+        count_drifts=count_drifts,
+        stale_allowances=stale_allowances,
+        single_digit_guard_pressure=list(
+            system_weight["single_digit_guard_pressure"]
+        ),
+    )
+    report = {
         "ok": not missing_files and not over_budget and not stale_allowances,
         "sources": [source.relative_to(REPO_ROOT).as_posix() for source in inventory_sources()],
         "entry_count": len(entries),
@@ -532,16 +987,67 @@ def build_report() -> dict[str, object]:
         "count_drift": count_drifts,
         "count_drift_summary": count_drift_summary(count_drifts),
         "stale_allowances": stale_allowances,
-        "warnings": report_warnings(
-            headroom_summary=headroom_summary,
-            count_drifts=count_drifts,
-            stale_allowances=stale_allowances,
-            single_digit_guard_pressure=list(
-                system_weight["single_digit_guard_pressure"]
-            ),
+        "warnings": warnings,
+        "system_weight_summary": {
+            "total_tracked_lines": system_weight["total_tracked_lines"],
+            "layers": system_weight["layers"],
+            "guard_headroom_summary": system_weight["guard_headroom_summary"],
+        },
+    }
+    if detail == "full":
+        report["system_weight"] = system_weight
+        report["rows"] = rows
+    return report
+
+
+def build_report(
+    changed_files: list[str] | None = None,
+    *,
+    detail: str = "summary",
+) -> dict[str, object]:
+    headroom = build_headroom_report(detail="full")
+    full_detail = detail == "full"
+    helper_duplication = helper_duplication_inventory(detail=full_detail)
+    broad_exceptions = broad_exception_inventory(detail=full_detail)
+    compact_debug_fields = compact_debug_field_inventory()
+    giant_functions = giant_function_inventory()
+    test_debt = test_debt_inventory(detail=full_detail)
+    changed_surface = changed_surface_debt(changed_files)
+    warnings = list(headroom["warnings"])
+    if changed_surface["acceptance_bearing_warning_count"]:
+        warnings.append(
+            {
+                "code": "changed_surface_debt_acceptance_bearing",
+                "message": (
+                    "Changed-surface debt warning(s) are acceptance-bearing; "
+                    "resolve them or record an explicit owner decision before closeout."
+                ),
+                "count": changed_surface["acceptance_bearing_warning_count"],
+            }
+        )
+    return {
+        "ok": (
+            bool(headroom["ok"])
+            and not changed_surface["acceptance_bearing_warning_count"]
         ),
-        "system_weight": system_weight,
-        "rows": rows,
+        "sources": headroom["sources"],
+        "entry_count": headroom["entry_count"],
+        "missing_files": headroom["missing_files"],
+        "over_budget": headroom["over_budget"],
+        "headroom_summary": headroom["headroom_summary"],
+        "count_drift": headroom["count_drift"],
+        "count_drift_summary": headroom["count_drift_summary"],
+        "stale_allowances": headroom["stale_allowances"],
+        "warnings": warnings,
+        "detail": detail,
+        "helper_duplication": helper_duplication,
+        "broad_exception_debt": broad_exceptions,
+        "compact_debug_field_leaks": compact_debug_fields,
+        "giant_hot_path_functions": giant_functions,
+        "test_debt_indicators": test_debt,
+        "changed_surface": changed_surface,
+        "system_weight": headroom["system_weight"],
+        "rows": headroom["rows"],
     }
 
 
@@ -561,6 +1067,32 @@ def main() -> int:
         action="store_true",
         help="With --refresh-register-counts, write the refreshed counts to disk.",
     )
+    parser.add_argument(
+        "--changed-file",
+        action="append",
+        default=[],
+        help=(
+            "Mark a repo-relative file as part of the changed surface. Repeat to "
+            "make helper, broad-exception, compact-field, and giant-function debt "
+            "acceptance-bearing for touched files only."
+        ),
+    )
+    parser.add_argument(
+        "--detail",
+        choices=("summary", "full"),
+        default="summary",
+        help="Use full only when an operator needs every helper/exception definition.",
+    )
+    parser.add_argument(
+        "--changed-surface-only",
+        action="store_true",
+        help="Emit only the acceptance-bearing changed-surface debt gate.",
+    )
+    parser.add_argument(
+        "--headroom-only",
+        action="store_true",
+        help="Emit only the architecture headroom/budget gate without helper scans.",
+    )
     args = parser.parse_args()
 
     if args.refresh_register_counts:
@@ -574,7 +1106,38 @@ def main() -> int:
                 print(f"write with: {REFRESH_REGISTER_COUNTS_COMMAND}")
         return 0
 
-    report = build_report()
+    if args.changed_surface_only:
+        changed_surface = changed_surface_debt(list(args.changed_file or []))
+        result = {
+            "ok": changed_surface["status"] == "pass",
+            "kind": "aippocampus_changed_surface_debt_gate",
+            "changed_surface": changed_surface,
+        }
+        if args.json_output:
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+        else:
+            print(
+                "changed-surface debt: "
+                f"{changed_surface['status']} "
+                f"({changed_surface['acceptance_bearing_warning_count']} warning(s))"
+            )
+        return 0 if result["ok"] else 1
+
+    if args.headroom_only:
+        report = build_headroom_report(detail=str(args.detail))
+        if args.json_output:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            summary = report["headroom_summary"]
+            print(
+                "runtime guard headroom: "
+                f"exact_zero={summary['runtime_exact_zero_count']} "
+                f"near_zero={summary['runtime_near_zero_count']} "
+                f"over_budget={summary['runtime_over_budget_count']}"
+            )
+        return 0 if report["ok"] else 1
+
+    report = build_report(changed_files=list(args.changed_file or []), detail=str(args.detail))
     if args.json_output:
         print(json.dumps(report, ensure_ascii=False, indent=2))
     else:
