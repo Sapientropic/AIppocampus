@@ -51,7 +51,6 @@ from aippocampus_runtime.onboarding.status import (
 from aippocampus_runtime.onboarding.status import (
     infer_project_label_for_cwd as infer_project_label_for_cwd,
 )
-from aippocampus_runtime.onboarding.status import load_json_file as load_json_file
 from aippocampus_runtime.onboarding.status import maybe_float as maybe_float
 from aippocampus_runtime.onboarding.status import maybe_int as maybe_int
 from aippocampus_runtime.onboarding.status import path_exists as path_exists

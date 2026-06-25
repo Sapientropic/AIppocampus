@@ -42,6 +42,22 @@ INSTRUCTION_SURFACE_CLASSIFIED_FILES = {
             "owns recall route/action selection text that later projections render"
         ),
     },
+    "skills/aippocampus/scripts/aippocampus_runtime/recall/segment_search_extras.py": {
+        "classification": "source_sidecar_boundary_owner",
+        "owner": "#2635/#2651",
+        "why": (
+            "owns source sidecar/read-model boundary strings; sidecars may guide "
+            "search, while source-open proof stays in detail/tests/issue closeout"
+        ),
+    },
+    "skills/aippocampus/scripts/aippocampus_runtime/subconscious/scheduler.py": {
+        "classification": "lifecycle_scheduler_boundary_owner",
+        "owner": "#2635/#2651",
+        "why": (
+            "owns hook-safe scheduler boundary text; lifecycle foreground must "
+            "stay fail-open and must not become a proof or job-output surface"
+        ),
+    },
     "tests/aippocampus/frontstage_assertions.py": {
         "classification": "test_contract_owner",
         "owner": "#2632/#2651",

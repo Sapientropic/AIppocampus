@@ -27,7 +27,12 @@ from aippocampus_runtime.dream.constructive_outputs import (
     prospective_invitation_silent_plan,
 )
 from aippocampus_runtime.dream.risk_terms import dream_text_hard_risk
-from aippocampus_runtime.source.io_kernel import parse_utc, safe_float, source_ref_key
+from aippocampus_runtime.source.io_kernel import (
+    parse_utc,
+    safe_float,
+    source_ref_key,
+    source_ref_key_set,
+)
 from aippocampus_runtime.subconscious.candidate_router import (
     USE_WITH_SOURCE,
     ask_policy_for,
@@ -122,10 +127,6 @@ def normalize_now(now: str | datetime | None) -> datetime:
     return parsed or datetime.now(timezone.utc)
 
 
-def source_ref_keys(refs: Iterable[Mapping[str, Any]]) -> set[tuple[str, str, str, str]]:
-    return {source_ref_key(ref) for ref in refs if any(source_ref_key(ref))}
-
-
 def normalize_source_refs(value: object) -> tuple[dict[str, Any], ...]:
     if isinstance(value, Mapping):
         raw_items: Iterable[object] = [value]
@@ -179,8 +180,8 @@ def source_pack_overlaps_finding(
     finding: Mapping[str, Any],
     source_pack: Mapping[str, Any],
 ) -> bool:
-    finding_keys = source_ref_keys(normalize_source_refs(finding.get("source_refs")))
-    pack_keys = source_ref_keys(normalize_source_refs(source_pack.get("source_refs")))
+    finding_keys = source_ref_key_set(normalize_source_refs(finding.get("source_refs")))
+    pack_keys = source_ref_key_set(normalize_source_refs(source_pack.get("source_refs")))
     return bool(finding_keys and pack_keys and finding_keys & pack_keys)
 
 

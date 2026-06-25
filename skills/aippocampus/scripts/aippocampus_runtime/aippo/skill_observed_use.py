@@ -311,7 +311,7 @@ def build_skill_observed_use_report(
         declared_need_class=declared_need_class,
     )
     seed = seed_report["seed"]
-    loaded_feedback_rows, invalid_feedback_line_count = skill_observed_feedback.load_jsonl_rows(
+    loaded_feedback_rows, invalid_feedback_line_count = skill_observed_feedback.load_feedback_jsonl_rows(
         foreground_feedback_path
     )
     observed_rows: Sequence[Mapping[str, Any]]

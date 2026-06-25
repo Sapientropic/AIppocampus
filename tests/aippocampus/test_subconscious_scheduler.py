@@ -555,12 +555,14 @@ class SubconsciousSchedulerTests(unittest.TestCase):
         )
         state = {"projects": {"T-Sense": {}}}
         stats = scheduler.project_stats_from_registry(self.registry)["T-Sense"]
+        now = scheduler.parse_utc("2026-05-26T01:00:00Z")
+        self.assertIsNotNone(now)
 
         scheduler.bootstrap_project_state_from_staging(
             self.root,
             stats,
             state["projects"]["T-Sense"],
-            now_ts=scheduler.parse_utc_ts("2026-05-26T01:00:00Z") or 0,
+            now_ts=now.timestamp() if now else 0,
             cooldown_seconds=6 * 60 * 60,
         )
 

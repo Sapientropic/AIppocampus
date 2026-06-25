@@ -26,7 +26,7 @@ def path_exists(value: Any) -> bool:
         return False
 
 
-def load_json_file(path: Path) -> dict[str, Any]:
+def load_onboarding_json(path: Path) -> dict[str, Any]:
     return load_json_dict(path).data
 
 
@@ -120,8 +120,8 @@ def sqlite_consistency_issues(entry: dict[str, Any]) -> list[dict[str, Any]]:
     if not clean_messages.exists() or not sqlite_path.exists():
         return []
     issues: list[dict[str, Any]] = []
-    clean_manifest = load_json_file(clean_messages.parent / "manifest.json")
-    index_manifest = load_json_file(sqlite_path.parent / "manifest.json")
+    clean_manifest = load_onboarding_json(clean_messages.parent / "manifest.json")
+    index_manifest = load_onboarding_json(sqlite_path.parent / "manifest.json")
     if clean_manifest and index_manifest:
         clean_rollout = str(clean_manifest.get("source_rollout") or "")
         index_rollout = str(index_manifest.get("source_rollout") or "")

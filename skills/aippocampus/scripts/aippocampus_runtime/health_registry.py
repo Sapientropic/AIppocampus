@@ -17,7 +17,7 @@ from aippocampus_runtime.warm_ambient.hook_seen_threads import (
 )
 
 
-def load_json_fail_open(path: Path) -> dict[str, Any]:
+def load_health_json(path: Path) -> dict[str, Any]:
     return load_json_dict(path).data
 
 
@@ -85,7 +85,7 @@ def registry_health_report(
         Path(registry_dir).resolve() if registry_dir else registry_paths(None)[0].parent
     )
     registry_path, _registry_md = registry_paths(registry_root_dir)
-    registry = load_json_fail_open(registry_path)
+    registry = load_health_json(registry_path)
     threads = [item for item in registry.get("threads") or [] if isinstance(item, dict)]
     hook_seen_reconciliation = hook_seen_registry_diagnostic(
         hook_seen_ledger_path_for_registry(registry_path),
@@ -112,15 +112,15 @@ def registry_health_report(
             thread_dir = candidate if candidate.exists() else None
 
         index_manifest = (
-            load_json_fail_open(thread_dir / "index" / "manifest.json") if thread_dir else {}
+            load_health_json(thread_dir / "index" / "manifest.json") if thread_dir else {}
         )
         clean_manifest = (
-            load_json_fail_open(thread_dir / "clean-source" / "manifest.json")
+            load_health_json(thread_dir / "clean-source" / "manifest.json")
             if thread_dir
             else {}
         )
         segments_manifest = (
-            load_json_fail_open(thread_dir / "segments" / "manifest.json") if thread_dir else {}
+            load_health_json(thread_dir / "segments" / "manifest.json") if thread_dir else {}
         )
         raw_health = entry.get("health")
         health: dict[str, Any] = raw_health if isinstance(raw_health, dict) else {}

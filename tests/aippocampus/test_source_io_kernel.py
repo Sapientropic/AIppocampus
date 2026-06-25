@@ -49,6 +49,29 @@ class SourceIoKernelTests(unittest.TestCase):
         self.assertEqual(result.rows, [{"a": "字", "b": 2}])
         self.assertEqual(result.loss["total_loss_count"], 0)
 
+    def test_strict_jsonl_loader_reports_line_context(self) -> None:
+        path = self.root / "strict.jsonl"
+        path.write_text('{"kind":"ok"}\n[]\n', encoding="utf-8")
+
+        with self.assertRaisesRegex(ValueError, "line 2 is not a JSON object"):
+            io_kernel.load_jsonl_dict_rows_strict(path)
+
+    def test_jsonl_line_field_loader_attaches_audit_line_numbers(self) -> None:
+        path = self.root / "lined.jsonl"
+        path.write_text('{"kind":"first"}\nnot-json\n{"kind":"third"}\n', encoding="utf-8")
+
+        result = io_kernel.load_jsonl_dict_rows_with_line_field(
+            path,
+            line_field="_line",
+        )
+
+        self.assertEqual(
+            result.rows,
+            [{"kind": "first", "_line": 1}, {"kind": "third", "_line": 3}],
+        )
+        self.assertEqual(result.loss["invalid_json_line_count"], 1)
+        self.assertEqual(result.loss["invalid_json_line_numbers"], [2])
+
     def test_jsonl_append_writer_returns_row_count_and_preserves_existing_rows(self) -> None:
         path = self.root / "nested" / "events.jsonl"
         io_kernel.write_jsonl_dict_rows(path, [{"kind": "first"}])
@@ -89,6 +112,16 @@ class SourceIoKernelTests(unittest.TestCase):
                 }
             ),
             ("thread-a", "msg-1", "turn-7", "42"),
+        )
+        self.assertEqual(
+            io_kernel.source_ref_key_set(
+                [
+                    {"thread_id": "thread-a", "message_id": "msg-1", "assistant_line": 42},
+                    {"thread_key": "thread-a", "message_id": "msg-1", "source_line": 42},
+                    {"ignored": ""},
+                ]
+            ),
+            {("thread-a", "msg-1", "", "42")},
         )
 
     def test_source_ref_identity_key_preserves_source_id_and_line_anchor(self) -> None:

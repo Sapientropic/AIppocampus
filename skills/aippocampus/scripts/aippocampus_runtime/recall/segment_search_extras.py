@@ -20,6 +20,7 @@ from aippocampus_runtime.recall.query_expansion import (
     plan_query_expansion,
 )
 from aippocampus_runtime.recall.semantic_bridge_map import load_semantic_bridge_rows
+from aippocampus_runtime.source.io_kernel import load_jsonl_dict_rows_strict
 from aippocampus_runtime.source.source_texture import (
     SOURCE_TEXTURE_BOUNDARY,
     build_source_texture_boundary_hints,
@@ -119,7 +120,7 @@ def source_texture_path(source_texture: str | Path | None, cwd: Path) -> Path | 
     return path if path.is_absolute() else cwd / path
 
 
-def _load_json_or_jsonl(path: Path) -> list[dict[str, Any]]:
+def load_source_texture_sidecar_rows(path: Path) -> list[dict[str, Any]]:
     if not path.exists():
         return []
     text = path.read_text(encoding="utf-8")
@@ -141,15 +142,7 @@ def _load_json_or_jsonl(path: Path) -> list[dict[str, Any]]:
             return [dict(payload)]
         if payload is not None:
             return []
-    rows: list[dict[str, Any]] = []
-    for line in stripped.splitlines():
-        raw = line.strip()
-        if not raw:
-            continue
-        item = json.loads(raw)
-        if isinstance(item, Mapping):
-            rows.append(dict(item))
-    return rows
+    return load_jsonl_dict_rows_strict(path)
 
 
 def _looks_like_texture_hint(row: Mapping[str, Any]) -> bool:
@@ -239,8 +232,8 @@ def build_texture_hint_plan(
         }
 
     try:
-        rows = _load_json_or_jsonl(path)
-    except (OSError, json.JSONDecodeError) as exc:
+        rows = load_source_texture_sidecar_rows(path)
+    except (OSError, json.JSONDecodeError, ValueError) as exc:
         return {
             "enabled": True,
             "source_texture_path_present": True,

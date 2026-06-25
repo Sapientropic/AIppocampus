@@ -21,7 +21,7 @@ from aippocampus_runtime.contracts import (
     foreground_shell_action,
 )
 from aippocampus_runtime.core import compact_text, now_utc, stable_json_id
-from aippocampus_runtime.source.io_kernel import parse_utc, source_ref_key
+from aippocampus_runtime.source.io_kernel import parse_utc, source_ref_key, source_ref_key_set
 
 SCHEMA_VERSION = 1
 TOPOLOGY_KIND = "aippocampus_reflection_topology"
@@ -98,10 +98,6 @@ def merge_refs(*groups: object, limit: int = 12) -> tuple[dict[str, Any], ...]:
             if len(refs) >= limit:
                 return tuple(refs)
     return tuple(refs)
-
-
-def source_ref_keys(refs: Iterable[Mapping[str, Any]]) -> set[tuple[str, str, str, str]]:
-    return {source_ref_key(ref) for ref in refs if any(source_ref_key(ref))}
 
 
 def journey_id_of(row: Mapping[str, Any]) -> str:
@@ -497,7 +493,7 @@ def dream_hypothesis_nodes_and_edges(
     ignored = 0
     now = datetime.now(timezone.utc)
     journey_ref_keys = {
-        f"journey:{journey_id_of(journey)}": source_ref_keys(journey_refs(journey))
+        f"journey:{journey_id_of(journey)}": source_ref_key_set(journey_refs(journey))
         for journey in journeys
     }
     for row in rows:
@@ -542,7 +538,7 @@ def dream_hypothesis_nodes_and_edges(
                 "unblock_condition": compact_text(str(bridge.get("unblock_condition") or ""), 220),
             }
             nodes[-1]["available_actions"].append("inspect_journey_bridge")
-        keys = source_ref_keys(refs)
+        keys = source_ref_key_set(refs)
         for journey_node_id, journey_keys in journey_ref_keys.items():
             overlap = keys & journey_keys
             if not overlap:
