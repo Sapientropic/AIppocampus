@@ -12,6 +12,7 @@ from functools import lru_cache
 from pathlib import Path
 
 try:
+    from tools.aippocampus.docs import guard_pressure
     from tools.aippocampus.docs.instruction_surface import (
         COMPACT_DEBUG_FIELD_LITERALS,
         INSTRUCTION_SURFACE_POLICY_DOC,
@@ -32,6 +33,7 @@ try:
         test_debt_inventory,
     )
 except ModuleNotFoundError:
+    import guard_pressure
     from instruction_surface import (
         COMPACT_DEBUG_FIELD_LITERALS,
         INSTRUCTION_SURFACE_POLICY_DOC,
@@ -51,6 +53,8 @@ except ModuleNotFoundError:
         giant_function_inventory,
         test_debt_inventory,
     )
+
+LOW_MARGIN_OWNER_ISSUES = guard_pressure.LOW_MARGIN_OWNER_ISSUES
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 ARCHITECTURE_DEBT_REGISTER = REPO_ROOT / "docs" / "architecture" / "architecture-debt-register.md"
@@ -133,16 +137,6 @@ DIAGNOSTIC_BOUNDARY_TOKENS = (
     "skipped",
     "loss",
 )
-LOW_MARGIN_OWNER_ISSUES = {
-    "skills/aippocampus/scripts/aippocampus_runtime/dream/input_pack.py": "#2548",
-    "skills/aippocampus/scripts/aippocampus_runtime/hooks/install_action_hint.py": "#2548",
-    "skills/aippocampus/scripts/aippocampus_runtime/recall/continuity_domains.py": "#2548",
-    "skills/aippocampus/scripts/aippocampus_runtime/coding/episode_arc_private_adjudication.py": "#2548",
-    "skills/aippocampus/scripts/aippocampus_runtime/contracts.py": "#2548",
-    "skills/aippocampus/scripts/aippocampus_runtime/sync/object_storage/cli.py": "#2548",
-    "skills/aippocampus/scripts/aippocampus_runtime/ops/provider_doctor.py": "#2548",
-    "tests/aippocampus/test_warm_ambient_recall.py": "#2548",
-}
 
 
 def script_line_count(path: Path) -> int:
@@ -414,9 +408,29 @@ def broad_exception_inventory(*, detail: bool = False) -> dict[str, object]:
     }
 
 
+def changed_surface_guard_pressure(
+    changed_files: list[str] | None = None,
+    *,
+    rows: list[dict[str, object]] | None = None,
+    split_boundaries: dict[str, str] | None = None,
+) -> list[dict[str, object]]:
+    split_map = split_boundary_entries() if split_boundaries is None else split_boundaries
+    return guard_pressure.changed_surface_guard_pressure(
+        changed_files,
+        rows=rows,
+        repo_root=REPO_ROOT,
+        budget_entries=budget_entries(),
+        script_line_count=script_line_count,
+        split_boundaries=split_map,
+        layer_for_path=layer_for_path,
+        margin_limit=SINGLE_DIGIT_GUARD_MARGIN_LIMIT,
+    )
+
+
 def changed_surface_debt(changed_files: list[str] | None = None) -> dict[str, object]:
     normalized = sorted({path.replace("\\", "/") for path in changed_files or [] if path})
     warnings: list[dict[str, object]] = []
+    guard_pressure_rows = changed_surface_guard_pressure(normalized)
     changed_paths = [
         REPO_ROOT / path
         for path in normalized
@@ -578,11 +592,37 @@ def changed_surface_debt(changed_files: list[str] | None = None) -> dict[str, ob
         warning = changed_file_instruction_surface_warning(item)
         if warning:
             warnings.append(warning)
+    for item in guard_pressure_rows:
+        if item.get("tracked_owner_issue"):
+            continue
+        warnings.append(
+            {
+                "code": "changed_surface_unowned_guard_pressure",
+                "path": item["path"],
+                "layer": item["layer"],
+                "current_count": item["current_count"],
+                "guard_budget": item["guard_budget"],
+                "margin": item["margin"],
+                "next_split_boundary": item["next_split_boundary"],
+                "acceptance_bearing": True,
+                "message": (
+                    "Touched exact-zero or single-digit guard owner without an issue/action "
+                    "pointer; split, shrink, or assign an owner before closeout."
+                ),
+            }
+        )
     return {
         "changed_files": normalized,
         "status": "fail" if warnings else "pass",
         "acceptance_bearing_warning_count": len(warnings),
         "warnings": warnings,
+        "guard_pressure": {
+            "touched_count": len(guard_pressure_rows),
+            "unowned_touched_count": sum(
+                1 for row in guard_pressure_rows if not row.get("tracked_owner_issue")
+            ),
+            "touched_files": guard_pressure_rows,
+        },
         "instruction_surface": {
             "policy_doc": INSTRUCTION_SURFACE_POLICY_DOC,
             "changed_file_count": len(instruction_occurrences),
@@ -658,7 +698,7 @@ def build_system_weight(
                     ),
                 }
             )
-        low_margin_owner = LOW_MARGIN_OWNER_ISSUES.get(rel_path, "")
+        low_margin_owner = guard_pressure.low_margin_owner_issue(rel_path)
         if margin <= SINGLE_DIGIT_GUARD_MARGIN_LIMIT:
             single_digit_guard_pressure.append(
                 {

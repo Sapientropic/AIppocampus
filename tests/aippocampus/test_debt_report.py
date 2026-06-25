@@ -171,6 +171,80 @@ class DebtReportTests(unittest.TestCase):
         self.assertEqual(pressure_warning["count"], 2)
         self.assertEqual(pressure_warning["unowned_count"], 1)
 
+    def test_changed_surface_guard_pressure_identifies_touched_pressure_rows(self) -> None:
+        owned_path = "skills/aippocampus/scripts/aippocampus_runtime/recall/owned.py"
+        unowned_path = "skills/aippocampus/scripts/aippocampus_runtime/recall/unowned.py"
+        rows = [
+            {
+                "path": owned_path,
+                "current_count": 98,
+                "guard_budget": 100,
+                "margin": 2,
+                "over_budget": False,
+            },
+            {
+                "path": unowned_path,
+                "current_count": 95,
+                "guard_budget": 100,
+                "margin": 5,
+                "over_budget": False,
+            },
+            {
+                "path": "skills/aippocampus/scripts/aippocampus_runtime/recall/healthy.py",
+                "current_count": 50,
+                "guard_budget": 100,
+                "margin": 50,
+                "over_budget": False,
+            },
+        ]
+
+        with mock.patch.dict(debt_report.LOW_MARGIN_OWNER_ISSUES, {owned_path: "#9999"}):
+            pressure = debt_report.changed_surface_guard_pressure(
+                [owned_path, unowned_path],
+                rows=rows,
+                split_boundaries={owned_path: "Split projection before adding another lane."},
+            )
+
+        by_path = {row["path"]: row for row in pressure}
+        self.assertEqual(set(by_path), {owned_path, unowned_path})
+        self.assertEqual(by_path[owned_path]["owner_issue"], "#9999")
+        self.assertTrue(by_path[owned_path]["tracked_owner_issue"])
+        self.assertFalse(by_path[unowned_path]["tracked_owner_issue"])
+
+    def test_changed_surface_debt_blocks_unowned_guard_pressure(self) -> None:
+        unowned_row = {
+            "path": "skills/aippocampus/scripts/aippocampus_runtime/recall/unowned.py",
+            "layer": "runtime",
+            "current_count": 95,
+            "guard_budget": 100,
+            "margin": 5,
+            "tracked_owner_issue": False,
+            "next_split_boundary": "Split before growing this owner.",
+        }
+        owned_row = dict(unowned_row, tracked_owner_issue=True, owner_issue="#9999")
+
+        with mock.patch.object(
+            debt_report,
+            "changed_surface_guard_pressure",
+            return_value=[unowned_row],
+        ):
+            changed = debt_report.changed_surface_debt(["docs/guides/install-guide.md"])
+        self.assertEqual(changed["status"], "fail")
+        self.assertEqual(changed["guard_pressure"]["unowned_touched_count"], 1)
+        self.assertIn(
+            "changed_surface_unowned_guard_pressure",
+            {warning["code"] for warning in changed["warnings"]},
+        )
+
+        with mock.patch.object(
+            debt_report,
+            "changed_surface_guard_pressure",
+            return_value=[owned_row],
+        ):
+            owned_changed = debt_report.changed_surface_debt(["docs/guides/install-guide.md"])
+        self.assertEqual(owned_changed["status"], "pass")
+        self.assertEqual(owned_changed["guard_pressure"]["touched_count"], 1)
+
     def test_count_drift_classifies_small_positive_and_stale_allowance(self) -> None:
         self.assertEqual(
             debt_report.drift_class(

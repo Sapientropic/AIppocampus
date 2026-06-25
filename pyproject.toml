@@ -52,6 +52,9 @@ dev = [
     "mypy==2.1.0",
     "ruff==0.15.12",
 ]
+test-quality = [
+    "hypothesis==6.155.7",
+]
 release = [
     "build==1.3.0",
     "check-jsonschema==0.37.2",

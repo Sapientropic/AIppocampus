@@ -46,6 +46,17 @@ The `dev` extra owns Ruff, mypy, coverage, and build versions used by CI. Update
 the pins only in a PR that runs the normal docs-health, lint, type, build, and
 fast-test gates.
 
+`test-quality` is an opt-in pilot extra for expensive or experimental test
+tools. It currently pins Hypothesis for the local lock owner-token property
+tests:
+
+```sh
+python -m pip install -e ".[test-quality]"
+```
+
+Do not add this extra to default `dev`, quick, or PR lanes without a promotion
+decision from the relevant guard-tooling issue.
+
 ## Release Tooling
 
 Use the exact-pinned `release` extra for package and registry publication:

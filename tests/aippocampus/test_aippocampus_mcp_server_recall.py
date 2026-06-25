@@ -687,9 +687,14 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
             for thread in threads:
                 thread.start()
             for thread in threads:
-                thread.join(timeout=5)
+                thread.join(timeout=registry_store.DEFAULT_REGISTRY_WRITER_WAIT_TIMEOUT_SECONDS + 5)
 
+        alive_threads = [thread.name for thread in threads if thread.is_alive()]
         self.assertFalse(errors)
+        self.assertFalse(
+            alive_threads,
+            f"register_thread worker(s) did not finish; responses={len(responses)} errors={errors!r}",
+        )
         self.assertEqual(len(responses), 2)
         self.assertTrue(all(not response["result"].get("isError") for response in responses))
         registry = json.loads((registry_dir / "threads.json").read_text(encoding="utf-8"))

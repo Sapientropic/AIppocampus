@@ -146,6 +146,22 @@ INSTRUCTION_SURFACE_CLASSIFIED_FILES = {
             "and diagnostics must stay in detail/operator surfaces"
         ),
     },
+    "skills/aippocampus/scripts/aippocampus_runtime/recall/associative_path_fallback.py": {
+        "classification": "apw_fallback_projection_owner",
+        "owner": "#2678/#2651",
+        "why": (
+            "owns APW fallback cards and deepen-request projection; policy gating "
+            "lives in the focused sibling helper after the #2678 split"
+        ),
+    },
+    "skills/aippocampus/scripts/aippocampus_runtime/recall/associative_path_fallback_policy.py": {
+        "classification": "apw_fallback_policy_owner",
+        "owner": "#2678/#2651",
+        "why": (
+            "owns APW fallback promotion and candidate-input gating; source-open "
+            "proof remains in fallback/deepen follow-through, not policy text"
+        ),
+    },
     "skills/aippocampus/scripts/aippocampus_runtime/recall/ambient_cards.py": {
         "classification": "ambient_recall_card_owner",
         "owner": "#2628/#2636/#2651",
