@@ -20,6 +20,8 @@ class LogRetentionTests(unittest.TestCase):
             log.parent.mkdir()
             log.write_bytes(b"old diagnostic bytes" * 8)
             (log.parent / "build_associations_hook.log.1.gz").write_bytes(b"stale")
+            stale_fixed_tmp = log.parent / "build_associations_hook.log.1.gz.tmp"
+            stale_fixed_tmp.write_bytes(b"stale fixed tmp")
 
             report = log_retention.rotate_log_if_needed(log, max_bytes=20, backups=2)
 
@@ -31,6 +33,8 @@ class LogRetentionTests(unittest.TestCase):
             self.assertTrue(second.exists())
             self.assertIn(b"old diagnostic bytes", gzip.decompress(first.read_bytes()))
             self.assertEqual(second.read_bytes(), b"stale")
+            self.assertEqual(stale_fixed_tmp.read_bytes(), b"stale fixed tmp")
+            self.assertEqual(list(log.parent.glob(".*.aippocampus-*.tmp")), [])
 
     def test_public_log_health_report_does_not_emit_log_contents(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -5,13 +5,13 @@ from __future__ import annotations
 
 import json
 import re
-import time
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
 from aippocampus_runtime.artifacts.publish import ArtifactLeaseBusyError, artifact_lease
 from aippocampus_runtime.core import aippocampus_registry_dir, now_utc
+from aippocampus_runtime.io_integrity import atomic_write_text
 from aippocampus_runtime.io_mtime_cache import load_json_object
 
 REGISTRY_SCHEMA_VERSION = 1
@@ -191,20 +191,13 @@ def render_registry_markdown(registry: dict) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
-def _write_text_atomic(path: Path, text: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(f".{path.name}.tmp-{id(text)}-{time.time_ns()}")
-    tmp.write_text(text, encoding="utf-8", newline="\n")
-    tmp.replace(path)
-
-
 def save_registry(registry: dict, json_path: Path, md_path: Path) -> None:
     json_path.parent.mkdir(parents=True, exist_ok=True)
-    _write_text_atomic(
+    atomic_write_text(
         json_path,
         json.dumps(registry, ensure_ascii=False, indent=2),
     )
-    _write_text_atomic(md_path, render_registry_markdown(registry))
+    atomic_write_text(md_path, render_registry_markdown(registry))
 
 
 def update_registry(

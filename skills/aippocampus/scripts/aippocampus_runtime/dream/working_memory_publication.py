@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping
 
 from aippocampus_runtime.core import now_utc
+from aippocampus_runtime.io_integrity import atomic_write_text
 from aippocampus_runtime.io_mtime_cache import load_jsonl_objects
 
 POINTER_KIND = "aippocampus_dream_working_memory_publication_pointer"
@@ -43,13 +44,6 @@ def stable_generation_name(rows: Iterable[Mapping[str, Any]], *, created_at: str
     raw = json.dumps(list(rows), ensure_ascii=False, sort_keys=True) + "\n" + created_at
     digest = hashlib.sha1(raw.encode("utf-8")).hexdigest()[:18]
     return f"working-memory-{digest}.jsonl"
-
-
-def write_text_atomic(path: Path, text: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(text, encoding="utf-8", newline="\n")
-    tmp.replace(path)
 
 
 def read_pointer(path: Path) -> dict[str, Any]:
@@ -88,7 +82,7 @@ def publish_working_memory_snapshot(
     directory = generation_dir(path)
     generation = directory / stable_generation_name(materialized, created_at=created)
     body = "".join(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n" for row in materialized)
-    write_text_atomic(generation, body)
+    atomic_write_text(generation, body)
 
     previous = read_pointer(path)
     previous_current = previous.get("current")
@@ -105,7 +99,7 @@ def publish_working_memory_snapshot(
             "reader_must_not_wait_for_writer_lock": True,
         },
     }
-    write_text_atomic(pointer_path(path), json.dumps(new_pointer, ensure_ascii=False, indent=2) + "\n")
+    atomic_write_text(pointer_path(path), json.dumps(new_pointer, ensure_ascii=False, indent=2) + "\n")
     return new_pointer
 
 

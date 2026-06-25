@@ -14,6 +14,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
+from aippocampus_runtime.io_integrity import atomic_write_json, atomic_write_jsonl
+
 MAX_LOSS_LINE_NUMBERS = 20
 
 
@@ -192,12 +194,7 @@ def write_jsonl_dict_rows(
     *,
     sort_keys: bool = False,
 ) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    with tmp.open("w", encoding="utf-8", newline="\n") as handle:
-        for row in rows:
-            handle.write(json.dumps(dict(row), ensure_ascii=False, sort_keys=sort_keys) + "\n")
-    tmp.replace(path)
+    atomic_write_jsonl(path, rows, sort_keys=sort_keys)
 
 
 def append_jsonl_dict_rows(
@@ -242,14 +239,7 @@ def write_json_atomic(
     indent: int | None = 2,
     sort_keys: bool = False,
 ) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(
-        json.dumps(dict(payload), ensure_ascii=False, indent=indent, sort_keys=sort_keys),
-        encoding="utf-8",
-        newline="\n",
-    )
-    tmp.replace(path)
+    atomic_write_json(path, payload, indent=indent, sort_keys=sort_keys)
 
 
 def jsonl_loss_warning(

@@ -49,6 +49,16 @@ class SourceIoKernelTests(unittest.TestCase):
         self.assertEqual(result.rows, [{"a": "字", "b": 2}])
         self.assertEqual(result.loss["total_loss_count"], 0)
 
+    def test_jsonl_writer_does_not_reuse_fixed_stale_tmp_path(self) -> None:
+        path = self.root / "rows.jsonl"
+        stale_fixed_tmp = path.with_suffix(path.suffix + ".tmp")
+        stale_fixed_tmp.write_text('{"kind":"stale"}\n', encoding="utf-8")
+
+        io_kernel.write_jsonl_dict_rows(path, [{"kind": "fresh"}])
+
+        self.assertEqual(io_kernel.load_jsonl_dict_rows(path).rows, [{"kind": "fresh"}])
+        self.assertEqual(stale_fixed_tmp.read_text(encoding="utf-8"), '{"kind":"stale"}\n')
+
     def test_strict_jsonl_loader_reports_line_context(self) -> None:
         path = self.root / "strict.jsonl"
         path.write_text('{"kind":"ok"}\n[]\n', encoding="utf-8")

@@ -61,6 +61,11 @@ def remove_sqlite_artifact(path: Path) -> None:
 
 
 def unique_temp_sqlite_path(destination: Path) -> Path:
+    # This is a SQLite build target, not a source/cache JSON writer. The caller
+    # creates SQLite sidecars against this path, publishes under
+    # `.index-publish.lock`, and removes the database plus sidecars via
+    # `remove_sqlite_artifact()` after publish. Do not copy this pattern for
+    # ordinary file writes; use io_integrity.prepared_atomic_replace instead.
     stamp = f"{os.getpid()}-{int(time.time() * 1000)}"
     return destination.with_name(f".{destination.name}.tmp-{stamp}")
 

@@ -28,6 +28,7 @@ from aippocampus_runtime.core import (
     stable_text_join_id,
     workspace_thread_key,
 )
+from aippocampus_runtime.io_integrity import atomic_write_json
 from aippocampus_runtime.model.routing import (
     DEFAULT_DEEPSEEK_API_KEY_ENV,
     is_default_deepseek_api_key_env,
@@ -1097,14 +1098,11 @@ def run_warm_job_file(
     result_path_value = job.get("result_path")
     if result_path_value:
         result_path = Path(str(result_path_value)).resolve()
-        result_path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = result_path.with_suffix(result_path.suffix + ".tmp")
         # Detached job files are local-private process envelopes; the companion
         # result file is intentionally only this summary projection. Do not
         # persist the full warm recall result here, because it may contain cards,
         # traces, registry paths, and prompt-derived scout detail.
-        tmp.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8", newline="\n")
-        tmp.replace(result_path)
+        atomic_write_json(result_path, summary, indent=2)
     return summary
 
 
