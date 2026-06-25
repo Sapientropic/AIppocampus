@@ -218,3 +218,25 @@ def update_registry(
         registry = updater(load_registry(json_path))
         save_registry(registry, json_path, md_path)
         return registry
+
+
+def update_registry_transaction(
+    json_path: Path,
+    md_path: Path,
+    *,
+    materialize: Callable[[], None],
+    updater: Callable[[dict], dict],
+    wait_timeout_seconds: float = DEFAULT_REGISTRY_WRITER_WAIT_TIMEOUT_SECONDS,
+) -> dict:
+    # Some callers, such as local sync pull, need to publish registry-adjacent
+    # files and then repair threads.json as one local writer generation. Keep
+    # the lease and save path owned here so sync/update code cannot grow
+    # slightly different read-modify-write lock contracts.
+    with registry_writer_lease(
+        json_path,
+        wait_timeout_seconds=wait_timeout_seconds,
+    ):
+        materialize()
+        registry = updater(load_registry(json_path))
+        save_registry(registry, json_path, md_path)
+        return registry

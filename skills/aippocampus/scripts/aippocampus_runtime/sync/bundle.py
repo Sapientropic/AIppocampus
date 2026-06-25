@@ -20,6 +20,12 @@ from aippocampus_runtime.io_integrity import (
     prepared_atomic_replace,
     stale_tmp_recovery_card,
 )
+from aippocampus_runtime.registry.store import (
+    RegistryReadError,
+    RegistryWriteBusyError,
+    update_registry,
+    update_registry_transaction,
+)
 from aippocampus_runtime.source.io_kernel import load_json_dict
 from aippocampus_runtime.sync.bundle_recovery import (
     managed_sync_dir_collision_payload,
@@ -223,8 +229,8 @@ def iter_raw_rollout_files(registry_dir: Path) -> Iterable[tuple[Path, Path]]:
 
 
 def copy_file(source: Path, destination: Path) -> None:
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(source, destination)
+    with prepared_atomic_replace(destination) as tmp:
+        shutil.copy2(source, tmp)
 
 
 def thread_dir_name(thread_key: str, fallback: str = "thread") -> str:
@@ -557,17 +563,60 @@ def verify_clean_source_delta_file(sync_root: Path, file_manifest: dict[str, Any
         raise ValueError(f"clean_source_file_hash_mismatch: {file_manifest.get('path')}")
 
 
-def repair_registry_locators(target_registry: Path) -> dict[str, Any]:
-    registry_path = target_registry / "threads.json"
-    registry = load_json_dict(registry_path).data
-    if not registry:
-        return {
-            "ok": False,
-            "registry": str(registry_path),
-            "repaired_entries": 0,
-            "issues": [{"code": "missing_registry"}],
-        }
+def preflight_sync_pull_payload(sync_root: Path, manifest: dict[str, Any]) -> dict[str, Any]:
+    issues: list[dict[str, Any]] = []
+    delta_file_paths = {
+        validate_relative_sync_path(str(item.get("path") or "")).as_posix()
+        for item in clean_source_delta_files(manifest)
+    }
+    for item in manifest.get("files") or []:
+        if not isinstance(item, dict):
+            continue
+        try:
+            relative_path = validate_relative_sync_path(str(item.get("path") or ""))
+            source = sync_path_under(sync_root, relative_path)
+        except (OSError, ValueError) as exc:
+            issues.append({"code": "unsafe_sync_path", "message": str(exc)})
+            continue
+        if relative_path.as_posix() in delta_file_paths:
+            continue
+        if not source.is_file():
+            issues.append({"code": "missing_sync_file", "path": relative_path.as_posix()})
+            continue
+        try:
+            expected_size = int(item.get("size") or -1)
+        except (TypeError, ValueError):
+            issues.append({"code": "invalid_size", "path": relative_path.as_posix()})
+            continue
+        expected_hash = str(item.get("sha256") or "")
+        if expected_size >= 0 and source.stat().st_size != expected_size:
+            issues.append({"code": "size_mismatch", "path": relative_path.as_posix()})
+            continue
+        if expected_hash and file_sha256(source) != expected_hash:
+            issues.append({"code": "hash_mismatch", "path": relative_path.as_posix()})
+    for item in clean_source_delta_files(manifest):
+        try:
+            verify_clean_source_delta_file(sync_root, item)
+        except (OSError, ValueError) as exc:
+            issues.append(
+                {
+                    "code": "clean_source_delta_invalid",
+                    "path": str(item.get("path") or ""),
+                    "message": str(exc),
+                }
+            )
+    return {
+        "ok": not issues,
+        "checked_files": len(manifest.get("files") or []),
+        "checked_clean_source_delta_files": len(clean_source_delta_files(manifest)),
+        "issues": issues,
+    }
 
+
+def _repair_registry_locators_in_memory(
+    registry: dict[str, Any],
+    target_registry: Path,
+) -> tuple[dict[str, Any], int, list[dict[str, str]]]:
     repaired_entries = 0
     unresolved: list[dict[str, str]] = []
     for entry in registry.get("threads") or []:
@@ -607,9 +656,7 @@ def repair_registry_locators(target_registry: Path) -> dict[str, Any]:
         )
         paths["rollout"] = rollout
         workspace = paths.get("workspace")
-        paths["workspace"] = (
-            str(Path(workspace)) if workspace and Path(workspace).exists() else None
-        )
+        paths["workspace"] = str(Path(workspace)) if workspace and Path(workspace).exists() else None
         entry["paths"] = paths
         entry["path_locator_policy"] = {
             "kind": "target_device_locators",
@@ -620,14 +667,55 @@ def repair_registry_locators(target_registry: Path) -> dict[str, Any]:
         after = json.dumps(paths, ensure_ascii=False, sort_keys=True)
         if after != before:
             repaired_entries += 1
-
     registry["sync_path_repaired_at"] = now_utc()
-    save_json(registry_path, registry)
+    return registry, repaired_entries, unresolved
+
+
+def repair_registry_locators(target_registry: Path) -> dict[str, Any]:
+    registry_path = target_registry / "threads.json"
+    md_path = target_registry / "threads.md"
+    if not registry_path.exists():
+        return {
+            "ok": False,
+            "registry": str(registry_path),
+            "repaired_entries": 0,
+            "issues": [{"code": "missing_registry"}],
+        }
+    repaired_entries = 0
+    unresolved: list[dict[str, str]] = []
+
+    def repair(registry: dict[str, Any]) -> dict[str, Any]:
+        nonlocal repaired_entries, unresolved
+        registry, repaired_entries, unresolved = _repair_registry_locators_in_memory(
+            registry,
+            target_registry,
+        )
+        return registry
+
+    try:
+        update_registry(registry_path, md_path, repair)
+    except RegistryReadError as exc:
+        return {
+            "ok": False,
+            "registry": str(registry_path),
+            "repaired_entries": 0,
+            "issues": [{"code": "registry_read_error", "message": str(exc)}],
+            "registry_writer_lease_used": True,
+        }
+    except RegistryWriteBusyError as exc:
+        return {
+            "ok": False,
+            "registry": str(registry_path),
+            "repaired_entries": 0,
+            "issues": [{"code": exc.code, "retryable": True}],
+            "registry_writer_lease_used": True,
+        }
     return {
         "ok": not unresolved,
         "registry": str(registry_path),
         "repaired_entries": repaired_entries,
         "issues": unresolved,
+        "registry_writer_lease_used": True,
     }
 
 
@@ -762,6 +850,16 @@ def pull_sync_bundle(sync_dir: str | Path, target_registry_dir: str | Path | Non
             code="unsupported_sync_manifest_schema",
             message=str(exc),
         )
+    preflight = preflight_sync_pull_payload(sync_root, manifest)
+    if not preflight["ok"]:
+        return {
+            "ok": False,
+            "status": "sync_pull_preflight_failed",
+            "target_registry_dir": str(target_registry),
+            "preflight": preflight,
+            "issues": preflight["issues"],
+            "write_boundary": write_boundary(written=False, target="local_registry"),
+        }
     delta_file_paths = {
         validate_relative_sync_path(str(item.get("path") or "")).as_posix()
         for item in clean_source_delta_files(manifest)
@@ -781,58 +879,123 @@ def pull_sync_bundle(sync_dir: str | Path, target_registry_dir: str | Path | Non
         "backed_up_files": [],
     }
     conflict_root = target_registry / SYNC_CONFLICTS_DIR / rollback_id
-    for item in manifest.get("files") or []:
-        relative_path = validate_relative_sync_path(str(item.get("path") or ""))
-        source = sync_path_under(sync_root, relative_path)
-        if not source.is_file():
-            continue
-        if is_clean_source_chunk_store_path(relative_path):
-            continue
-        if relative_path.as_posix() in delta_file_paths:
-            continue
-        destination = ensure_within(
-            target_registry, destination_for(target_registry, relative_path.as_posix())
-        )
-        if not destination.exists():
-            copy_file(source, destination)
-            _record_created(rollback_manifest, target_registry, destination)
-            copied += 1
-            continue
-        if file_sha256(destination) == item.get("sha256"):
-            skipped += 1
-            continue
-        conflict_path = ensure_within(
-            conflict_root, destination_for(conflict_root, relative_path.as_posix())
-        )
-        copy_file(source, conflict_path)
-        conflicts += 1
-
-    for item in clean_source_delta_files(manifest):
-        relative_path = validate_relative_sync_path(str(item.get("path") or ""))
-        destination = ensure_within(
-            target_registry, destination_for(target_registry, relative_path.as_posix())
-        )
-        if not destination.exists():
-            materialize_clean_source_delta_file(sync_root, item, destination)
-            _record_created(rollback_manifest, target_registry, destination)
-            copied += 1
-            continue
-        if file_sha256(destination) == item.get("sha256"):
-            skipped += 1
-            continue
-        conflict_path = ensure_within(
-            conflict_root, destination_for(conflict_root, relative_path.as_posix())
-        )
-        materialize_clean_source_delta_file(sync_root, item, conflict_path)
-        conflicts += 1
-
     registry_path = target_registry / "threads.json"
-    if registry_path.exists() and not any(
-        item.get("path") == "threads.json"
-        for item in rollback_manifest.get("created_files") or []
-    ):
-        _backup_for_rollback(rollback_manifest, target_registry, rollback_root, registry_path)
-    path_repair = repair_registry_locators(target_registry)
+    registry_md_path = target_registry / "threads.md"
+    registry_md_preexisted = registry_md_path.exists()
+    path_repair: dict[str, Any] = {
+        "ok": False,
+        "registry": str(registry_path),
+        "repaired_entries": 0,
+        "issues": [{"code": "not_run"}],
+        "registry_writer_lease_used": True,
+    }
+
+    def was_created(relative_path: str) -> bool:
+        return any(
+            item.get("path") == relative_path
+            for item in rollback_manifest.get("created_files") or []
+        )
+
+    def materialize_pull() -> None:
+        nonlocal copied, skipped, conflicts
+        for item in manifest.get("files") or []:
+            relative_path = validate_relative_sync_path(str(item.get("path") or ""))
+            source = sync_path_under(sync_root, relative_path)
+            if not source.is_file():
+                continue
+            if is_clean_source_chunk_store_path(relative_path):
+                continue
+            if relative_path.as_posix() in delta_file_paths:
+                continue
+            destination = ensure_within(
+                target_registry, destination_for(target_registry, relative_path.as_posix())
+            )
+            if not destination.exists():
+                copy_file(source, destination)
+                _record_created(rollback_manifest, target_registry, destination)
+                copied += 1
+                continue
+            if file_sha256(destination) == item.get("sha256"):
+                skipped += 1
+                continue
+            conflict_path = ensure_within(
+                conflict_root, destination_for(conflict_root, relative_path.as_posix())
+            )
+            copy_file(source, conflict_path)
+            conflicts += 1
+
+        for item in clean_source_delta_files(manifest):
+            relative_path = validate_relative_sync_path(str(item.get("path") or ""))
+            destination = ensure_within(
+                target_registry, destination_for(target_registry, relative_path.as_posix())
+            )
+            if not destination.exists():
+                materialize_clean_source_delta_file(sync_root, item, destination)
+                _record_created(rollback_manifest, target_registry, destination)
+                copied += 1
+                continue
+            if file_sha256(destination) == item.get("sha256"):
+                skipped += 1
+                continue
+            conflict_path = ensure_within(
+                conflict_root, destination_for(conflict_root, relative_path.as_posix())
+            )
+            materialize_clean_source_delta_file(sync_root, item, conflict_path)
+            conflicts += 1
+
+        if registry_path.exists() and not was_created("threads.json"):
+            _backup_for_rollback(rollback_manifest, target_registry, rollback_root, registry_path)
+        if registry_md_path.exists() and not was_created("threads.md"):
+            _backup_for_rollback(
+                rollback_manifest,
+                target_registry,
+                rollback_root,
+                registry_md_path,
+            )
+        if not registry_path.exists():
+            raise RegistryReadError(f"missing pulled registry: {registry_path}")
+
+    def repair_pulled_registry(registry: dict[str, Any]) -> dict[str, Any]:
+        nonlocal path_repair
+        registry, repaired_entries, unresolved = _repair_registry_locators_in_memory(
+            registry,
+            target_registry,
+        )
+        path_repair = {
+            "ok": not unresolved,
+            "registry": str(registry_path),
+            "repaired_entries": repaired_entries,
+            "issues": unresolved,
+            "registry_writer_lease_used": True,
+        }
+        return registry
+
+    try:
+        update_registry_transaction(
+            registry_path,
+            registry_md_path,
+            materialize=materialize_pull,
+            updater=repair_pulled_registry,
+        )
+    except RegistryWriteBusyError as exc:
+        return {
+            "ok": False,
+            "status": "registry_writer_busy",
+            "target_registry_dir": str(target_registry),
+            "issues": [{"code": exc.code, "retryable": True}],
+            "write_boundary": write_boundary(written=False, target="local_registry"),
+        }
+    except RegistryReadError as exc:
+        path_repair = {
+            "ok": False,
+            "registry": str(registry_path),
+            "repaired_entries": 0,
+            "issues": [{"code": "registry_read_error", "message": str(exc)}],
+            "registry_writer_lease_used": True,
+        }
+
+    if not registry_md_preexisted and registry_md_path.exists() and not was_created("threads.md"):
+        _record_created(rollback_manifest, target_registry, registry_md_path)
     for item in rollback_manifest.get("created_files") or []:
         rel = validate_relative_sync_path(str(item.get("path") or ""))
         target = ensure_within(target_registry, target_registry / rel)

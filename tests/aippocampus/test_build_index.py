@@ -211,6 +211,9 @@ class BuildIndexTests(unittest.TestCase):
                 self.assertEqual(active, lease)
                 payload = json.loads(lease.read_text(encoding="utf-8"))
                 self.assertEqual(payload["kind"], "aippocampus_artifact_writer_lease")
+                self.assertEqual(payload["lock_kind"], "artifact_writer_lease")
+                self.assertTrue(payload["owner_token"])
+                self.assertTrue(payload["recovered_stale_lock"])
 
             self.assertFalse(lease.exists())
 

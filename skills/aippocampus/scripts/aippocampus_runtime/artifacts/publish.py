@@ -13,6 +13,10 @@ from pathlib import Path
 from typing import Any, Iterator
 
 from aippocampus_runtime.artifacts.generation_pins import generation_cleanup_contract
+from aippocampus_runtime.local_file_lock import (
+    OwnerCheckedFileLease,
+    OwnerCheckedLeaseBusyError,
+)
 from aippocampus_runtime.source.io_kernel import write_json_atomic
 
 DEFAULT_ARTIFACT_LEASE_STALE_SECONDS = 6 * 60 * 60
@@ -67,7 +71,7 @@ def unique_temp_sqlite_path(destination: Path) -> Path:
     # `remove_sqlite_artifact()` after publish. Do not copy this pattern for
     # ordinary file writes; use io_integrity.prepared_atomic_replace instead.
     stamp = f"{os.getpid()}-{int(time.time() * 1000)}"
-    return destination.with_name(f".{destination.name}.tmp-{stamp}")
+    return destination.with_name(f".{destination.name}.sqlite-build-{stamp}")
 
 
 def index_pointer_path(sqlite_or_pointer_path: Path) -> Path:
@@ -628,49 +632,23 @@ def artifact_lease(
     boundary instead of an invisible OS handle.
     """
 
-    output_dir.mkdir(parents=True, exist_ok=True)
     lease_path = output_dir / lease_name
-    deadline = time.monotonic() + max(0.0, float(wait_timeout_seconds))
-    payload = {
-        "schema_version": 1,
-        "kind": "aippocampus_artifact_writer_lease",
-        "pid": os.getpid(),
-        "created_at": utc_now(),
-        "stale_after_seconds": int(stale_after_seconds),
-    }
-    while True:
-        try:
-            fd = os.open(str(lease_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-        except FileExistsError as exc:
-            try:
-                age = time.time() - lease_path.stat().st_mtime
-            except OSError:
-                continue
-            if age > stale_after_seconds:
-                try:
-                    lease_path.unlink()
-                except OSError:
-                    pass
-                continue
-            if time.monotonic() < deadline:
-                time.sleep(max(0.01, float(poll_interval_seconds)))
-                continue
-            raise ArtifactLeaseBusyError(
-                lease_path,
-                wait_timeout_seconds=float(wait_timeout_seconds),
-            ) from exc
-        else:
-            with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
-                json.dump(payload, handle, ensure_ascii=False, indent=2)
-            break
-
+    lease = OwnerCheckedFileLease(
+        lease_path,
+        lock_kind="artifact_writer_lease",
+        stale_after_seconds=float(stale_after_seconds),
+        wait_timeout_seconds=float(wait_timeout_seconds),
+        poll_interval_seconds=float(poll_interval_seconds),
+        payload_extra={"kind": "aippocampus_artifact_writer_lease"},
+    )
     try:
-        yield lease_path
-    finally:
-        try:
-            lease_path.unlink()
-        except FileNotFoundError:
-            pass
+        with lease:
+            yield lease_path
+    except OwnerCheckedLeaseBusyError as exc:
+        raise ArtifactLeaseBusyError(
+            lease_path,
+            wait_timeout_seconds=float(wait_timeout_seconds),
+        ) from exc
 
 
 def publish_sqlite_backup(

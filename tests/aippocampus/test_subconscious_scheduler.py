@@ -502,6 +502,25 @@ class SubconsciousSchedulerTests(unittest.TestCase):
         self.assertEqual(payload["stale_threshold_seconds"], 1)
         self.assertFalse(lock_path.exists())
 
+    def test_file_lock_release_preserves_replaced_owner_generation(self) -> None:
+        lock_path = self.root / "owner-changed.lock"
+        lock = scheduler.FileLock(lock_path, stale_seconds=60)
+        lock.__enter__()
+        try:
+            assert lock._lease is not None
+            assert lock._lease.fd is not None
+            os.close(lock._lease.fd)
+            lock._lease.fd = None
+            lock_path.write_text(
+                json.dumps({"owner_token": "fresh-scheduler-owner", "pid": 123}),
+                encoding="utf-8",
+            )
+        finally:
+            lock.__exit__(None, None, None)
+
+        payload = json.loads(lock_path.read_text(encoding="utf-8"))
+        self.assertEqual(payload["owner_token"], "fresh-scheduler-owner")
+
     def test_concurrent_maybe_start_launches_one_detached_worker(self) -> None:
         state_file = self.root / "subconscious_state.json"
         launches = 0

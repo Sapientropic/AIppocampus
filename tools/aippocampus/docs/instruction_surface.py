@@ -162,6 +162,14 @@ INSTRUCTION_SURFACE_CLASSIFIED_FILES = {
             "cached cards remain navigation until clean source is reopened"
         ),
     },
+    "skills/aippocampus/scripts/aippocampus_runtime/recall/semantic_result_cache.py": {
+        "classification": "semantic_result_cache_owner",
+        "owner": "#2681/#2629/#2651",
+        "why": (
+            "owns semantic-gate cache value classes and lock behavior; cached "
+            "aliases remain routing hints and cannot replace source reopening"
+        ),
+    },
     "skills/aippocampus/scripts/aippocampus_runtime/recall/cognitive_load_private_calibration.py": {
         "classification": "private_calibration_owner",
         "owner": "#2628/#2651",

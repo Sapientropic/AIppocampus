@@ -64,6 +64,7 @@ LOCAL_LOCK_OWNER_PATHS = {
     "skills/aippocampus/scripts/aippocampus_runtime/artifacts/publish.py",
     "skills/aippocampus/scripts/aippocampus_runtime/artifacts/generation_pins.py",
     "skills/aippocampus/scripts/aippocampus_runtime/dream/local_lock.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/local_file_lock.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/active_recall_lock.py",
     "skills/aippocampus/scripts/aippocampus_runtime/registry/store.py",
 }
