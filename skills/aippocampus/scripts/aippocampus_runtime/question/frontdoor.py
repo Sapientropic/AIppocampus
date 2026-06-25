@@ -104,6 +104,17 @@ def _safe_int(value: Any) -> int:
         return 0
 
 
+def _safe_optional_line(value: Any) -> int | None:
+    if value in (None, ""):
+        return None
+    if not isinstance(value, (int, float, str)):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def _search_command(
     title: Any,
     *,
@@ -114,6 +125,44 @@ def _search_command(
     if source_ref_count > 0 or source_thread_count > 0:
         return f"aippocampus search --all {shell_quote(query)} --json"
     return f"aippocampus search {shell_quote(query)} --json"
+
+
+def _registry_dir_for_command(args: argparse.Namespace) -> str:
+    if args.registry_dir:
+        return str(Path(args.registry_dir).resolve())
+    if args.registry:
+        return str(Path(args.registry).resolve().parent)
+    return ""
+
+
+def _source_ref_open_command(ref: Mapping[str, Any], *, registry_dir: str = "") -> str:
+    thread_key = str(ref.get("thread_key") or "").strip()
+    message_id = str(ref.get("message_id") or "").strip()
+    line = _safe_optional_line(ref.get("line") or ref.get("source_line"))
+    if not thread_key or (not message_id and line is None):
+        return ""
+    parts = ["aippocampus search --open-source"]
+    if registry_dir:
+        parts.append(f"--registry-dir {shell_quote(registry_dir)}")
+    parts.append(f"--thread-key {shell_quote(thread_key)}")
+    if message_id:
+        parts.append(f"--message-id {shell_quote(message_id)}")
+    elif line is not None:
+        parts.append(f"--line {line}")
+    parts.append("--json")
+    return " ".join(parts)
+
+
+def _first_source_ref_open_command(
+    item: Mapping[str, Any], *, registry_dir: str = ""
+) -> str:
+    for ref in item.get("_source_refs") or []:
+        if not isinstance(ref, Mapping):
+            continue
+        command = _source_ref_open_command(ref, registry_dir=registry_dir)
+        if command:
+            return command
+    return ""
 
 
 def _row_action(
@@ -134,16 +183,17 @@ def _row_action(
     }
 
 
-def _question_action_card(item: Mapping[str, Any]) -> dict[str, Any]:
+def _question_action_card(item: Mapping[str, Any], *, registry_dir: str = "") -> dict[str, Any]:
     title = item.get("title")
     state = str(item.get("state") or "unknown")
     source_ref_count = _safe_int(item.get("source_ref_count"))
     source_thread_count = _safe_int(item.get("source_thread_count"))
-    command = _search_command(
+    fallback_search_command = _search_command(
         title,
         source_ref_count=source_ref_count,
         source_thread_count=source_thread_count,
     )
+    reopen_command = _first_source_ref_open_command(item, registry_dir=registry_dir)
     row: dict[str, Any] = {
         "unit_id": item.get("unit_id"),
         "title": title,
@@ -175,16 +225,48 @@ def _question_action_card(item: Mapping[str, Any]) -> dict[str, Any]:
         )
         return row
 
+    fallback_action = _row_action(
+        action_id="search_question_title_fallback",
+        label="Search question title as fallback",
+        command=fallback_search_command,
+        why="Use only if the source-ref reopen route is unavailable or stale.",
+        claim_boundary="fallback_title_search_is_not_source_reopen",
+    )
+    if not reopen_command:
+        row.update(
+            {
+                "action_grammar": "direction_only",
+                "route_state": "refs_present_but_not_reopenable",
+                "blocked_reason": "source refs exist, but no compact ref has a thread plus message or line anchor",
+                "foreground_action": _row_action(
+                    action_id="inspect_question_ref_detail",
+                    label="Inspect question ref detail",
+                    command="aippocampus questions status --json",
+                    why=(
+                        "This row still has source refs, but compact list cannot safely "
+                        "open a specific source window."
+                    ),
+                    claim_boundary="question_refs_present_but_not_reopenable",
+                ),
+                "fallback_action": fallback_action,
+                "source_route": {
+                    "kind": "clean_source_question_refs",
+                    "source_ref_count": source_ref_count,
+                    "source_thread_count": source_thread_count,
+                    "status": "refs_present_but_not_reopenable",
+                    "claim_boundary": "reopen source before treating this question state as evidence",
+                },
+            }
+        )
+        return row
+
     route = {
-        "kind": "clean_source_question_refs",
+        "kind": "clean_source_question_ref_window",
         "source_ref_count": source_ref_count,
         "source_thread_count": source_thread_count,
-        "reopen_command": command,
-        "reopen_scope": (
-            "registry_wide"
-            if source_ref_count > 0 or source_thread_count > 0
-            else "current_thread"
-        ),
+        "reopen_command": reopen_command,
+        "fallback_search_command": fallback_search_command,
+        "reopen_scope": "registry_clean_source_window",
         "claim_boundary": "reopen source before treating this question state as evidence",
     }
     if state == "resolved":
@@ -195,9 +277,10 @@ def _question_action_card(item: Mapping[str, Any]) -> dict[str, Any]:
                 "foreground_action": _row_action(
                     action_id="recheck_resolved_question_source",
                     label="Recheck resolved question source",
-                    command=command,
+                    command=reopen_command,
                     why="Treat this as resolved only after reopening the source route.",
                 ),
+                "fallback_action": fallback_action,
                 "source_route": route,
             }
         )
@@ -209,9 +292,10 @@ def _question_action_card(item: Mapping[str, Any]) -> dict[str, Any]:
                 "foreground_action": _row_action(
                     action_id="recheck_dormant_question_source",
                     label="Recheck dormant question source",
-                    command=command,
+                    command=reopen_command,
                     why="Reopen the route before reviving a dormant question.",
                 ),
+                "fallback_action": fallback_action,
                 "source_route": route,
             }
         )
@@ -223,9 +307,10 @@ def _question_action_card(item: Mapping[str, Any]) -> dict[str, Any]:
                 "foreground_action": _row_action(
                     action_id="reopen_question_source",
                     label="Reopen question source",
-                    command=command,
+                    command=reopen_command,
                     why="Reopen source before using this question row as continuity evidence.",
                 ),
+                "fallback_action": fallback_action,
                 "source_route": route,
             }
         )
@@ -277,13 +362,15 @@ def _list_payload(args: argparse.Namespace) -> dict[str, Any]:
         _default_jobs_path(args),
         registry_path=_default_registry_path(args),
         dormant_after_days=args.dormant_after_days,
+        include_source_refs=True,
     )
     rows = []
     max_rows = max(0, int(args.max or 0))
+    registry_dir = _registry_dir_for_command(args)
     for item in list(payload.get("lifecycle") or [])[:max_rows]:
         if not isinstance(item, Mapping):
             continue
-        rows.append(_question_action_card(item))
+        rows.append(_question_action_card(item, registry_dir=registry_dir))
     unresolved_count = _safe_int(payload.get("stale_or_unresolved_ref_row_count"))
     if unresolved_count and len(rows) < max_rows:
         rows.append(_blocked_ref_card(unresolved_count))

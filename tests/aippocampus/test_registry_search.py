@@ -229,6 +229,58 @@ class RegistrySourceSearchUsefulnessTests(unittest.TestCase):
         self.assertEqual(result["status"], "matches_need_broadened_source_search")
         self.assertEqual(result["first_match_usefulness"]["status"], "query_anchor_missing")
         self.assertEqual(result["source_boundary"]["authority"], "direction_only")
+        self.assertEqual(
+            result["foreground_action"]["id"],
+            "broaden_registry_search_for_query_anchors",
+        )
+        self.assertNotEqual(
+            result["foreground_action"]["id"],
+            "open_registry_search_source_window",
+        )
+
+    def test_exact_session_identifier_does_not_promote_fuzzy_session_hits(self) -> None:
+        def fake_deep_search_entry_result(
+            entry: dict,
+            terms: list[str],
+            *,
+            max_hits: int,
+            search_budget: object = None,
+        ) -> dict:
+            del entry, terms, max_hits, search_budget
+            return {
+                "hits": [
+                    {
+                        "message_id": "msg_session_decoy",
+                        "line": 7,
+                        "role": "assistant",
+                        "phase": "final_answer",
+                        "is_final": True,
+                        "score": 50.0,
+                        "snippet": "Generic session setup notes with no requested source identifier.",
+                    }
+                ]
+            }
+
+        with patch.object(
+            registry_search,
+            "deep_search_entry_result",
+            side_effect=fake_deep_search_entry_result,
+        ):
+            result = source_registry_search.search_registry_sources(
+                ["session:00000000-0000-0000-0000-000000000000"],
+                registry_dir=self.root,
+                cwd=self.root,
+            )
+
+        self.assertFalse(result["ok"])
+        self.assertFalse(result["useful_target_hit"])
+        self.assertEqual(result["status"], "identifier_not_found")
+        self.assertEqual(result["match_count"], 0)
+        self.assertEqual(result["suppressed_low_coverage_match_count"], 1)
+        self.assertNotEqual(
+            result["foreground_action"]["id"],
+            "open_registry_search_source_window",
+        )
 
 if __name__ == "__main__":
     unittest.main()

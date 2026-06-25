@@ -221,7 +221,15 @@ class AippocampusMcpServerOpsTests(unittest.TestCase):
                     "threads": [
                         {
                             "thread_key": "session:test",
+                            "project_key": "project:local:abc123",
                             "title": "Local registry thread",
+                            "session_meta": {
+                                "id": "session-test",
+                                "cwd": str(self.cwd),
+                                "timestamp": "2026-06-24T00:00:00Z",
+                                "base_instructions": {"text": "raw host instructions"},
+                                "dynamic_tools": [{"name": "private_tool", "schema": "large"}],
+                            },
                             "paths": {
                                 "workspace": str(self.cwd),
                                 "rollout": str(self.cwd / "rollout.jsonl"),
@@ -290,13 +298,52 @@ class AippocampusMcpServerOpsTests(unittest.TestCase):
         full_payload = self.tool_payload(full_response)
         full_encoded = json.dumps(full_payload, ensure_ascii=False)
         self.assertEqual(full_payload["detail"], "full")
-        self.assertEqual(full_payload["threads"][0]["thread_key"], "session:test")
-        self.assertNotIn(str(self.cwd), full_encoded)
         self.assertEqual(
-            full_payload["threads"][0]["paths"]["workspace"],
+            full_payload["identifier_boundary"],
+            "compact_thread_handles_are_stable_local_fingerprints",
+        )
+        self.assertEqual(
+            full_payload["threads"][0]["detail_profile"],
+            "full_without_private_identifiers",
+        )
+        self.assertTrue(full_payload["threads"][0]["thread_key_redacted"])
+        self.assertTrue(full_payload["threads"][0]["raw_session_metadata_omitted"])
+        self.assertTrue(
+            full_payload["threads"][0]["session_meta_summary"][
+                "base_instructions_text_omitted"
+            ]
+        )
+        self.assertTrue(full_payload["threads"][0]["session_meta_summary"]["dynamic_tools_omitted"])
+        self.assertNotIn("session:test", full_encoded)
+        self.assertNotIn("session-test", full_encoded)
+        self.assertNotIn("project:local:abc123", full_encoded)
+        self.assertNotIn("raw host instructions", full_encoded)
+        self.assertNotIn("private_tool", full_encoded)
+        self.assertNotIn(str(self.cwd), full_encoded)
+        self.assertNotIn("paths", full_payload["threads"][0])
+        self.assertNotIn("debug", full_payload["threads"][0])
+
+        private_id_response = mcp.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 682,
+                "method": "tools/call",
+                "params": {
+                    "name": "list_threads",
+                    "arguments": {
+                        "registry_dir": str(registry_dir),
+                        "detail": "full",
+                        "include_private_identifiers": True,
+                    },
+                },
+            }
+        )
+        private_id_payload = self.tool_payload(private_id_response)
+        self.assertEqual(private_id_payload["threads"][0]["thread_key"], "session:test")
+        self.assertEqual(
+            private_id_payload["threads"][0]["paths"]["workspace"],
             mcp_handlers.LOCAL_PATH_REDACTION,
         )
-        self.assertIn(mcp_handlers.LOCAL_PATH_REDACTION, full_payload["threads"][0]["debug"]["command"])
 
     def test_unknown_tool_is_tool_error_not_protocol_crash(self) -> None:
         response = mcp.handle_request(

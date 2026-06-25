@@ -14,7 +14,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 from aippocampus_runtime.contracts import executable_command_violations
 from aippocampus_runtime.update import cli as update_cli
-from aippocampus_runtime.update import plugin_installer
+from aippocampus_runtime.update import plugin_installer, status_actions
 from tests.aippocampus.update_sync_fixtures import (
     aippocampus_hook_commands_by_event,
     append_direct_aippocampus_hook_duplicates,
@@ -863,6 +863,14 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertFalse(payload["surfaces"]["host_conformance"]["dimensions"]["live_schema_fresh"])
         self.assertNotIn("E:\\private", encoded)
 
+    def test_agent_callable_plugin_repair_action_is_not_read_only(self) -> None:
+        action = status_actions.agent_callable_foreground_action(
+            {"status": "host_live_probe_key_tools_failed"}
+        )
+
+        self.assertIn("plugin install --codex --verify", action["command"])
+        self.assertEqual(action["mutation_risk"], "writes_local_plugin_cache")
+
     def test_status_keeps_asserted_key_tools_out_of_conformance_upgrade(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, provider_env({
             "AIPPOCAMPUS_FOREGROUND_TOOLS_VISIBLE": "1",
@@ -1063,6 +1071,10 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertEqual(
             action_hint_next["command"],
             "aippocampus hooks action refresh-cache --write --json",
+        )
+        self.assertEqual(
+            action_hint_next["mutation_risk"],
+            "explicit_local_cache_write",
         )
         self.assertNotIn("action_hints", payload)
         self.assertNotIn("foreground_status_cards", payload)

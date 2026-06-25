@@ -197,6 +197,46 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
         self.assertNotIn("C:\\", encoded)
         assert_compact_frontstage_payload(self, public, max_top_level_diagnostics=1)
 
+    def test_low_specificity_registry_search_preserves_short_latin_acronym_anchor(self) -> None:
+        public = agent_continuity_cli_support.public_recall_projection(
+            {
+                "kind": "aippocampus_agent_continuity_path",
+                "schema_version": "agent-continuity-path-v1",
+                "mode": "recall",
+                "status": "ok",
+                "opt_in_required": False,
+                "query": "那个 apw 最近怎么样，有没有帮助？",
+                "packets": [
+                    {
+                        "route_id": "route_thread_1",
+                        "route_label": "thread_candidate: AIppocampus",
+                        "route_kind": "thread_candidate",
+                        "output_mode": "reopenable_route",
+                        "claim_permission": "no_claim_before_reopen",
+                    },
+                    {
+                        "route_id": "route_thread_2",
+                        "route_label": "thread_candidate: AIppocampus",
+                        "route_kind": "thread_candidate",
+                        "output_mode": "reopenable_route",
+                        "claim_permission": "no_claim_before_reopen",
+                    },
+                ],
+                "metrics": {
+                    "memory_packet_count": 2,
+                    "deepen_request_count": 2,
+                    "route_label_specificity_floor": 0.0,
+                    "topic_label_present_count": 0,
+                },
+            }
+        )
+
+        action = public["foreground_action"]
+        self.assertEqual(action["id"], "search_registry_sources_for_original_cue_anchors")
+        self.assertIn("apw", action["search_anchor_query"].casefold())
+        self.assertIn("apw", action["arguments"]["query"].casefold())
+        self.assertIn("apw", action["command"].casefold())
+
     def test_weak_label_apw_policy_adds_secondary_recovery_action(self) -> None:
         public = agent_continuity_cli_support.public_recall_projection(
             {

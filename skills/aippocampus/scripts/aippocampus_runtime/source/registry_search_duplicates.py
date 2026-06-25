@@ -29,6 +29,7 @@ def match_haystack(match: Mapping[str, Any]) -> str:
         str(value or "")
         for value in (
             match.get("snippet"),
+            thread_map.get("thread_key"),
             thread_map.get("title"),
             thread_map.get("workspace_name"),
             match.get("source"),

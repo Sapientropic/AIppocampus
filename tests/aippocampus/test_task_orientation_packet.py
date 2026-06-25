@@ -13,18 +13,12 @@ from aippocampus_runtime.contracts import (
 from aippocampus_runtime.journey import live as journey_live
 from aippocampus_runtime.journey import sidecar_materializer
 from aippocampus_runtime.recall import task_orientation, understanding_state
+from aippocampus_runtime.source.io_kernel import write_jsonl_dict_rows
 from tests.aippocampus.frontstage_assertions import (
     assert_compact_detail_affordances,
     assert_compact_frontstage_payload,
 )
 
-
-def write_jsonl(path: Path, rows: list[dict]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        "".join(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n" for row in rows),
-        encoding="utf-8",
-    )
 
 class TaskOrientationPacketTests(unittest.TestCase):
     def test_packet_is_thin_active_path_projection_without_private_source_dump(self) -> None:
@@ -46,11 +40,15 @@ class TaskOrientationPacketTests(unittest.TestCase):
         self.assertNotIn("learning_and_aippo_constraints", packet)
         self.assertNotIn("suppressed_constraints", packet)
         self.assertIn("route_plan", packet)
-        self.assertGreaterEqual(len(packet["route_plan"]["first_sources_to_reopen"]), 1)
-        self.assertEqual(packet["route_plan"]["next_step"], "inspect_first_source_route")
+        self.assertGreaterEqual(len(packet["route_plan"]["first_route_hints"]), 1)
+        self.assertEqual(
+            packet["route_plan"]["next_step"],
+            "run_recall_for_task_then_deepen_source_route",
+        )
         self.assertNotIn("stop_conditions", packet["route_plan"])
         self.assertNotIn("source_reopen_required_before_claims", packet["route_plan"])
-        self.assertLessEqual(len(packet["source_routes"]), 3)
+        self.assertLessEqual(len(packet["source_route_hints"]), 3)
+        self.assertNotIn("path_id", json.dumps(packet["source_route_hints"], ensure_ascii=False))
         self.assertNotIn("source_boundary", packet)
         self.assertNotIn("product_boundary", packet)
         self.assertNotIn("detail_deferred", packet)
@@ -249,7 +247,7 @@ class TaskOrientationPacketTests(unittest.TestCase):
             root = Path(tmp)
             sidecars = root / ".aippocampus"
             source_ref = {"thread_key": "session:orientation", "message_id": "msg-1"}
-            write_jsonl(
+            write_jsonl_dict_rows(
                 sidecars / "journeys.jsonl",
                 [
                     {
@@ -263,7 +261,7 @@ class TaskOrientationPacketTests(unittest.TestCase):
                     }
                 ],
             )
-            write_jsonl(
+            write_jsonl_dict_rows(
                 sidecars / "episode_arcs.jsonl",
                 [
                     {
@@ -279,7 +277,7 @@ class TaskOrientationPacketTests(unittest.TestCase):
                     }
                 ],
             )
-            write_jsonl(
+            write_jsonl_dict_rows(
                 sidecars / "reflection_adjustments.jsonl",
                 [
                     {
@@ -302,7 +300,7 @@ class TaskOrientationPacketTests(unittest.TestCase):
                     },
                 ],
             )
-            write_jsonl(
+            write_jsonl_dict_rows(
                 sidecars / "working_memory.jsonl",
                 [
                     {
@@ -356,11 +354,12 @@ class TaskOrientationPacketTests(unittest.TestCase):
         self.assertGreater(compact["current_orientation"]["advanced_navigation_route_count"], 0)
         self.assertEqual(
             compact["foreground_action"]["id"],
-            "open_orientation_detail",
+            "run_agent_recall_for_orientation",
         )
-        self.assertIn("aippocampus agent orient", compact["foreground_action"]["command"])
-        self.assertIn("--detail full", compact["foreground_action"]["command"])
+        self.assertIn("aippocampus agent recall", compact["foreground_action"]["command"])
+        self.assertIn("inspect_orientation_route_hint_detail", json.dumps(compact["safe_next_actions"]))
         self.assertNotIn("source_route", compact["foreground_action"]["id"])
+        self.assertNotIn("path_id", json.dumps(compact, ensure_ascii=False))
         self.assertNotIn("agent_next_action", compact)
         self.assertEqual(foreground_action_contract_violations(compact), [])
         self.assertNotIn(str(Path(tempfile.gettempdir())), encoded)
@@ -518,14 +517,15 @@ class TaskOrientationPacketTests(unittest.TestCase):
         self.assertNotIn("suppressed_detail", payload)
         self.assertNotIn("cannot_claim", payload)
         self.assertNotIn("red_lines", payload)
-        self.assertEqual(payload["foreground_action"]["id"], "open_orientation_detail")
+        self.assertEqual(payload["foreground_action"]["id"], "run_agent_recall_for_orientation")
         self.assertIn(
-            "aippocampus agent orient",
+            "aippocampus agent recall",
             payload["foreground_action"]["command"],
         )
-        self.assertIn("--detail full", payload["foreground_action"]["command"])
+        self.assertNotIn("--detail full", payload["foreground_action"]["command"])
         self.assertNotIn("source_route", payload["foreground_action"]["id"])
         self.assertNotIn("{task}", payload["foreground_action"]["command"])
+        self.assertNotIn("path_id", json.dumps(payload, ensure_ascii=False))
         self.assertEqual(executable_command_violations(payload), [])
         self.assertEqual(foreground_action_contract_violations(payload), [])
 

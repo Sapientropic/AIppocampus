@@ -6,7 +6,8 @@ import unittest
 from pathlib import Path
 from typing import Any
 
-from aippocampus_runtime.question import tracking
+from aippocampus_runtime.cli import facade
+from aippocampus_runtime.question import frontdoor, tracking
 from aippocampus_runtime.question.confirmation import load_confirmation_decisions
 
 
@@ -134,6 +135,90 @@ class QuestionTrackingTests(unittest.TestCase):
         linked_text = " ".join(item["question_text"] for item in link["linked_questions"])
         self.assertIn("compaction", linked_text)
         self.assertNotIn("dashboard", linked_text.casefold())
+
+    def test_questions_list_reopens_source_ref_before_title_search_fallback(self) -> None:
+        self.write_rows(
+            [
+                self.question_row(
+                    "1",
+                    title="Search noise and context overload",
+                    summary="Title intentionally does not appear in the source window.",
+                    question_text="How should question tracking reopen source refs?",
+                    question_short="source ref reopen route",
+                )
+            ]
+        )
+        self.write_registry(["session:1"])
+        args = frontdoor.build_parser().parse_args(
+            [
+                "list",
+                "--jobs",
+                str(self.jobs_path),
+                "--registry-dir",
+                str(self.root),
+                "--dormant-after-days",
+                "999",
+                "--json",
+            ]
+        )
+
+        payload = frontdoor._list_payload(args)
+        row = payload["rows"][0]
+        action = row["foreground_action"]
+        fallback = row["fallback_action"]
+        command = action["command"]
+
+        self.assertEqual(action["id"], "reopen_question_source")
+        self.assertEqual(row["route_state"], "ready_to_reopen")
+        self.assertIn("aippocampus search --open-source", command)
+        self.assertIn("--registry-dir", command)
+        self.assertIn("--thread-key session:1", command)
+        self.assertIn("--message-id msg_1", command)
+        self.assertNotIn("Search noise and context overload", command)
+        self.assertIn("source ref reopen route", fallback["command"])
+        self.assertEqual(fallback["claim_boundary"], "fallback_title_search_is_not_source_reopen")
+        self.assertNotIn("_source_refs", json.dumps(row, ensure_ascii=False))
+
+        opened = facade.run_command(
+            [
+                "search",
+                "--open-source",
+                "--registry-dir",
+                str(self.root),
+                "--thread-key",
+                "session:1",
+                "--message-id",
+                "msg_1",
+                "--json",
+            ],
+            capture_output=True,
+        )
+        self.assertEqual(opened.exit_code, 0, opened.stderr)
+        opened_payload = json.loads(opened.stdout)
+        self.assertTrue(opened_payload["metrics"]["source_reopen_success"])
+        self.assertIn(
+            "Question source 1",
+            json.dumps(opened_payload["source_window"], ensure_ascii=False),
+        )
+
+    def test_question_row_with_unserializable_refs_does_not_use_title_as_reopen_route(self) -> None:
+        row = frontdoor._question_action_card(
+            {
+                "unit_id": "question:missing-anchor",
+                "title": "Search noise and context overload",
+                "state": "open",
+                "source_ref_count": 1,
+                "source_thread_count": 1,
+                "_source_refs": [{"thread_key": "session:missing-anchor"}],
+            }
+        )
+
+        self.assertEqual(row["route_state"], "refs_present_but_not_reopenable")
+        self.assertEqual(row["foreground_action"]["id"], "inspect_question_ref_detail")
+        self.assertEqual(row["source_route"]["status"], "refs_present_but_not_reopenable")
+        self.assertIn("fallback_action", row)
+        self.assertIn("aippocampus search --all", row["fallback_action"]["command"])
+        self.assertNotEqual(row["foreground_action"]["command"], row["fallback_action"]["command"])
 
     def test_default_tracking_reports_pair_scan_prefilter_boundary(self) -> None:
         self.write_rows(

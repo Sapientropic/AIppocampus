@@ -44,12 +44,16 @@ Resolve the warning by doing one of these:
 
 ## Current Classified Owners
 
-Initial high-pressure owners:
+Representative high-pressure owners. The executable owner list lives in
+`tools/aippocampus/docs/instruction_surface.py`; this table stays short so the
+policy does not become another mirrored issue register.
 
 | File | Classification | Reason |
 | --- | --- | --- |
 | `skills/aippocampus/scripts/aippocampus_runtime/mcp/agent_recall_projection.py` | `compact_projection_owner` | Owns compact recall card translation while keeping proof in detail/operator/tests. |
+| `skills/aippocampus/scripts/aippocampus_runtime/mcp/public_projection.py` | `mcp_public_projection_owner` | Owns MCP default-vs-full projection and redaction text. |
 | `skills/aippocampus/scripts/aippocampus_runtime/recall/agent_continuity.py` | `runtime_prompt_and_route_owner` | Owns recall route/action selection text before projection. |
+| `skills/aippocampus/scripts/aippocampus_runtime/update/agent_status_summary.py` | `update_status_compact_projection_owner` | Owns compact readiness projection without treating unverified tools as ready. |
 | `tests/aippocampus/frontstage_assertions.py` | `test_contract_owner` | Owns reusable compact-vs-detail assertions. |
 | `tests/aippocampus/test_architecture_boundaries.py` | `architecture_guard_test_owner` | Owns repository-level architecture boundary tests. |
 

@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import json
 import time
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from aippocampus_runtime.contracts import canonical_foreground_action_fields
+from aippocampus_runtime.contracts import (
+    canonical_foreground_action_fields,
+)
 from aippocampus_runtime.core import compact_text, default_thread_clean_source_dir
 from aippocampus_runtime.mcp.recall_navigation import RecallNavigationError, normalize_handle
 from aippocampus_runtime.mcp.source_ref_registry import source_candidate_dirs_for_ref
@@ -40,6 +43,9 @@ from aippocampus_runtime.source.last_recall_actions import (
 )
 from aippocampus_runtime.source.last_recall_actions import (
     selector_cache_path as _selector_cache_path,
+)
+from aippocampus_runtime.source.last_recall_recovery import (
+    selector_recovery_payload as _selector_recovery_payload,
 )
 from aippocampus_runtime.source.last_recall_thread_candidate import (
     registry_source_window_command as _registry_source_window_command,
@@ -331,7 +337,7 @@ def render_last_recall_search_result(result: Mapping[str, Any]) -> str:
             lines.append(f"next: {command}")
     return "\n".join(lines)
 
-
+# aippocampus-stage-map: resolve selector -> load cache -> scan sources -> emit source/open recovery.
 def search_last_recall_sources(
     patterns: list[str],
     *,
@@ -345,13 +351,21 @@ def search_last_recall_sources(
     include_paths: bool = False,
 ) -> dict[str, Any]:
     query_text = " ".join(str(pattern) for pattern in patterns).strip()
-    cache_path = _selector_cache_path(
-        recall_selector=recall_selector,
-        last_recall_path=last_recall_path,
-    )
+    try:
+        cache_path = _selector_cache_path(
+            recall_selector=recall_selector,
+            last_recall_path=last_recall_path,
+        )
+    except (OSError, ValueError) as exc:
+        return _selector_recovery_payload(
+            code="invalid_recall_selector",
+            message=str(exc),
+            cue=query_from_last_recall_cache(last_recall_path),
+            query_text=query_text,
+        )
     try:
         cache = read_last_recall_cache(cache_path)
-    except Exception as exc:
+    except (OSError, json.JSONDecodeError, ValueError) as exc:
         return _recovery_payload(
             code="last_recall_unavailable",
             message=str(exc),

@@ -178,6 +178,9 @@ def _current_guidance_rows(lifecycle: Mapping[str, Any], *, limit: int = 3) -> l
         }
         if isinstance(review_action, Mapping):
             row["review_action"] = dict(review_action)
+        materialization_action = raw.get("materialization_action")
+        if isinstance(materialization_action, Mapping):
+            row["materialization_action"] = dict(materialization_action)
         rows.append(row)
         if len(rows) >= limit:
             break
@@ -288,6 +291,7 @@ def status_payload(
     cwd: Path,
     no_default_learning: bool = False,
     include_operator_detail: bool = False,
+    guidance_id: str | None = None,
 ) -> dict[str, Any]:
     report = refresh_action_hint_cache(
         cwd=cwd,
@@ -348,10 +352,15 @@ def status_payload(
         prepared_rows=(report.get("cache") or {}).get("records") or [],
     )
     compact_lifecycle, operator_detail = _compact_semantic_lifecycle(semantic_lifecycle)
+    requested_guidance_id = str(guidance_id or "").strip()
     current_guidance = _current_guidance_rows(
         compact_lifecycle,
-        limit=3 if include_operator_detail else 1,
+        limit=5 if requested_guidance_id else 3 if include_operator_detail else 1,
     )
+    if requested_guidance_id:
+        current_guidance = [
+            row for row in current_guidance if str(row.get("guidance_id") or "") == requested_guidance_id
+        ]
     semantic_count = int(semantic_metrics.get("action_time_guidance_count") or 0)
     summary_metrics = {
         "default_learning_status": intake.get("status"),
@@ -469,11 +478,13 @@ def guidance_payload(
     cwd: Path,
     no_default_learning: bool = False,
     include_operator_detail: bool = False,
+    guidance_id: str | None = None,
 ) -> dict[str, Any]:
     payload = status_payload(
         cwd=cwd,
         no_default_learning=no_default_learning,
         include_operator_detail=include_operator_detail,
+        guidance_id=guidance_id,
     )
     summary = dict(payload.get("summary") or {})
     semantic_count = int(summary.get("semantic_action_time_guidance_count") or 0)
@@ -746,6 +757,7 @@ def build_parser() -> argparse.ArgumentParser:
     guidance = sub.add_parser("guidance")
     guidance.add_argument("--cwd")
     guidance.add_argument("--no-default-learning", action="store_true")
+    guidance.add_argument("--guidance-id")
     guidance.add_argument("--json", action="store_true")
     guidance.add_argument("--operator-json", action="store_true")
     guidance.add_argument("--detail", choices=["compact", "full"], default="compact")
@@ -842,6 +854,7 @@ def main(argv: list[str] | None = None) -> int:
             cwd=_cwd(args.cwd),
             no_default_learning=args.no_default_learning,
             include_operator_detail=bool(args.operator_json or args.detail == "full"),
+            guidance_id=args.guidance_id,
         )
     else:
         payload = status_payload(

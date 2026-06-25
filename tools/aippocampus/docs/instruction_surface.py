@@ -35,11 +35,59 @@ INSTRUCTION_SURFACE_CLASSIFIED_FILES = {
             "detail/operator/tests, not default MCP payload expansion"
         ),
     },
+    "skills/aippocampus/scripts/aippocampus_runtime/mcp/agent_recall_compact_choices.py": {
+        "classification": "compact_route_choice_owner",
+        "owner": "#2663/#2651",
+        "why": (
+            "owns compact recall route-choice and source-search affordance wording; "
+            "route proof remains in deepen/open follow-through and tests"
+        ),
+    },
+    "skills/aippocampus/scripts/aippocampus_runtime/mcp/public_projection.py": {
+        "classification": "mcp_public_projection_owner",
+        "owner": "#2666/#2651",
+        "why": (
+            "owns MCP default-vs-full public projection and redaction text; raw "
+            "diagnostics stay in full/detail surfaces"
+        ),
+    },
+    "skills/aippocampus/scripts/aippocampus_runtime/mcp/tool_handlers.py": {
+        "classification": "mcp_tool_handler_owner",
+        "owner": "#2666/#2651",
+        "why": (
+            "owns MCP handler tool-error and renderer-routing text; handlers must "
+            "delegate compact/detail cleanup to the shared profile layer"
+        ),
+    },
     "skills/aippocampus/scripts/aippocampus_runtime/recall/agent_continuity.py": {
         "classification": "runtime_prompt_and_route_owner",
         "owner": "#2636/#2651",
         "why": (
             "owns recall route/action selection text that later projections render"
+        ),
+    },
+    "skills/aippocampus/scripts/aippocampus_runtime/recall/continuity_domain_cli.py": {
+        "classification": "continuity_domain_operator_cli_owner",
+        "owner": "#2668/#2651",
+        "why": (
+            "owns explicit continuity-domain preview/operator wording; default "
+            "foreground recall still has to reopen source before claims"
+        ),
+    },
+    "skills/aippocampus/scripts/aippocampus_runtime/recall/task_orientation.py": {
+        "classification": "task_orientation_projection_owner",
+        "owner": "#2670/#2651",
+        "why": (
+            "owns Task Orientation compact/detail projection text; compact route "
+            "guidance must stay distinct from callable source evidence"
+        ),
+    },
+    "skills/aippocampus/scripts/aippocampus_runtime/recall/task_orientation_fixtures.py": {
+        "classification": "task_orientation_fixture_owner",
+        "owner": "#2670/#2651",
+        "why": (
+            "owns deterministic Task Orientation fixture wording used to guard "
+            "source-guidance boundaries without becoming live source evidence"
         ),
     },
     "skills/aippocampus/scripts/aippocampus_runtime/recall/segment_search_extras.py": {
@@ -50,12 +98,52 @@ INSTRUCTION_SURFACE_CLASSIFIED_FILES = {
             "search, while source-open proof stays in detail/tests/issue closeout"
         ),
     },
+    "skills/aippocampus/scripts/aippocampus_runtime/source/registry_search_actions.py": {
+        "classification": "registry_search_action_owner",
+        "owner": "#2660/#2662/#2651",
+        "why": (
+            "owns registry search foreground actions for exact identifiers and "
+            "useful-target gating; diagnostic hits must not become source-open proof"
+        ),
+    },
+    "skills/aippocampus/scripts/aippocampus_runtime/source/registry_search_pipeline.py": {
+        "classification": "registry_search_projection_owner",
+        "owner": "#2660/#2662/#2651",
+        "why": (
+            "owns registry-wide search projection wording; exact/source usefulness "
+            "state must drive actions instead of generic familiarity fallbacks"
+        ),
+    },
+    "skills/aippocampus/scripts/aippocampus_runtime/source/last_recall_recovery.py": {
+        "classification": "last_recall_recovery_action_owner",
+        "owner": "#2665/#2651",
+        "why": (
+            "owns invalid-selector recovery actions for last-recall source search; "
+            "fallback commands must stay explicit and non-mutating"
+        ),
+    },
     "skills/aippocampus/scripts/aippocampus_runtime/subconscious/scheduler.py": {
         "classification": "lifecycle_scheduler_boundary_owner",
         "owner": "#2635/#2651",
         "why": (
             "owns hook-safe scheduler boundary text; lifecycle foreground must "
             "stay fail-open and must not become a proof or job-output surface"
+        ),
+    },
+    "skills/aippocampus/scripts/aippocampus_runtime/update/agent_status_summary.py": {
+        "classification": "update_status_compact_projection_owner",
+        "owner": "#2661/#2651",
+        "why": (
+            "owns compact update/readiness card text; acceptance-bearing warnings "
+            "must stay actionable without being reported as ready"
+        ),
+    },
+    "skills/aippocampus/scripts/aippocampus_runtime/update/status_actions.py": {
+        "classification": "update_status_action_owner",
+        "owner": "#2661/#2669/#2651",
+        "why": (
+            "owns update/readiness foreground action cards and mutation-risk labels "
+            "for CLI and MCP follow-through"
         ),
     },
     "tests/aippocampus/frontstage_assertions.py": {
@@ -70,6 +158,31 @@ INSTRUCTION_SURFACE_CLASSIFIED_FILES = {
         "classification": "architecture_guard_test_owner",
         "owner": "#2636/#2651",
         "why": "owns repository-level architecture boundary tests.",
+    },
+    "tests/aippocampus/test_aippocampus_cli.py": {
+        "classification": "cli_frontdoor_test_contract_owner",
+        "owner": "#2664/#2651",
+        "why": "owns executable CLI frontdoor contracts for operator/detail actions.",
+    },
+    "tests/aippocampus/test_question_tracking.py": {
+        "classification": "question_source_ref_test_contract_owner",
+        "owner": "#2667/#2651",
+        "why": "owns question source-ref reopen contracts instead of title-search fallbacks.",
+    },
+    "tests/aippocampus/test_task_orientation_packet.py": {
+        "classification": "task_orientation_test_contract_owner",
+        "owner": "#2670/#2651",
+        "why": "owns Task Orientation compact/detail boundary tests.",
+    },
+    "tests/aippocampus/test_update_agent_status.py": {
+        "classification": "update_status_test_contract_owner",
+        "owner": "#2661/#2651",
+        "why": "owns compact update-status readiness semantics for foreground agents.",
+    },
+    "tests/aippocampus/test_update_sync.py": {
+        "classification": "update_sync_test_contract_owner",
+        "owner": "#2661/#2669/#2651",
+        "why": "owns update/sync foreground action and mutation-risk regression contracts.",
     },
 }
 COMPACT_DEBUG_FIELD_LITERALS = (

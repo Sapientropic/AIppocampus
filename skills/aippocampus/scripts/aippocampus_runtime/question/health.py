@@ -276,7 +276,11 @@ def _candidate_subject(
 
 
 def _lifecycle_for(
-    subject: Mapping[str, Any], *, now: datetime, dormant_after_days: int
+    subject: Mapping[str, Any],
+    *,
+    now: datetime,
+    dormant_after_days: int,
+    include_source_refs: bool = False,
 ) -> dict[str, Any]:
     resolution = subject.get("resolution_signal") if isinstance(subject.get("resolution_signal"), dict) else None
     last_seen = str(subject.get("last_seen") or "")
@@ -290,7 +294,7 @@ def _lifecycle_for(
     else:
         state = "open"
         reason = "recent or age unknown; no resolution signal"
-    return {
+    item = {
         "unit_id": subject.get("unit_id"),
         "unit_type": subject.get("unit_type"),
         "title": subject.get("title"),
@@ -303,6 +307,9 @@ def _lifecycle_for(
         "source_thread_count": subject.get("source_thread_count") or 0,
         "resolution_signal": resolution,
     }
+    if include_source_refs:
+        item["_source_refs"] = list(subject.get("source_refs") or [])
+    return item
 
 
 def _signal_matches_subject(signal: Mapping[str, Any], subject: Mapping[str, Any]) -> bool:
@@ -362,6 +369,7 @@ def build_question_health_stats(
     source_index: SourceRefIndex | None = None,
     now: datetime | None = None,
     dormant_after_days: int = DEFAULT_DORMANT_AFTER_DAYS,
+    include_source_refs: bool = False,
 ) -> dict[str, Any]:
     now = now or _now_utc()
     rows_list = list(rows)
@@ -441,7 +449,12 @@ def build_question_health_stats(
         }
 
     lifecycle = [
-        _lifecycle_for(subject, now=now, dormant_after_days=dormant_after_days)
+        _lifecycle_for(
+            subject,
+            now=now,
+            dormant_after_days=dormant_after_days,
+            include_source_refs=include_source_refs,
+        )
         for subject in subjects
     ]
     resolution_signal_count = sum(
@@ -502,6 +515,7 @@ def question_health_stats(
     registry_path: Path | str | None = None,
     now: datetime | None = None,
     dormant_after_days: int = DEFAULT_DORMANT_AFTER_DAYS,
+    include_source_refs: bool = False,
 ) -> dict[str, Any]:
     path = Path(jobs_path)
     if not path.exists():
@@ -512,6 +526,7 @@ def question_health_stats(
         source_index=source_index,
         now=now,
         dormant_after_days=dormant_after_days,
+        include_source_refs=include_source_refs,
     )
     payload["jobs"] = str(path)
     payload["registry"] = str(registry_path) if registry_path else None

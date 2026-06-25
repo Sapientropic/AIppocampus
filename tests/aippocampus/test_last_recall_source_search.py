@@ -423,6 +423,34 @@ class LastRecallSourceSearchTests(unittest.TestCase):
         self.assertNotIn("agent deepen", json.dumps(payload, ensure_ascii=False))
         self.assertNotIn(str(self.cwd), json.dumps(payload, ensure_ascii=False))
 
+    def test_search_from_last_recall_invalid_selector_uses_contextual_recovery(self) -> None:
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            code = search.main(
+                [
+                    "--from-last-recall",
+                    "foo",
+                    "--recall-selector",
+                    "sel_bogus",
+                    "--cwd",
+                    str(self.cwd),
+                    "--json",
+                ]
+            )
+        payload = json.loads(stdout.getvalue())
+
+        self.assertEqual(code, 2)
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["status"], "cannot_verify")
+        self.assertEqual(payload["error"]["code"], "invalid_recall_selector")
+        self.assertEqual(payload["foreground_action"]["id"], "rerun_recall_for_fresh_search_set")
+        action_ids = [action["id"] for action in payload["safe_next_actions"]]
+        self.assertIn("search_all_registered_sources", action_ids)
+        self.assertIn("search_mutable_last_recall_without_selector", action_ids)
+        self.assertNotIn("inspect_cli_help", action_ids)
+        self.assertNotIn("aippocampus --help", json.dumps(payload, ensure_ascii=False))
+        self.assertEqual(foreground_action_contract_violations(payload), [])
+
     def test_registry_audit_reports_redacted_source_reachability_counts(self) -> None:
         raw = self.cwd / "raw-rollout.jsonl"
         raw.write_text("[]\n", encoding="utf-8")
