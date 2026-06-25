@@ -8,6 +8,8 @@ import json
 import os
 import re
 import sys
+import urllib.error
+import urllib.request
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -148,6 +150,63 @@ DIAGNOSTIC_DEFAULT_AUTHORITY_RE = re.compile(
     r")\b|\b(default adoption|default behavior|default routing)\b.{0,120}\bdiagnostic[- ]only\b",
     re.I | re.S,
 )
+RECALL_FOLLOWTHROUGH_FAMILY_RE = re.compile(
+    r"\b("
+    r"agent[_ -]?recall|apw|associative path|mcp|foreground action|"
+    r"source[-_ ]open|source open|source anchor|opened source|deepen"
+    r")\b",
+    re.I,
+)
+COMPACT_DETAIL_FAMILY_RE = re.compile(
+    r"\b(compact|detail|operator|foreground projection|foreground surface|projection)\b",
+    re.I,
+)
+CLEANUP_DEBT_FAMILY_RE = re.compile(
+    r"\b("
+    r"cleanup|test[-_ ]debt|guard[-_ ]debt|debt removed|compatibility cleanup|"
+    r"compatibility|compat field|retire|delete|deleted|migrated|duplicate helper|"
+    r"field[-_ ]only|guard framework|red[- ]light"
+    r")\b",
+    re.I,
+)
+BENCHMARK_SYNTHETIC_FAMILY_RE = re.compile(
+    r"\b(benchmark|synthetic|fixture|scripted proxy|contract fixture|proxy result)\b",
+    re.I,
+)
+FOLLOWTHROUGH_CHAIN_RE = re.compile(
+    r"agent[_ -]?recall.{0,240}"
+    r"(?:agent[_ -]?(?:deepen|open)|deepen/open|opened source).{0,240}"
+    r"(?:opened source anchor hits|source anchor hits|anchor hits)",
+    re.I | re.S,
+)
+COMPACT_OUTPUT_EVIDENCE_RE = re.compile(
+    r"\b(?:compact|default)\b.{0,100}\b(?:output|surface|payload|card|stdout|json)\b",
+    re.I | re.S,
+)
+DETAIL_OUTPUT_EVIDENCE_RE = re.compile(
+    r"\b(?:detail|operator|full)\b.{0,100}\b(?:output|surface|payload|diagnostic|stdout|json)\b",
+    re.I | re.S,
+)
+DEBT_REMOVED_EVIDENCE_RE = re.compile(
+    r"\b("
+    r"debt removed|deleted path|deleted test|deleted helper|removed path|"
+    r"migrated path|migrated caller|before/after inventory|before inventory|"
+    r"after inventory|remaining owner issue|remaining owner #|remaining debt"
+    r")\b",
+    re.I,
+)
+FIELD_ONLY_EVIDENCE_RE = re.compile(
+    r"\b("
+    r"selector (?:exists|emitted|present)|route_count|field exists|field present|"
+    r"schema valid|json snapshot|snapshot updated|payload contains|source_backed\s*[:=]\s*true"
+    r")\b",
+    re.I,
+)
+SYNTHETIC_ONLY_EVIDENCE_RE = re.compile(
+    r"\b(synthetic fixture|fixture[- ]only|scripted proxy|contract fixture|payload fixture)\b",
+    re.I,
+)
+WIRED_READY_USEFUL_RE = re.compile(r"\b(wired|ready|useful|foreground action)\b", re.I)
 FOLLOWUP_RE = re.compile(
     r"\b("
     r"remaining[_ -]?gap|followup[_ -]?issue|follow[- ]up issue|"
@@ -486,6 +545,101 @@ def _has_non_benchmark_adoption_rationale(body: str) -> bool:
     return bool(NON_BENCHMARK_ADOPTION_RATIONALE_RE.search(body))
 
 
+def _issue_family_text(
+    *,
+    issue: int,
+    body: str,
+    issue_metadata: Mapping[int, Mapping[str, Any]],
+) -> str:
+    metadata = issue_metadata.get(issue) or {}
+    issue_intent = _issue_intent_text_from_body(body)
+    if metadata:
+        return "\n".join(
+            [
+                issue_intent,
+                str(metadata.get("title") or ""),
+                str(metadata.get("body") or ""),
+            ]
+        )
+    return issue_intent
+
+
+def _high_risk_families_for_text(text: str) -> list[str]:
+    families: list[str] = []
+    if RECALL_FOLLOWTHROUGH_FAMILY_RE.search(text):
+        families.append("recall_mcp_apw_source_open")
+    if COMPACT_DETAIL_FAMILY_RE.search(text):
+        families.append("compact_detail_projection")
+    if CLEANUP_DEBT_FAMILY_RE.search(text):
+        families.append("cleanup_test_guard_debt")
+    if BENCHMARK_SYNTHETIC_FAMILY_RE.search(text):
+        families.append("benchmark_or_synthetic")
+    return families
+
+
+def _high_risk_issue_families(
+    *,
+    closing_issues: list[int],
+    body: str,
+    issue_metadata: Mapping[int, Mapping[str, Any]],
+) -> dict[str, list[str]]:
+    families: dict[str, list[str]] = {}
+    for issue in closing_issues:
+        issue_text = _issue_family_text(issue=issue, body=body, issue_metadata=issue_metadata)
+        issue_families = _high_risk_families_for_text(issue_text)
+        if issue_families:
+            families[str(issue)] = issue_families
+    return families
+
+
+def _flatten_high_risk_families(high_risk_issue_families: Mapping[str, list[str]]) -> set[str]:
+    return {family for families in high_risk_issue_families.values() for family in families}
+
+
+def _evidence_shape(body: str) -> dict[str, bool]:
+    return {
+        "has_recall_deepen_open_anchor_chain": bool(FOLLOWTHROUGH_CHAIN_RE.search(body)),
+        "has_compact_output_evidence": bool(COMPACT_OUTPUT_EVIDENCE_RE.search(body)),
+        "has_detail_or_operator_output_evidence": bool(DETAIL_OUTPUT_EVIDENCE_RE.search(body)),
+        "has_debt_removed_evidence": bool(DEBT_REMOVED_EVIDENCE_RE.search(body)),
+        "has_field_only_evidence_terms": bool(FIELD_ONLY_EVIDENCE_RE.search(body)),
+        "has_synthetic_only_evidence_terms": bool(SYNTHETIC_ONLY_EVIDENCE_RE.search(body)),
+        "has_wired_ready_useful_claim": bool(WIRED_READY_USEFUL_RE.search(body)),
+    }
+
+
+def _fetch_github_issue_metadata(
+    *,
+    repo: str,
+    issue_numbers: list[int],
+    token: str | None = None,
+) -> dict[int, dict[str, Any]]:
+    if not repo or not issue_numbers:
+        return {}
+    out: dict[int, dict[str, Any]] = {}
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "aippocampus-closeout-audit",
+    }
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    for number in issue_numbers:
+        url = f"https://api.github.com/repos/{repo}/issues/{number}"
+        request = urllib.request.Request(url, headers=headers)
+        try:
+            with urllib.request.urlopen(request, timeout=15) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError):
+            continue
+        if isinstance(payload, Mapping):
+            out[number] = {
+                "number": number,
+                "title": payload.get("title") or "",
+                "body": payload.get("body") or "",
+            }
+    return out
+
+
 def _has_followup_pointer(body: str) -> bool:
     in_followup_section = False
     for line in body.splitlines():
@@ -551,6 +705,13 @@ def audit_pr_body(
         body=text,
         issue_metadata=normalized_issue_metadata,
     )
+    high_risk_issue_families = _high_risk_issue_families(
+        closing_issues=closing_issues,
+        body=text,
+        issue_metadata=normalized_issue_metadata,
+    )
+    high_risk_families = _flatten_high_risk_families(high_risk_issue_families)
+    evidence_shape = _evidence_shape(text)
     required_evidence_levels = _flatten_required_levels(issue_intent_levels)
     risky_terms = sorted({match.group(1).casefold() for match in RISKY_CLOSEOUT_RE.finditer(text)})
     has_followup_pointer = _has_followup_pointer(text)
@@ -706,6 +867,102 @@ def audit_pr_body(
             }
         )
 
+    if (
+        closing_issues
+        and "recall_mcp_apw_source_open" in high_risk_families
+        and not evidence_shape["has_recall_deepen_open_anchor_chain"]
+    ):
+        findings.append(
+            {
+                "kind": "missing_recall_source_followthrough",
+                "severity": "error",
+                "message": (
+                    "Closing recall/MCP/APW/source-open work needs a real "
+                    "`agent recall -> agent deepen/open -> opened source anchor hits` chain."
+                ),
+                "closing_issues": closing_issues,
+                "high_risk_issue_families": high_risk_issue_families,
+            }
+        )
+
+    if (
+        closing_issues
+        and "compact_detail_projection" in high_risk_families
+        and not (
+            evidence_shape["has_compact_output_evidence"]
+            and evidence_shape["has_detail_or_operator_output_evidence"]
+        )
+    ):
+        findings.append(
+            {
+                "kind": "missing_compact_detail_evidence_split",
+                "severity": "error",
+                "message": (
+                    "Closing compact/detail projection work needs separate compact/default "
+                    "and detail/operator evidence, not only a JSON snapshot."
+                ),
+                "closing_issues": closing_issues,
+                "high_risk_issue_families": high_risk_issue_families,
+            }
+        )
+
+    if (
+        closing_issues
+        and "cleanup_test_guard_debt" in high_risk_families
+        and not evidence_shape["has_debt_removed_evidence"]
+    ):
+        findings.append(
+            {
+                "kind": "missing_debt_removed_evidence",
+                "severity": "error",
+                "message": (
+                    "Closing cleanup/test-debt/guard-debt work needs deleted or migrated "
+                    "paths, before/after inventory, or a remaining owner issue."
+                ),
+                "closing_issues": closing_issues,
+                "high_risk_issue_families": high_risk_issue_families,
+            }
+        )
+
+    if (
+        closing_issues
+        and high_risk_families
+        and evidence_shape["has_field_only_evidence_terms"]
+        and not evidence_shape["has_recall_deepen_open_anchor_chain"]
+    ):
+        findings.append(
+            {
+                "kind": "field_only_evidence_closes_high_risk",
+                "severity": "error",
+                "message": (
+                    "Field presence, route counts, selectors, or JSON snapshots do not "
+                    "prove high-risk AIppocampus product follow-through."
+                ),
+                "closing_issues": closing_issues,
+                "high_risk_issue_families": high_risk_issue_families,
+            }
+        )
+
+    if (
+        closing_issues
+        and high_risk_families
+        and evidence_shape["has_synthetic_only_evidence_terms"]
+        and evidence_shape["has_wired_ready_useful_claim"]
+        and not evidence_shape["has_recall_deepen_open_anchor_chain"]
+    ):
+        findings.append(
+            {
+                "kind": "synthetic_only_evidence_overclaims_high_risk",
+                "severity": "error",
+                "message": (
+                    "Synthetic fixtures or scripted proxies cannot by themselves support "
+                    "wired/ready/useful closeout claims for high-risk AIppocampus work."
+                ),
+                "closing_issues": closing_issues,
+                "high_risk_issue_families": high_risk_issue_families,
+            }
+        )
+
     return {
         "kind": "aippocampus_closeout_audit",
         "schema_version": SCHEMA_VERSION,
@@ -719,6 +976,8 @@ def audit_pr_body(
         "benchmark_source_side_terms": benchmark_source_side_terms,
         "source_side_orientation_required_terms": source_side_orientation_required_terms,
         "benchmark_local_scaffold_terms": benchmark_local_scaffold_terms,
+        "high_risk_issue_families": high_risk_issue_families,
+        "evidence_shape": evidence_shape,
         "has_aippocampus_orientation": has_aippocampus_orientation,
         "has_isolated_experiment_label": has_isolated_experiment_label,
         "default_runtime_change_signal": default_runtime_change_signal,
@@ -752,10 +1011,21 @@ def _body_from_args(args: argparse.Namespace) -> str:
     return sys.stdin.read()
 
 
-def _issue_metadata_from_args(args: argparse.Namespace) -> Any:
-    if not args.issue_metadata_file:
-        return None
-    return json.loads(Path(args.issue_metadata_file).read_text(encoding="utf-8"))
+def _issue_metadata_from_args(args: argparse.Namespace, body: str) -> Any:
+    metadata: Any = None
+    if args.issue_metadata_file:
+        metadata = json.loads(Path(args.issue_metadata_file).read_text(encoding="utf-8"))
+    if args.github_repo:
+        closing_issues = _unique_issue_numbers(CLOSING_REF_RE.findall(_selected_task_text(body)))
+        fetched = _fetch_github_issue_metadata(
+            repo=args.github_repo,
+            issue_numbers=closing_issues,
+            token=os.environ.get(args.github_token_env) if args.github_token_env else None,
+        )
+        existing = _normalize_issue_metadata(metadata)
+        existing.update(fetched)
+        return existing
+    return metadata
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -764,6 +1034,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--body-env")
     parser.add_argument("--body")
     parser.add_argument("--issue-metadata-file", type=Path)
+    parser.add_argument(
+        "--github-repo",
+        help="Fetch closing issue title/body metadata from this owner/repo for high-risk family detection.",
+    )
+    parser.add_argument("--github-token-env", default="GITHUB_TOKEN")
     parser.add_argument(
         "--closed-issues-file",
         type=Path,
@@ -782,9 +1057,10 @@ def main(argv: list[str] | None = None) -> int:
             window_end=args.closed_window_end,
         )
     else:
+        body = _body_from_args(args)
         report = audit_pr_body(
-            _body_from_args(args),
-            issue_metadata=_issue_metadata_from_args(args),
+            body,
+            issue_metadata=_issue_metadata_from_args(args, body),
         )
     if args.json_output or not args.github_annotations:
         print(json.dumps(report, ensure_ascii=False, indent=2))

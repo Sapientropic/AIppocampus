@@ -35,6 +35,7 @@ from aippocampus_runtime.navigation.association_terms import (
     source_text_is_noise as source_text_is_noise,  # re-export for older runtime modules
 )
 from aippocampus_runtime.registry.api import load_registry, registry_paths, unique_preserve
+from aippocampus_runtime.source.io_kernel import load_jsonl_dict_rows
 from aippocampus_runtime.text import has_cjk_ideograph
 
 ASSOCIATION_SCHEMA_VERSION = 1
@@ -112,6 +113,7 @@ def add_association(
     line: int | None = None,
     phase: str | None = None,
     turn_index: int | None = None,
+    term_quality: dict[str, Any] | None = None,
 ) -> None:
     term = normalize_term(term)
     if term_is_noise(term):
@@ -133,6 +135,16 @@ def add_association(
         item["confidence"] = max(float(item.get("confidence") or 0.0), confidence)
     else:
         item["confidence"] = max(float(item.get("confidence") or 0.0), confidence)
+
+    if term_quality:
+        item["term_quality"] = {
+            "source": "corpus_cjk_phrase_miner",
+            "frequency": int(term_quality.get("frequency") or 0),
+            "document_count": int(term_quality.get("document_count") or 0),
+            "left_accessor_variety": int(term_quality.get("left_accessor_variety") or 0),
+            "right_accessor_variety": int(term_quality.get("right_accessor_variety") or 0),
+            "score": float(term_quality.get("score") or 0.0),
+        }
 
     item["hit_count"] = int(item.get("hit_count") or 0) + 1
     related = [
@@ -195,27 +207,22 @@ def clean_source_messages(messages_path: Path, limit: int) -> list[dict[str, Any
     if not messages_path.exists():
         return []
     rows: list[dict[str, Any]] = []
-    with messages_path.open("r", encoding="utf-8") as f:
-        for line in f:
-            try:
-                item = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            role = item.get("role")
-            if role != "user" and not (
-                role == "assistant" and (item.get("is_final") or item.get("phase") == "final_answer")
-            ):
-                continue
-            rows.append(
-                {
-                    "line": item.get("source_line"),
-                    "role": item.get("role"),
-                    "phase": item.get("phase") or ("user" if role == "user" else "final_answer"),
-                    "turn_index": item.get("turn_index"),
-                    "text": item.get("text") or "",
-                    "source": "clean_source_user_turn" if role == "user" else "clean_source_final_answer",
-                }
-            )
+    for item in load_jsonl_dict_rows(messages_path).rows:
+        role = item.get("role")
+        if role != "user" and not (
+            role == "assistant" and (item.get("is_final") or item.get("phase") == "final_answer")
+        ):
+            continue
+        rows.append(
+            {
+                "line": item.get("source_line"),
+                "role": item.get("role"),
+                "phase": item.get("phase") or ("user" if role == "user" else "final_answer"),
+                "turn_index": item.get("turn_index"),
+                "text": item.get("text") or "",
+                "source": "clean_source_user_turn" if role == "user" else "clean_source_final_answer",
+            }
+        )
     rows.sort(key=lambda item: int(item.get("line") or 0), reverse=True)
     return rows[: max(1, int(limit))]
 
@@ -300,6 +307,11 @@ def collect_from_entry(
             diagnostics["cjk_phrase_miner_attached_count"] = int(
                 diagnostics.get("cjk_phrase_miner_attached_count") or 0
             ) + len(mined_terms)
+        mined_term_quality = {
+            term.casefold(): corpus_cjk_phrases[term]
+            for term in mined_terms
+            if corpus_cjk_phrases and term in corpus_cjk_phrases
+        }
         source_terms = unique_preserve(source_terms + mined_terms, limit=MAX_TERMS_PER_SOURCE + 8)
         if not source_terms:
             continue
@@ -316,6 +328,7 @@ def collect_from_entry(
                 line=message.get("line"),
                 phase=message.get("phase") or "final_answer",
                 turn_index=message.get("turn_index"),
+                term_quality=mined_term_quality.get(term.casefold()),
             )
 
 
@@ -342,6 +355,10 @@ def build_associations(
         (entry, source_messages_for_entry(entry, max_messages_per_thread))
         for entry in registry_entries
     ]
+    diagnostics["association_entry_message_pair_count"] = len(entry_messages)
+    diagnostics["association_source_message_count"] = sum(
+        len(messages) for _, messages in entry_messages
+    )
     corpus_cjk_phrases = mine_corpus_cjk_phrases(
         phrase_mining_rows(
             entry_messages,
@@ -351,11 +368,10 @@ def build_associations(
         diagnostics=diagnostics,
         limit=corpus_cjk_phrase_limit,
     )
-    for entry in registry.get("threads") or []:
-        messages = next(
-            (items for candidate, items in entry_messages if candidate is entry),
-            None,
-        )
+    for entry, messages in entry_messages:
+        diagnostics["association_entry_message_collect_count"] = int(
+            diagnostics.get("association_entry_message_collect_count") or 0
+        ) + 1
         collect_from_entry(
             entry,
             terms,

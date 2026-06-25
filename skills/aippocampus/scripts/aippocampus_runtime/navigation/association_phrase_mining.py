@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from time import perf_counter
 from typing import Any
 
 from aippocampus_runtime.navigation.association_terms import (
@@ -65,26 +66,54 @@ def _reject_mined_cjk_candidate(term: str) -> str | None:
     return None
 
 
-def _is_substring_dominated(term: str, raw_stats: dict[str, dict[str, Any]]) -> bool:
+def _substring_dominance_frequencies(
+    raw_stats: dict[str, dict[str, Any]],
+) -> tuple[dict[str, int], int]:
+    """Index longer raw terms that can dominate shorter weak phrase candidates.
+
+    The mined CJK window sizes are intentionally bounded. Build the containment
+    index once from longer candidates so the quality gate can keep rejecting
+    one-window substrings without asking every term to rescan every other term.
+    """
+
+    raw_terms = set(raw_stats)
+    containing_frequencies: dict[str, int] = {}
+    comparison_count = 0
+    for other, other_stat in raw_stats.items():
+        other_frequency = int(other_stat.get("frequency") or 0)
+        if other_frequency <= 0 or len(other) <= 4:
+            continue
+        seen_substrings: set[str] = set()
+        for size in range(4, len(other)):
+            for offset in range(0, len(other) - size + 1):
+                substring = other[offset : offset + size]
+                if substring in seen_substrings:
+                    continue
+                seen_substrings.add(substring)
+                comparison_count += 1
+                if substring in raw_terms:
+                    containing_frequencies[substring] = (
+                        containing_frequencies.get(substring, 0) + other_frequency
+                    )
+    return containing_frequencies, comparison_count
+
+
+def _is_substring_dominated(
+    term: str,
+    raw: dict[str, Any],
+    containing_frequencies: dict[str, int],
+) -> bool:
     if len(term) <= 3 or term in CJK_DOMAIN_ANCHORS:
         return False
-    stat = raw_stats.get(term) or {}
-    frequency = int(stat.get("frequency") or 0)
+    frequency = int(raw.get("frequency") or 0)
     if frequency <= 0:
         return False
-    left_av = len(stat.get("left") or set())
-    right_av = len(stat.get("right") or set())
-    doc_count = len(stat.get("docs") or set())
+    left_av = len(raw.get("left") or set())
+    right_av = len(raw.get("right") or set())
+    doc_count = len(raw.get("docs") or set())
     if left_av > 1 or right_av > 1 or doc_count > 1:
         return False
-    containing_frequency = 0
-    for other, other_stat in raw_stats.items():
-        if other == term or len(other) <= len(term) or term not in other:
-            continue
-        containing_frequency += int(other_stat.get("frequency") or 0)
-        if containing_frequency >= frequency:
-            return True
-    return False
+    return int(containing_frequencies.get(term) or 0) >= frequency
 
 
 def _bump(diagnostics: dict[str, int] | None, key: str) -> None:
@@ -107,6 +136,7 @@ def mine_corpus_cjk_phrases(
     rare clause shards from winning simply because they are unusual.
     """
 
+    started_at = perf_counter()
     raw_stats: dict[str, dict[str, Any]] = {}
     windows = 0
     for index, row in enumerate(rows):
@@ -151,6 +181,9 @@ def mine_corpus_cjk_phrases(
 
     accepted: dict[str, dict[str, Any]] = {}
     rejected_substrings = 0
+    containing_frequencies, substring_comparison_count = _substring_dominance_frequencies(
+        raw_stats
+    )
     for term, raw in raw_stats.items():
         stat = _serializable_cjk_phrase_stat(term, raw)
         frequency = int(stat["frequency"])
@@ -162,7 +195,7 @@ def mine_corpus_cjk_phrases(
                 continue
             if doc_count <= 1 and max(left_av, right_av) <= 1:
                 continue
-        if _is_substring_dominated(term, raw_stats):
+        if _is_substring_dominated(term, raw, containing_frequencies):
             rejected_substrings += 1
             continue
         accepted[term] = stat
@@ -183,6 +216,10 @@ def mine_corpus_cjk_phrases(
         diagnostics["cjk_phrase_miner_accepted_raw_count"] = len(accepted)
         diagnostics["cjk_phrase_miner_accepted_count"] = len(selected)
         diagnostics["cjk_phrase_miner_rejected_substring_count"] = rejected_substrings
+        diagnostics["cjk_phrase_miner_substring_dominance_comparison_count"] = (
+            substring_comparison_count
+        )
+        diagnostics["cjk_phrase_miner_elapsed_ms"] = int((perf_counter() - started_at) * 1000)
     return selected
 
 

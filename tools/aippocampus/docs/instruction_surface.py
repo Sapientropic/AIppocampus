@@ -412,6 +412,14 @@ INSTRUCTION_SURFACE_CLASSIFIED_FILES = {
             "the subprocess runner centralized while compact/detail doctrine stays in tests"
         ),
     },
+    "tests/aippocampus/test_closeout_audit.py": {
+        "classification": "closeout_audit_test_contract_owner",
+        "owner": "#2692/#2636/#2651",
+        "why": (
+            "owns PR-body and issue-closeout fixture text for the closeout audit; "
+            "these strings are test inputs, not runtime foreground instructions"
+        ),
+    },
     "tests/aippocampus/test_question_tracking.py": {
         "classification": "question_source_ref_test_contract_owner",
         "owner": "#2667/#2651",

@@ -31,6 +31,7 @@ from aippocampus_runtime.recall.continuity_domain_cue_quality import (
 )
 from aippocampus_runtime.recall.continuity_domain_producer import (
     DEFAULT_CONTINUITY_DOMAIN_PREVIEW_CANDIDATE_BUDGET,
+    DEFAULT_CONTINUITY_DOMAIN_PREVIEW_MESSAGE_BUDGET,
     DEFAULT_CONTINUITY_DOMAIN_PREVIEW_THREAD_BUDGET,
     propose_continuity_domain_events_from_registry,
 )
@@ -140,6 +141,21 @@ def _print_payload(payload: MappingPayload, *, json_output: bool) -> None:
         considered = raw_metrics.get("considered_thread_count", scanned)
         suffix = " partial" if partial else " complete"
         print(f"scan: {scanned}/{registered} threads ({considered} considered,{suffix})")
+        if "scanned_message_count" in raw_metrics:
+            skipped = raw_metrics.get("skipped_message_count", 0)
+            skipped_label = (
+                f">={skipped}"
+                if raw_metrics.get("skipped_message_count_is_lower_bound")
+                else str(skipped)
+            )
+            max_messages = raw_metrics.get("scan_budget_max_messages_per_thread")
+            budget_label = "unbounded" if max_messages is None else str(max_messages)
+            print(
+                "messages: "
+                f"{raw_metrics.get('scanned_message_count', 0)} scanned | "
+                f"{skipped_label} skipped | "
+                f"budget/thread: {budget_label}"
+            )
         print(
             "candidates: "
             f"{raw_metrics.get('candidate_domain_count', 0)} | "
@@ -538,6 +554,10 @@ def _producer_agent_preview(payload: MappingPayload) -> MappingPayload:
         "registered_thread_count": metrics.get("registered_thread_count", 0),
         "considered_thread_count": metrics.get("considered_thread_count", 0),
         "scanned_thread_count": metrics.get("scanned_thread_count", 0),
+        "scanned_message_count": metrics.get("scanned_message_count", 0),
+        "skipped_message_count": metrics.get("skipped_message_count", 0),
+        "max_messages_per_thread": metrics.get("scan_budget_max_messages_per_thread"),
+        "broad_scan_requested": bool(metrics.get("broad_scan_requested")),
         "candidate_count": metrics.get("candidate_count", len(previews)),
         "scan_partial": bool(metrics.get("scan_partial")),
     }
@@ -621,6 +641,7 @@ def produce_command(args: argparse.Namespace) -> MappingPayload:
     preview_scan_policy: MappingPayload | None = None
     broad_scan = bool(getattr(args, "broad_scan", False))
     max_threads = args.max_threads
+    max_messages_per_thread = getattr(args, "max_messages_per_thread", None)
     max_candidates = args.max_candidates
     # Plain `produce --json` is often reached from foreground agents. Keep that
     # path bounded and preview-shaped unless the operator explicitly asks for a
@@ -634,9 +655,12 @@ def produce_command(args: argparse.Namespace) -> MappingPayload:
     )
     if foreground_bounded_default:
         max_threads = DEFAULT_CONTINUITY_DOMAIN_PREVIEW_THREAD_BUDGET
+        if max_messages_per_thread is None:
+            max_messages_per_thread = DEFAULT_CONTINUITY_DOMAIN_PREVIEW_MESSAGE_BUDGET
         preview_scan_policy = {
             "mode": "foreground_bounded_default",
             "max_threads": max_threads,
+            "max_messages_per_thread": max_messages_per_thread,
             "broad_scan_command": "aippocampus continuity-domain preview --broad-scan --json",
         }
     elif args.preview:
@@ -644,11 +668,15 @@ def produce_command(args: argparse.Namespace) -> MappingPayload:
             preview_scan_policy = {
                 "mode": "explicit_broad_scan",
                 "max_threads": max_threads,
+                "max_messages_per_thread": max_messages_per_thread,
             }
         else:
+            if max_messages_per_thread is None:
+                max_messages_per_thread = DEFAULT_CONTINUITY_DOMAIN_PREVIEW_MESSAGE_BUDGET
             preview_scan_policy = {
                 "mode": "explicit_bounded",
                 "max_threads": max_threads,
+                "max_messages_per_thread": max_messages_per_thread,
             }
     if preview_equivalent and max_candidates is None:
         max_candidates = DEFAULT_CONTINUITY_DOMAIN_PREVIEW_CANDIDATE_BUDGET
@@ -659,12 +687,14 @@ def produce_command(args: argparse.Namespace) -> MappingPayload:
         registry_dir=_registry_dir_path(args),
         min_support=args.min_support,
         max_threads=max_threads,
+        max_messages_per_thread=max_messages_per_thread,
         max_candidates=max_candidates,
         include_local_detail=True,
         refresh_query_pattern_routes=(
             bool(args.refresh_query_pattern_routes)
             or (bool(args.append) and not bool(args.no_refresh_query_pattern_routes))
         ),
+        broad_scan_requested=bool(broad_scan or args.append),
     )
     events = list(proposal.get("candidate_events") or [])
     if preview_equivalent:
@@ -811,6 +841,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     produce.add_argument("--broad-scan", action="store_true")
     produce.add_argument("--min-support", type=int, default=2)
     produce.add_argument("--max-threads", type=int)
+    produce.add_argument("--max-messages-per-thread", type=int)
     produce.add_argument("--max-candidates", type=int)
     produce.add_argument("--json", action="store_true", dest="json_output")
 
@@ -823,6 +854,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     preview.add_argument("--broad-scan", action="store_true")
     preview.add_argument("--min-support", type=int, default=2)
     preview.add_argument("--max-threads", type=int)
+    preview.add_argument("--max-messages-per-thread", type=int)
     preview.add_argument("--max-candidates", type=int)
     preview.add_argument("--json", action="store_true", dest="json_output")
     preview.set_defaults(

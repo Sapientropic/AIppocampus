@@ -218,6 +218,302 @@ class ConceptGraphTests(unittest.TestCase):
 
         self.assertIn("idx_concept_edges_quality", edge_indexes)
         self.assertIn("idx_concepts_health", concept_indexes)
+        self.assertIn("idx_concept_edges_expand", edge_indexes)
+
+    def test_graph_health_quality_buckets_group_by_count_values(self) -> None:
+        con = graph.connect(self.output)
+        try:
+            graph.init_schema(con)
+            src_id = graph.upsert_concept(
+                con,
+                "Source topic",
+                status="verified",
+                lifecycle_reason="fixture",
+                hit_count=12,
+                thread_count=8,
+            )
+            one_id = graph.upsert_concept(
+                con,
+                "One thread",
+                status="verified",
+                lifecycle_reason="fixture",
+                hit_count=1,
+                thread_count=1,
+            )
+            many_id = graph.upsert_concept(
+                con,
+                "Many threads",
+                status="verified",
+                lifecycle_reason="fixture",
+                hit_count=9,
+                thread_count=8,
+            )
+            assert src_id and one_id and many_id
+            graph.upsert_edge(
+                con,
+                src_id,
+                one_id,
+                edge_type="verified_related",
+                confidence=0.9,
+                status="verified",
+                evidence_count=1,
+                thread_count=1,
+                lifecycle_reason="fixture",
+            )
+            graph.upsert_edge(
+                con,
+                src_id,
+                many_id,
+                edge_type="verified_related",
+                confidence=0.9,
+                status="verified",
+                evidence_count=8,
+                thread_count=8,
+                lifecycle_reason="fixture",
+            )
+            con.commit()
+        finally:
+            con.close()
+
+        health = graph.concept_graph_health(self.output)
+
+        self.assertEqual(health["source_diversity_buckets"]["1"], 1)
+        self.assertEqual(health["source_diversity_buckets"]["8+"], 1)
+        self.assertEqual(health["evidence_count_buckets"]["1"], 1)
+        self.assertEqual(health["evidence_count_buckets"]["8+"], 1)
+
+    def test_build_aggregates_repeated_concept_upserts_by_unique_label(self) -> None:
+        related_terms = [f"Route shard {idx:02d}" for idx in range(30)]
+        self.associations.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "terms": {
+                        "本地底座": {
+                            "term": "本地底座",
+                            "status": "staging",
+                            "confidence": 0.92,
+                            "hit_count": 100,
+                            "related_terms": related_terms,
+                            "threads": [
+                                {"thread_key": "session:a"},
+                                {"thread_key": "session:b"},
+                            ],
+                        }
+                    },
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        result = graph.build_concept_graph(self.associations, self.output, max_related_per_term=30)
+        diagnostics = result["build_diagnostics"]
+
+        self.assertEqual(result["build_mode"], "full_rebuild")
+        self.assertEqual(diagnostics["edge_upsert_attempts"], 60)
+        self.assertGreater(diagnostics["concept_resolve_requests"], diagnostics["unique_concept_labels"])
+        self.assertLessEqual(
+            diagnostics["concept_db_upsert_attempts"],
+            diagnostics["unique_concept_labels"],
+        )
+        self.assertGreaterEqual(diagnostics["concept_cache_hits"], 30)
+
+    def test_build_skips_unchanged_input_manifest_without_resetting_graph(self) -> None:
+        self.associations.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "terms": {
+                        "本地底座": {
+                            "term": "本地底座",
+                            "status": "staging",
+                            "confidence": 0.9,
+                            "hit_count": 4,
+                            "related_terms": ["Go runtime"],
+                            "threads": [
+                                {"thread_key": "session:a"},
+                                {"thread_key": "session:b"},
+                            ],
+                        }
+                    },
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        first = graph.build_concept_graph(self.associations, self.output)
+        second = graph.build_concept_graph(self.associations, self.output)
+
+        self.assertEqual(first["build_mode"], "full_rebuild")
+        self.assertEqual(second["build_mode"], "skipped_unchanged_inputs")
+        self.assertEqual(second["previous_graph"]["concept_count"], first["concept_count"])
+        self.assertEqual(second["previous_graph"]["edge_count"], first["edge_count"])
+        self.assertEqual(second["build_diagnostics"]["build_mode"], "skipped_unchanged_inputs")
+        self.assertEqual(second["build_diagnostics"]["previous_build_mode"], "full_rebuild")
+        self.assertFalse(second["build_diagnostics"]["reset_graph_called"])
+        self.assertEqual(second["build_diagnostics"]["concept_db_upsert_attempts"], 0)
+
+        payload = json.loads(self.associations.read_text(encoding="utf-8"))
+        payload["terms"]["本地底座"]["related_terms"].append("gotd")
+        self.associations.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
+        rebuilt = graph.build_concept_graph(self.associations, self.output)
+
+        self.assertEqual(rebuilt["build_mode"], "full_rebuild")
+        self.assertTrue(rebuilt["build_diagnostics"]["reset_graph_called"])
+        self.assertGreater(rebuilt["edge_count"], second["edge_count"])
+
+    def test_graph_health_reports_build_manifest_without_private_paths(self) -> None:
+        self.associations.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "terms": {
+                        "本地底座": {
+                            "term": "本地底座",
+                            "status": "staging",
+                            "confidence": 0.9,
+                            "hit_count": 4,
+                            "related_terms": ["Go runtime"],
+                            "threads": [
+                                {"thread_key": "session:a"},
+                                {"thread_key": "session:b"},
+                            ],
+                        }
+                    },
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        graph.build_concept_graph(self.associations, self.output)
+
+        health = graph.concept_graph_health(self.output)
+        encoded = json.dumps(health, ensure_ascii=False, sort_keys=True)
+
+        self.assertIn("input_manifest", health)
+        self.assertIn("build_diagnostics", health)
+        self.assertEqual(
+            health["build_diagnostics"]["schema_version"],
+            "concept_graph_build_diagnostics_v1",
+        )
+        self.assertNotIn(str(self.associations), encoded)
+        self.assertNotIn(str(self.output), encoded)
+
+    def test_hub_neighbor_query_plan_avoids_temp_sort(self) -> None:
+        con = graph.connect(self.output)
+        try:
+            graph.init_schema(con)
+            seed_id = graph.upsert_concept(
+                con,
+                "AIppocampus",
+                status="verified",
+                lifecycle_reason="fixture_seed",
+                hit_count=100,
+                thread_count=5,
+            )
+            self.assertIsNotNone(seed_id)
+            for idx in range(300):
+                dst_id = graph.upsert_concept(
+                    con,
+                    f"Specific route {idx:03d}",
+                    status="verified",
+                    lifecycle_reason="fixture_neighbor",
+                    hit_count=idx + 1,
+                    thread_count=5,
+                )
+                self.assertIsNotNone(dst_id)
+                graph.upsert_edge(
+                    con,
+                    str(seed_id),
+                    str(dst_id),
+                    edge_type="verified_related",
+                    confidence=0.95 - (idx * 0.0001),
+                    status="verified",
+                    evidence_count=idx + 1,
+                    thread_count=5,
+                    lifecycle_reason="fixture_edge",
+                )
+            con.commit()
+            plan = graph.edge_query_plan(con, str(seed_id), status="verified", max_degree=12)
+        finally:
+            con.close()
+
+        self.assertTrue(plan["uses_expand_index"], plan["plan"])
+        self.assertFalse(plan["uses_temp_btree"], plan["plan"])
+
+    def test_expansion_reports_depth_downgrade_when_neighbor_budget_is_exhausted(self) -> None:
+        con = graph.connect(self.output)
+        try:
+            graph.init_schema(con)
+            seed_id = graph.upsert_concept(
+                con,
+                "本地底座",
+                status="verified",
+                lifecycle_reason="fixture_seed",
+                hit_count=100,
+                thread_count=5,
+            )
+            self.assertIsNotNone(seed_id)
+            for idx in range(8):
+                mid_id = graph.upsert_concept(
+                    con,
+                    f"Bridge route {idx}",
+                    status="verified",
+                    lifecycle_reason="fixture_mid",
+                    hit_count=10,
+                    thread_count=5,
+                )
+                leaf_id = graph.upsert_concept(
+                    con,
+                    f"Leaf route {idx}",
+                    status="verified",
+                    lifecycle_reason="fixture_leaf",
+                    hit_count=10,
+                    thread_count=5,
+                )
+                self.assertIsNotNone(mid_id)
+                self.assertIsNotNone(leaf_id)
+                graph.upsert_edge(
+                    con,
+                    str(seed_id),
+                    str(mid_id),
+                    edge_type="verified_related",
+                    confidence=0.95,
+                    status="verified",
+                    evidence_count=10,
+                    thread_count=5,
+                    lifecycle_reason="fixture_edge",
+                )
+                graph.upsert_edge(
+                    con,
+                    str(mid_id),
+                    str(leaf_id),
+                    edge_type="verified_related",
+                    confidence=0.95,
+                    status="verified",
+                    evidence_count=10,
+                    thread_count=5,
+                    lifecycle_reason="fixture_edge",
+                )
+            con.commit()
+        finally:
+            con.close()
+
+        rows, diagnostics = graph.expand_concepts_with_diagnostics(
+            self.output,
+            ["本地底座"],
+            depth=2,
+            max_degree=8,
+            max_neighbor_fetches=1,
+        )
+
+        self.assertTrue(rows)
+        self.assertEqual(diagnostics["budget_state"], "depth_downgraded")
+        self.assertEqual(diagnostics["neighbor_fetches"], 1)
+        self.assertLess(diagnostics["depth_used"], diagnostics["depth_requested"])
 
     def test_graph_rejects_sliding_window_cjk_fragments_from_association_input(self) -> None:
         self.associations.write_text(
@@ -276,6 +572,152 @@ class ConceptGraphTests(unittest.TestCase):
         self.assertNotIn("仍按新流程保持手动触发", labels)
         self.assertNotIn("动触发", labels)
         self.assertGreaterEqual(result["concept_count"], 2)
+        term_quality = result["quality_gate"]["term_quality"]
+        self.assertGreaterEqual(
+            term_quality["rejected_counts_by_ingress"]["association"],
+            2,
+        )
+        self.assertGreaterEqual(
+            term_quality["rejected_counts_by_ingress"]["related_term"],
+            1,
+        )
+        encoded_quality = json.dumps(term_quality, ensure_ascii=False, sort_keys=True)
+        self.assertNotIn("仍按新流程保持手动触发", encoded_quality)
+        self.assertNotIn("动触发", encoded_quality)
+
+    def test_graph_rejects_low_value_cjk_fragments_from_timeline_ingress(self) -> None:
+        self.associations.write_text(
+            json.dumps({"schema_version": 1, "terms": {}}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        timeline = self.root / "project_timeline.json"
+        timeline.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "projects": {
+                        "p": {
+                            "project_label": "AIppocampus",
+                            "project_tags": ["黏菌"],
+                            "latest_turns": [
+                                {
+                                    "thread_key": "session:timeline",
+                                    "topic_terms": [
+                                        "仍按新流程保持手动触发",
+                                        "动触发",
+                                        "生命周期",
+                                        "证据缺口",
+                                    ],
+                                    "source_refs": [
+                                        {"thread_key": "session:timeline", "source_line": 10}
+                                    ],
+                                }
+                            ],
+                        }
+                    },
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        result = graph.build_concept_graph(
+            self.associations,
+            self.output,
+            project_timeline_path=timeline,
+        )
+        health = graph.concept_graph_health(self.output)
+        con = sqlite3.connect(self.output)
+        try:
+            labels = {row[0] for row in con.execute("SELECT label FROM concepts").fetchall()}
+        finally:
+            con.close()
+
+        self.assertIn("黏菌", labels)
+        self.assertIn("生命周期", labels)
+        self.assertIn("证据缺口", labels)
+        self.assertNotIn("仍按新流程保持手动触发", labels)
+        self.assertNotIn("动触发", labels)
+        self.assertGreaterEqual(
+            result["quality_gate"]["term_quality"]["rejected_counts_by_ingress"]["timeline"],
+            2,
+        )
+        self.assertEqual(
+            health["term_quality_gate"]["rejected_counts_by_ingress"]["timeline"],
+            result["quality_gate"]["term_quality"]["rejected_counts_by_ingress"]["timeline"],
+        )
+        encoded_health = json.dumps(health, ensure_ascii=False, sort_keys=True)
+        self.assertNotIn("生命周期", encoded_health)
+        self.assertNotIn("证据缺口", encoded_health)
+        self.assertNotIn("仍按新流程保持手动触发", encoded_health)
+
+    def test_graph_rejects_low_value_cjk_fragments_from_subconscious_ingress(self) -> None:
+        self.associations.write_text(
+            json.dumps({"schema_version": 1, "terms": {}}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        staging = self.root / "subconscious_edges.jsonl"
+        rows = [
+            {
+                "schema_version": 1,
+                "kind": "aippocampus_subconscious_edge",
+                "status": "staging",
+                "src": "仍按新流程保持手动触发",
+                "dst": "生命周期",
+                "edge_type": "related",
+                "confidence": 0.9,
+                "source_refs": [{"thread_key": "session:noise", "assistant_line": 10}],
+            },
+            {
+                "schema_version": 1,
+                "kind": "aippocampus_subconscious_edge",
+                "status": "staging",
+                "src": "黏菌",
+                "dst": "海马体",
+                "edge_type": "related",
+                "confidence": 0.9,
+                "source_refs": [{"thread_key": "session:good", "assistant_line": 20}],
+            },
+            {
+                "schema_version": 1,
+                "kind": "aippocampus_subconscious_edge",
+                "status": "staging",
+                "src": "动触发",
+                "dst": "海马体",
+                "edge_type": "related",
+                "confidence": 0.9,
+                "source_refs": [{"thread_key": "session:noise", "assistant_line": 30}],
+            },
+        ]
+        staging.write_text(
+            "\n".join(json.dumps(row, ensure_ascii=False) for row in rows) + "\n",
+            encoding="utf-8",
+        )
+
+        result = graph.build_concept_graph(
+            self.associations,
+            self.output,
+            subconscious_edges_path=staging,
+        )
+        expansions = graph.expand_concepts(self.output, ["黏菌"], depth=1)
+        con = sqlite3.connect(self.output)
+        try:
+            labels = {row[0] for row in con.execute("SELECT label FROM concepts").fetchall()}
+        finally:
+            con.close()
+
+        self.assertEqual(result["subconscious_edge_count"], 2)
+        self.assertEqual(expansions[0]["term"], "海马体")
+        self.assertIn("黏菌", labels)
+        self.assertIn("海马体", labels)
+        self.assertNotIn("仍按新流程保持手动触发", labels)
+        self.assertNotIn("动触发", labels)
+        self.assertGreaterEqual(
+            result["quality_gate"]["term_quality"]["rejected_counts_by_ingress"][
+                "subconscious"
+            ],
+            2,
+        )
 
     def test_build_graph_ingests_subconscious_staging_edges(self) -> None:
         self.associations.write_text(
@@ -310,6 +752,113 @@ class ConceptGraphTests(unittest.TestCase):
 
         self.assertEqual(result["subconscious_edge_count"], 2)
         self.assertEqual(expansions[0]["term"], "Go runtime")
+
+    def test_subconscious_project_hub_collapse_parks_overflow_edges(self) -> None:
+        self.associations.write_text(
+            json.dumps({"schema_version": 1, "terms": {}}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        staging = self.root / "subconscious_edges.jsonl"
+        targets = [
+            "memory report.md",
+            "Codex CLI",
+            "sync workflow",
+            "source boundary",
+            "Sapientropic/AIppocampus",
+            "release plan",
+            "operator dashboard",
+            "JSONL fixture",
+            "MCP compact surface",
+            "deployment pipeline",
+        ]
+        rows = []
+        for index, target in enumerate(targets):
+            rows.append(
+                {
+                    "schema_version": 1,
+                    "kind": "aippocampus_subconscious_edge",
+                    "status": "staging",
+                    "src": "AIppocampus",
+                    "dst": target,
+                    "edge_type": "related",
+                    "confidence": 0.93,
+                    "source_refs": [
+                        {"thread_key": "session:a", "assistant_line": 100 + index},
+                        {"thread_key": "session:b", "assistant_line": 200 + index},
+                        {"thread_key": "session:c", "assistant_line": 300 + index},
+                    ],
+                }
+            )
+        staging.write_text(
+            "\n".join(json.dumps(row, ensure_ascii=False) for row in rows) + "\n",
+            encoding="utf-8",
+        )
+
+        result = graph.build_concept_graph(
+            self.associations,
+            self.output,
+            subconscious_edges_path=staging,
+        )
+        expansions = graph.expand_concepts(self.output, ["AIppocampus"], depth=1, max_degree=20)
+        health = graph.concept_graph_health(self.output)
+        encoded_health = json.dumps(health, ensure_ascii=False, sort_keys=True)
+
+        hub_quality = result["quality_gate"]["subconscious_hub_quality"]
+        self.assertEqual(hub_quality["collapsed_hub_count"], 1)
+        self.assertEqual(hub_quality["parked_edge_group_count"], 4)
+        self.assertEqual(hub_quality["active_capped_edge_group_count"], 6)
+        self.assertLessEqual(len(expansions), 6)
+        self.assertEqual(result["lifecycle"]["edge_status_counts"]["parked"], 8)
+        self.assertIn("subconscious_hub_collapse", {item["code"] for item in health["warnings"]})
+        self.assertEqual(health["subconscious_hub_quality"]["parked_edge_group_count"], 4)
+        self.assertNotIn("AIppocampus", encoded_health)
+        self.assertNotIn("memory report.md", encoded_health)
+
+    def test_subconscious_small_project_hub_remains_navigation_usable(self) -> None:
+        self.associations.write_text(
+            json.dumps({"schema_version": 1, "terms": {}}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        staging = self.root / "subconscious_edges.jsonl"
+        rows = [
+            {
+                "schema_version": 1,
+                "kind": "aippocampus_subconscious_edge",
+                "status": "staging",
+                "src": "AIppocampus",
+                "dst": target,
+                "edge_type": edge_type,
+                "confidence": 0.91,
+                "source_refs": [{"thread_key": "session:overview", "assistant_line": index}],
+            }
+            for index, (target, edge_type) in enumerate(
+                [
+                    ("source IO kernel", "decision_about"),
+                    ("MCP compact surface", "same_decision_space"),
+                    ("agent recall", "project_topic"),
+                    ("sync workflow", "depends_on"),
+                ],
+                start=1,
+            )
+        ]
+        staging.write_text(
+            "\n".join(json.dumps(row, ensure_ascii=False) for row in rows) + "\n",
+            encoding="utf-8",
+        )
+
+        result = graph.build_concept_graph(
+            self.associations,
+            self.output,
+            subconscious_edges_path=staging,
+        )
+        expansions = graph.expand_concepts(self.output, ["AIppocampus"], depth=1, max_degree=10)
+        health = graph.concept_graph_health(self.output)
+
+        self.assertEqual(result["quality_gate"]["subconscious_hub_quality"]["collapsed_hub_count"], 0)
+        self.assertEqual(result["quality_gate"]["subconscious_hub_quality"]["parked_edge_group_count"], 0)
+        self.assertGreaterEqual(len(expansions), 3)
+        self.assertEqual(result["lifecycle"]["edge_status_counts"].get("parked", 0), 0)
+        self.assertNotIn("subconscious_hub_collapse", {item["code"] for item in health["warnings"]})
 
     def test_multilingual_concept_kind_inference_is_conservative(self) -> None:
         cases = {

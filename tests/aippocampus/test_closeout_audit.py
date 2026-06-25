@@ -357,6 +357,119 @@ class CloseoutAuditTests(unittest.TestCase):
         self.assertFalse(report["ok"], report)
         self.assertEqual(report["issue_intent_levels"]["279"], ["model_pilot", "behavior_run"])
 
+    def test_high_risk_recall_closeout_requires_real_source_followthrough(self) -> None:
+        report = closeout_audit.audit_pr_body(
+            """
+            ## Summary
+            Wires MCP recall and says selector exists; route_count is nonzero.
+            JSON snapshot updated.
+
+            Closes #2600.
+            """,
+            issue_metadata={
+                2600: {
+                    "title": "Fix MCP agent recall source-open foreground action",
+                    "body": "Recall/MCP/source-open work must prove useful source anchor hits.",
+                }
+            },
+        )
+
+        self.assertFalse(report["ok"], report)
+        kinds = {finding["kind"] for finding in report["findings"]}
+        self.assertIn("missing_recall_source_followthrough", kinds)
+        self.assertIn("field_only_evidence_closes_high_risk", kinds)
+
+    def test_high_risk_closeout_accepts_followthrough_and_debt_removed_shape(self) -> None:
+        report = closeout_audit.audit_pr_body(
+            """
+            ## Summary
+            Fixes compact MCP recall projection and removes duplicate helper debt.
+
+            Evidence level: behavior_run
+            agent recall -> agent deepen/open -> opened source anchor hits:
+            public cue selector sel_public, opened source anchor hits=3.
+
+            Compact/default output: compact card shows one next action.
+            Detail/operator output: detail JSON keeps diagnostics behind full view.
+
+            Debt removed: deleted helper copy and migrated callers.
+            Before/after inventory: duplicate helper count 2 -> 0.
+
+            Closes #2601.
+            """,
+            issue_metadata={
+                2601: {
+                    "title": "Cleanup MCP recall compact/detail projection debt",
+                    "body": "Recall/MCP/source-open, compact/detail, and cleanup/test-debt work.",
+                }
+            },
+        )
+
+        self.assertTrue(report["ok"], report)
+        self.assertIn("2601", report["high_risk_issue_families"])
+        self.assertTrue(report["evidence_shape"]["has_recall_deepen_open_anchor_chain"])
+        self.assertTrue(report["evidence_shape"]["has_debt_removed_evidence"])
+
+    def test_compact_detail_closeout_cannot_use_json_snapshot_only(self) -> None:
+        report = closeout_audit.audit_pr_body(
+            """
+            ## Summary
+            Updates compact projection. JSON snapshot updated.
+
+            Closes #2602.
+            """,
+            issue_metadata={
+                2602: {
+                    "title": "Split MCP compact/detail projection",
+                    "body": "Compact/default output and detail/operator output must be shown separately.",
+                }
+            },
+        )
+
+        self.assertFalse(report["ok"], report)
+        kinds = {finding["kind"] for finding in report["findings"]}
+        self.assertIn("missing_compact_detail_evidence_split", kinds)
+
+    def test_cleanup_closeout_requires_debt_removed_not_guard_added_only(self) -> None:
+        report = closeout_audit.audit_pr_body(
+            """
+            ## Summary
+            Adds a new guard for field-only tests.
+
+            Closes #2603.
+            """,
+            issue_metadata={
+                2603: {
+                    "title": "Clean up test-debt and guard-debt around field-only tests",
+                    "body": "Debt cleanup needs deleted or migrated paths and before/after inventory.",
+                }
+            },
+        )
+
+        self.assertFalse(report["ok"], report)
+        self.assertEqual(report["findings"][0]["kind"], "missing_debt_removed_evidence")
+
+    def test_synthetic_fixture_only_cannot_claim_ready_useful_high_risk(self) -> None:
+        report = closeout_audit.audit_pr_body(
+            """
+            ## Summary
+            Ready and useful after synthetic fixture passed; scripted proxy is green.
+
+            Closes #2604.
+            """,
+            issue_metadata={
+                2604: {
+                    "title": "Verify agent recall source-open readiness",
+                    "body": "Recall/source-open readiness must not rely only on synthetic fixtures.",
+                }
+            },
+        )
+
+        self.assertFalse(report["ok"], report)
+        kinds = {finding["kind"] for finding in report["findings"]}
+        self.assertIn("missing_recall_source_followthrough", kinds)
+        self.assertIn("synthetic_only_evidence_overclaims_high_risk", kinds)
+
     def test_cli_reads_body_file_and_returns_json(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             body = Path(tmp) / "body.md"

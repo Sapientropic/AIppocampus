@@ -12,7 +12,7 @@ from aippocampus_runtime.navigation.concept_graph import (
     DEFAULT_MAX_RELATED_PER_TERM,
     build_concept_graph,
     concept_graph_health,
-    expand_concepts,
+    expand_concepts_with_diagnostics,
 )
 from aippocampus_runtime.navigation.concept_graph_schema import (
     default_concept_graph_path,
@@ -77,8 +77,15 @@ def main() -> int:
         return 0 if payload.get("ok") else 1
 
     if args.expand:
-        rows = expand_concepts(output_path, args.expand, depth=args.depth)
-        payload = {"concept_graph": str(output_path), "seed_terms": args.expand, "expansions": rows}
+        rows, diagnostics = expand_concepts_with_diagnostics(
+            output_path, args.expand, depth=args.depth
+        )
+        payload = {
+            "concept_graph": str(output_path),
+            "seed_terms": args.expand,
+            "expansions": rows,
+            "expansion_diagnostics": diagnostics,
+        }
         if args.json_output:
             print(json.dumps(payload, ensure_ascii=False, indent=2))
         else:

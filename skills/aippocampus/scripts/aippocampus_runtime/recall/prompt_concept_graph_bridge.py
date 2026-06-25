@@ -16,7 +16,7 @@ from aippocampus_runtime.navigation.association_terms import (
     source_text_is_noise,
     term_is_noise,
 )
-from aippocampus_runtime.navigation.concept_graph import expand_concepts
+from aippocampus_runtime.navigation.concept_graph import expand_concepts_with_diagnostics
 from aippocampus_runtime.recall.prompt_cues import (
     CONCEPT_EXPANSION_MAX_TERMS,
     concept_expansion_terms,
@@ -157,7 +157,7 @@ def apply_concept_graph_bridge(
     seed_terms: list[str],
     score_candidates: Callable[[list[str]], list[dict[str, Any]]],
 ) -> tuple[list[dict[str, Any]], list[str], list[dict[str, Any]], dict[str, Any]]:
-    concept_expansions = expand_concepts(
+    concept_expansions, expansion_diagnostics = expand_concepts_with_diagnostics(
         concept_file, seed_terms, depth=2, max_terms=CONCEPT_EXPANSION_MAX_TERMS
     )
     if not concept_expansions:
@@ -165,7 +165,12 @@ def apply_concept_graph_bridge(
             [],
             seed_terms,
             concept_expansions,
-            {"state": "no_useful_expansion", "reason": "graph_returned_no_expansions"},
+            {
+                "state": "no_useful_expansion",
+                "reason": "graph_returned_no_expansions",
+                "expansion_budget_state": expansion_diagnostics.get("budget_state"),
+                "expansion_elapsed_ms": expansion_diagnostics.get("elapsed_ms"),
+            },
         )
     raw_expanded_terms = concept_expansion_terms(concept_expansions)
     expanded_terms = _useful_expansion_terms(concept_expansions)
@@ -179,6 +184,7 @@ def apply_concept_graph_bridge(
                 "reason": "no_foreground_safe_expansion_terms",
                 "raw_expansion_count": len(concept_expansions),
                 "rejected_broad_expansion_count": len(raw_expanded_terms),
+                "expansion_budget_state": expansion_diagnostics.get("budget_state"),
             },
         )
     expanded_query_terms = unique_preserve(seed_terms + expanded_terms, limit=40)
@@ -201,6 +207,7 @@ def apply_concept_graph_bridge(
                 "raw_expansion_count": len(concept_expansions),
                 "accepted_expansion_count": len(expanded_terms),
                 "raw_candidate_count": len(raw_expanded_candidates),
+                "expansion_budget_state": expansion_diagnostics.get("budget_state"),
             },
         )
     return (
@@ -219,6 +226,8 @@ def apply_concept_graph_bridge(
             "accepted_expansion_count": len(expanded_terms),
             "candidate_count": len(expanded_candidates),
             "rejected_candidate_count": len(raw_expanded_candidates) - len(expanded_candidates),
+            "expansion_budget_state": expansion_diagnostics.get("budget_state"),
+            "expansion_elapsed_ms": expansion_diagnostics.get("elapsed_ms"),
         },
     )
 

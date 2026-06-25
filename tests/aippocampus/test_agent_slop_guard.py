@@ -221,6 +221,70 @@ class RecallTests(unittest.TestCase):
         self.assertEqual(bad_findings[0]["owner_issue"], "#2699")
         self.assertEqual(allowed_findings, [])
 
+    def test_performance_rules_catch_unbounded_nested_loop_materialization_and_db_work(self) -> None:
+        bad = """
+def mine(candidates, raw_stats, con):
+    out = []
+    for candidate in candidates:
+        for other in raw_stats.values():
+            out.extend(sorted(raw_stats.values()))
+            con.execute("SELECT 1", (candidate,))
+    return out
+"""
+        allowed = """
+def report(candidates, raw_stats, con, limit):
+    counts = {}
+    for status in ("active", "parked"):
+        counts[status] = counts.get(status, 0) + 1
+    for candidate in candidates[:limit]:
+        counts[candidate] = counts.get(candidate, 0) + 1
+    for item in raw_stats[:limit]:
+        rows = list(item.get("sample_terms") or [])
+        counts[str(item)] = len(rows)
+    return {"diagnostic": counts}
+"""
+        path = (
+            "skills/aippocampus/scripts/aippocampus_runtime/navigation/"
+            "association_phrase_mining.py"
+        )
+
+        bad_findings = agent_slop_guard.analyze_text(bad, path=path, changed_files={path})
+        allowed_findings = agent_slop_guard.analyze_text(allowed, path=path, changed_files={path})
+
+        self.assertEqual(
+            [item["rule_id"] for item in bad_findings],
+            [
+                "performance_hot_path_nested_loop",
+                "performance_hot_path_loop_materialization",
+                "performance_hot_path_repeated_db_work",
+            ],
+        )
+        self.assertEqual({item["owner_issue"] for item in bad_findings}, {"#2705"})
+        self.assertEqual(allowed_findings, [])
+
+    def test_performance_db_rule_points_concept_upsert_amplification_to_owner(self) -> None:
+        bad = """
+def build(related_terms, con):
+    for related in related_terms:
+        upsert_concept(con, related, status="staging")
+"""
+        allowed = """
+def build(related_terms, resolver, con):
+    for related in related_terms[:MAX_RELATED_PER_TERM]:
+        resolver.resolve(con, related, status="staging")
+"""
+        path = "skills/aippocampus/scripts/aippocampus_runtime/navigation/concept_graph.py"
+
+        bad_findings = agent_slop_guard.analyze_text(bad, path=path, changed_files={path})
+        allowed_findings = agent_slop_guard.analyze_text(allowed, path=path, changed_files={path})
+
+        self.assertEqual(
+            [item["rule_id"] for item in bad_findings],
+            ["performance_hot_path_repeated_db_work"],
+        )
+        self.assertEqual(bad_findings[0]["owner_issue"], "#2706")
+        self.assertEqual(allowed_findings, [])
+
     def test_baseline_marks_historical_finding_without_hiding_changed_surface(self) -> None:
         text = """
 def load(rows):

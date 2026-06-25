@@ -11,18 +11,20 @@ from __future__ import annotations
 
 import hashlib
 import re
-from collections import Counter, defaultdict
+from collections import Counter
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.core import compact_text, now_utc
-from aippocampus_runtime.ops.route_readiness import safe_source_refs
 from aippocampus_runtime.privacy import (
     LOCAL_PATH_REDACTION,
     SENSITIVE_VALUE_REDACTION,
     redact_private_paths,
     redact_sensitive_values,
+)
+from aippocampus_runtime.recall.continuity_domain_scan import (
+    collect_continuity_domain_scan,
 )
 from aippocampus_runtime.recall.continuity_domains import (
     CONTINUITY_DOMAIN_SCHEMA_VERSION,
@@ -35,14 +37,13 @@ from aippocampus_runtime.recall.query_policy import (
     unique_preserve,
 )
 from aippocampus_runtime.registry.api import load_registry, registry_paths
-from aippocampus_runtime.source.io_kernel import load_jsonl_dict_rows
-from aippocampus_runtime.source.search import iter_clean_messages
 from aippocampus_runtime.warm_ambient.query_pattern_routes import (
     publish_registry_query_pattern_routes,
 )
 
 CONTINUITY_DOMAIN_PRODUCER_KIND = "aippocampus_continuity_domain_producer_report"
 DEFAULT_CONTINUITY_DOMAIN_PREVIEW_THREAD_BUDGET = 8
+DEFAULT_CONTINUITY_DOMAIN_PREVIEW_MESSAGE_BUDGET = 1000
 DEFAULT_CONTINUITY_DOMAIN_PREVIEW_CANDIDATE_BUDGET = 8
 SIGNAL_CANDIDATE_FILES = (
     "query_pattern_routes.jsonl",
@@ -432,66 +433,6 @@ def _entry_clean_source_dir(entry: Mapping[str, Any]) -> Path | None:
     return None
 
 
-def _message_source_ref(thread_key: str, message: Mapping[str, Any]) -> dict[str, Any] | None:
-    if not thread_key or _privacy_suppressed_term(thread_key):
-        return None
-    ref = {
-        "thread_key": thread_key,
-        "source_id": message.get("source_id"),
-        "message_id": message.get("message_id") or message.get("id"),
-        "turn_id": message.get("turn_id"),
-        "turn_index": message.get("turn_index"),
-        "line": message.get("source_line") or message.get("line"),
-        "phase": message.get("phase"),
-    }
-    refs = safe_source_refs(ref)
-    return refs[0] if refs else None
-
-
-def _remember_ref(
-    known_refs: dict[str, dict[str, set[str]]],
-    *,
-    thread_key: str,
-    message: Mapping[str, Any],
-) -> None:
-    bucket = known_refs[thread_key]
-    for key, value in {
-        "message_id": message.get("message_id") or message.get("id"),
-        "turn_id": message.get("turn_id"),
-        "turn_index": message.get("turn_index"),
-        "line": message.get("source_line") or message.get("line"),
-    }.items():
-        if value not in {None, ""}:
-            bucket[key].add(str(value))
-
-
-def _ref_resolves(
-    ref: Mapping[str, Any],
-    *,
-    known_refs: Mapping[str, Mapping[str, set[str]]],
-) -> bool:
-    thread_key = str(ref.get("thread_key") or "")
-    if not thread_key:
-        return False
-    bucket = known_refs.get(thread_key)
-    if not bucket:
-        return False
-    for key in ("message_id", "turn_id", "turn_index", "line"):
-        value = ref.get(key)
-        if value not in {None, ""} and str(value) in bucket.get(key, set()):
-            return True
-    return False
-
-
-def _resolving_signal_refs(
-    value: Any,
-    *,
-    known_refs: Mapping[str, Mapping[str, set[str]]],
-) -> list[dict[str, Any]]:
-    refs = safe_source_refs(value)
-    return [ref for ref in refs if _ref_resolves(ref, known_refs=known_refs)]
-
-
 def _registry_terms(entry: Mapping[str, Any]) -> list[str]:
     values: list[str] = []
     for key in ("keywords", "anchor_titles", "project_tags"):
@@ -540,15 +481,6 @@ def _signal_term_values(
             if term:
                 terms.append(term)
     return unique_preserve(terms, limit=16), privacy_suppressed, low_information_suppressed
-
-
-def _refs_by_thread(refs: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
-    by_thread: dict[str, list[dict[str, Any]]] = defaultdict(list)
-    for ref in refs:
-        thread_key = str(ref.get("thread_key") or "")
-        if thread_key:
-            by_thread[thread_key].append(ref)
-    return by_thread
 
 
 def _reviewed_signal_label_source(file_name: str, row: Mapping[str, Any]) -> bool:
@@ -673,9 +605,11 @@ def propose_continuity_domain_events_from_registry(
     registry_dir: Path | str | None = None,
     min_support: int = 2,
     max_threads: int | None = None,
+    max_messages_per_thread: int | None = None,
     max_candidates: int = 24,
     include_local_detail: bool = False,
     refresh_query_pattern_routes: bool = False,
+    broad_scan_requested: bool = False,
 ) -> dict[str, Any]:
     """Build source-ref-backed continuity-domain event candidates from registry history.
 
@@ -704,6 +638,11 @@ def propose_continuity_domain_events_from_registry(
     effective_thread_budget = (
         max(0, int(max_threads)) if max_threads is not None else None
     )
+    effective_message_budget = (
+        max(0, int(max_messages_per_thread))
+        if max_messages_per_thread is not None
+        else None
+    )
     threads = all_threads
     if max_threads is not None:
         threads = threads[: max(0, int(max_threads))]
@@ -713,88 +652,33 @@ def propose_continuity_domain_events_from_registry(
         and registered_thread_count > effective_thread_budget
     )
 
-    term_refs: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
-    term_co_terms: dict[tuple[str, str], Counter[str]] = defaultdict(Counter)
-    registry_terms_by_thread: dict[str, set[str]] = {}
-    missing_source_ref_count = 0
-    privacy_suppressed_terms: set[str] = set()
-    low_information_label_suppressed_count = 0
-    scanned_thread_count = 0
-    signal_candidate_count = 0
-    known_refs: dict[str, dict[str, set[str]]] = defaultdict(
-        lambda: {
-            "message_id": set(),
-            "turn_id": set(),
-            "turn_index": set(),
-            "line": set(),
-        }
+    scan = collect_continuity_domain_scan(
+        threads=threads,
+        registry_root=registry_root,
+        signal_candidate_files=SIGNAL_CANDIDATE_FILES,
+        max_messages_per_thread=effective_message_budget,
+        entry_clean_source_dir=_entry_clean_source_dir,
+        registry_terms_for_entry=_registry_terms,
+        privacy_suppressed_term=_privacy_suppressed_term,
+        terms_for_message=_terms_for_message,
+        signal_term_values=lambda file_name, row: _signal_term_values(
+            row,
+            trusted_domain_label=_reviewed_signal_label_source(file_name, row),
+        ),
     )
-
-    for entry in threads:
-        thread_key = str(entry.get("thread_key") or "").strip()
-        clean_dir = _entry_clean_source_dir(entry)
-        if not thread_key or clean_dir is None:
-            continue
-        scanned_thread_count += 1
-        registry_terms = _registry_terms(entry)
-        registry_terms_by_thread[thread_key] = {term.casefold() for term in registry_terms}
-        for message in iter_clean_messages(clean_dir / "messages.jsonl"):
-            text = str(message.get("text") or "")
-            if not text:
-                continue
-            _remember_ref(known_refs, thread_key=thread_key, message=message)
-            ref = _message_source_ref(thread_key, message)
-            if ref is None:
-                missing_source_ref_count += 1
-                continue
-            terms, suppressed_count, low_information_count = _terms_for_message(text, registry_terms)
-            if suppressed_count:
-                privacy_suppressed_terms.update(split_query_terms([text])[:suppressed_count])
-            low_information_label_suppressed_count += low_information_count
-            for term in terms:
-                key = (thread_key, term)
-                if not any(existing == ref for existing in term_refs[key]):
-                    term_refs[key].append(ref)
-                term_co_terms[key].update(other for other in terms if other != term)
-
-    # Reviewed sidecars may propose aliases, routes, or atmosphere, but they do
-    # not become evidence here. They are accepted only as label producers after
-    # their refs resolve back to registered clean-source messages.
-    for file_name in SIGNAL_CANDIDATE_FILES:
-        for row in load_jsonl_dict_rows(registry_root / file_name).rows:
-            raw_refs = row.get("source_refs") or row.get("source_ref") or row.get("representative_sources")
-            refs = _resolving_signal_refs(raw_refs, known_refs=known_refs)
-            if not refs:
-                if safe_source_refs(raw_refs):
-                    missing_source_ref_count += 1
-                continue
-            terms, suppressed_count, low_information_count = _signal_term_values(
-                row,
-                trusted_domain_label=_reviewed_signal_label_source(file_name, row),
-            )
-            privacy_suppressed_terms.update(f"signal:{file_name}:{index}" for index in range(suppressed_count))
-            low_information_label_suppressed_count += low_information_count
-            for thread_key, thread_refs in _refs_by_thread(refs).items():
-                for term in terms:
-                    key = (thread_key, term)
-                    for ref in thread_refs:
-                        if not any(existing == ref for existing in term_refs[key]):
-                            term_refs[key].append(ref)
-                    term_co_terms[key].update(other for other in terms if other != term)
-                    signal_candidate_count += 1
 
     candidates: list[tuple[float, str, str, list[dict[str, Any]], dict[str, Any]]] = []
     rejected_event_count = 0
-    for (thread_key, term), refs in term_refs.items():
+    for (thread_key, term), refs in scan.term_refs.items():
         if len(refs) < max(1, int(min_support)):
             continue
-        registry_term_set = registry_terms_by_thread.get(thread_key, set())
+        registry_term_set = scan.registry_terms_by_thread.get(thread_key, set())
         score = _candidate_score(term=term, refs=refs, registry_term_set=registry_term_set)
         event = _domain_event_from_term(
             thread_key=thread_key,
             term=term,
             refs=refs,
-            co_terms=term_co_terms[(thread_key, term)],
+            co_terms=scan.term_co_terms[(thread_key, term)],
             registry_term_set=registry_term_set,
         )
         if event is None:
@@ -815,6 +699,8 @@ def propose_continuity_domain_events_from_registry(
         for score, thread_key, term, refs, _event in selected[:8]
     ]
     candidate_events = [event for _score, _thread_key, _term, _refs, event in selected]
+    scan_truncated_by_message_budget = scan.message_budget_truncated_thread_count > 0
+    scan_partial = scan_truncated_by_budget or scan_truncated_by_message_budget
     report: dict[str, Any] = {
         "ok": True,
         "kind": CONTINUITY_DOMAIN_PRODUCER_KIND,
@@ -824,17 +710,30 @@ def propose_continuity_domain_events_from_registry(
         "metrics": {
             "registered_thread_count": len(registry.get("threads") or []),
             "considered_thread_count": considered_thread_count,
-            "scanned_thread_count": scanned_thread_count,
+            "scanned_thread_count": scan.scanned_thread_count,
+            "scanned_message_count": scan.scanned_message_count,
+            "skipped_message_count": scan.skipped_message_count,
+            "skipped_message_count_is_lower_bound": scan.skipped_message_count_is_lower_bound,
             "scan_budget_max_threads": effective_thread_budget,
+            "scan_budget_max_messages_per_thread": effective_message_budget,
             "scan_truncated_by_budget": scan_truncated_by_budget,
-            "scan_partial": scan_truncated_by_budget,
+            "scan_truncated_by_message_budget": scan_truncated_by_message_budget,
+            "scan_partial": scan_partial,
+            "message_budget_truncated_thread_count": scan.message_budget_truncated_thread_count,
+            "message_budget_cutoff_thread_count": scan.message_budget_cutoff_thread_count,
+            "unique_term_ref_key_count": len(scan.term_refs),
+            "source_ref_candidate_count": scan.source_ref_candidate_count,
+            "source_ref_identity_probe_count": scan.source_ref_identity_probe_count,
+            "source_ref_dedup_hit_count": scan.source_ref_dedup_hit_count,
+            "source_ref_dedup_list_scan_count": 0,
+            "broad_scan_requested": bool(broad_scan_requested),
             "candidate_domain_count": len(selected),
-            "signal_candidate_count": signal_candidate_count,
+            "signal_candidate_count": scan.signal_candidate_count,
             "accepted_event_count": len(candidate_events),
             "rejected_event_count": rejected_event_count,
-            "missing_source_ref_count": missing_source_ref_count,
-            "privacy_suppressed_count": len(privacy_suppressed_terms),
-            "low_information_label_suppressed_count": low_information_label_suppressed_count,
+            "missing_source_ref_count": scan.missing_source_ref_count,
+            "privacy_suppressed_count": len(scan.privacy_suppressed_terms),
+            "low_information_label_suppressed_count": scan.low_information_label_suppressed_count,
         },
         "top_domain_labels": label_rows,
         "source_boundary": {
@@ -845,11 +744,19 @@ def propose_continuity_domain_events_from_registry(
             "raw_source_text_serialized": False,
         },
         "scan_policy": {
-            "partial": scan_truncated_by_budget,
+            "mode": "explicit_broad_scan" if broad_scan_requested else "bounded_or_default",
+            "partial": scan_partial,
             "registered_thread_count": registered_thread_count,
             "considered_thread_count": considered_thread_count,
-            "scanned_thread_count": scanned_thread_count,
+            "scanned_thread_count": scan.scanned_thread_count,
+            "scanned_message_count": scan.scanned_message_count,
+            "skipped_message_count": scan.skipped_message_count,
+            "skipped_message_count_is_lower_bound": scan.skipped_message_count_is_lower_bound,
             "max_threads": effective_thread_budget,
+            "max_messages_per_thread": effective_message_budget,
+            "message_budget_truncated_thread_count": scan.message_budget_truncated_thread_count,
+            "message_budget_cutoff_thread_count": scan.message_budget_cutoff_thread_count,
+            "broad_scan_explicit": bool(broad_scan_requested),
             "broad_scan_requires_explicit_flag": True,
             "broad_scan_command": "aippocampus continuity-domain preview --broad-scan --json",
         },

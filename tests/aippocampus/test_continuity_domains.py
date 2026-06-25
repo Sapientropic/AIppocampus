@@ -97,6 +97,48 @@ def _write_registry_clean_source_fixture(root: Path) -> tuple[Path, Path]:
     )
     return registry_dir, clean
 
+
+def _write_long_registry_clean_source_fixture(
+    root: Path,
+    *,
+    message_count: int = 1200,
+) -> tuple[Path, Path]:
+    registry_dir = root / "registry"
+    clean = registry_dir / "threads" / "long-thread" / "clean-source"
+    clean.mkdir(parents=True, exist_ok=True)
+    with (clean / "messages.jsonl").open("w", encoding="utf-8", newline="\n") as fh:
+        for index in range(message_count):
+            row = {
+                "message_id": f"msg-long-{index}",
+                "turn_id": f"turn-long-{index}",
+                "turn_index": index + 1,
+                "source_line": index + 2,
+                "role": "user" if index % 2 == 0 else "assistant",
+                "phase": "" if index % 2 == 0 else "final_answer",
+                "text": "linear-domain repeats so preview budgets remain visible.",
+            }
+            fh.write(json.dumps(row, ensure_ascii=False) + "\n")
+    (clean / "turns.jsonl").write_text("", encoding="utf-8")
+    (registry_dir / "threads.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "threads": [
+                    {
+                        "thread_key": "long-thread",
+                        "title": "linear-domain continuity",
+                        "keywords": ["linear-domain"],
+                        "paths": {"clean_source_dir": str(clean)},
+                    }
+                ],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    return registry_dir, clean
+
+
 def _domain_events() -> list[dict]:
     return [
         {
@@ -1254,6 +1296,96 @@ class ContinuityDomainTests(unittest.TestCase):
         self.assertNotIn('"thread_key"', encoded)
         self.assertNotIn("little-thread", encoded)
         self.assertNotIn(str(root), encoded)
+
+    def test_continuity_domain_preview_reports_message_budget_without_raw_local_detail(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            registry_dir, _clean = _write_long_registry_clean_source_fixture(
+                root,
+                message_count=1200,
+            )
+
+            proc = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "aippocampus_runtime.cli.facade",
+                    "continuity-domain",
+                    "preview",
+                    "--registry-dir",
+                    str(registry_dir),
+                    "--min-support",
+                    "2",
+                    "--json",
+                ],
+                cwd=SCRIPTS,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                capture_output=True,
+                check=False,
+            )
+            payload = json.loads(proc.stdout)
+            encoded = json.dumps(payload, ensure_ascii=False)
+
+        self.assertEqual(proc.returncode, 0, proc.stderr or proc.stdout)
+        self.assertEqual(payload["detail"], "agent_preview")
+        self.assertNotIn("candidate_events", payload)
+        self.assertNotIn('"source_refs"', encoded)
+        self.assertNotIn('"thread_key"', encoded)
+        metrics = payload["metrics"]
+        self.assertEqual(metrics["scan_budget_max_messages_per_thread"], 1000)
+        self.assertEqual(metrics["scanned_message_count"], 1000)
+        self.assertEqual(metrics["skipped_message_count"], 1)
+        self.assertTrue(metrics["skipped_message_count_is_lower_bound"])
+        self.assertTrue(metrics["scan_truncated_by_message_budget"])
+        self.assertEqual(metrics["message_budget_cutoff_thread_count"], 1)
+        self.assertTrue(payload["scan_policy"]["partial"])
+        self.assertEqual(
+            payload["preview_scan_policy"]["max_messages_per_thread"],
+            1000,
+        )
+
+    def test_continuity_domain_preview_broad_scan_labels_explicit_message_budget_choice(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            registry_dir, _clean = _write_long_registry_clean_source_fixture(
+                root,
+                message_count=1200,
+            )
+
+            proc = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "aippocampus_runtime.cli.facade",
+                    "continuity-domain",
+                    "preview",
+                    "--registry-dir",
+                    str(registry_dir),
+                    "--broad-scan",
+                    "--min-support",
+                    "2",
+                    "--json",
+                ],
+                cwd=SCRIPTS,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                capture_output=True,
+                check=False,
+            )
+            payload = json.loads(proc.stdout)
+
+        self.assertEqual(proc.returncode, 0, proc.stderr or proc.stdout)
+        metrics = payload["metrics"]
+        self.assertTrue(metrics["broad_scan_requested"])
+        self.assertIsNone(metrics["scan_budget_max_messages_per_thread"])
+        self.assertEqual(metrics["scanned_message_count"], 1200)
+        self.assertEqual(metrics["skipped_message_count"], 0)
+        self.assertFalse(metrics["scan_truncated_by_message_budget"])
+        self.assertEqual(payload["scan_policy"]["mode"], "explicit_broad_scan")
+        self.assertTrue(payload["scan_policy"]["broad_scan_explicit"])
 
     def test_continuity_domain_producer_uses_signal_rows_only_as_candidate_routes(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

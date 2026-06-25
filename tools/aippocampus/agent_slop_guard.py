@@ -14,9 +14,10 @@ import ast
 import json
 import subprocess
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+from agent_slop_guard_rules import RULES
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_BASELINE = REPO_ROOT / "tools" / "aippocampus" / "agent_slop_guard_baseline.json"
@@ -28,6 +29,10 @@ HOT_PATH_PREFIXES = (
     "skills/aippocampus/scripts/aippocampus_runtime/hooks/",
     "skills/aippocampus/scripts/aippocampus_runtime/update/",
     "skills/aippocampus/scripts/aippocampus_runtime/subconscious/",
+)
+PERFORMANCE_HOT_PATH_PREFIXES = (
+    "skills/aippocampus/scripts/aippocampus_runtime/navigation/",
+    *HOT_PATH_PREFIXES,
 )
 DEFAULT_SCAN_ROOTS = (
     "skills/aippocampus/scripts/aippocampus_runtime",
@@ -111,109 +116,39 @@ DIAGNOSTIC_TOKENS = (
     "skipped",
     "loss",
 )
-
-
-@dataclass(frozen=True)
-class Rule:
-    rule_id: str
-    severity: str
-    owner_hint: str
-    owner_issue: str
-    description: str
-
-    def as_dict(self) -> dict[str, str]:
-        return {
-            "rule_id": self.rule_id,
-            "severity": self.severity,
-            "owner_hint": self.owner_hint,
-            "owner_issue": self.owner_issue,
-            "description": self.description,
-        }
-
-
-RULES: dict[str, Rule] = {
-    "compact_projector_bypass": Rule(
-        rule_id="compact_projector_bypass",
-        severity="warning",
-        owner_hint=(
-            "Route MCP/CLI compact recovery through render_profiled_result or "
-            "the compact projection owner; do not return text_result(public_payload(...))."
-        ),
-        owner_issue="#2696",
-        description="MCP/CLI compact path appears to bypass compact/detail projection.",
-    ),
-    "hot_path_silent_fallback": Rule(
-        rule_id="hot_path_silent_fallback",
-        severity="warning",
-        owner_hint=(
-            "Use typed recovery with diagnostics/loss accounting, or baseline the "
-            "historical debt to #2629/#2676 before touching this hot path."
-        ),
-        owner_issue="#2697",
-        description="Hot-path broad exception hides failure by continuing or returning empty state.",
-    ),
-    "source_jsonl_owner_bypass": Rule(
-        rule_id="source_jsonl_owner_bypass",
-        severity="warning",
-        owner_hint=(
-            "Use aippocampus_runtime.source.io_kernel.load_jsonl_dict_rows, "
-            "load_jsonl_dict_rows_with_line_field, or an approved source IO wrapper."
-        ),
-        owner_issue="#2698",
-        description="Source-backed JSONL appears to be parsed line-by-line outside the IO kernel.",
-    ),
-    "atomic_write_owner_bypass": Rule(
-        rule_id="atomic_write_owner_bypass",
-        severity="warning",
-        owner_hint=(
-            "Use aippocampus_runtime.io_integrity.prepared_atomic_replace or "
-            "atomic_write_* helpers instead of fixed .tmp files or ad hoc replace/rename."
-        ),
-        owner_issue="#2698",
-        description="Runtime writer appears to bypass shared atomic write helpers.",
-    ),
-    "source_ref_helper_duplicate": Rule(
-        rule_id="source_ref_helper_duplicate",
-        severity="warning",
-        owner_hint=(
-            "Reuse source.io_kernel source-ref helpers or a documented owner wrapper; "
-            "do not grow local source-ref key/normalization copies."
-        ),
-        owner_issue="#2698",
-        description="Local source-ref key/normalization helper duplicates the source-ref owner.",
-    ),
-    "compat_field_metadata_missing": Rule(
-        rule_id="compat_field_metadata_missing",
-        severity="warning",
-        owner_hint=(
-            "Compatibility fields need nearby owner, removal condition, and default "
-            "exposure boundary metadata; do not expose aliases in compact foreground by habit."
-        ),
-        owner_issue="#2699",
-        description="Compatibility/legacy field is missing owner/removal/default exposure metadata.",
-    ),
-    "field_only_followthrough_test": Rule(
-        rule_id="field_only_followthrough_test",
-        severity="warning",
-        owner_hint=(
-            "Use product_probe_helpers recall/deepen/open assertions or another real "
-            "follow-through probe before treating fields, route counts, or selectors as success."
-        ),
-        owner_issue="#2699",
-        description="Recall/MCP/APW/source-open test appears to assert payload fields without follow-through.",
-    ),
-    "compact_debug_field_test": Rule(
-        rule_id="compact_debug_field_test",
-        severity="warning",
-        owner_hint=(
-            "Compact foreground tests should assert action-sized behavior; detail/operator "
-            "debug fields belong behind full/detail profiles or frontstage assertions."
-        ),
-        owner_issue="#2699",
-        description="Compact foreground test appears to require debug/operator fields.",
-    ),
+PERFORMANCE_UNBOUNDED_TOKENS = (
+    "candidate",
+    "candidates",
+    "edge",
+    "edges",
+    "message",
+    "messages",
+    "raw_stats",
+    "registry",
+    "related_terms",
+    "rows",
+    "source_refs",
+    "term_refs",
+    "terms",
+    "thread",
+    "threads",
+)
+PERFORMANCE_BOUNDED_TOKENS = (
+    "budget",
+    "bounded",
+    "diagnostic",
+    "limit",
+    "preview",
+    "report",
+    "sample",
+    "top",
+)
+PERFORMANCE_DB_CALLS = {
+    "execute",
+    "executemany",
+    "upsert_concept",
+    "upsert_edge",
 }
-
 
 def repo_relative(path: Path | str, *, repo_root: Path = REPO_ROOT) -> str:
     value = Path(path)
@@ -323,6 +258,83 @@ def _window_text(lines: list[str], line_no: int, *, radius: int = 5) -> str:
     start = max(0, line_no - radius - 1)
     end = min(len(lines), line_no + radius)
     return "\n".join(lines[start:end]).casefold()
+
+
+def _is_performance_hot_path(path: str) -> bool:
+    return path.startswith(PERFORMANCE_HOT_PATH_PREFIXES)
+
+
+def _loop_text(node: ast.For) -> str:
+    return f"{_node_name_text(node.target)} {_node_name_text(node.iter)} {' '.join(_constant_strings(node.iter))}".casefold()
+
+
+def _node_text(node: ast.AST) -> str:
+    return f"{_node_name_text(node)} {' '.join(_constant_strings(node))}".casefold()
+
+
+def _mentions_unbounded_product_collection(text: str) -> bool:
+    lowered = text.casefold()
+    return any(token in lowered for token in PERFORMANCE_UNBOUNDED_TOKENS)
+
+
+def _mentions_bounded_context(text: str) -> bool:
+    lowered = text.casefold()
+    return any(token in lowered for token in PERFORMANCE_BOUNDED_TOKENS)
+
+
+def _constant_int(node: ast.AST) -> int | None:
+    if isinstance(node, ast.Constant) and isinstance(node.value, int):
+        return int(node.value)
+    return None
+
+
+def _iter_is_bounded(node: ast.AST) -> bool:
+    if isinstance(node, (ast.Tuple, ast.List, ast.Set)):
+        return len(node.elts) <= 12
+    if isinstance(node, ast.Subscript):
+        return True
+    if isinstance(node, ast.Call):
+        call = _call_name(node.func)
+        if call == "range":
+            values = [_constant_int(arg) for arg in node.args]
+            if values and all(value is not None for value in values):
+                return max(value or 0 for value in values) <= 128
+        if call in {"enumerate", "islice"} and node.args:
+            return _iter_is_bounded(node.args[0])
+    return _mentions_bounded_context(_node_text(node))
+
+
+def _loop_is_unbounded_product_work(node: ast.For) -> bool:
+    text = _loop_text(node)
+    return _mentions_unbounded_product_collection(text) and not _iter_is_bounded(node.iter)
+
+
+def _loop_body_text(node: ast.For) -> str:
+    return " ".join(_node_text(stmt) for stmt in node.body).casefold()
+
+
+def _is_diagnostic_or_report_loop(node: ast.For) -> bool:
+    return _mentions_bounded_context(f"{_loop_text(node)} {_loop_body_text(node)}")
+
+
+def _nested_for_children(node: ast.For) -> list[ast.For]:
+    children: list[ast.For] = []
+    for stmt in node.body:
+        for child in ast.walk(stmt):
+            if isinstance(child, ast.For):
+                children.append(child)
+    return children
+
+
+def _nested_loop_pair_is_risky(outer_text: str, inner_text: str) -> bool:
+    combined = f"{outer_text} {inner_text}".casefold()
+    if "raw_stats" in combined and "candidate" in combined:
+        return True
+    if "raw_stats" in combined and "substring" in combined:
+        return True
+    if "source_ref" in combined and "existing" in combined:
+        return True
+    return False
 
 
 def _fingerprint(rule_id: str, path: str, line: int, message: str) -> str:
@@ -537,6 +549,176 @@ def _source_ref_helper_duplicate_findings(
     return findings
 
 
+def _performance_owner_for(path: str, message: str) -> str:
+    text = f"{path} {message}".casefold()
+    if "association" in text or "raw_stats" in text:
+        return "#2705"
+    if "continuity_domain" in text or "message" in text or "source_ref" in text:
+        return "#2708"
+    if "expand" in text or "neighbor" in text or "hub" in text:
+        return "#2709"
+    if "upsert" in text or "concept" in text or "edge" in text:
+        return "#2706"
+    if "reset_graph" in text or "rebuild" in text:
+        return "#2710"
+    return "#2707"
+
+
+def _performance_finding(
+    *,
+    rule_id: str,
+    path: str,
+    line: int,
+    message: str,
+    baseline: Mapping[str, str],
+    changed_files: set[str],
+) -> dict[str, Any]:
+    finding = _finding(
+        rule_id=rule_id,
+        path=path,
+        line=line,
+        message=message,
+        baseline=baseline,
+        changed_files=changed_files,
+    )
+    if finding["baseline_status"] == "new":
+        finding["owner_issue"] = _performance_owner_for(path, message)
+    finding["matched_shape"] = message
+    return finding
+
+
+def _performance_nested_loop_findings(
+    tree: ast.AST,
+    *,
+    path: str,
+    baseline: Mapping[str, str],
+    changed_files: set[str],
+) -> list[dict[str, Any]]:
+    if not _is_performance_hot_path(path):
+        return []
+    findings: list[dict[str, Any]] = []
+    for outer in ast.walk(tree):
+        if not isinstance(outer, ast.For):
+            continue
+        if not _loop_is_unbounded_product_work(outer) or _is_diagnostic_or_report_loop(outer):
+            continue
+        outer_text = _loop_text(outer)
+        for inner in _nested_for_children(outer):
+            if not _loop_is_unbounded_product_work(inner) or _is_diagnostic_or_report_loop(inner):
+                continue
+            inner_text = _loop_text(inner)
+            if not _nested_loop_pair_is_risky(outer_text, inner_text):
+                continue
+            message = f"nested_loop:{outer_text} x {inner_text}"
+            findings.append(
+                _performance_finding(
+                    rule_id="performance_hot_path_nested_loop",
+                    path=path,
+                    line=int(getattr(inner, "lineno", getattr(outer, "lineno", 0)) or 0),
+                    message=message,
+                    baseline=baseline,
+                    changed_files=changed_files,
+                )
+            )
+    return findings
+
+
+def _materialized_arg_text(node: ast.Call) -> str:
+    if not node.args:
+        return ""
+    return _node_text(node.args[0])
+
+
+def _performance_loop_materialization_findings(
+    tree: ast.AST,
+    *,
+    path: str,
+    baseline: Mapping[str, str],
+    changed_files: set[str],
+) -> list[dict[str, Any]]:
+    if not _is_performance_hot_path(path):
+        return []
+    findings: list[dict[str, Any]] = []
+    seen: set[tuple[int, str]] = set()
+    for loop in ast.walk(tree):
+        if not isinstance(loop, ast.For):
+            continue
+        if not _loop_is_unbounded_product_work(loop) or _is_diagnostic_or_report_loop(loop):
+            continue
+        for child in ast.walk(loop):
+            if not isinstance(child, ast.Call):
+                continue
+            call = _call_name(child.func)
+            if call not in {"list", "sorted"}:
+                continue
+            arg_text = _materialized_arg_text(child)
+            if not _mentions_unbounded_product_collection(arg_text):
+                continue
+            if child.args and _iter_is_bounded(child.args[0]):
+                continue
+            message = f"loop_materialization:{call}({arg_text}) inside {_loop_text(loop)}"
+            key = (int(getattr(child, "lineno", getattr(loop, "lineno", 0)) or 0), call)
+            if key in seen:
+                continue
+            seen.add(key)
+            findings.append(
+                _performance_finding(
+                    rule_id="performance_hot_path_loop_materialization",
+                    path=path,
+                    line=int(getattr(child, "lineno", getattr(loop, "lineno", 0)) or 0),
+                    message=message,
+                    baseline=baseline,
+                    changed_files=changed_files,
+                )
+            )
+    return findings
+
+
+def _performance_db_work_findings(
+    tree: ast.AST,
+    *,
+    path: str,
+    baseline: Mapping[str, str],
+    changed_files: set[str],
+) -> list[dict[str, Any]]:
+    if not _is_performance_hot_path(path):
+        return []
+    findings: list[dict[str, Any]] = []
+    seen: set[tuple[int, str]] = set()
+    for loop in ast.walk(tree):
+        if not isinstance(loop, ast.For):
+            continue
+        if not _loop_is_unbounded_product_work(loop) or _is_diagnostic_or_report_loop(loop):
+            continue
+        for child in ast.walk(loop):
+            if not isinstance(child, ast.Call):
+                continue
+            qname = _qualified_call_name(child.func)
+            call = _call_name(child.func)
+            if call not in PERFORMANCE_DB_CALLS and not qname.endswith(".execute"):
+                continue
+            # A local resolver/cache wrapper is the accepted #2706 shape; the
+            # red light is for direct DB/upsert work in the product loop.
+            if call in {"resolve", "resolve_concept"}:
+                continue
+            message = f"loop_db_work:{qname or call} inside {_loop_text(loop)}"
+            key = (int(getattr(child, "lineno", getattr(loop, "lineno", 0)) or 0), qname or call)
+            if key in seen:
+                continue
+            seen.add(key)
+            findings.append(
+                _performance_finding(
+                    rule_id="performance_hot_path_repeated_db_work",
+                    path=path,
+                    line=int(getattr(child, "lineno", getattr(loop, "lineno", 0)) or 0),
+                    message=message,
+                    baseline=baseline,
+                    changed_files=changed_files,
+                )
+            )
+    return findings
+
+
 def _compat_field_metadata_missing_findings(
     tree: ast.AST,
     *,
@@ -717,6 +899,30 @@ def analyze_text(
     )
     findings.extend(
         _source_ref_helper_duplicate_findings(
+            tree,
+            path=path,
+            baseline=baseline_map,
+            changed_files=changed,
+        )
+    )
+    findings.extend(
+        _performance_nested_loop_findings(
+            tree,
+            path=path,
+            baseline=baseline_map,
+            changed_files=changed,
+        )
+    )
+    findings.extend(
+        _performance_loop_materialization_findings(
+            tree,
+            path=path,
+            baseline=baseline_map,
+            changed_files=changed,
+        )
+    )
+    findings.extend(
+        _performance_db_work_findings(
             tree,
             path=path,
             baseline=baseline_map,
