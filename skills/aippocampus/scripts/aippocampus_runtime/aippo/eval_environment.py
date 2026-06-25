@@ -2,19 +2,13 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 from collections.abc import Mapping, Sequence
 from typing import Any
 
 from aippocampus_runtime.aippo import working_contract
+from aippocampus_runtime.core import stable_json_digest
 
 SCHEMA_VERSION = "aippo-eval-environment-v0"
-
-
-def _stable_hash(value: Mapping[str, Any]) -> str:
-    encoded = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()[:16]
 
 
 def _fixture_instances() -> list[dict[str, Any]]:
@@ -150,7 +144,11 @@ def build_aippo_eval_environment_fixture_report() -> dict[str, Any]:
     env = _environment(contract)
     instances = _fixture_instances()
     rejected = _rejected_instances()
-    scorer_hash = _stable_hash(env["scorer"])
+    scorer_hash = stable_json_digest(
+        env["scorer"],
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
     comparison = {
         "manual_search_delta_vs_baseline": _sum_metric(instances, "baseline", "manual_search")
         - _sum_metric(instances, "aippo", "manual_search"),
@@ -179,7 +177,14 @@ def build_aippo_eval_environment_fixture_report() -> dict[str, Any]:
         ),
         "scorer_mutation_attempt_count": 0,
         "source_mutated_by_eval_environment_count": 0,
-        "mutable_scorer_during_run_count": int(scorer_hash != _stable_hash(env["scorer"])),
+        "mutable_scorer_during_run_count": int(
+            scorer_hash
+            != stable_json_digest(
+                env["scorer"],
+                ensure_ascii=False,
+                separators=(",", ":"),
+            )
+        ),
     }
     red_lines = {
         "self_report_used_as_eval_truth_count": 0,

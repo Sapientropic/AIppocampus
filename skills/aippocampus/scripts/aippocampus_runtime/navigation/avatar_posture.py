@@ -7,10 +7,10 @@ or competing cues would otherwise let a keyword table over-personalize routing.
 
 from __future__ import annotations
 
-import hashlib
-import json
 from collections.abc import Mapping, Sequence
 from typing import Any
+
+from aippocampus_runtime.core import stable_json_join_id
 
 POSTURE_IDS = {
     "closeout",
@@ -45,12 +45,6 @@ def _safe_refs(value: Any) -> list[dict[str, Any]]:
         if ref:
             refs.append(ref)
     return refs[:6]
-
-
-def _stable_id(prefix: str, *parts: Any) -> str:
-    raw = "\n".join(json.dumps(part, ensure_ascii=False, sort_keys=True) for part in parts)
-    digest = hashlib.sha1(raw.encode("utf-8", errors="replace")).hexdigest()[:16]
-    return f"{prefix}_{digest}"
 
 
 def _cue_text(row: Mapping[str, Any]) -> str:
@@ -158,7 +152,15 @@ def posture_dependency_edge(
     from_id = _text(source.get("section_id") or source.get("id"))
     to_id = _text(target.get("section_id") or target.get("id"))
     return {
-        "edge_id": _stable_id("posture_edge", from_id, to_id, relation),
+        "edge_id": stable_json_join_id(
+            "posture_edge",
+            from_id,
+            to_id,
+            relation,
+            ensure_ascii=False,
+            length=16,
+            default_str=False,
+        ),
         "edge_kind": "posture_dependency_edge",
         "from_section_id": from_id,
         "to_section_id": to_id,

@@ -4,12 +4,13 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 from collections import Counter
 from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
+
+from aippocampus_runtime.core import stable_text_join_digest
 
 SCHEMA_VERSION = 1
 KIND = "aippocampus_coordination_topology_diagnostic"
@@ -52,13 +53,6 @@ DIAGNOSTIC_TO_OPERATOR_ACTION = {
 }
 
 
-def stable_hash(*parts: Any, length: int = 16) -> str:
-    digest = hashlib.sha256(
-        "\u241f".join(str(part) for part in parts).encode("utf-8", errors="replace")
-    ).hexdigest()
-    return digest[:length]
-
-
 def _text(value: Any) -> str:
     return str(value or "").strip()
 
@@ -71,7 +65,9 @@ def _safe_case_id(value: Any) -> str:
         and all(char.isalnum() or char in "-_." for char in text)
     ):
         return text
-    return "case_" + stable_hash(text, length=12)
+    return "case_" + stable_text_join_digest(
+        text, sep="\u241f", length=12, blank_falsy=False
+    )
 
 
 def _public_label(value: Any, *, fallback: str) -> str:
@@ -150,8 +146,16 @@ def evaluate_coordination_case(row: Mapping[str, Any]) -> dict[str, Any]:
         "assignment_created": False,
         "claim_permission": "no_claim_before_source_reopen",
         "agent_count": len(agents),
-        "agent_group_hash": stable_hash(*sorted(agents)) if agents else "agent_group_empty",
-        "scope_hash": stable_hash(*sorted(scope_ids)) if scope_ids else "scope_empty",
+        "agent_group_hash": (
+            stable_text_join_digest(*sorted(agents), sep="\u241f", blank_falsy=False)
+            if agents
+            else "agent_group_empty"
+        ),
+        "scope_hash": (
+            stable_text_join_digest(*sorted(scope_ids), sep="\u241f", blank_falsy=False)
+            if scope_ids
+            else "scope_empty"
+        ),
         "source_reopen_required": diagnostic != "healthy_handoff",
         "privacy_boundary_crossing_detected": privacy_crossing,
         "privacy_clean_but_coordination_useless": privacy_clean_useless,

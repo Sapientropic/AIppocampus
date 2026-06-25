@@ -9,12 +9,11 @@ paths, or private snippets.
 
 from __future__ import annotations
 
-import hashlib
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
-from aippocampus_runtime.core import compact_text, sanitize_external_model_text
+from aippocampus_runtime.core import compact_text, sanitize_external_model_text, stable_text_id
 from aippocampus_runtime.ops.route_readiness import safe_source_refs
 from aippocampus_runtime.recall import authority
 
@@ -30,11 +29,6 @@ ACTION_LABELS = {
     authority.ACTION_BOUNDED_EVIDENCE: "use_bounded_evidence_within_scope",
     authority.ACTION_SOURCE_OPEN: "use_source_open_with_redaction",
 }
-
-
-def _stable_id(*parts: Any) -> str:
-    raw = "\n".join(str(part or "") for part in parts)
-    return "med_" + hashlib.sha256(raw.encode("utf-8")).hexdigest()[:18]
 
 
 def _safe_text(value: Any, chars: int = 220) -> str:
@@ -207,7 +201,7 @@ def drawer_item_from_surface(
     if blocked:
         cannot_claim.append("blocked_or_insufficient_evidence_shapes_answer")
     return EvidenceDrawerItem(
-        drawer_item_id=_stable_id(source_surface_kind, title, action, refs),
+        drawer_item_id=stable_text_id("med", source_surface_kind, title, action, refs, length=18),
         source_surface_kind=source_surface_kind,
         title=title,
         why_this_surfaced=_why(projected, action),

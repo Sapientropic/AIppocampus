@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from aippocampus_runtime.core import now_utc
+from aippocampus_runtime.core import now_utc, stable_json_join_id
 from aippocampus_runtime.navigation.local_global_compatibility import (
     BLOCKED_BOUNDARY,
     GLUED_ROUTE,
@@ -15,12 +13,6 @@ from aippocampus_runtime.navigation.local_global_compatibility import (
 )
 from aippocampus_runtime.ops.route_readiness import safe_source_refs
 from aippocampus_runtime.source_shape import build_source_shape_descriptor
-
-
-def _stable_id(*parts: Any, prefix: str, length: int = 20) -> str:
-    raw = "\0".join(json.dumps(part, ensure_ascii=False, sort_keys=True, default=str) for part in parts)
-    digest = hashlib.sha256(raw.encode("utf-8", errors="replace")).hexdigest()[:length]
-    return f"{prefix}_{digest}"
 
 
 def _text(value: Any) -> str:
@@ -121,7 +113,15 @@ def build_local_global_source_shape_descriptor(
         "built_at": created,
         "topic_epoch": rows[0].get("topic_epoch") if rows else "",
     }
-    shape_id = source_shape_id or _stable_id(producer, rows, compatibility, prefix="local_global_shape")
+    shape_id = source_shape_id or stable_json_join_id(
+        "local_global_shape",
+        producer,
+        rows,
+        compatibility,
+        sep="\0",
+        ensure_ascii=False,
+        length=20,
+    )
     return build_source_shape_descriptor(
         producer=producer,
         source_refs=refs,

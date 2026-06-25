@@ -4,13 +4,13 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 from collections import Counter
 from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.core import stable_text_join_digest
 from aippocampus_runtime.macro import transform_orbit
 from aippocampus_runtime.ops import packet_topology_diagnostic
 
@@ -44,13 +44,6 @@ SHAPE_TO_REASON = {
 }
 
 
-def stable_hash(*parts: Any, length: int = 16) -> str:
-    digest = hashlib.sha256(
-        "\u241f".join(str(part) for part in parts).encode("utf-8", errors="replace")
-    ).hexdigest()
-    return digest[:length]
-
-
 def _text(value: Any) -> str:
     return str(value or "").strip()
 
@@ -68,7 +61,9 @@ def _safe_case_id(value: Any) -> str:
         and all(char.isalnum() or char in "-_." for char in text)
     ):
         return text
-    return "case_" + stable_hash(text, length=12)
+    return "case_" + stable_text_join_digest(
+        text, sep="\u241f", length=12, blank_falsy=False
+    )
 
 
 def _safe_bool(value: Any) -> bool:
@@ -218,12 +213,15 @@ def _shadow_route_candidate_or_control(row: Mapping[str, Any]) -> dict[str, Any]
         "kind": SHADOW_ROUTE_KIND,
         "schema_version": SCHEMA_VERSION,
         "case_id": case_id,
-        "candidate_id": "dream_shadow_route_" + stable_hash(
+        "candidate_id": "dream_shadow_route_"
+        + stable_text_join_digest(
             case_id,
             visible_route_id,
             latent_route_id,
             *source_overlap,
             route_residue_count,
+            sep="\u241f",
+            blank_falsy=False,
         ),
         "visible_route_id": visible_route_id,
         "latent_route_id": latent_route_id,
@@ -341,7 +339,8 @@ def candidate_or_rejection(row: Mapping[str, Any]) -> dict[str, Any]:
         "kind": CANDIDATE_KIND,
         "schema_version": SCHEMA_VERSION,
         "case_id": case_id,
-        "candidate_id": "dream_topology_" + stable_hash(case_id, shape, *anchors),
+        "candidate_id": "dream_topology_"
+        + stable_text_join_digest(case_id, shape, *anchors, sep="\u241f", blank_falsy=False),
         "shape": shape,
         "dream_function": SHAPE_TO_DREAM_FUNCTION[shape],
         "authority": "dream_synthesized_candidate_not_fact",
@@ -649,7 +648,13 @@ def _review_task_for_candidate(candidate: Mapping[str, Any], *, now: str) -> dic
     projection = projection if isinstance(projection, Mapping) else {}
     anchors = _strings(candidate.get("source_anchors"))[:8]
     candidate_id = _text(candidate.get("candidate_id"))
-    task_id = "dream_review_" + stable_hash(candidate_id, projection.get("learning_finding_id"), *anchors)
+    task_id = "dream_review_" + stable_text_join_digest(
+        candidate_id,
+        projection.get("learning_finding_id"),
+        *anchors,
+        sep="\u241f",
+        blank_falsy=False,
+    )
     return {
         "kind": REVIEW_TASK_KIND,
         "schema_version": SCHEMA_VERSION,

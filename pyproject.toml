@@ -406,6 +406,7 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/update/__init__.py",
     "skills/aippocampus/scripts/aippocampus_runtime/update/agent_callable.py",
     "skills/aippocampus/scripts/aippocampus_runtime/update/agent_status_summary.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/update/agent_status_summary_stages.py",
     "skills/aippocampus/scripts/aippocampus_runtime/update/cli.py",
     "skills/aippocampus/scripts/aippocampus_runtime/update/status_actions.py",
     "skills/aippocampus/scripts/aippocampus_runtime/update/plugin_cache.py",

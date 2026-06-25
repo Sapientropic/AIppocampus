@@ -11,20 +11,14 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from tests.aippocampus.cli_fixtures import run_aippocampus_cli
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 
+
 class AippocampusStartCliTests(unittest.TestCase):
-    def run_cli(self, *args: str) -> subprocess.CompletedProcess[str]:
-        return subprocess.run(
-            [sys.executable, "-m", "aippocampus_runtime.cli.facade", *args],
-            cwd=SCRIPTS,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            capture_output=True,
-            check=False,
-        )
+    run_cli = staticmethod(run_aippocampus_cli)
 
     def write_clean_source(self, root: Path, *, stale: bool = False) -> Path:
         clean = root / "clean"

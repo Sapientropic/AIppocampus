@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 from collections import Counter, defaultdict
 from collections.abc import Iterable, Mapping
 from typing import Any
+
+from aippocampus_runtime.core import stable_json_tuple_id
 
 SCHEMA_VERSION = 1
 LEDGER_ROW_KIND = "aippocampus_circuit_feedback_ledger_row"
@@ -26,11 +27,6 @@ SAFE_OUTCOMES = {
     "stale_candidate",
     "anti_nag_suppressed",
 }
-
-
-def _stable_id(prefix: str, *parts: Any) -> str:
-    encoded = json.dumps(parts, ensure_ascii=False, sort_keys=True, default=str)
-    return f"{prefix}_{hashlib.sha256(encoded.encode('utf-8')).hexdigest()[:16]}"
 
 
 def _source_refs(value: Any) -> list[dict[str, Any]]:
@@ -64,7 +60,13 @@ def feedback_rows_from_reports(
             {
                 "kind": LEDGER_ROW_KIND,
                 "schema_version": SCHEMA_VERSION,
-                "feedback_id": _stable_id("circuit_feedback", job_id, outcome, report.get("run_id")),
+                "feedback_id": stable_json_tuple_id(
+                    "circuit_feedback",
+                    job_id,
+                    outcome,
+                    report.get("run_id"),
+                    ensure_ascii=False,
+                ),
                 "provider_job_id": job_id,
                 "provider_family": str(report.get("provider_family") or "subconscious_job"),
                 "quality_outcome": outcome,

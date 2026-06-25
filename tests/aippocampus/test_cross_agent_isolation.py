@@ -46,7 +46,7 @@ class CrossAgentIsolationTests(unittest.TestCase):
                     "agent_id": "agent_a",
                     "sharing": "private",
                 },
-                "marker_hash": isolation.stable_hash("AGENT_A_PRIVATE_SOURCE_SENTINEL"),
+                "marker_hash": isolation.isolation_hash("AGENT_A_PRIVATE_SOURCE_SENTINEL"),
                 "would_match_without_scope_filter": True,
             }
         )
@@ -77,7 +77,7 @@ class CrossAgentIsolationTests(unittest.TestCase):
                     "shared_scope_ids": ["project:AIppocampus"],
                     "allowed_agent_ids": ["agent_a", "agent_b"],
                 },
-                "marker_hash": isolation.stable_hash("SHARED_PROJECT_SYNTHETIC_MARKER"),
+                "marker_hash": isolation.isolation_hash("SHARED_PROJECT_SYNTHETIC_MARKER"),
             }
         )
 
@@ -103,7 +103,7 @@ class CrossAgentIsolationTests(unittest.TestCase):
                     "agent_id": "agent_a",
                     "sharing": "private",
                 },
-                "marker_hash": isolation.stable_hash("AGENT_A_PRIVATE_SOURCE_SENTINEL"),
+                "marker_hash": isolation.isolation_hash("AGENT_A_PRIVATE_SOURCE_SENTINEL"),
                 "would_match_without_scope_filter": True,
                 "simulate_filter_bypass": True,
             }

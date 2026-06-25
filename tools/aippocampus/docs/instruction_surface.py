@@ -51,6 +51,22 @@ INSTRUCTION_SURFACE_CLASSIFIED_FILES = {
             "diagnostics stay in full/detail surfaces"
         ),
     },
+    "skills/aippocampus/scripts/aippocampus_runtime/mcp/continuity_routes.py": {
+        "classification": "mcp_continuity_route_owner",
+        "owner": "#2628/#2651",
+        "why": (
+            "owns MCP continuity-domain route handles and route-count diagnostics; "
+            "compact proof must stay in follow-through, not foreground field dumps"
+        ),
+    },
+    "skills/aippocampus/scripts/aippocampus_runtime/mcp/recall_navigation.py": {
+        "classification": "mcp_recall_navigation_owner",
+        "owner": "#2628/#2636/#2651",
+        "why": (
+            "owns MCP progressive recall handles and blocked-source messages; "
+            "handles guide deepen/open but must not become remembered facts"
+        ),
+    },
     "skills/aippocampus/scripts/aippocampus_runtime/mcp/tool_handlers.py": {
         "classification": "mcp_tool_handler_owner",
         "owner": "#2666/#2651",
@@ -66,12 +82,84 @@ INSTRUCTION_SURFACE_CLASSIFIED_FILES = {
             "owns recall route/action selection text that later projections render"
         ),
     },
+    "skills/aippocampus/scripts/aippocampus_runtime/recall/active_path_packet.py": {
+        "classification": "active_path_packet_owner",
+        "owner": "#2628/#2636/#2651",
+        "why": (
+            "owns Active Path Packet foreground route hints; packet text is "
+            "navigation guidance and source reopening remains the truth boundary"
+        ),
+    },
+    "skills/aippocampus/scripts/aippocampus_runtime/recall/agent_continuity_cli_support.py": {
+        "classification": "recall_cli_render_boundary_owner",
+        "owner": "#2636/#2651",
+        "why": (
+            "owns agent recall/deepen compact-vs-detail CLI rendering; source proof "
+            "and diagnostics must stay in detail/operator surfaces"
+        ),
+    },
+    "skills/aippocampus/scripts/aippocampus_runtime/recall/ambient_cards.py": {
+        "classification": "ambient_recall_card_owner",
+        "owner": "#2628/#2636/#2651",
+        "why": (
+            "owns compact ambient-card guidance and its source-boundary warnings; "
+            "cards may orient attention but cannot assert source-open facts"
+        ),
+    },
+    "skills/aippocampus/scripts/aippocampus_runtime/recall/cognitive_load_private_calibration.py": {
+        "classification": "private_calibration_owner",
+        "owner": "#2628/#2651",
+        "why": (
+            "owns public-safe cognitive-load calibration wording from private "
+            "history; private detail stays out of foreground output"
+        ),
+    },
     "skills/aippocampus/scripts/aippocampus_runtime/recall/continuity_domain_cli.py": {
         "classification": "continuity_domain_operator_cli_owner",
         "owner": "#2668/#2651",
         "why": (
             "owns explicit continuity-domain preview/operator wording; default "
             "foreground recall still has to reopen source before claims"
+        ),
+    },
+    "skills/aippocampus/scripts/aippocampus_runtime/recall/evidence_drawer.py": {
+        "classification": "evidence_drawer_projection_owner",
+        "owner": "#2628/#2636/#2651",
+        "why": (
+            "owns optional evidence-drawer explanation text; drawer/detail output "
+            "can explain proof without expanding default compact recall"
+        ),
+    },
+    "skills/aippocampus/scripts/aippocampus_runtime/recall/hook_agent_affordance.py": {
+        "classification": "hook_agent_affordance_owner",
+        "owner": "#2628/#2651",
+        "why": (
+            "owns prompt-hook affordance text and quieting rules; broad agent words "
+            "must not become unsolicited foreground recall nudges"
+        ),
+    },
+    "skills/aippocampus/scripts/aippocampus_runtime/recall/prompt_cues.py": {
+        "classification": "prompt_cue_policy_owner",
+        "owner": "#2651",
+        "why": (
+            "owns prompt-intent and cue-detection strings used before recall "
+            "routing; broad product doctrine belongs in canonical docs"
+        ),
+    },
+    "skills/aippocampus/scripts/aippocampus_runtime/recall/route_notes.py": {
+        "classification": "route_note_extraction_owner",
+        "owner": "#2628/#2651",
+        "why": (
+            "owns process-note extraction wording; notes are route context and must "
+            "be source-reopened before becoming factual evidence"
+        ),
+    },
+    "skills/aippocampus/scripts/aippocampus_runtime/recall/score_fusion.py": {
+        "classification": "score_fusion_policy_owner",
+        "owner": "#2628/#2651",
+        "why": (
+            "owns retrieval score-fusion contract text; score richness is ranking "
+            "metadata, not source eligibility"
         ),
     },
     "skills/aippocampus/scripts/aippocampus_runtime/recall/task_orientation.py": {
@@ -106,6 +194,30 @@ INSTRUCTION_SURFACE_CLASSIFIED_FILES = {
             "useful-target gating; diagnostic hits must not become source-open proof"
         ),
     },
+    "skills/aippocampus/scripts/aippocampus_runtime/source/agent_self_note_cli.py": {
+        "classification": "agent_self_note_cli_owner",
+        "owner": "#2628/#2651",
+        "why": (
+            "owns low-authority foreground-agent self-note text and current-thread "
+            "route hints; self-notes remain atmosphere, not evidence"
+        ),
+    },
+    "skills/aippocampus/scripts/aippocampus_runtime/source/clean_source.py": {
+        "classification": "clean_source_boundary_owner",
+        "owner": "#2628/#2636/#2651",
+        "why": (
+            "owns clean-source normalization diagnostics and redaction labels; clean "
+            "source is authority, while provider loss/profiles stay explicit"
+        ),
+    },
+    "skills/aippocampus/scripts/aippocampus_runtime/source/multimodal_manifest.py": {
+        "classification": "multimodal_manifest_policy_owner",
+        "owner": "#2628/#2651",
+        "why": (
+            "owns media-origin validation text for source manifests; policy strings "
+            "guard source eligibility rather than foreground recall proof"
+        ),
+    },
     "skills/aippocampus/scripts/aippocampus_runtime/source/registry_search_pipeline.py": {
         "classification": "registry_search_projection_owner",
         "owner": "#2660/#2662/#2651",
@@ -130,12 +242,44 @@ INSTRUCTION_SURFACE_CLASSIFIED_FILES = {
             "stay fail-open and must not become a proof or job-output surface"
         ),
     },
+    "skills/aippocampus/scripts/aippocampus_runtime/hooks/foreground_status.py": {
+        "classification": "foreground_hook_status_owner",
+        "owner": "#2611/#2651",
+        "why": (
+            "owns foreground hook/action-hint status wording and latency readiness; "
+            "status output is operational guidance, not source proof"
+        ),
+    },
     "skills/aippocampus/scripts/aippocampus_runtime/update/agent_status_summary.py": {
         "classification": "update_status_compact_projection_owner",
         "owner": "#2661/#2651",
         "why": (
             "owns compact update/readiness card text; acceptance-bearing warnings "
             "must stay actionable without being reported as ready"
+        ),
+    },
+    "skills/aippocampus/scripts/aippocampus_runtime/update/agent_status_summary_core.py": {
+        "classification": "update_status_projection_primitive_owner",
+        "owner": "#2628/#2631/#2651",
+        "why": (
+            "owns shared update/readiness projection wording and action ordering "
+            "primitives so staged modules do not recreate helper copies or cycles"
+        ),
+    },
+    "skills/aippocampus/scripts/aippocampus_runtime/update/capability_ladder.py": {
+        "classification": "capability_ladder_status_owner",
+        "owner": "#2628/#2651",
+        "why": (
+            "owns capability/readiness ladder wording; ambient states must stay to "
+            "installed/callable/active/useful without mixed ready claims"
+        ),
+    },
+    "skills/aippocampus/scripts/aippocampus_runtime/update/agent_status_summary_stages.py": {
+        "classification": "update_status_staged_projection_owner",
+        "owner": "#2631/#2651",
+        "why": (
+            "owns staged compact update/readiness projection after the mega-function "
+            "split; proof and raw diagnostics remain in operator/detail output"
         ),
     },
     "skills/aippocampus/scripts/aippocampus_runtime/update/status_actions.py": {
@@ -164,6 +308,22 @@ INSTRUCTION_SURFACE_CLASSIFIED_FILES = {
         "owner": "#2664/#2651",
         "why": "owns executable CLI frontdoor contracts for operator/detail actions.",
     },
+    "tests/aippocampus/test_ambient_recall_cards.py": {
+        "classification": "ambient_recall_card_test_contract_owner",
+        "owner": "#2628/#2632/#2651",
+        "why": (
+            "owns ambient card trust/action-grammar behavior tests; identity checks "
+            "must exercise public card output rather than private helper aliases"
+        ),
+    },
+    "tests/aippocampus/test_cli_recovery_cards.py": {
+        "classification": "cli_recovery_card_test_contract_owner",
+        "owner": "#2632/#2651",
+        "why": (
+            "owns broad CLI recovery-card wording assertions; shared helpers keep "
+            "the subprocess runner centralized while compact/detail doctrine stays in tests"
+        ),
+    },
     "tests/aippocampus/test_question_tracking.py": {
         "classification": "question_source_ref_test_contract_owner",
         "owner": "#2667/#2651",
@@ -183,6 +343,14 @@ INSTRUCTION_SURFACE_CLASSIFIED_FILES = {
         "classification": "update_sync_test_contract_owner",
         "owner": "#2661/#2669/#2651",
         "why": "owns update/sync foreground action and mutation-risk regression contracts.",
+    },
+    "tests/aippocampus/test_warm_ambient_recall.py": {
+        "classification": "warm_ambient_test_contract_owner",
+        "owner": "#2632/#2651",
+        "why": (
+            "owns warm ambient recall compact/detail and private-boundary tests; "
+            "fixtures should guard product semantics instead of freezing debug noise"
+        ),
     },
 }
 COMPACT_DEBUG_FIELD_LITERALS = (

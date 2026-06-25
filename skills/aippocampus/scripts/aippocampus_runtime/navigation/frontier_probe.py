@@ -8,8 +8,6 @@ evidence for factual claims.
 
 from __future__ import annotations
 
-import hashlib
-import json
 import re
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
@@ -17,7 +15,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-from aippocampus_runtime.core import compact_text, now_utc
+from aippocampus_runtime.core import compact_text, now_utc, stable_json_join_id
 from aippocampus_runtime.navigation import concept_graph
 from aippocampus_runtime.question.source_refs import compact_source_refs, source_ref_key
 from aippocampus_runtime.registry.api import unique_preserve
@@ -27,15 +25,6 @@ FRONTIER_PROBE_KIND = "aippocampus_frontier_probe"
 RESONANCE_CANDIDATE_KIND = "aippocampus_resonance_candidate"
 DREAM_INPUT_SEED_KIND = "aippocampus_dream_input_seed"
 NEGATIVE_FEEDBACK_OUTCOMES = {"dismissed", "corrected", "ignored"}
-
-
-def _sha1(value: str) -> str:
-    return hashlib.sha1(value.encode("utf-8", errors="replace")).hexdigest()
-
-
-def stable_id(prefix: str, *parts: Any, length: int = 18) -> str:
-    raw = "\n".join(json.dumps(part, ensure_ascii=False, sort_keys=True) for part in parts)
-    return f"{prefix}_{_sha1(raw)[:length]}"
 
 
 def _text(value: Any, limit: int = 220) -> str:
@@ -106,17 +95,25 @@ def frontier_terms_from_journey(journey: Mapping[str, Any], *, limit: int = 18) 
 
 
 def _frontier_fingerprint(journey: Mapping[str, Any]) -> str:
-    return stable_id(
+    return stable_json_join_id(
         "frontier",
         journey.get("journey_id"),
         journey.get("current_frontier"),
         journey.get("current_frontier_source_refs"),
+        ensure_ascii=False,
         length=20,
+        default_str=False,
     )
 
 
 def _negative_feedback_key(journey: Mapping[str, Any]) -> str:
-    return stable_id("frontier_feedback", journey.get("journey_id"), _frontier_fingerprint(journey))
+    return stable_json_join_id(
+        "frontier_feedback",
+        journey.get("journey_id"),
+        _frontier_fingerprint(journey),
+        ensure_ascii=False,
+        default_str=False,
+    )
 
 
 def _feedback_blocks(feedback_rows: Sequence[Mapping[str, Any]], negative_feedback_key: str) -> bool:
@@ -185,13 +182,15 @@ def build_frontier_probes(
             probe = {
                 "schema_version": SCHEMA_VERSION,
                 "kind": FRONTIER_PROBE_KIND,
-                "probe_id": stable_id(
+                "probe_id": stable_json_join_id(
                     "frontier_probe",
                     journey.get("journey_id"),
                     _frontier_fingerprint(journey),
                     candidate,
                     row.get("path"),
+                    ensure_ascii=False,
                     length=20,
+                    default_str=False,
                 ),
                 "created_at": now_value,
                 "expires_at": _probe_expiry(journey, now=now_value),
@@ -270,7 +269,14 @@ def build_resonance_candidates(
             {
                 "schema_version": SCHEMA_VERSION,
                 "kind": RESONANCE_CANDIDATE_KIND,
-                "candidate_id": stable_id("resonance_candidate", journey_ids, labels, length=20),
+                "candidate_id": stable_json_join_id(
+                    "resonance_candidate",
+                    journey_ids,
+                    labels,
+                    ensure_ascii=False,
+                    length=20,
+                    default_str=False,
+                ),
                 "created_at": now_value,
                 "status": "reviewable_hypothesis",
                 "match_kind": "neighboring_frontier_concepts",
@@ -316,7 +322,14 @@ def frontier_probes_to_dream_seeds(probes: Sequence[Mapping[str, Any]]) -> list[
                 "schema_version": SCHEMA_VERSION,
                 "kind": DREAM_INPUT_SEED_KIND,
                 "seed_kind": "frontier_probe",
-                "seed_id": stable_id("dream_seed", probe.get("probe_id"), concept_label, length=20),
+                "seed_id": stable_json_join_id(
+                    "dream_seed",
+                    probe.get("probe_id"),
+                    concept_label,
+                    ensure_ascii=False,
+                    length=20,
+                    default_str=False,
+                ),
                 "source_probe_ids": [probe.get("probe_id")],
                 "questions": [],
                 "frontiers": [_text(probe.get("path_label"), 140)],

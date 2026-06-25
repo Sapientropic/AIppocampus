@@ -9,11 +9,10 @@ evidence. Clean source remains the authority for specific claims.
 
 from __future__ import annotations
 
-import hashlib
 from collections.abc import Iterable, Mapping
 from typing import Any
 
-from aippocampus_runtime.core import compact_text, sanitize_external_model_text
+from aippocampus_runtime.core import compact_text, sanitize_external_model_text, stable_text_id
 from aippocampus_runtime.ops.route_readiness import safe_source_refs
 from aippocampus_runtime.question.source_refs import source_ref_key
 from aippocampus_runtime.recall.authority import trust_taxonomy, with_trust_fields
@@ -37,11 +36,6 @@ STALE_MARKERS = {
 }
 IGNORE_STATUSES = {"blocked", "expired", "failed", "suppressed"}
 CONFLICT_STATUSES = {"conflict", "conflicted", "source_conflict", "uncleared", "unreviewed"}
-
-
-def _stable_id(*parts: Any) -> str:
-    raw = "\n".join(str(part or "") for part in parts)
-    return "app_" + hashlib.sha256(raw.encode("utf-8")).hexdigest()[:18]
 
 
 def _safe_text(value: Any, chars: int = 160) -> str:
@@ -166,7 +160,7 @@ def _path(
     clean_currentness = _currentness(currentness)
     clean_title = _safe_text(title, 120) or "Active path"
     path = {
-        "path_id": _stable_id(origin, clean_route, clean_title, source_refs),
+        "path_id": stable_text_id("app", origin, clean_route, clean_title, source_refs, length=18),
         "title": clean_title,
         "why_lit": _safe_text(why_lit, 220)
         or "A prior navigation surface may be relevant; reopen source before making claims.",

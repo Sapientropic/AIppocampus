@@ -10,11 +10,9 @@ truth.
 
 from __future__ import annotations
 
-import hashlib
-import json
 from typing import Any, Mapping, Sequence
 
-from aippocampus_runtime.core import now_utc
+from aippocampus_runtime.core import now_utc, stable_json_lines_id
 from aippocampus_runtime.recall.scoring_policy import (
     RAG_CHUNK_TEXT_POLICY,
     RETRIEVAL_TEXT_POLICY,
@@ -27,15 +25,6 @@ SCHEMA_VERSION = 1
 FUSION_KIND = "aippocampus_retrieval_score_fusion"
 
 CONTEXT_WEIGHTS: dict[str, dict[str, float]] = SCORE_FUSION_POLICY.context_weights_dict()
-
-
-def sha1_text(value: str) -> str:
-    return hashlib.sha1(value.encode("utf-8", errors="replace")).hexdigest()
-
-
-def stable_id(prefix: str, *parts: Any, length: int = 18) -> str:
-    raw = "\n".join(json.dumps(part, ensure_ascii=False, sort_keys=True) for part in parts)
-    return f"{prefix}_{sha1_text(raw)[:length]}"
 
 
 def safe_int(value: Any, default: int = 0) -> int:
@@ -100,7 +89,13 @@ def source_ref_fingerprint(refs: Sequence[Mapping[str, Any]]) -> str:
     keys = [source_ref_key(ref) for ref in refs if source_ref_key(ref)[0]]
     if not keys:
         return ""
-    return stable_id("src_refs", keys, length=16)
+    return stable_json_lines_id(
+        "src_refs",
+        keys,
+        length=16,
+        ensure_ascii=False,
+        default_str=False,
+    )
 
 
 def source_join_key(candidate: Mapping[str, Any]) -> str:
@@ -121,7 +116,13 @@ def source_join_key(candidate: Mapping[str, Any]) -> str:
         return fingerprint
     line = str(candidate.get("line") or candidate.get("source_line") or "").strip()
     if line and candidate.get("thread_key"):
-        return stable_id("source_line", candidate.get("thread_key"), line, length=18)
+        return stable_json_lines_id(
+            "source_line",
+            candidate.get("thread_key"),
+            line,
+            ensure_ascii=False,
+            default_str=False,
+        )
     return ""
 
 

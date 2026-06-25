@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 from collections.abc import Iterable, Mapping, Sequence
 from typing import Any
 
 from aippocampus_runtime.aippo import working_contract
+from aippocampus_runtime.core import stable_json_tuple_id
 from aippocampus_runtime.hooks import action_hint_cache
 from aippocampus_runtime.learning_loop import aippo_adapter
 from aippocampus_runtime.navigation import (
@@ -19,11 +19,6 @@ from aippocampus_runtime.navigation import (
 SCHEMA_VERSION = 1
 REPORT_KIND = "aippocampus_learning_source_shape_projection"
 STALE_STATUSES = {"stale", "resolved", "refuted", "retired", "superseded"}
-
-
-def _stable_id(prefix: str, *parts: Any) -> str:
-    encoded = json.dumps(parts, ensure_ascii=False, sort_keys=True, default=str)
-    return f"{prefix}_{hashlib.sha256(encoded.encode('utf-8')).hexdigest()[:16]}"
 
 
 def _strings(value: Any) -> list[str]:
@@ -89,7 +84,10 @@ def _macro_signal(row: Mapping[str, Any]) -> dict[str, Any]:
 def _section_from_finding(row: Mapping[str, Any]) -> dict[str, Any]:
     source_ids = _source_ids(row.get("source_refs"))
     return {
-        "case_id": str(row.get("finding_id") or _stable_id("learning", row)),
+        "case_id": str(
+            row.get("finding_id")
+            or stable_json_tuple_id("learning", row, ensure_ascii=False)
+        ),
         "kind": "learning_loop_section",
         "scope": str(row.get("scope") or "project:AIppocampus"),
         "source_ids": source_ids,
@@ -109,7 +107,10 @@ def _section_from_finding(row: Mapping[str, Any]) -> dict[str, Any]:
 
 def _aippo_section(row: Mapping[str, Any]) -> dict[str, Any]:
     return {
-        "case_id": str(row.get("clause_id") or _stable_id("aippo", row)),
+        "case_id": str(
+            row.get("clause_id")
+            or stable_json_tuple_id("aippo", row, ensure_ascii=False)
+        ),
         "kind": "aippocampus_aippo_activation_packet",
         "scope": str(row.get("scope") or "project_or_task_family"),
         "source_ids": _source_ids(row.get("source_refs")),
@@ -165,7 +166,10 @@ def project_learning_findings_to_source_shape(
         cognitive_routes=[
             {
                 "kind": "source_shape_learning_route",
-                "route_id": str(clause.get("clause_id") or _stable_id("route", clause)),
+                "route_id": str(
+                    clause.get("clause_id")
+                    or stable_json_tuple_id("route", clause, ensure_ascii=False)
+                ),
                 "status": "unresolved",
                 "title": "Learned workflow route",
                 "summary": clause.get("guidance") or "Learning-loop source shape route.",

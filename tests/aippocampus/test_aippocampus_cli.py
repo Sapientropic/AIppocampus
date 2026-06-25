@@ -17,31 +17,14 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 
 from aippocampus_runtime.source import latest_reply as latest_reply_module
+from tests.aippocampus.cli_fixtures import run_aippocampus_cli
 
 
 class AippocampusCliTests(unittest.TestCase):
-    def run_cli(self, *args: str) -> subprocess.CompletedProcess[str]:
-        return subprocess.run(
-            [sys.executable, "-m", "aippocampus_runtime.cli.facade", *args],
-            cwd=SCRIPTS,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            capture_output=True,
-            check=False,
-        )
+    run_cli = staticmethod(run_aippocampus_cli)
 
     def run_cli_with_env(self, *args: str, env: dict[str, str]) -> subprocess.CompletedProcess[str]:
-        return subprocess.run(
-            [sys.executable, "-m", "aippocampus_runtime.cli.facade", *args],
-            cwd=SCRIPTS,
-            env=env,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            capture_output=True,
-            check=False,
-        )
+        return run_aippocampus_cli(*args, env=env)
 
     def write_last_recall_cache(self, registry: Path, *route_ids: str) -> None:
         target = registry / "agent" / "last-recall.json"

@@ -8,6 +8,7 @@ from typing import Any
 
 from aippocampus_runtime.aippo import usefulness
 from aippocampus_runtime.aippo import working_contract as wc
+from aippocampus_runtime.core import stable_json_digest
 
 
 def _fixture_cases() -> list[dict[str, Any]]:
@@ -141,7 +142,19 @@ def build_aippo_working_contract_fixture_report() -> dict[str, Any]:
         ),
     }
     continuity_metrics = usefulness.continuity_usefulness_for_activation(activation, red_lines)
-    manifest_hash = wc._stable_hash(contract)
+    manifest_hash = stable_json_digest(
+        contract,
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    rebuild_contract = wc.build_aippo_working_contracts(
+        wc.project_workflow_public_safe_source_rows()
+    )[0]
+    rebuild_manifest_hash = stable_json_digest(
+        rebuild_contract,
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
     changed_source_rows = [
         dict(row, invalidators=["newer_benchmark_policy"])
         if row.get("clause_id") == "clause_benchmark_default_claim"
@@ -187,14 +200,7 @@ def build_aippo_working_contract_fixture_report() -> dict[str, Any]:
             ],
             "source_backed_claim_without_reopen": 0,
             "stale_as_current_count": red_lines["stale_clause_activated_as_current"],
-            "stable_rebuild_hash_changed_count": int(
-                manifest_hash
-                != wc._stable_hash(
-                    wc.build_aippo_working_contracts(
-                        wc.project_workflow_public_safe_source_rows()
-                    )[0]
-                )
-            ),
+            "stable_rebuild_hash_changed_count": int(manifest_hash != rebuild_manifest_hash),
         },
         "continuity_usefulness": continuity_metrics,
         "usefulness_gate": {
@@ -216,15 +222,12 @@ def build_aippo_working_contract_fixture_report() -> dict[str, Any]:
         },
         "stability": {
             "stable_manifest_hash": manifest_hash,
-            "rebuild_manifest_hash": wc._stable_hash(
-                wc.build_aippo_working_contracts(
-                    wc.project_workflow_public_safe_source_rows()
-                )[0]
-            ),
+            "rebuild_manifest_hash": rebuild_manifest_hash,
             "changed_clause_ids": [
                 old["clause_id"]
                 for old, new in zip(contract["clauses"], changed_contract["clauses"], strict=True)
-                if wc._stable_hash(old) != wc._stable_hash(new)
+                if stable_json_digest(old, ensure_ascii=False, separators=(",", ":"))
+                != stable_json_digest(new, ensure_ascii=False, separators=(",", ":"))
             ],
         },
         "red_lines": red_lines,

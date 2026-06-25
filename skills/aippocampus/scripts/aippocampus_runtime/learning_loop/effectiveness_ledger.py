@@ -8,12 +8,13 @@ state.
 
 from __future__ import annotations
 
-import hashlib
 import json
 from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
+
+from aippocampus_runtime.core import stable_json_tuple_id
 
 SCHEMA_VERSION = 1
 LEDGER_ROW_KIND = "aippocampus_learning_guidance_effectiveness_row"
@@ -37,11 +38,6 @@ LOADED_LEDGER_ORIGIN = {
     "origin_kind": "operator_selected_effectiveness_ledger_without_integrity_manifest",
     "boundary": "ledger files adjust navigation priority only; parsed JSONL is not a source-trust anchor",
 }
-
-
-def _stable_id(prefix: str, *parts: Any) -> str:
-    encoded = json.dumps(parts, ensure_ascii=False, sort_keys=True, default=str)
-    return f"{prefix}_{hashlib.sha256(encoded.encode('utf-8')).hexdigest()[:18]}"
 
 
 def _text(value: Any, limit: int = 160) -> str:
@@ -136,7 +132,16 @@ def ledger_rows_from_guidance_outcomes(
             {
                 "kind": LEDGER_ROW_KIND,
                 "schema_version": SCHEMA_VERSION,
-                "ledger_id": _stable_id("learn_eff", lesson_id, surface, outcome, source_refs, event_refs),
+                "ledger_id": stable_json_tuple_id(
+                    "learn_eff",
+                    lesson_id,
+                    surface,
+                    outcome,
+                    source_refs,
+                    event_refs,
+                    ensure_ascii=False,
+                    length=18,
+                ),
                 "lesson_id": lesson_id,
                 "finding_id": _text(guidance.get("finding_id") or outcome_row.get("finding_id"), 160),
                 "record_id": _text(guidance.get("record_id") or guidance.get("guidance_id") or lesson_id, 160),

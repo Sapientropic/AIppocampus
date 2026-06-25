@@ -25,6 +25,7 @@ from aippocampus_runtime.core import (
     now_utc,
     sanitize_external_model_payload,
     sanitize_external_model_text,
+    stable_text_join_id,
     workspace_thread_key,
 )
 from aippocampus_runtime.model.routing import (
@@ -119,7 +120,6 @@ from aippocampus_runtime.warm_ambient.scout_profiles import (  # noqa: F401
 )
 from aippocampus_runtime.warm_ambient.source_validation import (  # noqa: F401
     _clean_source_ref,
-    _stable_id,
     calibrate_cards,
     prompt_trace_fallback_cards,
     referenced_thread_keys,
@@ -440,7 +440,14 @@ def _clean_candidate(
     if not theme:
         theme = compact_text(key_line, 100)
     card = {
-        "card_id": _stable_id([support, theme, key_line, json.dumps(refs, sort_keys=True)]),
+        "card_id": stable_text_join_id(
+            "warc",
+            support,
+            theme,
+            key_line,
+            json.dumps(refs, sort_keys=True),
+            length=18,
+        ),
         "theme": theme,
         "resonance": _safe_text(candidate.get("resonance") or "medium", 40) or "medium",
         "support_level": support,
@@ -1140,6 +1147,14 @@ def run_warm_ambient_recall(
     chat_fn: ChatFn = call_chat_json,
     scout_fn: ScoutFn = model_scout_fn,
 ) -> dict[str, Any]:
+    """Run the warm ambient recall pipeline.
+
+    aippocampus-stage-map: sanitize prompt/config -> load cache/registry ->
+    launch bounded scouts -> validate/cache source-backed cards -> publish the
+    compact public projection. Keep scout traces and proof details out of the
+    foreground card unless an operator/detail surface explicitly asks for them.
+    """
+
     start = time.perf_counter()
     prompt = str(prompt or "").strip()
     cwd_path = Path(cwd).resolve()

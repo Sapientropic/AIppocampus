@@ -11,11 +11,11 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from aippocampus_runtime.core import stable_text_join_id
 from aippocampus_runtime.recall import prompt_recall_ambient
 from aippocampus_runtime.warm_ambient import cli as warm_cli
 from aippocampus_runtime.warm_ambient import recall as warm
 from aippocampus_runtime.warm_ambient import scheduler as warm_scheduler
-from aippocampus_runtime.warm_ambient import source_validation
 from aippocampus_runtime.warm_ambient.hook_seen_threads import (
     hook_seen_ledger_path_for_cache,
     hook_seen_thread_ref,
@@ -55,7 +55,13 @@ class WarmAmbientRecallTests(unittest.TestCase):
     def test_warm_card_ids_use_sha256_cache_fingerprints(self) -> None:
         raw = "\n".join(["prompt_trace_fallback", "ambient", "source"])
         self.assertEqual(
-            source_validation._stable_id(["prompt_trace_fallback", "ambient", "source"]),
+            stable_text_join_id(
+                "warc",
+                "prompt_trace_fallback",
+                "ambient",
+                "source",
+                length=18,
+            ),
             "warc_" + hashlib.sha256(raw.encode("utf-8")).hexdigest()[:18],
         )
 

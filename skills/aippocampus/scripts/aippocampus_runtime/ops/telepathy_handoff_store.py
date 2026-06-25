@@ -130,7 +130,14 @@ def _safe_int(value: Any) -> int | None:
 
 
 def _stable_event_id(card_id: str, event_type: str, event_time: str, ordinal: int) -> str:
-    return "telepathy_event_" + packets.stable_hash(card_id, event_type, event_time, ordinal)
+    return "telepathy_event_" + core.stable_text_join_digest(
+        card_id,
+        event_type,
+        event_time,
+        ordinal,
+        sep="\u241f",
+        blank_falsy=False,
+    )
 
 
 def _looks_private_or_path_like(value: str) -> bool:
@@ -354,7 +361,15 @@ def create_handoff(
     packet_row = {
         "case_id": case_id
         or "handoff_"
-        + packets.stable_hash(scope, owner, coordination_mode, source_support, length=12),
+        + core.stable_text_join_digest(
+            scope,
+            owner,
+            coordination_mode,
+            source_support,
+            sep="\u241f",
+            length=12,
+            blank_falsy=False,
+        ),
         "scope": scope,
         "coordination_mode": coordination_mode,
         "owner": owner,
@@ -517,7 +532,7 @@ def list_handoffs_payload(
     path = resolve_store_path(store_path, cwd=cwd)
     cards = _ordered_cards(current_handoff_cards(load_events(path)).values())
     if scope:
-        scope_hash = packets.stable_hash(scope)
+        scope_hash = core.stable_text_join_digest(scope, sep="\u241f", blank_falsy=False)
         cards = [
             card
             for card in cards

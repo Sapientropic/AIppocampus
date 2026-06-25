@@ -21,6 +21,7 @@ from aippocampus_runtime.contracts import executable_command_violations
 from aippocampus_runtime.recall.agent_continuity_cli_support import (
     render_recall_human,
 )
+from tests.aippocampus.cli_fixtures import run_aippocampus_cli
 from tests.aippocampus.frontstage_assertions import (
     assert_compact_detail_affordances,
     assert_compact_frontstage_payload,
@@ -29,28 +30,10 @@ from tests.aippocampus.frontstage_assertions import (
 
 
 class AippocampusCliRecoveryCardTests(unittest.TestCase):
-    def run_cli(self, *args: str) -> subprocess.CompletedProcess[str]:
-        return subprocess.run(
-            [sys.executable, "-m", "aippocampus_runtime.cli.facade", *args],
-            cwd=SCRIPTS,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            capture_output=True,
-            check=False,
-        )
+    run_cli = staticmethod(run_aippocampus_cli)
 
     def run_cli_with_env(self, *args: str, env: dict[str, str]) -> subprocess.CompletedProcess[str]:
-        return subprocess.run(
-            [sys.executable, "-m", "aippocampus_runtime.cli.facade", *args],
-            cwd=SCRIPTS,
-            env=env,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            capture_output=True,
-            check=False,
-        )
+        return run_aippocampus_cli(*args, env=env)
 
     def test_status_help_is_decision_card_not_health_flag_wall(self) -> None:
         proc = self.run_cli("status", "--help")

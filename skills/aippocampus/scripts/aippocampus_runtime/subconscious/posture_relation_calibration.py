@@ -6,11 +6,11 @@ here are not runtime policy and are not foreground eligible.
 
 from __future__ import annotations
 
-import hashlib
-import json
 from collections import Counter
 from collections.abc import Mapping, Sequence
 from typing import Any
+
+from aippocampus_runtime.core import stable_json_lines_id
 
 SCHEMA_VERSION = 1
 KIND = "posture_relation_calibration_candidate"
@@ -18,11 +18,6 @@ KIND = "posture_relation_calibration_candidate"
 
 def _text(value: Any) -> str:
     return str(value or "").strip()
-
-
-def _stable_id(prefix: str, *parts: Any) -> str:
-    raw = "\n".join(json.dumps(part, ensure_ascii=False, sort_keys=True) for part in parts)
-    return f"{prefix}_{hashlib.sha1(raw.encode('utf-8', errors='replace')).hexdigest()[:18]}"
 
 
 def _refs(row: Mapping[str, Any]) -> list[dict[str, Any]]:
@@ -94,7 +89,16 @@ def posture_relation_calibration_candidates(
             {
                 "schema_version": SCHEMA_VERSION,
                 "kind": KIND,
-                "candidate_id": _stable_id("posture_cal", scope, source, target, count, counter_count),
+                "candidate_id": stable_json_lines_id(
+                    "posture_cal",
+                    scope,
+                    source,
+                    target,
+                    count,
+                    counter_count,
+                    ensure_ascii=False,
+                    default_str=False,
+                ),
                 "relation": relation,
                 "from_posture_id": source,
                 "to_posture_id": target,

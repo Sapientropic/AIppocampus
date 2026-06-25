@@ -8,8 +8,6 @@ metadata into the shared descriptor and leaves source truth to deepen/reopen.
 
 from __future__ import annotations
 
-import hashlib
-import json
 from collections.abc import Mapping
 from typing import Any
 
@@ -38,11 +36,6 @@ TEMPORAL_KEYS = (
 
 def _text(value: Any, limit: int = 120) -> str:
     return core.compact_text(str(value or "").strip(), limit)
-
-
-def _stable_id(prefix: str, *parts: Any) -> str:
-    raw = json.dumps(parts, ensure_ascii=False, sort_keys=True, default=str)
-    return f"{prefix}_{hashlib.sha256(raw.encode('utf-8')).hexdigest()[:16]}"
 
 
 def _scope(candidate: Mapping[str, Any]) -> str:
@@ -85,10 +78,11 @@ def build_associative_path_source_shape(
 ) -> dict[str, Any]:
     """Return descriptor + compact projection for one APW candidate."""
 
-    safe_route_id = _text(route_id or candidate.get("route_id"), 120) or _stable_id(
+    safe_route_id = _text(route_id or candidate.get("route_id"), 120) or core.stable_json_tuple_id(
         "apw",
         candidate,
         refs,
+        ensure_ascii=False,
     )
     scope = _scope(candidate)
     freshness = _freshness(candidate)
@@ -143,7 +137,14 @@ def build_associative_path_source_shape(
         },
         projection_intent="foreground_recall",
         target_surfaces=("agent_recall_compact",),
-        source_shape_id=_stable_id("source_shape_apw", safe_route_id, refs, scope, freshness),
+        source_shape_id=core.stable_json_tuple_id(
+            "source_shape_apw",
+            safe_route_id,
+            refs,
+            scope,
+            freshness,
+            ensure_ascii=False,
+        ),
     )
     return {
         "descriptor": descriptor,

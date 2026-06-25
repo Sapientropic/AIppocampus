@@ -9,12 +9,12 @@ summaries do not belong here.
 
 from __future__ import annotations
 
-import hashlib
-import json
 import re
 from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence
 from typing import Any
+
+from aippocampus_runtime.core import list_or_empty, stable_json_lines_id
 
 SCHEMA_VERSION = 1
 REVIEW_SIGNAL_KIND = "aippocampus_learning_review_signal"
@@ -55,19 +55,15 @@ SUCCESS_STATUSES = {"succeeded", "success", "passed", "pass", "ok"}
 STALE_STATUSES = {"stale", "superseded", "refuted", "retired", "archived", "resolved"}
 
 
-def _stable_id(prefix: str, *parts: Any, length: int = 18) -> str:
-    raw = "\n".join(json.dumps(part, ensure_ascii=False, sort_keys=True) for part in parts)
-    digest = hashlib.sha256(raw.encode("utf-8", errors="replace")).hexdigest()[:length]
-    return f"{prefix}_{digest}"
+def _learning_row_id(prefix: str, *parts: Any, length: int = 18) -> str:
+    """Preserve the legacy learning-loop JSON-lines row id shape via core."""
 
-
-def _as_list(value: Any) -> list[Any]:
-    return value if isinstance(value, list) else []
+    return stable_json_lines_id(prefix, *parts, ensure_ascii=False, length=length, default_str=False)
 
 
 def _safe_strings(value: Any, *, limit: int = 8) -> list[str]:
     result: list[str] = []
-    for item in _as_list(value):
+    for item in list_or_empty(value):
         text = str(item or "").strip()
         if text and text not in result:
             result.append(text)
@@ -79,7 +75,7 @@ def _safe_strings(value: Any, *, limit: int = 8) -> list[str]:
 def _safe_refs(value: Any, *, limit: int = 4) -> list[dict[str, Any]]:
     refs: list[dict[str, Any]] = []
     seen: set[tuple[tuple[str, str], ...]] = set()
-    for item in _as_list(value):
+    for item in list_or_empty(value):
         if not isinstance(item, Mapping):
             continue
         clean = {
@@ -167,7 +163,7 @@ def _target_fingerprint(row: Mapping[str, Any]) -> str:
     fingerprints = _safe_strings(row.get("path_fingerprints"), limit=1)
     if fingerprints:
         return fingerprints[0]
-    return _stable_id("target", _text(row, "command_family"), _text(row, "target_class"), length=14)
+    return _learning_row_id("target", _text(row, "command_family"), _text(row, "target_class"), length=14)
 
 
 def _path_category_fingerprint(row: Mapping[str, Any]) -> str:
@@ -175,7 +171,7 @@ def _path_category_fingerprint(row: Mapping[str, Any]) -> str:
     if direct:
         return direct
     categories = _safe_strings(row.get("path_categories"), limit=4)
-    return _stable_id("pathcat", categories or _safe_strings(row.get("path_fingerprints")), length=14)
+    return _learning_row_id("pathcat", categories or _safe_strings(row.get("path_fingerprints")), length=14)
 
 
 def _signature(row: Mapping[str, Any]) -> dict[str, str]:
@@ -192,7 +188,7 @@ def _signature(row: Mapping[str, Any]) -> dict[str, str]:
 
 
 def _grouping_fingerprint(signature: Mapping[str, Any]) -> str:
-    return _stable_id("learn_group", signature, length=20)
+    return _learning_row_id("learn_group", signature, length=20)
 
 
 def adapt_behavior_events_to_review_signals(
@@ -214,7 +210,12 @@ def adapt_behavior_events_to_review_signals(
             {
                 "kind": REVIEW_SIGNAL_KIND,
                 "schema_version": SCHEMA_VERSION,
-                "signal_id": _stable_id("learn_sig", row.get("event_id"), signature, row.get("sequence_index")),
+                "signal_id": _learning_row_id(
+                    "learn_sig",
+                    row.get("event_id"),
+                    signature,
+                    row.get("sequence_index"),
+                ),
                 "signal_type": signal_type,
                 "learning_signal": "success_after_failure" if success else f"failure:{failure_family}",
                 "event_refs": event_refs,
@@ -265,7 +266,7 @@ def extract_learning_activations(
             {
                 "kind": ACTIVATION_KIND,
                 "schema_version": SCHEMA_VERSION,
-                "activation_id": _stable_id("learn_act", signal.get("signal_id")),
+                "activation_id": _learning_row_id("learn_act", signal.get("signal_id")),
                 "activation_kind": "tool_failure_activation",
                 "activation_status": "open" if durable else "review_only_expected_red",
                 "durable_activation": durable,
@@ -357,7 +358,7 @@ def detect_recurring_failure_findings(
             {
                 "kind": FINDING_KIND,
                 "schema_version": SCHEMA_VERSION,
-                "finding_id": _stable_id("learn_find", "recurring_failure", group),
+                "finding_id": _learning_row_id("learn_find", "recurring_failure", group),
                 "finding_kind": "recurring_failure_finding",
                 "candidate_family": "verification_preflight_candidate",
                 "status": status,
@@ -587,7 +588,12 @@ def detect_workflow_order_findings(
             {
                 "kind": FINDING_KIND,
                 "schema_version": SCHEMA_VERSION,
-                "finding_id": _stable_id("learn_find", "workflow_order", workflow_family, target),
+                "finding_id": _learning_row_id(
+                    "learn_find",
+                    "workflow_order",
+                    workflow_family,
+                    target,
+                ),
                 "finding_kind": "workflow_order_finding",
                 "candidate_family": candidate_family,
                 "workflow_family": workflow_family,
@@ -675,7 +681,7 @@ def project_action_time_guidance(
             {
                 "kind": ACTION_GUIDANCE_KIND,
                 "schema_version": SCHEMA_VERSION,
-                "guidance_id": _stable_id("learn_act_guidance", finding.get("finding_id"), query_terms),
+                "guidance_id": _learning_row_id("learn_act_guidance", finding.get("finding_id"), query_terms),
                 "title": "Source-backed learning guidance",
                 "guidance_text": guidance_text,
                 "next_action": next_action,
@@ -706,7 +712,7 @@ def project_guidance_to_route_readiness(
             continue
         route_rows.append(
             {
-                "route_id": row.get("guidance_id") or _stable_id("learn_route", row),
+                "route_id": row.get("guidance_id") or _learning_row_id("learn_route", row),
                 "surface_kind": "source_backed_learning_guidance",
                 "title": row.get("title") or "Source-backed learning guidance",
                 "why_lit": row.get("guidance_text") or "Learning guidance requires source reopen before use.",
@@ -867,7 +873,12 @@ def extract_workflow_candidates(
             {
                 "kind": WORKFLOW_CANDIDATE_KIND,
                 "schema_version": SCHEMA_VERSION,
-                "candidate_id": _stable_id("workflow_candidate", finding.get("finding_id"), workflow, form),
+                "candidate_id": _learning_row_id(
+                    "workflow_candidate",
+                    finding.get("finding_id"),
+                    workflow,
+                    form,
+                ),
                 "repeated_workflow_summary": workflow,
                 "recommended_form": form,
                 "skip_reason": skip_reason,
@@ -934,7 +945,12 @@ def build_semantic_learning_hypotheses(
             {
                 "kind": SEMANTIC_HYPOTHESIS_KIND,
                 "schema_version": SCHEMA_VERSION,
-                "hypothesis_id": _stable_id("learn_hyp", kind, refs, freshness),
+                "hypothesis_id": _learning_row_id(
+                    "learn_hyp",
+                    kind,
+                    refs,
+                    freshness,
+                ),
                 "candidate_kind": kind,
                 "status": status,
                 "foreground_eligible": False,

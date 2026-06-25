@@ -7,7 +7,6 @@ attention, but only source/path support can make a clause foreground-eligible.
 
 from __future__ import annotations
 
-import hashlib
 import json
 from collections.abc import Mapping, Sequence
 from typing import Any
@@ -97,11 +96,6 @@ def _strings(value: Any, *, limit: int = 12) -> list[str]:
 
 def _json_bytes(value: Mapping[str, Any]) -> int:
     return len(json.dumps(value, ensure_ascii=False, sort_keys=True).encode("utf-8"))
-
-
-def _stable_hash(value: Mapping[str, Any]) -> str:
-    encoded = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()[:16]
 
 
 def contract_deepen_action(deepen_route_id: str) -> dict[str, Any]:

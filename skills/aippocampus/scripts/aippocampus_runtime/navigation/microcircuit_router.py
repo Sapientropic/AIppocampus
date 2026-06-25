@@ -2,22 +2,17 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
 from typing import Any
+
+from aippocampus_runtime.core import stable_json_tuple_id
 
 SCHEMA_VERSION = 1
 ROUTER_KIND = "aippocampus_microcircuit_router_report"
 DECAY_KIND = "aippocampus_controlled_salience_decay_report"
 QUIET_STATUSES = {"stale", "superseded", "resolved", "retired", "refuted"}
 NOISY_OUTCOMES = {"ignored", "dismissed", "noisy", "wrong_route_drag"}
-
-
-def _stable_id(prefix: str, *parts: Any) -> str:
-    encoded = json.dumps(parts, ensure_ascii=False, sort_keys=True, default=str)
-    return f"{prefix}_{hashlib.sha256(encoded.encode('utf-8')).hexdigest()[:16]}"
 
 
 def _terms(value: Any) -> set[str]:
@@ -171,7 +166,9 @@ def apply_controlled_salience_decay(
             reason_codes.append("local_environment_lesson_decay")
         rows.append(
             {
-                "candidate_id": row.get("candidate_id") or row.get("route_id") or _stable_id("candidate", row),
+                "candidate_id": row.get("candidate_id")
+                or row.get("route_id")
+                or stable_json_tuple_id("candidate", row, ensure_ascii=False),
                 "foreground_prominence": "quiet" if quiet else "normal",
                 "reopenable_from_source": bool(_source_ids(row)),
                 "source_deleted": False,

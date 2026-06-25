@@ -12,6 +12,7 @@ import json
 from collections.abc import Iterable, Mapping
 from typing import Any
 
+from aippocampus_runtime.core import stable_json_join_id
 from aippocampus_runtime.navigation.avatar_illumination_support import (
     ACTION_GRAMMAR_BLOCKED,
     ACTION_GRAMMAR_SHADOW,
@@ -34,7 +35,6 @@ from aippocampus_runtime.navigation.avatar_illumination_support import (
     posture_tensions,
     privacy_state,
     semantic_invalidation_state,
-    stable_id,
     strings,
     task_relevant,
     text,
@@ -81,7 +81,14 @@ def build_source_backed_avatar_state(
     return {
         "kind": STATE_KIND,
         "schema_version": SCHEMA_VERSION,
-        "avatar_state_id": stable_id(card.get("card_id"), task, semantic_state.get("reason_codes"), prefix="avatar"),
+        "avatar_state_id": stable_json_join_id(
+            "avatar",
+            card.get("card_id"),
+            task,
+            semantic_state.get("reason_codes"),
+            sep="\0",
+            length=18,
+        ),
         "source_card_id": text(card.get("card_id"), 140),
         "domain": text(card.get("domain"), 60) or "unknown",
         "landmark": text(card.get("landmark"), 140),

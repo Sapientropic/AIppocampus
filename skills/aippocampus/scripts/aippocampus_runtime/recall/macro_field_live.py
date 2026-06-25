@@ -7,11 +7,10 @@ lets the atlas and router keep their normal navigation-only authority.
 
 from __future__ import annotations
 
-import hashlib
-import json
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+from aippocampus_runtime.core import stable_json_lines_id
 from aippocampus_runtime.macro import timing_affordance, transform_orbit
 from aippocampus_runtime.navigation import macro_field_atlas
 from aippocampus_runtime.ops.route_readiness import safe_source_refs
@@ -28,11 +27,6 @@ def _text(value: Any) -> str:
     return str(value or "").strip()
 
 
-def _stable_id(prefix: str, *parts: Any) -> str:
-    raw = "\n".join(json.dumps(part, ensure_ascii=False, sort_keys=True) for part in parts)
-    return f"{prefix}_{hashlib.sha256(raw.encode('utf-8', errors='replace')).hexdigest()[:18]}"
-
-
 def sections_from_recall_routes(routes: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
     sections: list[dict[str, Any]] = []
     for index, route in enumerate(routes):
@@ -46,7 +40,13 @@ def sections_from_recall_routes(routes: Sequence[Mapping[str, Any]]) -> list[dic
         sections.append(
             {
                 "section_id": _text(route.get("section_id"))
-                or _stable_id("recall_section", route.get("handle"), index),
+                or stable_json_lines_id(
+                    "recall_section",
+                    route.get("handle"),
+                    index,
+                    ensure_ascii=False,
+                    default_str=False,
+                ),
                 "title": macro_live_recall.route_label(route),
                 "scope": _text(route.get("scope_bucket") or route.get("scope") or "recall_route"),
                 "topic_epoch": _text(route.get("topic_epoch") or "current"),

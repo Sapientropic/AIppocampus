@@ -7,12 +7,11 @@ stay blocked until a future source reopen can adjudicate them.
 
 from __future__ import annotations
 
-import hashlib
-import json
 from collections import Counter
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+from aippocampus_runtime.core import stable_json_join_id
 from aippocampus_runtime.reflection.retrieval_reconsolidation import (
     RECONSOLIDATION_CANDIDATE_KIND,
 )
@@ -23,11 +22,6 @@ KIND = "retrieval_reconsolidation_consumer_report"
 
 def _text(value: Any) -> str:
     return str(value or "").strip()
-
-
-def _stable_id(prefix: str, *parts: Any) -> str:
-    raw = "\n".join(json.dumps(part, ensure_ascii=False, sort_keys=True) for part in parts)
-    return f"{prefix}_{hashlib.sha1(raw.encode('utf-8', errors='replace')).hexdigest()[:18]}"
 
 
 def _source_refs(candidate: Mapping[str, Any]) -> list[dict[str, Any]]:
@@ -84,7 +78,13 @@ def consume_retrieval_reconsolidation_candidates(
         row = {
             "kind": "retrieval_reconsolidation_navigation_metadata",
             "schema_version": SCHEMA_VERSION,
-            "metadata_id": _stable_id("retr_nav", candidate.get("candidate_id"), final_state),
+            "metadata_id": stable_json_join_id(
+                "retr_nav",
+                candidate.get("candidate_id"),
+                final_state,
+                ensure_ascii=False,
+                default_str=False,
+            ),
             "candidate_id": _text(candidate.get("candidate_id")),
             "review_state": "reviewed",
             "final_state": final_state,

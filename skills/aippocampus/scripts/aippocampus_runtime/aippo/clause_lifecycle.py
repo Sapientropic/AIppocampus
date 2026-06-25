@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import copy
-import hashlib
 import json
 from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence
 from datetime import datetime, timezone
 from typing import Any
+
+from aippocampus_runtime.core import dict_or_empty, stable_json_tuple_id
 
 SCHEMA_VERSION = 1
 PROBE_KIND = "aippocampus_aippo_verification_probe"
@@ -30,13 +31,8 @@ SEVERITY_WEIGHTS = {
 }
 
 
-def _stable_id(prefix: str, *parts: Any) -> str:
-    encoded = json.dumps(parts, ensure_ascii=False, sort_keys=True, default=str)
-    return f"{prefix}_{hashlib.sha256(encoded.encode('utf-8')).hexdigest()[:16]}"
-
-
 def _as_mapping(value: Any) -> Mapping[str, Any]:
-    return value if isinstance(value, Mapping) else {}
+    return dict_or_empty(value)
 
 
 def _strings(value: Any) -> list[str]:
@@ -105,7 +101,12 @@ def verification_probes_from_growing_clauses(
             {
                 "kind": PROBE_KIND,
                 "schema_version": SCHEMA_VERSION,
-                "probe_id": _stable_id("aippo_probe", clause.get("clause_id"), task_family),
+                "probe_id": stable_json_tuple_id(
+                    "aippo_probe",
+                    clause.get("clause_id"),
+                    task_family,
+                    ensure_ascii=False,
+                ),
                 "clause_id": clause.get("clause_id"),
                 "probe_class": "workflow_order_probe"
                 if "workflow" in str(clause.get("kind") or "")
@@ -119,7 +120,11 @@ def verification_probes_from_growing_clauses(
                 "can_ripen_from_agent_self_report": False,
                 "action_time_exposure": {
                     "optional": True,
-                    "anti_nag_id": _stable_id("anti_nag", clause.get("clause_id")),
+                    "anti_nag_id": stable_json_tuple_id(
+                        "anti_nag",
+                        clause.get("clause_id"),
+                        ensure_ascii=False,
+                    ),
                     "tiny_hint_only": True,
                 },
             }

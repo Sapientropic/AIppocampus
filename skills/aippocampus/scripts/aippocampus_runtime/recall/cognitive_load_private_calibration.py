@@ -10,13 +10,13 @@ cannot prove live host timing, user-visible recall lift, or affect truth.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 from collections import Counter
 from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.core import stable_text_join_digest
 from aippocampus_runtime.recall import cognitive_load_sidecar as sidecar
 from aippocampus_runtime.registry.store import load_registry, registry_paths
 
@@ -144,11 +144,6 @@ def _as_path(value: Any) -> Path | None:
     return Path(text) if text else None
 
 
-def _stable_hash(*parts: object, length: int = 20) -> str:
-    material = "\0".join(str(part or "") for part in parts)
-    return "sha256:" + hashlib.sha256(material.encode("utf-8", errors="replace")).hexdigest()[:length]
-
-
 def _contains_any(text: str, terms: Iterable[str]) -> bool:
     lowered = text.casefold()
     return any(term.casefold() in lowered for term in terms)
@@ -201,11 +196,14 @@ def _source_ref_from_row(row: Mapping[str, Any], *, fallback_kind: str) -> dict[
         return {key: value for key, value in stable_ref.items() if value not in (None, "")}
 
     return {
-        "source_ref_hash": _stable_hash(
+        "source_ref_hash": "sha256:"
+        + stable_text_join_digest(
             fallback_kind,
             raw_ref,
             row.get("message_id") or row.get("event_id") or row.get("id"),
             row.get("turn_index"),
+            sep="\0",
+            length=20,
         )
     }
 
@@ -273,7 +271,15 @@ def extract_cognitive_load_events_from_clean_source(
             repeated_pitfall_count += int(repeated_pitfall)
             load_events.append(
                 {
-                    "event_id": _stable_hash("message", ordinal, signal_type, row.get("message_id")),
+                    "event_id": "sha256:"
+                    + stable_text_join_digest(
+                        "message",
+                        ordinal,
+                        signal_type,
+                        row.get("message_id"),
+                        sep="\0",
+                        length=20,
+                    ),
                     "event_type": signal_type,
                     "timestamp": row.get("timestamp"),
                     "source_refs": [_source_ref_from_row(row, fallback_kind="message")],
@@ -290,7 +296,15 @@ def extract_cognitive_load_events_from_clean_source(
         signal_counts[signal_type] += 1
         load_events.append(
             {
-                "event_id": _stable_hash("behavior", ordinal, signal_type, row.get("event_id")),
+                "event_id": "sha256:"
+                + stable_text_join_digest(
+                    "behavior",
+                    ordinal,
+                    signal_type,
+                    row.get("event_id"),
+                    sep="\0",
+                    length=20,
+                ),
                 "event_type": signal_type,
                 "timestamp": row.get("timestamp"),
                 "source_refs": [_source_ref_from_row(row, fallback_kind="event")],

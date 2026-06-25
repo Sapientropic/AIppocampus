@@ -9,11 +9,12 @@ or benchmarking a live external memory system.
 
 from __future__ import annotations
 
-import hashlib
 import json
 from collections import Counter
 from collections.abc import Mapping
 from typing import Any
+
+from aippocampus_runtime.core import stable_text_join_digest
 
 SCHEMA_VERSION = "cross-agent-recall-isolation-v0"
 READ_PATHS = {
@@ -33,9 +34,8 @@ PUBLIC_SAFE_FORBIDDEN_MARKERS = (
 )
 
 
-def stable_hash(*parts: Any, length: int = 16) -> str:
-    digest = hashlib.sha256("\u241f".join(str(part) for part in parts).encode("utf-8")).hexdigest()
-    return digest[:length]
+def isolation_hash(*parts: Any, length: int = 16) -> str:
+    return stable_text_join_digest(*parts, sep="\u241f", length=length, blank_falsy=False)
 
 
 def _text(value: Any) -> str:
@@ -82,7 +82,7 @@ def scope_allows_source(case: Mapping[str, Any]) -> bool:
 def _sanitized_source_handle(case: Mapping[str, Any]) -> dict[str, Any]:
     source = _scope(case, "source_scope")
     return {
-        "source_ref_hash": stable_hash(
+        "source_ref_hash": isolation_hash(
             source.get("provider"),
             source.get("agent_id"),
             source.get("sharing"),
@@ -122,7 +122,7 @@ def _allowed_projection(case: Mapping[str, Any]) -> dict[str, Any]:
         "output_mode": "reopenable_route",
         "claim_permission": "no_claim_before_reopen",
         "next_action": "reopen_source",
-        "route_id": "route:" + stable_hash("route", case.get("case_id")),
+        "route_id": "route:" + isolation_hash("route", case.get("case_id")),
         "source_handles": [handle],
         "source_handle_count": 1,
         "public_safe": True,
@@ -198,8 +198,8 @@ def fixture_cases() -> list[dict[str, Any]]:
         "agent_id": "agent_b",
         "project_scope_id": "project:AIppocampus",
     }
-    private_marker_hash = stable_hash("AGENT_A_PRIVATE_SOURCE_SENTINEL")
-    shared_marker_hash = stable_hash("SHARED_PROJECT_SYNTHETIC_MARKER")
+    private_marker_hash = isolation_hash("AGENT_A_PRIVATE_SOURCE_SENTINEL")
+    shared_marker_hash = isolation_hash("SHARED_PROJECT_SYNTHETIC_MARKER")
     return [
         {
             "case_id": "agent_b_search_private_agent_a",

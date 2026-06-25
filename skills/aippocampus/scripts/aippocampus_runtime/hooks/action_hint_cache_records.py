@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 import re
 import time
 from collections.abc import Iterable, Mapping, Sequence
 from typing import Any
+
+from aippocampus_runtime.core import stable_json_tuple_digest
 
 SCHEMA_VERSION = 1
 RECORD_KIND = "aippocampus_action_hint_prepared_record"
@@ -23,11 +23,6 @@ BLOCKED_STATES = {
     "unsupported",
 }
 WEAK_SUPPORT_LEVELS = {"scent", "candidate", "dream", "direction_only"}
-
-
-def _stable_id(*parts: Any) -> str:
-    text = json.dumps(parts, ensure_ascii=False, sort_keys=True, default=str)
-    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
 
 
 def _terms(*values: Any) -> list[str]:
@@ -256,7 +251,7 @@ def records_from_aar_v2(
         refs = _source_refs(row.get("source_refs"))
         record = _base_record(
             provider_family="aar_v2",
-            record_id=str(row.get("record_id") or _stable_id("aar_v2", row)),
+            record_id=str(row.get("record_id") or stable_json_tuple_digest("aar_v2", row, ensure_ascii=False)),
             action_hint_kind="reopen_source_before_claim",
             next_action=str(
                 (row.get("nudge") or {}).get("recommended_action")
@@ -285,7 +280,7 @@ def records_from_learning_guidance(
         next_action = str(row.get("next_action") or "reopen_source_before_action")
         record = _base_record(
             provider_family="learning_loop",
-            record_id=str(row.get("guidance_id") or _stable_id("learning_loop", row)),
+            record_id=str(row.get("guidance_id") or stable_json_tuple_digest("learning_loop", row, ensure_ascii=False)),
             action_hint_kind=next_action,
             next_action=next_action,
             row={**dict(row), "command_terms": ["test", "pytest", "ruff", "mypy", "preflight"]},
@@ -312,7 +307,7 @@ def records_from_active_recall_locks(
         handles = [{"lock_id": lock_id, "reopen_required": True}]
         record = _base_record(
             provider_family="active_recall_lock",
-            record_id=str(row.get("record_id") or _stable_id("active_lock", lock_id)),
+            record_id=str(row.get("record_id") or stable_json_tuple_digest("active_lock", lock_id, ensure_ascii=False)),
             action_hint_kind=str(row.get("action_hint_kind") or "capture_evidence_before_action"),
             next_action=str(row.get("next_action") or "capture_evidence_before_action"),
             row={**dict(row), "active_recall_locks": [lock_id]},
@@ -343,7 +338,7 @@ def records_from_attention_route_tokens(
         ]
         record = _base_record(
             provider_family="attention_route_token",
-            record_id=str(row.get("token_id") or _stable_id("attention_route", row)),
+            record_id=str(row.get("token_id") or stable_json_tuple_digest("attention_route", row, ensure_ascii=False)),
             action_hint_kind=str(row.get("action_hint_kind") or "reopen_route_before_action"),
             next_action=str(row.get("next_action") or "reopen_route_before_action"),
             row=row,
@@ -400,7 +395,16 @@ def records_from_recent_recall_routes(
         }
         record = _base_record(
             provider_family="recent_recall_route",
-            record_id=str(row.get("record_id") or _stable_id("recent_recall", selector, request_index, route_id)),
+            record_id=str(
+                row.get("record_id")
+                or stable_json_tuple_digest(
+                    "recent_recall",
+                    selector,
+                    request_index,
+                    route_id,
+                    ensure_ascii=False,
+                )
+            ),
             action_hint_kind="reopen_recent_recall_route_before_broad_search",
             next_action="reopen_recent_recall_route_before_broad_search",
             row={
@@ -454,7 +458,9 @@ def records_from_aippo_learned_clauses(
         )
         record = _base_record(
             provider_family="aippo_learned_clause",
-            record_id=str(clause.get("clause_id") or _stable_id("aippo_clause", clause)),
+            record_id=str(
+                clause.get("clause_id") or stable_json_tuple_digest("aippo_clause", clause, ensure_ascii=False)
+            ),
             action_hint_kind="aippo_reopen_first_working_contract",
             next_action=next_action,
             row={
@@ -495,7 +501,9 @@ def records_from_aippo_verification_probes(
         next_action = str(probe.get("next_action") or "reopen_probe_source_before_action")
         record = _base_record(
             provider_family="aippo_verification_probe",
-            record_id=str(probe.get("probe_id") or _stable_id("aippo_probe", probe)),
+            record_id=str(
+                probe.get("probe_id") or stable_json_tuple_digest("aippo_probe", probe, ensure_ascii=False)
+            ),
             action_hint_kind="aippo_probe_reopen_before_action",
             next_action=next_action,
             row={
