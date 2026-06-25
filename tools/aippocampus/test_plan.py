@@ -12,6 +12,7 @@ from typing import Iterable, cast
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEBT_REPORT_SCRIPT = "tools/aippocampus/docs/debt_report.py"
+AGENT_SLOP_GUARD_SCRIPT = "tools/aippocampus/agent_slop_guard.py"
 PORTABLE_PYTHON_COMMAND = "python"
 CI_RUFF_COMMAND = "ruff check skills plugins tests tools benchmarks benchmark_corpus"
 CI_MYPY_COMMAND = "mypy"
@@ -28,6 +29,7 @@ STATIC_CONFIG_PATHS = {
     "pyproject.toml",
 }
 CHECK_TOOLING_PATHS = {
+    "tools/aippocampus/agent_slop_guard.py",
     "tools/aippocampus/run_tests.py",
     "tools/aippocampus/test_tier_manifest.py",
     "tools/aippocampus/test_plan.py",
@@ -145,10 +147,29 @@ def shell_arg(value: str) -> str:
 
 
 def debt_report_args(changed_files: Iterable[str]) -> str:
+    scannable_files = {
+        _repo_relative(path)
+        for path in changed_files
+        if not _is_agent_slop_fixture(_repo_relative(path))
+    }
     changed_args = " ".join(
-        f"--changed-file {shell_arg(path)}" for path in sorted(set(changed_files))
+        f"--changed-file {shell_arg(path)}" for path in sorted(scannable_files)
     )
     prefix = "--changed-surface-only --json"
+    return prefix if not changed_args else f"{prefix} {changed_args}"
+
+
+def agent_slop_guard_args(changed_files: Iterable[str]) -> str:
+    scannable_files = {
+        _repo_relative(path)
+        for path in changed_files
+        if _is_static_python_surface(_repo_relative(path))
+        and not _is_agent_slop_fixture(_repo_relative(path))
+    }
+    changed_args = " ".join(
+        f"--changed-file {shell_arg(path)}" for path in sorted(scannable_files)
+    )
+    prefix = "--json"
     return prefix if not changed_args else f"{prefix} {changed_args}"
 
 
@@ -223,7 +244,11 @@ def architecture_debt_plan_reason(changed_files: Iterable[str]) -> str:
 
 
 def changed_surface_debt_plan_reason(changed_files: Iterable[str]) -> str:
-    changed_python = sorted(path for path in changed_files if _is_static_python_surface(path))
+    changed_python = sorted(
+        path
+        for path in changed_files
+        if _is_static_python_surface(path) and not _is_agent_slop_fixture(path)
+    )
     if not changed_python:
         return ""
     preview = ", ".join(changed_python[:3])
@@ -232,6 +257,23 @@ def changed_surface_debt_plan_reason(changed_files: Iterable[str]) -> str:
         f"Python changed surface touched: {preview}{suffix}. Run the lightweight "
         "debt gate so duplicate helpers, hot-path broad exceptions, compact debug "
         "field literals, and giant-function growth are acceptance-bearing before closeout."
+    )
+
+
+def agent_slop_guard_plan_reason(changed_files: Iterable[str]) -> str:
+    changed_python = sorted(
+        path
+        for path in changed_files
+        if _is_static_python_surface(path) and not _is_agent_slop_fixture(path)
+    )
+    if not changed_python:
+        return ""
+    preview = ", ".join(changed_python[:3])
+    suffix = "" if len(changed_python) <= 3 else f", +{len(changed_python) - 3} more"
+    return (
+        f"Python changed surface touched: {preview}{suffix}. Run the advisory agent-slop "
+        "guard early so projector bypasses and silent fallback smells are visible before "
+        "a PR tries to prove behavior through field presence."
     )
 
 
@@ -450,12 +492,22 @@ def classify_changed_files(changed_files: Iterable[str]) -> set[str]:
         if path.startswith(".github/workflows/"):
             categories.add("ci_workflow")
         if path in {
+            "tools/aippocampus/agent_slop_guard.py",
             "tools/aippocampus/run_tests.py",
             "tools/aippocampus/run_ci_parity.py",
             "tools/aippocampus/test_tier_manifest.py",
             "tools/aippocampus/test_plan.py",
         }:
             categories.add("test_runner")
+        if (
+            path
+            in {
+                "tools/aippocampus/agent_slop_guard.py",
+                "tools/aippocampus/agent_slop_guard_baseline.json",
+            }
+            or _is_agent_slop_fixture(path)
+        ):
+            categories.add("agent_slop_guard")
         if path.startswith("tools/aippocampus/release/"):
             categories.add("release_tool")
         if path.startswith("tests/aippocampus/"):
@@ -491,6 +543,10 @@ def _is_static_python_surface(path: str) -> bool:
     if path in STATIC_CONFIG_PATHS:
         return True
     return path.endswith(".py") and path.startswith(STATIC_PYTHON_ROOTS)
+
+
+def _is_agent_slop_fixture(path: str) -> bool:
+    return _repo_relative(path).startswith("tests/aippocampus/agent_slop_guard_fixtures/")
 
 
 def _mypy_tracked_paths() -> set[str]:
@@ -575,6 +631,7 @@ def build_test_plan(
     changed_test_groups: list[dict[str, object]] = []
     debt_reason = architecture_debt_plan_reason(normalized_files)
     changed_surface_debt_reason = changed_surface_debt_plan_reason(normalized_files)
+    agent_slop_reason = agent_slop_guard_plan_reason(normalized_files)
     environment = python_environment_summary()
     warnings = planner_warnings(environment)
     large_dirty_surface = (
@@ -586,6 +643,8 @@ def build_test_plan(
         categories.add("architecture_debt")
     if changed_surface_debt_reason:
         categories.add("changed_surface_debt")
+    if agent_slop_reason:
+        categories.add("agent_slop_advisory")
 
     if not normalized_files:
         _add_command(
@@ -658,6 +717,20 @@ def build_test_plan(
             ),
         )
 
+    if agent_slop_reason:
+        _add_command(
+            commands,
+            PlannedCommand(
+                command=py_script(
+                    AGENT_SLOP_GUARD_SCRIPT,
+                    agent_slop_guard_args(normalized_files),
+                    local_executable=local_executable,
+                ),
+                reason=agent_slop_reason,
+                scope="changed-surface-advisory",
+            ),
+        )
+
     if "docs" in categories or "skill_surface" in categories:
         _add_command(
             commands,
@@ -696,6 +769,24 @@ def build_test_plan(
                 ),
                 reason="Tier membership/count drift should be visible before a broad run.",
                 scope="diagnostic",
+            ),
+        )
+
+    if "agent_slop_guard" in categories:
+        _add_command(
+            commands,
+            PlannedCommand(
+                command=py_command(
+                    "-m unittest "
+                    "tests.aippocampus.test_agent_slop_guard "
+                    "tests.aippocampus.test_test_plan -v",
+                    local_executable=local_executable,
+                ),
+                reason=(
+                    "Agent-slop guard changes must prove bad/allowed fixtures, "
+                    "advisory JSON output, and planner integration directly."
+                ),
+                scope="focused:agent-slop-guard",
             ),
         )
 
