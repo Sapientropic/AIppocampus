@@ -17,7 +17,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from agent_slop_guard_rules import RULES
+from agent_slop_guard_rules import OWNER_LAYER_CONTRACTS, RULES
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_BASELINE = REPO_ROOT / "tools" / "aippocampus" / "agent_slop_guard_baseline.json"
@@ -48,6 +48,24 @@ SOURCE_IO_OWNER_PATHS = {
     "skills/aippocampus/scripts/aippocampus_runtime/io_integrity.py",
     "skills/aippocampus/scripts/aippocampus_runtime/question/source_refs.py",
     "skills/aippocampus/scripts/aippocampus_runtime/dream/source_refs.py",
+}
+REGISTRY_WRITER_OWNER_PATHS = {
+    "skills/aippocampus/scripts/aippocampus_runtime/registry/store.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/registry/api.py",
+}
+REGISTRY_MUTATION_PREFIXES = (
+    "skills/aippocampus/scripts/aippocampus_runtime/registry/",
+    "skills/aippocampus/scripts/aippocampus_runtime/sync/",
+    "skills/aippocampus/scripts/aippocampus_runtime/update/",
+)
+# These modules are the documented local-lock owners. Other runtime callers
+# should import an owner helper instead of copying os.O_EXCL lock loops.
+LOCAL_LOCK_OWNER_PATHS = {
+    "skills/aippocampus/scripts/aippocampus_runtime/artifacts/publish.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/artifacts/generation_pins.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/dream/local_lock.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/recall/active_recall_lock.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/registry/store.py",
 }
 SOURCE_REF_HELPER_NAMES = {
     "source_ref_key",
@@ -549,6 +567,80 @@ def _source_ref_helper_duplicate_findings(
     return findings
 
 
+def _registry_writer_owner_bypass_findings(
+    tree: ast.AST,
+    *,
+    path: str,
+    baseline: Mapping[str, str],
+    changed_files: set[str],
+) -> list[dict[str, Any]]:
+    if not _is_runtime_path(path) or path in REGISTRY_WRITER_OWNER_PATHS:
+        return []
+    if not path.startswith(REGISTRY_MUTATION_PREFIXES):
+        return []
+    findings: list[dict[str, Any]] = []
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name in {
+            "load_registry",
+            "save_registry",
+            "registry_writer_lease",
+        }:
+            findings.append(
+                _finding(
+                    rule_id="registry_writer_owner_bypass",
+                    path=path,
+                    line=int(getattr(node, "lineno", 0) or 0),
+                    message=f"local {node.name} duplicates the registry writer owner.",
+                    baseline=baseline,
+                    changed_files=changed_files,
+                )
+            )
+            continue
+        if isinstance(node, ast.Call) and _call_name(node.func) == "save_registry":
+            findings.append(
+                _finding(
+                    rule_id="registry_writer_owner_bypass",
+                    path=path,
+                    line=int(getattr(node, "lineno", 0) or 0),
+                    message="save_registry call outside registry owner can bypass registry_writer_lease.",
+                    baseline=baseline,
+                    changed_files=changed_files,
+                )
+            )
+    return findings
+
+
+def _local_lock_owner_bypass_findings(
+    tree: ast.AST,
+    *,
+    path: str,
+    baseline: Mapping[str, str],
+    changed_files: set[str],
+) -> list[dict[str, Any]]:
+    if not _is_runtime_path(path) or path in LOCAL_LOCK_OWNER_PATHS:
+        return []
+    findings: list[dict[str, Any]] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        if _qualified_call_name(node.func) != "os.open":
+            continue
+        node_text = _node_text(node)
+        if "o_excl" not in node_text and ".lock" not in node_text:
+            continue
+        findings.append(
+            _finding(
+                rule_id="local_lock_owner_bypass",
+                path=path,
+                line=int(getattr(node, "lineno", 0) or 0),
+                message="os.O_EXCL lock copy bypasses the local-lock owner helpers.",
+                baseline=baseline,
+                changed_files=changed_files,
+            )
+        )
+    return findings
+
+
 def _performance_owner_for(path: str, message: str) -> str:
     text = f"{path} {message}".casefold()
     if "association" in text or "raw_stats" in text:
@@ -906,6 +998,22 @@ def analyze_text(
         )
     )
     findings.extend(
+        _registry_writer_owner_bypass_findings(
+            tree,
+            path=path,
+            baseline=baseline_map,
+            changed_files=changed,
+        )
+    )
+    findings.extend(
+        _local_lock_owner_bypass_findings(
+            tree,
+            path=path,
+            baseline=baseline_map,
+            changed_files=changed,
+        )
+    )
+    findings.extend(
         _performance_nested_loop_findings(
             tree,
             path=path,
@@ -1025,8 +1133,12 @@ def load_baseline(path: Path | None) -> dict[str, str]:
     for row in rows:
         if not isinstance(row, Mapping):
             continue
-        fingerprint = str(row.get("fingerprint") or "").strip()
-        if not fingerprint:
+        # Some AST-derived fingerprints include multiline SQL or trailing
+        # expression whitespace. Preserve the exact string or the baseline turns
+        # into permanent noise whenever those findings are present.
+        raw_fingerprint = row.get("fingerprint")
+        fingerprint = "" if raw_fingerprint is None else str(raw_fingerprint)
+        if not fingerprint.strip():
             continue
         baseline[fingerprint] = str(row.get("owner_issue") or row.get("owner") or "historical_baseline")
     return baseline
@@ -1092,6 +1204,7 @@ def build_report(
         "gate_status": "advisory",
         "rule_count": len(RULES),
         "rules": [rule.as_dict() for rule in RULES.values()],
+        "owner_layer_contracts": list(OWNER_LAYER_CONTRACTS),
         "scanned_file_count": len(paths),
         "finding_count": len(findings),
         "baselined_finding_count": len(baselined),

@@ -281,9 +281,9 @@ def agent_slop_guard_plan_reason(changed_files: Iterable[str]) -> str:
     suffix = "" if len(changed_python) <= 3 else f", +{len(changed_python) - 3} more"
     return (
         f"Python changed surface touched: {preview}{suffix}. Run the advisory agent-slop "
-        "guard early so compact projection, fallback, source IO, compatibility, and "
-        "field-only test smells are visible before a PR tries to prove behavior through "
-        "field presence."
+        "guard early so compact projection, fallback, source IO, registry/lock owner, "
+        "compatibility, and field-only test smells are visible before a PR tries to prove "
+        "behavior through field presence."
     )
 
 

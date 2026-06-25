@@ -136,6 +136,7 @@ class ChangedSurfaceTestPlanTests(unittest.TestCase):
         advisory_command = next(command for command in payload["commands"] if command["command"] == advisory)
         self.assertEqual(advisory_command["scope"], "changed-surface-advisory")
         self.assertIn("source IO", advisory_command["reason"])
+        self.assertIn("registry/lock owner", advisory_command["reason"])
         self.assertIn("field-only test", advisory_command["reason"])
         self.assertNotIn("--fail-on-violations", advisory_command["command"])
 
