@@ -46,6 +46,7 @@ from aippocampus_runtime.mcp.public_projection import (
     compact_thread,
     detail_arg,
     public_payload,
+    public_thread_detail_without_private_identifiers,
 )
 from aippocampus_runtime.mcp.recall_navigation import (
     RecallNavigationError,
@@ -998,17 +999,18 @@ def call_list_threads(arguments: dict[str, Any]) -> dict[str, Any]:
     include_private_identifiers = bool(
         arguments.get("include_private_identifiers") or arguments.get("include_private_paths")
     )
-    threads = (
-        [
+    if detail == "compact":
+        threads = [
             compact_thread(
                 item,
                 include_private_identifiers=include_private_identifiers,
             )
             for item in raw_threads
         ]
-        if detail == "compact"
-        else raw_threads
-    )
+    elif include_private_identifiers:
+        threads = raw_threads
+    else:
+        threads = [public_thread_detail_without_private_identifiers(item) for item in raw_threads]
     actions = list_threads_ok_actions()
     return text_result(
         public_payload(

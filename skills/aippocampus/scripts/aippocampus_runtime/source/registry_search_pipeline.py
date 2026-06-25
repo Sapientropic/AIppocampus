@@ -105,6 +105,8 @@ def _match_is_useful_registry_target(match: Mapping[str, Any]) -> bool:
         return False
     profile_value = match.get("query_match_profile")
     profile: Mapping[str, Any] = profile_value if isinstance(profile_value, Mapping) else {}
+    if profile.get("exact_identifier_query") and not profile.get("identifier_match"):
+        return False
     anchor_count = as_int(profile.get("distinctive_anchor_count"))
     if anchor_count == 0:
         return True
@@ -476,6 +478,17 @@ def _render_registry_search_payload(
         query=inputs.query_text,
         has_matches=bool(matches),
         first_match=matches[0] if matches else None,
+        useful_target_hit=useful_target_hit,
+        first_match_usefulness_status=(
+            "identifier_not_found"
+            if first_match_profile.get("exact_identifier_query")
+            and not first_match_profile.get("identifier_match")
+            else "demoted_artifact"
+            if first_match is not None and match_is_demoted_artifact(first_match)
+            else "query_anchor_missing"
+            if first_match is not None and not first_match_useful
+            else "topic_bearing_candidate"
+        ),
     )
     if discussion_action:
         actions = [discussion_action, *actions]
@@ -496,6 +509,8 @@ def _render_registry_search_payload(
         "status": (
             "ok"
             if useful_target_hit
+            else "identifier_not_found"
+            if inputs.query_gate.get("exact_identifier_query")
             else "matches_need_broadened_source_search"
             if matches
             else "no_phrase_like_matches"
@@ -518,6 +533,9 @@ def _render_registry_search_payload(
             {
                 "status": "demoted_artifact"
                 if first_match is not None and match_is_demoted_artifact(first_match)
+                else "identifier_not_found"
+                if first_match_profile.get("exact_identifier_query")
+                and not first_match_profile.get("identifier_match")
                 else "query_anchor_missing"
                 if not first_match_useful
                 else "topic_bearing_candidate",

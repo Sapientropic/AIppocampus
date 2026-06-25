@@ -365,7 +365,7 @@ class ArchitectureBoundaryTests(unittest.TestCase):
                 "--changed-surface-only",
                 "--json",
                 "--changed-file",
-                "skills/aippocampus/scripts/aippocampus_runtime/mcp/tool_handlers.py",
+                "skills/aippocampus/scripts/aippocampus_runtime/mcp/tool_catalog.py",
             ],
             text=True,
             encoding="utf-8",

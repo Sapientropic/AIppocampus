@@ -195,10 +195,22 @@ GENERIC_FOREGROUND_CUE_TERMS = {
     "preview",
     "plugin",
     "tool",
+    "github",
+    "github.com",
+    "agent_callable",
+    "agent-callable",
     "issue",
     "issues",
     "用户",
     "角度",
+    "不是",
+    "不过",
+    "刚才",
+    "这个",
+    "那个",
+    "然后",
+    "现在",
+    "就是",
 }
 GENERIC_FOREGROUND_CUE_PHRASES = {
     "runtime-contract.md",
@@ -206,6 +218,7 @@ GENERIC_FOREGROUND_CUE_PHRASES = {
     "continuity domain candidate",
     "aippocampus maintenance",
     "aippocampus 锚点",
+    "github.com",
 }
 
 
@@ -486,6 +499,8 @@ def _foreground_cue_quality(cue: str) -> tuple[str, str]:
     if not text:
         return "low_information", "empty"
     low = text.strip('"`“”‘’.,;:!?，。；：！？()[]{}<>').casefold()
+    if re.fullmatch(r"(?:[a-z0-9-]+\.)+[a-z]{2,}(?:/[^\s]*)?", low):
+        return "low_information", "hostname_or_domain"
     if low in GENERIC_FOREGROUND_CUE_PHRASES:
         return "low_information", "generic_tool_word"
     if low.startswith("-") or re.fullmatch(r"-{1,2}[\w][\w.-]*", low):

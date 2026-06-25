@@ -16,6 +16,8 @@ def registry_search_actions(
     query: str,
     has_matches: bool,
     first_match: Mapping[str, Any] | None,
+    useful_target_hit: bool = True,
+    first_match_usefulness_status: str = "",
 ) -> list[dict[str, Any]]:
     if has_matches and first_match:
         if match_is_demoted_artifact(first_match):
@@ -40,6 +42,55 @@ def registry_search_actions(
                     command_template='aippocampus agent recall "{cue}" --json',
                     requires=["cue"],
                     why="Use a richer cue when exact search mostly finds diagnostic artifacts.",
+                    mutation_risk="read_only",
+                    claim_boundary="no_claim_before_reopen",
+                ),
+            ]
+        if not useful_target_hit:
+            if first_match_usefulness_status == "identifier_not_found":
+                return [
+                    foreground_template_action(
+                        action_id="refine_registry_identifier_search",
+                        label="Search a different source identifier",
+                        command_template='aippocampus search --all "{source_identifier}" --json',
+                        requires=["source_identifier"],
+                        why=(
+                            "The query looks like a source identifier, but the first registry hit "
+                            "did not contain that exact identifier. Do not open a fuzzy hit as evidence."
+                        ),
+                        mutation_risk="read_only",
+                        claim_boundary="exact_identifier_not_found_in_registry_hit",
+                    ),
+                    foreground_shell_action(
+                        action_id="check_registered_sources",
+                        label="Check registered source status",
+                        command="aippocampus onboard --provider auto --status --json",
+                        why="Use this if the expected old source may not be registered locally.",
+                        mutation_risk="read_only",
+                        claim_boundary="host_status_not_source_evidence",
+                    ),
+                ]
+            return [
+                foreground_shell_action(
+                    action_id="broaden_registry_search_for_query_anchors",
+                    label="Broaden registry search",
+                    command=(
+                        f"aippocampus search --all {shell_quote(query)} "
+                        "--search-budget deep --json"
+                    ),
+                    why=(
+                        "Registry search found nearby snippets, but the first hit does not carry "
+                        "the distinctive query anchors; search deeper before opening a source."
+                    ),
+                    mutation_risk="read_only",
+                    claim_boundary="search_matches_not_target_evidence",
+                ),
+                foreground_template_action(
+                    action_id="refine_registry_exact_search",
+                    label="Refine registry exact search",
+                    command_template='aippocampus search --all "{distinctive_phrase}" --json',
+                    requires=["distinctive_phrase"],
+                    why="Use a more distinctive phrase before treating nearby registry hits as source evidence.",
                     mutation_risk="read_only",
                     claim_boundary="no_claim_before_reopen",
                 ),

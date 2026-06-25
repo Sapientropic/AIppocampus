@@ -246,21 +246,22 @@ def _recall_task_action(task: str) -> dict[str, Any]:
 def _orientation_route_action(task: str, route: Mapping[str, Any]) -> dict[str, Any]:
     clean_task = str(redact_sensitive_values(redact_private_paths(str(task or "").strip())) or "")
     action: dict[str, Any] = {
-        "id": "open_orientation_detail",
-        "label": "Open orientation detail",
+        "id": "inspect_orientation_route_hint_detail",
+        "label": "Inspect orientation route hint detail",
         "target": {
             key: value
             for key, value in {
-                "path_id": route.get("path_id"),
                 "title": route.get("title"),
+                "orientation_handle_status": route.get("orientation_handle_status")
+                or "diagnostic_not_callable",
             }.items()
             if value not in (None, "", [], {})
         },
         "mutation_risk": "read_only",
-        "claim_boundary": "orientation_detail_is_navigation_not_source_evidence",
+        "claim_boundary": "orientation_hint_is_not_a_callable_source_route",
         "why": (
-            "Task Orientation found a route-shaped hint, but compact output does not carry "
-            "a callable source-open handle; open detail or run recall before making claims."
+            "Task Orientation found a route hint, but its handle is diagnostic; run "
+            "recall/deepen before making claims."
         ),
     }
     if clean_task and not command_value_needs_input(clean_task):
@@ -275,15 +276,15 @@ def _orientation_route_action(task: str, route: Mapping[str, Any]) -> dict[str, 
 def _safe_next_actions(
     task: str,
     *,
-    source_routes: list[dict[str, Any]] | None = None,
+    route_hints: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     recall_action = _recall_task_action(task)
     route_actions = [
-        _orientation_route_action(task, source_routes[0])
-    ] if source_routes else []
+        _orientation_route_action(task, route_hints[0])
+    ] if route_hints else []
     return [
-        *route_actions,
         recall_action,
+        *route_actions,
         {
             "id": "deepen_selected_recall_route",
             "label": "Deepen a selected recall route",
@@ -324,11 +325,11 @@ def _compact_action_fields(actions: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def _compact_route_plan(plan: Mapping[str, Any]) -> dict[str, Any]:
-    first_sources = list(plan.get("first_sources_to_reopen") or [])[:3]
+    first_hints = list(plan.get("first_route_hints") or [])[:3]
     return {
-        "first_sources_to_reopen": first_sources,
-        "source_route_count": len(first_sources),
-        "next_step": "inspect_first_source_route",
+        "first_route_hints": first_hints,
+        "route_hint_count": len(first_hints),
+        "next_step": "run_recall_for_task_then_deepen_source_route",
     }
 
 
@@ -362,8 +363,8 @@ def build_task_orientation_packet(
     )
     compact_path = compact_active_path_packet(active_path)
     route_plan = route_plan_from_active_path(compact_path)
-    source_routes = list(route_plan.get("first_sources_to_reopen") or [])[:3]
-    actions = _safe_next_actions(clean_task, source_routes=source_routes)
+    route_hints = list(route_plan.get("first_route_hints") or [])[:3]
+    actions = _safe_next_actions(clean_task, route_hints=route_hints)
     sidecar_load: dict[str, Any] = (
         load_orientation_sidecars(
             clean_task,
@@ -415,9 +416,9 @@ def build_task_orientation_packet(
         "project": project,
         "task": clean_task,
         "frontier": (
-            "inspect the first orientation source route before broad recall"
-            if source_routes
-            else "choose first source route; do not start broad manual search until recall/owners are checked"
+            "run task recall, then deepen an emitted source route before claims"
+            if route_hints
+            else "use task recall before broad manual search; no callable orientation route is available"
         ),
         "load_bearing_unknowns": [
             "which reopened source route is actually current",
@@ -479,14 +480,14 @@ def build_task_orientation_packet(
             "current_orientation": {
                 "frontier": base_packet["frontier"],
                 "active_path_count": compact_path.get("path_count", 0),
-                "source_route_count": len(source_routes),
+                "route_hint_count": len(route_hints),
                 "issue_work_guard_should_pull": bool(issue_packet.get("should_pull")),
                 "learning_constraint_count": len(constraints),
                 "external_source_anchor_count": len(anchors),
                 "advanced_navigation_route_count": (sidecar_load.get("metrics") or {}).get("projected_item_count", 0),
                 "advanced_navigation_status": sidecar_load.get("status"),
             },
-            "source_routes": source_routes,
+            "source_route_hints": route_hints,
             "route_plan": _compact_route_plan(route_plan),
             "use_boundary": _use_boundary(),
         }

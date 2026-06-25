@@ -6,11 +6,11 @@ benchmark smoke checks; they are not source evidence or private replay output.
 
 from __future__ import annotations
 
-import hashlib
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.core import stable_text_id
 from aippocampus_runtime.learning_loop import aippo_adapter, semantic_learning
 from aippocampus_runtime.learning_loop.private_export import (
     LearningReplayInputError,
@@ -28,11 +28,6 @@ FOREGROUND_BYTE_BUDGET = 12000
 
 def _public_payload(payload: Any) -> Any:
     return redact_sensitive_values(redact_private_paths(payload))
-
-
-def stable_id(*parts: Any) -> str:
-    raw = "\n".join(str(part or "") for part in parts)
-    return "top_" + hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
 
 
 def source_ref(kind: str, key: str, line: int = 1) -> dict[str, Any]:
@@ -158,7 +153,7 @@ def _semantic_learning_constraints(task: str) -> list[dict[str, Any]]:
     promoted = [
         {
             "kind": "aippocampus_promoted_semantic_learning_guidance_candidate",
-            "guidance_candidate_id": stable_id("semantic_learning", task),
+            "guidance_candidate_id": stable_text_id("top", "semantic_learning", task, length=16),
             "candidate_kind": "workflow_packaging_candidate",
             "promotion_type": "source_backed_bridge_route",
             "foreground_eligible": True,
@@ -183,7 +178,9 @@ def _semantic_learning_constraints(task: str) -> list[dict[str, Any]]:
     for guidance in projection.get("guidance") or []:
         if not isinstance(guidance, Mapping):
             continue
-        constraint_id = str(guidance.get("guidance_id") or stable_id("semantic", task))
+        constraint_id = str(
+            guidance.get("guidance_id") or stable_text_id("top", "semantic", task, length=16)
+        )
         constraints.append(
             {
                 "constraint_id": constraint_id,
@@ -204,7 +201,7 @@ def _semantic_learning_constraints(task: str) -> list[dict[str, Any]]:
 
 def _source_backed_lesson_constraints(task: str) -> list[dict[str, Any]]:
     candidate = {
-        "lesson_id": stable_id("source_backed_lesson", task),
+        "lesson_id": stable_text_id("top", "source_backed_lesson", task, length=16),
         "candidate_kind": "context_reopen_candidate",
         "failed_route": "context_sensitive_route_without_reopen",
         "summary": "Reopen the source trail before retrying a context-sensitive route.",
@@ -220,7 +217,9 @@ def _source_backed_lesson_constraints(task: str) -> list[dict[str, Any]]:
     )
     if lesson.get("status") != "ripe" or not lesson.get("foreground_activation_allowed"):
         return []
-    constraint_id = str(lesson.get("lesson_id") or stable_id("lesson", task))
+    constraint_id = str(
+        lesson.get("lesson_id") or stable_text_id("top", "lesson", task, length=16)
+    )
     return [
         {
             "constraint_id": constraint_id,
@@ -242,7 +241,7 @@ def _aippo_seed_constraints(task: str) -> list[dict[str, Any]]:
     rows = aippo_adapter.learning_findings_to_aippo_source_rows(
         [
             {
-                "finding_id": stable_id("aippo_seed", task),
+                "finding_id": stable_text_id("top", "aippo_seed", task, length=16),
                 "finding_kind": "workflow_order_finding",
                 "workflow_family": "context_reopen_before_retry",
                 "scope": "project:AIppocampus",
@@ -257,7 +256,9 @@ def _aippo_seed_constraints(task: str) -> list[dict[str, Any]]:
     )
     constraints: list[dict[str, Any]] = []
     for row in rows:
-        constraint_id = str(row.get("clause_id") or stable_id("aippo_seed", task))
+        constraint_id = str(
+            row.get("clause_id") or stable_text_id("top", "aippo_seed", task, length=16)
+        )
         constraints.append(
             {
                 "constraint_id": constraint_id,
@@ -388,11 +389,11 @@ def route_plan_from_active_path(active_path: Mapping[str, Any]) -> dict[str, Any
     reopen = [path for path in paths if path.get("route") == "reopen"]
     ignored = [path for path in paths if path.get("route") == "ignore"]
     return {
-        "first_sources_to_reopen": [
+        "first_route_hints": [
             {
-                "path_id": path.get("path_id"),
                 "title": path.get("title"),
-                "why": "orientation route; reopen before relying on it",
+                "orientation_handle_status": "diagnostic_not_callable",
+                "why": "orientation hint; run recall/deepen before relying on it",
             }
             for path in reopen[:3]
         ],

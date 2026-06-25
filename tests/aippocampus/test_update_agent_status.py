@@ -91,6 +91,8 @@ class UpdateAgentStatusTests(unittest.TestCase):
         self.assertIn("hooks_status", deferred)
         self.assertIn("llm_child_process", deferred)
         self.assertEqual(payload["setup_card"]["state"], "partial_foreground_status")
+        self.assertIsNone(payload["summary"]["agent_callable_ready"])
+        self.assertEqual(payload["summary"]["agent_callable_readiness_state"], "not_checked")
         self.assertEqual(
             payload["setup_card"]["operator_detail_command"],
             "aippocampus update status --operator-json",
@@ -127,6 +129,77 @@ class UpdateAgentStatusTests(unittest.TestCase):
         self.assertNotIn("action_hints", surfaces)
         violations = executable_command_violations(payload["safe_next_actions"])
         self.assertEqual(violations, [])
+
+    def test_agent_json_reports_visible_tools_callability_as_not_checked(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, provider_env({"AIPPOCAMPUS_DEEPSEEK_API_KEY": "test"}):
+            root = Path(tmp)
+            probe = root / "host-probe.json"
+            probe.write_text(
+                json.dumps(
+                    {
+                        "validation_ok": True,
+                        "mcp_status": {"tool_names": ["agent_recall", "agent_deepen"]},
+                        "mcp_tool_is_error": False,
+                        "mcp_tool_payload": {"status": "ok"},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            stdout = StringIO()
+            slow_names = (
+                "compare_skill",
+                "compare_plugin",
+                "enrich_plugin_cache_status",
+                "status_hooks",
+                "status_llm",
+            )
+            slow_patches = [
+                patch.object(
+                    update_cli,
+                    name,
+                    side_effect=AssertionError(f"{name} should be deferred"),
+                )
+                for name in slow_names
+            ]
+            with ExitStack() as stack:
+                for slow_patch in slow_patches:
+                    stack.enter_context(slow_patch)
+                stack.enter_context(
+                    patch(
+                        "aippocampus_runtime.ops.provider_doctor._child_process_env_visibility",
+                        side_effect=AssertionError("child process probe should be deferred"),
+                    )
+                )
+                with redirect_stdout(stdout):
+                    code = update_cli.main(
+                        [
+                            "status",
+                            "--repo-root",
+                            str(REPO_ROOT),
+                            "--codex-home",
+                            str(root / "codex-home"),
+                            "--host-probe-report",
+                            str(probe),
+                            "--foreground-tools-visible",
+                            "--agent-json",
+                        ]
+                    )
+
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(code, 0, payload)
+        self.assertIsNone(payload["summary"]["agent_callable_ready"])
+        self.assertEqual(payload["summary"]["agent_callable_readiness_state"], "not_checked")
+        self.assertTrue(payload["summary"]["agent_callable_host_ready"])
+        self.assertTrue(payload["summary"]["agent_callable_current_thread_visible"])
+        self.assertIsNone(payload["summary"]["agent_callable_current_thread_callable"])
+        self.assertEqual(
+            payload["summary"]["agent_callable_status"],
+            "host_live_probe_ok_current_thread_unverified",
+        )
+        self.assertNotIn("agent_callable", payload["summary"]["needs_action"])
+        self.assertIn("--foreground-key-tools-callable", payload["foreground_action"]["command"])
+        self.assertIn("agent_recall", payload["foreground_action"]["manual_instruction"])
+        self.assertIn("agent_deepen", payload["foreground_action"]["manual_instruction"])
 
     def test_operator_status_omits_provider_key_env_names(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, {}, clear=False):

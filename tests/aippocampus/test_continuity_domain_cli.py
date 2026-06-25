@@ -213,6 +213,39 @@ class ContinuityDomainCliTests(unittest.TestCase):
         self.assertEqual(candidates[0]["foreground_candidate_quality"], "low_information")
         self.assertEqual(candidates[0]["foreground_actions"], [])
 
+    def test_agent_preview_rejects_hostname_and_cjk_continuation_cues(self) -> None:
+        payload = {
+            "ok": True,
+            "mode": "dry_run",
+            "metrics": {
+                "scan_partial": True,
+                "low_information_label_suppressed_count": 4,
+            },
+            "top_domain_labels": [],
+            "candidate_events": [
+                {
+                    "domain_id": "hostname-route",
+                    "title": "github.com",
+                    "domain_type": "maintenance",
+                    "scale": "thread",
+                    "activation_cues": ["github.com", "不是", "刚才", "不过", "AIppocampus"],
+                    "source_refs": [{"message_id": "msg-1"}],
+                }
+            ],
+        }
+
+        preview = continuity_domain_cli._producer_agent_preview(payload)
+
+        self.assertEqual(preview["foreground_candidate_quality"], "needs_broader_scan")
+        self.assertEqual(preview["foreground_action"]["id"], "needs_broader_scan_or_cue")
+        self.assertIn("--broad-scan", preview["foreground_action"]["command"])
+        encoded_action = json.dumps(preview["foreground_action"], ensure_ascii=False)
+        self.assertNotIn("agent recall", encoded_action)
+        candidate = preview["candidate_previews"][0]
+        self.assertEqual(candidate["foreground_candidate_quality"], "low_information")
+        self.assertEqual(candidate["foreground_actions"], [])
+        self.assertIn(candidate["suppression_reason"], {"hostname_or_domain", "generic_tool_word"})
+
     def test_agent_preview_skips_low_information_cues_before_using_specific_route_cue(self) -> None:
         payload = {
             "ok": True,

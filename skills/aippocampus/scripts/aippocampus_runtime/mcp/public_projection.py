@@ -103,6 +103,42 @@ def compact_thread(
     return {key: value for key, value in pairs.items() if value not in (None, "", [])}
 
 
+def public_thread_detail_without_private_identifiers(item: dict[str, Any]) -> dict[str, Any]:
+    session_meta_obj = item.get("session_meta")
+    session_meta = cast(dict[str, Any], session_meta_obj) if isinstance(session_meta_obj, dict) else {}
+    paths_obj = item.get("paths")
+    paths = cast(dict[str, Any], paths_obj) if isinstance(paths_obj, dict) else {}
+    base_instructions = session_meta.get("base_instructions")
+    dynamic_tools = session_meta.get("dynamic_tools")
+    result = {
+        **compact_thread(item, include_private_identifiers=False),
+        "detail_profile": "full_without_private_identifiers",
+        "private_identifier_fields_omitted": [
+            "thread_key",
+            "project_key",
+            "session_meta.id",
+        ],
+        "raw_session_metadata_omitted": bool(session_meta),
+        "session_meta_summary": {
+            "available": bool(session_meta),
+            "timestamp": session_meta.get("timestamp"),
+            "source": session_meta.get("source"),
+            "cwd_redacted": bool(session_meta.get("cwd")),
+            "base_instructions_text_omitted": bool(base_instructions),
+            "dynamic_tools_omitted": bool(dynamic_tools),
+        },
+        "paths_summary": {
+            "workspace_registered": bool(paths.get("workspace")),
+            "rollout_registered": bool(paths.get("rollout")),
+            "clean_source_registered": bool(
+                paths.get("clean_source_messages_jsonl") or paths.get("clean_source_dir")
+            ),
+            "local_paths_omitted": bool(paths),
+        },
+    }
+    return core.strip_empty(result)
+
+
 def _command_with_cwd_template(command: str) -> str:
     return re.sub(r'--cwd\s+(?:"[^"]+"|\S+)', '--cwd "{cwd}"', command, count=1)
 

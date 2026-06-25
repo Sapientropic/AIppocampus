@@ -204,7 +204,8 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertEqual(learning_payload["kind"], "aippocampus_learning_frontdoor")
         self.assertEqual(learning_payload["mode"], "status")
         self.assertEqual(learning_payload["foreground_action"]["id"], "review_semantic_guidance_candidate")
-        self.assertIn("learning guidance --json", learning_payload["foreground_action"]["command"])
+        self.assertIn("learning guidance", learning_payload["foreground_action"]["command"])
+        self.assertIn("--guidance-id", learning_payload["foreground_action"]["command"])
         self.assertTrue(learning_payload["privacy_boundary"]["raw_rollouts_serialized"] is False)
 
         self.assertEqual(learning_replay.returncode, 2, learning_replay.stderr)
@@ -260,6 +261,15 @@ class AippocampusCliTests(unittest.TestCase):
             status_payload["current_guidance"][0]["review_action"]["id"],
             "review_semantic_guidance_candidate",
         )
+        review_command = status_payload["current_guidance"][0]["review_action"]["command"]
+        guidance_id = status_payload["current_guidance"][0]["guidance_id"]
+        self.assertIn("--guidance-id", review_command)
+        self.assertIn(str(guidance_id), review_command)
+        self.assertNotEqual(review_command, "aippocampus learning guidance --json")
+        materialization_action = status_payload["current_guidance"][0]["materialization_action"]
+        self.assertEqual(materialization_action["target"]["guidance_id"], guidance_id)
+        self.assertEqual(materialization_action["mutation_risk"], "read_only")
+        self.assertEqual(materialization_action["blocked_until"], "reviewed_guidance_has_prepared_row")
         self.assertNotIn("semantic_guidance_lifecycle", status_payload)
         self.assertNotIn("operator_detail", status_payload)
         self.assertEqual(
@@ -328,6 +338,17 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertIn("semantic_guidance", guidance_payload)
         self.assertGreaterEqual(guidance_payload["semantic_guidance"]["guidance_count"], 1)
         self.assertLessEqual(len(guidance_payload["current_guidance"]), 1)
+        targeted_guidance = self.run_cli(
+            "learning",
+            "guidance",
+            "--guidance-id",
+            str(guidance_id),
+            "--json",
+        )
+        self.assertEqual(targeted_guidance.returncode, 0, targeted_guidance.stderr)
+        targeted_payload = json.loads(targeted_guidance.stdout)
+        self.assertEqual(len(targeted_payload["current_guidance"]), 1)
+        self.assertEqual(targeted_payload["current_guidance"][0]["guidance_id"], guidance_id)
         self.assertNotIn("semantic_loop", guidance_payload)
         self.assertNotIn("semantic_guidance_lifecycle", guidance_payload)
         self.assertNotIn("operator_detail", guidance_payload)

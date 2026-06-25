@@ -152,7 +152,12 @@ def _compact_update_action(
             manual_instruction
             or "Open the operator status view for the affected update surface before applying repairs."
         )
-    result.setdefault("mutation_risk", "read_only")
+    result.setdefault(
+        "mutation_risk",
+        update_actions.foreground_command_mutation_risk(
+            result.get("command") or result.get("command_template")
+        ),
+    )
     if "manual_instruction" in result:
         result["manual_instruction"] = compact_text(str(result["manual_instruction"]), 220)
     return {key: value for key, value in result.items() if value not in (None, "")}
@@ -208,6 +213,23 @@ def _dedupe_status_actions(actions: list[dict[str, Any]]) -> list[dict[str, Any]
     return deduped
 
 
+AGENT_CALLABLE_NOT_CHECKED_STATUSES = {
+    "host_live_probe_ok_foreground_probe_not_checked",
+    "host_live_probe_ok_current_thread_unverified", "host_registered_tools_unverified",
+}
+
+
+def _agent_callable_readiness_state(*, ready: bool, status: Any) -> str:
+    if ready:
+        return "verified"
+    status_text = str(status or "")
+    if status_text in AGENT_CALLABLE_NOT_CHECKED_STATUSES:
+        return "not_checked"
+    if status_text in TRUE_FOREGROUND_TOOL_FAILURE_STATUSES:
+        return "failed"
+    return "not_ready"
+
+# aippocampus-stage-map: normalize surfaces -> classify blockers -> choose compact action.
 def compact_agent_status_report(
     report: dict[str, Any],
     *,
@@ -476,7 +498,7 @@ def compact_agent_status_report(
                     else None,
                 )
             )
-    agent_ready = (
+    agent_ready_bool = (
         bool(summary.get("agent_callable_ready"))
         if "agent_callable_ready" in summary
         else bool(agent.get("ready"))
@@ -492,6 +514,22 @@ def compact_agent_status_report(
         else bool(agent.get("ready"))
     )
     agent_status = agent.get("status") or summary.get("agent_callable_status")
+    agent_readiness_state = _agent_callable_readiness_state(
+        ready=agent_ready_bool,
+        status=agent_status,
+    )
+    agent_ready_public: bool | None = (
+        True
+        if agent_readiness_state == "verified"
+        else None
+        if agent_readiness_state == "not_checked"
+        else False
+    )
+    raw_thread_callable = summary.get(
+        "agent_callable_current_thread_callable",
+        agent.get("current_foreground_key_tools_callable"),
+    )
+    agent_thread_callable_public = None if agent_readiness_state == "not_checked" else bool(raw_thread_callable)
     ambient_issue_codes: list[str] = []
     if hook_status not in {"current", "not_checked"}:
         ambient_issue_codes.append(f"hooks:{hook_status}")
@@ -646,9 +684,11 @@ def compact_agent_status_report(
             "product_magic_ready": bool(summary.get("product_magic_ready")),
             "core_blockers": summary.get("core_blockers") or [],
             "magic_blockers": summary.get("magic_blockers") or [],
-            "agent_callable_ready": agent_ready,
+            "agent_callable_ready": agent_ready_public,
+            "agent_callable_readiness_state": agent_readiness_state,
             "agent_callable_host_ready": agent_host_ready,
             "agent_callable_current_thread_visible": agent_thread_visible,
+            "agent_callable_current_thread_callable": agent_thread_callable_public,
             "agent_callable_status": agent_status,
             "plan_surface_filter": summary.get("plan_surface_filter") or [],
             "plan_scope": summary.get("plan_scope") or "all_surfaces",

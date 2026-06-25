@@ -122,6 +122,29 @@ def action_hint_status_command() -> str:
     return "aippocampus hooks action status --json"
 
 
+def foreground_command_mutation_risk(command: Any, *, default: str = "read_only") -> str:
+    """Classify executable foreground commands that update status cards surface.
+
+    Status projections often build a card from a command string after the owner
+    module has lost the original action object. Keep this classifier small and
+    explicit so foreground agents do not learn that local install/cache writes
+    are ordinary read-only probes.
+    """
+
+    lowered = str(command or "").strip().casefold()
+    if not lowered:
+        return default
+    if "hooks action refresh-cache" in lowered and "--write" in lowered:
+        return "explicit_local_cache_write"
+    if "hooks action install" in lowered or "hooks action uninstall" in lowered:
+        return "writes_local_hooks_config"
+    if "plugin install" in lowered:
+        return "writes_local_plugin_cache"
+    if "update apply" in lowered:
+        return "writes_local_install_surface"
+    return default
+
+
 def _extract_command_template(value: str) -> str:
     if "`" in value:
         parts = value.split("`")
@@ -187,8 +210,6 @@ def agent_callable_foreground_action(item: dict[str, Any]) -> dict[str, str]:
     status = str(item.get("status") or "")
     raw_next = str(item.get("next_command") or "")
     if status in {
-        "host_live_probe_ok_foreground_probe_not_checked",
-        "host_live_probe_ok_current_thread_unverified",
         "host_registered_tools_unverified",
     }:
         return {
@@ -203,6 +224,30 @@ def agent_callable_foreground_action(item: dict[str, Any]) -> dict[str, str]:
                 "\"brief sanitized error\"."
             ),
         }
+    if status == "host_live_probe_ok_foreground_probe_not_checked":
+        return {
+            "command": (
+                "aippocampus update status --foreground-tools-visible "
+                "--agent-json"
+            ),
+            "manual_instruction": (
+                "Check this foreground thread: if agent_recall and agent_deepen "
+                "are visible, rerun with --foreground-tools-visible; if a key "
+                "tool fails, use --foreground-key-tool-failure."
+            ),
+        }
+    if status == "host_live_probe_ok_current_thread_unverified":
+        return {
+            "command": (
+                "aippocampus update status --foreground-tools-visible "
+                "--foreground-key-tools-callable --agent-json"
+            ),
+            "manual_instruction": (
+                "MCP tools are visible, but key calls are not checked. Call "
+                "agent_recall and agent_deepen in this foreground thread first; "
+                "if either fails, use --foreground-key-tool-failure."
+            ),
+        }
     if status == "foreground_mcp_runtime_mismatch":
         return {
             "command": 'aippocampus agent recall "old decision or handoff cue" --json',
@@ -214,6 +259,7 @@ def agent_callable_foreground_action(item: dict[str, Any]) -> dict[str, str]:
     if status == "host_live_probe_key_tools_failed":
         return {
             "command": "aippocampus plugin install --codex --verify",
+            "mutation_risk": "writes_local_plugin_cache",
             "manual_instruction": (
                 "Reload Codex Desktop or restart the MCP host after the plugin verify step."
             ),
@@ -311,7 +357,10 @@ def foreground_status_cards(report: dict[str, Any]) -> list[dict[str, Any]]:
                     else "The host probe passed, but this foreground thread has not proved it can see and call the AIppocampus tools."
                 ),
                 "command": action["command"],
-                "mutation_risk": "read_only",
+                "mutation_risk": str(
+                    action.get("mutation_risk")
+                    or foreground_command_mutation_risk(action.get("command"))
+                ),
                 "claim_boundary": "current_thread_tool_probe_not_source_evidence",
                 **(
                     {"manual_instruction": action["manual_instruction"]}
@@ -394,6 +443,11 @@ def foreground_status_cards(report: dict[str, Any]) -> list[dict[str, Any]]:
         foreground_action = (
             raw_foreground_action if isinstance(raw_foreground_action, dict) else {}
         )
+        command = str(
+            foreground_action.get("command")
+            or action_hints.get("next_command")
+            or action_hint_status_command()
+        )
         cards.append(
             {
                 "id": "action_hint_cache" if installed else "action_hint_setup",
@@ -405,13 +459,10 @@ def foreground_status_cards(report: dict[str, Any]) -> list[dict[str, Any]]:
                 "why": (
                     "Action-time hints are recommended setup for trusted Codex sessions, but remain fail-open navigation hints rather than source evidence or a recall blocker."
                 ),
-                "command": str(
-                    foreground_action.get("command")
-                    or action_hints.get("next_command")
-                    or action_hint_status_command()
-                ),
+                "command": command,
                 "mutation_risk": str(
-                    foreground_action.get("mutation_risk") or "read_only"
+                    foreground_action.get("mutation_risk")
+                    or foreground_command_mutation_risk(command)
                 ),
                 "claim_boundary": "action_hints_are_navigation_not_source_evidence",
                 "recommended_next_actions": action_hint_recommended_actions(),

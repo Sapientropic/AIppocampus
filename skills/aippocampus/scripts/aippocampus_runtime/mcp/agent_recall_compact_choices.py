@@ -91,8 +91,9 @@ def repeated_low_distinctiveness_label(
     return core.compact_text(labels.get(token) or token, 80)
 
 
-_CUE_TOKEN_RE = re.compile(r"[\u4e00-\u9fff]{2,}|[A-Za-z0-9][A-Za-z0-9_-]{3,}")
+_CUE_TOKEN_RE = re.compile(r"[\u4e00-\u9fff]{2,}|[A-Za-z0-9][A-Za-z0-9_-]{1,}")
 _ANCHOR_NORMALIZE_RE = re.compile(r"[^0-9A-Za-z\u4e00-\u9fff]+")
+_SHORT_LATIN_ANCHOR_TERMS = {"api", "apw", "ci", "cli", "mcp", "rag", "sdk", "ui", "ux"}
 _LOW_SIGNAL_WORDS = {
     "agent",
     "about",
@@ -162,7 +163,8 @@ def registry_source_search_anchor_query(cue: str | None, *, max_tokens: int = 8)
     for match in _CUE_TOKEN_RE.finditer(raw):
         token = match.group(0)
         key = _ANCHOR_NORMALIZE_RE.sub("", token.casefold())
-        if key in _LOW_SIGNAL_WORDS or key in seen:
+        short_noise = key.isascii() and len(key) < 4 and key not in _SHORT_LATIN_ANCHOR_TERMS
+        if key in _LOW_SIGNAL_WORDS or key in seen or short_noise:
             continue
         seen.add(key)
         tokens.append(token)

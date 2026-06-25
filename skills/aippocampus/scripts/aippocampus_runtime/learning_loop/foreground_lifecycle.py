@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping
 from typing import Any
 
-from aippocampus_runtime.contracts import foreground_shell_action
+from aippocampus_runtime.contracts import foreground_shell_action, shell_quote
 
 
 def preview_cache_bridge_action() -> dict[str, Any]:
@@ -144,9 +144,12 @@ def semantic_guidance_lifecycle(
                     **foreground_shell_action(
                         action_id="review_semantic_guidance_candidate",
                         label="Review semantic guidance candidate",
-                        command="aippocampus learning guidance --json",
+                        command=(
+                            "aippocampus learning guidance "
+                            f"--guidance-id {shell_quote(guidance_id)} --json"
+                        ),
                         why=(
-                            "Review the public-safe semantic candidate and source-ref count "
+                            "Review this public-safe semantic candidate and source-ref count "
                             "before treating it as cache material."
                         ),
                         mutation_risk="read_only",
@@ -156,19 +159,38 @@ def semantic_guidance_lifecycle(
                 },
                 "materialization_action": {
                     **foreground_shell_action(
-                        action_id="prepare_action_hint_cache_after_review",
-                        label="Prepare action-hint cache after review",
-                        command="aippocampus hooks action refresh-cache --write --json",
+                        action_id=(
+                            "prepare_action_hint_cache_after_review"
+                            if prepared_matches or (prepared_count and not prepared_by_id)
+                            else "preview_action_hint_cache_bridge_after_review"
+                        ),
+                        label=(
+                            "Prepare action-hint cache after review"
+                            if prepared_matches or (prepared_count and not prepared_by_id)
+                            else "Preview action-hint cache bridge after review"
+                        ),
+                        command=(
+                            "aippocampus hooks action refresh-cache --write --json"
+                            if prepared_matches or (prepared_count and not prepared_by_id)
+                            else "aippocampus hooks action refresh-cache --json"
+                        ),
                         why=(
                             "Write hot-cache records only after reviewed guidance has a "
                             "prepared source-backed row."
+                            if prepared_matches or (prepared_count and not prepared_by_id)
+                            else "Dry-run the cache bridge; this candidate is not prepared cache input yet."
                         ),
-                        mutation_risk="explicit_local_cache_write",
+                        mutation_risk=(
+                            "explicit_local_cache_write"
+                            if prepared_matches or (prepared_count and not prepared_by_id)
+                            else "read_only"
+                        ),
                         claim_boundary="learning_guidance_not_source_truth",
                     ),
                     "blocked_until": (
                         None if prepared_count else "reviewed_guidance_has_prepared_row"
                     ),
+                    "target": {"guidance_id": guidance_id},
                 },
             }
         )
