@@ -21,6 +21,7 @@ from aippocampus_runtime.mcp import agent_recall_result_projection as result_pro
 from aippocampus_runtime.mcp.compact_profile import strip_compact_foreground_debug_fields
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 from aippocampus_runtime.recall import associative_path_foreground_gate as apw_gate
+from aippocampus_runtime.recall.query_profile import classify_query_profile
 
 
 def _compact_claim_boundary(
@@ -115,6 +116,22 @@ def _opened_route_reopen_action(
     )
     action["claim_boundary"] = "no_claim_before_reopen"
     return action
+
+
+def _source_open_primary_action(action: Mapping[str, Any]) -> bool:
+    action_id = str(action.get("id") or action.get("action_id") or "")
+    if action_id in {
+        "use_opened_route_context",
+        "reopen_already_opened_route_context",
+        "open_registry_search_source_window",
+        "reopen_search_match_source",
+        "use_opened_source_window",
+    }:
+        return True
+    return str(action.get("claim_boundary") or "") in {
+        "source_open_within_opened_context",
+        "source_window_opened_for_claim",
+    }
 
 
 def _recall_miss_recovery_card(status: Any) -> dict[str, Any]:
@@ -342,6 +359,12 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
     ).strip()
     if command_value_needs_input(recovery_cue):
         recovery_cue = ""
+    query_profile = classify_query_profile(recovery_cue) if recovery_cue else {}
+    exact_wording_source_search_requested = recall_choices.exact_wording_source_search_first_intent(
+        recovery_cue,
+        query_profile,
+    )
+    exact_wording_source_search_primary = False
     search_fields = (
         {
             "arguments": {"query": recovery_cue, "max": 5},
@@ -501,6 +524,25 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
         and memory_packets
     ):
         foreground_action = _opened_route_reopen_action(1, recall_selector=recall_selector)
+    if exact_wording_source_search_requested and not _source_open_primary_action(foreground_action):
+        exact_search_action = recall_choices.exact_wording_source_search_action(recovery_cue)
+        if exact_search_action:
+            ordinary_recovery_action = core.strip_empty(
+                normalize_foreground_action(foreground_action),
+                drop_empty_dicts=True,
+            )
+            ordinary_action_id = str(
+                ordinary_recovery_action.get("id")
+                or ordinary_recovery_action.get("action_id")
+                or ""
+            )
+            if (
+                ordinary_recovery_action
+                and ordinary_action_id != "search_registry_sources_for_original_cue_anchors"
+            ):
+                safe_next_actions = [ordinary_recovery_action, *safe_next_actions]
+            foreground_action = exact_search_action
+            exact_wording_source_search_primary = True
     raw_associative_path_fallback = payload.get("associative_path_fallback")
     raw_associative_path_fallback = (
         raw_associative_path_fallback if isinstance(raw_associative_path_fallback, Mapping) else None
@@ -609,18 +651,21 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
             foreground_action["secondary_action"] = associative_policy_action
             if isinstance(associative_path_policy, dict):
                 associative_path_policy["secondary_action"] = associative_policy_action["id"]
-    (
-        foreground_action,
-        safe_next_actions,
-        discussion_atlas_pointer,
-    ) = discussion_projection.maybe_promote_discussion_atlas_action(
-        payload=payload,
-        foreground_action=foreground_action,
-        safe_next_actions=safe_next_actions,
-        status=status,
-        labels_low_specificity=labels_low_specificity,
-        recovery_cue=recovery_cue,
-    )
+    if recall_choices.is_exact_wording_source_search_action(foreground_action):
+        discussion_atlas_pointer = payload.get("discussion_atlas_pointer")
+    else:
+        (
+            foreground_action,
+            safe_next_actions,
+            discussion_atlas_pointer,
+        ) = discussion_projection.maybe_promote_discussion_atlas_action(
+            payload=payload,
+            foreground_action=foreground_action,
+            safe_next_actions=safe_next_actions,
+            status=status,
+            labels_low_specificity=labels_low_specificity,
+            recovery_cue=recovery_cue,
+        )
     repo_familiarity_fallback = recovery_projection.compact_repo_familiarity_fallback_card(
         payload.get("repo_familiarity_fallback")
     )
@@ -658,7 +703,7 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
             displayed_route_count=int(hidden_route_count_fields.get("displayed_route_count") or 0),
         )
     can_use_for = ["next_action_choice"]
-    if not labels_low_specificity:
+    if not labels_low_specificity and not exact_wording_source_search_primary:
         can_use_for.append("route_selection")
     result = {
         "detail": "compact",

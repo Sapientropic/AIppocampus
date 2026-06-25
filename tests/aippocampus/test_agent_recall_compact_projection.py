@@ -347,6 +347,74 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
         self.assertEqual(public["foreground_action"]["arguments"]["discussion"], 2127)
         self.assertIn("/discussions/2127", json.dumps(public, ensure_ascii=False))
 
+    def test_exact_wording_query_prefers_source_search_before_route_or_fallbacks(self) -> None:
+        public = agent_continuity_cli_support.public_recall_projection(
+            {
+                "kind": "aippocampus_agent_continuity_path",
+                "schema_version": "agent-continuity-path-v1",
+                "mode": "recall",
+                "status": "ok",
+                "last_recall_cache_available": True,
+                "recall_selector_id": "sel_exact_wording",
+                "foreground_action_card": {
+                    "decision": "use_route_first",
+                    "canonical_action": {
+                        "action_id": "agent_deepen_selected_route",
+                        "tool_name": "agent_deepen",
+                        "arguments": {"request_index": 1, "recall_selector": "sel_exact_wording"},
+                        "claim_boundary": "no_claim_before_reopen",
+                    },
+                },
+                "memory_packets": [
+                    {
+                        "route_id": "route_generic_benchmark",
+                        "route_topic": "Benchmark claim posture",
+                        "route_kind": "clean_source_route",
+                        "output_mode": "reopenable_route",
+                        "claim_permission": "no_claim_before_reopen",
+                    }
+                ],
+                "discussion_atlas_pointer": {
+                    "kind": "aippocampus_discussion_atlas_navigation_pointer",
+                    "status": "atlas_pointer",
+                    "discussion": 2127,
+                    "title": "Moving Ground",
+                    "url": "https://github.com/Sapientropic/AIppocampus/discussions/2127",
+                    "claim_boundary": "discussion_atlas_navigation_only_until_external_source_opened",
+                },
+                "repo_familiarity_fallback": {
+                    "kind": "aippocampus_repo_familiarity_fallback",
+                    "status": "route_candidate",
+                    "landmark": "Recall facade docs",
+                    "category": "repo_doc",
+                    "first_source_to_reopen": "docs/guides/public-api.md",
+                    "query_anchor_count": 2,
+                    "query_anchor_match_count": 1,
+                    "query_anchor_alignment": "overlap",
+                    "claim_boundary": "repo_familiarity_navigation_only_until_source_opened",
+                },
+            },
+            query="请找一下 开发者真实水平 小号 的原话",
+        )
+
+        action = public["foreground_action"]
+        self.assertEqual(action["id"], "search_registered_sources_for_exact_wording")
+        self.assertEqual(action["tool_name"], "search_memory")
+        self.assertEqual(action["arguments"]["scope"], "all_registered_sources")
+        self.assertEqual(action["arguments"]["query"], "开发者真实水平 小号")
+        assert_command_args(
+            self,
+            action["command"],
+            ["aippocampus", "search", "--all", "开发者真实水平 小号", "--json"],
+        )
+        self.assertEqual(action["claim_boundary"], "source_reopen_required_before_quote")
+        self.assertEqual(public["claim_boundary"]["can_use_for"], ["next_action_choice"])
+        self.assertIn("agent_deepen_selected_route", json.dumps(public["safe_next_actions"]))
+        self.assertNotEqual(action["id"], "open_discussion_atlas_pointer")
+        self.assertNotIn("repo_familiarity_fallback", public)
+        self.assertEqual(executable_command_violations(public), [])
+        assert_compact_frontstage_payload(self, public, max_top_level_diagnostics=2)
+
     def test_repo_familiarity_source_open_command_avoids_bash_only_quote_idiom(self) -> None:
         public = agent_continuity_cli_support.public_recall_projection(
             {

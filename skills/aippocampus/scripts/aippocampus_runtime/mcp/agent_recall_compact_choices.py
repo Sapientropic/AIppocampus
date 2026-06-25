@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from typing import Any
 
 from aippocampus_runtime import core
@@ -12,6 +13,10 @@ from aippocampus_runtime.contracts import (
     shell_quote,
 )
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
+from aippocampus_runtime.recall.prompt_cues import (
+    EXACT_WORDING_TOPIC_TERMS,
+    matched_terms,
+)
 
 
 def _safe_choice_token(value: Any, *, limit: int = 64) -> str:
@@ -111,7 +116,60 @@ _LOW_SIGNAL_WORDS = {
     "sourcebacked",
     "technical",
     "work",
+    "请找一下",
+    "找一下",
+    "查一下",
+    "找找",
+    "查查",
+    "看看",
+    "找回",
+    "找回那句",
+    "找回之前",
+    "你还能找回",
+    "之前",
+    "前面",
+    "刚才",
+    "上次",
+    "那句",
+    "这句",
+    "原话",
+    "原文",
+    "的原话",
+    "的原文",
+    "引用",
+    "证据",
+    "来源",
 }
+
+EXACT_WORDING_SOURCE_SEARCH_ACTION_ID = "search_registered_sources_for_exact_wording"
+_EXACT_SOURCE_SEARCH_FIRST_TERMS = EXACT_WORDING_TOPIC_TERMS | {
+    "verbatim",
+    "exact wording",
+    "original wording",
+    "exact quote",
+    "original quote",
+    "原始措辞",
+    "准确措辞",
+    "逐字",
+}
+
+_EXACT_WORDING_REQUEST_FRAME_REPLACEMENTS = (
+    re.compile(
+        r"(请|麻烦|帮我|能不能|可以)?\s*"
+        r"(找一下|查一下|找找|查查|找回|看看|看一下|想起|想起来|还记得)",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"(之前|前面|刚才|上次|那句|这句|那段|这段|说过|怎么说|怎么表述)",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"(的)?\s*(原话|原文|引用|证据|来源|source-backed evidence|source evidence|"
+        r"clean source|exact wording|original wording|verbatim|exact quote|quote)",
+        re.IGNORECASE,
+    ),
+    re.compile(r"(吗|嘛|呢|吧)[？?]?$", re.IGNORECASE),
+)
 
 
 def distinctive_cue_anchor_gap(cue: str | None, packets: list[dict[str, Any]]) -> bool:
@@ -158,9 +216,10 @@ def registry_source_search_anchor_query(cue: str | None, *, max_tokens: int = 8)
     """
 
     raw = str(redact_sensitive_values(redact_private_paths(str(cue or "").strip())) or "")
+    searchable = _strip_exact_wording_request_frame(raw)
     tokens: list[str] = []
     seen: set[str] = set()
-    for match in _CUE_TOKEN_RE.finditer(raw):
+    for match in _CUE_TOKEN_RE.finditer(searchable or raw):
         token = match.group(0)
         key = _ANCHOR_NORMALIZE_RE.sub("", token.casefold())
         short_noise = key.isascii() and len(key) < 4 and key not in _SHORT_LATIN_ANCHOR_TERMS
@@ -173,6 +232,21 @@ def registry_source_search_anchor_query(cue: str | None, *, max_tokens: int = 8)
     if tokens:
         return " ".join(tokens)
     return core.compact_text(raw, 160)
+
+
+def _strip_exact_wording_request_frame(cue: str) -> str:
+    """Remove request words while preserving the remembered source anchors.
+
+    Exact-wording prompts often contain a useful phrase wrapped in "please find
+    the original wording" language. Searching the wrapper makes the source path
+    feel broken even when the anchors are present locally, so compact recall
+    emits a source-search command for the anchors only.
+    """
+
+    text = str(cue or "")
+    for pattern in _EXACT_WORDING_REQUEST_FRAME_REPLACEMENTS:
+        text = pattern.sub(" ", text)
+    return re.sub(r"\s+", " ", text).strip(" \t\r\n\"'`.,;:!?，。；：！？、()[]{}<>《》")
 
 
 def registry_source_search_fallback_action(cue: str | None) -> dict[str, Any] | None:
@@ -193,6 +267,51 @@ def registry_source_search_fallback_action(cue: str | None) -> dict[str, Any] | 
             "sources for the original cue anchors before asking the user for a brand-new cue."
         ),
     }
+
+
+def exact_wording_source_search_action(cue: str | None) -> dict[str, Any] | None:
+    query = registry_source_search_anchor_query(cue, max_tokens=12)
+    if not query or command_value_needs_input(query):
+        return None
+    return {
+        "id": EXACT_WORDING_SOURCE_SEARCH_ACTION_ID,
+        "label": "Search registered sources for exact wording",
+        "tool_name": "search_memory",
+        "arguments": {"query": query, "scope": "all_registered_sources", "max": 5},
+        "command": f"aippocampus search --all {shell_quote(query)} --json",
+        "search_anchor_query": query,
+        "mutation_risk": "read_only",
+        "claim_boundary": "source_reopen_required_before_quote",
+        "route_choice_posture": "exact_wording_source_search_first",
+        "why": (
+            "The cue asks for original wording; search registered clean sources "
+            "first, then open the matched source before quoting."
+        ),
+    }
+
+
+def is_exact_wording_source_search_action(action: dict[str, Any] | Any) -> bool:
+    if not isinstance(action, dict):
+        return False
+    return str(action.get("id") or action.get("action_id") or "") == EXACT_WORDING_SOURCE_SEARCH_ACTION_ID
+
+
+def exact_wording_source_search_first_intent(
+    cue: str,
+    query_profile: Mapping[str, Any],
+) -> bool:
+    if not cue:
+        return False
+    if not (
+        query_profile.get("profile") == "exact_phrase"
+        and query_profile.get("lane") == "source_text"
+    ):
+        return False
+    # `query_profile` deliberately groups source/evidence and exact wording
+    # requests. Compact recall routing needs a narrower decision: source-backed
+    # discussion or citation requests may still be route/navigation tasks, while
+    # original-wording requests should take the shortest source-search path.
+    return bool(matched_terms(cue, _EXACT_SOURCE_SEARCH_FIRST_TERMS))
 
 
 def route_choice_reason(
@@ -253,16 +372,17 @@ def with_low_specificity_foreground_action(
         for key, value in normalize_foreground_action(secondary).items()
         if value not in (None, "", [])
     }
-    next_action = {
+    tighter_cue_template: dict[str, object] = {
+        "arguments_template": {"query": "{tighter_cue}", "max": 3},
+        "requires": ["tighter_cue"],
+        "template_only": True,
+        "command_template": 'aippocampus agent recall "{tighter_cue}" --json',
+    }
+    next_action: dict[str, object] = {
         "id": "refine_low_specificity_recall_cue",
         "label": "Refine low-specificity recall cue",
         "tool_name": "agent_recall",
-        "tighter_cue_template": {
-            "arguments_template": {"query": "{tighter_cue}", "max": 3},
-            "requires": ["tighter_cue"],
-            "template_only": True,
-            "command_template": 'aippocampus agent recall "{tighter_cue}" --json',
-        },
+        "tighter_cue_template": tighter_cue_template,
         "route_choice_posture": "labels_low_specificity",
         "route_label_specificity_floor": _metric_float(
             metrics,
@@ -285,7 +405,7 @@ def with_low_specificity_foreground_action(
     if repeated_route_label:
         next_action["repeated_route_label"] = repeated_route_label
     clean_cue = str(redact_sensitive_values(redact_private_paths(str(cue or "").strip())) or "")
-    next_action.update(next_action["tighter_cue_template"])
+    next_action.update(tighter_cue_template)
     if clean_cue and not command_value_needs_input(clean_cue):
         next_action["previous_low_specificity_cue"] = clean_cue
         next_action["previous_cue_role"] = "context_only_not_executable"

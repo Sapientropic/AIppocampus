@@ -7,6 +7,9 @@ from typing import Any
 
 from aippocampus_runtime import core
 from aippocampus_runtime.contracts import command_value_needs_input, shell_quote
+from aippocampus_runtime.mcp.agent_recall_compact_choices import (
+    EXACT_WORDING_SOURCE_SEARCH_ACTION_ID,
+)
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 
 DeepenActionBuilder = Callable[..., dict[str, Any]]
@@ -290,6 +293,8 @@ def repo_familiarity_fallback_action(card: Mapping[str, Any] | None) -> dict[str
 
 def repo_familiarity_should_replace_foreground_action(action: Mapping[str, Any]) -> bool:
     action_id = str(action.get("id") or action.get("action_id") or "")
+    if action_id == EXACT_WORDING_SOURCE_SEARCH_ACTION_ID:
+        return False
     if action_id == "deepen_associative_path_fallback":
         return False
     route_posture = str(action.get("route_choice_posture") or "")

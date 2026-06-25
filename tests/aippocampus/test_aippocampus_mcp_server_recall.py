@@ -852,6 +852,121 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
         self.assertNotIn(str(self.cwd), encoded)
         self.assertNotIn("privacy", payload)
 
+    def test_search_memory_all_registered_sources_keeps_duplicate_refs_reopenable_in_full_detail(self) -> None:
+        duplicate_text = "MCP duplicate source ref exact phrase is mirrored."
+        threads = []
+        for index in range(1, 3):
+            registry_clean = self.cwd / f"mcp-duplicate-{index}" / "clean-source"
+            registry_clean.mkdir(parents=True)
+            (registry_clean / "messages.jsonl").write_text(
+                json.dumps(
+                    {
+                        "id": f"msg_duplicate_{index}",
+                        "message_id": f"msg_duplicate_{index}",
+                        "source_line": 20 + index,
+                        "role": "assistant",
+                        "phase": "final_answer",
+                        "turn_index": index,
+                        "is_final": True,
+                        "text": duplicate_text,
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            threads.append(
+                {
+                    "thread_key": f"session:mcp-duplicate-{index}",
+                    "title": f"MCP duplicate {index}",
+                    "paths": {
+                        "clean_source_messages_jsonl": str(registry_clean / "messages.jsonl"),
+                        "sqlite": str(self.cwd / f"missing-mcp-duplicate-{index}.sqlite"),
+                    },
+                }
+            )
+        (self.cwd / "threads.json").write_text(
+            json.dumps({"schema_version": 1, "threads": threads}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+
+        compact_response = mcp.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 3103,
+                "method": "tools/call",
+                "params": {
+                    "name": "search_memory",
+                    "arguments": {
+                        "query": "MCP duplicate source ref exact phrase",
+                        "cwd": str(self.cwd),
+                        "registry_dir": str(self.cwd),
+                        "scope": "all_registered_sources",
+                    },
+                },
+            }
+        )
+        compact_payload = self.tool_payload(compact_response)
+        compact_encoded = json.dumps(compact_payload, ensure_ascii=False)
+
+        self.assertEqual(compact_payload["match_count"], 1)
+        self.assertEqual(compact_payload["source_hits"][0]["source_count"], 2)
+        self.assertNotIn("matches", compact_payload)
+        self.assertNotIn("duplicate_source_refs", compact_encoded)
+
+        full_response = mcp.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 3104,
+                "method": "tools/call",
+                "params": {
+                    "name": "search_memory",
+                    "arguments": {
+                        "query": "MCP duplicate source ref exact phrase",
+                        "cwd": str(self.cwd),
+                        "registry_dir": str(self.cwd),
+                        "scope": "all_registered_sources",
+                        "detail": "full",
+                    },
+                },
+            }
+        )
+        full_payload = self.tool_payload(full_response)
+        duplicate_refs = full_payload["matches"][0]["duplicate_source_refs"]
+
+        self.assertEqual([ref["source_ref_index"] for ref in duplicate_refs], [1, 2])
+        self.assertIn("--thread-key session:mcp-duplicate-2", duplicate_refs[1]["source_window_command"])
+        self.assertIn("--source-ref-index 2", duplicate_refs[1]["last_search_reopen_command"])
+
+        open_response = mcp.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 3105,
+                "method": "tools/call",
+                "params": {
+                    "name": "search_memory",
+                    "arguments": {
+                        "query": "MCP duplicate source ref exact phrase",
+                        "cwd": str(self.cwd),
+                        "registry_dir": str(self.cwd),
+                        "scope": "all_registered_sources",
+                        "open_source": True,
+                        "thread_key": "session:mcp-duplicate-2",
+                        "message_id": "msg_duplicate_2",
+                        "line": 22,
+                        "detail": "full",
+                    },
+                },
+            }
+        )
+        open_payload = self.tool_payload(open_response)
+
+        self.assertEqual(open_payload["kind"], "aippocampus_registry_source_window")
+        self.assertEqual(open_payload["source_boundary"]["authority"], "source_open")
+        self.assertEqual(open_payload["source_route"]["thread_key"], "session:mcp-duplicate-2")
+        self.assertIn(duplicate_text, json.dumps(open_payload["source_window"], ensure_ascii=False))
+        self.assertNotIn(str(self.cwd), json.dumps(open_payload, ensure_ascii=False))
+
     def test_search_memory_all_registered_sources_uses_configured_registry_when_registry_dir_omitted(self) -> None:
         registry_clean = self.cwd / "registry-cwd-thread" / "clean-source"
         registry_clean.mkdir(parents=True)

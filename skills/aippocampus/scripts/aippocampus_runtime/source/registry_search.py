@@ -40,6 +40,11 @@ def add_registry_search_arguments(parser: Any) -> None:
         help="Reopen a numbered registry-wide search hit from the same-machine last search cache.",
     )
     parser.add_argument(
+        "--source-ref-index",
+        type=int,
+        help="With --hit --last-search, reopen a specific collapsed duplicate source ref.",
+    )
+    parser.add_argument(
         "--last-search",
         action="store_true",
         help="With --hit, use the same-machine last registry-wide search cache.",
@@ -65,6 +70,7 @@ def run_registry_search_cli(args: Any, render_human_search_result: Any) -> int:
         result = open_registry_source_window(
             registry_dir=args.registry_dir,
             hit_index=args.hit,
+            source_ref_index=args.source_ref_index,
             use_last_search=bool(args.last_search),
             thread_key=args.thread_key,
             message_id=args.message_id,

@@ -42,6 +42,26 @@ def write_last_registry_search_cache(
     for match in matches:
         raw_route = match.get("source_route")
         route: Mapping[str, Any] = raw_route if isinstance(raw_route, Mapping) else {}
+        duplicate_source_routes = []
+        for ref in match.get("duplicate_source_refs") or []:
+            if not isinstance(ref, Mapping):
+                continue
+            raw_ref_route = ref.get("source_route")
+            ref_route: Mapping[str, Any] = (
+                raw_ref_route if isinstance(raw_ref_route, Mapping) else {}
+            )
+            if not ref_route:
+                continue
+            duplicate_source_routes.append(
+                {
+                    "source_ref_index": ref.get("source_ref_index"),
+                    "source_route": {
+                        key: ref_route.get(key)
+                        for key in ("kind", "thread_key", "message_id", "line", "boundary")
+                        if ref_route.get(key) not in (None, "", [])
+                    },
+                }
+            )
         cache_matches.append(
             {
                 "hit_index": match.get("hit_index"),
@@ -51,11 +71,12 @@ def write_last_registry_search_cache(
                     for key in ("kind", "thread_key", "message_id", "line", "boundary")
                     if route.get(key) not in (None, "", [])
                 },
+                "duplicate_source_routes": duplicate_source_routes,
             }
         )
     payload = {
         "kind": "aippocampus_last_registry_source_search",
-        "schema_version": 1,
+        "schema_version": 2,
         "query_text": compact_text(query_text, 240),
         "match_count": len(cache_matches),
         "matches": cache_matches,
@@ -125,18 +146,28 @@ def _load_last_search_route(
     *,
     registry_dir: str | Path | None,
     hit_index: int | None,
+    source_ref_index: int | None = None,
 ) -> dict[str, Any] | None:
     if not hit_index or hit_index <= 0:
         return None
     path = last_registry_search_cache_path(registry_dir)
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
         return None
     for match in payload.get("matches") or []:
         if not isinstance(match, Mapping):
             continue
         if int(match.get("hit_index") or 0) == int(hit_index):
+            if source_ref_index is not None and int(source_ref_index or 0) > 0:
+                for ref in match.get("duplicate_source_routes") or []:
+                    if not isinstance(ref, Mapping):
+                        continue
+                    if int(ref.get("source_ref_index") or 0) != int(source_ref_index):
+                        continue
+                    route = ref.get("source_route")
+                    return dict(route) if isinstance(route, Mapping) else None
+                return None
             route = match.get("source_route")
             return dict(route) if isinstance(route, Mapping) else None
     return None
@@ -146,6 +177,7 @@ def open_registry_source_window(
     *,
     registry_dir: str | Path | None = None,
     hit_index: int | None = None,
+    source_ref_index: int | None = None,
     use_last_search: bool = False,
     thread_key: str | None = None,
     message_id: str | None = None,
@@ -155,7 +187,11 @@ def open_registry_source_window(
 ) -> dict[str, Any]:
     route: dict[str, Any] = {}
     if use_last_search or hit_index:
-        cached = _load_last_search_route(registry_dir=registry_dir, hit_index=hit_index)
+        cached = _load_last_search_route(
+            registry_dir=registry_dir,
+            hit_index=hit_index,
+            source_ref_index=source_ref_index,
+        )
         if not cached:
             return _source_open_recovery(
                 code="last_registry_search_unavailable",

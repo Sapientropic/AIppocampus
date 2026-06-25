@@ -27,7 +27,7 @@ from aippocampus_runtime.core import compact_text
 from aippocampus_runtime.ops.route_readiness import safe_source_refs
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 from aippocampus_runtime.recall.continuity_domain_cue_quality import (
-    foreground_continuity_domain_cue_quality,
+    foreground_continuity_domain_candidate_quality,
 )
 from aippocampus_runtime.recall.continuity_domain_producer import (
     DEFAULT_CONTINUITY_DOMAIN_PREVIEW_CANDIDATE_BUDGET,
@@ -493,13 +493,10 @@ def _foreground_activation_cues(raw_cues: Any) -> tuple[list[str], bool]:
 
 
 def _best_foreground_cue(cues: list[str], fallback_title: str) -> tuple[str, str, str]:
-    for cue in [*cues, fallback_title]:
-        quality, reason = foreground_continuity_domain_cue_quality(cue)
-        if quality == "actionable":
-            return compact_text(str(cue), 80), quality, reason
-    first = cues[0] if cues else fallback_title
-    quality, reason = foreground_continuity_domain_cue_quality(first)
-    return compact_text(str(first), 80), quality, reason
+    return foreground_continuity_domain_candidate_quality(
+        title=fallback_title,
+        cues=cues,
+    )
 
 
 def _producer_candidate_previews(payload: MappingPayload) -> list[MappingPayload]:
