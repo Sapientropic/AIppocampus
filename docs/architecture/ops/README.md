@@ -13,6 +13,7 @@ leave this folder and use
 
 | File | Kind | Status | Reader route |
 | --- | --- | --- | --- |
+| [agent-domain-hazards.md](agent-domain-hazards.md) | Verification aid | Current starter cards | Use before changing agent-prone surfaces where recurring failures come from missed domain hazards rather than ordinary syntax or unit-test gaps. |
 | [compatibility-shim-inventory.md](compatibility-shim-inventory.md) | Inventory | Current maintenance owner | Use before changing fallback env/path names or deleting compatibility shims. |
 | [encrypted-sync-v1.md](encrypted-sync-v1.md) | Contract/design | Current Stage 3 boundary | Use before enabling raw sync or claiming encrypted transfer readiness. |
 | [encrypted-sync-v2.md](encrypted-sync-v2.md) | Design | Forward-looking | Use for recovery, conflict, revocation, and migration design; do not cite as shipped behavior. |

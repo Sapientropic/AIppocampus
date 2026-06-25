@@ -296,16 +296,30 @@ class ChangedSurfaceTestPlanTests(unittest.TestCase):
         with (
             mock.patch.object(test_plan, "_local_python_version_parts", return_value=(3, 12, 9)),
             mock.patch.object(test_plan, "canonical_ci_python_version", return_value="3.12"),
+            mock.patch.object(test_plan, "find_python_for_minor", return_value=["py", "-3.12"]),
         ):
             payload = test_plan.build_test_plan(["tools/aippocampus/test_plan.py"])
 
         self.assertTrue(payload["python_environment"]["minor_matches_ci"])
         self.assertEqual(payload["warnings"], [])
 
+    def test_python_minor_mismatch_is_quiet_when_ci_minor_runtime_is_available(self) -> None:
+        with (
+            mock.patch.object(test_plan, "_local_python_version_parts", return_value=(3, 13, 1)),
+            mock.patch.object(test_plan, "canonical_ci_python_version", return_value="3.12"),
+            mock.patch.object(test_plan, "find_python_for_minor", return_value=["py", "-3.12"]),
+        ):
+            payload = test_plan.build_test_plan(["tools/aippocampus/test_plan.py"])
+
+        self.assertFalse(payload["python_environment"]["minor_matches_ci"])
+        self.assertTrue(payload["python_environment"]["canonical_ci_python_available"])
+        self.assertEqual(payload["warnings"], [])
+
     def test_python_minor_mismatch_warns_without_adding_matrix_gate(self) -> None:
         with (
             mock.patch.object(test_plan, "_local_python_version_parts", return_value=(3, 13, 1)),
             mock.patch.object(test_plan, "canonical_ci_python_version", return_value="3.12"),
+            mock.patch.object(test_plan, "find_python_for_minor", return_value=None),
         ):
             payload = test_plan.build_test_plan(["tools/aippocampus/test_plan.py"])
 
