@@ -116,7 +116,10 @@ def _no_match_warning_line(warning: Mapping[str, Any]) -> str:
 
 
 def render_human_search_result(result: dict[str, Any]) -> str:
-    if result.get("kind") == "aippocampus_current_thread_source_window":
+    if result.get("kind") in {
+        "aippocampus_current_thread_source_window",
+        "aippocampus_last_recall_source_window",
+    }:
         return render_current_source_window_text(
             result, snippet_chars=DEFAULT_HUMAN_SNIPPET_CHARS
         )

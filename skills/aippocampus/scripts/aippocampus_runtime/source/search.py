@@ -312,6 +312,17 @@ the reopened source boundary.""",
         help="Open a bounded source window from the current thread clean-source directory.",
     )
     args = parser.parse_args(argv)
+    if args.open_source and args.from_last_recall:
+        if args.hit or args.last_search or args.registry_search or args.thread_key:
+            parser.error(
+                "--from-last-recall --open-source cannot be combined with registry source-window options"
+            )
+        if args.patterns:
+            parser.error("--from-last-recall --open-source does not take search patterns")
+        from importlib import import_module
+
+        module = import_module("aippocampus_runtime.source.last_recall_source_window")
+        return int(module.run_last_recall_source_window_cli(args))
     if args.open_current_source:
         if args.open_source or args.hit or args.last_search or args.registry_search:
             parser.error("--open-current-source cannot be combined with registry source-window options")

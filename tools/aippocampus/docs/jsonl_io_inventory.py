@@ -7,6 +7,18 @@ from typing import Iterable
 
 DIRECT_JSONL_APPROVED_OWNER_PATHS = {
     "skills/aippocampus/scripts/aippocampus_runtime/source/io_kernel.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/update/plugin_installer.py",
+}
+DIRECT_JSONL_APPROVED_OWNER_REASONS = {
+    "skills/aippocampus/scripts/aippocampus_runtime/source/io_kernel.py": (
+        "source_jsonl_loss_accounting_owner"
+    ),
+    # Codex app-server stdio is a request/response NDJSON protocol, not
+    # source JSONL. The installer owns request-id matching, protocol noise,
+    # and timeout accounting for this host boundary.
+    "skills/aippocampus/scripts/aippocampus_runtime/update/plugin_installer.py": (
+        "codex_app_server_ndjson_protocol_owner"
+    ),
 }
 
 
@@ -50,6 +62,10 @@ def is_approved_direct_jsonl_owner(rel_path: str) -> bool:
     return rel_path in DIRECT_JSONL_APPROVED_OWNER_PATHS
 
 
+def direct_jsonl_owner_classification(rel_path: str) -> str | None:
+    return DIRECT_JSONL_APPROVED_OWNER_REASONS.get(rel_path)
+
+
 def direct_jsonl_parse_sites_for_path(
     path: Path,
     *,
@@ -69,6 +85,7 @@ def direct_jsonl_parse_sites_for_path(
             continue
         approved = is_approved_direct_jsonl_owner(rel_path)
         runtime = is_runtime_path(rel_path)
+        owner_classification = direct_jsonl_owner_classification(rel_path)
         sites.append(
             {
                 "path": rel_path,
@@ -77,12 +94,13 @@ def direct_jsonl_parse_sites_for_path(
                 "approved_owner": approved,
                 "runtime_path": runtime,
                 "classification": (
-                    "approved_owner"
+                    owner_classification
                     if approved
                     else "unapproved_runtime"
                     if runtime
                     else "non_runtime_line_json"
                 ),
+                "approved_owner_reason": owner_classification,
             }
         )
     return sites

@@ -282,5 +282,105 @@ class RegistrySourceSearchUsefulnessTests(unittest.TestCase):
             "open_registry_search_source_window",
         )
 
+    def test_deep_search_ranks_exact_hit_after_public_snippet_cutoff_first(self) -> None:
+        exact_clean = self.root / "exact-clean"
+        partial_clean = self.root / "partial-clean"
+        exact_clean.mkdir()
+        partial_clean.mkdir()
+        exact_phrase = "scarlet walnut cicada"
+        long_prefix = "prefix filler " * 18
+        long_suffix = " suffix filler" * 18
+        (exact_clean / "messages.jsonl").write_text(
+            json.dumps(
+                {
+                    "id": "msg_exact_late",
+                    "message_id": "msg_exact_late",
+                    "source_line": 31,
+                    "role": "assistant",
+                    "phase": "final_answer",
+                    "is_final": True,
+                    "text": f"{long_prefix}{exact_phrase}{long_suffix}",
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (partial_clean / "messages.jsonl").write_text(
+            json.dumps(
+                {
+                    "id": "msg_partial_loud",
+                    "message_id": "msg_partial_loud",
+                    "source_line": 9,
+                    "role": "assistant",
+                    "phase": "final_answer",
+                    "is_final": True,
+                    "text": (
+                        "scarlet scarlet scarlet walnut walnut walnut "
+                        "nearby topic text without the requested adjacent phrase"
+                    ),
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (self.root / "threads.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "threads": [
+                        {
+                            "thread_key": "session:partial",
+                            "title": "partial topic",
+                            "paths": {
+                                "clean_source_messages_jsonl": str(
+                                    partial_clean / "messages.jsonl"
+                                )
+                            },
+                        },
+                        {
+                            "thread_key": "session:exact",
+                            "title": "exact late source",
+                            "paths": {
+                                "clean_source_messages_jsonl": str(
+                                    exact_clean / "messages.jsonl"
+                                )
+                            },
+                        },
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        result = source_registry_search.search_registry_sources(
+            [exact_phrase],
+            registry_dir=self.root,
+            cwd=self.root,
+            search_budget="deep",
+            record_last_search=True,
+            limit=10,
+        )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["matches"][0]["message_id"], "msg_exact_late")
+        self.assertNotIn("_ranking_haystack", json.dumps(result, ensure_ascii=False))
+        diagnostics = result["match_evidence_diagnostics"]
+        self.assertEqual(diagnostics["exact_phrase_preserved_by_internal_context_count"], 1)
+
+        reopened = source_registry_search.open_registry_source_window(
+            registry_dir=self.root,
+            hit_index=1,
+            use_last_search=True,
+        )
+
+        self.assertTrue(reopened["ok"])
+        self.assertIn(
+            exact_phrase,
+            json.dumps(reopened["source_window"], ensure_ascii=False),
+        )
+
 if __name__ == "__main__":
     unittest.main()

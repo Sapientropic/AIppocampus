@@ -107,11 +107,27 @@ INSTRUCTION_SURFACE_CLASSIFIED_FILES = {
             "delegate compact/detail cleanup to the shared profile layer"
         ),
     },
+    "skills/aippocampus/scripts/aippocampus_runtime/mcp/tool_catalog.py": {
+        "classification": "mcp_tool_catalog_schema_owner",
+        "owner": "#2716/#2651",
+        "why": (
+            "owns MCP tool descriptions and schemas; any source-open parameter "
+            "claim must be backed by handler tests and compact/detail projection"
+        ),
+    },
     "skills/aippocampus/scripts/aippocampus_runtime/recall/agent_continuity.py": {
         "classification": "runtime_prompt_and_route_owner",
         "owner": "#2636/#2651",
         "why": (
             "owns recall route/action selection text that later projections render"
+        ),
+    },
+    "skills/aippocampus/scripts/aippocampus_runtime/recall/foreground_action_card.py": {
+        "classification": "recall_foreground_action_card_owner",
+        "owner": "#2716/#2651",
+        "why": (
+            "owns compact recall next-action wording; route proof must stay in "
+            "search/open follow-through rather than foreground diagnostics"
         ),
     },
     "skills/aippocampus/scripts/aippocampus_runtime/recall/active_path_packet.py": {
@@ -290,12 +306,44 @@ INSTRUCTION_SURFACE_CLASSIFIED_FILES = {
             "state must drive actions instead of generic familiarity fallbacks"
         ),
     },
+    "skills/aippocampus/scripts/aippocampus_runtime/source/registry_search_duplicates.py": {
+        "classification": "registry_search_match_projection_owner",
+        "owner": "#2715/#2651",
+        "why": (
+            "owns duplicate/usefulness projection cleanup; private ranking "
+            "haystacks may affect ordering but must be stripped from public output"
+        ),
+    },
     "skills/aippocampus/scripts/aippocampus_runtime/source/last_recall_recovery.py": {
         "classification": "last_recall_recovery_action_owner",
         "owner": "#2665/#2651",
         "why": (
             "owns invalid-selector recovery actions for last-recall source search; "
             "fallback commands must stay explicit and non-mutating"
+        ),
+    },
+    "skills/aippocampus/scripts/aippocampus_runtime/source/last_recall_actions.py": {
+        "classification": "last_recall_foreground_action_owner",
+        "owner": "#2716/#2651",
+        "why": (
+            "owns last-recall search/open action text; fallback deepen actions "
+            "must never be presented as exact source-open proof"
+        ),
+    },
+    "skills/aippocampus/scripts/aippocampus_runtime/source/search.py": {
+        "classification": "clean_source_search_cli_owner",
+        "owner": "#2715/#2716/#2651",
+        "why": (
+            "owns source-search CLI argument and help text; foreground commands "
+            "must execute exact source-open follow-through without path leakage"
+        ),
+    },
+    "skills/aippocampus/scripts/aippocampus_runtime/source/search_output.py": {
+        "classification": "clean_source_search_output_owner",
+        "owner": "#2715/#2716/#2651",
+        "why": (
+            "owns human search/open rendering; source-open proof remains in the "
+            "opened window and detail payload rather than compact debug fields"
         ),
     },
     "skills/aippocampus/scripts/aippocampus_runtime/subconscious/scheduler.py": {
@@ -376,6 +424,15 @@ INSTRUCTION_SURFACE_CLASSIFIED_FILES = {
         "why": (
             "owns update/readiness foreground action cards and mutation-risk labels "
             "for CLI and MCP follow-through"
+        ),
+    },
+    "skills/aippocampus/scripts/aippocampus_runtime/update/plugin_installer.py": {
+        "classification": "plugin_install_host_probe_owner",
+        "owner": "#2715/#2716/#2669/#2651",
+        "why": (
+            "owns plugin install, rollback, and Codex host-probe user-facing text; "
+            "host proof stays in structured probe payloads and reports rather than "
+            "compact foreground copy"
         ),
     },
     "tests/aippocampus/frontstage_assertions.py": {

@@ -358,6 +358,33 @@ class ArchitectureBoundaryTests(unittest.TestCase):
             1,
         )
 
+        # Keep this as a synthetic negative example. Real owner files become
+        # classified over time, and using one of them here turns the guard into
+        # a brittle snapshot of yesterday's architecture map.
+        unclassified_path = (
+            REPO_ROOT
+            / "skills"
+            / "aippocampus"
+            / "scripts"
+            / "aippocampus_runtime"
+            / "mcp"
+            / "_tmp_unclassified_instruction_surface_probe.py"
+        )
+        unclassified_rel = unclassified_path.relative_to(REPO_ROOT).as_posix()
+        unclassified_path.write_text(
+            "\n".join(
+                [
+                    '"""Temporary probe: agents must open source evidence before claims."""',
+                    'PROMPT_ONE = "Foreground output should stay compact and avoid operator diagnostic proof."',
+                    'PROMPT_TWO = "Detail output should preserve diagnostic evidence for verification."',
+                    'PROMPT_THREE = "Source-backed claims must follow the reopen route before use."',
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        self.addCleanup(lambda: unclassified_path.unlink(missing_ok=True))
+
         unclassified = subprocess.run(
             [
                 sys.executable,
@@ -365,7 +392,7 @@ class ArchitectureBoundaryTests(unittest.TestCase):
                 "--changed-surface-only",
                 "--json",
                 "--changed-file",
-                "skills/aippocampus/scripts/aippocampus_runtime/mcp/tool_catalog.py",
+                unclassified_rel,
             ],
             text=True,
             encoding="utf-8",

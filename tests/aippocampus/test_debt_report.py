@@ -310,6 +310,15 @@ class DebtReportTests(unittest.TestCase):
                 / "recall"
                 / "local_jsonl_parser.py"
             )
+            host_protocol_owner = (
+                root
+                / "skills"
+                / "aippocampus"
+                / "scripts"
+                / "aippocampus_runtime"
+                / "update"
+                / "plugin_installer.py"
+            )
             ordinary = (
                 root
                 / "skills"
@@ -319,10 +328,14 @@ class DebtReportTests(unittest.TestCase):
                 / "recall"
                 / "json_config.py"
             )
-            for path in (approved, bad, ordinary):
+            for path in (approved, bad, host_protocol_owner, ordinary):
                 path.parent.mkdir(parents=True, exist_ok=True)
             approved.write_text("import json\n\ndef parse(line):\n    return json.loads(line)\n", encoding="utf-8")
             bad.write_text("import json\n\ndef parse(line):\n    return json.loads(line)\n", encoding="utf-8")
+            host_protocol_owner.write_text(
+                "import json\n\ndef parse(line):\n    return json.loads(line)\n",
+                encoding="utf-8",
+            )
             ordinary.write_text(
                 "import json\n\ndef parse(path):\n    return json.loads(path.read_text())\n",
                 encoding="utf-8",
@@ -351,11 +364,22 @@ class DebtReportTests(unittest.TestCase):
 
         sites = inventory["sites"]
         by_path = {item["path"]: item for item in sites}
-        self.assertEqual(inventory["summary"]["line_json_parse_site_count"], 2)
+        self.assertEqual(inventory["summary"]["line_json_parse_site_count"], 3)
         self.assertTrue(
             by_path[
                 "skills/aippocampus/scripts/aippocampus_runtime/source/io_kernel.py"
             ]["approved_owner"]
+        )
+        self.assertTrue(
+            by_path[
+                "skills/aippocampus/scripts/aippocampus_runtime/update/plugin_installer.py"
+            ]["approved_owner"]
+        )
+        self.assertEqual(
+            by_path[
+                "skills/aippocampus/scripts/aippocampus_runtime/update/plugin_installer.py"
+            ]["classification"],
+            "codex_app_server_ndjson_protocol_owner",
         )
         self.assertEqual(
             by_path[
