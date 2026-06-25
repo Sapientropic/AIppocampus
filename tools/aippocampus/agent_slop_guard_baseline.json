@@ -827,6 +827,171 @@
       "fingerprint": "field_only_followthrough_test:tests/aippocampus/test_source_evidence_recall_eval.py:195:payload field assertions lack deepen/open/source follow-through.",
       "owner_issue": "#2699",
       "reason": "historical compatibility-field or field-only-test debt"
+    },
+    {
+      "fingerprint": "local_lock_owner_bypass:skills/aippocampus/scripts/aippocampus_runtime/hooks/skip_telemetry.py:188:os.O_EXCL lock copy bypasses the local-lock owner helpers.",
+      "owner_issue": "#2681",
+      "reason": "historical local-lock owner-bypass debt"
+    },
+    {
+      "fingerprint": "compact_projector_bypass:skills/aippocampus/scripts/aippocampus_runtime/mcp/tool_handlers.py:397:text_result(public_payload(...)) bypasses compact/detail projection.",
+      "owner_issue": "#2696",
+      "reason": "historical MCP compact projector migration debt"
+    },
+    {
+      "fingerprint": "compact_projector_bypass:skills/aippocampus/scripts/aippocampus_runtime/mcp/tool_handlers.py:402:text_result(public_payload(...)) bypasses compact/detail projection.",
+      "owner_issue": "#2696",
+      "reason": "historical MCP compact projector migration debt"
+    },
+    {
+      "fingerprint": "compact_projector_bypass:skills/aippocampus/scripts/aippocampus_runtime/mcp/tool_handlers.py:456:text_result(public_payload(...)) bypasses compact/detail projection.",
+      "owner_issue": "#2696",
+      "reason": "historical MCP compact projector migration debt"
+    },
+    {
+      "fingerprint": "compact_projector_bypass:skills/aippocampus/scripts/aippocampus_runtime/mcp/tool_handlers.py:477:text_result(public_payload(...)) bypasses compact/detail projection.",
+      "owner_issue": "#2696",
+      "reason": "historical MCP compact projector migration debt"
+    },
+    {
+      "fingerprint": "compact_projector_bypass:skills/aippocampus/scripts/aippocampus_runtime/mcp/tool_handlers.py:478:text_result(public_payload(...)) bypasses compact/detail projection.",
+      "owner_issue": "#2696",
+      "reason": "historical MCP compact projector migration debt"
+    },
+    {
+      "fingerprint": "compact_projector_bypass:skills/aippocampus/scripts/aippocampus_runtime/mcp/tool_handlers.py:577:text_result(public_payload(...)) bypasses compact/detail projection.",
+      "owner_issue": "#2696",
+      "reason": "historical MCP compact projector migration debt"
+    },
+    {
+      "fingerprint": "compact_projector_bypass:skills/aippocampus/scripts/aippocampus_runtime/mcp/tool_handlers.py:591:text_result(public_payload(...)) bypasses compact/detail projection.",
+      "owner_issue": "#2696",
+      "reason": "historical MCP compact projector migration debt"
+    },
+    {
+      "fingerprint": "compact_projector_bypass:skills/aippocampus/scripts/aippocampus_runtime/mcp/tool_handlers.py:841:text_result(public_payload(...)) bypasses compact/detail projection.",
+      "owner_issue": "#2696",
+      "reason": "historical MCP compact projector migration debt"
+    },
+    {
+      "fingerprint": "compact_projector_bypass:skills/aippocampus/scripts/aippocampus_runtime/mcp/tool_handlers.py:863:text_result(public_payload(...)) bypasses compact/detail projection.",
+      "owner_issue": "#2696",
+      "reason": "historical MCP compact projector migration debt"
+    },
+    {
+      "fingerprint": "compact_projector_bypass:skills/aippocampus/scripts/aippocampus_runtime/mcp/tool_handlers.py:866:text_result(public_payload(...)) bypasses compact/detail projection.",
+      "owner_issue": "#2696",
+      "reason": "historical MCP compact projector migration debt"
+    },
+    {
+      "fingerprint": "compact_projector_bypass:skills/aippocampus/scripts/aippocampus_runtime/mcp/tool_handlers.py:961:text_result(public_payload(...)) bypasses compact/detail projection.",
+      "owner_issue": "#2696",
+      "reason": "historical MCP compact projector migration debt"
+    },
+    {
+      "fingerprint": "compact_projector_bypass:skills/aippocampus/scripts/aippocampus_runtime/mcp/tool_handlers.py:1012:text_result(public_payload(...)) bypasses compact/detail projection.",
+      "owner_issue": "#2696",
+      "reason": "historical MCP compact projector migration debt"
+    },
+    {
+      "fingerprint": "compact_projector_bypass:skills/aippocampus/scripts/aippocampus_runtime/mcp/tool_handlers.py:1076:text_result(public_payload(...)) bypasses compact/detail projection.",
+      "owner_issue": "#2696",
+      "reason": "historical MCP compact projector migration debt"
+    },
+    {
+      "fingerprint": "compact_projector_bypass:skills/aippocampus/scripts/aippocampus_runtime/mcp/tool_handlers.py:1083:text_result(public_payload(...)) bypasses compact/detail projection.",
+      "owner_issue": "#2696",
+      "reason": "historical MCP compact projector migration debt"
+    },
+    {
+      "fingerprint": "compact_projector_bypass:skills/aippocampus/scripts/aippocampus_runtime/mcp/tool_handlers.py:1094:text_result(public_payload(...)) bypasses compact/detail projection.",
+      "owner_issue": "#2696",
+      "reason": "historical MCP compact projector migration debt"
+    },
+    {
+      "fingerprint": "compact_projector_bypass:skills/aippocampus/scripts/aippocampus_runtime/mcp/tool_handlers.py:1098:text_result(public_payload(...)) bypasses compact/detail projection.",
+      "owner_issue": "#2696",
+      "reason": "historical MCP compact projector migration debt"
+    },
+    {
+      "fingerprint": "compact_projector_bypass:skills/aippocampus/scripts/aippocampus_runtime/mcp/tool_handlers.py:1143:text_result(public_payload(...)) bypasses compact/detail projection.",
+      "owner_issue": "#2696",
+      "reason": "historical MCP compact projector migration debt"
+    },
+    {
+      "fingerprint": "compact_projector_bypass:skills/aippocampus/scripts/aippocampus_runtime/mcp/tool_handlers.py:1172:text_result(public_payload(...)) bypasses compact/detail projection.",
+      "owner_issue": "#2696",
+      "reason": "historical MCP compact projector migration debt"
+    },
+    {
+      "fingerprint": "performance_hot_path_loop_materialization:skills/aippocampus/scripts/aippocampus_runtime/navigation/attention_evidence_packager.py:178:loop_materialization:sorted(_mappings get window span_candidates) inside span sorted _mappings _span_rank get window span_candidates",
+      "owner_issue": "#2707",
+      "reason": "historical performance hot-path owner debt"
+    },
+    {
+      "fingerprint": "performance_hot_path_loop_materialization:skills/aippocampus/scripts/aippocampus_runtime/navigation/cognitive_map_overview.py:85:loop_materialization:sorted(rows ) inside label rows items clusters_by_label ",
+      "owner_issue": "#2707",
+      "reason": "historical performance hot-path owner debt"
+    },
+    {
+      "fingerprint": "performance_hot_path_loop_materialization:skills/aippocampus/scripts/aippocampus_runtime/navigation/cognitive_map_query.py:228:loop_materialization:list(get route query_terms) inside region _safe_rows get cognitive_map regions",
+      "owner_issue": "#2707",
+      "reason": "historical performance hot-path owner debt"
+    },
+    {
+      "fingerprint": "performance_hot_path_repeated_db_work:skills/aippocampus/scripts/aippocampus_runtime/navigation/concept_lifecycle.py:211:loop_db_work:con.execute inside row fetchall execute con \n        select edge_type, status, lifecycle_reason, count(*) as count\n        from concept_edges\n        where status in ('parked', 'retired')\n        group by edge_type, status, lifecycle_reason\n        ",
+      "owner_issue": "#2706",
+      "reason": "historical performance hot-path owner debt"
+    },
+    {
+      "fingerprint": "performance_hot_path_loop_materialization:skills/aippocampus/scripts/aippocampus_runtime/recall/prompt_cues.py:72:loop_materialization:sorted(terms ) inside term sorted terms len ",
+      "owner_issue": "#2707",
+      "reason": "historical performance hot-path owner debt"
+    },
+    {
+      "fingerprint": "performance_hot_path_loop_materialization:skills/aippocampus/scripts/aippocampus_runtime/recall/prompt_recall_core.py:212:loop_materialization:list(get existing matched_terms) inside source get match threads",
+      "owner_issue": "#2707",
+      "reason": "historical performance hot-path owner debt"
+    },
+    {
+      "fingerprint": "performance_hot_path_loop_materialization:skills/aippocampus/scripts/aippocampus_runtime/recall/prompt_recall_core.py:213:loop_materialization:list(get match matched_terms) inside source get match threads",
+      "owner_issue": "#2707",
+      "reason": "historical performance hot-path owner debt"
+    },
+    {
+      "fingerprint": "performance_hot_path_loop_materialization:skills/aippocampus/scripts/aippocampus_runtime/recall/prompt_recall_core.py:220:loop_materialization:list(get item matched_terms) inside source get match threads",
+      "owner_issue": "#2707",
+      "reason": "historical performance hot-path owner debt"
+    },
+    {
+      "fingerprint": "performance_hot_path_loop_materialization:skills/aippocampus/scripts/aippocampus_runtime/recall/prompt_recall_core.py:221:loop_materialization:list(get match matched_terms) inside source get match threads",
+      "owner_issue": "#2707",
+      "reason": "historical performance hot-path owner debt"
+    },
+    {
+      "fingerprint": "performance_hot_path_loop_materialization:skills/aippocampus/scripts/aippocampus_runtime/recall/prompt_recall_core.py:444:loop_materialization:list(get existing matched_terms) inside thread_key get match thread_keys",
+      "owner_issue": "#2707",
+      "reason": "historical performance hot-path owner debt"
+    },
+    {
+      "fingerprint": "performance_hot_path_loop_materialization:skills/aippocampus/scripts/aippocampus_runtime/recall/prompt_recall_core.py:450:loop_materialization:list(get item matched_terms) inside thread_key get match thread_keys",
+      "owner_issue": "#2707",
+      "reason": "historical performance hot-path owner debt"
+    },
+    {
+      "fingerprint": "performance_hot_path_loop_materialization:skills/aippocampus/scripts/aippocampus_runtime/recall/prompt_recall_hot_path.py:111:loop_materialization:list(get item matched_terms) inside thread_key get hot_path candidate_ids",
+      "owner_issue": "#2707",
+      "reason": "historical performance hot-path owner debt"
+    },
+    {
+      "fingerprint": "local_lock_owner_bypass:skills/aippocampus/scripts/aippocampus_runtime/recall/semantic_result_cache.py:53:os.O_EXCL lock copy bypasses the local-lock owner helpers.",
+      "owner_issue": "#2681",
+      "reason": "historical local-lock owner-bypass debt"
+    },
+    {
+      "fingerprint": "local_lock_owner_bypass:skills/aippocampus/scripts/aippocampus_runtime/subconscious/scheduler_lock.py:28:os.O_EXCL lock copy bypasses the local-lock owner helpers.",
+      "owner_issue": "#2681",
+      "reason": "historical local-lock owner-bypass debt"
     }
   ]
 }

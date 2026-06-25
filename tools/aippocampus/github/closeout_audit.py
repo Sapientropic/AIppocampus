@@ -158,8 +158,29 @@ RECALL_FOLLOWTHROUGH_FAMILY_RE = re.compile(
     r")\b",
     re.I,
 )
+GUARD_TOOLING_LABELS = {"readiness:guard-tooling"}
+GUARD_TOOLING_FAMILY_RE = re.compile(
+    r"\b("
+    r"agent[-_ ]slop|owner[-_ ]layer|owner[-_ ]contract|import/ownership|"
+    r"guard[-_ ]tooling|red[- ]light|changed[-_ ]surface guard|"
+    r"central owner helper"
+    r")\b",
+    re.I,
+)
 COMPACT_DETAIL_FAMILY_RE = re.compile(
     r"\b(compact|detail|foreground projection|foreground surface|projection)\b",
+    re.I,
+)
+GUARD_CONTRACT_LIST_EVIDENCE_RE = re.compile(
+    r"\b("
+    r"contract list|owner[-_ ]layer contracts?|runtime owner[-_ ]layer contracts?|"
+    r"agent[-_ ]slop guard report"
+    r")\b|\bMCP projection\b.{0,180}\bsource IO\b.{0,180}\bregistry\b.{0,180}\block\b",
+    re.I | re.S,
+)
+GUARD_COMMAND_EVIDENCE_RE = re.compile(
+    r"\bpython\s+tools[/\\]aippocampus[/\\]"
+    r"(?:agent_slop_guard|docs[/\\]debt_report|run_tests)\.py\b",
     re.I,
 )
 CLEANUP_DEBT_FAMILY_RE = re.compile(
@@ -667,6 +688,25 @@ def _issue_family_text(
     return issue_intent
 
 
+def _label_names(value: Any) -> set[str]:
+    names: set[str] = set()
+    for item in _node_list(value):
+        if isinstance(item, Mapping):
+            name = item.get("name")
+        else:
+            name = item
+        if isinstance(name, str) and name.strip():
+            names.add(name.strip().casefold())
+    return names
+
+
+def _is_guard_tooling_issue(metadata: Mapping[str, Any], text: str) -> bool:
+    labels = _label_names(metadata.get("labels"))
+    if labels:
+        return bool(labels & GUARD_TOOLING_LABELS)
+    return bool(GUARD_TOOLING_FAMILY_RE.search(text))
+
+
 def _high_risk_families_for_text(text: str) -> list[str]:
     families: list[str] = []
     if RECALL_FOLLOWTHROUGH_FAMILY_RE.search(text):
@@ -691,7 +731,16 @@ def _high_risk_issue_families(
     families: dict[str, list[str]] = {}
     for issue in closing_issues:
         issue_text = _issue_family_text(issue=issue, body=body, issue_metadata=issue_metadata)
-        issue_families = _high_risk_families_for_text(issue_text)
+        metadata = issue_metadata.get(issue) or {}
+        if _is_guard_tooling_issue(metadata, issue_text):
+            # Guard-tooling issues often name the runtime surfaces they protect
+            # (MCP, source-open, compact projection) without changing those
+            # product paths. Treat them as owner-contract closeouts so agents do
+            # not satisfy a tooling acceptance gate by dumping runtime proof
+            # material into the foreground PR text.
+            issue_families = ["guard_tooling_contract"]
+        else:
+            issue_families = _high_risk_families_for_text(issue_text)
         if issue_families:
             families[str(issue)] = issue_families
     return families
@@ -722,6 +771,8 @@ def _evidence_shape(body: str) -> dict[str, bool]:
         "has_field_only_evidence_terms": bool(FIELD_ONLY_EVIDENCE_RE.search(body)),
         "has_synthetic_only_evidence_terms": bool(SYNTHETIC_ONLY_EVIDENCE_RE.search(body)),
         "has_wired_ready_useful_claim": bool(WIRED_READY_USEFUL_RE.search(body)),
+        "has_guard_contract_list_evidence": bool(GUARD_CONTRACT_LIST_EVIDENCE_RE.search(body)),
+        "has_guard_command_evidence": bool(GUARD_COMMAND_EVIDENCE_RE.search(body)),
     }
 
 
@@ -800,6 +851,7 @@ def _fetch_github_issue_metadata(
                 "number": number,
                 "title": payload.get("title") or "",
                 "body": payload.get("body") or "",
+                "labels": payload.get("labels") or [],
             }
     return out
 
@@ -819,7 +871,7 @@ def _fetch_github_issue_metadata_with_gh(
                 "--repo",
                 repo,
                 "--json",
-                "title,body",
+                "title,body,labels",
             ],
             check=False,
             capture_output=True,
@@ -841,6 +893,7 @@ def _fetch_github_issue_metadata_with_gh(
         "number": number,
         "title": payload.get("title") or "",
         "body": payload.get("body") or "",
+        "labels": payload.get("labels") or [],
     }
 
 
@@ -1079,6 +1132,27 @@ def audit_pr_body(
                 "closing_issues": closing_issues,
             }
         )
+
+    if closing_issues and "guard_tooling_contract" in high_risk_families:
+        missing_guard_evidence: list[str] = []
+        if not evidence_shape["has_guard_contract_list_evidence"]:
+            missing_guard_evidence.append("contract_list")
+        if not evidence_shape["has_guard_command_evidence"]:
+            missing_guard_evidence.append("guard_command")
+        if missing_guard_evidence:
+            findings.append(
+                {
+                    "kind": "missing_guard_tooling_closeout_evidence",
+                    "severity": "error",
+                    "message": (
+                        "Guard-tooling closeouts need the owner-contract list and "
+                        "the command agents should run before claiming cleanup."
+                    ),
+                    "closing_issues": closing_issues,
+                    "high_risk_issue_families": high_risk_issue_families,
+                    "missing_evidence": missing_guard_evidence,
+                }
+            )
 
     if (
         closing_issues

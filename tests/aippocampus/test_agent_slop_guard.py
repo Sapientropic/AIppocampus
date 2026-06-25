@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -146,6 +147,81 @@ def clean_source_ref(ref):
         self.assertEqual([item["rule_id"] for item in bad_findings], ["source_ref_helper_duplicate"])
         self.assertEqual(bad_findings[0]["owner_issue"], "#2698")
         self.assertEqual(owner_findings, [])
+
+    def test_owner_layer_contract_inventory_points_to_known_rules(self) -> None:
+        report = agent_slop_guard.build_report(paths=[], changed_files=set(), baseline={})
+        contracts = {item["contract_id"]: item for item in report["owner_layer_contracts"]}
+
+        self.assertGreaterEqual(len(contracts), 5)
+        self.assertEqual(
+            set(contracts),
+            {
+                "mcp_foreground_projection_owner",
+                "source_io_kernel_owner",
+                "registry_writer_owner",
+                "local_lock_owner",
+                "followthrough_test_owner",
+            },
+        )
+        known_rules = set(agent_slop_guard.RULES)
+        for contract in contracts.values():
+            with self.subTest(contract=contract["contract_id"]):
+                self.assertTrue(set(contract["rule_ids"]) <= known_rules)
+                self.assertTrue(contract["owner"])
+                self.assertTrue(contract["why"])
+
+    def test_registry_writer_owner_bypass_rule_catches_load_save_copy(self) -> None:
+        bad = """
+from aippocampus_runtime.registry.store import load_registry, save_registry
+
+def mutate(json_path, md_path, entry):
+    registry = load_registry(json_path)
+    registry.setdefault("threads", []).append(entry)
+    save_registry(registry, json_path, md_path)
+"""
+        allowed = """
+from aippocampus_runtime.registry.store import update_registry
+
+def mutate(json_path, md_path, entry):
+    def updater(registry):
+        registry.setdefault("threads", []).append(entry)
+        return registry
+    return update_registry(json_path, md_path, updater)
+"""
+        path = "skills/aippocampus/scripts/aippocampus_runtime/update/cli.py"
+
+        bad_findings = agent_slop_guard.analyze_text(bad, path=path, changed_files={path})
+        allowed_findings = agent_slop_guard.analyze_text(allowed, path=path, changed_files={path})
+
+        self.assertEqual([item["rule_id"] for item in bad_findings], ["registry_writer_owner_bypass"])
+        self.assertEqual(bad_findings[0]["owner_issue"], "#2682")
+        self.assertIn("registry_writer_lease", bad_findings[0]["owner_hint"])
+        self.assertEqual(allowed_findings, [])
+
+    def test_local_lock_owner_bypass_rule_catches_os_o_excl_copy(self) -> None:
+        bad = """
+import os
+
+def acquire(path):
+    lock_path = path.with_suffix(path.suffix + ".lock")
+    return os.open(str(lock_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+"""
+        allowed = """
+from aippocampus_runtime.artifacts.publish import artifact_lease
+
+def publish(path, payload):
+    with artifact_lease(path.parent, f".{path.name}.lease"):
+        path.write_text(payload, encoding="utf-8")
+"""
+        path = "skills/aippocampus/scripts/aippocampus_runtime/hooks/skip_telemetry.py"
+
+        bad_findings = agent_slop_guard.analyze_text(bad, path=path, changed_files={path})
+        allowed_findings = agent_slop_guard.analyze_text(allowed, path=path, changed_files={path})
+
+        self.assertEqual([item["rule_id"] for item in bad_findings], ["local_lock_owner_bypass"])
+        self.assertEqual(bad_findings[0]["owner_issue"], "#2681")
+        self.assertIn("artifact_lease", bad_findings[0]["owner_hint"])
+        self.assertEqual(allowed_findings, [])
 
     def test_compat_field_rule_requires_owner_removal_and_exposure_metadata(self) -> None:
         bad = """
@@ -308,11 +384,36 @@ def load(rows):
         self.assertTrue(baselined["changed_surface"])
         self.assertEqual(baselined["owner_issue"], "#2629")
 
+    def test_load_baseline_preserves_exact_fingerprint_whitespace(self) -> None:
+        fingerprint = (
+            "performance_hot_path_repeated_db_work:runtime.py:12:"
+            "loop_db_work:con.execute inside row fetchall \n        select 1        "
+        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "baseline.json"
+            path.write_text(
+                json.dumps(
+                    {
+                        "baseline": [
+                            {
+                                "fingerprint": fingerprint,
+                                "owner_issue": "#2707",
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            baseline = agent_slop_guard.load_baseline(path)
+
+        self.assertEqual(baseline[fingerprint], "#2707")
+
     def test_fixture_root_contract_has_bad_and_allowed_examples(self) -> None:
         results = agent_slop_guard.run_fixture_root(FIXTURES, baseline={})
         by_fixture = {item["fixture"]: item for item in results}
 
-        self.assertGreaterEqual(len(results), 13)
+        self.assertGreaterEqual(len(results), 17)
         self.assertTrue(all(item["passed"] for item in results))
         self.assertEqual(
             by_fixture["mcp/projector_bypass.py"]["rule_ids"],
@@ -341,6 +442,18 @@ def load(rows):
                 "skills/aippocampus/scripts/aippocampus_runtime/source/source_ref_helper_copy.py"
             ]["rule_ids"],
             ["source_ref_helper_duplicate"],
+        )
+        self.assertEqual(
+            by_fixture[
+                "skills/aippocampus/scripts/aippocampus_runtime/update/registry_writer_copy.py"
+            ]["rule_ids"],
+            ["registry_writer_owner_bypass"],
+        )
+        self.assertEqual(
+            by_fixture[
+                "skills/aippocampus/scripts/aippocampus_runtime/hooks/local_os_excl_lock.py"
+            ]["rule_ids"],
+            ["local_lock_owner_bypass"],
         )
         self.assertEqual(
             by_fixture[

@@ -413,6 +413,88 @@ class CloseoutAuditTests(unittest.TestCase):
         self.assertTrue(report["evidence_shape"]["has_recall_deepen_open_anchor_chain"])
         self.assertTrue(report["evidence_shape"]["has_debt_removed_evidence"])
 
+    def test_guard_tooling_contract_closeout_does_not_require_runtime_proof(self) -> None:
+        report = closeout_audit.audit_pr_body(
+            """
+            ## Summary
+            - Add runtime owner-layer contracts for MCP projection, source IO,
+              registry writer, local lock, and follow-through test surfaces.
+            - Add changed-surface red lights for registry writer copies and
+              ad hoc local locks.
+
+            Closes #2689.
+
+            ## Verification
+            - `python tools/aippocampus/agent_slop_guard.py --all --json --fail-on-violations`
+            """,
+            issue_metadata={
+                2689: {
+                    "title": "Add runtime owner-layer import boundary checks",
+                    "body": (
+                        "Need repo-native import/ownership tests for MCP projection, "
+                        "source IO, registry/sync, locks, compact foreground surfaces, "
+                        "fixtures, and architecture cleanup."
+                    ),
+                    "labels": [{"name": "readiness:guard-tooling"}],
+                }
+            },
+        )
+
+        self.assertTrue(report["ok"], report)
+        self.assertEqual(report["high_risk_issue_families"]["2689"], ["guard_tooling_contract"])
+        self.assertTrue(report["evidence_shape"]["has_guard_contract_list_evidence"])
+        self.assertTrue(report["evidence_shape"]["has_guard_command_evidence"])
+        kinds = {finding["kind"] for finding in report["findings"]}
+        self.assertNotIn("missing_recall_source_followthrough", kinds)
+        self.assertNotIn("missing_compact_detail_evidence_split", kinds)
+        self.assertNotIn("missing_debt_removed_evidence", kinds)
+
+    def test_guard_tooling_contract_closeout_requires_contracts_and_command(self) -> None:
+        report = closeout_audit.audit_pr_body(
+            """
+            ## Summary
+            Improves the ownership guard.
+
+            Closes #2689.
+            """,
+            issue_metadata={
+                2689: {
+                    "title": "Add runtime owner-layer import boundary checks",
+                    "body": "Add owner-layer guard-tooling contracts.",
+                    "labels": [{"name": "readiness:guard-tooling"}],
+                }
+            },
+        )
+
+        self.assertFalse(report["ok"], report)
+        finding = report["findings"][0]
+        self.assertEqual(finding["kind"], "missing_guard_tooling_closeout_evidence")
+        self.assertEqual(finding["missing_evidence"], ["contract_list", "guard_command"])
+
+    def test_non_guard_labeled_issue_is_not_masked_by_guard_words(self) -> None:
+        report = closeout_audit.audit_pr_body(
+            """
+            ## Summary
+            Touches the owner-layer around MCP source-open recall.
+
+            Closes #2690.
+            """,
+            issue_metadata={
+                2690: {
+                    "title": "Fix MCP source-open recall follow-through",
+                    "body": "MCP/source-open work needs real recall/deepen/open source anchor hits.",
+                    "labels": [{"name": "bug"}],
+                }
+            },
+        )
+
+        self.assertFalse(report["ok"], report)
+        self.assertEqual(report["high_risk_issue_families"]["2690"], ["recall_mcp_apw_source_open"])
+        self.assertIn(
+            "missing_recall_source_followthrough",
+            {finding["kind"] for finding in report["findings"]},
+        )
+
     def test_followthrough_phrase_without_commands_does_not_pass_high_risk_closeout(
         self,
     ) -> None:
@@ -634,7 +716,13 @@ class CloseoutAuditTests(unittest.TestCase):
         completed = subprocess.CompletedProcess(
             args=["gh", "issue", "view"],
             returncode=0,
-            stdout=json.dumps({"title": "Performance closeout", "body": "latency and graph expansion"}),
+            stdout=json.dumps(
+                {
+                    "title": "Performance closeout",
+                    "body": "latency and graph expansion",
+                    "labels": [{"name": "readiness:guard-tooling"}],
+                }
+            ),
             stderr="",
         )
 
@@ -653,6 +741,7 @@ class CloseoutAuditTests(unittest.TestCase):
 
         self.assertEqual(metadata[2713]["title"], "Performance closeout")
         self.assertEqual(metadata[2713]["body"], "latency and graph expansion")
+        self.assertEqual(metadata[2713]["labels"], [{"name": "readiness:guard-tooling"}])
         run.assert_called_once()
 
     def test_cli_reads_body_file_and_returns_json(self) -> None:

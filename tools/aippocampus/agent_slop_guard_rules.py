@@ -78,6 +78,27 @@ RULES: dict[str, Rule] = {
         owner_issue="#2698",
         description="Local source-ref key/normalization helper duplicates the source-ref owner.",
     ),
+    "registry_writer_owner_bypass": Rule(
+        rule_id="registry_writer_owner_bypass",
+        severity="warning",
+        owner_hint=(
+            "Use aippocampus_runtime.registry.store.update_registry or "
+            "registry_writer_lease around load/modify/save; do not copy registry "
+            "writer helpers into sync/update/runtime callers."
+        ),
+        owner_issue="#2682",
+        description="Registry mutation appears to bypass the registry writer owner.",
+    ),
+    "local_lock_owner_bypass": Rule(
+        rule_id="local_lock_owner_bypass",
+        severity="warning",
+        owner_hint=(
+            "Use artifact_lease, registry_writer_lease, active_recall_lock, or a "
+            "documented local-lock owner helper instead of hand-rolled os.O_EXCL locks."
+        ),
+        owner_issue="#2681",
+        description="Runtime code appears to copy a local lock implementation outside a lock owner.",
+    ),
     "compat_field_metadata_missing": Rule(
         rule_id="compat_field_metadata_missing",
         severity="warning",
@@ -139,3 +160,37 @@ RULES: dict[str, Rule] = {
         description="Hot path performs DB lookup/upsert work inside an unbounded loop.",
     ),
 }
+
+
+OWNER_LAYER_CONTRACTS: tuple[dict[str, object], ...] = (
+    {
+        "contract_id": "mcp_foreground_projection_owner",
+        "rule_ids": ("compact_projector_bypass",),
+        "owner": "aippocampus_runtime.mcp.result_profile / public_projection",
+        "why": "Compact/default foreground output stays action-sized instead of becoming proof dumps.",
+    },
+    {
+        "contract_id": "source_io_kernel_owner",
+        "rule_ids": ("source_jsonl_owner_bypass", "source_ref_helper_duplicate"),
+        "owner": "aippocampus_runtime.source.io_kernel",
+        "why": "JSONL loss accounting and source-ref identity stay source-backed and consistent.",
+    },
+    {
+        "contract_id": "registry_writer_owner",
+        "rule_ids": ("registry_writer_owner_bypass",),
+        "owner": "aippocampus_runtime.registry.store.update_registry / registry_writer_lease",
+        "why": "Registry read-modify-write paths share one lease and do not clobber each other.",
+    },
+    {
+        "contract_id": "local_lock_owner",
+        "rule_ids": ("local_lock_owner_bypass", "atomic_write_owner_bypass"),
+        "owner": "aippocampus_runtime.artifacts.publish / io_integrity / dedicated lock owners",
+        "why": "Writers use portable interrupted-write boundaries instead of local lock copies.",
+    },
+    {
+        "contract_id": "followthrough_test_owner",
+        "rule_ids": ("field_only_followthrough_test", "compact_debug_field_test"),
+        "owner": "tests.aippocampus.product_probe_helpers / frontstage assertions",
+        "why": "Recall/MCP/APW tests prove source follow-through and compact UX, not field presence.",
+    },
+)
