@@ -515,6 +515,59 @@ class ConceptGraphTests(unittest.TestCase):
         self.assertEqual(diagnostics["neighbor_fetches"], 1)
         self.assertLess(diagnostics["depth_used"], diagnostics["depth_requested"])
 
+    def test_expansion_reports_truncated_budget_when_depth_two_is_partial(self) -> None:
+        con = graph.connect(self.output)
+        try:
+            graph.init_schema(con)
+            labels = ["seed", "child_a", "child_b", "grand_a", "grand_b"]
+            ids = {
+                label: graph.upsert_concept(
+                    con,
+                    label,
+                    status="verified",
+                    lifecycle_reason="fixture",
+                    hit_count=10,
+                    thread_count=5,
+                )
+                for label in labels
+            }
+            for src, dst in [
+                ("seed", "child_a"),
+                ("seed", "child_b"),
+                ("child_a", "grand_a"),
+                ("child_b", "grand_b"),
+            ]:
+                graph.upsert_edge(
+                    con,
+                    str(ids[src]),
+                    str(ids[dst]),
+                    edge_type="verified_related",
+                    confidence=1.0,
+                    status="verified",
+                    evidence_count=5,
+                    thread_count=5,
+                    lifecycle_reason="fixture",
+                )
+            con.commit()
+        finally:
+            con.close()
+
+        rows, diagnostics = graph.expand_concepts_with_diagnostics(
+            self.output,
+            ["seed"],
+            depth=2,
+            max_degree=12,
+            max_terms=10,
+            max_neighbor_fetches=2,
+        )
+
+        self.assertIn("grand_a", [row["term"] for row in rows])
+        self.assertNotIn("grand_b", [row["term"] for row in rows])
+        self.assertEqual(diagnostics["depth_used"], diagnostics["depth_requested"])
+        self.assertEqual(diagnostics["neighbor_fetches"], 2)
+        self.assertGreater(diagnostics["neighbor_fetches_skipped_due_to_budget"], 0)
+        self.assertEqual(diagnostics["budget_state"], "truncated_by_neighbor_budget")
+
     def test_graph_rejects_sliding_window_cjk_fragments_from_association_input(self) -> None:
         self.associations.write_text(
             json.dumps(

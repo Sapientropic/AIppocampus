@@ -9,7 +9,10 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
-from aippocampus_runtime.artifacts.generation_pins import generation_cleanup_contract
+from aippocampus_runtime.artifacts.generation_pins import (
+    cleanup_reader_pins,
+    generation_cleanup_contract,
+)
 from aippocampus_runtime.artifacts.publish import INDEX_POINTER_NAME, SEGMENTS_POINTER_NAME
 from aippocampus_runtime.core import file_sha256, now_utc
 from aippocampus_runtime.io_integrity import atomic_write_json
@@ -267,6 +270,7 @@ def _evict_generation_target(
     index_dir: Path,
     include_paths: bool,
     source_preconditions: dict[str, dict[str, str]],
+    reader_pin_cleanup: dict[str, Any],
 ) -> tuple[dict[str, Any], int]:
     if not target.is_dir():
         raise FileNotFoundError(str(target))
@@ -298,6 +302,7 @@ def _evict_generation_target(
         "reason": "storage_gc_old_generation_eviction",
         "source_report": candidate.get("source_report"),
         "source_preconditions": source_preconditions,
+        "reader_pin_cleanup": reader_pin_cleanup,
         "evidence": candidate.get("evidence") or [],
         "evicted_paths": recorded_paths,
         "reclaimed_bytes": reclaimed,
@@ -379,6 +384,7 @@ def apply_generation_cleanup_candidate(
             "applied": None,
             "reclaimed_bytes": 0,
         }
+    reader_pin_cleanup = cleanup_reader_pins(pointer_parent, target.name, dry_run=False)
     try:
         applied, reclaimed = _evict_generation_target(
             candidate=candidate,
@@ -386,6 +392,7 @@ def apply_generation_cleanup_candidate(
             index_dir=index_dir,
             include_paths=include_paths,
             source_preconditions=source_preconditions,
+            reader_pin_cleanup=reader_pin_cleanup,
         )
     except OSError as exc:
         return {

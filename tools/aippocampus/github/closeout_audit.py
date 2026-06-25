@@ -7,6 +7,7 @@ import argparse
 import json
 import os
 import re
+import subprocess
 import sys
 import urllib.error
 import urllib.request
@@ -173,10 +174,38 @@ BENCHMARK_SYNTHETIC_FAMILY_RE = re.compile(
     r"\b(benchmark|synthetic|fixture|scripted proxy|contract fixture|proxy result)\b",
     re.I,
 )
+PERFORMANCE_FAMILY_RE = re.compile(
+    r"\b("
+    r"performance|latency|elapsed|build time|scan|graph expansion|query plan|"
+    r"o\([^)]+\)|quadratic|write amplification|no[- ]op skip|long[- ]thread|"
+    r"hub[- ]node|budget diagnostics|slow|timing"
+    r")\b",
+    re.I,
+)
+PERFORMANCE_FRESHNESS_REQUIRED_RE = re.compile(
+    r"\b(graph|cache|freshness|stale[- ]?(?:route|graph)|build|skip|no[- ]op skip)\b",
+    re.I,
+)
 FOLLOWTHROUGH_CHAIN_RE = re.compile(
     r"agent[_ -]?recall.{0,240}"
     r"(?:agent[_ -]?(?:deepen|open)|deepen/open|opened source).{0,240}"
     r"(?:opened source anchor hits|source anchor hits|anchor hits)",
+    re.I | re.S,
+)
+RECALL_COMMAND_RE = re.compile(
+    r"\baippocampus\s+agent\s+recall\b.{0,260}\s--json\b",
+    re.I | re.S,
+)
+SOURCE_REOPEN_COMMAND_RE = re.compile(
+    r"\baippocampus\s+(?:"
+    r"agent\s+(?:deepen|open)\b|"
+    r"search\s+(?:--open-source|--hit\b)"
+    r").{0,320}\s--json\b",
+    re.I | re.S,
+)
+SOURCE_ANCHOR_HIT_COUNT_RE = re.compile(
+    r"\b(?:opened\s+)?source anchor hits?\b.{0,80}(?:=|:|before|after|->)\s*\d+|"
+    r"\banchor hits?\b.{0,80}(?:=|:|before|after|->)\s*\d+",
     re.I | re.S,
 )
 COMPACT_OUTPUT_EVIDENCE_RE = re.compile(
@@ -207,6 +236,40 @@ SYNTHETIC_ONLY_EVIDENCE_RE = re.compile(
     re.I,
 )
 WIRED_READY_USEFUL_RE = re.compile(r"\b(wired|ready|useful|foreground action)\b", re.I)
+PERFORMANCE_LATENCY_BEFORE_AFTER_RE = re.compile(
+    r"\b(?:latency|elapsed|wall[- ]?time|timing|agent recall)\b"
+    r".{0,180}\b(?:before|after|before/after|->|\d+(?:\.\d+)?\s*m?s)\b|"
+    r"\b(?:before/after|before|after|->)\b"
+    r".{0,180}\b(?:latency|elapsed|wall[- ]?time|timing|ms|seconds?)\b",
+    re.I | re.S,
+)
+PERFORMANCE_USEFUL_SOURCE_HIT_RE = re.compile(
+    r"\b("
+    r"useful[-_ ]?source[-_ ]?hit(?:[-_ ]?count)?|"
+    r"opened source anchor hits|source anchor hits|anchor hits"
+    r")\b.{0,120}(?:\d+|before|after|->)",
+    re.I | re.S,
+)
+PERFORMANCE_WRONG_ROUTE_RE = re.compile(
+    r"\b(wrong[-_ ]?route[-_ ]?drag(?:[-_ ]?count)?|hard[- ]negative(?: result)?)\b"
+    r".{0,120}(?:\d+|before|after|->|none|no\b)",
+    re.I | re.S,
+)
+PERFORMANCE_MANUAL_FALLBACK_RE = re.compile(
+    r"\b("
+    r"manual[-_ ]?search[-_ ]?fallback(?:[-_ ]?count)?|manual[-_ ]?fallback|"
+    r"no manual fallback"
+    r")\b.{0,120}(?:\d+|before|after|->|none|no\b|needed)",
+    re.I | re.S,
+)
+PERFORMANCE_FRESHNESS_METRIC_RE = re.compile(
+    r"\b("
+    r"stale[-_ ]?(?:route|graph)(?:[-_ ]?count)?|"
+    r"freshness(?:[-_ ]?metric)?|build[-_ ]?skip[-_ ]?freshness|"
+    r"build/skip freshness|no[- ]op skip freshness|stale[-_ ]?route"
+    r")\b.{0,140}(?:\d+|before|after|->|none|fresh|unchanged|skipped)",
+    re.I | re.S,
+)
 FOLLOWUP_RE = re.compile(
     r"\b("
     r"remaining[_ -]?gap|followup[_ -]?issue|follow[- ]up issue|"
@@ -574,6 +637,8 @@ def _high_risk_families_for_text(text: str) -> list[str]:
         families.append("cleanup_test_guard_debt")
     if BENCHMARK_SYNTHETIC_FAMILY_RE.search(text):
         families.append("benchmark_or_synthetic")
+    if PERFORMANCE_FAMILY_RE.search(text):
+        families.append("performance_user_visible")
     return families
 
 
@@ -597,8 +662,20 @@ def _flatten_high_risk_families(high_risk_issue_families: Mapping[str, list[str]
 
 
 def _evidence_shape(body: str) -> dict[str, bool]:
+    has_commanded_source_followthrough = bool(
+        RECALL_COMMAND_RE.search(body)
+        and SOURCE_REOPEN_COMMAND_RE.search(body)
+        and SOURCE_ANCHOR_HIT_COUNT_RE.search(body)
+    )
     return {
-        "has_recall_deepen_open_anchor_chain": bool(FOLLOWTHROUGH_CHAIN_RE.search(body)),
+        # A prose sentence such as "agent recall -> deepen/open -> opened" is
+        # not closeout evidence. Require rerunnable commands and an anchor-hit
+        # count so agent-written PRs cannot pass by describing the shape only.
+        "has_recall_deepen_open_anchor_chain": has_commanded_source_followthrough,
+        "has_recall_deepen_open_phrase": bool(FOLLOWTHROUGH_CHAIN_RE.search(body)),
+        "has_recall_command": bool(RECALL_COMMAND_RE.search(body)),
+        "has_source_reopen_command": bool(SOURCE_REOPEN_COMMAND_RE.search(body)),
+        "has_source_anchor_hit_count": bool(SOURCE_ANCHOR_HIT_COUNT_RE.search(body)),
         "has_compact_output_evidence": bool(COMPACT_OUTPUT_EVIDENCE_RE.search(body)),
         "has_detail_or_operator_output_evidence": bool(DETAIL_OUTPUT_EVIDENCE_RE.search(body)),
         "has_debt_removed_evidence": bool(DEBT_REMOVED_EVIDENCE_RE.search(body)),
@@ -606,6 +683,50 @@ def _evidence_shape(body: str) -> dict[str, bool]:
         "has_synthetic_only_evidence_terms": bool(SYNTHETIC_ONLY_EVIDENCE_RE.search(body)),
         "has_wired_ready_useful_claim": bool(WIRED_READY_USEFUL_RE.search(body)),
     }
+
+
+def _performance_evidence_shape(body: str) -> dict[str, bool]:
+    return {
+        "has_latency_before_after_metric": bool(PERFORMANCE_LATENCY_BEFORE_AFTER_RE.search(body)),
+        "has_useful_source_hit_metric": bool(PERFORMANCE_USEFUL_SOURCE_HIT_RE.search(body)),
+        "has_wrong_route_drag_metric": bool(PERFORMANCE_WRONG_ROUTE_RE.search(body)),
+        "has_manual_search_fallback_metric": bool(PERFORMANCE_MANUAL_FALLBACK_RE.search(body)),
+        "has_freshness_metric": bool(PERFORMANCE_FRESHNESS_METRIC_RE.search(body)),
+    }
+
+
+def _performance_family_text(
+    *,
+    closing_issues: list[int],
+    body: str,
+    issue_metadata: Mapping[int, Mapping[str, Any]],
+) -> str:
+    parts = [body]
+    for issue in closing_issues:
+        parts.append(_issue_family_text(issue=issue, body=body, issue_metadata=issue_metadata))
+    return "\n".join(parts)
+
+
+def _missing_performance_metrics(
+    *,
+    evidence_shape: Mapping[str, bool],
+    performance_evidence_shape: Mapping[str, bool],
+    freshness_required: bool,
+) -> list[str]:
+    missing: list[str] = []
+    if not evidence_shape["has_recall_deepen_open_anchor_chain"]:
+        missing.append("recall_deepen_open_anchor_chain")
+    for key, label in (
+        ("has_latency_before_after_metric", "before_after_latency_or_elapsed"),
+        ("has_useful_source_hit_metric", "useful_source_hit_or_anchor_count"),
+        ("has_wrong_route_drag_metric", "wrong_route_drag_or_hard_negative"),
+        ("has_manual_search_fallback_metric", "manual_search_fallback"),
+    ):
+        if not performance_evidence_shape[key]:
+            missing.append(label)
+    if freshness_required and not performance_evidence_shape["has_freshness_metric"]:
+        missing.append("graph_cache_freshness")
+    return missing
 
 
 def _fetch_github_issue_metadata(
@@ -630,6 +751,9 @@ def _fetch_github_issue_metadata(
             with urllib.request.urlopen(request, timeout=15) as response:
                 payload = json.loads(response.read().decode("utf-8"))
         except (urllib.error.URLError, TimeoutError, json.JSONDecodeError):
+            fallback = _fetch_github_issue_metadata_with_gh(repo=repo, number=number)
+            if fallback is not None:
+                out[number] = fallback
             continue
         if isinstance(payload, Mapping):
             out[number] = {
@@ -638,6 +762,46 @@ def _fetch_github_issue_metadata(
                 "body": payload.get("body") or "",
             }
     return out
+
+
+def _fetch_github_issue_metadata_with_gh(
+    *,
+    repo: str,
+    number: int,
+) -> dict[str, Any] | None:
+    try:
+        completed = subprocess.run(
+            [
+                "gh",
+                "issue",
+                "view",
+                str(number),
+                "--repo",
+                repo,
+                "--json",
+                "title,body",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=15,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if completed.returncode != 0:
+        return None
+    try:
+        payload = json.loads(completed.stdout or "{}")
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(payload, Mapping):
+        return None
+    return {
+        "number": number,
+        "title": payload.get("title") or "",
+        "body": payload.get("body") or "",
+    }
 
 
 def _has_followup_pointer(body: str) -> bool:
@@ -712,6 +876,15 @@ def audit_pr_body(
     )
     high_risk_families = _flatten_high_risk_families(high_risk_issue_families)
     evidence_shape = _evidence_shape(text)
+    performance_family_text = _performance_family_text(
+        closing_issues=closing_issues,
+        body=text,
+        issue_metadata=normalized_issue_metadata,
+    )
+    performance_evidence_shape = _performance_evidence_shape(text)
+    performance_freshness_required = bool(
+        PERFORMANCE_FRESHNESS_REQUIRED_RE.search(performance_family_text)
+    )
     required_evidence_levels = _flatten_required_levels(issue_intent_levels)
     risky_terms = sorted({match.group(1).casefold() for match in RISKY_CLOSEOUT_RE.finditer(text)})
     has_followup_pointer = _has_followup_pointer(text)
@@ -924,6 +1097,29 @@ def audit_pr_body(
             }
         )
 
+    if closing_issues and "performance_user_visible" in high_risk_families:
+        missing_performance_metrics = _missing_performance_metrics(
+            evidence_shape=evidence_shape,
+            performance_evidence_shape=performance_evidence_shape,
+            freshness_required=performance_freshness_required,
+        )
+        if missing_performance_metrics:
+            findings.append(
+                {
+                    "kind": "missing_performance_user_visible_metrics",
+                    "severity": "error",
+                    "message": (
+                        "Performance-family closeouts need user-visible before/after "
+                        "metrics plus recall/deepen/open follow-through; internal "
+                        "SQL/query-plan/build timing alone is not enough."
+                    ),
+                    "closing_issues": closing_issues,
+                    "high_risk_issue_families": high_risk_issue_families,
+                    "missing_metrics": missing_performance_metrics,
+                    "freshness_required": performance_freshness_required,
+                }
+            )
+
     if (
         closing_issues
         and high_risk_families
@@ -978,6 +1174,8 @@ def audit_pr_body(
         "benchmark_local_scaffold_terms": benchmark_local_scaffold_terms,
         "high_risk_issue_families": high_risk_issue_families,
         "evidence_shape": evidence_shape,
+        "performance_evidence_shape": performance_evidence_shape,
+        "performance_freshness_required": performance_freshness_required,
         "has_aippocampus_orientation": has_aippocampus_orientation,
         "has_isolated_experiment_label": has_isolated_experiment_label,
         "default_runtime_change_signal": default_runtime_change_signal,

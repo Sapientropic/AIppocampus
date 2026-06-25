@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import importlib.util
+import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEBT_REPORT = REPO_ROOT / "tools" / "aippocampus" / "docs" / "debt_report.py"
@@ -267,6 +269,7 @@ class DebtReportTests(unittest.TestCase):
         report = debt_report.build_report()
 
         self.assertIn("helper_duplication", report)
+        self.assertIn("direct_jsonl_io", report)
         self.assertIn("broad_exception_debt", report)
         self.assertIn("compact_debug_field_leaks", report)
         self.assertIn("instruction_surface_debt", report)
@@ -280,6 +283,94 @@ class DebtReportTests(unittest.TestCase):
         self.assertGreaterEqual(
             report["broad_exception_debt"]["summary"]["broad_total"],
             report["broad_exception_debt"]["summary"]["pure_silent_broad_except_total"],
+        )
+        self.assertEqual(
+            report["direct_jsonl_io"]["ordinary_json_object_reads"],
+            "excluded",
+        )
+
+    def test_direct_jsonl_inventory_classifies_runtime_line_parsers(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            approved = (
+                root
+                / "skills"
+                / "aippocampus"
+                / "scripts"
+                / "aippocampus_runtime"
+                / "source"
+                / "io_kernel.py"
+            )
+            bad = (
+                root
+                / "skills"
+                / "aippocampus"
+                / "scripts"
+                / "aippocampus_runtime"
+                / "recall"
+                / "local_jsonl_parser.py"
+            )
+            ordinary = (
+                root
+                / "skills"
+                / "aippocampus"
+                / "scripts"
+                / "aippocampus_runtime"
+                / "recall"
+                / "json_config.py"
+            )
+            for path in (approved, bad, ordinary):
+                path.parent.mkdir(parents=True, exist_ok=True)
+            approved.write_text("import json\n\ndef parse(line):\n    return json.loads(line)\n", encoding="utf-8")
+            bad.write_text("import json\n\ndef parse(line):\n    return json.loads(line)\n", encoding="utf-8")
+            ordinary.write_text(
+                "import json\n\ndef parse(path):\n    return json.loads(path.read_text())\n",
+                encoding="utf-8",
+            )
+
+            def clear_debt_caches() -> None:
+                debt_report.scan_python_files.cache_clear()
+                debt_report.parse_python.cache_clear()
+
+            clear_debt_caches()
+            try:
+                with mock.patch.object(debt_report, "REPO_ROOT", root):
+                    clear_debt_caches()
+                    inventory = debt_report.direct_jsonl_io_inventory(
+                        debt_report.scan_python_files(),
+                        repo_root=root,
+                        detail=True,
+                    )
+                    changed = debt_report.changed_surface_debt(
+                        [
+                            "skills/aippocampus/scripts/aippocampus_runtime/recall/local_jsonl_parser.py"
+                        ]
+                    )
+            finally:
+                clear_debt_caches()
+
+        sites = inventory["sites"]
+        by_path = {item["path"]: item for item in sites}
+        self.assertEqual(inventory["summary"]["line_json_parse_site_count"], 2)
+        self.assertTrue(
+            by_path[
+                "skills/aippocampus/scripts/aippocampus_runtime/source/io_kernel.py"
+            ]["approved_owner"]
+        )
+        self.assertEqual(
+            by_path[
+                "skills/aippocampus/scripts/aippocampus_runtime/recall/local_jsonl_parser.py"
+            ]["classification"],
+            "unapproved_runtime",
+        )
+        self.assertNotIn(
+            "skills/aippocampus/scripts/aippocampus_runtime/recall/json_config.py",
+            by_path,
+        )
+        self.assertEqual(changed["status"], "fail")
+        self.assertIn(
+            "changed_surface_direct_jsonl_parse",
+            {warning["code"] for warning in changed["warnings"]},
         )
 
     def test_hot_path_pure_silent_broad_exceptions_stay_zero(self) -> None:

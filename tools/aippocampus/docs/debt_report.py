@@ -20,6 +20,17 @@ try:
         instruction_surface_classification,
         instruction_surface_inventory,
     )
+    from tools.aippocampus.docs.jsonl_io_inventory import (
+        DIRECT_JSONL_APPROVED_OWNER_PATHS,
+        direct_jsonl_io_inventory,
+        direct_jsonl_parse_sites_for_path,
+    )
+    from tools.aippocampus.docs.static_debt_inventories import (
+        GIANT_FUNCTION_LINE_LIMIT,
+        compact_debug_field_inventory,
+        giant_function_inventory,
+        test_debt_inventory,
+    )
 except ModuleNotFoundError:
     from instruction_surface import (
         COMPACT_DEBUG_FIELD_LITERALS,
@@ -28,6 +39,17 @@ except ModuleNotFoundError:
         changed_file_instruction_surface_warning,
         instruction_surface_classification,
         instruction_surface_inventory,
+    )
+    from jsonl_io_inventory import (
+        DIRECT_JSONL_APPROVED_OWNER_PATHS,
+        direct_jsonl_io_inventory,
+        direct_jsonl_parse_sites_for_path,
+    )
+    from static_debt_inventories import (
+        GIANT_FUNCTION_LINE_LIMIT,
+        compact_debug_field_inventory,
+        giant_function_inventory,
+        test_debt_inventory,
     )
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -51,7 +73,6 @@ STALE_ALLOWANCE_MIN_BUDGET = 1000
 STALE_ALLOWANCE_MAX_CURRENT = 300
 STALE_ALLOWANCE_MAX_RATIO = 0.25
 SINGLE_DIGIT_GUARD_MARGIN_LIMIT = 9
-GIANT_FUNCTION_LINE_LIMIT = 250
 SCAN_ROOTS = (
     "skills/aippocampus/scripts/aippocampus_runtime",
     "tests/aippocampus",
@@ -112,13 +133,6 @@ DIAGNOSTIC_BOUNDARY_TOKENS = (
     "skipped",
     "loss",
 )
-TEST_SCAFFOLD_HELPERS = {
-    "run_cli",
-    "write_jsonl",
-    "source_ref",
-    "fake_urlopen",
-    "tearDown",
-}
 LOW_MARGIN_OWNER_ISSUES = {
     "skills/aippocampus/scripts/aippocampus_runtime/dream/input_pack.py": "#2548",
     "skills/aippocampus/scripts/aippocampus_runtime/hooks/install_action_hint.py": "#2548",
@@ -400,99 +414,6 @@ def broad_exception_inventory(*, detail: bool = False) -> dict[str, object]:
     }
 
 
-@lru_cache(maxsize=1)
-def compact_debug_field_inventory() -> dict[str, object]:
-    occurrences: list[dict[str, object]] = []
-    mcp_root = REPO_ROOT / "skills" / "aippocampus" / "scripts" / "aippocampus_runtime" / "mcp"
-    if mcp_root.exists():
-        for path in sorted(mcp_root.rglob("*.py"), key=repo_relative):
-            rel_path = repo_relative(path)
-            text = path.read_text(encoding="utf-8")
-            for field in COMPACT_DEBUG_FIELD_LITERALS:
-                count = text.count(field)
-                if count:
-                    occurrences.append({"path": rel_path, "field": field, "count": count})
-    return {
-        "summary": {
-            "field_family_count": len({str(item["field"]) for item in occurrences}),
-            "occurrence_total": sum(int(item["count"]) for item in occurrences),
-            "file_count": len({str(item["path"]) for item in occurrences}),
-        },
-        "occurrences": occurrences,
-        "note": (
-            "Static literal inventory only; compact/default behavior is enforced by "
-            "MCP profile tests and changed-surface checks."
-        ),
-    }
-
-
-@lru_cache(maxsize=1)
-def giant_function_inventory() -> dict[str, object]:
-    functions: list[dict[str, object]] = []
-    for path in scan_python_files():
-        rel_path = repo_relative(path)
-        if not rel_path.startswith("skills/aippocampus/scripts/aippocampus_runtime/"):
-            continue
-        tree = parse_python(path)
-        if tree is None:
-            continue
-        for node in ast.walk(tree):
-            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                continue
-            end = getattr(node, "end_lineno", None)
-            if end is None:
-                continue
-            line_count = int(end) - int(node.lineno) + 1
-            if line_count >= GIANT_FUNCTION_LINE_LIMIT:
-                functions.append(
-                    {
-                        "path": rel_path,
-                        "function": node.name,
-                        "line": int(node.lineno),
-                        "line_count": line_count,
-                    }
-                )
-    functions.sort(key=lambda item: (-int(item["line_count"]), str(item["path"])))
-    return {
-        "threshold_lines": GIANT_FUNCTION_LINE_LIMIT,
-        "summary": {"function_count": len(functions)},
-        "functions": functions,
-    }
-
-
-def test_debt_inventory(*, detail: bool = False) -> dict[str, object]:
-    definitions: list[dict[str, object]] = []
-    for path in scan_python_files():
-        rel_path = repo_relative(path)
-        if not rel_path.startswith("tests/aippocampus/"):
-            continue
-        tree = parse_python(path)
-        if tree is None:
-            continue
-        for node in ast.walk(tree):
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name in TEST_SCAFFOLD_HELPERS:
-                definitions.append(
-                    {
-                        "name": node.name,
-                        "path": rel_path,
-                        "line": int(getattr(node, "lineno", 0) or 0),
-                    }
-                )
-    counts = Counter(str(item["name"]) for item in definitions)
-    return {
-        "summary": {
-            "scaffold_definition_count": len(definitions),
-            "duplicate_scaffold_family_count": sum(1 for count in counts.values() if count > 1),
-        },
-        "families": [
-            {"name": name, "definition_count": count}
-            for name, count in sorted(counts.items())
-        ],
-        "definition_sample": definitions[:80],
-        **({"definitions": definitions} if detail else {}),
-    }
-
-
 def changed_surface_debt(changed_files: list[str] | None = None) -> dict[str, object]:
     normalized = sorted({path.replace("\\", "/") for path in changed_files or [] if path})
     warnings: list[dict[str, object]] = []
@@ -505,6 +426,7 @@ def changed_surface_debt(changed_files: list[str] | None = None) -> dict[str, ob
     broad_handlers: list[dict[str, object]] = []
     giant_functions: list[dict[str, object]] = []
     compact_occurrences: list[dict[str, object]] = []
+    direct_jsonl_sites: list[dict[str, object]] = []
     instruction_occurrences: list[dict[str, object]] = []
     for path in changed_paths:
         rel_path = repo_relative(path)
@@ -564,6 +486,11 @@ def changed_surface_debt(changed_files: list[str] | None = None) -> dict[str, ob
                             ),
                         }
                     )
+        direct_jsonl_sites.extend(
+            item
+            for item in direct_jsonl_parse_sites_for_path(path, repo_root=REPO_ROOT)
+            if bool(item.get("runtime_path")) and not bool(item.get("approved_owner"))
+        )
         if "/mcp/" in f"/{rel_path}" and not mcp_compact_debug_literals_guarded(path):
             for field in COMPACT_DEBUG_FIELD_LITERALS:
                 count = text.count(field)
@@ -633,6 +560,20 @@ def changed_surface_debt(changed_files: list[str] | None = None) -> dict[str, ob
                 "message": "Touched MCP file contains compact/debug field literals; prove compact profile output stays clean or move diagnostics behind detail/operator.",
             }
         )
+    for item in direct_jsonl_sites:
+        warnings.append(
+            {
+                "code": "changed_surface_direct_jsonl_parse",
+                "path": item["path"],
+                "line": item["line"],
+                "classification": item["classification"],
+                "acceptance_bearing": True,
+                "message": (
+                    "Touched runtime file parses JSONL line records directly; "
+                    "use source.io_kernel or document an approved non-source owner."
+                ),
+            }
+        )
     for item in instruction_occurrences:
         warning = changed_file_instruction_surface_warning(item)
         if warning:
@@ -652,6 +593,11 @@ def changed_surface_debt(changed_files: list[str] | None = None) -> dict[str, ob
                 1 for item in instruction_occurrences if item.get("classification")
             ),
             "files": instruction_occurrences,
+        },
+        "direct_jsonl_io": {
+            "changed_site_count": len(direct_jsonl_sites),
+            "sites": direct_jsonl_sites,
+            "approved_owner_paths": sorted(DIRECT_JSONL_APPROVED_OWNER_PATHS),
         },
         "policy": (
             "Changed-surface debt warnings are acceptance-bearing; do not treat "
@@ -1105,10 +1051,23 @@ def build_report(
     headroom = build_headroom_report(detail="full")
     full_detail = detail == "full"
     helper_duplication = helper_duplication_inventory(detail=full_detail)
+    direct_jsonl_io = direct_jsonl_io_inventory(
+        scan_python_files(),
+        repo_root=REPO_ROOT,
+        detail=full_detail,
+    )
     broad_exceptions = broad_exception_inventory(detail=full_detail)
-    compact_debug_fields = compact_debug_field_inventory()
-    giant_functions = giant_function_inventory()
-    test_debt = test_debt_inventory(detail=full_detail)
+    compact_debug_fields = compact_debug_field_inventory(
+        mcp_root=REPO_ROOT / "skills" / "aippocampus" / "scripts" / "aippocampus_runtime" / "mcp",
+        repo_root=REPO_ROOT,
+        compact_debug_field_literals=COMPACT_DEBUG_FIELD_LITERALS,
+    )
+    giant_functions = giant_function_inventory(scan_python_files(), repo_root=REPO_ROOT)
+    test_debt = test_debt_inventory(
+        scan_python_files(),
+        repo_root=REPO_ROOT,
+        detail=full_detail,
+    )
     instruction_surface = instruction_surface_inventory(
         scan_python_files(),
         repo_root=REPO_ROOT,
@@ -1142,6 +1101,7 @@ def build_report(
         "warnings": warnings,
         "detail": detail,
         "helper_duplication": helper_duplication,
+        "direct_jsonl_io": direct_jsonl_io,
         "broad_exception_debt": broad_exceptions,
         "compact_debug_field_leaks": compact_debug_fields,
         "instruction_surface_debt": instruction_surface,

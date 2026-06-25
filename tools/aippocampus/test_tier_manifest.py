@@ -13,13 +13,11 @@ PR_STEMS = frozenset(
         "test_agent_native_recall_facade",
         "test_agent_last_recall_recovery",
         "test_agent_pull_gesture",
-        "test_agent_slop_guard",
         "test_aippo_clause_lifecycle",
         "test_circuit_feedback",
         "test_cli_recovery_cards_core",
         "test_command_quoting_contract",
         "test_debt_report",
-        "test_docs_health_benchmark_evidence",
         "test_consolidation_priority",
         "test_dream_delivery_eligibility",
         "test_attention_route_compatibility",
@@ -32,12 +30,9 @@ PR_STEMS = frozenset(
         "test_learning_loop_effectiveness_ledger",
         "test_learning_loop_private_replay",
         "test_learning_loop_second_user_dogfood",
-        "test_macro_topology_loadbearing",
-        "test_macro_total_encoder",
         "test_memory_system_incident_corpus",
         "test_microcircuit_router",
         "test_mcp_latest_reply",
-        "test_navigation_data_quality_guard",
         "test_navigation_potential",
         "test_narrative_packet",
         "test_parallel_derivation_bundle",
@@ -49,7 +44,6 @@ PR_STEMS = frozenset(
         "test_source_anchor_artifact_demotion",
         "test_source_io_kernel",
         "test_source_shape_projection",
-        "test_update_agent_status",
     }
 )
 
@@ -881,6 +875,36 @@ TIER_SHRINK_REPLACEMENT_LANES: dict[str, dict[str, str]] = {
 }
 
 FAST_LANE_RECLASSIFIED_MODULES: dict[str, tuple[str, str, str]] = {
+    "test_agent_slop_guard": (
+        "broad",
+        "broad-pr plus focused agent-slop guard tests own rule changes; the changed-surface planner still runs the guard on touched Python files.",
+        "Agent-slop fixtures are prevention tooling, not a module every unrelated local PR should pay for.",
+    ),
+    "test_docs_health_benchmark_evidence": (
+        "broad",
+        "broad-pr plus focused docs-health benchmark-evidence runs own docs/evidence edits.",
+        "Benchmark-evidence documentation checks should not make the default PR lane look like a benchmark closeout lane.",
+    ),
+    "test_macro_topology_loadbearing": (
+        "broad",
+        "broad-pr plus focused macro-topology runs own macro topology changes.",
+        "Macro topology coverage is product-specific breadth rather than default PR-critical infrastructure.",
+    ),
+    "test_macro_total_encoder": (
+        "broad",
+        "broad-pr plus focused macro-total encoder runs own macro encoder changes.",
+        "Macro encoder semantics should be selected by changed surface instead of every unrelated PR.",
+    ),
+    "test_navigation_data_quality_guard": (
+        "broad",
+        "broad-pr plus focused navigation-data-quality guard runs own association/concept-graph edits.",
+        "The advisory navigation quality guard is essential when navigation surfaces change but too specialized for every local PR loop.",
+    ),
+    "test_update_agent_status": (
+        "broad",
+        "broad-pr plus focused update-agent-status runs own installer/update status edits.",
+        "Install/status reporting is pre-merge safety and focused changed-surface coverage, not an always-on PR module.",
+    ),
     "test_active_recall": (
         "broad",
         "broad-pr plus focused active-recall runs own the full matrix.",

@@ -7,6 +7,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 MODULE_PATH = (
     Path(__file__).resolve().parents[2]
@@ -387,7 +388,9 @@ class CloseoutAuditTests(unittest.TestCase):
 
             Evidence level: behavior_run
             agent recall -> agent deepen/open -> opened source anchor hits:
-            public cue selector sel_public, opened source anchor hits=3.
+            `aippocampus agent recall "old handoff cue" --json`
+            `aippocampus agent deepen --request 1 --recall-selector sel_public --json`
+            opened source anchor hits=3.
 
             Compact/default output: compact card shows one next action.
             Detail/operator output: detail JSON keeps diagnostics behind full view.
@@ -409,6 +412,39 @@ class CloseoutAuditTests(unittest.TestCase):
         self.assertIn("2601", report["high_risk_issue_families"])
         self.assertTrue(report["evidence_shape"]["has_recall_deepen_open_anchor_chain"])
         self.assertTrue(report["evidence_shape"]["has_debt_removed_evidence"])
+
+    def test_followthrough_phrase_without_commands_does_not_pass_high_risk_closeout(
+        self,
+    ) -> None:
+        report = closeout_audit.audit_pr_body(
+            """
+            ## Summary
+            Fixes MCP recall projection.
+
+            Evidence level: behavior_run
+            agent recall -> agent deepen/open -> opened source anchor hits:
+            public cue selector sel_public, opened source anchor hits=3.
+
+            Compact/default output: compact card shows one next action.
+            Detail/operator output: detail JSON keeps diagnostics behind full view.
+
+            Closes #2601.
+            """,
+            issue_metadata={
+                2601: {
+                    "title": "Cleanup MCP recall compact/detail projection debt",
+                    "body": "Recall/MCP/source-open and compact/detail work.",
+                }
+            },
+        )
+
+        self.assertFalse(report["ok"], report)
+        self.assertTrue(report["evidence_shape"]["has_recall_deepen_open_phrase"])
+        self.assertFalse(report["evidence_shape"]["has_recall_deepen_open_anchor_chain"])
+        self.assertIn(
+            "missing_recall_source_followthrough",
+            {finding["kind"] for finding in report["findings"]},
+        )
 
     def test_compact_detail_closeout_cannot_use_json_snapshot_only(self) -> None:
         report = closeout_audit.audit_pr_body(
@@ -469,6 +505,112 @@ class CloseoutAuditTests(unittest.TestCase):
         kinds = {finding["kind"] for finding in report["findings"]}
         self.assertIn("missing_recall_source_followthrough", kinds)
         self.assertIn("synthetic_only_evidence_overclaims_high_risk", kinds)
+
+    def test_performance_closeout_rejects_internal_metrics_without_user_visible_shape(
+        self,
+    ) -> None:
+        report = closeout_audit.audit_pr_body(
+            """
+            ## Summary
+            Improves the SQL query plan for graph expansion.
+
+            Evidence level: behavior_run
+            Internal performance: EXPLAIN QUERY PLAN no longer uses a temp b-tree.
+            Build elapsed before=245ms after=18ms on a synthetic hub fixture.
+
+            Closes #2713.
+            """,
+            issue_metadata={
+                2713: {
+                    "title": "Require user-visible before/after metrics for performance closeouts",
+                    "body": (
+                        "Performance and latency issues need recall/deepen/open follow-through, "
+                        "useful source hits, wrong-route drag, manual-search fallback, and "
+                        "graph/cache freshness when relevant."
+                    ),
+                }
+            },
+        )
+
+        self.assertFalse(report["ok"], report)
+        kinds = {finding["kind"] for finding in report["findings"]}
+        self.assertIn("missing_performance_user_visible_metrics", kinds)
+        performance = next(
+            finding
+            for finding in report["findings"]
+            if finding["kind"] == "missing_performance_user_visible_metrics"
+        )
+        self.assertIn("recall_deepen_open_anchor_chain", performance["missing_metrics"])
+        self.assertIn("useful_source_hit_or_anchor_count", performance["missing_metrics"])
+        self.assertIn("wrong_route_drag_or_hard_negative", performance["missing_metrics"])
+        self.assertIn("manual_search_fallback", performance["missing_metrics"])
+        self.assertIn("graph_cache_freshness", performance["missing_metrics"])
+
+    def test_performance_closeout_accepts_internal_metrics_with_user_visible_followthrough(
+        self,
+    ) -> None:
+        report = closeout_audit.audit_pr_body(
+            """
+            ## Summary
+            Improves hub-node graph expansion without changing the foreground surface.
+
+            Evidence level: behavior_run
+            Internal performance: EXPLAIN QUERY PLAN uses idx_concept_edges_expand;
+            synthetic hub fixture latency before=245ms after=18ms.
+
+            User-visible before/after metrics:
+            agent recall -> agent deepen/open -> opened source anchor hits:
+            `aippocampus agent recall "hub-node slowdown cue" --json`
+            `aippocampus agent deepen --request 1 --recall-selector sel_perf --json`
+            opened source anchor hits=3.
+            agent recall wall time before=1800ms after=420ms.
+            useful source hit count before=1 after=3.
+            wrong-route-drag count before=2 after=0.
+            manual-search-fallback count before=1 after=0.
+            stale-route/stale-graph freshness metric: stale_route_count before=1 after=0.
+
+            Closes #2713.
+            """,
+            issue_metadata={
+                2713: {
+                    "title": "Require user-visible before/after metrics for performance closeouts",
+                    "body": (
+                        "Performance and latency issues involving graph/cache freshness need "
+                        "recall/deepen/open follow-through and user-visible before/after metrics."
+                    ),
+                }
+            },
+        )
+
+        self.assertTrue(report["ok"], report)
+        self.assertTrue(report["performance_freshness_required"])
+        self.assertTrue(report["performance_evidence_shape"]["has_latency_before_after_metric"])
+        self.assertTrue(report["performance_evidence_shape"]["has_useful_source_hit_metric"])
+
+    def test_github_metadata_fetch_falls_back_to_gh_cli_on_rest_failure(self) -> None:
+        completed = subprocess.CompletedProcess(
+            args=["gh", "issue", "view"],
+            returncode=0,
+            stdout=json.dumps({"title": "Performance closeout", "body": "latency and graph expansion"}),
+            stderr="",
+        )
+
+        with (
+            mock.patch.object(
+                closeout_audit.urllib.request,
+                "urlopen",
+                side_effect=closeout_audit.urllib.error.URLError("rate limit"),
+            ),
+            mock.patch.object(closeout_audit.subprocess, "run", return_value=completed) as run,
+        ):
+            metadata = closeout_audit._fetch_github_issue_metadata(
+                repo="Sapientropic/AIppocampus",
+                issue_numbers=[2713],
+            )
+
+        self.assertEqual(metadata[2713]["title"], "Performance closeout")
+        self.assertEqual(metadata[2713]["body"], "latency and graph expansion")
+        run.assert_called_once()
 
     def test_cli_reads_body_file_and_returns_json(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

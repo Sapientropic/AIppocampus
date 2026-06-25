@@ -248,6 +248,7 @@ def expand_concepts_with_diagnostics(
         best: dict[str, dict[str, Any]] = {}
         visited: set[tuple[str, int]] = set()
         budget_exceeded = False
+        neighbor_fetches_skipped_due_to_budget = 0
         depth_used = 0
         while queue:
             concept_id, score, current_depth, path, edge_types = queue.pop(0)
@@ -258,6 +259,7 @@ def expand_concepts_with_diagnostics(
             visited.add((concept_id, current_depth))
             if diagnostics["neighbor_fetches"] >= diagnostics["max_neighbor_fetches"]:
                 budget_exceeded = True
+                neighbor_fetches_skipped_due_to_budget += 1
                 continue
             next_depth = current_depth + 1
             rows, row_diagnostics = edge_rows_with_diagnostics(
@@ -309,10 +311,15 @@ def expand_concepts_with_diagnostics(
             ),
         )[: max(1, int(max_terms))]
         diagnostics["state"] = "expanded" if expansions else "no_expansions"
-        diagnostics["budget_state"] = (
-            "depth_downgraded" if budget_exceeded and depth_used < int(depth) else "within_budget"
-        )
+        if budget_exceeded and depth_used < int(depth):
+            budget_state = "depth_downgraded"
+        elif budget_exceeded:
+            budget_state = "truncated_by_neighbor_budget"
+        else:
+            budget_state = "within_budget"
+        diagnostics["budget_state"] = budget_state
         diagnostics["depth_used"] = depth_used
+        diagnostics["neighbor_fetches_skipped_due_to_budget"] = neighbor_fetches_skipped_due_to_budget
         diagnostics["expansion_count"] = len(expansions)
         diagnostics["elapsed_ms"] = round((time.perf_counter() - start) * 1000, 3)
         return expansions, diagnostics

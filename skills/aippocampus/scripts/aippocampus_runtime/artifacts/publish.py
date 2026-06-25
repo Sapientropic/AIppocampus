@@ -245,6 +245,22 @@ def _generation_path_projection(
     return projected
 
 
+def _reader_pin_cleanup_projection(cleanup: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "reader_pin_ttl_seconds": cleanup["ttl_seconds"],
+        "active_reader_pin_count": cleanup["active_reader_pin_count"],
+        "expired_reader_pin_count": cleanup["expired_reader_pin_count"],
+        "malformed_pin_count": cleanup["malformed_pin_count"],
+        "expired_reader_pins_cleanup_eligible_count": cleanup[
+            "expired_reader_pins_cleanup_eligible_count"
+        ],
+        "malformed_reader_pins_cleanup_eligible_count": cleanup[
+            "malformed_reader_pins_cleanup_eligible_count"
+        ],
+        "reader_pins_intentionally_left_count": cleanup["reader_pins_intentionally_left_count"],
+    }
+
+
 def index_generation_diagnostics(
     sqlite_or_pointer_path: Path,
     *,
@@ -308,9 +324,7 @@ def index_generation_diagnostics(
                 else cleanup["cleanup_status"]
             ),
             "generation_age_seconds": cleanup["generation_age_seconds"],
-            "reader_pin_ttl_seconds": cleanup["ttl_seconds"],
-            "active_reader_pin_count": cleanup["active_reader_pin_count"],
-            "expired_reader_pin_count": cleanup["expired_reader_pin_count"],
+            **_reader_pin_cleanup_projection(cleanup),
             "cleanup_evidence": list(cleanup["evidence"]),
             **_generation_path_projection(generation_dir, root=root, include_paths=include_paths),
         }
@@ -372,6 +386,7 @@ def index_generation_diagnostics(
         "last_known_good_generation": last_known_good_generation,
         "current_generation_exists": current_exists,
         "last_known_good_generation_exists": last_known_good_exists,
+        # Compatibility metadata: owner #2362/#2699; removal after pointer-only readers; default exposure diagnostics.
         "stable_compatibility_exists": stable_exists,
         "compatibility_path": pointer.get("compatibility_path") or pointer.get("stable"),
         "generation_count": len(generation_rows),
@@ -458,9 +473,7 @@ def segment_generation_diagnostics(
                 else cleanup["cleanup_status"]
             ),
             "generation_age_seconds": cleanup["generation_age_seconds"],
-            "reader_pin_ttl_seconds": cleanup["ttl_seconds"],
-            "active_reader_pin_count": cleanup["active_reader_pin_count"],
-            "expired_reader_pin_count": cleanup["expired_reader_pin_count"],
+            **_reader_pin_cleanup_projection(cleanup),
             "cleanup_evidence": list(cleanup["evidence"]),
             **_generation_path_projection(generation_dir, root=root, include_paths=include_paths),
         }
@@ -522,6 +535,7 @@ def segment_generation_diagnostics(
         "last_known_good_generation": last_known_good_generation,
         "current_generation_exists": current_exists,
         "last_known_good_generation_exists": last_known_good_exists,
+        # Compatibility metadata: owner #2362/#2699; removal after pointer-only segment readers; default exposure diagnostics.
         "stable_compatibility_exists": stable_exists,
         "compatibility_path": pointer.get("compatibility_path") or pointer.get("stable"),
         "generation_count": len(generation_rows),
@@ -745,6 +759,7 @@ def publish_sqlite_with_pointer(
         "generation_layout": f"{INDEX_GENERATIONS_DIR}/<generation>/{destination.name}",
         "current_generation": current_generation,
         "last_known_good_generation": last_known_good_generation,
+        # Compatibility metadata: owner #2362/#2699; removal after current-only readers; default exposure pointer-only.
         "compatibility_path": _pointer_value(pointer_path, destination),
         "stable": _pointer_value(pointer_path, destination),
         "current": _pointer_value(pointer_path, current_path),

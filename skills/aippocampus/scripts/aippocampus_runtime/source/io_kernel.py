@@ -153,6 +153,39 @@ def load_jsonl_dict_rows(path: Path) -> JsonlReadResult:
     return JsonlReadResult(rows=rows, loss=_finish_jsonl_loss(loss))
 
 
+def parse_jsonl_dict_rows_text(text: str, *, strict: bool = False) -> JsonlReadResult:
+    """Parse already-read JSONL text through the same loss-accounting contract."""
+
+    loss = empty_jsonl_loss()
+    rows: list[dict[str, Any]] = []
+    for line_no, line in enumerate(text.splitlines(), start=1):
+        if not line.strip():
+            loss["skipped_empty_line_count"] = (
+                int(loss.get("skipped_empty_line_count") or 0) + 1
+            )
+            continue
+        try:
+            item = json.loads(line)
+        except json.JSONDecodeError:
+            loss["invalid_json_line_count"] = int(loss.get("invalid_json_line_count") or 0) + 1
+            line_numbers = loss.setdefault("invalid_json_line_numbers", [])
+            if isinstance(line_numbers, list) and len(line_numbers) < MAX_LOSS_LINE_NUMBERS:
+                line_numbers.append(line_no)
+            if strict:
+                return JsonlReadResult(rows=[], loss=_finish_jsonl_loss(loss))
+            continue
+        if not isinstance(item, dict):
+            loss["non_object_line_count"] = int(loss.get("non_object_line_count") or 0) + 1
+            line_numbers = loss.setdefault("non_object_line_numbers", [])
+            if isinstance(line_numbers, list) and len(line_numbers) < MAX_LOSS_LINE_NUMBERS:
+                line_numbers.append(line_no)
+            if strict:
+                return JsonlReadResult(rows=[], loss=_finish_jsonl_loss(loss))
+            continue
+        rows.append(item)
+    return JsonlReadResult(rows=rows, loss=_finish_jsonl_loss(loss))
+
+
 def load_jsonl_dict_rows_strict(path: Path) -> list[dict[str, Any]]:
     """Load JSONL object rows and fail with line context on malformed input."""
 
