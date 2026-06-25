@@ -10,6 +10,24 @@ from tools.aippocampus import run_ci_parity
 
 
 class CiParityTests(unittest.TestCase):
+    def test_candidate_python_commands_prefers_configured_and_bundled_runtime(self) -> None:
+        bundled = r"C:\CodexRuntime\python.exe"
+        with (
+            mock.patch.dict(
+                run_ci_parity.os.environ,
+                {run_ci_parity.CI_PYTHON_ENV: r"C:\Python312\python.exe"},
+            ),
+            mock.patch.object(
+                run_ci_parity,
+                "_codex_bundled_python_commands",
+                return_value=[[str(bundled)]],
+            ),
+        ):
+            candidates = run_ci_parity._candidate_python_commands("3.12")
+
+        self.assertEqual(candidates[0], [r"C:\Python312\python.exe"])
+        self.assertEqual(candidates[1], [bundled])
+
     def test_find_python_for_minor_checks_candidates_before_selecting(self) -> None:
         with (
             mock.patch.object(

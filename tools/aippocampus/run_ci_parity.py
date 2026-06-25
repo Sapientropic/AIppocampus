@@ -14,6 +14,7 @@ from typing import Any
 REPO_ROOT = Path(__file__).resolve().parents[2]
 FALLBACK_CANONICAL_CI_PYTHON = "3.12"
 KIND = "aippocampus_ci_python_parity"
+CI_PYTHON_ENV = "AIPPOCAMPUS_CI_PYTHON"
 
 
 def canonical_python_minor() -> str:
@@ -31,8 +32,35 @@ def canonical_python_minor() -> str:
     return FALLBACK_CANONICAL_CI_PYTHON
 
 
+def _configured_python_commands() -> list[list[str]]:
+    configured = os.environ.get(CI_PYTHON_ENV)
+    if not configured:
+        return []
+    executable = configured.strip().strip('"')
+    return [[executable]] if executable else []
+
+
+def _codex_bundled_python_commands() -> list[list[str]]:
+    runtime_root = (
+        Path.home()
+        / ".cache"
+        / "codex-runtimes"
+        / "codex-primary-runtime"
+        / "dependencies"
+        / "python"
+    )
+    candidates = [
+        runtime_root / "python.exe",
+        runtime_root / "bin" / "python",
+        runtime_root / "bin" / "python3",
+    ]
+    return [[str(path)] for path in candidates if path.exists()]
+
+
 def _candidate_python_commands(minor: str) -> list[list[str]]:
     candidates: list[list[str]] = []
+    candidates.extend(_configured_python_commands())
+    candidates.extend(_codex_bundled_python_commands())
     if os.name == "nt":
         candidates.append(["py", f"-{minor}"])
     candidates.extend(
@@ -80,6 +108,7 @@ def recovery_card(*, minor: str) -> dict[str, Any]:
         "canonical_python_minor": minor,
         "summary": f"Python {minor} was not found for the opt-in CI parity lane.",
         "recovery_actions": [
+            f"Set {CI_PYTHON_ENV} to a Python {minor} executable if one is bundled by the host.",
             f"Install Python {minor} and rerun this command.",
             "Let GitHub Actions remain the platform compatibility authority.",
             "Use local ruff, mypy, focused tests, and PR gate for ordinary iteration.",

@@ -94,6 +94,7 @@ from benchmark_test_classification import (
     benchmark_fast_lane_profile_for,
     is_benchmark_shaped_module,
 )
+from run_ci_parity import find_python_for_minor
 from test_tier_manifest import TEST_MODULE_CLASSIFICATIONS
 
 
@@ -323,17 +324,21 @@ def python_environment_summary() -> dict[str, object]:
     canonical_version = canonical_ci_python_version()
     local_minor = f"{major}.{minor}"
     canonical_minor = _version_minor(canonical_version)
+    canonical_command = find_python_for_minor(canonical_minor)
     return {
         "local_python_version": local_version,
         "local_python_minor": local_minor,
         "canonical_ci_python_version": canonical_version,
         "canonical_ci_python_minor": canonical_minor,
         "minor_matches_ci": local_minor == canonical_minor,
+        "canonical_ci_python_available": canonical_command is not None,
     }
 
 
 def planner_warnings(environment: dict[str, object]) -> list[dict[str, str]]:
     if environment.get("minor_matches_ci") is True:
+        return []
+    if environment.get("canonical_ci_python_available") is True:
         return []
     local_minor = str(environment.get("local_python_minor", "unknown"))
     canonical_minor = str(environment.get("canonical_ci_python_minor", "unknown"))

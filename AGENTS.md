@@ -72,6 +72,40 @@ and link to it.
 - Before changing hooks, sync, registry, or search ranking, explain the
   privacy and over-personalization boundary in code or docs.
 
+## Agent Attention And Domain Hazards
+
+Many AIppocampus regressions are not caused by agents lacking general coding
+knowledge. They happen because the implementation path lets an agent attend to
+the easy local shape while missing the domain hazard that makes that shape
+wrong here.
+
+For high-risk surfaces, keep one compact domain-hazard card near the owning
+doc, test helper, or verification reference. Do not mirror the card across
+many prompts. A card should name the surface, the recurring hazard, forbidden
+shortcuts, required checks, one or two examples / anti-examples, and the
+focused command or fixture that proves the hazard stayed covered. Starter
+cards live in `docs/architecture/ops/agent-domain-hazards.md`; move or split
+them closer to owners when a card grows beyond a quick attention aid.
+
+Use domain-hazard cards especially when touching:
+
+- association, concept-graph, cognitive-map, theme, or phrase-mining code where
+  language, segmentation, source diversity, or graph expansion can flood recall
+  with low-value navigation;
+- recall, MCP, APW, source-open, compact foreground, or repo-familiarity code
+  where a route can look safe while still making the foreground agent wander;
+- sync, registry, lock, JSONL, compatibility, or cleanup code where a green
+  happy path can hide data loss, stale state, or platform-specific behavior.
+
+Changed-surface planning should check whether a known hazard card applies
+before proposing tests or accepting a closeout. If a failure keeps recurring
+and no card exists, create a small card or open an owner issue instead of
+adding another fallback, field, or broad warning.
+
+Domain-hazard cards are attention aids, not source evidence and not a full SDD
+layer. Stale cards should be updated or deleted when the owning behavior
+changes.
+
 ## Roadmap, Issue, And Project Intake
 
 Agents should help turn sprawling docs into executable GitHub work, but docs
@@ -96,7 +130,8 @@ planning material:
 - Prefer one umbrella issue for a broad track, then create focused child issues
   or checklist items for independently closable slices. Each actionable issue
   should include goal, source, scope, non-goals, acceptance criteria, and
-  relevant files.
+  relevant files. For agent-prone surfaces, also include the applicable
+  domain hazards or forbidden shortcuts.
 - Use GitHub Projects as the planning view when available, not as another truth
   source. Suggested fields are `Status`, `Track`, `Kind`, `Stage`, `Evidence`,
   `Source`, and `Priority`. Do not claim a Project, fields, or automations exist
