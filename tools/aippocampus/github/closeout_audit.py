@@ -159,13 +159,14 @@ RECALL_FOLLOWTHROUGH_FAMILY_RE = re.compile(
     re.I,
 )
 COMPACT_DETAIL_FAMILY_RE = re.compile(
-    r"\b(compact|detail|operator|foreground projection|foreground surface|projection)\b",
+    r"\b(compact|detail|foreground projection|foreground surface|projection)\b",
     re.I,
 )
 CLEANUP_DEBT_FAMILY_RE = re.compile(
     r"\b("
     r"cleanup|test[-_ ]debt|guard[-_ ]debt|debt removed|compatibility cleanup|"
-    r"compatibility|compat field|retire|delete|deleted|migrated|duplicate helper|"
+    r"compat field|retire|delete helper|deleted helper|deleted path|deleted test|"
+    r"migrated path|migrated caller|duplicate helper|"
     r"field[-_ ]only|guard framework|red[- ]light"
     r")\b",
     re.I,
@@ -186,6 +187,19 @@ PERFORMANCE_FRESHNESS_REQUIRED_RE = re.compile(
     r"\b(graph|cache|freshness|stale[- ]?(?:route|graph)|build|skip|no[- ]op skip)\b",
     re.I,
 )
+USER_VISIBLE_PERFORMANCE_CONTEXT_RE = re.compile(
+    r"\b("
+    r"user[- ]visible|agent recall|recall path|live recall|live expansion|"
+    r"prompt hook|lifecycle hook|foreground|mcp|apw|source[-_ ]open|"
+    r"wrong[-_ ]?route|manual[-_ ]?search"
+    r")\b",
+    re.I,
+)
+NON_GOAL_HEADING_RE = re.compile(
+    r"^\s*#{1,6}\s*(?:non[- ]?goals?|out of scope)\b",
+    re.I,
+)
+MARKDOWN_SECTION_HEADING_RE = re.compile(r"^\s*#{1,6}\s+\S")
 FOLLOWTHROUGH_CHAIN_RE = re.compile(
     r"agent[_ -]?recall.{0,240}"
     r"(?:agent[_ -]?(?:deepen|open)|deepen/open|opened source).{0,240}"
@@ -337,6 +351,27 @@ def _intent_level_requirements(text: str) -> list[str]:
 
 def _issue_intent_text_from_body(body: str) -> str:
     return "\n".join(match.group("intent").strip() for match in ISSUE_INTENT_RE.finditer(body))
+
+
+def _strip_non_goal_sections(text: str) -> str:
+    """Return issue text that should affect closeout obligations.
+
+    Issue non-goals often name adjacent high-risk surfaces precisely to say
+    this PR must not claim them. Feeding those sections into closeout family
+    detection pushes future agents toward noisy, unrelated proof material.
+    """
+
+    kept_lines: list[str] = []
+    skipping_non_goal_section = False
+    for line in str(text or "").splitlines():
+        if NON_GOAL_HEADING_RE.match(line):
+            skipping_non_goal_section = True
+            continue
+        if skipping_non_goal_section and MARKDOWN_SECTION_HEADING_RE.match(line):
+            skipping_non_goal_section = False
+        if not skipping_non_goal_section:
+            kept_lines.append(line)
+    return "\n".join(kept_lines)
 
 
 def _normalize_issue_metadata(value: Any) -> dict[int, dict[str, Any]]:
@@ -552,7 +587,12 @@ def _issue_intent_levels(
         item = metadata.get(issue)
         if not item:
             continue
-        text = "\n".join(str(item.get(key) or "") for key in ("title", "body"))
+        text = "\n".join(
+            [
+                str(item.get("title") or ""),
+                _strip_non_goal_sections(str(item.get("body") or "")),
+            ]
+        )
         required = _intent_level_requirements(text)
         if required:
             levels[str(issue)] = required
@@ -621,7 +661,7 @@ def _issue_family_text(
             [
                 issue_intent,
                 str(metadata.get("title") or ""),
-                str(metadata.get("body") or ""),
+                _strip_non_goal_sections(str(metadata.get("body") or "")),
             ]
         )
     return issue_intent
@@ -637,7 +677,7 @@ def _high_risk_families_for_text(text: str) -> list[str]:
         families.append("cleanup_test_guard_debt")
     if BENCHMARK_SYNTHETIC_FAMILY_RE.search(text):
         families.append("benchmark_or_synthetic")
-    if PERFORMANCE_FAMILY_RE.search(text):
+    if PERFORMANCE_FAMILY_RE.search(text) and USER_VISIBLE_PERFORMANCE_CONTEXT_RE.search(text):
         families.append("performance_user_visible")
     return families
 

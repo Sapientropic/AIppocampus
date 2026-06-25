@@ -361,9 +361,183 @@ class ConceptGraphTests(unittest.TestCase):
 
         rebuilt = graph.build_concept_graph(self.associations, self.output)
 
-        self.assertEqual(rebuilt["build_mode"], "full_rebuild")
-        self.assertTrue(rebuilt["build_diagnostics"]["reset_graph_called"])
+        self.assertEqual(rebuilt["build_mode"], "incremental_update")
+        self.assertFalse(rebuilt["build_diagnostics"]["reset_graph_called"])
+        self.assertEqual(rebuilt["build_diagnostics"]["changed_families"], ["associations"])
+        self.assertGreater(rebuilt["build_diagnostics"]["edge_contribution_rows_updated"], 0)
         self.assertGreater(rebuilt["edge_count"], second["edge_count"])
+
+    def test_incremental_association_slice_replaces_stale_related_edges(self) -> None:
+        self.associations.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "terms": {
+                        "本地底座": {
+                            "term": "本地底座",
+                            "status": "staging",
+                            "confidence": 0.9,
+                            "hit_count": 4,
+                            "related_terms": ["Go runtime"],
+                            "threads": [
+                                {"thread_key": "session:a"},
+                                {"thread_key": "session:b"},
+                            ],
+                        }
+                    },
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        graph.build_concept_graph(self.associations, self.output)
+        payload = json.loads(self.associations.read_text(encoding="utf-8"))
+        payload["terms"]["本地底座"]["related_terms"] = ["gotd adapter"]
+        self.associations.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
+        result = graph.build_concept_graph(self.associations, self.output)
+        expansions = graph.expand_concepts(self.output, ["本地底座"], depth=1)
+        con = sqlite3.connect(self.output)
+        try:
+            labels = {row[0] for row in con.execute("SELECT label FROM concepts").fetchall()}
+        finally:
+            con.close()
+
+        self.assertEqual(result["build_mode"], "incremental_update")
+        self.assertFalse(result["build_diagnostics"]["reset_graph_called"])
+        self.assertEqual(result["build_diagnostics"]["changed_families"], ["associations"])
+        self.assertGreaterEqual(result["build_diagnostics"]["read_model_edge_keys_deleted"], 2)
+        self.assertIn("gotd adapter", [item["term"] for item in expansions])
+        self.assertNotIn("Go runtime", [item["term"] for item in expansions])
+        self.assertNotIn("Go runtime", labels)
+
+    def test_incremental_timeline_turn_replaces_stale_topic_edges(self) -> None:
+        self.associations.write_text(
+            json.dumps({"schema_version": 1, "terms": {}}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        timeline = self.root / "project_timeline.json"
+        timeline.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "projects": {
+                        "p": {
+                            "project_label": "AIppocampus",
+                            "project_tags": ["黏菌"],
+                            "latest_turns": [
+                                {
+                                    "thread_key": "session:timeline",
+                                    "turn_id": "turn:1",
+                                    "topic_terms": ["生命周期", "证据缺口"],
+                                    "source_refs": [
+                                        {"thread_key": "session:timeline", "source_line": 10}
+                                    ],
+                                }
+                            ],
+                        }
+                    },
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        graph.build_concept_graph(
+            self.associations,
+            self.output,
+            project_timeline_path=timeline,
+        )
+        payload = json.loads(timeline.read_text(encoding="utf-8"))
+        payload["projects"]["p"]["latest_turns"][0]["topic_terms"] = [
+            "source boundary",
+            "registry search",
+        ]
+        timeline.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
+        result = graph.build_concept_graph(
+            self.associations,
+            self.output,
+            project_timeline_path=timeline,
+        )
+        con = sqlite3.connect(self.output)
+        try:
+            labels = {row[0] for row in con.execute("SELECT label FROM concepts").fetchall()}
+        finally:
+            con.close()
+
+        self.assertEqual(result["build_mode"], "incremental_update")
+        self.assertFalse(result["build_diagnostics"]["reset_graph_called"])
+        self.assertEqual(result["build_diagnostics"]["changed_families"], ["project_timeline"])
+        self.assertIn("source boundary", labels)
+        self.assertIn("registry search", labels)
+        self.assertNotIn("生命周期", labels)
+        self.assertNotIn("证据缺口", labels)
+
+    def test_incremental_subconscious_negative_deletion_restores_association_edge(
+        self,
+    ) -> None:
+        self.associations.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "terms": {
+                        "本地底座": {
+                            "term": "本地底座",
+                            "status": "staging",
+                            "confidence": 0.9,
+                            "hit_count": 3,
+                            "related_terms": ["Go runtime"],
+                            "threads": [
+                                {"thread_key": "session:a"},
+                                {"thread_key": "session:b"},
+                            ],
+                        }
+                    },
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        staging = self.root / "subconscious_edges.jsonl"
+        staging.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "kind": "aippocampus_subconscious_edge",
+                    "status": "contradicted",
+                    "src": "本地底座",
+                    "dst": "Go runtime",
+                    "edge_type": "co_occurs",
+                    "confidence": 0.8,
+                    "source_refs": [{"thread_key": "session:correction", "assistant_line": 1}],
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        first = graph.build_concept_graph(
+            self.associations,
+            self.output,
+            subconscious_edges_path=staging,
+        )
+        self.assertEqual(first["lifecycle"]["edge_status_counts"]["retired"], 2)
+        self.assertEqual(graph.expand_concepts(self.output, ["本地底座"], depth=1), [])
+
+        staging.write_text("", encoding="utf-8")
+        result = graph.build_concept_graph(
+            self.associations,
+            self.output,
+            subconscious_edges_path=staging,
+        )
+        expansions = graph.expand_concepts(self.output, ["本地底座"], depth=1)
+
+        self.assertEqual(result["build_mode"], "incremental_update")
+        self.assertFalse(result["build_diagnostics"]["reset_graph_called"])
+        self.assertEqual(result["build_diagnostics"]["changed_families"], ["subconscious_edges"])
+        self.assertGreaterEqual(result["build_diagnostics"]["edge_contribution_rows_deleted"], 2)
+        self.assertEqual(result["lifecycle"]["edge_status_counts"].get("retired", 0), 0)
+        self.assertEqual(expansions[0]["term"], "Go runtime")
 
     def test_graph_health_reports_build_manifest_without_private_paths(self) -> None:
         self.associations.write_text(

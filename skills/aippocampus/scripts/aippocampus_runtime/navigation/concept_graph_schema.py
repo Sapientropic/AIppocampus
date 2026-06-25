@@ -87,6 +87,43 @@ def init_schema(con: sqlite3.Connection) -> None:
             PRIMARY KEY (src_concept_id, dst_concept_id, edge_type, scope_key)
         );
 
+        CREATE TABLE IF NOT EXISTS concept_node_contributions (
+            source_family TEXT NOT NULL,
+            slice_key TEXT NOT NULL,
+            concept_id TEXT NOT NULL,
+            label TEXT NOT NULL,
+            normalized_label TEXT NOT NULL,
+            kind TEXT NOT NULL DEFAULT 'topic',
+            kind_source TEXT NOT NULL DEFAULT 'fallback',
+            kind_confidence REAL NOT NULL DEFAULT 0.0,
+            status TEXT NOT NULL DEFAULT 'staging',
+            scope_key TEXT NOT NULL DEFAULT 'global',
+            hit_count INTEGER NOT NULL DEFAULT 0,
+            thread_count INTEGER NOT NULL DEFAULT 0,
+            lifecycle_reason TEXT NOT NULL DEFAULT 'staging_default',
+            PRIMARY KEY (source_family, slice_key, concept_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS concept_edge_contributions (
+            source_family TEXT NOT NULL,
+            slice_key TEXT NOT NULL,
+            src_concept_id TEXT NOT NULL,
+            dst_concept_id TEXT NOT NULL,
+            edge_type TEXT NOT NULL,
+            scope_key TEXT NOT NULL DEFAULT 'global',
+            weight REAL NOT NULL,
+            confidence REAL NOT NULL,
+            status TEXT NOT NULL DEFAULT 'staging',
+            evidence_count INTEGER NOT NULL DEFAULT 0,
+            thread_count INTEGER NOT NULL DEFAULT 0,
+            lifecycle_reason TEXT NOT NULL DEFAULT 'staging_default',
+            source_thread_key TEXT,
+            source_message_id TEXT,
+            PRIMARY KEY (
+                source_family, slice_key, src_concept_id, dst_concept_id, edge_type, scope_key
+            )
+        );
+
         CREATE INDEX IF NOT EXISTS idx_concepts_normalized ON concepts(normalized_label);
         CREATE INDEX IF NOT EXISTS idx_concepts_health
             ON concepts(status, scope_key, thread_count, hit_count);
@@ -96,6 +133,14 @@ def init_schema(con: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_concept_edges_dst ON concept_edges(dst_concept_id, weight DESC);
         CREATE INDEX IF NOT EXISTS idx_concept_edges_quality
             ON concept_edges(edge_type, status, thread_count, evidence_count, confidence, scope_key);
+        CREATE INDEX IF NOT EXISTS idx_node_contributions_concept
+            ON concept_node_contributions(concept_id);
+        CREATE INDEX IF NOT EXISTS idx_node_contributions_slice
+            ON concept_node_contributions(source_family, slice_key);
+        CREATE INDEX IF NOT EXISTS idx_edge_contributions_edge
+            ON concept_edge_contributions(src_concept_id, dst_concept_id, edge_type, scope_key);
+        CREATE INDEX IF NOT EXISTS idx_edge_contributions_slice
+            ON concept_edge_contributions(source_family, slice_key);
         """
     )
     ensure_lifecycle_columns(con)
@@ -135,4 +180,6 @@ def ensure_lifecycle_columns(con: sqlite3.Connection) -> None:
 def reset_graph(con: sqlite3.Connection) -> None:
     con.execute("DELETE FROM concept_edges")
     con.execute("DELETE FROM concepts")
+    con.execute("DELETE FROM concept_edge_contributions")
+    con.execute("DELETE FROM concept_node_contributions")
     con.execute("DELETE FROM meta")

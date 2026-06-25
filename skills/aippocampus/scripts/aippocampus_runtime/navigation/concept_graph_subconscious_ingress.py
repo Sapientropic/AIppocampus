@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import sqlite3
 from collections.abc import Callable, Iterable
 from pathlib import Path
@@ -27,6 +29,12 @@ from aippocampus_runtime.source.io_kernel import iter_jsonl_dict_rows
 
 UpsertConcept = Callable[..., str | None]
 UpsertEdge = Callable[..., None]
+
+
+def _stable_slice_key(*parts: Any) -> str:
+    payload = json.dumps(parts, ensure_ascii=False, sort_keys=True, default=str)
+    digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()[:24]
+    return f"subconscious:{digest}"
 
 
 def iter_concept_graph_rows(path: Path) -> Iterable[dict[str, Any]]:
@@ -148,6 +156,7 @@ def collect_subconscious_edges(
             normalize_term(str(group["dst"])),
             str(group["edge_type"]),
         )
+        slice_key = _stable_slice_key(*group_key)
         if decision := hub_decisions.get(group_key):
             edge_status = decision.status
             edge_lifecycle_reason = decision.reason
@@ -161,6 +170,8 @@ def collect_subconscious_edges(
             supplied_kind=group.get("src_kind"),
             supplied_kind_status=group.get("kind_status"),
             source_backed_kind=bool(refs),
+            contribution_source_family="subconscious_edges",
+            contribution_slice_key=slice_key,
         )
         dst_id = upsert_concept(
             con,
@@ -172,6 +183,8 @@ def collect_subconscious_edges(
             supplied_kind=group.get("dst_kind"),
             supplied_kind_status=group.get("kind_status"),
             source_backed_kind=bool(refs),
+            contribution_source_family="subconscious_edges",
+            contribution_slice_key=slice_key,
         )
         if not src_id or not dst_id:
             continue
@@ -186,6 +199,8 @@ def collect_subconscious_edges(
             lifecycle_reason=edge_lifecycle_reason,
             thread_count=len(thread_keys),
             source_thread_key=source_thread_key,
+            contribution_source_family="subconscious_edges",
+            contribution_slice_key=slice_key,
         )
         inserted += 1
         if group["edge_type"] in edge_policy.BIDIRECTIONAL_EDGE_TYPES:
@@ -200,6 +215,8 @@ def collect_subconscious_edges(
                 lifecycle_reason=edge_lifecycle_reason,
                 thread_count=len(thread_keys),
                 source_thread_key=source_thread_key,
+                contribution_source_family="subconscious_edges",
+                contribution_slice_key=slice_key,
             )
             inserted += 1
     return inserted, hub_quality

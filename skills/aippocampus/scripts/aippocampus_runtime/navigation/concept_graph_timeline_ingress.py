@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import sqlite3
 from collections.abc import Callable
 from pathlib import Path
@@ -15,6 +17,12 @@ from aippocampus_runtime.registry.api import unique_preserve
 from aippocampus_runtime.source.io_kernel import load_json_dict
 
 AddBidirectionalEdge = Callable[..., None]
+
+
+def _stable_slice_key(*parts: Any) -> str:
+    payload = json.dumps(parts, ensure_ascii=False, sort_keys=True, default=str)
+    digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()[:24]
+    return f"timeline:{digest}"
 
 
 def load_timeline_payload(path: Path) -> dict[str, Any]:
@@ -32,7 +40,9 @@ def collect_timeline_edges(
         return 0
     timeline = load_timeline_payload(timeline_path)
     edge_count = 0
-    for project in (timeline.get("projects") or {}).values():
+    for project_index, (project_key, project) in enumerate(
+        (timeline.get("projects") or {}).items()
+    ):
         if not isinstance(project, dict):
             continue
         project_label = str(project.get("project_label") or "").strip()
@@ -47,7 +57,7 @@ def collect_timeline_edges(
             ),
             limit=8,
         )
-        for turn in project.get("latest_turns") or []:
+        for turn_index, turn in enumerate(project.get("latest_turns") or []):
             if not isinstance(turn, dict):
                 continue
             turn_terms = term_quality.filter_terms(
@@ -64,6 +74,10 @@ def collect_timeline_edges(
             if len(topic_terms) < 2:
                 continue
             source_thread_key = turn.get("thread_key")
+            slice_key = _stable_slice_key(
+                project_key or project_index,
+                turn.get("turn_id") or turn.get("message_id") or source_thread_key or turn_index,
+            )
             for idx, term in enumerate(topic_terms):
                 for related in topic_terms[idx + 1 :]:
                     add_bidirectional_edge(
@@ -75,6 +89,8 @@ def collect_timeline_edges(
                         status="staging",
                         evidence_count=1,
                         source_thread_key=source_thread_key,
+                        contribution_source_family="project_timeline",
+                        contribution_slice_key=slice_key,
                     )
                     edge_count += 2
     return edge_count

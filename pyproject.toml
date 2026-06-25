@@ -245,6 +245,7 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/navigation/cognitive_map_query.py",
     "skills/aippocampus/scripts/aippocampus_runtime/navigation/concept_edge_utility.py",
     "skills/aippocampus/scripts/aippocampus_runtime/navigation/concept_graph.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/navigation/concept_graph_contributions.py",
     "skills/aippocampus/scripts/aippocampus_runtime/navigation/concept_graph_expand.py",
     "skills/aippocampus/scripts/aippocampus_runtime/navigation/concept_graph_cli.py",
     "skills/aippocampus/scripts/aippocampus_runtime/navigation/data_quality_guard.py",
