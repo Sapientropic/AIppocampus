@@ -1632,12 +1632,13 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
         self.assertTrue(response["result"]["isError"])
         payload = self.tool_payload(response)
         self.assertEqual(payload["error"]["code"], "missing_turn_selector")
-        self.assertIn("turn_id", payload["error"]["details"]["required_any"])
+        self.assertIn("turn_id", payload["error"]["required_any"])
         self.assertEqual(
-            payload["error"]["details"]["foreground_action"]["tool_name"],
+            payload["foreground_action"]["tool_name"],
             "agent_recall",
         )
-        self.assertIn("arguments_template", payload["error"]["details"])
+        self.assertIn("arguments_template", payload["foreground_action"])
+        self.assertNotIn("details", payload["error"])
         self.assertEqual(executable_command_violations(payload), [])
 
     def test_deepen_tools_return_recovery_cards_for_missing_selectors(self) -> None:
@@ -1678,13 +1679,13 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
 
         self.assertTrue(recall_response["result"]["isError"])
         recall_payload = self.tool_payload(recall_response)
-        details = recall_payload["error"]["details"]
         self.assertEqual(recall_payload["error"]["code"], "missing_recall_handle")
-        self.assertIn("foreground_action", details)
-        self.assertNotIn("agent_next_action", details)
-        self.assertEqual(details["foreground_action"]["tool_name"], "recall_context")
-        self.assertIn("arguments_template", details)
-        self.assertIn("followup_arguments_template", details)
+        self.assertIn("foreground_action", recall_payload)
+        self.assertNotIn("agent_next_action", recall_payload)
+        self.assertNotIn("details", recall_payload["error"])
+        self.assertEqual(recall_payload["foreground_action"]["tool_name"], "recall_context")
+        self.assertIn("arguments_template", recall_payload["foreground_action"])
+        self.assertEqual(recall_payload["staged_followup"][1]["tool_name"], "recall_deepen")
         self.assertEqual(executable_command_violations(recall_payload), [])
 
     def test_get_turn_context_reports_missing_message_id(self) -> None:

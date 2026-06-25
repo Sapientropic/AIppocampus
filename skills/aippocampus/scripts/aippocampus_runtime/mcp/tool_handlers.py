@@ -27,6 +27,7 @@ from aippocampus_runtime.mcp.compact_profile import (
     compact_search_memory_payload,
 )
 from aippocampus_runtime.mcp.foreground_recovery import (
+    compact_missing_input_recovery_payload,
     missing_input_recovery_card,
 )
 from aippocampus_runtime.mcp.foreground_recovery import (
@@ -491,12 +492,24 @@ def call_recall_deepen(arguments: dict[str, Any]) -> dict[str, Any]:
 
 def call_agent_recall(arguments: dict[str, Any]) -> dict[str, Any]:
     query = str(arguments.get("query") or arguments.get("intent") or arguments.get("cue") or "").strip()
+
+    def _compact_recall(raw: dict[str, Any]) -> dict[str, Any]:
+        raw = dict(raw)
+        raw["query"] = query
+        return compact_agent_recall_payload(raw)
+
     if not query:
         payload = agent_recall_missing_query_payload(
             schema_version=str(getattr(agent_continuity_module(), "SCHEMA_VERSION", "agent-continuity-path-v1")),
             kind="aippocampus_agent_continuity_path",
         )
-        return text_result(public_payload(arguments, payload), is_error=True)
+        return render_profiled_result(
+            arguments,
+            payload,
+            is_error=True,
+            compact_projector=compact_missing_input_recovery_payload,
+            full_output_boundary="local_private_recovery_detail",
+        )
     agent = agent_continuity_module()
     cwd_path = cwd_arg(arguments)
     source_dir = clean_source_dir_for(arguments)
@@ -553,10 +566,6 @@ def call_agent_recall(arguments: dict[str, Any]) -> dict[str, Any]:
     payload["recall_selector_available"] = bool(selector_id)
     payload["recall_selector_id"] = selector_id
 
-    def _compact_recall(raw: dict[str, Any]) -> dict[str, Any]:
-        raw["query"] = query
-        return compact_agent_recall_payload(raw)
-
     return render_profiled_result(
         arguments,
         payload,
@@ -599,6 +608,25 @@ def call_agent_deepen(arguments: dict[str, Any]) -> dict[str, Any]:
     cached_context: dict[str, Any] = {}
     request_index_arg: int | None = None
     selector_cache_path: str | Path | None = arguments.get("last_recall_path")
+
+    def _compact_deepen(raw: dict[str, Any]) -> dict[str, Any]:
+        return compact_agent_deepen_payload(
+            raw,
+            request_index=request_index_arg,
+            last_recall=bool(arguments.get("last_recall") or request_index_arg is not None),
+            recall_selector=str(arguments.get("recall_selector") or ""),
+            surface="mcp_agent_deepen_compact",
+        )
+
+    def _deepen_result(payload: dict[str, Any], *, is_error: bool = False) -> dict[str, Any]:
+        return render_profiled_result(
+            arguments,
+            payload,
+            is_error=is_error,
+            compact_projector=_compact_deepen,
+            full_output_boundary="local_private_diagnostic_full",
+        )
+
     if handle is None and (
         arguments.get("recall_selector") or arguments.get("last_recall") or "request_index" in arguments
     ):
@@ -617,14 +645,14 @@ def call_agent_deepen(arguments: dict[str, Any]) -> dict[str, Any]:
                 kind="aippocampus_agent_continuity_path",
                 cue=query_from_last_recall_cache(selector_cache_path),
             )
-            return text_result(public_payload(arguments, payload), is_error=True)
+            return _deepen_result(payload, is_error=True)
     if handle is None:
         payload = missing_handle_payload(
             mode="deepen",
             schema_version=str(getattr(agent_continuity_module(), "SCHEMA_VERSION", "agent-continuity-path-v1")),
             kind="aippocampus_agent_continuity_path",
         )
-        return text_result(public_payload(arguments, payload), is_error=True)
+        return _deepen_result(payload, is_error=True)
     agent = agent_continuity_module()
     payload = agent.deepen(
         handle,
@@ -666,23 +694,8 @@ def call_agent_deepen(arguments: dict[str, Any]) -> dict[str, Any]:
                     "error_type": type(exc).__name__,
                 }
             )
-    def _compact_deepen(raw: dict[str, Any]) -> dict[str, Any]:
-        return compact_agent_deepen_payload(
-            raw,
-            request_index=request_index_arg,
-            last_recall=bool(arguments.get("last_recall") or request_index_arg is not None),
-            recall_selector=str(arguments.get("recall_selector") or ""),
-            surface="mcp_agent_deepen_compact",
-        )
-
     is_error = payload.get("status") == "cannot_verify" or payload.get("ok") is False
-    return render_profiled_result(
-        arguments,
-        payload,
-        is_error=is_error,
-        compact_projector=_compact_deepen,
-        full_output_boundary="local_private_diagnostic_full",
-    )
+    return _deepen_result(payload, is_error=is_error)
 
 
 def call_agent_explain(arguments: dict[str, Any]) -> dict[str, Any]:
@@ -690,6 +703,25 @@ def call_agent_explain(arguments: dict[str, Any]) -> dict[str, Any]:
     cached_context: dict[str, Any] = {}
     request_index_arg: int | None = None
     selector_cache_path: str | Path | None = arguments.get("last_recall_path")
+
+    def _compact_explain(raw: dict[str, Any]) -> dict[str, Any]:
+        return compact_agent_explain_payload(
+            raw,
+            request_index=request_index_arg,
+            last_recall=bool(arguments.get("last_recall") or request_index_arg is not None),
+            recall_selector=str(arguments.get("recall_selector") or ""),
+            surface="mcp_agent_explain_compact",
+        )
+
+    def _explain_result(payload: dict[str, Any], *, is_error: bool = False) -> dict[str, Any]:
+        return render_profiled_result(
+            arguments,
+            payload,
+            is_error=is_error,
+            compact_projector=_compact_explain,
+            full_output_boundary="local_private_diagnostic_full",
+        )
+
     if handle is None and (
         arguments.get("recall_selector") or arguments.get("last_recall") or "request_index" in arguments
     ):
@@ -708,45 +740,22 @@ def call_agent_explain(arguments: dict[str, Any]) -> dict[str, Any]:
                 kind="aippocampus_agent_continuity_path",
                 cue=query_from_last_recall_cache(selector_cache_path),
             )
-            payload = compact_agent_explain_payload(
-                payload,
-                request_index=request_index_arg,
-                last_recall=True,
-                recall_selector=str(arguments.get("recall_selector") or ""),
-                surface="mcp_agent_explain_compact",
-            )
-            return text_result(public_payload(arguments, payload), is_error=True)
+            return _explain_result(payload, is_error=True)
     if handle is None:
         payload = missing_handle_payload(
             mode="explain",
             schema_version=str(getattr(agent_continuity_module(), "SCHEMA_VERSION", "agent-continuity-path-v1")),
             kind="aippocampus_agent_continuity_path",
         )
-        payload = compact_agent_explain_payload(payload, surface="mcp_agent_explain_compact")
-        return text_result(public_payload(arguments, payload), is_error=True)
+        return _explain_result(payload, is_error=True)
     agent = agent_continuity_module()
     payload = agent.explain(
         handle,
         macro_state_path=arguments.get("macro_state_jsonl") or cached_context.get("macro_state_jsonl"),
         project=str(arguments.get("project") or cached_context.get("project") or "AIppocampus"),
     )
-    def _compact_explain(raw: dict[str, Any]) -> dict[str, Any]:
-        return compact_agent_explain_payload(
-            raw,
-            request_index=request_index_arg,
-            last_recall=bool(arguments.get("last_recall") or request_index_arg is not None),
-            recall_selector=str(arguments.get("recall_selector") or ""),
-            surface="mcp_agent_explain_compact",
-        )
-
     is_error = payload.get("status") == "cannot_verify" or payload.get("ok") is False
-    return render_profiled_result(
-        arguments,
-        payload,
-        is_error=is_error,
-        compact_projector=_compact_explain,
-        full_output_boundary="local_private_diagnostic_full",
-    )
+    return _explain_result(payload, is_error=is_error)
 
 
 def call_recall_diagnostic(arguments: dict[str, Any]) -> dict[str, Any]:

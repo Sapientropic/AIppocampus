@@ -197,6 +197,17 @@ def _compact_claim_boundary(boundary: Any) -> dict[str, Any]:
     }
 
 
+def _compact_error(error: Any) -> dict[str, Any]:
+    if not isinstance(error, Mapping):
+        return {}
+    return {
+        key: strip_compact_foreground_debug_fields(value)
+        for key, value in error.items()
+        if key in {"code", "message", "tool_name", "required_any", "retryable"}
+        and value not in (None, "", [], {})
+    }
+
+
 def _search_hit_label(match: Mapping[str, Any]) -> str:
     thread = match.get("thread")
     thread_map = thread if isinstance(thread, Mapping) else {}
@@ -344,15 +355,34 @@ def compact_mcp_structured_content(payload: Any) -> Any:
             "source_open_posture",
             "evidence_level",
             "summary",
+            "surface_class",
+            "required_any",
         )
         if key in payload and payload[key] not in (None, "")
     }
+    error = _compact_error(payload.get("error"))
+    if error:
+        card["error"] = error
     action = _compact_action(payload.get("foreground_action"))
     if action:
         card["foreground_action"] = action
     follow_up_action = _compact_action(payload.get("follow_up_action"))
     if follow_up_action and follow_up_action != action:
         card["follow_up_action"] = follow_up_action
+    recovery_card = card.get("status") != "ok" or bool(error) or bool(card.get("surface_class"))
+    if recovery_card:
+        safe_next_actions = [
+            _compact_action(safe_action)
+            for safe_action in payload.get("safe_next_actions") or []
+            if isinstance(safe_action, Mapping)
+        ]
+        safe_next_actions = [
+            safe_action
+            for safe_action in safe_next_actions
+            if safe_action and safe_action != action and safe_action != follow_up_action
+        ][:2]
+        if safe_next_actions:
+            card["safe_next_actions"] = safe_next_actions
     routes = [_compact_route(route) for route in payload.get("routes") or []]
     routes = [route for route in routes if route][:2]
     if routes:

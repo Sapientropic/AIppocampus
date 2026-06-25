@@ -7,6 +7,7 @@ from typing import Any
 
 from aippocampus_runtime import core
 from aippocampus_runtime.contracts import canonical_foreground_action_fields, shell_quote
+from aippocampus_runtime.mcp.compact_profile import strip_compact_foreground_debug_fields
 
 
 def _detail_command(
@@ -143,7 +144,7 @@ def compact_agent_explain_payload(
             primary,
             safe_next_actions=safe_actions,
         )
-        return core.strip_empty(
+        card = core.strip_empty(
             {
                 "detail": "compact",
                 "kind": "aippocampus_route_explain_card",
@@ -152,6 +153,7 @@ def compact_agent_explain_payload(
                 "surface": surface,
                 "status": source.get("status"),
                 "ok": source.get("ok", False),
+                "surface_class": source.get("surface_class") or "foreground_recovery_card",
                 "error": error,
                 **action_fields,
                 "follow_up_action": source.get("follow_up_action"),
@@ -165,6 +167,7 @@ def compact_agent_explain_payload(
                 "policy_boundary": source.get("policy_boundary"),
             }
         )
+        return strip_compact_foreground_debug_fields(card)
     reason_codes = core.list_or_empty(explanation.get("reason_codes"))
     primary = _deepen_action(
         request_index,
@@ -181,7 +184,7 @@ def compact_agent_explain_payload(
         220,
     )
     action_fields = canonical_foreground_action_fields(primary, safe_next_actions=[primary])
-    return core.strip_empty(
+    card = core.strip_empty(
         {
             "detail": "compact",
             "kind": "aippocampus_route_explain_card",
@@ -204,6 +207,7 @@ def compact_agent_explain_payload(
             "policy_boundary": source.get("policy_boundary"),
         }
     )
+    return strip_compact_foreground_debug_fields(card)
 
 
 def project_agent_explain_payload(

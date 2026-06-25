@@ -109,11 +109,7 @@ COMPACT_DETAIL_AFFORDANCE_ALLOWLIST: dict[
             "operator_detail_command",
         ): "Concept expansion is also operator-only until the user supplies a concrete navigation cue.",
     },
-    "mcp.agent_deepen.missing_selector": {
-        (
-            "operator_detail_command",
-        ): "The MCP recovery card needs one full-detail CLI command for operators debugging selector state.",
-    },
+    "mcp.agent_deepen.missing_selector": {},
     "task_orientation.compact": {},
 }
 
