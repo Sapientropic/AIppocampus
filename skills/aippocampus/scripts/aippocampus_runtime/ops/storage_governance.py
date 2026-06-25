@@ -58,7 +58,7 @@ from aippocampus_runtime.ops.storage_governance_projection import (
 from aippocampus_runtime.source.io_kernel import load_json_dict
 
 
-def load_json_file(path: Path) -> dict[str, Any]:
+def load_governance_json_report(path: Path) -> dict[str, Any]:
     result = load_json_dict(path, missing_is_loss=True)
     loss = result.loss
     if int(loss.get("non_object_json_count") or 0):
@@ -304,7 +304,7 @@ def _load_capacity_report(
     fanout_budget: int,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     if capacity_report_path is not None:
-        return load_json_file(capacity_report_path), {
+        return load_governance_json_report(capacity_report_path), {
             "kind": "storage_capacity_report",
             "mode": "loaded_existing_json",
             "path": str(capacity_report_path),
@@ -338,7 +338,7 @@ def _load_retention_report(
             "attempted": [str(item) for item in attempted],
             "note": "Run retention_report.py --write or pass --retention-report for path-level candidates.",
         }
-    return load_json_file(path), {
+    return load_governance_json_report(path), {
         "kind": "retention_report",
         "mode": "loaded_existing_json",
         "path": str(path),

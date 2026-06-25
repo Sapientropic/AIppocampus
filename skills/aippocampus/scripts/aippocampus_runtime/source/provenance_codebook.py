@@ -34,6 +34,7 @@ from aippocampus_runtime.source.fingerprint_contracts import (
 from aippocampus_runtime.source.fingerprint_contracts import (
     verify_source_fingerprint_reuse as verify_source_fingerprint_reuse,
 )
+from aippocampus_runtime.source.io_kernel import load_jsonl_dict_rows_strict
 
 TRUSTED_ORDERING_AUTHORITIES = {
     "clean_source_turn_order",
@@ -85,20 +86,6 @@ def _mapping(value: Any) -> Mapping[str, Any]:
 
 def _mapping_dict(value: Any) -> dict[str, Any]:
     return {str(key): item for key, item in value.items()} if isinstance(value, Mapping) else {}
-
-
-def _load_jsonl(path: Path) -> list[dict[str, Any]]:
-    rows: list[dict[str, Any]] = []
-    with path.open("r", encoding="utf-8") as handle:
-        for line_no, line in enumerate(handle, 1):
-            text = line.strip()
-            if not text:
-                continue
-            parsed = json.loads(text)
-            if not isinstance(parsed, dict):
-                raise ValueError(f"line {line_no} is not a JSON object")
-            rows.append(parsed)
-    return rows
 
 
 def _source_fingerprint_payload(row: Mapping[str, Any], content_hash: str) -> dict[str, str]:
@@ -1551,7 +1538,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args(argv)
 
-    rows = _load_jsonl(Path(args.input))
+    rows = load_jsonl_dict_rows_strict(Path(args.input))
     report = build_report(rows, query=args.query)
     if args.json_output:
         print(json.dumps(report, ensure_ascii=False, indent=2))

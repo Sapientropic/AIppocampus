@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import importlib
 import importlib.util
 import json
@@ -12,7 +11,9 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.core import stable_bytes_id
 from aippocampus_runtime.source import provenance_codebook as codebook
+from aippocampus_runtime.source.io_kernel import load_jsonl_dict_rows_strict
 
 
 def _canonical_json(value: Any) -> str:
@@ -25,7 +26,7 @@ def _family_rows(family: Mapping[str, Any]) -> list[dict[str, Any]]:
         return [dict(row) for row in rows if isinstance(row, Mapping)]
     path = family.get("jsonl_path") or family.get("path")
     if path:
-        return codebook._load_jsonl(Path(str(path)))
+        return load_jsonl_dict_rows_strict(Path(str(path)))
     return []
 
 
@@ -80,11 +81,6 @@ def _dictionary_training_rows(rows: Sequence[Mapping[str, Any]]) -> list[Mapping
     ]
 
 
-def _stable_id(prefix: str, value: bytes | str) -> str:
-    data = value.encode("utf-8", errors="replace") if isinstance(value, str) else value
-    return f"{prefix}_{hashlib.sha256(data).hexdigest()[:20]}"
-
-
 def _zstd_codec(raw: bytes, rows: Sequence[Mapping[str, Any]], family_id: str) -> dict[str, Any]:
     base = {
         "codec_id": "zstd",
@@ -137,7 +133,7 @@ def _zstd_dictionary_codec(
         "status": "skipped",
         "skip_reason": "zstandard_python_module_not_available",
         "encoded_bytes": None,
-        "dictionary_id": _stable_id("zstd_dict", family_id),
+        "dictionary_id": stable_bytes_id("zstd_dict", family_id),
         "dictionary_byte_length": 0,
         "training_source_family": family_id,
         "training_privacy_partition": _privacy_partition(training_rows),
@@ -175,7 +171,7 @@ def _zstd_dictionary_codec(
             "skip_reason": None,
             "encoded_bytes": len(compressed),
             "compression_ratio": round(len(compressed) / len(raw), 4),
-            "dictionary_id": _stable_id("zstd_dict", dict_bytes),
+            "dictionary_id": stable_bytes_id("zstd_dict", dict_bytes),
             "dictionary_byte_length": len(dict_bytes),
             "build_time_ms": round((decode_started - started) * 1000, 3),
             "decode_time_ms": round((time.perf_counter() - decode_started) * 1000, 3),

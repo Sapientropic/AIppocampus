@@ -38,7 +38,7 @@ def _mapping(value: Any) -> Mapping[str, Any]:
     return value if isinstance(value, Mapping) else {}
 
 
-def _load_jsonl(path: Path) -> list[dict[str, Any]]:
+def _load_health_rows(path: Path) -> list[dict[str, Any]]:
     result = load_jsonl_dict_rows(path)
     rows = list(result.rows)
     rows.extend({"_malformed_json": True} for _ in range(_safe_int(result.loss.get("invalid_json_line_count"))))
@@ -188,8 +188,8 @@ def source_intake_health_summary(
 ) -> dict[str, Any]:
     """Return sanitized source-intake health without exposing private rows."""
 
-    messages = _load_jsonl(clean_source_dir / "messages.jsonl")
-    turns = _load_jsonl(clean_source_dir / "turns.jsonl")
+    messages = _load_health_rows(clean_source_dir / "messages.jsonl")
+    turns = _load_health_rows(clean_source_dir / "turns.jsonl")
     hook_available, hook_version_status = _hook_status(clean_manifest)
     manifest_message_count = _safe_int(clean_manifest.get("message_count"), len(messages))
     manifest_turn_count = _safe_int(clean_manifest.get("turn_count"), len(turns))

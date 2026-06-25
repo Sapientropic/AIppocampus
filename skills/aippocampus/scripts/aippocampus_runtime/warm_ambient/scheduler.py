@@ -11,7 +11,6 @@ hook wait.
 
 from __future__ import annotations
 
-import json
 import os
 import subprocess
 import sys
@@ -34,7 +33,7 @@ from aippocampus_runtime.model.routing import (
 )
 from aippocampus_runtime.recall.active_recall_lock import start_or_update_recall_lock
 from aippocampus_runtime.recall.ambient_cache import default_ambient_cache_path
-from aippocampus_runtime.source.io_kernel import write_json_atomic
+from aippocampus_runtime.source.io_kernel import load_json_dict, parse_utc, write_json_atomic
 from aippocampus_runtime.warm_ambient.config import (
     DEFAULT_WARM_DETACHED_JOB_CONFIG,
     WarmDetachedJobConfig,
@@ -116,15 +115,7 @@ def spawn_warm_job(job_path: Path, *, cwd: Path | None = None) -> dict[str, Any]
 
 
 def _parse_timestamp(value: Any) -> datetime | None:
-    if not isinstance(value, str) or not value:
-        return None
-    try:
-        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    except ValueError:
-        return None
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(timezone.utc)
+    return parse_utc(value)
 
 
 def _age_seconds_since(value: Any, *, now: datetime) -> int | None:
@@ -161,16 +152,12 @@ def _latest_timestamp(*values: Any) -> str | None:
     return latest_text
 
 
-def _load_json_fail_open(path: Path) -> dict[str, Any]:
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        return {}
-    return data if isinstance(data, dict) else {}
+def _load_warm_job_json(path: Path) -> dict[str, Any]:
+    return load_json_dict(path).data
 
 
 def _json_file_timestamp(path: Path) -> str | None:
-    payload = _load_json_fail_open(path)
+    payload = _load_warm_job_json(path)
     return _latest_timestamp(
         payload.get("completed_at"),
         payload.get("updated_at"),

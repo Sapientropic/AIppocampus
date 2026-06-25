@@ -101,7 +101,7 @@ def _feedback_source_ref(row: Mapping[str, Any]) -> str:
     )
 
 
-def load_jsonl_rows(path: str | Path | None) -> tuple[list[dict[str, Any]], int]:
+def load_feedback_jsonl_rows(path: str | Path | None) -> tuple[list[dict[str, Any]], int]:
     if not path:
         return [], 0
     source = Path(path).expanduser().resolve()
@@ -211,6 +211,6 @@ def observed_use_rows_from_foreground_feedback(
 
 __all__ = [
     "TRACE_BACKED_ORIGINS",
-    "load_jsonl_rows",
+    "load_feedback_jsonl_rows",
     "observed_use_rows_from_foreground_feedback",
 ]

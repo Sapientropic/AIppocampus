@@ -29,7 +29,7 @@ def strip_maintenance_fields(row: Mapping[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in row.items() if not str(key).startswith("_maintenance_")}
 
 
-def write_jsonl_rows(path: Path, rows: Iterable[Mapping[str, Any]]) -> None:
+def write_archive_rows(path: Path, rows: Iterable[Mapping[str, Any]]) -> None:
     write_jsonl_dict_rows(
         path,
         (strip_maintenance_fields(row) for row in rows),
@@ -37,9 +37,9 @@ def write_jsonl_rows(path: Path, rows: Iterable[Mapping[str, Any]]) -> None:
     )
 
 
-def atomic_write_jsonl_rows(path: Path, rows: Iterable[Mapping[str, Any]]) -> None:
+def atomic_write_retained_queue_rows(path: Path, rows: Iterable[Mapping[str, Any]]) -> None:
     temp_path = path.with_name(f".{path.name}.tmp")
-    write_jsonl_rows(temp_path, rows)
+    write_archive_rows(temp_path, rows)
     os.replace(temp_path, path)
 
 
@@ -158,7 +158,7 @@ def verify_staging_archive_manifest(
             errors.append("archive_file_hash_mismatch")
         if int(archive_file.get("byte_count") or 0) != path.stat().st_size:
             errors.append("archive_file_size_mismatch")
-        rows = maintenance.iter_jsonl_rows(path)
+        rows = maintenance.load_staging_queue_rows(path)
         if int(archive_file.get("row_count") or 0) != len(rows):
             errors.append("archive_file_row_count_mismatch")
         expected_rows = expected_rows_by_queue.get(queue, [])
@@ -208,7 +208,7 @@ def apply_staging_maintenance(
     for queue, filename in maintenance.QUEUE_FILES.items():
         retained_rows: list[dict[str, Any]] = []
         archived_rows: list[dict[str, Any]] = []
-        for row in maintenance.iter_jsonl_rows(root / filename):
+        for row in maintenance.load_staging_queue_rows(root / filename):
             line_number = int(row.get("_maintenance_line_number") or 0)
             action = action_index.get((queue, line_number))
             if action and action.get("maintenance_state") == "archive_candidate":
@@ -222,7 +222,7 @@ def apply_staging_maintenance(
             continue
         archive_root.mkdir(parents=True, exist_ok=True)
         archive_path = archive_root / f"{filename}.archive.jsonl"
-        write_jsonl_rows(archive_path, archived_rows)
+        write_archive_rows(archive_path, archived_rows)
         relative_path = _safe_relative_path(archive_path, root)
         archive_files.append(
             {
@@ -310,7 +310,7 @@ def apply_staging_maintenance(
         return report
 
     for queue, filename in maintenance.QUEUE_FILES.items():
-        atomic_write_jsonl_rows(root / filename, retained_by_queue[queue])
+        atomic_write_retained_queue_rows(root / filename, retained_by_queue[queue])
 
     report["mode"] = "apply"
     report["apply"] = {

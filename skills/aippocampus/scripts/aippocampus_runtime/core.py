@@ -260,6 +260,19 @@ def stable_text_id(prefix: str, *parts: object, length: int = 20) -> str:
     return f"{prefix}_{digest}"
 
 
+def stable_bytes_id(prefix: str, value: bytes | str, *, length: int = 20) -> str:
+    """Return a stable id for already-serialized byte payloads.
+
+    Use this when the byte stream is the identity material, such as a trained
+    dictionary or compressed payload. Text helpers intentionally stringify
+    inputs; using them here would change persisted ids for bytes-like artifacts.
+    """
+
+    data = value.encode("utf-8", errors="replace") if isinstance(value, str) else value
+    digest = hashlib.sha256(data).hexdigest()[:length]
+    return f"{prefix}_{digest}"
+
+
 def norm_path(path: str | Path) -> str:
     return path_identity_key(path)
 

@@ -5,14 +5,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from aippocampus_runtime.source.io_kernel import write_jsonl_dict_rows
 from aippocampus_runtime.subconscious import staging_archive, staging_maintenance
 
-
-def write_jsonl(path: Path, rows: list[dict[str, object]]) -> None:
-    path.write_text(
-        "".join(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n" for row in rows),
-        encoding="utf-8",
-    )
 
 class SubconsciousStagingMaintenanceTests(unittest.TestCase):
     def test_dry_run_report_classifies_active_review_and_archive_rows(self) -> None:
@@ -22,7 +17,7 @@ class SubconsciousStagingMaintenanceTests(unittest.TestCase):
             edges_path = root / "subconscious_edges.jsonl"
             jobs_path = root / "subconscious_jobs.jsonl"
             promotion_path = root / "promotion_candidates.jsonl"
-            write_jsonl(
+            write_jsonl_dict_rows(
                 edges_path,
                 [
                     {
@@ -86,7 +81,7 @@ class SubconsciousStagingMaintenanceTests(unittest.TestCase):
                     },
                 ],
             )
-            write_jsonl(
+            write_jsonl_dict_rows(
                 jobs_path,
                 [
                     {
@@ -101,7 +96,7 @@ class SubconsciousStagingMaintenanceTests(unittest.TestCase):
                     }
                 ],
             )
-            write_jsonl(
+            write_jsonl_dict_rows(
                 promotion_path,
                 [
                     {
@@ -156,7 +151,7 @@ class SubconsciousStagingMaintenanceTests(unittest.TestCase):
     def test_pressure_report_warns_without_applying_changes(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            write_jsonl(
+            write_jsonl_dict_rows(
                 root / "subconscious_jobs.jsonl",
                 [
                     {
@@ -189,7 +184,7 @@ class SubconsciousStagingMaintenanceTests(unittest.TestCase):
             root = Path(tmp)
             edges_path = root / "subconscious_edges.jsonl"
             jobs_path = root / "subconscious_jobs.jsonl"
-            write_jsonl(
+            write_jsonl_dict_rows(
                 edges_path,
                 [
                     {
@@ -239,7 +234,7 @@ class SubconsciousStagingMaintenanceTests(unittest.TestCase):
                     },
                 ],
             )
-            write_jsonl(
+            write_jsonl_dict_rows(
                 jobs_path,
                 [
                     {
@@ -260,7 +255,7 @@ class SubconsciousStagingMaintenanceTests(unittest.TestCase):
                     },
                 ],
             )
-            write_jsonl(
+            write_jsonl_dict_rows(
                 root / "promotion_candidates.jsonl",
                 [
                     {
@@ -282,8 +277,14 @@ class SubconsciousStagingMaintenanceTests(unittest.TestCase):
             self.assertTrue(report["apply"]["manifest_verification"]["ok"])
             self.assertEqual(report["apply"]["archived_row_count"], 3)
 
-            remaining_edge_ids = [staging_maintenance.stable_row_id(row) for row in staging_maintenance.iter_jsonl_rows(edges_path)]
-            remaining_job_ids = [staging_maintenance.stable_row_id(row) for row in staging_maintenance.iter_jsonl_rows(jobs_path)]
+            remaining_edge_ids = [
+                staging_maintenance.stable_row_id(row)
+                for row in staging_maintenance.load_staging_queue_rows(edges_path)
+            ]
+            remaining_job_ids = [
+                staging_maintenance.stable_row_id(row)
+                for row in staging_maintenance.load_staging_queue_rows(jobs_path)
+            ]
             self.assertEqual(remaining_edge_ids, ["sf_active", "b" * 64])
             self.assertEqual(remaining_job_ids, ["sf_referenced_job"])
 
@@ -303,11 +304,15 @@ class SubconsciousStagingMaintenanceTests(unittest.TestCase):
             archive_files = {item["queue"]: root / item["relative_path"] for item in manifest["archive_files"]}
             archived_edges = [
                 staging_maintenance.stable_row_id(row)
-                for row in staging_maintenance.iter_jsonl_rows(archive_files["subconscious_edges"])
+                for row in staging_maintenance.load_staging_queue_rows(
+                    archive_files["subconscious_edges"]
+                )
             ]
             archived_jobs = [
                 staging_maintenance.stable_row_id(row)
-                for row in staging_maintenance.iter_jsonl_rows(archive_files["subconscious_jobs"])
+                for row in staging_maintenance.load_staging_queue_rows(
+                    archive_files["subconscious_jobs"]
+                )
             ]
             self.assertEqual(archived_edges, ["b" * 64, "sf_promoted"])
             self.assertEqual(archived_jobs, ["sf_rejected_job"])
@@ -315,7 +320,7 @@ class SubconsciousStagingMaintenanceTests(unittest.TestCase):
     def test_archive_manifest_verification_detects_tampered_archives(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            write_jsonl(
+            write_jsonl_dict_rows(
                 root / "subconscious_edges.jsonl",
                 [
                     {
@@ -352,7 +357,7 @@ class SubconsciousStagingMaintenanceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             edges_path = root / "subconscious_edges.jsonl"
-            write_jsonl(
+            write_jsonl_dict_rows(
                 edges_path,
                 [
                     {
@@ -379,7 +384,7 @@ class SubconsciousStagingMaintenanceTests(unittest.TestCase):
             self.assertFalse((root / staging_maintenance.ARCHIVE_DIR_NAME).exists())
             remaining_ids = [
                 staging_maintenance.stable_row_id(row)
-                for row in staging_maintenance.iter_jsonl_rows(edges_path)
+                for row in staging_maintenance.load_staging_queue_rows(edges_path)
             ]
             self.assertEqual(remaining_ids, ["sf_active"])
 

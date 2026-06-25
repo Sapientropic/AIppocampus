@@ -31,7 +31,12 @@ from aippocampus_runtime.core import aippocampus_registry_dir, now_utc
 from aippocampus_runtime.model import routing as model_routing
 from aippocampus_runtime.ops import log_retention
 from aippocampus_runtime.public_output import emit_public_text
-from aippocampus_runtime.source.io_kernel import load_json_dict, write_json_atomic
+from aippocampus_runtime.source.io_kernel import (
+    iter_jsonl_dict_rows,
+    load_json_dict,
+    parse_utc,
+    write_json_atomic,
+)
 from aippocampus_runtime.subconscious import (
     agent_fallback_queue,
     scheduler_due_diagnostics,
@@ -219,17 +224,6 @@ def due_reason(
     return None
 
 
-def parse_utc_ts(value: str) -> float | None:
-    if not value:
-        return None
-    try:
-        if value.endswith("Z"):
-            value = value[:-1] + "+00:00"
-        return datetime.fromisoformat(value).timestamp()
-    except ValueError:
-        return None
-
-
 def iso_from_ts(value: float) -> str:
     return (
         datetime.fromtimestamp(value, tz=timezone.utc)
@@ -253,22 +247,15 @@ def latest_staging_ts(root: Path, label: str) -> float | None:
     for path in [root / "subconscious_jobs.jsonl", root / "promotion_candidates.jsonl"]:
         if not path.exists():
             continue
-        try:
-            lines = path.read_text(encoding="utf-8").splitlines()
-        except OSError:
-            continue
-        for line in lines:
-            if not line.strip():
+        for item in iter_jsonl_dict_rows(path):
+            if not finding_mentions_project(item, label):
                 continue
-            try:
-                item = json.loads(line)
-            except json.JSONDecodeError:
+            created_at = parse_utc(item.get("created_at"))
+            if created_at is None:
                 continue
-            if not isinstance(item, dict) or not finding_mentions_project(item, label):
-                continue
-            ts = parse_utc_ts(str(item.get("created_at") or ""))
-            if ts is not None and (latest is None or ts > latest):
-                latest = ts
+            timestamp = created_at.timestamp()
+            if latest is None or timestamp > latest:
+                latest = timestamp
     return latest
 
 

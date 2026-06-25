@@ -15,7 +15,7 @@ from typing import Any, Iterable, Mapping, cast
 
 from aippocampus_runtime.core import now_utc
 from aippocampus_runtime.registry.api import registry_paths, unique_preserve
-from aippocampus_runtime.source.io_kernel import iter_jsonl_dict_rows_with_line_numbers, parse_utc
+from aippocampus_runtime.source.io_kernel import load_jsonl_dict_rows_with_line_field, parse_utc
 
 REPORT_KIND = "aippocampus_subconscious_staging_maintenance_report"
 ARCHIVE_MANIFEST_KIND = "aippocampus_subconscious_staging_archive_manifest"
@@ -108,13 +108,13 @@ def normalize_now(value: str | datetime | None = None) -> datetime:
     return datetime.now(timezone.utc)
 
 
-def iter_jsonl_rows(path: Path) -> list[dict[str, Any]]:
-    rows: list[dict[str, Any]] = []
-    for line_number, item in iter_jsonl_dict_rows_with_line_numbers(path):
-        row = dict(item)
-        row["_maintenance_line_number"] = line_number
-        rows.append(row)
-    return rows
+def load_staging_queue_rows(path: Path) -> list[dict[str, Any]]:
+    return list(
+        load_jsonl_dict_rows_with_line_field(
+            path,
+            line_field="_maintenance_line_number",
+        ).rows
+    )
 
 
 def iter_recent_jsonl_tail(
@@ -240,7 +240,7 @@ def iter_reference_ids(value: Any) -> Iterable[str]:
 def referenced_finding_ids(root: Path) -> set[str]:
     referenced: set[str] = set()
     for name in REFERENCE_FILES:
-        for row in iter_jsonl_rows(root / name):
+        for row in load_staging_queue_rows(root / name):
             referenced.update(iter_reference_ids(row))
     return {item for item in referenced if item}
 
@@ -252,7 +252,7 @@ def queue_pressure(
     thresholds: StagingPressureThresholds | None = None,
 ) -> dict[str, Any]:
     active_thresholds = thresholds or default_pressure_thresholds()
-    rows = row_count if row_count is not None else len(iter_jsonl_rows(path))
+    rows = row_count if row_count is not None else len(load_staging_queue_rows(path))
     byte_count = path.stat().st_size if path.exists() else 0
     reasons: list[str] = []
     if active_thresholds.max_rows >= 0 and rows > active_thresholds.max_rows:
@@ -343,7 +343,7 @@ def analyze_staging_queues(
     queue_rows: dict[str, list[dict[str, Any]]] = {}
 
     for queue, filename in QUEUE_FILES.items():
-        rows = iter_jsonl_rows(root / filename)
+        rows = load_staging_queue_rows(root / filename)
         queue_rows[queue] = rows
         for row in rows:
             stable_id = stable_row_id(row)

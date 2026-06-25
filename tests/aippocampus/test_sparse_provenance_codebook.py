@@ -9,6 +9,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 from aippocampus_runtime.source import provenance_codebook as codebook
 from aippocampus_runtime.source import provenance_codebook_economics as economics
+from aippocampus_runtime.source.io_kernel import load_jsonl_dict_rows_strict
 
 FIXTURE = (
     REPO_ROOT
@@ -19,7 +20,7 @@ FIXTURE = (
 
 class SparseProvenanceCodebookTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.rows = codebook._load_jsonl(FIXTURE)
+        self.rows = load_jsonl_dict_rows_strict(FIXTURE)
         self.codebook = codebook.build_codebook(self.rows)
 
     def test_builds_content_addressed_chunks_with_dedupe_and_manifest_hash(self) -> None:

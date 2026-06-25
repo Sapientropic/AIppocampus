@@ -151,6 +151,41 @@ def load_jsonl_dict_rows(path: Path) -> JsonlReadResult:
     return JsonlReadResult(rows=rows, loss=_finish_jsonl_loss(loss))
 
 
+def load_jsonl_dict_rows_strict(path: Path) -> list[dict[str, Any]]:
+    """Load JSONL object rows and fail with line context on malformed input."""
+
+    rows: list[dict[str, Any]] = []
+    with path.open("r", encoding="utf-8") as handle:
+        for line_no, line in enumerate(handle, start=1):
+            text = line.strip()
+            if not text:
+                continue
+            try:
+                item = json.loads(text)
+            except json.JSONDecodeError as exc:
+                raise ValueError(f"line {line_no} is invalid JSON") from exc
+            if not isinstance(item, dict):
+                raise ValueError(f"line {line_no} is not a JSON object")
+            rows.append(item)
+    return rows
+
+
+def load_jsonl_dict_rows_with_line_field(
+    path: Path,
+    *,
+    line_field: str,
+) -> JsonlReadResult:
+    """Load JSONL rows and attach source line numbers for audit/detail flows."""
+
+    loss = empty_jsonl_loss()
+    rows: list[dict[str, Any]] = []
+    for line_no, item in iter_jsonl_dict_rows_with_line_numbers(path, loss=loss):
+        row = dict(item)
+        row[str(line_field)] = line_no
+        rows.append(row)
+    return JsonlReadResult(rows=rows, loss=_finish_jsonl_loss(loss))
+
+
 def write_jsonl_dict_rows(
     path: Path,
     rows: Iterable[Mapping[str, Any]],
@@ -255,6 +290,15 @@ def source_ref_key(ref: Mapping[str, Any]) -> tuple[str, str, str, str]:
         str(ref.get("turn_id") or ref.get("turn_index") or ""),
         str(line),
     )
+
+
+def source_ref_key_set(refs: Iterable[Mapping[str, Any]]) -> set[tuple[str, str, str, str]]:
+    keys: set[tuple[str, str, str, str]] = set()
+    for ref in refs:
+        key = source_ref_key(ref)
+        if any(key):
+            keys.add(key)
+    return keys
 
 
 def source_ref_identity_key(ref: Mapping[str, Any]) -> tuple[str, str, str, str, str]:

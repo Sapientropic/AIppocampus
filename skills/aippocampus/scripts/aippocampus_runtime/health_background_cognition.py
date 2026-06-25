@@ -28,7 +28,7 @@ BACKGROUND_COGNITION_STALE_SECONDS = 24 * 60 * 60
 BACKGROUND_COGNITION_TAIL_BYTES = 96 * 1024
 
 
-def load_json_fail_open(path: Path) -> dict[str, Any]:
+def load_health_json(path: Path) -> dict[str, Any]:
     return load_json_dict(path).data
 
 
@@ -146,7 +146,7 @@ def _latest_jsonl_timestamp(path: Path, *, dream_only: bool = False) -> str | No
 
 
 def _latest_json_file_timestamp(path: Path, *field_paths: tuple[str, ...]) -> str | None:
-    payload = load_json_fail_open(path)
+    payload = load_health_json(path)
     timestamps = [_nested_timestamp(payload, *field_path) for field_path in field_paths]
     return _latest_timestamp(*timestamps, _iso_from_mtime(path))
 
@@ -276,7 +276,7 @@ def _subconscious_lane(
 ) -> dict[str, Any]:
     enabled = _subconscious_hook_enabled()
     state_file = root / "subconscious_state.json"
-    state = load_json_fail_open(state_file)
+    state = load_health_json(state_file)
     state.setdefault("projects", {})
     # Reuse the scheduler's own due-project wrapper so health does not drift
     # from foreground hook behavior. The public projection below strips local
@@ -404,9 +404,9 @@ def _dream_lane(*, root: Path, now: datetime) -> dict[str, Any]:
 def _prompt_hook_lane(*, root: Path, now: datetime) -> dict[str, Any]:
     status_path = root / "aippocampus_prompt_hook_last_status.json"
     telemetry_path = root / "aippocampus_prompt_hook_skip_telemetry.json"
-    status = load_json_fail_open(status_path)
+    status = load_health_json(status_path)
     latest = _mapping(status.get("last_prompt_hook"))
-    telemetry = load_json_fail_open(telemetry_path)
+    telemetry = load_health_json(telemetry_path)
     last_prompt_hook_at = _nested_timestamp(status, "last_prompt_hook", "timestamp")
     telemetry_at = _nested_timestamp(telemetry, "updated_at")
     last_artifact_at = _latest_timestamp(
@@ -453,7 +453,7 @@ def _prompt_hook_lane(*, root: Path, now: datetime) -> dict[str, Any]:
 
 def _warm_ambient_lane(*, root: Path, now: datetime) -> dict[str, Any]:
     enabled = warm_background_enabled()
-    status = load_json_fail_open(root / "aippocampus_prompt_hook_last_status.json")
+    status = load_health_json(root / "aippocampus_prompt_hook_last_status.json")
     warm_status = _mapping(_mapping(status.get("last_prompt_hook")).get("warm_background"))
     hook_at = _nested_timestamp(status, "last_prompt_hook", "timestamp")
     activity = warm_job_activity(root / "ambient_warm_jobs", now=now)
@@ -509,7 +509,7 @@ def _semantic_gate_lane(*, root: Path, now: datetime) -> dict[str, Any]:
     provider_visible = api_key_env in os.environ
     enabled = semantic_gate_enabled(api_key_env=api_key_env)
     telemetry_path = root / "aippocampus_prompt_hook_skip_telemetry.json"
-    telemetry = load_json_fail_open(telemetry_path)
+    telemetry = load_health_json(telemetry_path)
     last_artifact_at = _latest_json_file_timestamp(telemetry_path, ("updated_at",))
     due_state = "not_due"
     skip_reason = None
