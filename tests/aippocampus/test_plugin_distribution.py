@@ -259,5 +259,25 @@ class PluginDistributionTests(unittest.TestCase):
         self.assertTrue(ok)
         self.assertEqual(failures, [])
 
+    def test_real_codex_smoke_reads_structured_content_before_compact_text(self) -> None:
+        payload = {
+            "status": "available_requires_sync_dir",
+            "backend": "local_folder",
+            "commands": ["status", "push", "pull", "repair"],
+        }
+        response = {
+            "result": {
+                "structuredContent": payload,
+                "content": [
+                    {
+                        "type": "text",
+                        "text": "compact agent-facing text, not JSON",
+                    }
+                ],
+            }
+        }
+
+        self.assertEqual(smoke_real_codex_host.extract_sync_status_payload(response), payload)
+
 if __name__ == "__main__":
     unittest.main()

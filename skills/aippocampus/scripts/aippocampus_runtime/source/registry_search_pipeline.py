@@ -34,8 +34,14 @@ from aippocampus_runtime.source.registry_search_actions import registry_search_a
 from aippocampus_runtime.source.registry_search_duplicates import (
     collapse_duplicate_matches,
     compact_registry_match,
+    diagnostic_registry_match,
     match_haystack,
     process_noise_reason,
+)
+from aippocampus_runtime.source.registry_search_evidence import (
+    match_evidence_diagnostics,
+    match_is_useful_registry_target,
+    query_anchor_rank,
 )
 from aippocampus_runtime.source.registry_search_skips import (
     registry_entry_ref,
@@ -90,33 +96,6 @@ def as_int(value: Any, default: int = 0) -> int:
         return default
 
 
-def _query_anchor_rank(match: Mapping[str, Any]) -> tuple[int, int, float]:
-    profile_value = match.get("query_match_profile")
-    profile: Mapping[str, Any] = profile_value if isinstance(profile_value, Mapping) else {}
-    return (
-        1 if profile.get("exact_phrase_match") else 0,
-        as_int(profile.get("matched_distinctive_anchor_count")),
-        as_float(profile.get("distinctive_anchor_coverage")),
-    )
-
-
-def _match_is_useful_registry_target(match: Mapping[str, Any]) -> bool:
-    if match_is_demoted_artifact(match):
-        return False
-    profile_value = match.get("query_match_profile")
-    profile: Mapping[str, Any] = profile_value if isinstance(profile_value, Mapping) else {}
-    if profile.get("exact_identifier_query") and not profile.get("identifier_match"):
-        return False
-    anchor_count = as_int(profile.get("distinctive_anchor_count"))
-    if anchor_count == 0:
-        return True
-    if profile.get("exact_phrase_match"):
-        return True
-    if profile.get("relationship_origin_override"):
-        return True
-    return as_int(profile.get("matched_distinctive_anchor_count")) > 0
-
-
 def _hit_selector(route: Mapping[str, Any]) -> str:
     return stable_text_fingerprint(
         json.dumps(route, ensure_ascii=False, sort_keys=True, default=str),
@@ -142,7 +121,8 @@ def _registry_match(
         "message_id": hit.get("message_id") or hit.get("id"),
         "boundary": "reopen_source_before_quoting_or_strong_claims",
     }
-    snippet = compact_text(str(hit.get("snippet") or ""), DEFAULT_PUBLIC_SNIPPET_CHARS)
+    raw_snippet = str(hit.get("snippet") or "")
+    snippet = compact_text(raw_snippet, DEFAULT_PUBLIC_SNIPPET_CHARS)
     noise_reason = str(hit.get("noise_reason") or "") or process_noise_reason(snippet)
     artifact_role = artifact_role_profile(
         text=snippet,
@@ -178,6 +158,8 @@ def _registry_match(
         "artifact_demoted": bool(artifact_role.get("demote")),
         "source_route": source_route,
     }
+    if raw_snippet and raw_snippet != snippet:
+        match["_ranking_haystack"] = raw_snippet
     if include_paths:
         match["local_diagnostic"] = {
             "workspace": paths.get("workspace"),
@@ -417,9 +399,9 @@ def _finalize_registry_search_matches(
     matches.sort(
         key=lambda item: (
             1 if item.get("search_noise") or match_is_demoted_artifact(item) else 0,
-            -_query_anchor_rank(item)[0],
-            -_query_anchor_rank(item)[1],
-            -_query_anchor_rank(item)[2],
+            -query_anchor_rank(item)[0],
+            -query_anchor_rank(item)[1],
+            -query_anchor_rank(item)[2],
             -(
                 as_float(item.get("score"))
                 + relationship_origin_rank_adjustment(
@@ -464,7 +446,7 @@ def _render_registry_search_payload(
         raw_first_match_profile if isinstance(raw_first_match_profile, Mapping) else {}
     )
     first_match_useful = (
-        _match_is_useful_registry_target(first_match)
+        match_is_useful_registry_target(first_match)
         if isinstance(first_match, Mapping)
         else False
     )
@@ -499,7 +481,7 @@ def _render_registry_search_payload(
     )
     diagnostic_output = include_paths or search_budget == "deep"
     output_matches = (
-        matches
+        [diagnostic_registry_match(match) for match in matches]
         if diagnostic_output
         else [compact_registry_match(match) for match in matches]
     )
@@ -555,6 +537,15 @@ def _render_registry_search_payload(
         "repo_doc_match_count": len(inputs.repo_doc_matches),
         "discussion_atlas_pointer": discussion_pointer,
         "suppressed_low_coverage_match_count": len(evaluation.suppressed_matches),
+        "match_evidence_diagnostics": (
+            match_evidence_diagnostics(
+                matches,
+                query_text=inputs.query_text,
+                suppressed_count=len(evaluation.suppressed_matches),
+            )
+            if diagnostic_output
+            else None
+        ),
         "suppressed_low_coverage_matches": (
             evaluation.suppressed_matches[:3] if diagnostic_output else None
         ),

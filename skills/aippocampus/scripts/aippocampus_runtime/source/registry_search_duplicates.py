@@ -25,9 +25,15 @@ def process_noise_reason(text: str) -> str:
 def match_haystack(match: Mapping[str, Any]) -> str:
     thread = match.get("thread")
     thread_map = thread if isinstance(thread, Mapping) else {}
+    # Ranking/profile gates must see the matched source window, not the compact
+    # foreground snippet. Keep this private key out of payload projection below;
+    # otherwise a future cleanup can reintroduce the exact regression where
+    # user-facing snippet budgets erase exact anchors before ranking.
+    ranking_haystack = str(match.get("_ranking_haystack") or "")
     return " ".join(
         str(value or "")
         for value in (
+            ranking_haystack,
             match.get("snippet"),
             thread_map.get("thread_key"),
             thread_map.get("title"),
@@ -41,8 +47,14 @@ def compact_registry_match(match: Mapping[str, Any]) -> dict[str, Any]:
     return {
         key: value
         for key, value in match.items()
-        if key not in {"score", "query_match_profile"}
+        if key not in {"score", "query_match_profile", "_ranking_haystack"}
     }
+
+
+def diagnostic_registry_match(match: Mapping[str, Any]) -> dict[str, Any]:
+    """Keep ranking diagnostics while stripping private match-context text."""
+
+    return {key: value for key, value in match.items() if key != "_ranking_haystack"}
 
 
 def _duplicate_fingerprint(match: Mapping[str, Any]) -> str:

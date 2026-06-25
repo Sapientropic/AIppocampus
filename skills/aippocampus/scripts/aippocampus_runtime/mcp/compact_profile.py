@@ -273,6 +273,34 @@ def compact_search_memory_payload(
     without spending a turn parsing a source-search dump.
     """
 
+    if str(payload.get("kind") or "") in {
+        "aippocampus_current_thread_source_window",
+        "aippocampus_registry_source_window",
+        "aippocampus_last_recall_source_window",
+    }:
+        source_boundary = _compact_source_boundary(payload.get("source_boundary"))
+        metrics = payload.get("metrics")
+        metrics_map = metrics if isinstance(metrics, Mapping) else {}
+        source_open_card = {
+            key: payload[key]
+            for key in ("detail", "kind", "mcp_search_scope", "ok", "status", "surface")
+            if key in payload and payload[key] not in (None, "")
+        }
+        source_open_card["summary"] = (
+            "Source window opened; use full detail only when exact source text is needed."
+            if payload.get("ok")
+            else "Source window could not be opened; rerun search for a fresh source route."
+        )
+        if source_boundary:
+            source_open_card["source_boundary"] = source_boundary
+        window_count = metrics_map.get("window_message_count")
+        if isinstance(window_count, int):
+            source_open_card["source_window_summary"] = {"message_count": window_count}
+        action = _compact_action(payload.get("foreground_action"))
+        if action:
+            source_open_card["foreground_action"] = action
+        return strip_compact_foreground_debug_fields(source_open_card)
+
     matches = [item for item in payload.get("matches") or [] if isinstance(item, Mapping)]
     match_count = payload.get("match_count")
     count = len(matches)

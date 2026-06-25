@@ -39,6 +39,31 @@ def deepen_command_for_request(request_index: int, recall_selector: str | None) 
     return f"aippocampus agent deepen --request {request_index} --last-recall --json"
 
 
+def last_recall_source_window_command(
+    *,
+    request_index: int,
+    recall_selector: str | None,
+    match: Mapping[str, Any],
+) -> str:
+    message_id = str(match.get("message_id") or match.get("id") or "").strip()
+    line = match.get("source_line") or match.get("line")
+    if not message_id and (line is None or not str(line).isdigit()):
+        return ""
+    parts = [
+        "aippocampus search --from-last-recall --open-source",
+        f"--request {int(request_index)}",
+    ]
+    selector = clean_recall_selector(recall_selector)
+    if selector:
+        parts.append(f"--recall-selector {shell_quote(selector)}")
+    if message_id:
+        parts.append(f"--message-id {shell_quote(message_id)}")
+    if line is not None and str(line).isdigit():
+        parts.append(f"--line {int(str(line))}")
+    parts.append("--json")
+    return " ".join(parts)
+
+
 def deepen_action_for_request(
     request_index: int,
     recall_selector: str | None,
@@ -188,10 +213,11 @@ def actions_for_last_recall_search(
             deepen_action_for_request(
                 int(first_match.get("request_index") or 1),
                 recall_selector,
-                action_id="deepen_last_recall_search_hit",
+                action_id="deepen_unopenable_last_recall_search_hit",
                 why=(
-                    "Exact wording matched inside a last-recall source-ref route; "
-                    "deepen that route before quoting or making strong claims."
+                    "Exact wording matched inside a last-recall source-ref route, but no "
+                    "direct source-window selector was available; deepen is only a fallback "
+                    "route check, not proof that the exact hit opened."
                 ),
             ),
             follow_up,
@@ -234,6 +260,7 @@ __all__ = [
     "actions_for_last_recall_search",
     "clean_recall_selector",
     "deepen_action_for_request",
+    "last_recall_source_window_command",
     "rerun_recall_action",
     "selector_cache_path",
 ]

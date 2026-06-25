@@ -991,7 +991,7 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
                 "recall_selector_id": "sel_blocked_apw",
                 "foreground_action_card": {
                     "canonical_action": {
-                        "action_id": "recover_recall_miss",
+                        "action_id": "search_registry_sources_for_original_cue_anchors",
                         "tool_name": "search_memory",
                         "arguments": {
                             "query": "hook刚刚对你有帮助吗 ambient recall 迟钝",
@@ -1002,7 +1002,7 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
                             "aippocampus search --all "
                             "'hook刚刚对你有帮助吗 ambient recall 迟钝' --json"
                         ),
-                        "claim_boundary": "no_route_claim",
+                        "claim_boundary": "source_reopen_required_before_claim",
                     }
                 },
                 "memory_packets": [{"route_id": "route_low", "route_kind": "direction_only"}],
@@ -1030,7 +1030,10 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
         )
 
         encoded = json.dumps(public, ensure_ascii=False, sort_keys=True)
-        self.assertEqual(public["foreground_action"]["id"], "recover_recall_miss")
+        self.assertEqual(
+            public["foreground_action"]["id"],
+            "search_registry_sources_for_original_cue_anchors",
+        )
         self.assertNotIn("deepen_associative_path_fallback", encoded)
         self.assertNotIn("associative_path_fallback", public)
         self.assertEqual(executable_command_violations(public), [])

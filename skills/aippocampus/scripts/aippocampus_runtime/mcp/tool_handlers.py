@@ -91,6 +91,7 @@ from aippocampus_runtime.recall.why_diagnostics import recall_diagnostic_report
 from aippocampus_runtime.registry import api as registry
 from aippocampus_runtime.registry.store import RegistryWriteBusyError
 from aippocampus_runtime.source import latest_reply as latest_reply_module
+from aippocampus_runtime.source.io_kernel import load_jsonl_dict_rows
 from aippocampus_runtime.source.search import (
     iter_clean_messages,
     public_search_result,
@@ -148,18 +149,9 @@ def missing_files(root: Path, required: list[str]) -> list[str]:
 
 
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
-    rows: list[dict[str, Any]] = []
     if not path.exists():
-        return rows
-    with path.open("r", encoding="utf-8") as f:
-        for line in f:
-            try:
-                item = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if isinstance(item, dict):
-                rows.append(item)
-    return rows
+        return []
+    return list(load_jsonl_dict_rows(path).rows)
 
 
 def text_result(payload: Any, *, is_error: bool = False) -> dict[str, Any]:
@@ -267,25 +259,20 @@ def call_search_memory(arguments: dict[str, Any]) -> dict[str, Any]:
             ),
         )
     if scope == "last_recall_candidates":
-        from aippocampus_runtime.source.last_recall_search import search_last_recall_sources
-
-        request_index = (
-            int_range(arguments.get("request_index"), default=0, minimum=0, maximum=25)
-            if arguments.get("request_index") is not None
-            else None
+        from aippocampus_runtime.mcp.search_memory_last_recall import (
+            last_recall_search_memory_payload,
         )
-        payload = search_last_recall_sources(
-            [query],
+
+        payload = last_recall_search_memory_payload(
+            arguments,
+            query=query,
             cwd=cwd_arg(arguments),
-            last_recall_path=arguments.get("last_recall_path"),
-            recall_selector=arguments.get("recall_selector"),
-            request_index=request_index or None,
             limit=limit,
             include_paths=include_paths,
         )
         payload["limit"] = limit
         payload["mcp_search_scope"] = scope
-        payload["detail"] = "compact"
+        payload["detail"] = detail_arg(arguments)
         payload["surface"] = "mcp_search_memory_compact"
         return render_profiled_result(
             arguments,

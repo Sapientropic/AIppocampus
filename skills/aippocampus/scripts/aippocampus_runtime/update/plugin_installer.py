@@ -451,7 +451,13 @@ def _find_installed_plugin(payload: dict[str, Any], selector: str) -> dict[str, 
 
 
 def _extract_tool_payload(tool_response: dict[str, Any]) -> dict[str, Any]:
-    result = tool_response.get("result") or {}
+    raw_result = tool_response.get("result")
+    result: dict[str, Any] = raw_result if isinstance(raw_result, dict) else {}
+    # MCP compact text is the agent-facing UX; host probes must read the
+    # machine payload so compact copy changes do not masquerade as call failures.
+    structured = result.get("structuredContent")
+    if isinstance(structured, dict):
+        return structured
     content = result.get("content") or []
     if not content:
         return {}
@@ -459,7 +465,10 @@ def _extract_tool_payload(tool_response: dict[str, Any]) -> dict[str, Any]:
     text = str(first.get("text") or "")
     if not text:
         return {}
-    parsed = json.loads(text)
+    try:
+        parsed = json.loads(text)
+    except json.JSONDecodeError:
+        return {}
     return parsed if isinstance(parsed, dict) else {}
 
 

@@ -146,9 +146,9 @@ class CodexAppServerClient:
     def close(self) -> None:
         if self._proc.poll() is None:
             try:
-                assert self._proc.stdin is not None
-                self._proc.stdin.close()
-            except Exception:
+                if self._proc.stdin is not None:
+                    self._proc.stdin.close()
+            except (OSError, ValueError):
                 pass
             try:
                 self._proc.terminate()
@@ -243,7 +243,13 @@ def summarize_plugin(plugin: dict[str, Any]) -> dict[str, Any]:
 
 
 def extract_sync_status_payload(tool_response: dict[str, Any]) -> dict[str, Any]:
-    result = tool_response.get("result") or {}
+    raw_result = tool_response.get("result")
+    result: dict[str, Any] = raw_result if isinstance(raw_result, dict) else {}
+    # MCP compact text is allowed to be human/agent-facing prose; the smoke
+    # validates the structured machine contract so UX copy does not break install.
+    structured = result.get("structuredContent")
+    if isinstance(structured, dict):
+        return structured
     content = result.get("content") or []
     if not content:
         return {}
@@ -251,7 +257,10 @@ def extract_sync_status_payload(tool_response: dict[str, Any]) -> dict[str, Any]
     text = str(first.get("text") or "")
     if not text:
         return {}
-    parsed = json.loads(text)
+    try:
+        parsed = json.loads(text)
+    except json.JSONDecodeError:
+        return {}
     return parsed if isinstance(parsed, dict) else {}
 
 

@@ -262,6 +262,156 @@ class LastRecallSourceSearchTests(unittest.TestCase):
         self.assertEqual(payload["matches"][0]["request_index"], 2)
         self.assertIn("two", payload["matches"][0]["snippet"])
 
+    def test_search_from_last_recall_source_ref_hit_opens_exact_source_without_private_path(
+        self,
+    ) -> None:
+        cache_path = self._write_cache(
+            [
+                {
+                    "request_index": 1,
+                    "route_id": "route_current_source_ref",
+                    "handle": {
+                        "kind": "source_ref",
+                        "route_id": "route_current_source_ref",
+                        "source_refs": [{"message_id": "msg_final", "line": 13}],
+                        "source_fingerprint": clean_source_fingerprint(self.clean),
+                    },
+                }
+            ],
+            query="baseline current-thread source",
+        )
+        selector = write_recall_selector_snapshot(cache_path)
+        self.assertIsNotNone(selector)
+
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            code = search.main(
+                [
+                    "--from-last-recall",
+                    "--recall-selector",
+                    str(selector),
+                    "baseline current-thread source",
+                    "--cwd",
+                    str(self.cwd),
+                    "--json",
+                ]
+            )
+        payload = json.loads(stdout.getvalue())
+
+        self.assertEqual(code, 0)
+        self.assertEqual(payload["matches"][0]["message_id"], "msg_final")
+        self.assertEqual(
+            payload["foreground_action"]["id"],
+            "open_last_recall_search_hit_source_window",
+        )
+        self.assertIn(
+            "aippocampus search --from-last-recall --open-source --request 1",
+            payload["foreground_action"]["command"],
+        )
+        self.assertIn(f"--recall-selector {selector}", payload["foreground_action"]["command"])
+        self.assertIn("--message-id msg_final", payload["foreground_action"]["command"])
+        self.assertNotIn("agent deepen", payload["foreground_action"]["command"])
+        self.assertNotIn(str(self.cwd), json.dumps(payload, ensure_ascii=False))
+
+        reopen_stdout = io.StringIO()
+        with contextlib.redirect_stdout(reopen_stdout):
+            reopen_code = search.main(
+                [
+                    "--from-last-recall",
+                    "--open-source",
+                    "--request",
+                    "1",
+                    "--recall-selector",
+                    str(selector),
+                    "--message-id",
+                    "msg_final",
+                    "--line",
+                    "13",
+                    "--cwd",
+                    str(self.cwd),
+                    "--json",
+                ]
+            )
+        reopened = json.loads(reopen_stdout.getvalue())
+
+        self.assertEqual(reopen_code, 0)
+        self.assertEqual(reopened["kind"], "aippocampus_last_recall_source_window")
+        self.assertEqual(reopened["source_boundary"]["authority"], "source_open")
+        self.assertIn(
+            "baseline current-thread source",
+            json.dumps(reopened["source_window"], ensure_ascii=False),
+        )
+        self.assertGreaterEqual(reopened["source_anchor_profile"]["matched_anchor_count"], 1)
+        self.assertTrue(reopened["source_anchor_profile"]["exact_phrase_match"])
+        self.assertGreaterEqual(len(reopened["anchor_hits"]), 1)
+        self.assertNotIn(str(self.cwd), json.dumps(reopened, ensure_ascii=False))
+
+    def test_search_from_last_recall_unopenable_hit_labels_deepen_as_fallback(self) -> None:
+        unopenable_clean = self.cwd / "unopenable" / "clean-source"
+        self._write_messages(
+            unopenable_clean,
+            [
+                {
+                    "role": "assistant",
+                    "text": "unopenable exact phrase has no message id or source line",
+                }
+            ],
+        )
+        cache_path = self.cwd / "unopenable-last-recall.json"
+        ok = write_last_recall_cache(
+            [
+                {
+                    "request_index": 1,
+                    "route_id": "route_unopenable",
+                    "handle": {
+                        "kind": "source_ref",
+                        "route_id": "route_unopenable",
+                        "source_refs": [{"turn_id": "missing-selector"}],
+                    },
+                }
+            ],
+            query="unopenable exact phrase",
+            cwd=self.cwd,
+            clean_source_dir=unopenable_clean,
+            registry_dir=self.cwd,
+            macro_state_path=None,
+            project="fixture",
+            max_matches=5,
+            schema_version="agent-continuity-path-v1",
+            path=cache_path,
+        )
+        self.assertTrue(ok)
+        # The route context points to a non-default clean source. This creates a
+        # real match but deliberately no selector that can reopen the exact row.
+        selector = write_recall_selector_snapshot(cache_path)
+        self.assertIsNotNone(selector)
+
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            code = search.main(
+                [
+                    "--from-last-recall",
+                    "--recall-selector",
+                    str(selector),
+                    "unopenable exact phrase",
+                    "--cwd",
+                    str(self.cwd),
+                    "--last-recall-path",
+                    str(cache_path),
+                    "--json",
+                ]
+            )
+        payload = json.loads(stdout.getvalue())
+
+        self.assertEqual(code, 0)
+        self.assertEqual(payload["matches"][0]["source_open_state"], "exact_hit_unopenable")
+        self.assertEqual(
+            payload["foreground_action"]["id"],
+            "deepen_unopenable_last_recall_search_hit",
+        )
+        self.assertIn("fallback", payload["foreground_action"]["why"])
+        self.assertNotIn("opens the exact", payload["foreground_action"]["why"])
+
     def test_search_from_last_recall_no_match_stays_inside_recalled_routes(self) -> None:
         recalled_clean = self.cwd / "recalled" / "clean-source"
         outside_clean = self.cwd / "outside" / "clean-source"
@@ -324,7 +474,7 @@ class LastRecallSourceSearchTests(unittest.TestCase):
         self.assertEqual(payload["foreground_action"]["id"], "refine_last_recall_exact_search")
         self.assertNotIn("outside registry phrase should not leak in", json.dumps(payload))
 
-    def test_search_from_last_recall_stale_cache_returns_rerun_action(self) -> None:
+    def test_search_from_last_recall_source_growth_warns_but_still_opens_hit(self) -> None:
         fingerprint = clean_source_fingerprint(self.clean)
         cache_path = self._write_cache(
             [
@@ -356,16 +506,24 @@ class LastRecallSourceSearchTests(unittest.TestCase):
                     str(cache_path),
                     "--json",
                 ]
-            )
+        )
         payload = json.loads(stdout.getvalue())
 
-        self.assertEqual(code, 2)
-        self.assertFalse(payload["ok"])
-        self.assertEqual(payload["status"], "cannot_verify")
-        self.assertEqual(payload["error"]["code"], "stale_recall_handle")
+        self.assertEqual(code, 0)
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["status"], "ok")
+        self.assertEqual(payload["matches"][0]["message_id"], "msg_final")
+        self.assertEqual(
+            payload["foreground_action"]["id"],
+            "open_last_recall_search_hit_source_window",
+        )
+        self.assertIn(
+            "stale_recall_handle",
+            {warning["code"] for warning in payload["warnings"]},
+        )
         self.assertEqual(payload["foreground_action_contract"], "foreground-action-v2")
         self.assertNotIn("agent_next_action", payload)
-        self.assertIn("agent recall", payload["foreground_action"].get("command", ""))
+        self.assertIn("--from-last-recall --open-source", payload["foreground_action"].get("command", ""))
         self.assertNotIn("--last-recall", payload["foreground_action"].get("command", ""))
         self.assertNotIn(str(self.cwd), json.dumps(payload, ensure_ascii=False))
 

@@ -39,6 +39,9 @@ from aippocampus_runtime.source.last_recall_actions import (
     deepen_command_for_request as _deepen_command_for_request,
 )
 from aippocampus_runtime.source.last_recall_actions import (
+    last_recall_source_window_command as _last_recall_source_window_command,
+)
+from aippocampus_runtime.source.last_recall_actions import (
     rerun_recall_action as _rerun_recall_action,
 )
 from aippocampus_runtime.source.last_recall_actions import (
@@ -211,6 +214,12 @@ def _match_for_last_recall(
     if selector:
         source_route["recall_selector"] = selector
     source_window_command = _registry_source_window_command(source_ref, match)
+    if not source_window_command:
+        source_window_command = _last_recall_source_window_command(
+            request_index=request_index,
+            recall_selector=selector,
+            match=match,
+        )
     item = {
         "request_index": request_index,
         "route_id": route_id,
@@ -238,6 +247,8 @@ def _match_for_last_recall(
         item["source_window_command"] = source_window_command
     else:
         item["deepen_command"] = _deepen_command_for_request(request_index, selector)
+        item["source_open_state"] = "exact_hit_unopenable"
+        item["source_open_blocker"] = "missing_message_or_line_selector"
     if include_paths:
         item["local_diagnostic"] = {
             "clean_source_messages_jsonl": str(source_dir / "messages.jsonl"),
@@ -453,12 +464,16 @@ def search_last_recall_sources(
             clean_source_dir=clean_source_dir,
         )
         if invalidations:
-            return _recovery_payload(
-                code="stale_recall_handle",
-                message="The last recall source set changed; rerun recall before exact route search.",
-                cue=query_from_last_recall_cache(cache_path),
-                query_text=query_text,
-                detail={"invalidated_by": invalidations, "request_index": index},
+            warnings.append(
+                {
+                    "code": "stale_recall_handle",
+                    "request_index": index,
+                    "invalidated_by": invalidations,
+                    "message": (
+                        "One recalled route source changed after recall; exact search "
+                        "continues against the current reachable clean source."
+                    ),
+                }
             )
 
         route_id = str(normalized.get("route_id") or "").strip()

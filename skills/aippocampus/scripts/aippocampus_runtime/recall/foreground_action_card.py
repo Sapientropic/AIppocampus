@@ -137,7 +137,11 @@ def _next_action(decision: str, request: Mapping[str, Any], packet: Mapping[str,
 def _search_recovery_action(query: Any, *, registry_wide: bool = False) -> dict[str, Any]:
     cue = _safe_text(query, limit=160)
     base = {
-        "action_id": "recover_recall_miss",
+        "action_id": (
+            "search_registry_sources_for_original_cue_anchors"
+            if registry_wide
+            else "recover_recall_miss"
+        ),
         "tool_name": "search_memory",
         "label": (
             "Search registered sources for cue anchors"
@@ -145,11 +149,13 @@ def _search_recovery_action(query: Any, *, registry_wide: bool = False) -> dict[
             else "Search current clean source for exact wording"
         ),
         "why": (
-            "Search registered source for a topic-bearing hit before trusting the low-confidence route."
+            "Routes surfaced, but compact route labels or opened anchors were too weak; search registered source for the original cue anchors before choosing a route."
             if registry_wide
             else "Search clean source for exact wording before broadening the recall attempt."
         ),
-        "claim_boundary": "no_route_claim",
+        "claim_boundary": (
+            "source_reopen_required_before_claim" if registry_wide else "no_route_claim"
+        ),
     }
     if cue:
         arguments = {"query": cue, "max": 5}
