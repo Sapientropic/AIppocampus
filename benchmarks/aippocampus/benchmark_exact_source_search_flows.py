@@ -41,6 +41,7 @@ def _write_registry(root: Path, threads: list[dict[str, Any]]) -> None:
 def _setup_fixture(root: Path) -> tuple[Path, Path]:
     current_clean = root / "current" / "clean-source"
     registry_clean = root / "registry-thread" / "clean-source"
+    registry_duplicate_clean = root / "registry-duplicate-thread" / "clean-source"
     recall_clean = root / "recall-thread" / "clean-source"
     _write_messages(
         current_clean,
@@ -71,6 +72,21 @@ def _setup_fixture(root: Path) -> tuple[Path, Path]:
         ],
     )
     _write_messages(
+        registry_duplicate_clean,
+        [
+            {
+                "id": "msg_registry_duplicate",
+                "message_id": "msg_registry_duplicate",
+                "source_line": 12,
+                "role": "assistant",
+                "phase": "final_answer",
+                "turn_index": 4,
+                "is_final": True,
+                "text": "The cross-thread exact search fixture phrase lives in a registered source.",
+            }
+        ],
+    )
+    _write_messages(
         recall_clean,
         [
             {
@@ -95,6 +111,16 @@ def _setup_fixture(root: Path) -> tuple[Path, Path]:
                     "workspace": str(root / "private-workspace"),
                     "clean_source_messages_jsonl": str(registry_clean / "messages.jsonl"),
                     "sqlite": str(root / "missing-registry.sqlite"),
+                },
+            },
+            {
+                "thread_key": "session:registry-duplicate",
+                "title": "Registry exact source duplicate fixture",
+                "paths": {
+                    "clean_source_messages_jsonl": str(
+                        registry_duplicate_clean / "messages.jsonl"
+                    ),
+                    "sqlite": str(root / "missing-registry-duplicate.sqlite"),
                 },
             },
             {
@@ -149,6 +175,12 @@ def evaluate_exact_source_search_flows() -> dict[str, Any]:
             hit_index=1,
             use_last_search=True,
         )
+        registry_duplicate_reopen = open_registry_source_window(
+            registry_dir=root,
+            hit_index=1,
+            source_ref_index=2,
+            use_last_search=True,
+        )
         registry_miss = search_registry_sources(
             ["zqxj-unmatched-registry-needle"],
             registry_dir=root,
@@ -168,7 +200,22 @@ def evaluate_exact_source_search_flows() -> dict[str, Any]:
             cwd=root,
             last_recall_path=root / "missing-last-recall.json",
         )
-        payloads = [registry_hit, registry_reopen, registry_miss, last_recall_hit, last_recall_miss, stale_last_recall]
+        payloads = [
+            registry_hit,
+            registry_reopen,
+            registry_duplicate_reopen,
+            registry_miss,
+            last_recall_hit,
+            last_recall_miss,
+            stale_last_recall,
+        ]
+        duplicate_refs = registry_hit["matches"][0].get("duplicate_source_refs") or []
+        target_in_duplicate_refs = any(
+            isinstance(ref, dict)
+            and ref.get("thread_key") == "session:registry-duplicate"
+            and bool(ref.get("source_window_command"))
+            for ref in duplicate_refs
+        )
         encoded = json.dumps(payloads, ensure_ascii=False)
         rows = [
             {
@@ -185,6 +232,19 @@ def evaluate_exact_source_search_flows() -> dict[str, Any]:
                 and registry_reopen.get("metrics", {}).get("source_reopen_success") is True,
                 "scope": "registry_source_window",
                 "reopenable": True,
+                "top_level_target_hit": True,
+                "target_in_duplicate_refs": False,
+            },
+            {
+                "case_id": "registry_wide_duplicate_ref_reopens_source_window",
+                "ok": target_in_duplicate_refs
+                and bool(registry_duplicate_reopen.get("ok"))
+                and registry_duplicate_reopen.get("source_route", {}).get("thread_key")
+                == "session:registry-duplicate",
+                "scope": "registry_source_window",
+                "reopenable": True,
+                "top_level_target_hit": False,
+                "target_in_duplicate_refs": target_in_duplicate_refs,
             },
             {
                 "case_id": "registry_wide_no_match_boundary",
@@ -199,7 +259,10 @@ def evaluate_exact_source_search_flows() -> dict[str, Any]:
                 and last_recall_hit.get("match_count") == 1
                 and last_recall_hit["matches"][0]["request_index"] == 1,
                 "scope": last_recall_hit.get("search_scope"),
-                "reopenable": bool(last_recall_hit["matches"][0].get("deepen_command")),
+                "reopenable": bool(
+                    last_recall_hit["matches"][0].get("source_window_command")
+                    or last_recall_hit["matches"][0].get("reopen_command")
+                ),
             },
             {
                 "case_id": "last_recall_no_match_boundary",
@@ -242,6 +305,9 @@ def evaluate_exact_source_search_flows() -> dict[str, Any]:
                 "case_count": len(rows),
                 "hit_correctness_count": sum(1 for row in rows if row["ok"]),
                 "reopenable_hit_count": sum(1 for row in rows if row["reopenable"]),
+                "target_in_duplicate_refs_count": sum(
+                    1 for row in rows if row.get("target_in_duplicate_refs")
+                ),
                 "privacy_path_leak_count": red_lines["privacy_path_leak_count"],
             },
             "red_lines": red_lines,

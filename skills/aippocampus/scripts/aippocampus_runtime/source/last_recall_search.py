@@ -25,7 +25,6 @@ from aippocampus_runtime.recall.agent_recall_cache import (
     read_last_recall_cache,
 )
 from aippocampus_runtime.recall.continuity_domains import clean_source_fingerprint
-from aippocampus_runtime.source.clean_source import SCOPE_LABEL_ORDER
 from aippocampus_runtime.source.last_recall_actions import (
     actions_for_last_recall_search as _actions_for_last_recall_search,
 )
@@ -47,6 +46,9 @@ from aippocampus_runtime.source.last_recall_actions import (
 from aippocampus_runtime.source.last_recall_actions import (
     selector_cache_path as _selector_cache_path,
 )
+from aippocampus_runtime.source.last_recall_clean_search import (
+    search_clean_source_dir_for_last_recall as _search_clean_source_dir,
+)
 from aippocampus_runtime.source.last_recall_recovery import (
     selector_recovery_payload as _selector_recovery_payload,
 )
@@ -56,18 +58,9 @@ from aippocampus_runtime.source.last_recall_thread_candidate import (
 from aippocampus_runtime.source.last_recall_thread_candidate import (
     thread_candidate_search_refs as _thread_candidate_search_refs,
 )
-from aippocampus_runtime.source.search_core import iter_clean_messages, score_message
+from aippocampus_runtime.source.registry_search_evidence import query_anchor_rank
 from aippocampus_runtime.source.search_terms import search_query_terms
-from aippocampus_runtime.source.semantic_scope_labels import (
-    load_semantic_scope_labels,
-    merged_scope_labels,
-    semantic_labels_for_message,
-)
 
-PROCESS_NOISE_PREFIXES = (
-    ("<subagent_notification>", "process_notification"),
-    ("<tool", "tool_process"),
-)
 DEFAULT_PUBLIC_SNIPPET_CHARS = 260
 
 
@@ -83,14 +76,6 @@ def _as_float(value: Any, default: float = 0.0) -> float:
         return float(value)
     except (TypeError, ValueError):
         return default
-
-
-def _process_noise_reason(text: str) -> str:
-    snippet = str(text or "").lstrip().casefold()
-    for prefix, reason in PROCESS_NOISE_PREFIXES:
-        if snippet.startswith(prefix):
-            return reason
-    return ""
 
 
 def _recovery_payload(
@@ -200,6 +185,10 @@ def _match_for_last_recall(
 ) -> dict[str, Any]:
     selector = _clean_recall_selector(recall_selector)
     thread_key = str(source_ref.get("thread_key") or "").strip()
+    query_profile = match.get("query_match_profile")
+    query_profile_map: Mapping[str, Any] = (
+        query_profile if isinstance(query_profile, Mapping) else {}
+    )
     source_route = {
         "kind": "registry_clean_source_hit" if thread_key else "last_recall_candidate_hit",
         "request_index": request_index,
@@ -241,6 +230,7 @@ def _match_for_last_recall(
         "search_noise": bool(match.get("search_noise")),
         "noise_reason": match.get("noise_reason"),
         "source_route": source_route,
+        "_query_match_profile": dict(query_profile_map),
     }
     if source_window_command:
         item["reopen_command"] = source_window_command
@@ -254,67 +244,6 @@ def _match_for_last_recall(
             "clean_source_messages_jsonl": str(source_dir / "messages.jsonl"),
         }
     return {key: value for key, value in item.items() if value not in (None, "", [], {})}
-
-
-def _search_clean_source_dir(
-    source_dir: Path,
-    patterns: list[str],
-    *,
-    limit: int,
-    snippet_chars: int,
-) -> dict[str, Any]:
-    semantic_sidecar = load_semantic_scope_labels(source_dir)
-    terms = search_query_terms(patterns)
-    known_scope_labels = set(SCOPE_LABEL_ORDER)
-    matches: list[dict[str, Any]] = []
-    warnings: list[dict[str, Any]] = []
-    for message in iter_clean_messages(source_dir / "messages.jsonl"):
-        message_text = str(message.get("text") or "")
-        base_scope_labels = [
-            str(label) for label in message.get("scope_labels", []) if isinstance(label, str)
-        ]
-        semantic_scope_labels = semantic_labels_for_message(message, semantic_sidecar)
-        message_scope_labels = merged_scope_labels(base_scope_labels, semantic_scope_labels)
-        for label in message_scope_labels:
-            if label not in known_scope_labels:
-                warnings.append(
-                    {
-                        "code": "unknown_scope_label",
-                        "scope_label": label,
-                        "message": f"Unknown scope label: {label}",
-                    }
-                )
-        score = score_message(message, terms)
-        if score <= 0:
-            continue
-        noise_reason = _process_noise_reason(message_text)
-        match = {
-            "id": message.get("message_id") or message.get("id"),
-            "message_id": message.get("message_id") or message.get("id"),
-            "turn_id": message.get("turn_id"),
-            "source_line": message.get("source_line"),
-            "role": message.get("role"),
-            "phase": message.get("phase") or "",
-            "turn_index": message.get("turn_index"),
-            "is_final": bool(message.get("is_final")),
-            "scope_labels": message_scope_labels,
-            "semantic_scope_labels": semantic_scope_labels,
-            "score": round(score, 3),
-            "snippet": compact_text(message_text, snippet_chars) if snippet_chars else "",
-            "snippet_omitted": snippet_chars == 0,
-        }
-        if noise_reason:
-            match["search_noise"] = True
-            match["noise_reason"] = noise_reason
-        matches.append(match)
-    matches.sort(
-        key=lambda item: (
-            1 if item.get("search_noise") else 0,
-            -_as_float(item.get("score")),
-            _as_int(item.get("source_line")),
-        )
-    )
-    return {"matches": matches[:limit], "warnings": warnings}
 
 
 def render_last_recall_search_result(result: Mapping[str, Any]) -> str:
@@ -347,6 +276,18 @@ def render_last_recall_search_result(result: Mapping[str, Any]) -> str:
         if command:
             lines.append(f"next: {command}")
     return "\n".join(lines)
+
+
+def _query_anchor_sort_key(item: Mapping[str, Any]) -> tuple[int, int, float]:
+    profile = item.get("_query_match_profile") or item.get("query_match_profile")
+    if isinstance(profile, Mapping):
+        return query_anchor_rank({"query_match_profile": profile})
+    return (0, 0, 0.0)
+
+
+def _strip_internal_match_fields(match: dict[str, Any]) -> dict[str, Any]:
+    return {key: value for key, value in match.items() if not key.startswith("_")}
+
 
 # aippocampus-stage-map: resolve selector -> load cache -> scan sources -> emit source/open recovery.
 def search_last_recall_sources(
@@ -529,12 +470,18 @@ def search_last_recall_sources(
     matches.sort(
         key=lambda item: (
             1 if item.get("search_noise") else 0,
+            -_query_anchor_sort_key(item)[0],
+            -_query_anchor_sort_key(item)[1],
+            -_query_anchor_sort_key(item)[2],
             -_as_float(item.get("score")),
             _as_int(item.get("request_index")),
             _as_int(item.get("line")),
         )
     )
-    matches = matches[: max(1, int(limit or 1))]
+    matches = [
+        _strip_internal_match_fields(match)
+        for match in matches[: max(1, int(limit or 1))]
+    ]
     all_unavailable = bool(indices) and not matches and searched_source_count == 0
     all_unavailable_thread_candidates = (
         all_unavailable

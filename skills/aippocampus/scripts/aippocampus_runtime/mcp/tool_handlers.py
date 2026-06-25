@@ -229,20 +229,21 @@ def call_search_memory(arguments: dict[str, Any]) -> dict[str, Any]:
         scope = "last_recall_candidates"
     include_paths = bool(arguments.get("include_private_paths"))
     if scope == "all_registered_sources":
-        from aippocampus_runtime.source.registry_search import search_registry_sources
+        from aippocampus_runtime.mcp.search_memory_registry import (
+            registry_search_memory_payload,
+        )
 
-        payload = search_registry_sources(
-            [query],
+        payload = registry_search_memory_payload(
+            arguments,
+            query=query,
+            cwd=cwd_arg(arguments),
             registry_dir=registry_dir_arg(arguments),
             limit=limit,
             include_paths=include_paths,
-            search_budget=str(arguments.get("search_budget") or "default"),
-            record_last_search=False,
-            cwd=cwd_arg(arguments),
         )
         payload["limit"] = limit
         payload["mcp_search_scope"] = scope
-        payload["detail"] = "compact"
+        payload["detail"] = detail_arg(arguments)
         payload["surface"] = "mcp_search_memory_compact"
         return render_profiled_result(
             arguments,

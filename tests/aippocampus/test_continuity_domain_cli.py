@@ -323,6 +323,62 @@ class ContinuityDomainCliTests(unittest.TestCase):
             self.assertEqual(candidate["foreground_actions"], [])
             self.assertIn("suppression_reason", candidate)
 
+    def test_agent_preview_rejects_mixed_generic_weak_cues_from_issue_2717(self) -> None:
+        payload = {
+            "ok": True,
+            "mode": "dry_run",
+            "metrics": {
+                "scan_partial": True,
+                "low_information_label_suppressed_count": 24122,
+            },
+            "top_domain_labels": [],
+            "candidate_events": [
+                {
+                    "domain_id": "generic-project-plus-weak-judgment",
+                    "title": "AIppocampus",
+                    "domain_type": "recurring_question",
+                    "scale": "meso",
+                    "activation_cues": ["AIppocampus", "source-backed", "结论", "他又更新", "DeepSeek"],
+                    "source_refs": [{"message_id": "msg-1"}],
+                },
+                {
+                    "domain_id": "generic-source-plus-weak-truth",
+                    "title": "source-backed",
+                    "domain_type": "recurring_question",
+                    "scale": "meso",
+                    "activation_cues": ["source-backed", "AIppocampus", "真实", "fresh-thread", "---"],
+                    "source_refs": [{"message_id": "msg-2"}],
+                },
+                {
+                    "domain_id": "punctuation-title-plus-weak-strength",
+                    "title": "---",
+                    "domain_type": "recurring_question",
+                    "scale": "meso",
+                    "activation_cues": ["---", "AIppocampus", "source-backed", "很强", "公开", "**AIppocampus"],
+                    "source_refs": [{"message_id": "msg-3"}],
+                },
+            ],
+        }
+
+        preview = continuity_domain_cli._producer_agent_preview(payload)
+
+        self.assertEqual(preview["foreground_candidate_quality"], "needs_broader_scan")
+        self.assertEqual(preview["foreground_action"]["id"], "needs_broader_scan_or_cue")
+        encoded = json.dumps(preview, ensure_ascii=False)
+        for weak_command in (
+            "agent recall '结论'",
+            "agent recall '真实'",
+            "agent recall '很强'",
+            "agent recall 结论",
+            "agent recall 真实",
+            "agent recall 很强",
+        ):
+            self.assertNotIn(weak_command, encoded)
+        for candidate in preview["candidate_previews"]:
+            self.assertEqual(candidate["foreground_candidate_quality"], "low_information")
+            self.assertEqual(candidate["foreground_actions"], [])
+            self.assertIn("suppression_reason", candidate)
+
     def test_agent_preview_skips_low_information_cues_before_using_specific_route_cue(self) -> None:
         payload = {
             "ok": True,

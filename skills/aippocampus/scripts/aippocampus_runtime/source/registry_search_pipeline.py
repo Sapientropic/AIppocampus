@@ -48,6 +48,10 @@ from aippocampus_runtime.source.registry_search_skips import (
     registry_entry_search_skip,
     skipped_maintenance_actions,
 )
+from aippocampus_runtime.source.registry_source_routes import (
+    registry_clean_source_route,
+    registry_source_window_command,
+)
 from aippocampus_runtime.source.registry_source_window import write_last_registry_search_cache
 from aippocampus_runtime.source.relationship_origin import (
     relationship_origin_allows_low_coverage,
@@ -114,13 +118,11 @@ def _registry_match(
     raw_paths = entry.get("paths")
     paths: Mapping[str, Any] = raw_paths if isinstance(raw_paths, Mapping) else {}
     thread_key = str(entry.get("thread_key") or "").strip()
-    source_route = {
-        "kind": "registry_clean_source_hit",
-        "thread_key": thread_key,
-        "line": hit.get("line"),
-        "message_id": hit.get("message_id") or hit.get("id"),
-        "boundary": "reopen_source_before_quoting_or_strong_claims",
-    }
+    source_route = registry_clean_source_route(
+        thread_key=thread_key,
+        message_id=hit.get("message_id") or hit.get("id"),
+        line=hit.get("line"),
+    )
     raw_snippet = str(hit.get("snippet") or "")
     snippet = compact_text(raw_snippet, DEFAULT_PUBLIC_SNIPPET_CHARS)
     noise_reason = str(hit.get("noise_reason") or "") or process_noise_reason(snippet)
@@ -175,9 +177,6 @@ def _annotate_last_search_reopen_commands(
     registry_dir: str | Path | None,
     include_paths: bool,
 ) -> None:
-    registry_arg = ""
-    if include_paths and registry_dir:
-        registry_arg = f" --registry-dir {shell_quote(str(Path(registry_dir).resolve()))}"
     for index, match in enumerate(matches, start=1):
         raw_route = match.get("source_route")
         route: Mapping[str, Any] = raw_route if isinstance(raw_route, Mapping) else {}
@@ -189,25 +188,39 @@ def _annotate_last_search_reopen_commands(
                 match["source_window_command"] = command
                 match["last_search_reopen_command"] = command
             continue
-        thread_key = str(route.get("thread_key") or "")
-        message_id = str(route.get("message_id") or "")
-        line = route.get("line")
-        line_arg = ""
-        if line is not None and str(line).isdigit():
-            line_arg = f"--line {int(str(line))}"
-        direct_parts = [
-            "aippocampus search --open-source",
-            f"--thread-key {shell_quote(thread_key)}" if thread_key else "",
-            f"--message-id {shell_quote(message_id)}" if message_id else "",
-            line_arg,
-            registry_arg.strip(),
-            "--json",
-        ]
-        source_window_command = " ".join(part for part in direct_parts if part)
+        source_window_command = registry_source_window_command(
+            route,
+            registry_dir=registry_dir,
+            include_registry_dir=include_paths,
+        )
         match["hit_index"] = index
         match["reopen_command"] = source_window_command
         match["source_window_command"] = source_window_command
         match["last_search_reopen_command"] = f"aippocampus search --hit {index} --last-search --json"
+        duplicate_refs = [
+            ref for ref in match.get("duplicate_source_refs") or [] if isinstance(ref, dict)
+        ]
+        for ref_index, ref in enumerate(duplicate_refs, start=1):
+            route_ref = registry_clean_source_route(
+                thread_key=str(ref.get("thread_key") or ""),
+                message_id=str(ref.get("message_id") or ""),
+                line=ref.get("line"),
+            )
+            if not route_ref.get("thread_key"):
+                continue
+            ref_command = registry_source_window_command(
+                route_ref,
+                registry_dir=registry_dir,
+                include_registry_dir=include_paths,
+            )
+            ref["source_ref_index"] = ref_index
+            ref["source_route"] = route_ref
+            ref["reopen_command"] = ref_command
+            ref["source_window_command"] = ref_command
+            ref["last_search_reopen_command"] = (
+                f"aippocampus search --hit {index} --last-search "
+                f"--source-ref-index {ref_index} --json"
+            )
 
 
 def _load_registry_search_input(

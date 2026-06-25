@@ -382,5 +382,81 @@ class RegistrySourceSearchUsefulnessTests(unittest.TestCase):
             json.dumps(reopened["source_window"], ensure_ascii=False),
         )
 
+    def test_collapsed_duplicate_source_refs_are_directly_reopenable(self) -> None:
+        duplicate_text = "registry duplicate alternate source window phrase"
+        threads = []
+        for index in range(1, 4):
+            clean = self.root / f"duplicate-clean-{index}"
+            clean.mkdir()
+            (clean / "messages.jsonl").write_text(
+                json.dumps(
+                    {
+                        "id": f"msg_duplicate_{index}",
+                        "message_id": f"msg_duplicate_{index}",
+                        "source_line": 40 + index,
+                        "role": "assistant",
+                        "phase": "final_answer",
+                        "is_final": True,
+                        "text": duplicate_text,
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            threads.append(
+                {
+                    "thread_key": f"session:duplicate-{index}",
+                    "title": f"Duplicate {index}",
+                    "paths": {"clean_source_messages_jsonl": str(clean / "messages.jsonl")},
+                }
+            )
+        (self.root / "threads.json").write_text(
+            json.dumps({"schema_version": 1, "threads": threads}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+
+        result = source_registry_search.search_registry_sources(
+            [duplicate_text],
+            registry_dir=self.root,
+            cwd=self.root,
+            record_last_search=True,
+            limit=10,
+        )
+        duplicate = result["matches"][0]
+
+        self.assertEqual(result["match_count"], 1)
+        self.assertEqual(duplicate["source_count"], 3)
+        self.assertEqual(
+            [ref["source_ref_index"] for ref in duplicate["duplicate_source_refs"]],
+            [1, 2, 3],
+        )
+        self.assertTrue(
+            all(ref.get("source_window_command") for ref in duplicate["duplicate_source_refs"])
+        )
+        self.assertIn(
+            "--source-ref-index 2",
+            duplicate["duplicate_source_refs"][1]["last_search_reopen_command"],
+        )
+
+        representative = source_registry_search.open_registry_source_window(
+            registry_dir=self.root,
+            hit_index=1,
+            use_last_search=True,
+        )
+        alternate = source_registry_search.open_registry_source_window(
+            registry_dir=self.root,
+            hit_index=1,
+            source_ref_index=2,
+            use_last_search=True,
+        )
+
+        self.assertTrue(representative["ok"])
+        self.assertTrue(alternate["ok"])
+        self.assertEqual(representative["source_route"]["thread_key"], "session:duplicate-1")
+        self.assertEqual(alternate["source_route"]["thread_key"], "session:duplicate-2")
+        self.assertIn(duplicate_text, json.dumps(alternate["source_window"], ensure_ascii=False))
+        self.assertNotIn(str(self.root), json.dumps(alternate, ensure_ascii=False))
+
 if __name__ == "__main__":
     unittest.main()

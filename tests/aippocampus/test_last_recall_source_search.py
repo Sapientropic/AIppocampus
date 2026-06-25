@@ -18,6 +18,7 @@ from aippocampus_runtime.recall.agent_recall_cache import (
 from aippocampus_runtime.recall.continuity_domains import clean_source_fingerprint
 from aippocampus_runtime.registry import api as registry
 from aippocampus_runtime.source import search
+from aippocampus_runtime.source.last_recall_search import search_last_recall_sources
 
 
 class LastRecallSourceSearchTests(unittest.TestCase):
@@ -261,6 +262,73 @@ class LastRecallSourceSearchTests(unittest.TestCase):
         self.assertEqual(payload["match_count"], 1)
         self.assertEqual(payload["matches"][0]["request_index"], 2)
         self.assertIn("two", payload["matches"][0]["snippet"])
+
+    def test_search_from_last_recall_ranks_exact_hit_before_loud_partial_hit(self) -> None:
+        route_clean = self.cwd / "ranking-thread" / "clean-source"
+        exact_phrase = "scarlet walnut cicada"
+        self._write_messages(
+            route_clean,
+            [
+                {
+                    "id": "msg_partial_loud",
+                    "message_id": "msg_partial_loud",
+                    "source_line": 5,
+                    "role": "assistant",
+                    "phase": "final_answer",
+                    "is_final": True,
+                    "text": (
+                        "scarlet scarlet scarlet walnut walnut walnut "
+                        "nearby topic text without the requested adjacent phrase"
+                    ),
+                },
+                {
+                    "id": "msg_exact_late",
+                    "message_id": "msg_exact_late",
+                    "source_line": 31,
+                    "role": "assistant",
+                    "phase": "final_answer",
+                    "is_final": True,
+                    "text": f"prefix filler prefix filler {exact_phrase} suffix filler",
+                },
+            ],
+        )
+        self._write_registry(
+            [
+                {
+                    "thread_key": "session:ranking",
+                    "paths": {"clean_source_messages_jsonl": str(route_clean / "messages.jsonl")},
+                }
+            ]
+        )
+        cache_path = self._write_cache(
+            [
+                {
+                    "request_index": 1,
+                    "route_id": "route_ranking",
+                    "handle": {
+                        "kind": "thread_candidate",
+                        "thread_key": "session:ranking",
+                        "route_id": "route_ranking",
+                    },
+                }
+            ],
+            query=exact_phrase,
+        )
+
+        payload = search_last_recall_sources(
+            [exact_phrase],
+            cwd=self.cwd,
+            last_recall_path=cache_path,
+            per_route_limit=1,
+            limit=1,
+        )
+
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["match_count"], 1)
+        self.assertEqual(payload["matches"][0]["message_id"], "msg_exact_late")
+        self.assertIn("--message-id msg_exact_late", payload["foreground_action"]["command"])
+        self.assertNotIn("query_match_profile", json.dumps(payload, ensure_ascii=False))
+        self.assertNotIn("_query_match_profile", json.dumps(payload, ensure_ascii=False))
 
     def test_search_from_last_recall_source_ref_hit_opens_exact_source_without_private_path(
         self,

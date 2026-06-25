@@ -201,6 +201,111 @@ class McpSearchMemoryLastRecallTests(unittest.TestCase):
         self.assertGreaterEqual(len(open_payload["anchor_hits"]), 1)
         self.assertNotIn(str(self.cwd), json.dumps(open_payload, ensure_ascii=False))
 
+    def test_search_memory_last_recall_prefers_exact_hit_over_loud_partial_hit(self) -> None:
+        route_clean = self.cwd / "mcp-ranking-thread" / "clean-source"
+        exact_phrase = "amber cedar lantern"
+        self._write_messages(
+            route_clean,
+            [
+                {
+                    "id": "msg_partial_loud",
+                    "message_id": "msg_partial_loud",
+                    "source_line": 6,
+                    "role": "assistant",
+                    "phase": "final_answer",
+                    "is_final": True,
+                    "text": (
+                        "amber amber amber cedar cedar cedar "
+                        "nearby route text without the requested adjacent phrase"
+                    ),
+                },
+                {
+                    "id": "msg_exact",
+                    "message_id": "msg_exact",
+                    "source_line": 32,
+                    "role": "assistant",
+                    "phase": "final_answer",
+                    "is_final": True,
+                    "text": f"The remembered source says {exact_phrase} clearly.",
+                },
+            ],
+        )
+        (self.cwd / "threads.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "threads": [
+                        {
+                            "thread_key": "session:mcp-ranking",
+                            "paths": {
+                                "clean_source_messages_jsonl": str(
+                                    route_clean / "messages.jsonl"
+                                )
+                            },
+                        }
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        cache_path = self._write_cache(
+            [
+                {
+                    "request_index": 1,
+                    "route_id": "route_mcp_ranking",
+                    "handle": {
+                        "kind": "thread_candidate",
+                        "thread_key": "session:mcp-ranking",
+                        "route_id": "route_mcp_ranking",
+                    },
+                }
+            ],
+            query=exact_phrase,
+        )
+        selector = write_recall_selector_snapshot(cache_path)
+        self.assertIsNotNone(selector)
+
+        search_payload = call_mcp_tool_payload(
+            "search_memory",
+            {
+                "query": exact_phrase,
+                "cwd": str(self.cwd),
+                "last_recall_path": str(cache_path),
+                "recall_selector": selector,
+                "scope": "last_recall_candidates",
+            },
+        )
+        encoded = json.dumps(search_payload, ensure_ascii=False)
+
+        self.assertEqual(
+            search_payload["foreground_action"]["id"],
+            "open_last_recall_search_hit_source_window",
+        )
+        self.assertIn("--message-id msg_exact", search_payload["foreground_action"]["command"])
+        self.assertNotIn("matches", search_payload)
+        self.assertNotIn("msg_partial_loud", encoded)
+
+        open_payload = call_mcp_tool_payload(
+            "search_memory",
+            {
+                "query": exact_phrase,
+                "cwd": str(self.cwd),
+                "last_recall_path": str(cache_path),
+                "recall_selector": selector,
+                "scope": "last_recall_candidates",
+                "open_source": True,
+                "request_index": 1,
+                "message_id": "msg_exact",
+                "line": 32,
+                "detail": "full",
+            },
+        )
+
+        self.assertEqual(open_payload["source_boundary"]["authority"], "source_open")
+        self.assertTrue(open_payload["source_anchor_profile"]["exact_phrase_match"])
+        self.assertIn(exact_phrase, json.dumps(open_payload["source_window"], ensure_ascii=False))
+
 
 if __name__ == "__main__":
     unittest.main()

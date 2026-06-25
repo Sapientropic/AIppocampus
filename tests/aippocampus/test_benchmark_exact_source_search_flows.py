@@ -19,11 +19,12 @@ class ExactSourceSearchFlowBenchmarkTests(unittest.TestCase):
 
         self.assertTrue(report["ok"], report)
         self.assertTrue(report["quality_gate_ok"])
-        self.assertEqual(report["metrics"]["case_count"], 6)
+        self.assertEqual(report["metrics"]["case_count"], 7)
         self.assertEqual(report["red_lines"]["privacy_path_leak_count"], 0)
         self.assertEqual(report["red_lines"]["raw_registry_entry_shape_count"], 0)
         self.assertEqual(report["red_lines"]["search_miss_claims_absence_count"], 0)
-        self.assertGreaterEqual(report["metrics"]["reopenable_hit_count"], 2)
+        self.assertGreaterEqual(report["metrics"]["reopenable_hit_count"], 3)
+        self.assertEqual(report["metrics"]["target_in_duplicate_refs_count"], 1)
         self.assertIn("absence_of_memory_from_search_miss", report["cannot_claim"])
 
     def test_cli_json_runner(self) -> None:

@@ -348,6 +348,8 @@ the reopened source boundary.""",
             parser.error("--hit requires --last-search")
         if args.last_search and not args.hit:
             parser.error("--last-search requires --hit")
+        if args.source_ref_index and not args.hit:
+            parser.error("--source-ref-index requires --hit --last-search")
         if args.patterns:
             parser.error("source-window reopen does not take search patterns")
         return run_registry_search_cli(args, render_human_search_result)

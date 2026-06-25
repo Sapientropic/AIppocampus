@@ -6,8 +6,13 @@ import json
 from collections.abc import Mapping
 from typing import Any
 
-from aippocampus_runtime.contracts import shell_quote
 from aippocampus_runtime.mcp.recall_navigation import RecallNavigationError
+from aippocampus_runtime.source.registry_source_routes import (
+    registry_clean_source_route,
+)
+from aippocampus_runtime.source.registry_source_routes import (
+    registry_source_window_command as _registry_source_window_command,
+)
 
 
 def _handle_mapping(handle: Any) -> dict[str, Any] | None:
@@ -62,17 +67,14 @@ def registry_source_window_command(ref: Mapping[str, Any], match: Mapping[str, A
     thread_key = str(ref.get("thread_key") or "").strip()
     if not thread_key:
         return ""
-    message_id = str(match.get("message_id") or match.get("id") or "").strip()
-    line = match.get("source_line") or match.get("line")
-    line_arg = f"--line {int(str(line))}" if line is not None and str(line).isdigit() else ""
-    parts = [
-        "aippocampus search --open-source",
-        f"--thread-key {shell_quote(thread_key)}",
-        f"--message-id {shell_quote(message_id)}" if message_id else "",
-        line_arg,
-        "--json",
-    ]
-    return " ".join(part for part in parts if part)
+    return _registry_source_window_command(
+        registry_clean_source_route(
+            thread_key=thread_key,
+            message_id=str(match.get("message_id") or match.get("id") or ""),
+            line=match.get("source_line") or match.get("line"),
+            boundary="open_registry_source_window_before_quoting_or_strong_claims",
+        )
+    )
 
 
 __all__ = ["registry_source_window_command", "thread_candidate_search_refs"]
