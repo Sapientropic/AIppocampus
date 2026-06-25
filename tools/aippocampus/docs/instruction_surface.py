@@ -122,6 +122,22 @@ INSTRUCTION_SURFACE_CLASSIFIED_FILES = {
             "foreground recall still has to reopen source before claims"
         ),
     },
+    "skills/aippocampus/scripts/aippocampus_runtime/recall/continuity_domain_cue_quality.py": {
+        "classification": "continuity_domain_cue_quality_owner",
+        "owner": "#2668/#2651",
+        "why": (
+            "owns continuity-domain foreground cue quality and suppression labels; "
+            "broad route words may stay diagnostic but must not become recall commands"
+        ),
+    },
+    "skills/aippocampus/scripts/aippocampus_runtime/recall/continuity_domain_producer.py": {
+        "classification": "continuity_domain_producer_owner",
+        "owner": "#2668/#2631/#2651",
+        "why": (
+            "owns deterministic registry-to-domain candidate wording and "
+            "low-information label filtering; append/publish remains operator-owned"
+        ),
+    },
     "skills/aippocampus/scripts/aippocampus_runtime/recall/evidence_drawer.py": {
         "classification": "evidence_drawer_projection_owner",
         "owner": "#2628/#2636/#2651",

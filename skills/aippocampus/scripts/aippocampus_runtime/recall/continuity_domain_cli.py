@@ -26,6 +26,9 @@ from aippocampus_runtime.contracts import (
 from aippocampus_runtime.core import compact_text
 from aippocampus_runtime.ops.route_readiness import safe_source_refs
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
+from aippocampus_runtime.recall.continuity_domain_cue_quality import (
+    foreground_continuity_domain_cue_quality,
+)
 from aippocampus_runtime.recall.continuity_domain_producer import (
     DEFAULT_CONTINUITY_DOMAIN_PREVIEW_CANDIDATE_BUDGET,
     DEFAULT_CONTINUITY_DOMAIN_PREVIEW_THREAD_BUDGET,
@@ -169,57 +172,6 @@ def _print_payload(payload: MappingPayload, *, json_output: bool) -> None:
 
 
 MappingPayload = dict[str, Any]
-GENERIC_FOREGROUND_CUE_TERMS = {
-    "aippocampus",
-    "aiippocampus",
-    "sapientropic",
-    "ai",
-    "codex-hindsight-memory",
-    "recall",
-    "append",
-    "anchor",
-    "anchors",
-    "锚点",
-    "maintenance",
-    "runtime",
-    "runtime-contract",
-    "continuity-domain",
-    "continuity",
-    "route",
-    "source",
-    "source-backed",
-    "foreground",
-    "action",
-    "candidate",
-    "candidates",
-    "preview",
-    "plugin",
-    "tool",
-    "github",
-    "github.com",
-    "agent_callable",
-    "agent-callable",
-    "issue",
-    "issues",
-    "用户",
-    "角度",
-    "不是",
-    "不过",
-    "刚才",
-    "这个",
-    "那个",
-    "然后",
-    "现在",
-    "就是",
-}
-GENERIC_FOREGROUND_CUE_PHRASES = {
-    "runtime-contract.md",
-    "old continuity cue",
-    "continuity domain candidate",
-    "aippocampus maintenance",
-    "aippocampus 锚点",
-    "github.com",
-}
 
 
 def _read_event(args: argparse.Namespace) -> dict[str, Any]:
@@ -494,31 +446,6 @@ def _strip_producer_local_detail(payload: MappingPayload) -> MappingPayload:
     return clean
 
 
-def _foreground_cue_quality(cue: str) -> tuple[str, str]:
-    text = compact_text(str(cue or ""), 80).strip()
-    if not text:
-        return "low_information", "empty"
-    low = text.strip('"`“”‘’.,;:!?，。；：！？()[]{}<>').casefold()
-    if re.fullmatch(r"(?:[a-z0-9-]+\.)+[a-z]{2,}(?:/[^\s]*)?", low):
-        return "low_information", "hostname_or_domain"
-    if low in GENERIC_FOREGROUND_CUE_PHRASES:
-        return "low_information", "generic_tool_word"
-    if low.startswith("-") or re.fullmatch(r"-{1,2}[\w][\w.-]*", low):
-        return "low_information", "cli_flag_or_option"
-    if low.endswith((".md", ".py", ".json", ".jsonl", ".toml", ".yaml", ".yml")) and " " not in low:
-        return "low_information", "file_name_only"
-    tokens = [
-        token.strip('"`“”‘’.,;:!?，。；：！？()[]{}<>')
-        for token in re.findall(r"[\w\u4e00-\u9fff.-]+", low.replace("_", "-"))
-        if token.strip('"`“”‘’.,;:!?，。；：！？()[]{}<>')
-    ]
-    if tokens and all(token in GENERIC_FOREGROUND_CUE_TERMS for token in tokens):
-        return "low_information", "generic_tool_word"
-    if low in GENERIC_FOREGROUND_CUE_TERMS:
-        return "low_information", "generic_tool_word"
-    return "actionable", ""
-
-
 def _looks_path_or_identity_cue(cue: str) -> bool:
     text = compact_text(str(cue or ""), 80).strip()
     if not text:
@@ -551,11 +478,11 @@ def _foreground_activation_cues(raw_cues: Any) -> tuple[list[str], bool]:
 
 def _best_foreground_cue(cues: list[str], fallback_title: str) -> tuple[str, str, str]:
     for cue in [*cues, fallback_title]:
-        quality, reason = _foreground_cue_quality(cue)
+        quality, reason = foreground_continuity_domain_cue_quality(cue)
         if quality == "actionable":
             return compact_text(str(cue), 80), quality, reason
     first = cues[0] if cues else fallback_title
-    quality, reason = _foreground_cue_quality(first)
+    quality, reason = foreground_continuity_domain_cue_quality(first)
     return compact_text(str(first), 80), quality, reason
 
 
