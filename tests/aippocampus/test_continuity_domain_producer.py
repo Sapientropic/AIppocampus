@@ -201,6 +201,14 @@ class ContinuityDomainProducerTests(unittest.TestCase):
             "the answer",
             "your answer should change",
             "your answer gets visible",
+            "github.com",
+            "comment](https",
+            "不是",
+            "不过",
+            "刚才",
+            "本机",
+            "压缩",
+            "main",
         ):
             self.assertEqual(_clean_candidate_term(term), ("", False))
         self.assertEqual(_clean_candidate_term("AIppocampus"), ("AIppocampus", False))
@@ -257,6 +265,14 @@ class ContinuityDomainProducerTests(unittest.TestCase):
             "answer",
             "your answer",
             "your answer gets visible",
+            "github.com",
+            "comment](https",
+            "不是",
+            "不过",
+            "刚才",
+            "本机",
+            "压缩",
+            "main",
         }
         self.assertFalse(titles & forbidden)
         cue_text = "\n".join(

@@ -104,6 +104,15 @@ GENERIC_PRODUCER_TERMS = {
     "issues",
     "line",
     "lines",
+    "main",
+    "master",
+    "branch",
+    "commit",
+    "merge",
+    "pr",
+    "pull",
+    "repo",
+    "repository",
     "source",
     "trail",
     "source trail",
@@ -182,6 +191,13 @@ LOW_INFORMATION_PRODUCER_TERMS = {
     "再深度实测",
     "资深产品经理",
     "以资深产品经理",
+    "不是",
+    "不过",
+    "刚才",
+    "刚刚",
+    "本机",
+    "本地",
+    "压缩",
 }
 UNTRUSTED_SINGLE_WORD_PRODUCER_TERMS = {
     "activation",
@@ -296,6 +312,11 @@ CJK_ACTION_PROMPT_RE = re.compile(
     r"(要怎么|怎么改|怎么办|怎么做|怎么处理|如何改|如何处理|改一下|弄一下)"
 )
 LINE_RANGE_TOKEN_RE = re.compile(r"^\d{1,6}[-–]\d{1,6}$")
+MARKDOWN_LINK_FRAGMENT_RE = re.compile(r"\]\(\s*https?", re.IGNORECASE)
+HOSTNAME_OR_DOMAIN_RE = re.compile(
+    r"(?:[a-z0-9-]+\.)+[a-z]{2,}(?:/[^\s]*)?",
+    re.IGNORECASE,
+)
 
 
 def _hash(value: Any, *, prefix: str) -> str:
@@ -368,6 +389,10 @@ def _clean_candidate_term_detail(
         return "", ""
     if _privacy_suppressed_term(text):
         return "", "privacy"
+    if MARKDOWN_LINK_FRAGMENT_RE.search(text):
+        return "", "shape"
+    if HOSTNAME_OR_DOMAIN_RE.fullmatch(text.casefold()):
+        return "", "low_information"
     if LINE_RANGE_TOKEN_RE.fullmatch(text):
         return "", "low_information"
     if "/" in text and " " not in text and not _has_cjk(text):

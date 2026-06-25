@@ -246,6 +246,83 @@ class ContinuityDomainCliTests(unittest.TestCase):
         self.assertEqual(candidate["foreground_actions"], [])
         self.assertIn(candidate["suppression_reason"], {"hostname_or_domain", "generic_tool_word"})
 
+    def test_agent_preview_rejects_real_registry_noise_shape_from_issue_2668(self) -> None:
+        payload = {
+            "ok": True,
+            "mode": "dry_run",
+            "metrics": {
+                "scan_partial": True,
+                "missing_source_ref_count": 1573,
+                "low_information_label_suppressed_count": 24122,
+            },
+            "top_domain_labels": [],
+            "candidate_events": [
+                {
+                    "domain_id": "project-name-route",
+                    "title": "AIppocampus",
+                    "domain_type": "recurring_question",
+                    "scale": "meso",
+                    "activation_cues": ["压缩"],
+                    "source_refs": [{"message_id": "msg-1"}],
+                },
+                {
+                    "domain_id": "hostname-route",
+                    "title": "github.com",
+                    "domain_type": "recurring_question",
+                    "scale": "meso",
+                    "activation_cues": ["comment](https"],
+                    "source_refs": [{"message_id": "msg-2"}],
+                },
+                {
+                    "domain_id": "cjk-function-word-route",
+                    "title": "不是",
+                    "domain_type": "recurring_question",
+                    "scale": "meso",
+                    "activation_cues": ["压缩"],
+                    "source_refs": [{"message_id": "msg-3"}],
+                },
+                {
+                    "domain_id": "broad-contract-word-route",
+                    "title": "source-backed",
+                    "domain_type": "recurring_question",
+                    "scale": "meso",
+                    "activation_cues": ["压缩"],
+                    "source_refs": [{"message_id": "msg-4"}],
+                },
+                {
+                    "domain_id": "branch-token-route",
+                    "title": "main",
+                    "domain_type": "recurring_question",
+                    "scale": "meso",
+                    "activation_cues": ["main"],
+                    "source_refs": [{"message_id": "msg-6"}],
+                },
+                {
+                    "domain_id": "local-env-route",
+                    "title": "aippocampus",
+                    "domain_type": "recurring_question",
+                    "scale": "meso",
+                    "activation_cues": ["本机"],
+                    "source_refs": [{"message_id": "msg-5"}],
+                },
+            ],
+        }
+
+        preview = continuity_domain_cli._producer_agent_preview(payload)
+
+        self.assertEqual(preview["foreground_candidate_quality"], "needs_broader_scan")
+        self.assertEqual(preview["foreground_action"]["id"], "needs_broader_scan_or_cue")
+        self.assertIn("--broad-scan", preview["foreground_action"]["command"])
+        encoded_action = json.dumps(preview["foreground_action"], ensure_ascii=False)
+        self.assertNotIn("agent recall", encoded_action)
+        for cue in ("压缩", "comment](https", "本机"):
+            self.assertNotIn(cue, encoded_action)
+        self.assertNotIn("agent recall main", encoded_action)
+        for candidate in preview["candidate_previews"]:
+            self.assertEqual(candidate["foreground_candidate_quality"], "low_information")
+            self.assertEqual(candidate["foreground_actions"], [])
+            self.assertIn("suppression_reason", candidate)
+
     def test_agent_preview_skips_low_information_cues_before_using_specific_route_cue(self) -> None:
         payload = {
             "ok": True,
