@@ -7,6 +7,8 @@ import json
 from pathlib import Path
 from typing import Any, Callable
 
+from aippocampus_runtime.source.io_kernel import parse_jsonl_dict_rows_text
+
 _CACHE: dict[tuple[str, int, int, str], Any] = {}
 _READ_COUNTS: dict[str, int] = {}
 
@@ -50,20 +52,7 @@ def load_json_object(path: Path | str) -> dict[str, Any] | None:
 
 def load_jsonl_objects(path: Path | str, *, strict: bool = False) -> tuple[list[dict[str, Any]], int] | None:
     def parse(text: str) -> tuple[list[dict[str, Any]], int]:
-        rows: list[dict[str, Any]] = []
-        invalid = 0
-        for line in text.splitlines():
-            if not line.strip():
-                continue
-            try:
-                item = json.loads(line)
-            except json.JSONDecodeError:
-                invalid += 1
-                if strict:
-                    return [], invalid
-                continue
-            if isinstance(item, dict):
-                rows.append(item)
-        return rows, invalid
+        result = parse_jsonl_dict_rows_text(text, strict=strict)
+        return result.rows, int(result.loss.get("total_loss_count") or 0)
 
     return load_cached(path, label=f"jsonl_objects:strict={strict}", parser=parse)

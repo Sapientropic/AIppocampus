@@ -188,6 +188,16 @@ def generation_gc_candidates_from_capacity_thread(
                     "reader_pin_ttl_seconds": item.get("reader_pin_ttl_seconds"),
                     "active_reader_pin_count": item.get("active_reader_pin_count"),
                     "expired_reader_pin_count": item.get("expired_reader_pin_count"),
+                    "malformed_pin_count": item.get("malformed_pin_count"),
+                    "expired_reader_pins_cleanup_eligible_count": item.get(
+                        "expired_reader_pins_cleanup_eligible_count"
+                    ),
+                    "malformed_reader_pins_cleanup_eligible_count": item.get(
+                        "malformed_reader_pins_cleanup_eligible_count"
+                    ),
+                    "reader_pins_intentionally_left_count": item.get(
+                        "reader_pins_intentionally_left_count"
+                    ),
                 },
                 "evidence": [
                     f"generation={generation_id}",
@@ -271,6 +281,16 @@ def segment_generation_gc_candidates_from_capacity_thread(
                     "reader_pin_ttl_seconds": item.get("reader_pin_ttl_seconds"),
                     "active_reader_pin_count": item.get("active_reader_pin_count"),
                     "expired_reader_pin_count": item.get("expired_reader_pin_count"),
+                    "malformed_pin_count": item.get("malformed_pin_count"),
+                    "expired_reader_pins_cleanup_eligible_count": item.get(
+                        "expired_reader_pins_cleanup_eligible_count"
+                    ),
+                    "malformed_reader_pins_cleanup_eligible_count": item.get(
+                        "malformed_reader_pins_cleanup_eligible_count"
+                    ),
+                    "reader_pins_intentionally_left_count": item.get(
+                        "reader_pins_intentionally_left_count"
+                    ),
                 },
                 "evidence": [
                     f"generation={generation_id}",

@@ -122,14 +122,34 @@ def pin_resolved_generation(
 
 
 def _pin_generation(pin: Path) -> str | None:
+    payload, malformed_reason = _read_pin_payload(pin)
+    if malformed_reason is not None or payload is None:
+        return None
+    return str(payload["generation"])
+
+
+def _read_pin_payload(pin: Path) -> tuple[dict[str, Any] | None, str | None]:
     try:
         payload = json.loads(pin.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return None
-    if not isinstance(payload, dict) or payload.get("kind") != PIN_KIND:
-        return None
+    except OSError:
+        return None, "unreadable"
+    except json.JSONDecodeError:
+        return None, "invalid_json"
+    if not isinstance(payload, dict):
+        return None, "non_object_json"
+    if payload.get("kind") != PIN_KIND:
+        return None, "wrong_kind"
     generation = payload.get("generation")
-    return generation if isinstance(generation, str) and generation else None
+    if not isinstance(generation, str) or not generation:
+        return None, "missing_generation"
+    return payload, None
+
+
+def _pin_age_seconds(pin: Path, *, now_seconds: float) -> float | None:
+    try:
+        return max(0.0, now_seconds - pin.stat().st_mtime)
+    except OSError:
+        return None
 
 
 def reader_pin_summary(
@@ -145,26 +165,145 @@ def reader_pin_summary(
     malformed = 0
     pins = reader_pin_dir(pointer_parent)
     if pins.exists():
-        for pin in pins.glob("*.json"):
-            if _pin_generation(pin) != generation:
+        for pin in pins.glob("*"):
+            if not pin.is_file():
                 continue
-            try:
-                age = max(0.0, now - pin.stat().st_mtime)
-            except OSError:
+            if pin.suffix != ".json":
+                malformed += 1
+                continue
+            payload, malformed_reason = _read_pin_payload(pin)
+            if malformed_reason is not None or payload is None:
+                malformed += 1
+                continue
+            if payload["generation"] != generation:
+                continue
+            age = _pin_age_seconds(pin, now_seconds=now)
+            if age is None:
+                malformed += 1
                 continue
             if age <= ttl_seconds:
                 active += 1
             else:
                 expired += 1
-        for pin in pins.glob("*"):
-            if pin.suffix != ".json":
-                malformed += 1
     return {
         "generation": generation,
         "ttl_seconds": int(ttl_seconds),
         "active_reader_pin_count": active,
         "expired_reader_pin_count": expired,
         "malformed_pin_count": malformed,
+    }
+
+
+def cleanup_reader_pins(
+    pointer_parent: Path,
+    generation: str | None = None,
+    *,
+    ttl_seconds: int = DEFAULT_GENERATION_READER_PIN_TTL_SECONDS,
+    now_seconds: float | None = None,
+    dry_run: bool = True,
+) -> dict[str, Any]:
+    """Remove stale reader-pin files inside one pointer parent.
+
+    Valid active pins are a foreground-read safety contract, not clutter. This
+    helper only removes a valid pin after its TTL window has elapsed. Malformed
+    files are also left alone while fresh, because on Windows a partially
+    written file can briefly look malformed to a concurrent maintenance pass.
+    """
+
+    now = time.time() if now_seconds is None else float(now_seconds)
+    pins = reader_pin_dir(pointer_parent)
+    active_preserved = 0
+    expired_eligible = 0
+    expired_removed = 0
+    malformed_eligible = 0
+    malformed_removed = 0
+    malformed_left = 0
+    other_generation_left = 0
+    removal_error_count = 0
+    eligible_labels: list[str] = []
+    removed_labels: list[str] = []
+    left_labels: list[str] = []
+
+    def eligible_pin(pin: Path, *, malformed: bool) -> None:
+        nonlocal expired_eligible, malformed_eligible
+        if malformed:
+            malformed_eligible += 1
+        else:
+            expired_eligible += 1
+        eligible_labels.append(pin.name)
+
+    def remove_pin(pin: Path, *, malformed: bool) -> None:
+        nonlocal expired_removed, malformed_removed, removal_error_count
+        if dry_run:
+            return
+        try:
+            pin.unlink()
+        except FileNotFoundError:
+            pass
+        except OSError:
+            removal_error_count += 1
+            left_labels.append(pin.name)
+            return
+        if malformed:
+            malformed_removed += 1
+        else:
+            expired_removed += 1
+        removed_labels.append(pin.name)
+
+    if pins.exists():
+        for pin in sorted(pins.glob("*")):
+            if not pin.is_file():
+                continue
+            age = _pin_age_seconds(pin, now_seconds=now)
+            malformed_reason: str | None = None
+            payload: dict[str, Any] | None = None
+            if pin.suffix != ".json":
+                malformed_reason = "non_json_pin_file"
+            else:
+                payload, malformed_reason = _read_pin_payload(pin)
+
+            if malformed_reason is not None or payload is None:
+                if age is not None and age > ttl_seconds:
+                    eligible_pin(pin, malformed=True)
+                    remove_pin(pin, malformed=True)
+                else:
+                    malformed_left += 1
+                    left_labels.append(pin.name)
+                continue
+
+            pin_generation = str(payload["generation"])
+            if generation is not None and pin_generation != generation:
+                other_generation_left += 1
+                left_labels.append(pin.name)
+                continue
+            if age is None or age <= ttl_seconds:
+                active_preserved += 1
+                left_labels.append(pin.name)
+                continue
+            eligible_pin(pin, malformed=False)
+            remove_pin(pin, malformed=False)
+
+    intentionally_left = active_preserved + malformed_left + other_generation_left
+    return {
+        "schema_version": 1,
+        "kind": "aippocampus_reader_pin_cleanup",
+        "status": "dry_run" if dry_run else "applied",
+        "dry_run": bool(dry_run),
+        "pointer_parent_label": Path(pointer_parent).name,
+        "generation": generation,
+        "ttl_seconds": int(ttl_seconds),
+        "active_preserved_count": active_preserved,
+        "expired_eligible_count": expired_eligible,
+        "expired_removed_count": expired_removed,
+        "malformed_eligible_count": malformed_eligible,
+        "malformed_removed_count": malformed_removed,
+        "malformed_left_count": malformed_left,
+        "other_generation_left_count": other_generation_left,
+        "intentionally_left_count": intentionally_left,
+        "removal_error_count": removal_error_count,
+        "eligible_pin_labels": eligible_labels,
+        "removed_pin_labels": removed_labels,
+        "left_pin_labels": left_labels,
     }
 
 
@@ -197,6 +336,13 @@ def generation_cleanup_contract(
         ttl_seconds=ttl_seconds,
         now_seconds=now,
     )
+    pin_cleanup = cleanup_reader_pins(
+        pointer_parent,
+        generation,
+        ttl_seconds=ttl_seconds,
+        now_seconds=now,
+        dry_run=True,
+    )
     active = int(pins["active_reader_pin_count"])
     if active > 0:
         cleanup_status = "blocked_active_reader_pin"
@@ -222,6 +368,10 @@ def generation_cleanup_contract(
             f"generation_age_seconds={age_seconds}",
             f"ttl_seconds={ttl_seconds}",
         ]
+    if int(pin_cleanup["expired_eligible_count"]):
+        evidence.append(f"expired_reader_pins_cleanup_eligible={pin_cleanup['expired_eligible_count']}")
+    if int(pin_cleanup["malformed_eligible_count"]):
+        evidence.append(f"malformed_reader_pins_cleanup_eligible={pin_cleanup['malformed_eligible_count']}")
 
     return {
         "status": status_name,
@@ -229,6 +379,11 @@ def generation_cleanup_contract(
         "generation": generation,
         "generation_age_seconds": age_seconds,
         **pins,
+        "reader_pin_cleanup": pin_cleanup,
+        "active_reader_pins_preserved_count": pin_cleanup["active_preserved_count"],
+        "expired_reader_pins_cleanup_eligible_count": pin_cleanup["expired_eligible_count"],
+        "malformed_reader_pins_cleanup_eligible_count": pin_cleanup["malformed_eligible_count"],
+        "reader_pins_intentionally_left_count": pin_cleanup["intentionally_left_count"],
         "evidence": evidence,
         "requirement": (
             "Old generation cleanup requires no active reader pin and a conservative TTL window."

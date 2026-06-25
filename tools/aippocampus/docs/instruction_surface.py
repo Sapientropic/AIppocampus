@@ -258,6 +258,14 @@ INSTRUCTION_SURFACE_CLASSIFIED_FILES = {
             "route hints; self-notes remain atmosphere, not evidence"
         ),
     },
+    "skills/aippocampus/scripts/aippocampus_runtime/source/io_kernel.py": {
+        "classification": "source_io_trust_boundary_owner",
+        "owner": "#2635/#2675/#2651",
+        "why": (
+            "owns JSONL/source-ref loss-accounting boundary text; diagnostics "
+            "belong in detail/operator surfaces, not compact foreground proof"
+        ),
+    },
     "skills/aippocampus/scripts/aippocampus_runtime/source/clean_source.py": {
         "classification": "clean_source_boundary_owner",
         "owner": "#2628/#2636/#2651",

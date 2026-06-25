@@ -49,6 +49,17 @@ class SourceIoKernelTests(unittest.TestCase):
         self.assertEqual(result.rows, [{"a": "字", "b": 2}])
         self.assertEqual(result.loss["total_loss_count"], 0)
 
+    def test_jsonl_text_parser_shares_loss_accounting_with_path_reader(self) -> None:
+        result = io_kernel.parse_jsonl_dict_rows_text('{"kind":"ok"}\nnot-json\n[]\n')
+        strict = io_kernel.parse_jsonl_dict_rows_text('{"kind":"ok"}\n[]\n', strict=True)
+
+        self.assertEqual(result.rows, [{"kind": "ok"}])
+        self.assertEqual(result.loss["invalid_json_line_count"], 1)
+        self.assertEqual(result.loss["non_object_line_count"], 1)
+        self.assertEqual(result.loss["total_loss_count"], 2)
+        self.assertEqual(strict.rows, [])
+        self.assertEqual(strict.loss["non_object_line_numbers"], [2])
+
     def test_jsonl_writer_does_not_reuse_fixed_stale_tmp_path(self) -> None:
         path = self.root / "rows.jsonl"
         stale_fixed_tmp = path.with_suffix(path.suffix + ".tmp")

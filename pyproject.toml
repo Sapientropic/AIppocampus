@@ -190,6 +190,7 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/artifacts/__init__.py",
     "skills/aippocampus/scripts/aippocampus_runtime/artifacts/checkpoint.py",
     "skills/aippocampus/scripts/aippocampus_runtime/artifacts/export_bundle.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/artifacts/generation_pins.py",
     "skills/aippocampus/scripts/aippocampus_runtime/artifacts/import_bundle.py",
     "skills/aippocampus/scripts/aippocampus_runtime/artifacts/publish.py",
     "skills/aippocampus/scripts/aippocampus_runtime/source/__init__.py",

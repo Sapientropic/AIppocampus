@@ -10,6 +10,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from aippocampus_runtime import health
+from aippocampus_runtime.artifacts import generation_pins
 from aippocampus_runtime.ops import storage_eviction, storage_governance
 from aippocampus_runtime.recall import index_builder, rollout_search
 
@@ -193,10 +194,16 @@ class StorageGovernanceTests(unittest.TestCase):
         for path in [generation_dir, *generation_dir.rglob("*")]:
             self._mark_path_old(path)
 
-    def _write_reader_pin(self, pointer_parent: Path, generation_dir: Path) -> Path:
+    def _write_reader_pin(
+        self,
+        pointer_parent: Path,
+        generation_dir: Path,
+        *,
+        name: str | None = None,
+    ) -> Path:
         pins = pointer_parent / ".reader-pins"
         pins.mkdir(parents=True, exist_ok=True)
-        pin = pins / f"reader-pin-{generation_dir.name}.json"
+        pin = pins / (name or f"reader-pin-{generation_dir.name}.json")
         pin.write_text(
             json.dumps(
                 {
@@ -764,6 +771,52 @@ class StorageGovernanceTests(unittest.TestCase):
         self.assertEqual(result["blocked"][0]["reason_code"], "path_level_retention_required")
         self.assertTrue(self.sqlite.exists())
 
+    def test_reader_pin_cleanup_preserves_active_and_removes_stale_noise(self) -> None:
+        old = self._write_index_generation("gen_20260605T004500_old", 29)
+        other = self._write_index_generation("gen_20260605T004000_other", 19)
+        active_pin = self._write_reader_pin(
+            self.index,
+            old,
+            name="reader-pin-active.json",
+        )
+        expired_pin = self._write_reader_pin(
+            self.index,
+            old,
+            name="reader-pin-expired.json",
+        )
+        other_generation_pin = self._write_reader_pin(
+            self.index,
+            other,
+            name="reader-pin-other-generation.json",
+        )
+        malformed_pin = self.index / ".reader-pins" / "reader-pin-malformed.json"
+        malformed_pin.write_text("{not-json", encoding="utf-8")
+        fresh_malformed_pin = self.index / ".reader-pins" / "reader-pin-fresh-malformed.tmp"
+        fresh_malformed_pin.write_text("partial", encoding="utf-8")
+        for pin in (expired_pin, other_generation_pin, malformed_pin):
+            self._mark_path_old(pin)
+
+        dry_run = generation_pins.cleanup_reader_pins(self.index, old.name, dry_run=True)
+
+        self.assertEqual(dry_run["active_preserved_count"], 1)
+        self.assertEqual(dry_run["expired_eligible_count"], 1)
+        self.assertEqual(dry_run["malformed_eligible_count"], 1)
+        self.assertEqual(dry_run["malformed_left_count"], 1)
+        self.assertEqual(dry_run["other_generation_left_count"], 1)
+        self.assertTrue(expired_pin.exists())
+        self.assertTrue(malformed_pin.exists())
+
+        applied = generation_pins.cleanup_reader_pins(self.index, old.name, dry_run=False)
+
+        self.assertEqual(applied["expired_removed_count"], 1)
+        self.assertEqual(applied["malformed_removed_count"], 1)
+        self.assertEqual(applied["active_preserved_count"], 1)
+        self.assertFalse(expired_pin.exists())
+        self.assertFalse(malformed_pin.exists())
+        self.assertTrue(active_pin.exists())
+        self.assertTrue(fresh_malformed_pin.exists())
+        self.assertTrue(other_generation_pin.exists())
+
     def test_dry_run_blocks_old_generation_cleanup_before_reader_pin_ttl_elapsed(self) -> None:
         current = self._write_index_generation("gen_20260605T010000_current", 41)
         last_known_good = self._write_index_generation("gen_20260605T005900_lkg", 37)
@@ -816,6 +869,8 @@ class StorageGovernanceTests(unittest.TestCase):
         last_known_good = self._write_index_generation("gen_20260605T005900_lkg", 37)
         old = self._write_index_generation("gen_20260605T004500_old", 29)
         self._mark_generation_old(old)
+        expired_pin = self._write_reader_pin(self.index, old)
+        self._mark_path_old(expired_pin)
         pointer_path = self.index / "source_index.pointer.json"
         pointer_path.write_text(
             json.dumps(
@@ -900,6 +955,8 @@ class StorageGovernanceTests(unittest.TestCase):
         last_known_good = self._write_index_generation("gen_20260605T005900_lkg", 37)
         old = self._write_index_generation("gen_20260605T004500_old", 29)
         self._mark_generation_old(old)
+        expired_pin = self._write_reader_pin(self.index, old)
+        self._mark_path_old(expired_pin)
         pointer_path = self.index / "source_index.pointer.json"
         pointer_path.write_text(
             json.dumps(
@@ -937,6 +994,8 @@ class StorageGovernanceTests(unittest.TestCase):
         manifest = json.loads(Path(result["applied"][0]["manifest"]).read_text(encoding="utf-8"))
         self.assertEqual(manifest["kind_label"], "rebuildable_old_index_generations")
         self.assertEqual(manifest["source_preconditions"]["reader_pin_or_ttl_contract"]["status"], "passed")
+        self.assertEqual(manifest["reader_pin_cleanup"]["expired_removed_count"], 1)
+        self.assertFalse(expired_pin.exists())
 
     def test_apply_blocks_generation_cleanup_when_pointer_disappears_after_planning(self) -> None:
         current = self._write_index_generation("gen_20260605T010000_current", 41)
