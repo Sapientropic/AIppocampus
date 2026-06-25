@@ -21,6 +21,7 @@ from aippocampus_runtime.hooks.host_boundary import (
     add_host_integration,
     host_integration_text_lines,
 )
+from aippocampus_runtime.io_integrity import atomic_write_json
 
 SCRIPT_DIR = Path(__file__).resolve().parents[2]
 DEFAULT_HOOK_MODULE = "aippocampus_runtime.hooks.lifecycle"
@@ -43,7 +44,7 @@ def load_hooks(path: Path) -> dict[str, Any]:
         return {"hooks": {}}
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
         data = {}
     if not isinstance(data, dict):
         data = {}
@@ -54,10 +55,7 @@ def load_hooks(path: Path) -> dict[str, Any]:
 
 
 def save_hooks(path: Path, data: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8", newline="\n")
-    tmp.replace(path)
+    atomic_write_json(path, data, indent=2)
 
 
 def quote_powershell_double(value: str | Path) -> str:

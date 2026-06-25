@@ -21,6 +21,7 @@ from aippocampus_runtime.core import (
     workspace_fingerprint,
     workspace_identity,
 )
+from aippocampus_runtime.io_integrity import atomic_write_json
 from aippocampus_runtime.recall.ambient_cards import cached_card_with_provenance
 from aippocampus_runtime.registry.api import registry_paths, unique_preserve
 
@@ -119,7 +120,7 @@ def _load_cache(path: Path) -> dict[str, Any]:
         return {"schema_version": CACHE_SCHEMA_VERSION, "updated_at": None, "entries": {}}
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
         return {"schema_version": CACHE_SCHEMA_VERSION, "updated_at": None, "entries": {}}
     if not isinstance(data, dict):
         return {"schema_version": CACHE_SCHEMA_VERSION, "updated_at": None, "entries": {}}
@@ -131,10 +132,7 @@ def _load_cache(path: Path) -> dict[str, Any]:
 
 
 def _write_cache(path: Path, data: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8", newline="\n")
-    tmp.replace(path)
+    atomic_write_json(path, data, indent=2)
 
 
 def _load_signal_accumulator(path: Path) -> dict[str, Any]:
@@ -146,7 +144,7 @@ def _load_signal_accumulator(path: Path) -> dict[str, Any]:
         }
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
         return {
             "schema_version": SIGNAL_ACCUMULATOR_SCHEMA_VERSION,
             "updated_at": None,
@@ -166,10 +164,7 @@ def _load_signal_accumulator(path: Path) -> dict[str, Any]:
 
 
 def _write_signal_accumulator(path: Path, data: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8", newline="\n")
-    tmp.replace(path)
+    atomic_write_json(path, data, indent=2)
 
 
 def _signal_key(

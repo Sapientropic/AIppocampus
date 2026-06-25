@@ -106,6 +106,14 @@ INSTRUCTION_SURFACE_CLASSIFIED_FILES = {
             "cards may orient attention but cannot assert source-open facts"
         ),
     },
+    "skills/aippocampus/scripts/aippocampus_runtime/recall/ambient_cache.py": {
+        "classification": "ambient_thread_cache_owner",
+        "owner": "#2674/#2676/#2651",
+        "why": (
+            "owns local ambient-cache persistence and related-cache boundary text; "
+            "cached cards remain navigation until clean source is reopened"
+        ),
+    },
     "skills/aippocampus/scripts/aippocampus_runtime/recall/cognitive_load_private_calibration.py": {
         "classification": "private_calibration_owner",
         "owner": "#2628/#2651",
@@ -264,6 +272,30 @@ INSTRUCTION_SURFACE_CLASSIFIED_FILES = {
         "why": (
             "owns foreground hook/action-hint status wording and latency readiness; "
             "status output is operational guidance, not source proof"
+        ),
+    },
+    "skills/aippocampus/scripts/aippocampus_runtime/hooks/install_lifecycle.py": {
+        "classification": "lifecycle_hook_install_owner",
+        "owner": "#2674/#2651",
+        "why": (
+            "owns lifecycle hook install/status text and private command redaction; "
+            "hook wiring is operational state, not foreground source evidence"
+        ),
+    },
+    "skills/aippocampus/scripts/aippocampus_runtime/hooks/install_prompt.py": {
+        "classification": "prompt_hook_install_owner",
+        "owner": "#2674/#2651",
+        "why": (
+            "owns prompt hook install/status text, latency-budget wording, and "
+            "private command redaction for hook setup surfaces"
+        ),
+    },
+    "skills/aippocampus/scripts/aippocampus_runtime/hooks/skip_telemetry.py": {
+        "classification": "prompt_skip_telemetry_owner",
+        "owner": "#2674/#2651",
+        "why": (
+            "owns aggregate prompt-hook skip/latency telemetry wording; telemetry "
+            "is local operational signal and must not log prompt/source text"
         ),
     },
     "skills/aippocampus/scripts/aippocampus_runtime/update/agent_status_summary.py": {

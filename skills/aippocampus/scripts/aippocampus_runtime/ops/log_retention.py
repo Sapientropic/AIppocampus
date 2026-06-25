@@ -15,6 +15,7 @@ from typing import Any, Iterable
 
 from aippocampus_runtime.contracts import canonical_foreground_action_fields
 from aippocampus_runtime.core import aippocampus_registry_dir
+from aippocampus_runtime.io_integrity import prepared_atomic_replace
 
 DEFAULT_MAX_LOG_BYTES = 8 * 1024 * 1024
 DEFAULT_BACKUPS = 3
@@ -234,7 +235,7 @@ def rotate_log_if_needed(
         report["skipped"] = "below_threshold"
         return report
 
-    tmp = _backup_path(log, 1).with_suffix(".gz.tmp")
+    backup = _backup_path(log, 1)
     try:
         if resolved_backups <= 0:
             log.unlink()
@@ -252,25 +253,19 @@ def rotate_log_if_needed(
                     dst.unlink()
                 src.replace(dst)
 
-        tmp.parent.mkdir(parents=True, exist_ok=True)
-        with log.open("rb") as src_fh, gzip.open(tmp, "wb") as dst_fh:
-            shutil.copyfileobj(src_fh, dst_fh)
-        tmp.replace(_backup_path(log, 1))
+        with prepared_atomic_replace(backup) as tmp:
+            with log.open("rb") as src_fh, gzip.open(tmp, "wb") as dst_fh:
+                shutil.copyfileobj(src_fh, dst_fh)
         log.unlink()
         report.update(
             {
                 "rotated": True,
-                "backup_name": _backup_path(log, 1).name,
+                "backup_name": backup.name,
                 "size_bytes": 0,
             }
         )
         return report
     except OSError as exc:
-        try:
-            if tmp.exists():
-                tmp.unlink()
-        except OSError:
-            pass
         report.update({"error": type(exc).__name__, "message": str(exc)[:200]})
         return report
 

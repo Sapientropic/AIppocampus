@@ -27,6 +27,7 @@ if str(SCRIPTS_ROOT) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_ROOT))
 
 from aippocampus_runtime.core import compact_text, now_utc
+from aippocampus_runtime.io_integrity import atomic_write_json
 from aippocampus_runtime.io_mtime_cache import load_json_object
 from aippocampus_runtime.navigation.associations import (
     normalize_term,
@@ -95,10 +96,7 @@ def load_cognitive_map_rows(path: Path) -> list[dict[str, Any]]:
 
 
 def write_json(path: Path, data: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8", newline="\n")
-    tmp.replace(path)
+    atomic_write_json(path, data, indent=2)
 
 
 def load_cognitive_map(path: Path | str) -> dict[str, Any]:

@@ -24,6 +24,7 @@ PR_STEMS = frozenset(
         "test_attention_route_compatibility",
         "test_first_useful_recall_demo",
         "test_health_human_text",
+        "test_io_integrity",
         "test_lane_cache_verifier",
         "test_learning_loop_aippo_adapter",
         "test_learning_loop_behavioral_records",
@@ -276,6 +277,7 @@ TEST_MODULE_STEMS = frozenset(
         "test_install_lifecycle_hook",
         "test_install_action_hint_hook",
         "test_install_prompt_hook",
+        "test_io_integrity",
         "test_issue_work_guard",
         "test_known_artifact_recall_dogfood",
         "test_lane_cache_verifier",
@@ -749,6 +751,7 @@ TAG_OVERRIDES = {
     "test_import_bundle": ("filesystem",),
     "test_install_lifecycle_hook": ("install", "hook"),
     "test_install_prompt_hook": ("install", "hook"),
+    "test_io_integrity": ("filesystem", "io"),
     "test_learning_loop_behavioral_records": ("learning_loop", "privacy", "filesystem"),
     "test_prompt_foreground_budget": ("hook",),
     "test_prompt_hook_anti_nag_behavior": (

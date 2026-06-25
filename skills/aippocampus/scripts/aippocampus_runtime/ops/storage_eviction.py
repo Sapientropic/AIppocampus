@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import json
-import os
 import re
 from copy import deepcopy
 from pathlib import Path
@@ -16,6 +15,7 @@ from aippocampus_runtime.artifacts.publish import (
     sqlite_sidecar_paths,
 )
 from aippocampus_runtime.core import file_sha256, now_utc
+from aippocampus_runtime.io_integrity import atomic_write_json
 from aippocampus_runtime.ops.generation_eviction import (
     apply_generation_cleanup_candidate,
     candidate_is_supported_generation_cleanup,
@@ -44,13 +44,6 @@ def _is_relative_to(path: Path, root: Path) -> bool:
     except (OSError, ValueError):
         return False
     return True
-
-
-def _json_atomic(path: Path, payload: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp_path = path.with_name(f".{path.name}.tmp-{os.getpid()}-{os.urandom(4).hex()}")
-    tmp_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-    os.replace(tmp_path, path)
 
 
 def _safe_slug(value: str) -> str:
@@ -276,7 +269,7 @@ def _evict_sqlite_target(
         "expected_rebuild_cost": candidate.get("expected_rebuild_cost"),
     }
     manifest_path = _eviction_manifest_path(index_dir, candidate)
-    _json_atomic(manifest_path, manifest)
+    atomic_write_json(manifest_path, manifest, indent=2)
     applied = {
         "candidate_id": candidate.get("id"),
         "bytes": reclaimed,

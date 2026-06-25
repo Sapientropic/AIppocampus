@@ -9,14 +9,12 @@ infers them from text.
 
 from __future__ import annotations
 
-import json
-import os
 from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.core import compact_text
 from aippocampus_runtime.source.clean_source import SCOPE_LABEL_ORDER
-from aippocampus_runtime.source.io_kernel import load_jsonl_dict_rows
+from aippocampus_runtime.source.io_kernel import load_jsonl_dict_rows, write_jsonl_dict_rows
 
 SEMANTIC_SCOPE_LABELS_FILENAME = "semantic-scope-labels.jsonl"
 SEMANTIC_SCOPE_LABEL_FINDING_KIND = "semantic_scope_labels"
@@ -347,10 +345,5 @@ def semantic_scope_label_rows_from_findings(
 
 def write_semantic_scope_label_sidecar(clean_source_dir: Path, rows: list[dict[str, Any]]) -> Path:
     path = clean_source_dir / SEMANTIC_SCOPE_LABELS_FILENAME
-    clean_source_dir.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
-    with tmp.open("w", encoding="utf-8", newline="\n") as fh:
-        for row in rows:
-            fh.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
-    tmp.replace(path)
+    write_jsonl_dict_rows(path, rows, sort_keys=True)
     return path

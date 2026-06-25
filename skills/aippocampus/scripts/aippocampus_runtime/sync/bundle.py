@@ -15,7 +15,11 @@ from aippocampus_runtime.artifacts.publish import resolve_sqlite_index_path
 from aippocampus_runtime.cli.human_io import exit_code_for_payload
 from aippocampus_runtime.contracts import canonical_foreground_action_fields, write_boundary
 from aippocampus_runtime.core import aippocampus_registry_dir, file_sha256, now_utc, safe_path_name
-from aippocampus_runtime.io_integrity import stale_tmp_recovery_card
+from aippocampus_runtime.io_integrity import (
+    atomic_write_json,
+    prepared_atomic_replace,
+    stale_tmp_recovery_card,
+)
 from aippocampus_runtime.source.io_kernel import load_json_dict
 from aippocampus_runtime.sync.bundle_recovery import (
     managed_sync_dir_collision_payload,
@@ -172,11 +176,7 @@ def bytes_sha256(data: bytes) -> str:
 
 
 def save_json(path: Path, data: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    with tmp.open("w", encoding="utf-8", newline="\n") as fh:
-        fh.write(json.dumps(data, ensure_ascii=False, indent=2))
-    tmp.replace(path)
+    atomic_write_json(path, data, indent=2)
 
 
 def iter_registry_sync_files(registry_dir: Path) -> Iterable[tuple[Path, Path]]:
@@ -511,32 +511,28 @@ def clean_source_delta_files(manifest: dict[str, Any]) -> list[dict[str, Any]]:
 def materialize_clean_source_delta_file(
     sync_root: Path, file_manifest: dict[str, Any], destination: Path
 ) -> None:
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    tmp = destination.with_suffix(destination.suffix + ".tmp")
-    total = 0
-    file_hash = hashlib.sha256()
-    with tmp.open("wb") as out:
-        for chunk in file_manifest.get("chunks") or []:
-            relative_path = validate_relative_sync_path(str(chunk.get("path") or ""))
-            if not is_clean_source_chunk_store_path(relative_path):
-                raise ValueError(f"unexpected clean-source chunk path: {relative_path}")
-            source = sync_path_under(sync_root, relative_path)
-            data = source.read_bytes()
-            expected_hash = str(chunk.get("sha256") or "")
-            if bytes_sha256(data) != expected_hash:
-                raise ValueError(f"clean_source_chunk_hash_mismatch: {relative_path.as_posix()}")
-            if len(data) != int(chunk.get("size") or 0):
-                raise ValueError(f"clean_source_chunk_size_mismatch: {relative_path.as_posix()}")
-            out.write(data)
-            file_hash.update(data)
-            total += len(data)
-    if total != int(file_manifest.get("size") or 0):
-        tmp.unlink(missing_ok=True)
-        raise ValueError(f"clean_source_file_size_mismatch: {file_manifest.get('path')}")
-    if file_hash.hexdigest() != str(file_manifest.get("sha256") or ""):
-        tmp.unlink(missing_ok=True)
-        raise ValueError(f"clean_source_file_hash_mismatch: {file_manifest.get('path')}")
-    tmp.replace(destination)
+    with prepared_atomic_replace(destination) as tmp:
+        total = 0
+        file_hash = hashlib.sha256()
+        with tmp.open("wb") as out:
+            for chunk in file_manifest.get("chunks") or []:
+                relative_path = validate_relative_sync_path(str(chunk.get("path") or ""))
+                if not is_clean_source_chunk_store_path(relative_path):
+                    raise ValueError(f"unexpected clean-source chunk path: {relative_path}")
+                source = sync_path_under(sync_root, relative_path)
+                data = source.read_bytes()
+                expected_hash = str(chunk.get("sha256") or "")
+                if bytes_sha256(data) != expected_hash:
+                    raise ValueError(f"clean_source_chunk_hash_mismatch: {relative_path.as_posix()}")
+                if len(data) != int(chunk.get("size") or 0):
+                    raise ValueError(f"clean_source_chunk_size_mismatch: {relative_path.as_posix()}")
+                out.write(data)
+                file_hash.update(data)
+                total += len(data)
+        if total != int(file_manifest.get("size") or 0):
+            raise ValueError(f"clean_source_file_size_mismatch: {file_manifest.get('path')}")
+        if file_hash.hexdigest() != str(file_manifest.get("sha256") or ""):
+            raise ValueError(f"clean_source_file_hash_mismatch: {file_manifest.get('path')}")
 
 
 def verify_clean_source_delta_file(sync_root: Path, file_manifest: dict[str, Any]) -> None:

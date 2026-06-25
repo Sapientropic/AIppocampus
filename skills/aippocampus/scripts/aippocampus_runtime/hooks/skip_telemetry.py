@@ -6,11 +6,11 @@ import json
 import os
 import platform
 import sys
-import time
 from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime import core as runtime_core
+from aippocampus_runtime.io_integrity import atomic_write_json
 
 PROMPT_SKIP_TELEMETRY_ENV = "AIPPOCAMPUS_PROMPT_SKIP_TELEMETRY"
 HOST_TIMEOUT_RISK_BUCKET = "gte_4300"
@@ -339,13 +339,4 @@ def _write_skip_telemetry_locked(
         "semantic_diagnostic": semantic_gate.get("diagnostic"),
     }
     safe_telemetry = runtime_core.sanitize_external_model_payload(telemetry)
-    tmp = path.with_suffix(path.suffix + f".{os.getpid()}.{time.time_ns()}.tmp")
-    try:
-        tmp.write_text(json.dumps(safe_telemetry, ensure_ascii=False, indent=2), encoding="utf-8", newline="\n")
-        tmp.replace(path)
-    except OSError:
-        try:
-            tmp.unlink()
-        except OSError:
-            pass
-        raise
+    atomic_write_json(path, safe_telemetry, indent=2)

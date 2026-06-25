@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -38,9 +37,7 @@ def write_archive_rows(path: Path, rows: Iterable[Mapping[str, Any]]) -> None:
 
 
 def atomic_write_retained_queue_rows(path: Path, rows: Iterable[Mapping[str, Any]]) -> None:
-    temp_path = path.with_name(f".{path.name}.tmp")
-    write_archive_rows(temp_path, rows)
-    os.replace(temp_path, path)
+    write_archive_rows(path, rows)
 
 
 def file_sha256(path: Path) -> str:

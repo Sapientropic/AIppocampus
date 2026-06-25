@@ -24,6 +24,7 @@ from aippocampus_runtime.core import (
     compact_text,
     now_utc,
 )
+from aippocampus_runtime.io_integrity import prepared_atomic_replace
 from aippocampus_runtime.question.source_refs import build_source_ref_index, source_ref_key
 from aippocampus_runtime.question.tracking import (
     DEFAULT_STRONG_THRESHOLD,
@@ -115,56 +116,52 @@ def write_question_index(
     *,
     source_signature: str,
 ) -> int:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp_path = path.with_name(path.name + ".tmp")
-    if tmp_path.exists():
-        tmp_path.unlink()
     record_list = list(records)
-    with closing(sqlite3.connect(tmp_path)) as conn:
-        conn.execute("PRAGMA journal_mode=OFF")
-        conn.execute("CREATE TABLE metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
-        conn.execute(
-            "CREATE TABLE question_record ("
-            "source_id TEXT PRIMARY KEY, "
-            "finding_id TEXT NOT NULL, "
-            "source_ref_keys_json TEXT NOT NULL, "
-            "payload_json TEXT NOT NULL)"
-        )
-        conn.execute(
-            "CREATE TABLE question_term ("
-            "term TEXT NOT NULL, "
-            "source_id TEXT NOT NULL, "
-            "PRIMARY KEY (term, source_id))"
-        )
-        conn.execute("CREATE INDEX question_term_source_idx ON question_term(source_id)")
-        metadata = {
-            "schema_version": str(SCHEMA_VERSION),
-            "kind": "aippocampus_question_index_sidecar",
-            "built_at": now_utc(),
-            "source_signature": source_signature,
-            "record_count": str(len(record_list)),
-            "truth_boundary": TRUTH_BOUNDARY,
-        }
-        conn.executemany("INSERT INTO metadata(key, value) VALUES (?, ?)", metadata.items())
-        conn.executemany(
-            "INSERT INTO question_record(source_id, finding_id, source_ref_keys_json, payload_json) "
-            "VALUES (?, ?, ?, ?)",
-            [
-                (
-                    record.source_id,
-                    record.finding_id,
-                    json.dumps(list(record.source_ref_keys), ensure_ascii=False),
-                    json.dumps(record.payload, ensure_ascii=False, sort_keys=True),
-                )
-                for record in record_list
-            ],
-        )
-        conn.executemany(
-            "INSERT OR IGNORE INTO question_term(term, source_id) VALUES (?, ?)",
-            [(term, record.source_id) for record in record_list for term in record.terms],
-        )
-        conn.commit()
-    tmp_path.replace(path)
+    with prepared_atomic_replace(path) as tmp_path:
+        with closing(sqlite3.connect(tmp_path)) as conn:
+            conn.execute("PRAGMA journal_mode=OFF")
+            conn.execute("CREATE TABLE metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
+            conn.execute(
+                "CREATE TABLE question_record ("
+                "source_id TEXT PRIMARY KEY, "
+                "finding_id TEXT NOT NULL, "
+                "source_ref_keys_json TEXT NOT NULL, "
+                "payload_json TEXT NOT NULL)"
+            )
+            conn.execute(
+                "CREATE TABLE question_term ("
+                "term TEXT NOT NULL, "
+                "source_id TEXT NOT NULL, "
+                "PRIMARY KEY (term, source_id))"
+            )
+            conn.execute("CREATE INDEX question_term_source_idx ON question_term(source_id)")
+            metadata = {
+                "schema_version": str(SCHEMA_VERSION),
+                "kind": "aippocampus_question_index_sidecar",
+                "built_at": now_utc(),
+                "source_signature": source_signature,
+                "record_count": str(len(record_list)),
+                "truth_boundary": TRUTH_BOUNDARY,
+            }
+            conn.executemany("INSERT INTO metadata(key, value) VALUES (?, ?)", metadata.items())
+            conn.executemany(
+                "INSERT INTO question_record(source_id, finding_id, source_ref_keys_json, payload_json) "
+                "VALUES (?, ?, ?, ?)",
+                [
+                    (
+                        record.source_id,
+                        record.finding_id,
+                        json.dumps(list(record.source_ref_keys), ensure_ascii=False),
+                        json.dumps(record.payload, ensure_ascii=False, sort_keys=True),
+                    )
+                    for record in record_list
+                ],
+            )
+            conn.executemany(
+                "INSERT OR IGNORE INTO question_term(term, source_id) VALUES (?, ?)",
+                [(term, record.source_id) for record in record_list for term in record.terms],
+            )
+            conn.commit()
     return len(record_list)
 
 

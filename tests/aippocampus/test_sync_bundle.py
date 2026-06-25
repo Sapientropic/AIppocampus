@@ -343,6 +343,43 @@ class SyncBundleTests(unittest.TestCase):
         for path in first_messages_chunks + first_turns_chunks:
             self.assertTrue((self.sync_dir / path).is_file(), path)
 
+    def test_clean_source_materialize_failure_preserves_destination_and_cleans_tmp(self) -> None:
+        chunk_data = b"fresh clean source\n"
+        chunk_hash = sync_bundle.bytes_sha256(chunk_data)
+        chunk_path = sync_bundle.clean_source_chunk_path(chunk_hash)
+        chunk_file = sync_bundle.sync_path_under(self.sync_dir, chunk_path)
+        chunk_file.parent.mkdir(parents=True)
+        chunk_file.write_bytes(chunk_data)
+        destination = self.root / "target" / "messages.jsonl"
+        destination.parent.mkdir(parents=True)
+        destination.write_text("existing\n", encoding="utf-8")
+        stale_fixed_tmp = destination.with_suffix(destination.suffix + ".tmp")
+        stale_fixed_tmp.write_text("stale fixed tmp\n", encoding="utf-8")
+
+        manifest = {
+            "path": "registry/threads/session-test/clean-source/messages.jsonl",
+            "size": len(chunk_data) + 1,
+            "sha256": chunk_hash,
+            "chunks": [
+                {
+                    "path": chunk_path.as_posix(),
+                    "size": len(chunk_data),
+                    "sha256": chunk_hash,
+                }
+            ],
+        }
+
+        with self.assertRaisesRegex(ValueError, "clean_source_file_size_mismatch"):
+            sync_bundle.materialize_clean_source_delta_file(
+                self.sync_dir,
+                manifest,
+                destination,
+            )
+
+        self.assertEqual(destination.read_text(encoding="utf-8"), "existing\n")
+        self.assertEqual(stale_fixed_tmp.read_text(encoding="utf-8"), "stale fixed tmp\n")
+        self.assertEqual(list(destination.parent.glob(".*.aippocampus-*.tmp")), [])
+
     def test_pull_copies_missing_files_and_preserves_conflicts(self) -> None:
         sync_bundle.push_sync_bundle(self.registry, self.sync_dir)
         target_registry = self.root / "target-registry"

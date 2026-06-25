@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import re
 import time
 from collections.abc import Iterable, Mapping
@@ -21,6 +20,7 @@ from typing import Any
 
 from aippocampus_runtime.artifacts.publish import artifact_lease
 from aippocampus_runtime.core import sanitize_external_model_text
+from aippocampus_runtime.io_integrity import atomic_write_text
 from aippocampus_runtime.ops.route_readiness import safe_source_refs
 from aippocampus_runtime.registry.api import unique_preserve
 from aippocampus_runtime.warm_ambient.query_pattern_alias_hygiene import (
@@ -282,12 +282,6 @@ def _canonical_jsonl(rows: list[dict[str, Any]]) -> str:
     return "\n".join(json.dumps(row, ensure_ascii=False, sort_keys=True) for row in ordered) + "\n"
 
 
-def _write_text_atomic(path: Path, text: str) -> None:
-    tmp = path.with_name(f".{path.name}.tmp-{os.getpid()}-{time.time_ns()}")
-    tmp.write_text(text, encoding="utf-8", newline="\n")
-    os.replace(tmp, path)
-
-
 def publish_query_pattern_routes(
     path: Path,
     routes: Iterable[Mapping[str, Any]],
@@ -331,7 +325,7 @@ def publish_query_pattern_routes(
     if changed:
         path.parent.mkdir(parents=True, exist_ok=True)
         with artifact_lease(path.parent, f".{path.name}.lease"):
-            _write_text_atomic(path, text)
+            atomic_write_text(path, text)
     return {
         "kind": QUERY_PATTERN_PUBLISH_KIND,
         "schema_version": QUERY_PATTERN_ROUTE_SCHEMA_VERSION,
