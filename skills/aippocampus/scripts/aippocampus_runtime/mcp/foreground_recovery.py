@@ -2,23 +2,71 @@
 
 from __future__ import annotations
 
-import json
+from collections.abc import Mapping
 from typing import Any
 
+from aippocampus_runtime import core
 from aippocampus_runtime.contracts import canonical_foreground_action_fields
-from aippocampus_runtime.mcp.public_projection import public_payload
+from aippocampus_runtime.mcp.result_profile import render_profiled_result
 
 
-def _text_result(payload: Any, *, is_error: bool = False) -> dict[str, Any]:
-    return {
-        "content": [
-            {
-                "type": "text",
-                "text": json.dumps(payload, ensure_ascii=False, indent=2),
-            }
-        ],
-        "isError": is_error,
-    }
+def _action_map(action: Any) -> dict[str, Any]:
+    return dict(action) if isinstance(action, Mapping) else {}
+
+
+def compact_missing_input_recovery_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    """Project missing-input recovery into an action-sized MCP card.
+
+    Missing-argument errors are part of the foreground UX: a model sees them
+    when it needs to recover from an invalid call. Keep the operator/source
+    boundary detail in the full profile and give compact only the state, the
+    primary template action, and a tiny list of safe follow-up actions.
+    """
+
+    error = _action_map(payload.get("error"))
+    primary_action = _action_map(payload.get("foreground_action"))
+    required_any = error.get("required_any") or primary_action.get("requires")
+    compact_error = core.strip_empty(
+        {
+            "code": error.get("code"),
+            "message": error.get("message"),
+            "tool_name": error.get("tool_name") or primary_action.get("tool_name"),
+            "required_any": required_any,
+        }
+    )
+    safe_next_actions = [
+        _action_map(action)
+        for action in payload.get("safe_next_actions") or []
+        if _action_map(action)
+    ][:3]
+    foreground_fields = (
+        canonical_foreground_action_fields(
+            primary_action,
+            safe_next_actions=safe_next_actions,
+        )
+        if primary_action
+        else {}
+    )
+    staged_followup = [
+        _action_map(action)
+        for action in payload.get("staged_followup") or []
+        if _action_map(action)
+    ][:3]
+    return core.strip_empty(
+        {
+            "detail": "compact",
+            "kind": payload.get("kind"),
+            "surface": "mcp_missing_input_recovery_compact",
+            "ok": False,
+            "status": payload.get("status"),
+            "surface_class": payload.get("surface_class"),
+            "summary": compact_error.get("message"),
+            "error": compact_error,
+            "required_any": compact_error.get("required_any"),
+            **foreground_fields,
+            "staged_followup": staged_followup,
+        }
+    )
 
 
 def missing_input_recovery_card(
@@ -70,7 +118,13 @@ def missing_input_recovery_card(
     }
     if staged_followup:
         payload["staged_followup"] = staged_followup
-    return _text_result(public_payload(arguments, payload), is_error=True)
+    return render_profiled_result(
+        arguments,
+        payload,
+        is_error=True,
+        compact_projector=compact_missing_input_recovery_payload,
+        full_output_boundary="local_private_recovery_detail",
+    )
 
 
 def template_tool_action(

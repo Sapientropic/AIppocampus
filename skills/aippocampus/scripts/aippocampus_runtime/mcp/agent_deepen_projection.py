@@ -192,12 +192,13 @@ def compact_agent_deepen_payload(
                 "schema_version": source.get("schema_version"),
                 "mode": source.get("mode"),
                 "surface": surface,
+                "surface_class": source.get("surface_class"),
                 "status": source.get("status"),
                 "ok": False,
                 "error": result.get("error") or source.get("error"),
                 **foreground_fields,
+                "follow_up_action": follow_up_action,
                 "claim_boundary": source.get("claim_boundary"),
-                "operator_detail_command": source.get("operator_detail_command"),
             }
         )
     if source.get("status") != "ok" or source.get("surface") != "recall":

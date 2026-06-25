@@ -35,12 +35,44 @@ INSTRUCTION_SURFACE_CLASSIFIED_FILES = {
             "detail/operator/tests, not default MCP payload expansion"
         ),
     },
+    "skills/aippocampus/scripts/aippocampus_runtime/mcp/agent_deepen_projection.py": {
+        "classification": "mcp_deepen_projection_owner",
+        "owner": "#2679/#2686/#2651",
+        "why": (
+            "owns MCP agent_deepen compact-vs-detail source-open and recovery "
+            "cards; operator/source diagnostics remain in detail/full output"
+        ),
+    },
+    "skills/aippocampus/scripts/aippocampus_runtime/mcp/agent_explain_projection.py": {
+        "classification": "mcp_explain_projection_owner",
+        "owner": "#2679/#2686/#2651",
+        "why": (
+            "owns MCP and CLI agent_explain compact-vs-detail recovery cards; "
+            "policy/operator diagnostics remain behind detail/full output"
+        ),
+    },
     "skills/aippocampus/scripts/aippocampus_runtime/mcp/agent_recall_compact_choices.py": {
         "classification": "compact_route_choice_owner",
         "owner": "#2663/#2651",
         "why": (
             "owns compact recall route-choice and source-search affordance wording; "
             "route proof remains in deepen/open follow-through and tests"
+        ),
+    },
+    "skills/aippocampus/scripts/aippocampus_runtime/mcp/compact_profile.py": {
+        "classification": "mcp_compact_profile_owner",
+        "owner": "#2679/#2685/#2686/#2651",
+        "why": (
+            "owns MCP structuredContent/text compact filtering; debug and proof "
+            "fields stay behind detail/operator profiles"
+        ),
+    },
+    "skills/aippocampus/scripts/aippocampus_runtime/mcp/foreground_recovery.py": {
+        "classification": "mcp_foreground_recovery_owner",
+        "owner": "#2685/#2651",
+        "why": (
+            "owns missing-input recovery card wording and safe next actions for "
+            "MCP tools; detailed source/operator payload stays in full profile"
         ),
     },
     "skills/aippocampus/scripts/aippocampus_runtime/mcp/public_projection.py": {
@@ -355,6 +387,14 @@ INSTRUCTION_SURFACE_CLASSIFIED_FILES = {
         "classification": "cli_frontdoor_test_contract_owner",
         "owner": "#2664/#2651",
         "why": "owns executable CLI frontdoor contracts for operator/detail actions.",
+    },
+    "tests/aippocampus/test_aippocampus_mcp_server_catalog.py": {
+        "classification": "mcp_catalog_test_contract_owner",
+        "owner": "#2685/#2686/#2651",
+        "why": (
+            "owns MCP tool catalog and missing-input compact/detail regression "
+            "tests so payload assertions do not re-freeze JSON-wall text"
+        ),
     },
     "tests/aippocampus/test_ambient_recall_cards.py": {
         "classification": "ambient_recall_card_test_contract_owner",

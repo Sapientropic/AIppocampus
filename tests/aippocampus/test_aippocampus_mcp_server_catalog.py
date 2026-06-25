@@ -86,6 +86,27 @@ class AippocampusMcpServerCatalogTests(unittest.TestCase):
         text = result["content"][0]["text"]
         return json.loads(text)
 
+    def assert_compact_structured_response(self, response: dict) -> dict:
+        result = response["result"]
+        payload = result.get("structuredContent")
+        self.assertIsInstance(payload, dict)
+        text = str(result["content"][0]["text"])
+        self.assertFalse(text.lstrip().startswith(("{", "[")), text)
+        self.assertLessEqual(len(text), 420)
+        assert_no_compact_debug_fields(
+            self,
+            payload,
+            surface=str(payload.get("surface") or payload.get("kind") or "mcp_compact"),
+        )
+        return payload
+
+    def full_text_payload(self, response: dict) -> dict:
+        result = response["result"]
+        self.assertNotIn("structuredContent", result)
+        text = result["content"][0]["text"]
+        self.assertTrue(str(text).lstrip().startswith("{"))
+        return json.loads(text)
+
     def call_tool_payload(self, name: str, arguments: dict[str, object]) -> dict:
         response = mcp.handle_request(
             {
@@ -109,15 +130,27 @@ class AippocampusMcpServerCatalogTests(unittest.TestCase):
 
         for tool_name, code in cases.items():
             with self.subTest(tool=tool_name):
-                payload = self.call_tool_payload(tool_name, {})
+                response = mcp.handle_request(
+                    {
+                        "jsonrpc": "2.0",
+                        "id": f"missing-{tool_name}",
+                        "method": "tools/call",
+                        "params": {"name": tool_name, "arguments": {}},
+                    }
+                )
+                payload = self.assert_compact_structured_response(response)
+                encoded = json.dumps(payload, ensure_ascii=False)
 
                 self.assertFalse(payload["ok"])
                 self.assertEqual(payload["status"], "needs_input")
                 self.assertEqual(payload["surface_class"], "foreground_recovery_card")
                 self.assertEqual(payload["error"]["code"], code)
+                self.assertNotIn("details", payload["error"])
+                self.assertNotIn("source_boundary", payload)
+                self.assertNotIn("related_issue", payload)
+                self.assertNotIn("runtime_provenance", encoded)
                 self.assertIn("safe_next_actions", payload)
                 self.assertTrue(payload["safe_next_actions"][0]["tool_name"])
-                self.assertEqual(payload["source_boundary"]["claim_authority"], "none_until_source_reopened")
                 if tool_name == "get_turn_context":
                     self.assertIn("staged_followup", payload)
                     self.assertEqual(payload["staged_followup"][0]["tool_name"], "agent_recall")
@@ -605,10 +638,12 @@ class AippocampusMcpServerCatalogTests(unittest.TestCase):
             }
         )
 
-        payload = self.tool_payload(response)
+        payload = self.assert_compact_structured_response(response)
         encoded = json.dumps(payload, ensure_ascii=False)
         self.assertTrue(response["result"]["isError"])
         self.assertEqual(payload["status"], "cannot_verify")
+        self.assertEqual(payload["surface"], "mcp_agent_deepen_compact")
+        self.assertEqual(payload["error"]["code"], "last_recall_unavailable")
         assert_recall_template_action(
             self,
             payload["foreground_action"],
@@ -616,8 +651,35 @@ class AippocampusMcpServerCatalogTests(unittest.TestCase):
             full_detail=True,
         )
         self.assertIn("foreground_action", payload)
-        self.assertNotIn(payload["foreground_action"], payload["safe_next_actions"])
+        if "safe_next_actions" in payload:
+            self.assertNotIn(payload["foreground_action"], payload["safe_next_actions"])
+        self.assertNotIn("operator_detail_command", encoded)
+        self.assertNotIn("source_boundary", encoded)
         self.assertNotIn(str(missing_path), encoded)
+
+        full_response = mcp.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": "agent-deepen-missing-last-full",
+                "method": "tools/call",
+                "params": {
+                    "name": "agent_deepen",
+                    "arguments": {
+                        "request_index": 1,
+                        "last_recall": True,
+                        "last_recall_path": str(missing_path),
+                        "detail": "full",
+                    },
+                },
+            }
+        )
+        full_payload = self.full_text_payload(full_response)
+        self.assertTrue(full_response["result"]["isError"])
+        self.assertEqual(full_payload["detail"], "full")
+        self.assertEqual(full_payload["output_boundary"], "local_private_diagnostic_full")
+        self.assertEqual(full_payload["result"]["error"]["code"], "last_recall_unavailable")
+        self.assertIn("operator_detail_command", full_payload)
+        self.assertNotIn(str(missing_path), json.dumps(full_payload, ensure_ascii=False))
 
     def test_agent_deepen_and_explain_missing_handle_lead_with_recall(self) -> None:
         for request_id, tool_name in ((2037, "agent_deepen"), (2038, "agent_explain")):
@@ -630,17 +692,38 @@ class AippocampusMcpServerCatalogTests(unittest.TestCase):
                         "params": {"name": tool_name, "arguments": {"cwd": str(self.cwd)}},
                     }
                 )
-                payload = self.tool_payload(response)
+                payload = self.assert_compact_structured_response(response)
 
                 self.assertTrue(response["result"]["isError"])
                 assert_recall_template_action(self, payload["foreground_action"])
                 self.assertIn("foreground_action", payload)
+                self.assertEqual(payload["surface"], f"mcp_agent_{tool_name.removeprefix('agent_')}_compact")
+                self.assertNotIn("operator_detail_command", json.dumps(payload, ensure_ascii=False))
                 self.assertIn(
                     f"aippocampus agent {tool_name.removeprefix('agent_')} --request",
                     payload["follow_up_action"]["command_template"],
                 )
                 self.assertIn("--recall-selector {recall_selector}", payload["follow_up_action"]["command_template"])
                 self.assertEqual(payload["follow_up_action"]["requires"], ["recall_selector", "request_index"])
+
+        full_response = mcp.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": "agent-deepen-missing-handle-full",
+                "method": "tools/call",
+                "params": {
+                    "name": "agent_deepen",
+                    "arguments": {"cwd": str(self.cwd), "detail": "full"},
+                },
+            }
+        )
+        full_payload = self.full_text_payload(full_response)
+        self.assertTrue(full_response["result"]["isError"])
+        self.assertEqual(full_payload["detail"], "full")
+        self.assertEqual(full_payload["output_boundary"], "local_private_diagnostic_full")
+        self.assertEqual(full_payload["error"]["code"], "missing_recall_handle")
+        self.assertIn("operator_detail_command", full_payload)
+        self.assertIn("--detail full", full_payload["operator_detail_command"])
 
     def test_agent_recall_missing_query_returns_recovery_card(self) -> None:
         response = mcp.handle_request(
@@ -653,9 +736,10 @@ class AippocampusMcpServerCatalogTests(unittest.TestCase):
         )
 
         self.assertTrue(response["result"]["isError"])
-        payload = self.tool_payload(response)
+        payload = self.assert_compact_structured_response(response)
         encoded = json.dumps(payload, ensure_ascii=False)
         self.assertEqual(payload["status"], "needs_input")
+        self.assertEqual(payload["surface"], "mcp_missing_input_recovery_compact")
         self.assertEqual(payload["error"]["code"], "agent_recall_cue_required")
         self.assertEqual(payload["foreground_action"]["id"], "recall_vague_cue")
         self.assertIn("aippocampus agent recall", payload["foreground_action"]["command_template"])

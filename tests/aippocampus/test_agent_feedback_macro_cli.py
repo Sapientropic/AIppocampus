@@ -12,6 +12,10 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 
 from aippocampus_runtime.macro import state as macro_state
+from tests.aippocampus.frontstage_assertions import (
+    assert_compact_frontstage_payload,
+    assert_no_compact_debug_fields,
+)
 
 
 class AgentFeedbackMacroCliTests(unittest.TestCase):
@@ -207,7 +211,7 @@ class AgentFeedbackMacroCliTests(unittest.TestCase):
         self.assertEqual(deepen_payload["error"]["code"], "missing_recall_handle")
         self.assertNotIn("operator_detail", deepen_payload)
         self.assertNotIn("boundary_detail", deepen_payload)
-        self.assertIn("operator_detail_command", deepen_payload)
+        self.assertNotIn("operator_detail_command", deepen_payload)
         self.assertEqual(missing_payload["error"]["code"], "missing_recall_handle")
         self.assertEqual(malformed_payload["error"]["code"], "malformed_recall_handle")
         for payload, mode, error_container, has_nested_error in (
@@ -216,6 +220,10 @@ class AgentFeedbackMacroCliTests(unittest.TestCase):
             (malformed_payload, "explain", malformed_payload, False),
         ):
             encoded = json.dumps(payload, ensure_ascii=False)
+            self.assertEqual(payload["detail"], "compact")
+            self.assertEqual(payload["surface_class"], "foreground_recovery_card")
+            assert_compact_frontstage_payload(self, payload, max_top_level_diagnostics=0)
+            assert_no_compact_debug_fields(self, payload, surface=f"cli.agent_{mode}.recovery")
             self.assertNotIn("agent_next_action", payload)
             self.assertIsInstance(payload["foreground_action"], dict)
             self.assertNotIn(payload["foreground_action"], payload["safe_next_actions"])
