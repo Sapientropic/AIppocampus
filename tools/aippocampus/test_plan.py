@@ -272,8 +272,9 @@ def agent_slop_guard_plan_reason(changed_files: Iterable[str]) -> str:
     suffix = "" if len(changed_python) <= 3 else f", +{len(changed_python) - 3} more"
     return (
         f"Python changed surface touched: {preview}{suffix}. Run the advisory agent-slop "
-        "guard early so projector bypasses and silent fallback smells are visible before "
-        "a PR tries to prove behavior through field presence."
+        "guard early so compact projection, fallback, source IO, compatibility, and "
+        "field-only test smells are visible before a PR tries to prove behavior through "
+        "field presence."
     )
 
 
@@ -392,6 +393,8 @@ def collect_changed_files(*, base: str) -> list[str]:
 
 def _test_module_for_path(path: str) -> str | None:
     normalized = _repo_relative(path)
+    if _is_agent_slop_fixture(normalized):
+        return None
     prefix = "tests/aippocampus/"
     if not normalized.startswith(prefix) or not normalized.endswith(".py"):
         return None
@@ -510,7 +513,7 @@ def classify_changed_files(changed_files: Iterable[str]) -> set[str]:
             categories.add("agent_slop_guard")
         if path.startswith("tools/aippocampus/release/"):
             categories.add("release_tool")
-        if path.startswith("tests/aippocampus/"):
+        if path.startswith("tests/aippocampus/") and not _is_agent_slop_fixture(path):
             categories.add("tests")
         if path.startswith("benchmarks/aippocampus/") or path.startswith("benchmark_corpus/"):
             categories.add("benchmark")
