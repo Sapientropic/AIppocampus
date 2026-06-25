@@ -11,7 +11,6 @@ MCP navigation into another long-lived memory cache.
 from __future__ import annotations
 
 import base64
-import hashlib
 import json
 import re
 import time
@@ -19,7 +18,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from aippocampus_runtime.core import compact_text, sanitize_external_model_text
+from aippocampus_runtime.core import compact_text, sanitize_external_model_text, stable_text_id
 from aippocampus_runtime.mcp.continuity_routes import continuity_routes_for_context
 from aippocampus_runtime.mcp.handle_inputs import nested_navigation_handle_value
 from aippocampus_runtime.mcp.registry_source_routes import (
@@ -154,11 +153,6 @@ def _safe_text(value: Any, chars: int) -> str:
     return compact_text(sanitized, chars)
 
 
-def _stable_id(*parts: Any, prefix: str = "route") -> str:
-    raw = "\n".join(str(part or "") for part in parts)
-    return f"{prefix}_{hashlib.sha256(raw.encode('utf-8')).hexdigest()[:18]}"
-
-
 def _fingerprint_paths(paths: list[Path]) -> str:
     parts: list[str] = []
     for path in paths:
@@ -168,7 +162,11 @@ def _fingerprint_paths(paths: list[Path]) -> str:
             parts.append(f"{path.name}:missing")
             continue
         parts.append(f"{path.name}:{stat.st_mtime_ns}:{stat.st_size}")
-    return _stable_id(*parts, prefix="source")
+    return stable_text_id("source", *parts, length=18)
+
+
+def _route_identity(*parts: Any, prefix: str = "route") -> str:
+    return stable_text_id(prefix, *parts, length=18)
 
 
 def clean_source_fingerprint(source_dir: Path) -> str:
@@ -405,7 +403,7 @@ def _route_from_clean_hit(
     intent: str,
 ) -> dict[str, Any]:
     source_refs = [_clean_ref(hit)]
-    route_id = _stable_id("clean_source", source_refs[0], hit.get("score"))
+    route_id = stable_text_id("route", "clean_source", source_refs[0], hit.get("score"), length=18)
     handle = _route_handle(
         source_dir=source_dir,
         route_id=route_id,
@@ -495,7 +493,7 @@ def recall_context_packet(
         max_routes=limit,
         clean_ref=_clean_ref,
         route_handle=_route_handle,
-        stable_id=_stable_id,
+        stable_id=_route_identity,
         safe_text=_safe_text,
     )
     relationship_origin_routes = relationship_origin_registry_routes(
@@ -506,7 +504,7 @@ def recall_context_packet(
         max_routes=limit,
         clean_ref=_clean_ref,
         route_handle=_route_handle,
-        stable_id=_stable_id,
+        stable_id=_route_identity,
         safe_text=_safe_text,
     )
     current_source_routes = [
@@ -523,7 +521,7 @@ def recall_context_packet(
         max_routes=limit,
         clean_ref=_clean_ref,
         route_handle=_route_handle,
-        stable_id=_stable_id,
+        stable_id=_route_identity,
         safe_text=_safe_text,
     )
     seed_semantic_routes, seed_semantic_diagnostics = semantic_trigger_source_routes(
@@ -534,7 +532,7 @@ def recall_context_packet(
         max_routes=limit,
         clean_ref=_clean_ref,
         route_handle=_route_handle,
-        stable_id=_stable_id,
+        stable_id=_route_identity,
         safe_text=_safe_text,
     )
     snapshot_path = continuity_domains_snapshot_path or continuity_domains_latest_path_for_clean_source(
@@ -572,7 +570,7 @@ def recall_context_packet(
                     max_routes=limit - len(routes),
                     clean_ref=_clean_ref,
                     route_handle=_route_handle,
-                    stable_id=_stable_id,
+                    stable_id=_route_identity,
                     safe_text=_safe_text,
                 ),
             ]
@@ -583,7 +581,7 @@ def recall_context_packet(
                 intent_terms=_query_terms(clean_intent),
                 registry_dir=registry_dir,
                 max_routes=limit - len(routes),
-                stable_id=_stable_id,
+                stable_id=_route_identity,
                 safe_text=_safe_text,
             )
         )
@@ -690,7 +688,7 @@ def normalize_handle(handle: Any) -> dict[str, Any]:
             return {
                 "schema_version": HANDLE_SCHEMA_VERSION,
                 "kind": "source_ref",
-                "route_id": current.get("route_id") or _stable_id("source_ref", refs),
+                "route_id": current.get("route_id") or stable_text_id("route", "source_ref", refs, length=18),
                 "source_refs": [_clean_ref(ref) for ref in refs if isinstance(ref, dict)],
                 "source_fingerprint": current.get("source_fingerprint"),
             }
@@ -982,7 +980,7 @@ def _continuity_domain_deepen_payload(
             source_payload = _source_ref_deepen_payload(
                 {
                     "kind": "source_ref",
-                    "route_id": _stable_id("continuity_domain", domain_id, ref),
+                    "route_id": stable_text_id("route", "continuity_domain", domain_id, ref, length=18),
                     "source_refs": [ref],
                     "source_fingerprint": current_source_fingerprint,
                 },

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import subprocess
@@ -135,6 +136,91 @@ class AippocampusLibTests(unittest.TestCase):
         self.assertEqual(
             aippocampuslib.strip_empty(payload, drop_empty_dicts=True),
             {"keep": {"value": "present"}, "items": [{"b": "value"}]},
+        )
+
+    def test_legacy_stable_id_shapes_remain_canonical_helpers(self) -> None:
+        tuple_parts = ("aar_v2", {"b": 2, "a": 1})
+        tuple_raw = json.dumps(tuple_parts, ensure_ascii=False, sort_keys=True, default=str)
+        tuple_digest = hashlib.sha256(tuple_raw.encode("utf-8")).hexdigest()[:16]
+        self.assertEqual(
+            aippocampuslib.stable_json_tuple_digest(*tuple_parts, ensure_ascii=False),
+            tuple_digest,
+        )
+        self.assertEqual(
+            aippocampuslib.stable_json_tuple_id("apw", *tuple_parts, ensure_ascii=False),
+            f"apw_{tuple_digest}",
+        )
+
+        text_raw = "\0".join(["src-key", "msg-1"])
+        text_digest = hashlib.sha256(text_raw.encode("utf-8")).hexdigest()[:20]
+        self.assertEqual(
+            aippocampuslib.stable_text_join_id(
+                "src",
+                "src-key",
+                "msg-1",
+                sep="\0",
+                length=20,
+            ),
+            f"src_{text_digest}",
+        )
+        non_null_raw = "|".join(str(part) for part in ("route", 0, False))
+        self.assertEqual(
+            aippocampuslib.stable_text_non_null_join_id(
+                "rt", "route", None, 0, False, sep="|", length=16
+            ),
+            f"rt_{hashlib.sha256(non_null_raw.encode('utf-8', errors='replace')).hexdigest()[:16]}",
+        )
+
+        json_lines_raw = "\n".join(
+            json.dumps(part, ensure_ascii=False, sort_keys=True)
+            for part in ("thread", 7)
+        )
+        json_lines_digest = hashlib.sha256(
+            json_lines_raw.encode("utf-8", errors="replace")
+        ).hexdigest()[:18]
+        self.assertEqual(
+            aippocampuslib.stable_json_lines_id(
+                "source_line",
+                "thread",
+                7,
+                ensure_ascii=False,
+                default_str=False,
+            ),
+            f"source_line_{json_lines_digest}",
+        )
+        compact_raw = json.dumps(
+            {"b": 2, "a": 1},
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+            default=str,
+        )
+        self.assertEqual(
+            aippocampuslib.stable_json_digest(
+                {"b": 2, "a": 1},
+                ensure_ascii=False,
+                separators=(",", ":"),
+            ),
+            hashlib.sha256(compact_raw.encode("utf-8")).hexdigest()[:16],
+        )
+
+        json_join_raw = "\0".join(
+            json.dumps(part, ensure_ascii=False, sort_keys=True, default=str)
+            for part in ("episode", {"n": 1})
+        )
+        json_join_digest = hashlib.sha256(
+            json_join_raw.encode("utf-8", errors="replace")
+        ).hexdigest()[:14]
+        self.assertEqual(
+            aippocampuslib.stable_json_join_id(
+                "seq",
+                "episode",
+                {"n": 1},
+                sep="\0",
+                ensure_ascii=False,
+                length=14,
+            ),
+            f"seq_{json_join_digest}",
         )
 
     def test_safety_owner_preserves_redaction_and_transport_behavior(self) -> None:

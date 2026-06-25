@@ -10,10 +10,10 @@ instead of raw commentary, commands, stdout, paths, or secrets.
 
 from __future__ import annotations
 
-import hashlib
 from collections.abc import Iterable, Mapping
 from typing import Any
 
+from aippocampus_runtime.core import stable_text_id
 from aippocampus_runtime.ops.route_readiness import safe_source_refs
 from aippocampus_runtime.privacy import redact_private_paths
 
@@ -55,12 +55,6 @@ NOTE_REASON = {
     "handoff_hint": "A process note leaves a handoff hint joined to adjacent evidence.",
     "source_to_action_link": "A process note links source/tool evidence to a later action.",
 }
-
-
-def _stable_id(*parts: Any, prefix: str = "route_note") -> str:
-    raw = "\n".join(str(part or "") for part in parts)
-    digest = hashlib.sha256(raw.encode("utf-8", errors="replace")).hexdigest()[:20]
-    return f"{prefix}_{digest}"
 
 
 def _text(value: Any) -> str:
@@ -314,11 +308,13 @@ def _route_note_row(
     source_refs: list[dict[str, Any]],
 ) -> dict[str, Any]:
     note_ref = _message_ref(message)
-    route_id = _stable_id(
+    route_id = stable_text_id(
+        "route_note",
         note_type,
         message.get("message_id") or message.get("id"),
         message.get("source_line") or message.get("line"),
         joined_evidence_refs,
+        length=20,
     )
     joined_evidence_kind = sorted(
         {str(ref.get("evidence_kind") or "unknown") for ref in joined_evidence_refs}
@@ -331,7 +327,7 @@ def _route_note_row(
     ]
     return {
         "route_id": route_id,
-        "route_id_hash": _stable_id(route_id, prefix="route"),
+        "route_id_hash": stable_text_id("route", route_id, length=20),
         "surface_kind": f"route_note:{note_type}",
         "origin": "route_note",
         "status": "ready",

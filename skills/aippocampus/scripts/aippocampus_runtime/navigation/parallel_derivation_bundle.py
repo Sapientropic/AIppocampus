@@ -8,13 +8,11 @@ before downstream route/fanout surfaces flatten navigation signals.
 
 from __future__ import annotations
 
-import hashlib
-import json
 from collections import defaultdict, deque
 from collections.abc import Iterable, Mapping, Sequence
 from typing import Any
 
-from aippocampus_runtime.core import compact_text, now_utc
+from aippocampus_runtime.core import compact_text, now_utc, stable_json_join_id
 from aippocampus_runtime.ops.route_readiness import safe_source_refs
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 from aippocampus_runtime.source_shape import build_source_shape_descriptor
@@ -36,12 +34,6 @@ DEGRADE_TO = {
     OBSTRUCTION: "source_reopen_review",
     INCOMPLETE: "diagnostic_only",
 }
-
-
-def _stable_id(*parts: Any, prefix: str, length: int = 20) -> str:
-    raw = "\0".join(json.dumps(part, ensure_ascii=False, sort_keys=True, default=str) for part in parts)
-    digest = hashlib.sha256(raw.encode("utf-8", errors="replace")).hexdigest()[:length]
-    return f"{prefix}_{digest}"
 
 
 def _text(value: Any, limit: int = 120) -> str:
@@ -419,7 +411,16 @@ def build_parallel_derivation_bundle(
     all_refs = _all_source_refs(rows)
     created = created_at or now_utc()
     safe_snapshot = source_snapshot if isinstance(source_snapshot, Mapping) else {}
-    shape_id = _stable_id(bundle_id, rows, basis, dag, prefix="parallel_shape")
+    shape_id = stable_json_join_id(
+        "parallel_shape",
+        bundle_id,
+        rows,
+        basis,
+        dag,
+        sep="\0",
+        ensure_ascii=False,
+        length=20,
+    )
     descriptor = build_source_shape_descriptor(
         producer="parallel_derivation_bundle",
         source_refs=all_refs,
@@ -451,7 +452,15 @@ def build_parallel_derivation_bundle(
     bundle = {
         "kind": BUNDLE_KIND,
         "schema_version": SCHEMA_VERSION,
-        "bundle_id": _text(bundle_id, 120) or _stable_id(rows, safe_snapshot, prefix="pdb"),
+        "bundle_id": _text(bundle_id, 120)
+        or stable_json_join_id(
+            "pdb",
+            rows,
+            safe_snapshot,
+            sep="\0",
+            ensure_ascii=False,
+            length=20,
+        ),
         "created_at": created,
         "derivations": rows,
         "source_basis": basis,

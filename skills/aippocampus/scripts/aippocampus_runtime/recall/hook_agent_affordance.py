@@ -6,6 +6,8 @@ import json
 from collections.abc import Mapping
 from typing import Any
 
+from aippocampus_runtime.core import dict_or_empty, list_or_empty
+
 AFFORDANCE_SCHEMA_VERSION = "hook-agent-affordance-v0"
 PRIVACY_BOUNDARY = "no raw source, no local paths, no source refs in hook"
 
@@ -43,34 +45,26 @@ _TINY_AFFORDANCE_BLOCKERS = {
 }
 
 
-def _as_list(value: Any) -> list[Any]:
-    return value if isinstance(value, list) else []
-
-
-def _as_dict(value: Any) -> dict[str, Any]:
-    return value if isinstance(value, dict) else {}
-
-
 def _controlled_confidence(value: Any) -> str:
     confidence = str(value or "").strip().casefold()
     return confidence if confidence in {"low", "medium", "high"} else "low"
 
 
 def _reason_contains(result: Mapping[str, Any], needle: str) -> bool:
-    return any(needle in str(reason).casefold() for reason in _as_list(result.get("reasons")))
+    return any(needle in str(reason).casefold() for reason in list_or_empty(result.get("reasons")))
 
 
 def _ambient_cards(result: Mapping[str, Any]) -> list[dict[str, Any]]:
-    ambient = _as_dict(result.get("ambient_recall"))
-    return [card for card in _as_list(ambient.get("cards")) if isinstance(card, dict)]
+    ambient = dict_or_empty(result.get("ambient_recall"))
+    return [card for card in list_or_empty(ambient.get("cards")) if isinstance(card, dict)]
 
 
 def _ambient_tiny_agent_recall_affordance(result: Mapping[str, Any]) -> dict[str, Any]:
-    ambient = _as_dict(result.get("ambient_recall"))
+    ambient = dict_or_empty(result.get("ambient_recall"))
     raw = (
-        _as_dict(ambient.get("tiny_agent_recall_affordance"))
-        or _as_dict(ambient.get("agent_recall_affordance"))
-        or _as_dict(result.get("tiny_agent_recall_affordance"))
+        dict_or_empty(ambient.get("tiny_agent_recall_affordance"))
+        or dict_or_empty(ambient.get("agent_recall_affordance"))
+        or dict_or_empty(result.get("tiny_agent_recall_affordance"))
     )
     if not raw:
         return {}
@@ -87,7 +81,7 @@ def _ambient_tiny_agent_recall_affordance(result: Mapping[str, Any]) -> dict[str
     blockers = {
         str(item)
         for key in ("safety_blockers", "blockers", "adoption_blockers")
-        for item in _as_list(raw.get(key))
+        for item in list_or_empty(raw.get(key))
     }
     if blockers & _TINY_AFFORDANCE_BLOCKERS:
         return {}
@@ -137,7 +131,7 @@ def _is_episode_arc(item: Mapping[str, Any]) -> bool:
 
 
 def _has_architecture_diagnostic(result: Mapping[str, Any], items: list[dict[str, Any]]) -> bool:
-    if result.get("architecture_diagnostic") or _as_list(result.get("architecture_diagnostics")):
+    if result.get("architecture_diagnostic") or list_or_empty(result.get("architecture_diagnostics")):
         return True
     if result.get("observatory") or result.get("cognitive_observatory"):
         return True
@@ -151,17 +145,17 @@ def _has_architecture_diagnostic(result: Mapping[str, Any], items: list[dict[str
 
 def _lead_kinds(result: Mapping[str, Any]) -> list[str]:
     kinds: list[str] = []
-    working = [item for item in _as_list(result.get("working_memory")) if isinstance(item, dict)]
-    candidates = [item for item in _as_list(result.get("candidates")) if isinstance(item, dict)]
-    evidence = [item for item in _as_list(result.get("evidence")) if isinstance(item, dict)]
+    working = [item for item in list_or_empty(result.get("working_memory")) if isinstance(item, dict)]
+    candidates = [item for item in list_or_empty(result.get("candidates")) if isinstance(item, dict)]
+    evidence = [item for item in list_or_empty(result.get("evidence")) if isinstance(item, dict)]
     cards = _ambient_cards(result)
     architecture = [
-        item for item in _as_list(result.get("architecture_diagnostics")) if isinstance(item, dict)
+        item for item in list_or_empty(result.get("architecture_diagnostics")) if isinstance(item, dict)
     ]
-    cognitive_map = [item for item in _as_list(result.get("cognitive_map")) if isinstance(item, dict)]
-    semantic_gate = _as_dict(result.get("semantic_gate"))
-    surface_intent = _as_dict(result.get("agent_surface_intent"))
-    explicit_surfaces = [str(item) for item in _as_list(surface_intent.get("surfaces"))]
+    cognitive_map = [item for item in list_or_empty(result.get("cognitive_map")) if isinstance(item, dict)]
+    semantic_gate = dict_or_empty(result.get("semantic_gate"))
+    surface_intent = dict_or_empty(result.get("agent_surface_intent"))
+    explicit_surfaces = [str(item) for item in list_or_empty(surface_intent.get("surfaces"))]
     skip_without_explicit_agent_surface = (
         str(result.get("decision") or "") == "skip" and not surface_intent.get("explicit")
     )
@@ -215,7 +209,7 @@ def _lead_kinds(result: Mapping[str, Any]) -> list[str]:
         and (
             any(_is_episode_arc(item) for item in all_items)
             or result.get("episode_arc")
-            or _as_list(result.get("episode_arcs"))
+            or list_or_empty(result.get("episode_arcs"))
         )
     ):
         kinds.append("episode_arc")
@@ -246,22 +240,26 @@ def _lead_kinds(result: Mapping[str, Any]) -> list[str]:
 
 def _lead_count(result: Mapping[str, Any], lead_kinds: list[str]) -> int:
     count = (
-        len(_as_list(result.get("candidates")))
-        + len(_as_list(result.get("evidence")))
-        + len(_as_list(result.get("working_memory")))
+        len(list_or_empty(result.get("candidates")))
+        + len(list_or_empty(result.get("evidence")))
+        + len(list_or_empty(result.get("working_memory")))
         + len(_ambient_cards(result))
-        + len(_as_list(result.get("cognitive_map")))
-        + len(_as_list(result.get("architecture_diagnostics")))
+        + len(list_or_empty(result.get("cognitive_map")))
+        + len(list_or_empty(result.get("architecture_diagnostics")))
     )
     if (result.get("architecture_diagnostic") or result.get("observatory") or result.get("cognitive_observatory")) and count == 0:
         count = 1
-    if (result.get("avatar_state") or result.get("episode_arc") or _as_list(result.get("episode_arcs"))) and count == 0:
+    if (
+        result.get("avatar_state")
+        or result.get("episode_arc")
+        or list_or_empty(result.get("episode_arcs"))
+    ) and count == 0:
         count = 1
     if result.get("semantic_source_reopen_route") and count == 0:
         count = 1
-    surface_intent = _as_dict(result.get("agent_surface_intent"))
+    surface_intent = dict_or_empty(result.get("agent_surface_intent"))
     if surface_intent.get("explicit"):
-        count = max(count, len(_as_list(surface_intent.get("surfaces"))))
+        count = max(count, len(list_or_empty(surface_intent.get("surfaces"))))
     return min(max(count, len(lead_kinds)), 9)
 
 
@@ -309,7 +307,7 @@ def _tool_visibility(result: Mapping[str, Any]) -> str:
     raw = str(
         result.get("tool_visibility")
         or result.get("agent_tool_visibility")
-        or (_as_dict(result.get("agent_callable")).get("tool_visibility"))
+        or (dict_or_empty(result.get("agent_callable")).get("tool_visibility"))
         or ""
     ).strip().casefold()
     if raw in _TOOL_VISIBILITY_VALUES:
@@ -339,8 +337,8 @@ def _cli_fallback(action: str) -> str:
 
 def _reason_codes(action: str, lead_kinds: list[str], result: Mapping[str, Any]) -> list[str]:
     codes: list[str] = []
-    surface_intent = _as_dict(result.get("agent_surface_intent"))
-    explicit_surfaces = [str(item) for item in _as_list(surface_intent.get("surfaces"))]
+    surface_intent = dict_or_empty(result.get("agent_surface_intent"))
+    explicit_surfaces = [str(item) for item in list_or_empty(surface_intent.get("surfaces"))]
     if explicit_surfaces:
         codes.append("explicit_agent_native_surface_intent")
     if (
@@ -410,7 +408,7 @@ def format_hook_agent_affordance(affordance: Mapping[str, Any]) -> str | None:
     if not affordance.get("usable_continuity_lead"):
         return None
     action = str(affordance.get("suggested_agent_action") or "agent_recall")
-    lead_kinds = [str(kind) for kind in _as_list(affordance.get("lead_kinds"))]
+    lead_kinds = [str(kind) for kind in list_or_empty(affordance.get("lead_kinds"))]
     if action == "agent_aippo":
         next_line = "Next: call agent_aippo for the task contract before broad search."
     elif action == "agent_deepen":

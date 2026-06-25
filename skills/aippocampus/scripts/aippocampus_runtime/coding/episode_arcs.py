@@ -14,6 +14,7 @@ import json
 from typing import Any, Mapping, Sequence
 
 from aippocampus_runtime.coding import sequence_packets
+from aippocampus_runtime.core import dict_or_empty, list_or_empty, stable_json_join_id
 from aippocampus_runtime.question.source_refs import clean_source_ref, source_ref_key
 from aippocampus_runtime.registry.api import unique_preserve
 
@@ -75,17 +76,7 @@ _RELATIONS = {
 
 
 def _as_mapping(value: Any) -> Mapping[str, Any]:
-    return value if isinstance(value, Mapping) else {}
-
-
-def _as_list(value: Any) -> list[Any]:
-    return value if isinstance(value, list) else []
-
-
-def _stable_id(prefix: str, *parts: Any, length: int = 18) -> str:
-    raw = "\n".join(json.dumps(part, ensure_ascii=False, sort_keys=True) for part in parts)
-    digest = hashlib.sha1(raw.encode("utf-8", errors="replace")).hexdigest()[:length]
-    return f"{prefix}_{digest}"
+    return dict_or_empty(value)
 
 
 def _unique_objects(items: list[Any], *, limit: int) -> list[Any]:
@@ -109,7 +100,7 @@ def _source_ref_hash(ref: Mapping[str, Any]) -> str:
 
 
 def _compact_source_refs(row: Mapping[str, Any]) -> list[dict[str, Any]]:
-    candidates = _as_list(row.get("source_refs"))
+    candidates = list_or_empty(row.get("source_refs"))
     if not candidates:
         candidates = [dict(row)]
     refs: list[dict[str, Any]] = []
@@ -202,7 +193,15 @@ def _normalize_event(row: Mapping[str, Any], fallback_index: int) -> dict[str, A
     _, profile = _profile_for([event_kind])
     event_id = str(row.get("event_id") or row.get("decision_id") or "").strip()
     if not event_id:
-        event_id = _stable_id("event", event_kind, refs, fallback_index, length=16)
+        event_id = stable_json_join_id(
+            "event",
+            event_kind,
+            refs,
+            fallback_index,
+            ensure_ascii=False,
+            length=16,
+            default_str=False,
+        )
     return {
         "event_id": event_id,
         "event_kind": event_kind,
@@ -213,13 +212,23 @@ def _normalize_event(row: Mapping[str, Any], fallback_index: int) -> dict[str, A
         "turn_index": row.get("turn_index"),
         "source_line": row.get("source_line") or row.get("line"),
         "affected_scope": _as_mapping(row.get("affected_scope")),
-        "sequence_gaps": [str(item) for item in _as_list(row.get("sequence_gaps")) if str(item).strip()],
+        "sequence_gaps": [
+            str(item) for item in list_or_empty(row.get("sequence_gaps")) if str(item).strip()
+        ],
     }
 
 
 def _group_rows(rows: Sequence[Mapping[str, Any]]) -> list[tuple[str, list[tuple[int, Mapping[str, Any]]]]]:
     groups: dict[str, list[tuple[int, Mapping[str, Any]]]] = {}
-    fallback_group = _stable_id("episode", len(rows), rows[:1], rows[-1:] if rows else [], length=16)
+    fallback_group = stable_json_join_id(
+        "episode",
+        len(rows),
+        rows[:1],
+        rows[-1:] if rows else [],
+        ensure_ascii=False,
+        length=16,
+        default_str=False,
+    )
     for index, row in enumerate(rows):
         episode_id = str(
             row.get("episode_id")
@@ -296,7 +305,7 @@ def _merge_scope(events: Sequence[Mapping[str, Any]]) -> dict[str, list[Any]]:
     for event in events:
         scope = _as_mapping(event.get("affected_scope"))
         for field in merged:
-            merged[field].extend(_as_list(scope.get(field)))
+            merged[field].extend(list_or_empty(scope.get(field)))
     return {field: _unique_objects(values, limit=12) for field, values in merged.items() if values}
 
 
@@ -352,9 +361,12 @@ def build_episode_arcs(event_rows: Sequence[Mapping[str, Any]]) -> list[dict[str
 
 
 def _source_thickness(arc: Mapping[str, Any]) -> str:
-    if arc.get("sequence_gaps") or len(_as_list(arc.get("source_event_ids"))) < 2:
+    if arc.get("sequence_gaps") or len(list_or_empty(arc.get("source_event_ids"))) < 2:
         return "thin"
-    if str(arc.get("episode_kind") or "") == "supersession_arc" and len(_as_list(arc.get("source_event_ids"))) >= 3:
+    if (
+        str(arc.get("episode_kind") or "") == "supersession_arc"
+        and len(list_or_empty(arc.get("source_event_ids"))) >= 3
+    ):
         return "strong"
     return "usable"
 
@@ -388,11 +400,11 @@ def render_sequence_packet(
 ) -> dict[str, Any]:
     """Render the host-facing sequence packet for an Episode/Arc read-model."""
 
-    events = _as_list(arc.get("_events"))
+    events = list_or_empty(arc.get("_events"))
     if not events:
-        event_ids = [str(value) for value in _as_list(arc.get("source_event_ids"))]
-        event_kinds = [str(value) for value in _as_list(arc.get("event_order"))]
-        hashes = [str(value) for value in _as_list(arc.get("source_ref_hashes"))]
+        event_ids = [str(value) for value in list_or_empty(arc.get("source_event_ids"))]
+        event_kinds = [str(value) for value in list_or_empty(arc.get("event_order"))]
+        hashes = [str(value) for value in list_or_empty(arc.get("source_ref_hashes"))]
         events = [
             {
                 "event_id": event_id,
@@ -423,7 +435,7 @@ def render_sequence_packet(
         "cannot_claim": _cannot_claim(arc),
     }
     if arc.get("sequence_gaps"):
-        packet["sequence_gaps"] = list(_as_list(arc.get("sequence_gaps")))
+        packet["sequence_gaps"] = list(list_or_empty(arc.get("sequence_gaps")))
     return packet
 
 
@@ -439,9 +451,9 @@ def build_reopen_plan(arc: Mapping[str, Any]) -> dict[str, Any]:
         "recommended_use": _recommended_use(arc),
         "safe_uses": safe_uses,
         "route": {
-            "source_event_ids": [str(value) for value in _as_list(arc.get("source_event_ids"))],
-            "source_refs": list(_as_list(arc.get("source_refs"))),
-            "source_ref_hashes": [str(value) for value in _as_list(arc.get("source_ref_hashes"))],
+            "source_event_ids": [str(value) for value in list_or_empty(arc.get("source_event_ids"))],
+            "source_refs": list(list_or_empty(arc.get("source_refs"))),
+            "source_ref_hashes": [str(value) for value in list_or_empty(arc.get("source_ref_hashes"))],
             "source_window": dict(_as_mapping(arc.get("turn_range"))),
         },
         "cannot_claim": unique_preserve(_cannot_claim(arc) + ["episode_arc_is_not_current_truth"], limit=12),
@@ -456,7 +468,7 @@ def _rate(numerator: int, denominator: int) -> float:
 
 def _has_visible_action_projection(packet: Mapping[str, Any], plan: Mapping[str, Any]) -> bool:
     proposed_use = str(_as_mapping(packet.get("current_assessment")).get("proposed_use") or "")
-    safe_uses = {str(value) for value in _as_list(plan.get("safe_uses"))}
+    safe_uses = {str(value) for value in list_or_empty(plan.get("safe_uses"))}
     return proposed_use in VISIBLE_ACTION_USES or bool(safe_uses & VISIBLE_ACTION_USES)
 
 
@@ -465,27 +477,29 @@ def _public_case_summary(
     packet: Mapping[str, Any],
     plan: Mapping[str, Any],
 ) -> dict[str, Any]:
-    event_order = [str(value) for value in _as_list(arc.get("event_order"))]
-    sequence_gaps = [str(value) for value in _as_list(arc.get("sequence_gaps"))]
-    source_event_count = len(_as_list(arc.get("source_event_ids")))
+    event_order = [str(value) for value in list_or_empty(arc.get("event_order"))]
+    sequence_gaps = [str(value) for value in list_or_empty(arc.get("sequence_gaps"))]
+    source_event_count = len(list_or_empty(arc.get("source_event_ids")))
     return {
-        "case_id": _stable_id(
+        "case_id": stable_json_join_id(
             "arc_case",
             arc.get("episode_kind"),
             event_order,
             sequence_gaps,
             source_event_count,
+            ensure_ascii=False,
             length=12,
+            default_str=False,
         ),
         "episode_kind": str(arc.get("episode_kind") or ""),
         "source_event_count": source_event_count,
-        "source_ref_hash_count": len(_as_list(arc.get("source_ref_hashes"))),
+        "source_ref_hash_count": len(list_or_empty(arc.get("source_ref_hashes"))),
         "event_order": event_order,
         "sequence_gaps": sequence_gaps,
         "current_validity": str(arc.get("current_validity") or ""),
         "source_thickness": str(_as_mapping(packet.get("current_assessment")).get("source_thickness") or ""),
         "proposed_use": str(_as_mapping(packet.get("current_assessment")).get("proposed_use") or ""),
-        "safe_uses": [str(value) for value in _as_list(plan.get("safe_uses"))],
+        "safe_uses": [str(value) for value in list_or_empty(plan.get("safe_uses"))],
     }
 
 
@@ -519,7 +533,7 @@ def build_public_gappy_chain_calibration_report(event_rows: Sequence[Mapping[str
 
         episode_kind = summary["episode_kind"]
         kind_counts[episode_kind] = kind_counts.get(episode_kind, 0) + 1
-        sequence_gaps = [str(value) for value in _as_list(summary.get("sequence_gaps"))]
+        sequence_gaps = [str(value) for value in list_or_empty(summary.get("sequence_gaps"))]
         visible_action = _has_visible_action_projection(packet, plan)
         if sequence_gaps:
             gappy_arc_count += 1

@@ -8,13 +8,12 @@ foreground eligibility.
 
 from __future__ import annotations
 
-import hashlib
 import json
 from collections.abc import Iterable, Mapping, Sequence
 from typing import Any
 
 from aippocampus_runtime.aippo import working_contract
-from aippocampus_runtime.core import compact_text
+from aippocampus_runtime.core import compact_text, stable_json_tuple_id
 from aippocampus_runtime.hooks.action_hint_cache_records import build_action_hint_cache_report
 
 SCHEMA_VERSION = 1
@@ -36,11 +35,6 @@ REOPEN_FIRST_FINDINGS = {
     "source_backed_do_not_repeat",
     "do_not_repeat",
 }
-
-
-def _stable_id(prefix: str, *parts: Any) -> str:
-    encoded = json.dumps(parts, ensure_ascii=False, sort_keys=True, default=str)
-    return f"{prefix}_{hashlib.sha256(encoded.encode('utf-8')).hexdigest()[:18]}"
 
 
 def _text(value: Any, limit: int = 220) -> str:
@@ -154,7 +148,13 @@ def _source_backed_lesson_to_aippo_row(
     source_supported = verified_origin and source_count >= 1
     lesson_id = (
         _text(lesson.get("lesson_id") or lesson.get("candidate_id") or lesson.get("clause_id"), 120)
-        or _stable_id("source_lesson_clause", lesson.get("failed_route"), lesson.get("proposed_lesson"))
+        or stable_json_tuple_id(
+            "source_lesson_clause",
+            lesson.get("failed_route"),
+            lesson.get("proposed_lesson"),
+            ensure_ascii=False,
+            length=18,
+        )
     )
     guidance = (
         _text(lesson.get("proposed_lesson"), 320)
@@ -320,7 +320,13 @@ def learning_findings_to_aippo_source_rows(
         source_supported = verified_origin and source_count >= 2
         row = {
             "clause_id": _text(finding.get("clause_id"), 120)
-            or _stable_id("learned_clause", finding.get("finding_id"), kind),
+            or stable_json_tuple_id(
+                "learned_clause",
+                finding.get("finding_id"),
+                kind,
+                ensure_ascii=False,
+                length=18,
+            ),
             "kind": (
                 "reopen_first_workflow_clause"
                 if kind in REOPEN_FIRST_FINDINGS

@@ -8,12 +8,11 @@ reopen order, but it cannot become source evidence by itself.
 
 from __future__ import annotations
 
-import hashlib
-import json
 import re
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+from aippocampus_runtime.core import stable_json_tuple_id
 from aippocampus_runtime.source_shape import (
     build_source_shape_descriptor,
     project_source_shape_for_foreground,
@@ -26,12 +25,6 @@ CLAIM_PERMISSION = "none"
 PRIVATE_PARTITIONS = {"private", "restricted", "personal", "user_private", "machine_private"}
 STALE_FRESHNESS = {"stale", "superseded", "refuted", "retired", "archived", "expired"}
 SAFE_CODE_RE = re.compile(r"[^A-Za-z0-9_.:#-]+")
-
-
-def _stable_id(prefix: str, *parts: Any, length: int = 18) -> str:
-    raw = json.dumps(parts, ensure_ascii=False, sort_keys=True, default=str)
-    digest = hashlib.sha256(raw.encode("utf-8", errors="replace")).hexdigest()[:length]
-    return f"{prefix}_{digest}"
 
 
 def _text(value: Any, *, limit: int = 120) -> str:
@@ -230,7 +223,15 @@ def build_semantic_candidate_context(row: Mapping[str, Any]) -> dict[str, Any]:
         "kind": CONTEXT_KIND,
         "schema_version": SCHEMA_VERSION,
         "context_id": _text(row.get("context_id"), limit=120)
-        or _stable_id("semctx", producer, refs, row.get("scope"), row.get("topic_epoch")),
+        or stable_json_tuple_id(
+            "semctx",
+            producer,
+            refs,
+            row.get("scope"),
+            row.get("topic_epoch"),
+            ensure_ascii=False,
+            length=18,
+        ),
         "producer": producer,
         "source_refs": refs,
         "source_ref_count": len(refs),

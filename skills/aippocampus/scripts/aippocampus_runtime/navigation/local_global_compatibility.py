@@ -12,13 +12,13 @@ instruction to act.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.core import stable_text_join_digest
 from aippocampus_runtime.navigation import (
     local_global_fixture_catalog,
     local_global_sections,
@@ -70,13 +70,6 @@ CLAIM_RANK = {
 }
 
 
-def stable_hash(*parts: Any, length: int = 16) -> str:
-    digest = hashlib.sha256(
-        "\u241f".join(str(part) for part in parts).encode("utf-8", errors="replace")
-    ).hexdigest()
-    return digest[:length]
-
-
 def _text(value: Any) -> str:
     return str(value or "").strip()
 
@@ -95,7 +88,7 @@ def _safe_id(value: Any, *, prefix: str) -> str:
         and all(char.isalnum() or char in "-_.:#" for char in text)
     ):
         return text
-    return f"{prefix}_{stable_hash(text or prefix, length=12)}"
+    return f"{prefix}_{stable_text_join_digest(text or prefix, sep='\u241f', length=12, blank_falsy=False)}"
 
 
 def _safe_scope(value: Any) -> str:
@@ -107,7 +100,9 @@ def _safe_scope(value: Any) -> str:
         and all(char.isalnum() or char in "-_.:#" for char in text)
     ):
         return text
-    return "scope_" + stable_hash(text or "missing_scope", length=12)
+    return "scope_" + stable_text_join_digest(
+        text or "missing_scope", sep="\u241f", length=12, blank_falsy=False
+    )
 
 
 def _strings(value: Any, *, limit: int = 12) -> list[str]:

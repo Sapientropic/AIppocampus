@@ -4,12 +4,13 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 from collections import Counter
 from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
+
+from aippocampus_runtime.core import stable_text_join_digest
 
 SCHEMA_VERSION = 1
 REPORT_KIND = "aippocampus_telepathy_coordination_packet_report"
@@ -64,13 +65,6 @@ BOUNDARY_FLAGS = {
 }
 
 
-def stable_hash(*parts: Any, length: int = 16) -> str:
-    digest = hashlib.sha256(
-        "\u241f".join(str(part) for part in parts).encode("utf-8", errors="replace")
-    ).hexdigest()
-    return digest[:length]
-
-
 def _text(value: Any) -> str:
     return str(value or "").strip()
 
@@ -88,7 +82,9 @@ def _safe_case_id(value: Any) -> str:
         and all(char.isalnum() or char in "-_." for char in text)
     ):
         return text
-    return "case_" + stable_hash(text, length=12)
+    return "case_" + stable_text_join_digest(
+        text, sep="\u241f", length=12, blank_falsy=False
+    )
 
 
 def _safe_scope(value: Any) -> str:
@@ -100,7 +96,9 @@ def _safe_scope(value: Any) -> str:
         and all(char.isalnum() or char in "-_.:#" for char in text)
     ):
         return text
-    return "scope_" + stable_hash(text or "missing_scope", length=12)
+    return "scope_" + stable_text_join_digest(
+        text or "missing_scope", sep="\u241f", length=12, blank_falsy=False
+    )
 
 
 def _safe_owner(value: Any) -> str:
@@ -111,7 +109,9 @@ def _safe_owner(value: Any) -> str:
         and all(char.isalnum() or char in "-_." for char in text)
     ):
         return text
-    return "owner_" + stable_hash(text or "missing_owner", length=12)
+    return "owner_" + stable_text_join_digest(
+        text or "missing_owner", sep="\u241f", length=12, blank_falsy=False
+    )
 
 
 def _safe_int(value: Any) -> int:
@@ -258,9 +258,12 @@ def normalize_coordination_packet(row: Mapping[str, Any]) -> dict[str, Any]:
         "kind": PACKET_KIND,
         "schema_version": SCHEMA_VERSION,
         "case_id": case_id,
-        "packet_id": "telepathy_" + stable_hash(case_id, scope, owner_ref, mode),
+        "packet_id": "telepathy_"
+        + stable_text_join_digest(
+            case_id, scope, owner_ref, mode, sep="\u241f", blank_falsy=False
+        ),
         "scope": scope,
-        "scope_hash": stable_hash(scope),
+        "scope_hash": stable_text_join_digest(scope, sep="\u241f", blank_falsy=False),
         "coordination_mode": mode,
         "owner_ref": owner_ref,
         "status": status,

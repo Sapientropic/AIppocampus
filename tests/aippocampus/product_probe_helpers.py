@@ -45,6 +45,18 @@ def write_clean_source_thread(clean_dir: Path, rows: Sequence[Mapping[str, objec
     )
 
 
+def source_ref_fixture(
+    label: str = "test",
+    *,
+    message_id: str = "msg-1",
+    line: int = 7,
+    thread_prefix: str = "session",
+) -> dict[str, Any]:
+    """Return a compact source-ref row for product-probe fixtures."""
+
+    return {"thread_key": f"{thread_prefix}:{label}", "message_id": message_id, "line": line}
+
+
 def run_cli_json(
     test: unittest.TestCase,
     *args: str,

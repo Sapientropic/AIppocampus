@@ -9,7 +9,12 @@ import re
 from collections.abc import Iterable, Mapping
 from typing import Any
 
-from aippocampus_runtime.core import compact_text, now_utc, sanitize_external_model_text
+from aippocampus_runtime.core import (
+    compact_text,
+    now_utc,
+    sanitize_external_model_text,
+    stable_json_join_id,
+)
 
 SCHEMA_VERSION = 1
 PACKET_KIND = "aippocampus_thread_story_activation_packet"
@@ -39,12 +44,6 @@ CANNOT_CLAIM = [
     "user_or_persona_truth",
     "live_answer_quality_lift",
 ]
-
-
-def _stable_id(prefix: str, *parts: Any, length: int = 18) -> str:
-    raw = "\n".join(json.dumps(part, ensure_ascii=False, sort_keys=True, default=str) for part in parts)
-    digest = hashlib.sha1(raw.encode("utf-8", errors="replace")).hexdigest()
-    return f"{prefix}_{digest[:length]}"
 
 
 def _safe_text(value: Any, *, max_chars: int) -> str:
@@ -101,7 +100,15 @@ def _merge_source_refs(rows: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]
 
 
 def _ref_tokens(refs: Iterable[Mapping[str, Any]]) -> list[str]:
-    return [_stable_id("sr", dict(ref), length=12) for ref in refs]
+    return [
+        stable_json_join_id(
+            "sr",
+            dict(ref),
+            ensure_ascii=False,
+            length=12,
+        )
+        for ref in refs
+    ]
 
 
 def _unique(values: Iterable[Any], *, limit: int = 6) -> list[str]:
@@ -125,7 +132,12 @@ def _supported_rows(rows: Iterable[Mapping[str, Any]]) -> tuple[list[dict[str, A
     for row in rows:
         if str(row.get("kind") or row.get("row_kind") or "").strip() not in SUPPORTED_ROW_KINDS:
             continue
-        row_id = _safe_text(row.get("id") or row.get("packet_row_id") or _stable_id("row", row), max_chars=90)
+        row_id = _safe_text(
+            row.get("id")
+            or row.get("packet_row_id")
+            or stable_json_join_id("row", row, ensure_ascii=False),
+            max_chars=90,
+        )
         if _source_refs(row.get("source_refs") or row.get("evidence_refs") or []):
             backed.append(dict(row))
         else:
@@ -151,7 +163,12 @@ def build_thread_story_packet(rows: Iterable[Mapping[str, Any]], *, created_at: 
         if row.get(key)
     ]
     source_ref_tokens = _ref_tokens(source_refs)
-    packet_id = _stable_id("thread_story_packet", story_anchor, source_ref_tokens)
+    packet_id = stable_json_join_id(
+        "thread_story_packet",
+        story_anchor,
+        source_ref_tokens,
+        ensure_ascii=False,
+    )
     return {
         "schema_version": SCHEMA_VERSION,
         "kind": PACKET_KIND,
@@ -175,7 +192,12 @@ def build_thread_story_packet(rows: Iterable[Mapping[str, Any]], *, created_at: 
             "dont_decode_instruction_present": True,
         },
         "private_navigation": {
-            "route_handle": _stable_id("thread_story_route", packet_id, source_ref_tokens),
+            "route_handle": stable_json_join_id(
+                "thread_story_route",
+                packet_id,
+                source_ref_tokens,
+                ensure_ascii=False,
+            ),
             "symbolic_channel_count": len(symbolic_hashes),
             "symbolic_channel_hashes": symbolic_hashes,
             "raw_story_text_serialized": False,

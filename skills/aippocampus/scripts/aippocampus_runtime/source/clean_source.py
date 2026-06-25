@@ -23,6 +23,7 @@ from aippocampus_runtime.core import (
     locate_rollout,
     now_utc,
     resolve_artifact_path,
+    stable_text_join_id,
 )
 from aippocampus_runtime.io_integrity import atomic_write_json, atomic_write_jsonl
 from aippocampus_runtime.recall.route_notes import extract_route_note_candidates_for_source
@@ -82,22 +83,14 @@ def _provider_normalization_loss(provider: ConversationProvider) -> dict[str, An
     return report
 
 
-def _stable_id(prefix: str, *parts: object, length: int = 16) -> str:
-    # Clean-source ids are persisted join keys across messages, turns, sidecars,
-    # and sync bundles. This legacy digest is not a password hash; changing it
-    # needs an explicit source-id migration plan with alias lookup.
-    material = "\0".join(str(part or "") for part in parts)
-    digest = hashlib.sha1(material.encode("utf-8")).hexdigest()
-    return f"{prefix}_{digest[:length]}"
-
-
 def _content_sha256(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
 def _semantic_key(role: str, phase: str, text: str) -> str:
     normalized = " ".join(text.casefold().split())
-    return _stable_id("sem", role, phase, normalized, length=20)
+    # Clean-source ids are persisted join keys across messages, turns, sidecars,
+    return stable_text_join_id("sem", role, phase, normalized, sep="\0", length=20)
 
 
 def _clean_behavior_events(
@@ -112,13 +105,14 @@ def _clean_behavior_events(
         line_no = event.get("line")
         event_kind = str(event.get("event_kind") or "")
         hard_event_kind = str(event.get("hard_event_kind") or event_kind)
-        event_id = _stable_id(
+        event_id = stable_text_join_id(
             "evt",
             source_id,
             line_no,
             event_kind,
             event.get("call_ref"),
             event.get("observation_sha256") or event.get("input_sha256"),
+            sep="\0",
             length=20,
         )
         status = str(event.get("status") or "observed")
@@ -265,8 +259,14 @@ def _clean_messages(
             if (int(turn.get("tool_call_count") or 0) + int(turn.get("tool_output_count") or 0)) > 0:
                 _count_loss(loss_accounting, "tool_only_turn")
 
-        turn_uid = _stable_id(
-            "turn", source_id, turn_id, turn.get("user_line"), turn.get("start_line"), length=20
+        turn_uid = stable_text_join_id(
+            "turn",
+            source_id,
+            turn_id,
+            turn.get("user_line"),
+            turn.get("start_line"),
+            sep="\0",
+            length=20,
         )
         kept: list[dict] = []
         selected_ids = {id(item) for item in (user, assistant) if item}
@@ -292,13 +292,14 @@ def _clean_messages(
                 metadata={"provider": source_provider, "phase": phase},
             )
             content_sha256 = _content_sha256(text)
-            message_id = _stable_id(
+            message_id = stable_text_join_id(
                 "msg",
                 source_id,
                 item.get("line"),
                 item.get("role"),
                 phase,
                 content_sha256,
+                sep="\0",
                 length=20,
             )
             kept_item = {
@@ -386,6 +387,14 @@ def build_clean_source(
     provider: ConversationProvider | None = None,
     redaction_profiles: list[str] | None = None,
 ) -> dict[str, Any]:
+    """Build normalized clean source from a host transcript.
+
+    aippocampus-stage-map: locate provider/source -> normalize host turns ->
+    materialize clean messages/events -> emit canonical manifests/profiles.
+    Keep persisted id-shape changes outside this orchestrator unless paired
+    with an explicit source-id alias migration.
+    """
+
     cwd = Path(cwd).resolve()
     active_provider = provider or create_conversation_provider(
         provider_name,
@@ -409,7 +418,7 @@ def build_clean_source(
 
     source_thread_key = active_provider.thread_key(source_path, meta)
     source_key = source_thread_key or meta.get("id") or str(source_path.resolve())
-    source_id = _stable_id("src", source_key, length=20)
+    source_id = stable_text_join_id("src", source_key, sep="\0", length=20)
     clean_messages, clean_turns, loss_accounting = _clean_messages(
         messages,
         turns,

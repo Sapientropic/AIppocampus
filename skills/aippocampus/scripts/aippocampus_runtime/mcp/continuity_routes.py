@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 import base64
-import hashlib
 import json
 import time
 from pathlib import Path
 from typing import Any
 
-from aippocampus_runtime.core import compact_text, sanitize_external_model_text
+from aippocampus_runtime.core import compact_text, sanitize_external_model_text, stable_text_id
 from aippocampus_runtime.mcp.domain_handles import continuity_domain_route_handle
 from aippocampus_runtime.recall.continuity_domains import (
     clean_source_fingerprint,
@@ -27,11 +26,6 @@ MAX_HANDLE_REFS = 3
 def _safe_text(value: Any, chars: int) -> str:
     sanitized, _ = sanitize_external_model_text(str(value or ""))
     return compact_text(sanitized, chars)
-
-
-def _stable_id(*parts: Any, prefix: str = "route") -> str:
-    raw = "\n".join(str(part or "") for part in parts)
-    return f"{prefix}_{hashlib.sha256(raw.encode('utf-8')).hexdigest()[:18]}"
 
 
 def _clean_ref(item: dict[str, Any]) -> dict[str, Any]:
@@ -107,7 +101,7 @@ def _domain_routes(
     for pointer in pointers:
         domain_id = str(pointer.get("domain_id") or "")
         source_refs = [ref for ref in pointer.get("source_refs") or [] if isinstance(ref, dict)]
-        route_id = _stable_id("continuity_domain", domain_id)
+        route_id = stable_text_id("route", "continuity_domain", domain_id, length=18)
         handle = continuity_domain_route_handle(
             source_dir=clean_source_dir,
             snapshot_path=snapshot_path,
@@ -158,7 +152,7 @@ def _pathlet_routes(
         source_refs = [ref for ref in source_refs if ref]
         if not source_refs:
             continue
-        route_id = _stable_id("pathlet", pathlet_id, source_refs)
+        route_id = stable_text_id("route", "pathlet", pathlet_id, source_refs, length=18)
         handle = _source_ref_handle(
             source_dir=clean_source_dir,
             route_id=route_id,

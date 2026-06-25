@@ -11,13 +11,17 @@ counterfactual hypothesis become causal truth on its own.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from aippocampus_runtime.core import compact_text, now_utc, sanitize_external_model_text
+from aippocampus_runtime.core import (
+    compact_text,
+    now_utc,
+    sanitize_external_model_text,
+    stable_json_join_id,
+)
 from aippocampus_runtime.registry.api import unique_preserve
 
 SCHEMA_VERSION = 1
@@ -51,12 +55,6 @@ SOURCE_REF_KEYS = (
     "line",
     "source_line",
 )
-
-
-def _stable_id(prefix: str, *parts: Any, length: int = 18) -> str:
-    raw = "\n".join(json.dumps(part, ensure_ascii=False, sort_keys=True) for part in parts)
-    digest = hashlib.sha1(raw.encode("utf-8", errors="replace")).hexdigest()
-    return f"{prefix}_{digest[:length]}"
 
 
 def _safe_text(value: Any, *, max_chars: int) -> str:
@@ -149,7 +147,17 @@ def _candidate_from_row(row: Mapping[str, Any]) -> dict[str, Any] | None:
         return None
     pattern_id = _safe_text(row.get("pattern_id") or row.get("id"), max_chars=100)
     summary = _safe_text(row.get("summary") or row.get("correction_surface"), max_chars=360)
-    record_id = _stable_id("aar_v2", input_kind, pattern_id, action_class, source_refs, summary)
+    record_id = stable_json_join_id(
+        "aar_v2",
+        input_kind,
+        pattern_id,
+        action_class,
+        source_refs,
+        summary,
+        ensure_ascii=False,
+        length=18,
+        default_str=False,
+    )
     return {
         "schema_version": SCHEMA_VERSION,
         "kind": AAR_V2_RECORD_KIND,

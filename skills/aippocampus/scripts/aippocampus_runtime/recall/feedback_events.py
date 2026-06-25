@@ -10,14 +10,13 @@ source and explicit source reopen.
 
 from __future__ import annotations
 
-import hashlib
 import json
 from collections import Counter
 from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
-from aippocampus_runtime.core import now_utc
+from aippocampus_runtime.core import now_utc, stable_json_join_id
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 from aippocampus_runtime.source.io_kernel import safe_float
 
@@ -92,19 +91,23 @@ class InvalidFeedbackValue(ValueError):
         super().__init__(f"unsupported {field}: {value!r}; expected one of {', '.join(valid)}")
 
 
-def _stable_hash(prefix: str, *parts: Any, length: int = 18) -> str:
-    raw = "\n".join(json.dumps(part, ensure_ascii=False, sort_keys=True) for part in parts)
-    digest = hashlib.sha1(raw.encode("utf-8", errors="replace")).hexdigest()[:length]
-    return f"{prefix}_{digest}"
-
-
 def _safe_token(value: Any, *, fallback_prefix: str) -> str:
     text = str(value or "").strip()
     if not text:
-        return _stable_hash(fallback_prefix, "")
+        return stable_json_join_id(
+            fallback_prefix,
+            "",
+            ensure_ascii=False,
+            default_str=False,
+        )
     safe = redact_sensitive_values(redact_private_paths(text))
     if safe != text or "\\" in safe or "/" in safe:
-        return _stable_hash(fallback_prefix, safe)
+        return stable_json_join_id(
+            fallback_prefix,
+            safe,
+            ensure_ascii=False,
+            default_str=False,
+        )
     return safe[:160]
 
 

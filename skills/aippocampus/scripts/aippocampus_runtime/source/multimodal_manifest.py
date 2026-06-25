@@ -131,14 +131,6 @@ def _as_mapping(value: Any) -> Mapping[str, Any]:
     return value if isinstance(value, Mapping) else {}
 
 
-def _as_list(value: Any) -> list[str]:
-    if isinstance(value, str):
-        return [value] if value.strip() else []
-    if not isinstance(value, list):
-        return []
-    return [str(item) for item in value if str(item or "").strip()]
-
-
 def _block(code: str, *, field: str, message: str) -> dict[str, str]:
     return {"code": code, "field": field, "message": message}
 

@@ -8,10 +8,10 @@ instead of inventing a parallel evidence or memory-fact layer.
 
 from __future__ import annotations
 
-import hashlib
 from collections.abc import Iterable, Mapping
 from typing import Any, Literal
 
+from aippocampus_runtime.core import stable_text_non_null_join_id
 from aippocampus_runtime.navigation import attention_route_tokens
 
 ACTION_GRAMMARS = {
@@ -44,11 +44,6 @@ OutputMode = Literal[
     "bounded_evidence",
 ]
 ClaimPermission = Literal["no_claim_before_reopen", "bounded_claim_allowed", "blocked"]
-
-
-def _stable_id(*parts: Any, prefix: str = "rt") -> str:
-    payload = "|".join(str(part) for part in parts if part is not None)
-    return f"{prefix}_{hashlib.sha256(payload.encode('utf-8')).hexdigest()[:16]}"
 
 
 def _compact_source_handle(handle: Mapping[str, Any]) -> dict[str, Any]:
@@ -163,7 +158,8 @@ def build_route_packet(candidate: Mapping[str, Any]) -> dict[str, Any]:
     scope; otherwise source-backed candidates remain reopenable routes.
     """
 
-    route_id = str(candidate.get("route_id") or "") or _stable_id(
+    route_id = str(candidate.get("route_id") or "") or stable_text_non_null_join_id(
+        "rt",
         candidate.get("case_id"),
         candidate.get("source_handles"),
     )

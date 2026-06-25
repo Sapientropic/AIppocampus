@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from aippocampus_runtime.core import dict_or_empty
+
 READY_SURFACE_STATUSES = {"current", "ready", "installed_package"}
 
 
@@ -23,12 +25,8 @@ def _ready_or_status(item: dict[str, Any]) -> str:
     return "ready" if _surface_ready(item) else _status_or_unknown(item)
 
 
-def _as_dict(value: Any) -> dict[str, Any]:
-    return value if isinstance(value, dict) else {}
-
-
 def _agent_fallback_entry(llm: dict[str, Any]) -> dict[str, Any]:
-    worker = _as_dict(llm.get("cognitive_worker"))
+    worker = dict_or_empty(llm.get("cognitive_worker"))
     resolved = str(worker.get("resolved_mode") or "").strip()
     diagnostic_status = str(worker.get("status") or "unknown").strip() or "unknown"
     ready = resolved == "agent_fallback" and bool(worker.get("agent_fallback_available"))

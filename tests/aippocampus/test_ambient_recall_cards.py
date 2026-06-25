@@ -13,9 +13,25 @@ from aippocampus_runtime.recall import (
 
 class AmbientRecallCardTests(unittest.TestCase):
     def test_card_ids_use_sha256_cache_fingerprints(self) -> None:
-        raw = "\n".join(["scent", "ambient", "route"])
+        payload = cards.ambient_recall_from_decision(
+            {
+                "decision": "scent",
+                "confidence": "medium",
+                "candidates": [
+                    {
+                        "title": "ambient route",
+                        "thread_key": "route",
+                        "matched_terms": ["scent"],
+                    }
+                ],
+                "evidence": [],
+                "working_memory": [],
+                "cognitive_map": [],
+            }
+        )
+        raw = "\n".join(["scent", "ambient route: scent", "route", "scent"])
         self.assertEqual(
-            cards._stable_id(["scent", "ambient", "route"]),
+            payload["cards"][0]["card_id"],
             "arc_" + hashlib.sha256(raw.encode("utf-8")).hexdigest()[:18],
         )
 

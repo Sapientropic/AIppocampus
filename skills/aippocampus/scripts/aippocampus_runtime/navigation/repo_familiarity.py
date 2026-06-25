@@ -16,18 +16,13 @@ import subprocess
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-from aippocampus_runtime.core import compact_text
+from aippocampus_runtime.core import compact_text, stable_text_join_id
 
 SCHEMA_VERSION = 1
 CARD_KIND = "source_backed_familiarity_card"
 PACKET_KIND = "aippocampus_repo_familiarity_packet"
 DEFAULT_MAX_CARDS = 3
 DEFAULT_MAX_PACKET_BYTES = 1800
-
-
-def _stable_id(parts: Sequence[Any]) -> str:
-    raw = "\n".join(str(part or "") for part in parts)
-    return "rfc_" + hashlib.sha256(raw.encode("utf-8")).hexdigest()[:18]
 
 
 def _repo_rel(path: str | Path) -> str:
@@ -412,7 +407,13 @@ def build_repo_familiarity_cards(manifest: Mapping[str, Any]) -> list[dict[str, 
             "schema_version": SCHEMA_VERSION,
             "kind": CARD_KIND,
             "domain": "repo",
-            "card_id": _stable_id([landmark, first_source, source_refs[0].get("path")]),
+            "card_id": stable_text_join_id(
+                "rfc",
+                landmark,
+                first_source,
+                source_refs[0].get("path"),
+                length=18,
+            ),
             "landmark": landmark,
             "category": _text(row.get("kind"), 80),
             "boundary": _text(row.get("boundary"), 320),

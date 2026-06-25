@@ -10,10 +10,9 @@ from aippocampus_runtime.ops import activation_payload_compaction as runner
 from aippocampus_runtime.ops.activation_authority_audit import (
     apply_dead_letter_candidate_manifest,
 )
+from aippocampus_runtime.source.io_kernel import write_jsonl_dict_rows
+from tests.aippocampus.product_probe_helpers import source_ref_fixture
 
-
-def source_ref(label: str) -> dict[str, Any]:
-    return {"thread_key": f"session:{label}", "message_id": "msg-1", "line": 7}
 
 def dead_letter_manifest() -> dict[str, Any]:
     surfaces: list[dict[str, Any]] = []
@@ -30,19 +29,13 @@ def dead_letter_manifest() -> dict[str, Any]:
                 "conflict_key": f"dead-letter-{surface_kind}",
                 "pruning_action": "retire",
                 "wrong_route_drag_count": 4,
-                "source_refs": [source_ref(label)],
+                "source_refs": [source_ref_fixture(label)],
                 "provenance_pointer": f"{surface_kind}:test-fixture",
             }
         )
     return apply_dead_letter_candidate_manifest(
         surfaces,
         applied_at="2026-06-05T06:00:00Z",
-    )
-
-def write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
-    path.write_text(
-        "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows),
-        encoding="utf-8",
     )
 
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
@@ -65,7 +58,7 @@ def write_owner_fixtures(root: Path) -> tuple[Path, Path, Path, Path, Path]:
                                 "kind": "aippocampus_ambient_card",
                                 "title": "Raw ambient title",
                                 "summary": "Raw ambient summary",
-                                "source_refs": [source_ref("ambient")],
+                                "source_refs": [source_ref_fixture("ambient")],
                                 "related_fingerprints": ["card:ambient-card-1"],
                             }
                         ],
@@ -80,7 +73,7 @@ def write_owner_fixtures(root: Path) -> tuple[Path, Path, Path, Path, Path]:
     )
 
     working_memory = root / "working_memory.jsonl"
-    write_jsonl(
+    write_jsonl_dict_rows(
         working_memory,
         [
             {
@@ -91,13 +84,13 @@ def write_owner_fixtures(root: Path) -> tuple[Path, Path, Path, Path, Path]:
                 "title": "Raw working title",
                 "summary": "Raw working summary",
                 "activation_cues": ["raw working cue"],
-                "source_refs": [source_ref("working")],
+                "source_refs": [source_ref_fixture("working")],
             }
         ],
     )
 
     semantic_triggers = root / "semantic_triggers.jsonl"
-    write_jsonl(
+    write_jsonl_dict_rows(
         semantic_triggers,
         [
             {
@@ -110,7 +103,7 @@ def write_owner_fixtures(root: Path) -> tuple[Path, Path, Path, Path, Path]:
                 "aliases": ["raw semantic alias"],
                 "activation_cues": ["raw semantic cue"],
                 "when_to_use": "Raw semantic guidance",
-                "source_refs": [source_ref("semantic")],
+                "source_refs": [source_ref_fixture("semantic")],
             }
         ],
     )
@@ -127,7 +120,7 @@ def write_owner_fixtures(root: Path) -> tuple[Path, Path, Path, Path, Path]:
                         "lock_id": "active-lock-1",
                         "state": "ready",
                         "support_level": "scent",
-                        "candidate_refs": [source_ref("active-lock")],
+                        "candidate_refs": [source_ref_fixture("active-lock")],
                         "query_aliases": ["Raw active lock alias"],
                         "route_reasons": ["Raw active lock route"],
                         "prompt_fingerprint": "prompt_fp",

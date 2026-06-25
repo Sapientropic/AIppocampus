@@ -13,6 +13,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.core import stable_json_tuple_id
 from aippocampus_runtime.source.behavior_events import extract_rollout_behavior_events
 
 SCHEMA_VERSION = 1
@@ -90,11 +91,6 @@ class LearningReplayInputError(ValueError):
         self.code = code
 
 
-def _stable_id(prefix: str, *parts: Any) -> str:
-    encoded = json.dumps(parts, ensure_ascii=False, sort_keys=True, default=str)
-    return f"{prefix}_{hashlib.sha256(encoded.encode('utf-8')).hexdigest()[:16]}"
-
-
 def _refs(row: Mapping[str, Any], *, source_label: str) -> list[dict[str, Any]]:
     refs = row.get("source_refs")
     if isinstance(refs, Sequence) and not isinstance(refs, (str, bytes)):
@@ -151,7 +147,15 @@ def sanitize_events_for_private_replay(
             if key in ALLOWED_KEYS and key not in RAW_BLOCKED_KEYS
         }
         row["kind"] = "behavior_event"
-        row["event_id"] = str(row.get("event_id") or _stable_id("private_event", index, event.get("line")))
+        row["event_id"] = str(
+            row.get("event_id")
+            or stable_json_tuple_id(
+                "private_event",
+                index,
+                event.get("line"),
+                ensure_ascii=False,
+            )
+        )
         row["sequence_index"] = int(row.get("sequence_index") or index)
         row["source_refs"] = _refs(event, source_label=source_label)
         row.setdefault("scope", "project_or_task_family")

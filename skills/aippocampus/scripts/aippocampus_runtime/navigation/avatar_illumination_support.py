@@ -3,8 +3,6 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 import re
 from collections.abc import Iterable, Mapping, Sequence
 from typing import Any
@@ -140,11 +138,6 @@ MACRO_LAYER_CUES: dict[str, tuple[str, ...]] = {
         "路线图",
     ),
 }
-
-
-def stable_id(*parts: Any, prefix: str, length: int = 18) -> str:
-    raw = "\0".join(json.dumps(part, sort_keys=True, default=str) for part in parts)
-    return f"{prefix}_" + hashlib.sha256(raw.encode("utf-8")).hexdigest()[:length]
 
 
 def text(value: Any, limit: int = 180) -> str:

@@ -8,24 +8,17 @@ guidance, while gappy or wrong-order paths only ask the agent to reopen source.
 
 from __future__ import annotations
 
-import hashlib
-import json
 from collections.abc import Mapping, Sequence
 from typing import Any
 
 from aippocampus_runtime.coding import episode_arcs
+from aippocampus_runtime.core import stable_json_join_id
 from aippocampus_runtime.recall.narrative_packet import compile_narrative_packet
 
 REPORT_KIND = "aippocampus_episode_arc_route_producer_report"
 REPORT_SCHEMA_VERSION = "aippocampus.episode_arc_route_producer_report.v1"
 ACTION_REOPENABLE_ROUTE = "reopenable_route"
 ACTION_DIRECTION_WITH_REF = "direction_with_ref"
-
-
-def _stable_id(prefix: str, *parts: Any, length: int = 14) -> str:
-    raw = "\0".join(json.dumps(part, ensure_ascii=False, sort_keys=True, default=str) for part in parts)
-    digest = hashlib.sha256(raw.encode("utf-8", errors="replace")).hexdigest()[:length]
-    return f"{prefix}_{digest}"
 
 
 def public_event(
@@ -146,7 +139,15 @@ def _route_material(arc: Mapping[str, Any], narrative_packet: Mapping[str, Any])
     pathlet_kind = _pathlet_kind(arc)
     next_action, action_grammar = _route_action(pathlet_kind, gaps)
     return {
-        "case_id": _stable_id("episode_route", _family(arc), arc.get("event_order"), gaps),
+        "case_id": stable_json_join_id(
+            "episode_route",
+            _family(arc),
+            arc.get("event_order"),
+            gaps,
+            sep="\0",
+            ensure_ascii=False,
+            length=14,
+        ),
         "family": _family(arc),
         "pathlet_kind": pathlet_kind,
         "event_order": [str(item) for item in arc.get("event_order") or []],

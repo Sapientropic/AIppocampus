@@ -8,13 +8,12 @@ is downgraded or dropped unless local clean source supports it.
 
 from __future__ import annotations
 
-import hashlib
 import json
 import re
 from pathlib import Path
 from typing import Any
 
-from aippocampus_runtime.core import compact_text, sanitize_external_model_text
+from aippocampus_runtime.core import compact_text, sanitize_external_model_text, stable_text_join_id
 from aippocampus_runtime.recall.ambient_cards import (
     ACTIVE_GENTLE_NUDGE,
     CANDIDATE,
@@ -114,11 +113,6 @@ def _unique_preserve(items: list[str], limit: int | None = None) -> list[str]:
         if limit is not None and len(out) >= limit:
             break
     return out
-
-
-def _stable_id(parts: list[Any]) -> str:
-    raw = "\n".join(str(part or "") for part in parts)
-    return "warc_" + hashlib.sha256(raw.encode("utf-8")).hexdigest()[:18]
 
 
 def _is_distinctive_trace_term(term: str) -> bool:
@@ -258,8 +252,12 @@ def prompt_trace_fallback_cards(
         cards.append(
             with_card_provenance(
                 {
-                    "card_id": _stable_id(
-                        ["prompt_trace_fallback", key_line, json.dumps(refs, sort_keys=True)]
+                    "card_id": stable_text_join_id(
+                        "warc",
+                        "prompt_trace_fallback",
+                        key_line,
+                        json.dumps(refs, sort_keys=True),
+                        length=18,
                     ),
                     "theme": compact_text("prior trace: " + ", ".join(shared[:4]), 100),
                     "resonance": "medium",

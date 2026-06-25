@@ -7,12 +7,13 @@ keeping source truth in clean-source messages, route notes, and event refs.
 
 from __future__ import annotations
 
-import hashlib
 import json
 import re
 from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
+
+from aippocampus_runtime.core import stable_text_id
 
 SOURCE_TEXTURE_SCHEMA_VERSION = 1
 SOURCE_TEXTURE_KIND = "aippocampus_source_texture"
@@ -89,12 +90,6 @@ SAFE_SOURCE_REF_FIELDS = (
     "raw_end_line",
     "clean_ordinal",
 )
-
-
-def _stable_id(prefix: str, *parts: Any) -> str:
-    raw = "\n".join(str(part or "") for part in parts)
-    digest = hashlib.sha256(raw.encode("utf-8", errors="replace")).hexdigest()[:20]
-    return f"{prefix}_{digest}"
 
 
 def _count_jsonl_rows(path: Path, default: int = 0) -> int:
@@ -201,7 +196,7 @@ def _base_row(
     row: dict[str, Any] = {
         "kind": SOURCE_TEXTURE_KIND,
         "schema_version": SOURCE_TEXTURE_SCHEMA_VERSION,
-        "texture_id": _stable_id(
+        "texture_id": stable_text_id(
             signal_kind[:12], signal_kind, signal_detail, clean_source_refs, clean_event_refs
         ),
         "surface_kind": f"source_texture:{signal_kind}",
@@ -478,7 +473,7 @@ def build_source_texture_boundary_hints(
                 continue
             canonical_id = str(segment.get("segment_id") or segment.get("id") or "segment")
             detail = str(row.get("signal_detail") or signal_kind)
-            hint_id = _stable_id("sthint", canonical_id, row.get("texture_id"), detail)
+            hint_id = stable_text_id("sthint", canonical_id, row.get("texture_id"), detail, length=20)
             hints.append(
                 {
                     "kind": "aippocampus_source_texture_boundary_hint",

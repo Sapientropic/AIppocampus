@@ -246,6 +246,73 @@ def stable_json_id(prefix: str, *parts: object, length: int = 18) -> str:
     return f"{prefix}_{digest}"
 
 
+def _stable_digest(text: str, *, length: int) -> str:
+    return hashlib.sha256(text.encode("utf-8", errors="replace")).hexdigest()[:length]
+
+
+def stable_text_join_digest(
+    *parts: object,
+    sep: str = "\n",
+    length: int = 20,
+    blank_falsy: bool = True,
+) -> str:
+    """Return a digest for legacy text-joined identity material.
+
+    New runtime code should usually prefer `stable_json_id()` or
+    `stable_text_id()`. This lower-level helper exists to retire copied
+    `_stable_id`/`stable_hash` functions while preserving old persisted join
+    keys whose separator, hash algorithm, or falsy handling was already part of
+    the source/reopen contract.
+    """
+
+    if blank_falsy:
+        raw = sep.join(str(part or "") for part in parts)
+    else:
+        raw = sep.join(str(part) for part in parts)
+    return _stable_digest(raw, length=length)
+
+
+def stable_text_join_id(
+    prefix: str,
+    *parts: object,
+    sep: str = "\n",
+    length: int = 20,
+    blank_falsy: bool = True,
+) -> str:
+    """Return a prefixed id for legacy text-joined identity material."""
+
+    digest = stable_text_join_digest(
+        *parts,
+        sep=sep,
+        length=length,
+        blank_falsy=blank_falsy,
+    )
+    return f"{prefix}_{digest}"
+
+
+def stable_text_non_null_join_id(
+    prefix: str,
+    *parts: object,
+    sep: str = "|",
+    length: int = 16,
+) -> str:
+    """Return a prefixed id for legacy text joins that skipped only `None`.
+
+    Some route-token helpers preserved falsey values like `0` and `False` but
+    omitted absent values. Keep that behavior distinct from
+    `stable_text_join_id(..., blank_falsy=True)` so cleanup does not collapse
+    meaningful falsey identity material.
+    """
+
+    digest = stable_text_join_digest(
+        *(part for part in parts if part is not None),
+        sep=sep,
+        length=length,
+        blank_falsy=False,
+    )
+    return f"{prefix}_{digest}"
+
+
 def stable_text_id(prefix: str, *parts: object, length: int = 20) -> str:
     """Return the legacy text-joined stable id without cloning local helpers.
 
@@ -258,6 +325,107 @@ def stable_text_id(prefix: str, *parts: object, length: int = 20) -> str:
     raw = "\n".join(str(part or "") for part in parts)
     digest = hashlib.sha256(raw.encode("utf-8", errors="replace")).hexdigest()[:length]
     return f"{prefix}_{digest}"
+
+
+def stable_json_tuple_digest(
+    *parts: object,
+    length: int = 16,
+    ensure_ascii: bool = True,
+) -> str:
+    """Return a digest for legacy tuple-JSON identity material.
+
+    Several pre-core modules hashed `json.dumps(parts)` rather than each part
+    independently. Keeping that shape canonical prevents well-meant helper
+    cleanup from changing persisted ids or source-join keys.
+    """
+
+    raw = json.dumps(parts, ensure_ascii=ensure_ascii, sort_keys=True, default=str)
+    return _stable_digest(raw, length=length)
+
+
+def stable_json_tuple_id(
+    prefix: str,
+    *parts: object,
+    length: int = 16,
+    ensure_ascii: bool = True,
+) -> str:
+    """Return a prefixed id for legacy tuple-JSON identity material."""
+
+    return f"{prefix}_{stable_json_tuple_digest(*parts, length=length, ensure_ascii=ensure_ascii)}"
+
+
+def stable_json_digest(
+    value: object,
+    *,
+    length: int = 16,
+    ensure_ascii: bool = True,
+    separators: tuple[str, str] | None = None,
+    default_str: bool = True,
+) -> str:
+    """Return a digest for one canonical JSON value.
+
+    This is for persisted identity material that already committed to a
+    specific JSON dump shape. Prefer `stable_json_id()` for new structural ids;
+    pass `separators` only while deleting an old local helper whose compact JSON
+    bytes are part of the existing row identity.
+    """
+
+    if default_str:
+        raw = json.dumps(
+            value,
+            ensure_ascii=ensure_ascii,
+            sort_keys=True,
+            separators=separators,
+            default=str,
+        )
+    else:
+        raw = json.dumps(value, ensure_ascii=ensure_ascii, sort_keys=True, separators=separators)
+    return _stable_digest(raw, length=length)
+
+
+def stable_json_join_id(
+    prefix: str,
+    *parts: object,
+    sep: str = "\n",
+    length: int = 18,
+    ensure_ascii: bool = True,
+    default_str: bool = True,
+) -> str:
+    """Return a prefixed id for legacy joined JSON part material."""
+
+    if default_str:
+        raw = sep.join(
+            json.dumps(part, ensure_ascii=ensure_ascii, sort_keys=True, default=str)
+            for part in parts
+        )
+    else:
+        raw = sep.join(json.dumps(part, ensure_ascii=ensure_ascii, sort_keys=True) for part in parts)
+    return f"{prefix}_{_stable_digest(raw, length=length)}"
+
+
+def stable_json_lines_id(
+    prefix: str,
+    *parts: object,
+    length: int = 18,
+    ensure_ascii: bool = True,
+    default_str: bool = True,
+) -> str:
+    """Return a prefixed id for legacy newline-separated JSON identity rows.
+
+    Use only when migrating an existing helper whose line-by-line JSON
+    serialization is already observable. New structural ids should use
+    `stable_json_id()` so future agents do not invent another almost-identical
+    hash format.
+    """
+
+    if default_str:
+        raw = "\n".join(
+            json.dumps(part, ensure_ascii=ensure_ascii, sort_keys=True, default=str)
+            for part in parts
+        )
+    else:
+        raw = "\n".join(json.dumps(part, ensure_ascii=ensure_ascii, sort_keys=True) for part in parts)
+    return f"{prefix}_{_stable_digest(raw, length=length)}"
 
 
 def stable_bytes_id(prefix: str, value: bytes | str, *, length: int = 20) -> str:

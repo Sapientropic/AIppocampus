@@ -7,11 +7,12 @@ source-reopen guidance. Raw model wording is never evidence.
 
 from __future__ import annotations
 
-import hashlib
 import json
 from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
 from typing import Any
+
+from aippocampus_runtime.core import stable_json_join_id
 
 SCHEMA_VERSION = 1
 SEMANTIC_INBOX_KIND = "aippocampus_semantic_learning_inbox_report"
@@ -42,11 +43,6 @@ PROMOTABLE_KINDS = {
     "cross_thread_resonance_candidate",
 }
 BACKSTAGE_KINDS = {"blind_spot_candidate", "one_sided_route_candidate"}
-
-
-def _stable_id(prefix: str, *parts: Any, length: int = 18) -> str:
-    raw = "\n".join(json.dumps(part, ensure_ascii=False, sort_keys=True) for part in parts)
-    return f"{prefix}_{hashlib.sha256(raw.encode('utf-8', errors='replace')).hexdigest()[:length]}"
 
 
 def _safe_refs(value: Any, *, limit: int = 6) -> list[dict[str, Any]]:
@@ -288,7 +284,16 @@ def intake_semantic_learning_hypotheses(
             {
                 "kind": "aippocampus_semantic_learning_inbox_row",
                 "schema_version": SCHEMA_VERSION,
-                "hypothesis_id": str(row.get("hypothesis_id") or _stable_id("sem_hyp", candidate_kind, refs)),
+                "hypothesis_id": str(
+                    row.get("hypothesis_id")
+                    or stable_json_join_id(
+                        "sem_hyp",
+                        candidate_kind,
+                        refs,
+                        ensure_ascii=False,
+                        default_str=False,
+                    )
+                ),
                 "candidate_kind": candidate_kind,
                 "source_refs": refs,
                 "source_ref_count": len(refs),
@@ -388,8 +393,12 @@ def adjudicate_semantic_learning_hypotheses(
                 {
                     "kind": "aippocampus_promoted_semantic_learning_guidance_candidate",
                     "schema_version": SCHEMA_VERSION,
-                    "guidance_candidate_id": _stable_id(
-                        "sem_guidance_candidate", row.get("hypothesis_id"), candidate_kind
+                    "guidance_candidate_id": stable_json_join_id(
+                        "sem_guidance_candidate",
+                        row.get("hypothesis_id"),
+                        candidate_kind,
+                        ensure_ascii=False,
+                        default_str=False,
                     ),
                     "hypothesis_id": row.get("hypothesis_id"),
                     "candidate_kind": candidate_kind,
@@ -484,7 +493,13 @@ def surface_semantic_learning_guidance(
             {
                 "kind": SEMANTIC_GUIDANCE_KIND,
                 "schema_version": SCHEMA_VERSION,
-                "guidance_id": _stable_id("sem_guidance", candidate_id, query_terms),
+                "guidance_id": stable_json_join_id(
+                    "sem_guidance",
+                    candidate_id,
+                    query_terms,
+                    ensure_ascii=False,
+                    default_str=False,
+                ),
                 "title": "Source-backed semantic learning guidance",
                 "guidance_text": text,
                 "next_action": next_action,

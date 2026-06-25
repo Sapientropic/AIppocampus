@@ -1,16 +1,11 @@
 from __future__ import annotations
 
 import json
-import subprocess
-import sys
 import unittest
-from pathlib import Path
 
 from aippocampus_runtime.contracts import executable_command_violations
+from tests.aippocampus.cli_fixtures import run_aippocampus_cli
 from tests.aippocampus.frontstage_assertions import assert_compact_frontstage_payload
-
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 
 
 class AippocampusCliRecoveryCardCoreTests(unittest.TestCase):
@@ -21,16 +16,7 @@ class AippocampusCliRecoveryCardCoreTests(unittest.TestCase):
     foreground-action contract that ordinary agents rely on during failures.
     """
 
-    def run_cli(self, *args: str) -> subprocess.CompletedProcess[str]:
-        return subprocess.run(
-            [sys.executable, "-m", "aippocampus_runtime.cli.facade", *args],
-            cwd=SCRIPTS,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            capture_output=True,
-            check=False,
-        )
+    run_cli = staticmethod(run_aippocampus_cli)
 
     def test_agent_parent_json_is_foreground_chooser_not_argparse(self) -> None:
         proc = self.run_cli("agent", "--json")

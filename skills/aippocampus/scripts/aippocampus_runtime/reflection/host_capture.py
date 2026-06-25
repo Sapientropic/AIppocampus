@@ -3,13 +3,11 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 import re
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from aippocampus_runtime.core import compact_text, now_utc
+from aippocampus_runtime.core import compact_text, now_utc, stable_json_tuple_id
 from aippocampus_runtime.learning_loop import core as learning_core
 from aippocampus_runtime.reflection import reconsolidation as corr
 from aippocampus_runtime.source import behavior_events
@@ -123,11 +121,6 @@ def _optional_list(value: Any) -> list[Any]:
     return [value]
 
 
-def _stable_id(prefix: str, *parts: Any) -> str:
-    encoded = json.dumps(parts, ensure_ascii=False, sort_keys=True, default=str)
-    return f"{prefix}_{hashlib.sha256(encoded.encode('utf-8')).hexdigest()[:16]}"
-
-
 def _host_scope(payload: Mapping[str, Any]) -> str:
     return compact_text(str(payload.get("scope") or "project_or_task_family"), 160)
 
@@ -209,25 +202,34 @@ def _post_tool_behavior_event(
     path_bits = behavior_events.path_breadcrumbs(raw_input, command)
     path_fingerprint = str(payload.get("path_category_fingerprint") or "")
     if not path_fingerprint:
-        path_fingerprint = _stable_id(
+        path_fingerprint = stable_json_tuple_id(
             "host_pathcat",
             path_bits.get("path_categories"),
             path_bits.get("path_extensions"),
             path_bits.get("path_fingerprints"),
+            ensure_ascii=False,
         )
     target_fingerprint = str(payload.get("target_fingerprint") or "")
     if not target_fingerprint:
-        target_fingerprint = _stable_id(
+        target_fingerprint = stable_json_tuple_id(
             "host_target",
             command_family,
             target_class,
             path_fingerprint,
             payload.get("issue_ids") or [],
+            ensure_ascii=False,
         )
     event_id = compact_text(
         str(payload.get("event_id") or payload.get("tool_call_id") or payload.get("call_id") or ""),
         160,
-    ) or _stable_id("host_post_tool", tool_name, command_family, failure_family, refs)
+    ) or stable_json_tuple_id(
+        "host_post_tool",
+        tool_name,
+        command_family,
+        failure_family,
+        refs,
+        ensure_ascii=False,
+    )
     row: dict[str, Any] = {
         "kind": "behavior_event",
         "event_id": event_id,

@@ -3,11 +3,10 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 from collections.abc import Iterable, Mapping, Sequence
 from typing import Any
 
+from aippocampus_runtime.core import stable_json_id
 from aippocampus_runtime.ops.route_readiness import safe_source_refs
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 from aippocampus_runtime.recall.authority import (
@@ -41,12 +40,6 @@ SIGNAL_PRODUCER_BOUNDARIES = {
     "working_memory": "working_memory_candidate_not_source_fact",
     "continuity_domain": "domain_pointer_not_source_fact",
 }
-
-
-def _stable_id(*parts: Any, prefix: str, length: int = 20) -> str:
-    raw = "\0".join(json.dumps(part, sort_keys=True, default=str) for part in parts)
-    digest = hashlib.sha256(raw.encode("utf-8", errors="replace")).hexdigest()[:length]
-    return f"{prefix}_{digest}"
 
 
 def _safe_text(value: Any, chars: int = 220) -> str:
@@ -108,12 +101,13 @@ def normalize_continuity_signal(row: Mapping[str, Any]) -> dict[str, Any] | None
         return None
     signal_kind = _safe_text(row.get("signal_kind") or row.get("kind") or producer, 100)
     source_refs = safe_source_refs(row.get("source_refs") or row.get("event_refs"))
-    signal_id = _safe_text(row.get("signal_id"), 100) or _stable_id(
+    signal_id = _safe_text(row.get("signal_id"), 100) or stable_json_id(
+        "sig",
         producer,
         signal_kind,
         row.get("signal_labels") or row.get("labels"),
         source_refs,
-        prefix="sig",
+        length=20,
     )
     signal = {
         "signal_id": signal_id,
@@ -145,7 +139,7 @@ def _ordered_pathlet_fingerprint(pathlets: Sequence[Mapping[str, Any]]) -> str:
                 [_ref_key(ref) for ref in pathlet.get("ordered_source_refs") or [] if isinstance(ref, Mapping)],
             ]
         )
-    return _stable_id(ordered, prefix="pathorder")
+    return stable_json_id("pathorder", ordered, length=20)
 
 
 def project_situation_glyph(
@@ -179,11 +173,12 @@ def project_situation_glyph(
         limit=12,
     )
     path_order = _ordered_pathlet_fingerprint(pathlet_rows)
-    glyph_id = _stable_id(
+    glyph_id = stable_json_id(
+        "glyph",
         [signal.get("signal_id") for signal in normalized],
         path_order,
         [(boundary.get("pin_id"), boundary.get("effect")) for boundary in boundary_rows],
-        prefix="glyph",
+        length=20,
     )
     source_refs = _dedupe_refs(
         [ref for signal in normalized for ref in signal.get("source_refs") or []],

@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 from collections.abc import Mapping
 from typing import Any
+
+from aippocampus_runtime.core import stable_json_lines_id
 
 SCHEMA_VERSION = 1
 KIND = "posture_relation_policy_row"
@@ -13,11 +13,6 @@ KIND = "posture_relation_policy_row"
 
 def _text(value: Any) -> str:
     return str(value or "").strip()
-
-
-def _stable_id(prefix: str, *parts: Any) -> str:
-    raw = "\n".join(json.dumps(part, ensure_ascii=False, sort_keys=True) for part in parts)
-    return f"{prefix}_{hashlib.sha256(raw.encode('utf-8', errors='replace')).hexdigest()[:18]}"
 
 
 def promotion_gate(
@@ -50,11 +45,13 @@ def promotion_gate(
     row = {
         "schema_version": SCHEMA_VERSION,
         "kind": KIND,
-        "policy_id": _stable_id(
+        "policy_id": stable_json_lines_id(
             "posture_policy",
             candidate.get("candidate_id"),
             candidate.get("relation"),
             scope,
+            ensure_ascii=False,
+            default_str=False,
         ),
         "candidate_id": _text(candidate.get("candidate_id")),
         "accepted": accepted,

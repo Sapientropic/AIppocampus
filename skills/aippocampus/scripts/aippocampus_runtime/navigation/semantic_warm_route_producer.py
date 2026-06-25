@@ -9,20 +9,15 @@ those tokens.
 
 from __future__ import annotations
 
-import hashlib
 from collections.abc import Iterable, Mapping
 from typing import Any
 
+from aippocampus_runtime.core import stable_text_non_null_join_id
 from aippocampus_runtime.navigation import attention_hot_router
 from aippocampus_runtime.warm_ambient import scout_profiles
 
 SEMANTIC_WARM_ROUTE_KIND = "aippocampus_semantic_warm_route_producer_fixture"
 SCHEMA_VERSION = 1
-
-
-def _stable_id(*parts: Any, prefix: str = "warmrt") -> str:
-    payload = "|".join(str(part) for part in parts if part is not None)
-    return f"{prefix}_{hashlib.sha256(payload.encode('utf-8')).hexdigest()[:16]}"
 
 
 def _strings(value: Any, *, limit: int = 8) -> list[str]:
@@ -97,7 +92,8 @@ def project_semantic_warm_route_tokens(rows: Iterable[Mapping[str, Any]]) -> lis
         scout_variant = str(row.get("scout_variant") or "direct")
         source_ref_fingerprints = _strings(row.get("source_ref_fingerprints"))
         candidate_fingerprint = str(row.get("candidate_fingerprint") or "")
-        token_id = str(row.get("token_id") or "") or _stable_id(
+        token_id = str(row.get("token_id") or "") or stable_text_non_null_join_id(
+            "warmrt",
             scout_family,
             scout_variant,
             candidate_fingerprint,

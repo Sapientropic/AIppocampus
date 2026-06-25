@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import os
 import sys
@@ -17,6 +16,7 @@ from aippocampus_runtime.contracts import (
     foreground_shell_action,
     foreground_template_action,
 )
+from aippocampus_runtime.core import stable_text_id
 from aippocampus_runtime.registry.api import registry_paths
 from aippocampus_runtime.source.agent_self_note_actions import (
     append_error_payload as build_append_error_payload,
@@ -48,12 +48,6 @@ CURRENT_THREAD_ENV_KEYS = (
     "CODEX_THREAD_ID",
     "CODEX_SESSION_ID",
 )
-
-
-def _stable_id(prefix: str, *parts: Any) -> str:
-    raw = "\n".join(str(part or "") for part in parts)
-    digest = hashlib.sha256(raw.encode("utf-8", errors="replace")).hexdigest()[:20]
-    return f"{prefix}_{digest}"
 
 
 def current_thread_self_note_route(
@@ -91,6 +85,9 @@ def current_thread_self_note_route(
             raw_identity = thread_key_from_rollout(rollout_path, meta)
             source = "explicit_rollout"
             current_thread_available = True
+        # aippocampus-debt-ok: broad-exception-boundary
+        # Current-thread discovery is a best-effort route hint. A bad rollout
+        # path must fall through to safer identity fallbacks, not block note UI.
         except Exception:
             raw_identity = ""
     if not raw_identity:
@@ -100,6 +97,9 @@ def current_thread_self_note_route(
             raw_identity = thread_key_from_rollout(rollout_path, meta)
             source = "codex_rollout"
             current_thread_available = True
+        # aippocampus-debt-ok: broad-exception-boundary
+        # Rollout lookup crosses host-local files that can disappear mid-run;
+        # keep the foreground route usable and report the final source kind.
         except Exception:
             raw_identity = ""
     if not raw_identity:
@@ -113,7 +113,7 @@ def current_thread_self_note_route(
     if not raw_identity:
         raw_identity = workspace_thread_key(cwd_path)
 
-    public_thread_key = _stable_id("current_thread", raw_identity, cwd_path.name)
+    public_thread_key = stable_text_id("current_thread", raw_identity, cwd_path.name, length=20)
     source_ref = {
         "thread_key": public_thread_key,
         "source_id": (

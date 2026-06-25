@@ -8,13 +8,12 @@ It is not a persistent all-pairs graph and it does not create source truth.
 
 from __future__ import annotations
 
-import hashlib
 import json
 from collections import Counter
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from aippocampus_runtime.core import compact_text
+from aippocampus_runtime.core import compact_text, stable_json_join_id
 from aippocampus_runtime.navigation import avatar_posture, local_global_compatibility
 from aippocampus_runtime.navigation.local_global_source_shape import (
     build_local_global_source_shape_descriptor,
@@ -35,12 +34,6 @@ DECLARED_RELATIONS = {
 
 def _text(value: Any) -> str:
     return str(value or "").strip()
-
-
-def _stable_id(prefix: str, *parts: Any) -> str:
-    raw = "\n".join(json.dumps(part, ensure_ascii=False, sort_keys=True) for part in parts)
-    digest = hashlib.sha1(raw.encode("utf-8", errors="replace")).hexdigest()[:18]
-    return f"{prefix}_{digest}"
 
 
 def _safe_refs(value: Any) -> list[dict[str, Any]]:
@@ -92,7 +85,13 @@ def normalize_atlas_section(row: Mapping[str, Any], *, index: int = 0) -> dict[s
         if row.get("posture_id")
         else avatar_posture.reduce_avatar_posture(row)
     )
-    section_id = _text(row.get("section_id") or row.get("id")) or _stable_id("section", index, row)
+    section_id = _text(row.get("section_id") or row.get("id")) or stable_json_join_id(
+        "section",
+        index,
+        row,
+        ensure_ascii=False,
+        default_str=False,
+    )
     source_refs = _safe_refs(row.get("source_refs"))
     return {
         "section_id": section_id,
@@ -207,7 +206,14 @@ def hard_overlap_edges(selected: Sequence[Mapping[str, Any]]) -> list[dict[str, 
                 status = "needs_source_reopen"
             edges.append(
                 {
-                    "edge_id": _stable_id("hard_edge", left["section_id"], right["section_id"], result),
+                    "edge_id": stable_json_join_id(
+                        "hard_edge",
+                        left["section_id"],
+                        right["section_id"],
+                        result,
+                        ensure_ascii=False,
+                        default_str=False,
+                    ),
                     "edge_kind": "hard_overlap_edge",
                     "from_section_id": left["section_id"],
                     "to_section_id": right["section_id"],
@@ -242,7 +248,15 @@ def normalize_declared_edge(
         return None
     status = "active" if refs and not event.get("stale") else "needs_source_reopen"
     return {
-        "edge_id": _stable_id("declared_edge", event.get("source_event_id"), source_id, target_id, relation),
+        "edge_id": stable_json_join_id(
+            "declared_edge",
+            event.get("source_event_id"),
+            source_id,
+            target_id,
+            relation,
+            ensure_ascii=False,
+            default_str=False,
+        ),
         "edge_kind": "declared_edge",
         "source_event_id": _text(event.get("source_event_id") or event.get("event_id")),
         "from_section_id": source_id,
@@ -316,7 +330,13 @@ def compact_foreground_lanes(
             lane_action = "reopen_anchor_source_first"
         lanes.append(
             {
-                "lane_id": _stable_id("lane", section["section_id"], role),
+                "lane_id": stable_json_join_id(
+                    "lane",
+                    section["section_id"],
+                    role,
+                    ensure_ascii=False,
+                    default_str=False,
+                ),
                 "role": role,
                 "section_id": section["section_id"],
                 "title": section["title"],
@@ -379,8 +399,20 @@ def materialize_macro_field_atlas(
     source_shape_descriptor = build_local_global_source_shape_descriptor(
         selected,
         producer="macro_field_atlas",
-        case_id=_stable_id("macro_field_atlas", query, sorted(known_ids)),
-        source_shape_id=_stable_id("macro_field_source_shape", query, sorted(known_ids)),
+        case_id=stable_json_join_id(
+            "macro_field_atlas",
+            query,
+            sorted(known_ids),
+            ensure_ascii=False,
+            default_str=False,
+        ),
+        source_shape_id=stable_json_join_id(
+            "macro_field_source_shape",
+            query,
+            sorted(known_ids),
+            ensure_ascii=False,
+            default_str=False,
+        ),
     )
     projection = compact_foreground_lanes(
         selected,

@@ -8,11 +8,10 @@ phrasing, while only evidence cards carry source-backed snippets.
 
 from __future__ import annotations
 
-import hashlib
 import re
 from typing import Any
 
-from aippocampus_runtime.core import compact_text, sanitize_external_model_text
+from aippocampus_runtime.core import compact_text, sanitize_external_model_text, stable_text_id
 from aippocampus_runtime.recall.ambient_card_hygiene import demote_no_ref_active_cards
 from aippocampus_runtime.recall.ambient_policy import policy_payload_for_working_memory
 from aippocampus_runtime.recall.authority import with_authority_fields, with_trust_fields
@@ -64,14 +63,13 @@ GENERIC_ISSUE_SUMMARY_RE = re.compile(
 RECENT_TURN_MISMATCH_WINDOW = 20
 
 
-def _stable_id(parts: list[Any]) -> str:
-    raw = "\n".join(str(part or "") for part in parts)
-    return "arc_" + hashlib.sha256(raw.encode("utf-8")).hexdigest()[:18]
-
-
 def _safe_text(value: Any, chars: int) -> str:
     sanitized, _ = sanitize_external_model_text(str(value or ""))
     return compact_text(sanitized, chars)
+
+
+def _card_id(*parts: Any) -> str:
+    return stable_text_id("arc", *parts, length=18)
 
 
 def _clean_terms(values: Any, *, limit: int = 6) -> list[str]:
@@ -461,9 +459,7 @@ def _evidence_card(item: dict[str, Any], *, deep_archival: bool = False) -> dict
     return with_authority_fields(
         with_card_provenance(
             {
-                "card_id": _stable_id(
-                    [EVIDENCE, theme, ref.get("thread_key"), ref.get("line"), key_line]
-                ),
+                "card_id": _card_id(EVIDENCE, theme, ref.get("thread_key"), ref.get("line"), key_line),
                 "theme": theme,
                 "resonance": "high",
                 "support_level": EVIDENCE,
@@ -612,7 +608,7 @@ def _candidate_card(item: dict[str, Any], *, support_level: str = SCENT) -> dict
     terms = _clean_terms(item.get("matched_terms") or item.get("keywords") or [])
     ref = _source_ref_from_item(item)
     return with_card_provenance({
-        "card_id": _stable_id([support_level, theme, item.get("thread_key"), ",".join(terms)]),
+        "card_id": _card_id(support_level, theme, item.get("thread_key"), ",".join(terms)),
         "theme": theme,
         "resonance": "medium",
         "support_level": support_level,
@@ -636,7 +632,7 @@ def _working_memory_card(item: dict[str, Any]) -> dict[str, Any]:
     refs = [ref for ref in refs if ref]
     is_dream = item.get("candidate_type") == "dream_hypothesis"
     card: dict[str, Any] = {
-        "card_id": _stable_id([CANDIDATE, theme, item.get("route"), refs[0] if refs else ""]),
+        "card_id": _card_id(CANDIDATE, theme, item.get("route"), refs[0] if refs else ""),
         "theme": theme,
         "resonance": "medium",
         "support_level": CANDIDATE,
@@ -690,7 +686,7 @@ def _cognitive_map_card(item: dict[str, Any]) -> dict[str, Any]:
         source_boundary.setdefault("not_source_backed_route", True)
         source_boundary.setdefault("source_reopen_required_for_claims", True)
     return with_card_provenance({
-        "card_id": _stable_id([SCENT, theme, item.get("route_id")]),
+        "card_id": _card_id(SCENT, theme, item.get("route_id")),
         "theme": theme,
         "resonance": "medium",
         "support_level": SCENT,
@@ -715,7 +711,7 @@ def _continuity_domain_pointer_card(item: dict[str, Any]) -> dict[str, Any]:
     source_boundary.setdefault("source_reopen_required_for_facts", True)
     return with_card_provenance(
         {
-            "card_id": _stable_id([CONTINUITY_DOMAIN_POINTER, domain_id, theme]),
+            "card_id": _card_id(CONTINUITY_DOMAIN_POINTER, domain_id, theme),
             "card_kind": CONTINUITY_DOMAIN_POINTER,
             "domain_id": domain_id,
             "theme": theme,
@@ -750,7 +746,7 @@ def _dedupe_cards(cards: list[dict[str, Any]], *, limit: int) -> list[dict[str, 
     for card in cards:
         key = str(card.get("card_id") or "")
         if not key:
-            key = _stable_id([card.get("theme"), card.get("support_level")])
+            key = _card_id(card.get("theme"), card.get("support_level"))
             card = {**card, "card_id": key}
         if key in seen:
             continue

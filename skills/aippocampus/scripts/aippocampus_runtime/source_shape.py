@@ -8,13 +8,12 @@ active recall, Dream, Macro, avatar, or foreground surfaces see them.
 
 from __future__ import annotations
 
-import hashlib
 import json
 from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from aippocampus_runtime.core import compact_text, now_utc
+from aippocampus_runtime.core import compact_text, now_utc, stable_json_join_id
 from aippocampus_runtime.ops.route_readiness import safe_source_refs
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 from aippocampus_runtime.runtime_recheck_events import RUNTIME_RECHECK_EVENT_KIND
@@ -68,12 +67,6 @@ RUNTIME_TERM_GLOSSARY = {
     "degrade_to": "The lower-authority surface a blocked or suspect descriptor falls back to.",
     "runtime_recheck_event": "A direction-only event that asks consumers to reopen or recheck source.",
 }
-
-
-def _stable_id(*parts: Any, prefix: str, length: int = 20) -> str:
-    raw = "\0".join(json.dumps(part, sort_keys=True, default=str) for part in parts)
-    digest = hashlib.sha256(raw.encode("utf-8", errors="replace")).hexdigest()[:length]
-    return f"{prefix}_{digest}"
 
 
 def _text(value: Any, limit: int = 120) -> str:
@@ -408,12 +401,14 @@ def build_source_shape_descriptor(
     )
     state = _descriptor_state(diagnostics, derivation_summary=derivation_summary)
     dominant = _dominant_guard(diagnostics)
-    safe_shape_id = _text(source_shape_id, 160) or _stable_id(
+    safe_shape_id = _text(source_shape_id, 160) or stable_json_join_id(
+        "source_shape",
         producer,
         refs,
         safe_snapshot,
         derivation_summary,
-        prefix="source_shape",
+        sep="\0",
+        length=20,
     )
     degrade_to = str(dominant.get("degrade_to")) if dominant else "reopenable_route"
     projection_allowed = state == "complete" and dominant is None

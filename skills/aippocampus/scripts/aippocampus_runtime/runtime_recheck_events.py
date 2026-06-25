@@ -3,12 +3,10 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 from collections.abc import Iterable, Mapping
 from typing import Any
 
-from aippocampus_runtime.core import compact_text, now_utc
+from aippocampus_runtime.core import compact_text, now_utc, stable_json_join_id
 from aippocampus_runtime.ops.route_readiness import safe_source_refs
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 
@@ -50,12 +48,6 @@ ACCEPTED_DREAM_REVIEW_STATES = {
     "source_adjudicated",
 }
 ACCEPTED_ADJUDICATION_STATUSES = {"accepted", "approved"}
-
-
-def _stable_id(*parts: Any, prefix: str, length: int = 20) -> str:
-    raw = "\0".join(json.dumps(part, sort_keys=True, default=str) for part in parts)
-    digest = hashlib.sha256(raw.encode("utf-8", errors="replace")).hexdigest()[:length]
-    return f"{prefix}_{digest}"
 
 
 def _safe_text(value: Any, limit: int = 120) -> str:
@@ -108,11 +100,20 @@ def build_runtime_recheck_event(
     safe_scope = _safe_scope(scope)
     safe_shape = _safe_text(source_shape_id, 160)
     surfaces = _target_surfaces(target_surfaces)
-    dedupe_key = _stable_id(safe_reason, safe_shape, safe_scope, refs, prefix="rre_dedupe")
+    dedupe_key = stable_json_join_id(
+        "rre_dedupe",
+        safe_reason,
+        safe_shape,
+        safe_scope,
+        refs,
+        sep="\0",
+        length=20,
+    )
     payload = {
         "kind": RUNTIME_RECHECK_EVENT_KIND,
         "schema_version": RUNTIME_RECHECK_SCHEMA_VERSION,
-        "event_id": event_id or _stable_id(producer, dedupe_key, prefix="rre"),
+        "event_id": event_id
+        or stable_json_join_id("rre", producer, dedupe_key, sep="\0", length=20),
         "dedupe_key": dedupe_key,
         "producer": _safe_text(producer, 100),
         "reason_code": safe_reason,
@@ -221,7 +222,13 @@ def _dream_finding_id(finding: Mapping[str, Any]) -> str:
         value = finding.get(key)
         if value:
             return _safe_text(value, 140)
-    return _stable_id(finding.get("title"), finding.get("summary"), prefix="dream_finding")
+    return stable_json_join_id(
+        "dream_finding",
+        finding.get("title"),
+        finding.get("summary"),
+        sep="\0",
+        length=20,
+    )
 
 
 def _dream_finding_adjudicated(finding: Mapping[str, Any]) -> bool:

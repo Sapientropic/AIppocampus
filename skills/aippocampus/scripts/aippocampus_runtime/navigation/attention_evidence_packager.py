@@ -8,16 +8,11 @@ unconflicted source input.
 
 from __future__ import annotations
 
-import hashlib
 from collections.abc import Iterable, Mapping
 from typing import Any
 
+from aippocampus_runtime.core import stable_text_non_null_join_id
 from aippocampus_runtime.navigation import attention_router_contract
-
-
-def _stable_id(*parts: Any, prefix: str = "epkg") -> str:
-    payload = "|".join(str(part) for part in parts if part is not None)
-    return f"{prefix}_{hashlib.sha256(payload.encode('utf-8')).hexdigest()[:16]}"
 
 
 def _text(value: Any, default: str = "") -> str:
@@ -53,7 +48,8 @@ def _baseline_window(window: Mapping[str, Any]) -> dict[str, Any]:
         if span_range:
             handle[key] = span_range
     return {
-        "window_id": _text(window.get("window_id")) or _stable_id(window.get("source_id")),
+        "window_id": _text(window.get("window_id"))
+        or stable_text_non_null_join_id("epkg", window.get("source_id")),
         "source_id": handle["source_id"],
         "segment_id": handle["segment_id"],
         "retrieval_rank": int(window.get("retrieval_rank") or 0),
