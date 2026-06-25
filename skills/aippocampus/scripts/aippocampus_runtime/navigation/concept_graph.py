@@ -20,15 +20,36 @@ from typing import Any, Callable
 from aippocampus_runtime.core import now_utc
 from aippocampus_runtime.navigation import concept_graph_edge_policy as edge_policy
 from aippocampus_runtime.navigation.associations import (
-    load_associations,
     normalize_term,
     term_is_noise,
 )
 from aippocampus_runtime.navigation.concept_graph_build_state import (
     CONCEPT_GRAPH_BUILD_POLICY_VERSION,
-    BuildConceptResolver,
     build_input_manifest,
+    load_meta_json,
     unchanged_input_reuse_payload,
+)
+from aippocampus_runtime.navigation.concept_graph_contributions import (
+    CONTRIBUTION_MANIFEST_META_KEY,
+    CONTRIBUTION_MANIFEST_SCHEMA_VERSION,
+    EDGE_CONTRIBUTION_COLUMNS,
+    EDGE_CONTRIBUTION_TABLE,
+    NODE_CONTRIBUTION_COLUMNS,
+    NODE_CONTRIBUTION_TABLE,
+    TEMP_EDGE_CONTRIBUTION_TABLE,
+    TEMP_NODE_CONTRIBUTION_TABLE,
+    ConceptGraphContributionModel,
+    ConceptResolver,
+    all_contribution_keys,
+    collect_affected_contribution_keys,
+    contribution_rows,
+    copy_all_temp_contributions,
+    copy_temp_contribution_slices,
+    delete_official_contribution_slices,
+    diff_contribution_manifests,
+    manifest_entries,
+    materialize_input_contributions,
+    project_contribution_read_model,
 )
 from aippocampus_runtime.navigation.concept_graph_expand import (
     DEFAULT_MAX_DEGREE as DEFAULT_MAX_DEGREE,
@@ -68,16 +89,6 @@ from aippocampus_runtime.navigation.concept_graph_schema import (
 from aippocampus_runtime.navigation.concept_graph_schema import (
     default_concept_graph_path as default_concept_graph_path,
 )
-from aippocampus_runtime.navigation.concept_graph_subconscious_ingress import (
-    collect_subconscious_edges,
-)
-from aippocampus_runtime.navigation.concept_graph_term_quality import (
-    ConceptTermQualityTracker,
-    TermQualityContext,
-)
-from aippocampus_runtime.navigation.concept_graph_timeline_ingress import (
-    collect_timeline_edges,
-)
 from aippocampus_runtime.navigation.concept_kinds import (
     classify_concept_kind,
 )
@@ -90,7 +101,6 @@ from aippocampus_runtime.navigation.concept_lifecycle import (
     lifecycle_diagnostics,
     normalize_graph_status,
 )
-from aippocampus_runtime.registry.api import unique_preserve
 
 # Public graph artifact schema. Additive rebuildable SQLite cache columns are
 # migrated in concept_graph_schema.py without changing this artifact contract.
@@ -127,6 +137,7 @@ EDGE_TYPE_MULTIPLIER = {
     "co_occurs": 0.55,
 }
 
+
 def concept_normalized(value: str) -> str:
     return normalize_term(value).casefold()
 
@@ -138,42 +149,6 @@ def concept_is_noise(value: str) -> bool:
     if term.casefold() in {item.casefold() for item in GENERIC_CONCEPT_TERMS}:
         return True
     return term_is_noise(term)
-
-
-def phrase_stat_for_item(item: dict[str, Any] | None) -> dict[str, Any] | None:
-    if not isinstance(item, dict):
-        return None
-    stat = item.get("term_quality") or item.get("phrase_stat")
-    return dict(stat) if isinstance(stat, dict) else None
-
-
-def association_item_reviewed(item: dict[str, Any]) -> bool:
-    kind_status = str(
-        item.get("concept_kind_status") or item.get("kind_status") or ""
-    ).casefold()
-    if kind_status == "reviewed":
-        return True
-    return any(
-        isinstance(source, dict) and source.get("source") == "registry_anchor"
-        for source in item.get("threads") or []
-    )
-
-
-def association_term_quality_context(
-    item: dict[str, Any],
-    *,
-    ingress: str,
-    source_threads: list[str],
-) -> TermQualityContext:
-    return TermQualityContext(
-        ingress=ingress,
-        reviewed=association_item_reviewed(item),
-        static_anchor=association_item_reviewed(item),
-        source_backed=bool(source_threads),
-        hit_count=int(item.get("hit_count") or 0),
-        thread_count=len(source_threads),
-        phrase_stat=phrase_stat_for_item(item),
-    )
 
 
 def concept_id_for(label: str) -> str:
@@ -396,6 +371,60 @@ def count_by_column(con: sqlite3.Connection, column: str) -> dict[str, int]:
     return {str(row["value"] or "unknown"): int(row["count"] or 0) for row in rows}
 
 
+def _write_build_meta(
+    con: sqlite3.Connection,
+    *,
+    metadata: dict[str, Any],
+    quality_gate: dict[str, Any],
+    input_manifest: dict[str, Any],
+    contribution_manifest: dict[str, Any],
+    build_diagnostics: dict[str, Any],
+) -> None:
+    payloads = {
+        **metadata,
+        "quality_gate": quality_gate,
+        "input_manifest": input_manifest,
+        CONTRIBUTION_MANIFEST_META_KEY: contribution_manifest,
+        "build_metadata": metadata,
+        "build_diagnostics": build_diagnostics,
+    }
+    for key, value in payloads.items():
+        con.execute(
+            "INSERT OR REPLACE INTO meta(key, value) VALUES (?, ?)",
+            (key, json.dumps(value, ensure_ascii=False, sort_keys=True)),
+        )
+
+
+def _build_result_payload(
+    con: sqlite3.Connection,
+    *,
+    output_path: Path,
+    metadata: dict[str, Any],
+    input_manifest: dict[str, Any],
+    quality_gate: dict[str, Any],
+    build_diagnostics: dict[str, Any],
+    timeline_edge_count: int,
+    subconscious_edge_count: int,
+) -> dict[str, Any]:
+    concepts = con.execute("SELECT COUNT(*) AS count FROM concepts").fetchone()["count"]
+    edges = con.execute("SELECT COUNT(*) AS count FROM concept_edges").fetchone()["count"]
+    return {
+        **metadata,
+        "output": str(output_path),
+        "input_manifest": input_manifest,
+        "concept_count": concepts,
+        "edge_count": edges,
+        "timeline_edge_count": timeline_edge_count,
+        "subconscious_edge_count": subconscious_edge_count,
+        "concept_kind_counts": count_by_column(con, "kind"),
+        "concept_kind_source_counts": count_by_column(con, "kind_source"),
+        "lifecycle": lifecycle_diagnostics(con),
+        "quality_gate": quality_gate,
+        "build_diagnostics": build_diagnostics,
+        "source_boundary": graph_source_boundary(),
+    }
+
+
 def add_bidirectional_edge(
     con: sqlite3.Connection,
     a: str,
@@ -408,7 +437,7 @@ def add_bidirectional_edge(
     thread_count: int = 0,
     lifecycle_reason: str = "staging_default",
     source_thread_key: str | None = None,
-    concept_resolver: BuildConceptResolver | None = None,
+    concept_resolver: ConceptResolver | None = None,
     upsert_edge_fn: Callable[..., None] | None = None,
 ) -> None:
     concept_status, concept_lifecycle_reason = edge_policy.concept_lifecycle_for_edge(
@@ -479,172 +508,165 @@ def build_concept_graph(
     con = connect(output_path)
     try:
         init_schema(con)
-        if reuse := unchanged_input_reuse_payload(
-            con,
-            output_path=output_path,
-            input_manifest=input_manifest,
+        previous_contribution_manifest = load_meta_json(con, CONTRIBUTION_MANIFEST_META_KEY)
+        if previous_contribution_manifest and (
+            reuse := unchanged_input_reuse_payload(
+                con,
+                output_path=output_path,
+                input_manifest=input_manifest,
+            )
         ):
             reuse.setdefault("source_boundary", graph_source_boundary())
             reuse.setdefault("concept_kind_counts", count_by_column(con, "kind"))
             reuse.setdefault("concept_kind_source_counts", count_by_column(con, "kind_source"))
             reuse.setdefault("lifecycle", lifecycle_diagnostics(con))
+            reuse["build_diagnostics"]["incremental_update_deferred"] = False
+            reuse["build_diagnostics"]["contribution_manifest_reused"] = True
             reuse["build_diagnostics"]["elapsed_ms"] = round(
                 (time.perf_counter() - start) * 1000, 3
             )
             return reuse
-        associations = load_associations(associations_path)
-        reset_graph(con)
-        concept_resolver = BuildConceptResolver(
-            normalize_key=concept_normalized,
-            upsert=upsert_concept,
+
+        contribution_model = ConceptGraphContributionModel(
+            concept_id_for=concept_id_for,
+            concept_normalized=concept_normalized,
+            concept_is_noise=concept_is_noise,
+            edge_weight=edge_weight,
+            add_bidirectional_edge=add_bidirectional_edge,
         )
-        edge_upsert_attempts = 0
-
-        def tracked_upsert_edge(edge_con: sqlite3.Connection, *args: Any, **kwargs: Any) -> None:
-            nonlocal edge_upsert_attempts
-            edge_upsert_attempts += 1
-            upsert_edge(edge_con, *args, **kwargs)
-
-        def resolve_concept(
-            resolve_con: sqlite3.Connection, label: str, **kwargs: Any
-        ) -> str | None:
-            return concept_resolver.resolve(resolve_con, label, **kwargs)
-
-        def add_build_edge(
-            edge_con: sqlite3.Connection, *args: Any, **kwargs: Any
-        ) -> None:
-            add_bidirectional_edge(
-                edge_con,
-                *args,
-                concept_resolver=concept_resolver,
-                upsert_edge_fn=tracked_upsert_edge,
-                **kwargs,
-            )
-
-        term_items = list((associations.get("terms") or {}).values())
-        item_by_normalized = {
-            concept_normalized(str(item.get("term") or "")): item
-            for item in term_items
-            if isinstance(item, dict) and item.get("term")
-        }
-        related_phrase_stats = {
-            key: stat
-            for key, item in item_by_normalized.items()
-            if (stat := phrase_stat_for_item(item)) is not None
-        }
-        term_quality = ConceptTermQualityTracker()
-        quality_gate: dict[str, Any] = {
-            "schema_version": "concept_graph_quality_gate_v1",
-            "min_auto_co_occurs_thread_count": edge_policy.MIN_AUTO_COOCCURS_THREAD_COUNT,
-            "edge_type_status_counts": {},
-            "reason_counts": {},
-        }
-        for item in term_items:
-            if not isinstance(item, dict):
-                continue
-            term = normalize_term(str(item.get("term") or ""))
-            status = "verified" if item.get("status") == "verified" else "staging"
-            lifecycle_reason = "association_verified" if status == "verified" else "association_staging"
-            confidence = float(item.get("confidence") or 0.0)
-            sources = item.get("threads") or []
-            source_threads = unique_preserve(
-                [
-                    str(source.get("thread_key") or "")
-                    for source in sources
-                    if source.get("thread_key")
-                ]
-            )
-            term_context = association_term_quality_context(
-                item,
-                ingress="association",
-                source_threads=source_threads,
-            )
-            if not term_quality.accepts(term, term_context):
-                continue
-            supplied_kind = item.get("concept_kind")
-            supplied_kind_status = item.get("concept_kind_status") or item.get("kind_status")
-            term_id = resolve_concept(
+        materialized = materialize_input_contributions(
+            con,
+            model=contribution_model,
+            associations_path=associations_path,
+            project_timeline_path=project_timeline_path,
+            subconscious_edges_path=subconscious_edges_path,
+            max_related_per_term=max_related_per_term,
+            policy_version=CONCEPT_GRAPH_BUILD_POLICY_VERSION,
+        )
+        quality_gate = materialized["quality_gate"]
+        current_contribution_manifest = materialized["contribution_manifest"]
+        current_entries = manifest_entries(current_contribution_manifest)
+        previous_entries = manifest_entries(previous_contribution_manifest)
+        changed_slices, deleted_slices, changed_families = diff_contribution_manifests(
+            previous_contribution_manifest,
+            current_contribution_manifest,
+        )
+        previous_slice_count = len(previous_entries)
+        current_slice_count = len(current_entries)
+        full_rebuild_fallback_reason = ""
+        projection_diagnostics: dict[str, int] = {}
+        contribution_rows_deleted = {"nodes": 0, "edges": 0}
+        contribution_rows_inserted = {"nodes": 0, "edges": 0}
+        considered_new_nodes = len(
+            contribution_rows(
                 con,
-                term,
-                status=status,
-                lifecycle_reason=lifecycle_reason,
-                hit_count=int(item.get("hit_count") or 0),
-                thread_count=len(source_threads),
-                supplied_kind=supplied_kind,
-                supplied_kind_status=supplied_kind_status,
-                source_backed_kind=bool(supplied_kind)
-                and status == "verified"
-                and bool(source_threads),
+                TEMP_NODE_CONTRIBUTION_TABLE,
+                NODE_CONTRIBUTION_COLUMNS,
             )
-            if not term_id:
-                continue
-            edge_type = "verified_related" if status == "verified" else "co_occurs"
-            related_context = TermQualityContext(
-                ingress="related_term",
-                reviewed=association_item_reviewed(item),
-                static_anchor=association_item_reviewed(item),
-                source_backed=bool(source_threads),
-                hit_count=int(item.get("hit_count") or 0),
-                thread_count=len(source_threads),
+        )
+        considered_new_edges = len(
+            contribution_rows(
+                con,
+                TEMP_EDGE_CONTRIBUTION_TABLE,
+                EDGE_CONTRIBUTION_COLUMNS,
+                edge=True,
             )
-            related_terms = term_quality.filter_terms(
-                list(item.get("related_terms") or []),
-                related_context,
-                phrase_stats_by_term=related_phrase_stats,
-                limit=max(0, int(max_related_per_term)),
+        )
+        if not previous_contribution_manifest or previous_slice_count <= 0:
+            full_rebuild_fallback_reason = "missing_or_legacy_contribution_manifest"
+            reset_graph(con)
+            inserted_nodes, inserted_edges = copy_all_temp_contributions(con)
+            contribution_rows_inserted = {"nodes": inserted_nodes, "edges": inserted_edges}
+            all_concept_ids, all_edge_keys = all_contribution_keys(con)
+            projection_diagnostics = project_contribution_read_model(
+                con,
+                model=contribution_model,
+                concept_ids=all_concept_ids,
+                edge_keys=all_edge_keys,
             )
-            for related in related_terms:
-                edge_status, gate_reason = edge_policy.automatic_co_occurs_expansion_status(
-                    edge_type=edge_type,
-                    status=status,
-                    thread_count=len(source_threads),
-                )
-                edge_reason = gate_reason or lifecycle_reason
-                edge_policy.quality_gate_bucket(quality_gate, edge_type, edge_status)
-                if gate_reason:
-                    edge_policy.quality_gate_reason(quality_gate, gate_reason)
-                add_build_edge(
+            build_mode = "full_rebuild"
+            reset_graph_called = True
+        elif not changed_slices and not deleted_slices:
+            build_mode = "skipped_unchanged_contributions"
+            reset_graph_called = False
+        else:
+            affected_slice_refs = changed_slices | deleted_slices
+            old_concepts, old_edges, old_node_rows, old_edge_rows = (
+                collect_affected_contribution_keys(
                     con,
-                    term,
-                    str(related),
-                    edge_type=edge_type,
-                    confidence=confidence,
-                    status=edge_status,
-                    lifecycle_reason=edge_reason,
-                    evidence_count=int(item.get("hit_count") or 0),
-                    thread_count=len(source_threads),
-                    source_thread_key=source_threads[0] if source_threads else None,
+                    slice_refs=affected_slice_refs,
+                    node_table=NODE_CONTRIBUTION_TABLE,
+                    edge_table=EDGE_CONTRIBUTION_TABLE,
                 )
-        timeline_edge_count = collect_timeline_edges(
-            con,
-            project_timeline_path,
-            term_quality=term_quality,
-            add_bidirectional_edge=add_build_edge,
+            )
+            new_concepts, new_edges, new_node_rows, new_edge_rows = (
+                collect_affected_contribution_keys(
+                    con,
+                    slice_refs=changed_slices,
+                    node_table=TEMP_NODE_CONTRIBUTION_TABLE,
+                    edge_table=TEMP_EDGE_CONTRIBUTION_TABLE,
+                )
+            )
+            deleted_nodes, deleted_edges = delete_official_contribution_slices(
+                con, affected_slice_refs
+            )
+            inserted_nodes, inserted_edges = copy_temp_contribution_slices(
+                con, changed_slices
+            )
+            contribution_rows_deleted = {"nodes": deleted_nodes, "edges": deleted_edges}
+            contribution_rows_inserted = {"nodes": inserted_nodes, "edges": inserted_edges}
+            projection_diagnostics = project_contribution_read_model(
+                con,
+                model=contribution_model,
+                concept_ids=old_concepts | new_concepts,
+                edge_keys=old_edges | new_edges,
+            )
+            projection_diagnostics.update(
+                {
+                    "old_slice_node_rows_considered": old_node_rows,
+                    "old_slice_edge_rows_considered": old_edge_rows,
+                    "new_slice_node_rows_considered": new_node_rows,
+                    "new_slice_edge_rows_considered": new_edge_rows,
+                }
+            )
+            build_mode = "incremental_update"
+            reset_graph_called = False
+
+        parked_edge_contributions = int(
+            con.execute(
+                "SELECT COUNT(*) AS count FROM concept_edge_contributions WHERE status = 'parked'"
+            ).fetchone()["count"]
+            or 0
         )
-        subconscious_edge_count, subconscious_hub_quality = collect_subconscious_edges(
-            con,
-            subconscious_edges_path,
-            term_quality=term_quality,
-            upsert_concept=resolve_concept,
-            upsert_edge=tracked_upsert_edge,
-        )
-        quality_gate["term_quality"] = term_quality.to_payload()
-        quality_gate["subconscious_hub_quality"] = subconscious_hub_quality
         build_diagnostics = {
             "schema_version": "concept_graph_build_diagnostics_v1",
-            "build_mode": "full_rebuild",
-            "incremental_update_deferred": True,
-            "reset_graph_called": True,
+            "build_mode": build_mode,
+            "incremental_update_deferred": False,
+            "reset_graph_called": reset_graph_called,
             "policy_version": CONCEPT_GRAPH_BUILD_POLICY_VERSION,
-            "edge_upsert_attempts": edge_upsert_attempts,
-            **concept_resolver.diagnostics(),
+            "contribution_manifest_schema": CONTRIBUTION_MANIFEST_SCHEMA_VERSION,
+            "previous_contribution_slice_count": previous_slice_count,
+            "current_contribution_slice_count": current_slice_count,
+            "changed_contribution_slice_count": len(changed_slices),
+            "deleted_contribution_slice_count": len(deleted_slices),
+            "changed_families": sorted(changed_families),
+            "node_contribution_rows_considered": considered_new_nodes,
+            "edge_contribution_rows_considered": considered_new_edges,
+            "node_contribution_rows_updated": contribution_rows_inserted["nodes"],
+            "edge_contribution_rows_updated": contribution_rows_inserted["edges"],
+            "node_contribution_rows_deleted": contribution_rows_deleted["nodes"],
+            "edge_contribution_rows_deleted": contribution_rows_deleted["edges"],
+            "parked_edge_contribution_rows": parked_edge_contributions,
+            "full_rebuild_fallback_reason": full_rebuild_fallback_reason or None,
+            **materialized["diagnostics"],
+            **projection_diagnostics,
         }
         build_diagnostics["elapsed_ms"] = round((time.perf_counter() - start) * 1000, 3)
         metadata = {
             "schema_version": CONCEPT_GRAPH_SCHEMA_VERSION,
             "kind": "aippocampus_concept_graph",
             "created_at": now_utc(),
-            "build_mode": "full_rebuild",
+            "build_mode": build_mode,
             "source_associations": str(associations_path),
             "source_project_timeline": str(project_timeline_path)
             if project_timeline_path
@@ -654,45 +676,25 @@ def build_concept_graph(
             else None,
             "max_related_per_term": max_related_per_term,
         }
-        for key, value in metadata.items():
-            con.execute(
-                "INSERT INTO meta(key, value) VALUES (?, ?)",
-                (key, json.dumps(value, ensure_ascii=False)),
-            )
-        con.execute(
-            "INSERT INTO meta(key, value) VALUES (?, ?)",
-            ("quality_gate", json.dumps(quality_gate, ensure_ascii=False)),
-        )
-        con.execute(
-            "INSERT INTO meta(key, value) VALUES (?, ?)",
-            ("input_manifest", json.dumps(input_manifest, ensure_ascii=False, sort_keys=True)),
-        )
-        con.execute(
-            "INSERT INTO meta(key, value) VALUES (?, ?)",
-            ("build_metadata", json.dumps(metadata, ensure_ascii=False)),
-        )
-        con.execute(
-            "INSERT INTO meta(key, value) VALUES (?, ?)",
-            ("build_diagnostics", json.dumps(build_diagnostics, ensure_ascii=False)),
+        _write_build_meta(
+            con,
+            metadata=metadata,
+            quality_gate=quality_gate,
+            input_manifest=input_manifest,
+            contribution_manifest=current_contribution_manifest,
+            build_diagnostics=build_diagnostics,
         )
         con.commit()
-        concepts = con.execute("SELECT COUNT(*) AS count FROM concepts").fetchone()["count"]
-        edges = con.execute("SELECT COUNT(*) AS count FROM concept_edges").fetchone()["count"]
-        return {
-            **metadata,
-            "output": str(output_path),
-            "input_manifest": input_manifest,
-            "concept_count": concepts,
-            "edge_count": edges,
-            "timeline_edge_count": timeline_edge_count,
-            "subconscious_edge_count": subconscious_edge_count,
-            "concept_kind_counts": count_by_column(con, "kind"),
-            "concept_kind_source_counts": count_by_column(con, "kind_source"),
-            "lifecycle": lifecycle_diagnostics(con),
-            "quality_gate": quality_gate,
-            "build_diagnostics": build_diagnostics,
-            "source_boundary": graph_source_boundary(),
-        }
+        return _build_result_payload(
+            con,
+            output_path=output_path,
+            metadata=metadata,
+            input_manifest=input_manifest,
+            quality_gate=quality_gate,
+            build_diagnostics=build_diagnostics,
+            timeline_edge_count=int(materialized["timeline_edge_count"]),
+            subconscious_edge_count=int(materialized["subconscious_edge_count"]),
+        )
     finally:
         con.close()
 

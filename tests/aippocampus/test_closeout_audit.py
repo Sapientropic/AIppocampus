@@ -485,6 +485,49 @@ class CloseoutAuditTests(unittest.TestCase):
         self.assertFalse(report["ok"], report)
         self.assertEqual(report["findings"][0]["kind"], "missing_debt_removed_evidence")
 
+    def test_build_incrementality_closeout_does_not_inherit_non_goal_recall_noise(
+        self,
+    ) -> None:
+        report = closeout_audit.audit_pr_body(
+            """
+            ## Summary
+            Implements changed-slice concept graph ingress updates.
+
+            Evidence level: scale_run
+            Closeout class: complete
+            Real local graph run: full rebuild concepts=101766, edges=1274418;
+            changed association slice build_mode=incremental_update and reset_graph_called=false.
+
+            Closes #2711.
+            """,
+            issue_metadata={
+                2711: {
+                    "title": "Implement changed-ingress incremental concept graph updates after no-op skip",
+                    "body": """
+                    ## Problem
+                    Changed inputs still take the conservative full_rebuild path.
+                    The next scale step is real changed-ingress incrementality.
+
+                    ## Scope
+                    Track stale/deleted labels and edges explicitly.
+                    Keep the operator report honest.
+
+                    ## Acceptance
+                    Add synthetic fixtures for each changed ingress family.
+                    A real/local graph run may report counts only.
+
+                    ## Non-goals
+                    Do not change live expansion semantics; another issue owns
+                    recall query/read latency and foreground output.
+                    """,
+                }
+            },
+        )
+
+        self.assertTrue(report["ok"], report)
+        self.assertEqual(report["required_evidence_levels"], ["scale_run"])
+        self.assertEqual(report["high_risk_issue_families"]["2711"], ["benchmark_or_synthetic"])
+
     def test_synthetic_fixture_only_cannot_claim_ready_useful_high_risk(self) -> None:
         report = closeout_audit.audit_pr_body(
             """
