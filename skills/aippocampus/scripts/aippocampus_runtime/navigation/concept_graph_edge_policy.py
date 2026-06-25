@@ -7,6 +7,14 @@ from typing import Any
 from aippocampus_runtime.navigation.concept_lifecycle import normalize_graph_status
 
 MIN_AUTO_COOCCURS_THREAD_COUNT = 2
+BIDIRECTIONAL_EDGE_TYPES = {
+    "alias",
+    "same_decision_space",
+    "contrasts_with",
+    "co_occurs",
+    "project_topic",
+    "related",
+}
 
 
 def automatic_co_occurs_expansion_status(
@@ -49,6 +57,7 @@ def concept_lifecycle_for_edge(*, status: str, lifecycle_reason: str) -> tuple[s
 
 __all__ = [
     "MIN_AUTO_COOCCURS_THREAD_COUNT",
+    "BIDIRECTIONAL_EDGE_TYPES",
     "automatic_co_occurs_expansion_status",
     "concept_lifecycle_for_edge",
     "quality_gate_bucket",

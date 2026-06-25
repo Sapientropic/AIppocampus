@@ -9,6 +9,7 @@ and should not grow the hot graph owner.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
@@ -99,7 +100,13 @@ def _edge_confidence_distribution(con: Any, *, limit: int = 80) -> list[dict[str
 def _quality_buckets(con: Any, column: str) -> dict[str, int]:
     if column not in {"thread_count", "evidence_count"}:
         return {}
-    rows = con.execute(f"SELECT {column} AS value, COUNT(*) AS count FROM concept_edges").fetchall()
+    rows = con.execute(
+        f"""
+        SELECT {column} AS value, COUNT(*) AS count
+        FROM concept_edges
+        GROUP BY {column}
+        """
+    ).fetchall()
     out: dict[str, int] = {}
     for row in rows:
         bucket = _bucket_count(int(row["value"] or 0))
@@ -148,6 +155,36 @@ def _cjk_fragment_indicator(con: Any) -> dict[str, int]:
         "long_cjk_label_count": long_cjk_label_count,
         "low_value_cjk_fragment_count": fragment_count,
     }
+
+
+def _quality_gate_payload(con: Any) -> dict[str, Any]:
+    row = con.execute("SELECT value FROM meta WHERE key = 'quality_gate'").fetchone()
+    if not row:
+        return {}
+    try:
+        loaded = json.loads(str(row["value"] or "{}"))
+    except json.JSONDecodeError:
+        return {}
+    return loaded if isinstance(loaded, dict) else {}
+
+
+def _meta_json_payload(con: Any, key: str) -> dict[str, Any]:
+    if key not in {"quality_gate", "input_manifest", "build_diagnostics", "build_metadata"}:
+        return {}
+    row = con.execute("SELECT value FROM meta WHERE key = ?", (key,)).fetchone()
+    if not row:
+        return {}
+    try:
+        loaded = json.loads(str(row["value"] or "{}"))
+    except json.JSONDecodeError:
+        return {}
+    return loaded if isinstance(loaded, dict) else {}
+
+
+def _quality_gate_section(con: Any, section: str) -> dict[str, Any]:
+    loaded = _quality_gate_payload(con)
+    value = loaded.get(section)
+    return value if isinstance(value, dict) else {}
 
 
 def concept_graph_health(db_path: Path) -> dict[str, Any]:
@@ -217,6 +254,23 @@ def concept_graph_health(db_path: Path) -> dict[str, Any]:
                         "message": "Most co_occurs rows share one confidence value; do not infer semantic quality from confidence alone.",
                     }
                 )
+        subconscious_hub_quality = _quality_gate_section(con, "subconscious_hub_quality")
+        collapsed_hub_count = int(subconscious_hub_quality.get("collapsed_hub_count") or 0)
+        if collapsed_hub_count:
+            warnings.append(
+                {
+                    "code": "subconscious_hub_collapse",
+                    "severity": "warning",
+                    "collapsed_hub_count": collapsed_hub_count,
+                    "parked_edge_group_count": int(
+                        subconscious_hub_quality.get("parked_edge_group_count") or 0
+                    ),
+                    "message": (
+                        "Subconscious concept edges contained project-like hub collapse; "
+                        "parked hub overflow edges before navigation expansion."
+                    ),
+                }
+            )
         health_state = (
             "quality_gated_operator_diagnostics"
             if not warnings
@@ -237,6 +291,10 @@ def concept_graph_health(db_path: Path) -> dict[str, Any]:
             "evidence_count_buckets": _quality_buckets(con, "evidence_count"),
             "hub_concentration_top": _hub_concentration(con),
             "cjk_fragment_indicators": _cjk_fragment_indicator(con),
+            "term_quality_gate": _quality_gate_section(con, "term_quality"),
+            "subconscious_hub_quality": subconscious_hub_quality,
+            "input_manifest": _meta_json_payload(con, "input_manifest"),
+            "build_diagnostics": _meta_json_payload(con, "build_diagnostics"),
             "count_semantics": {
                 "thread_count": "bounded_source_thread_reference_count_not_raw_df",
                 "evidence_count": "bounded_source_reference_or_hit_count_not_raw_df",

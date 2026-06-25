@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 import json
 import sqlite3
 import tempfile
@@ -7,6 +8,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+from aippocampus_runtime.navigation import association_phrase_mining as phrase_mining
 from aippocampus_runtime.navigation import associations as assoc
 
 
@@ -317,11 +319,164 @@ class BuildAssociationsTests(unittest.TestCase):
         self.assertIn("联想回忆", report)
         self.assertGreaterEqual(report["联想回忆"]["frequency"], 2)
         self.assertGreaterEqual(report["联想回忆"]["document_count"], 2)
+        self.assertEqual(
+            terms["联想回忆"]["term_quality"]["source"],
+            "corpus_cjk_phrase_miner",
+        )
+        self.assertGreaterEqual(terms["联想回忆"]["term_quality"]["left_accessor_variety"], 1)
+        self.assertGreaterEqual(terms["联想回忆"]["term_quality"]["right_accessor_variety"], 1)
         for fragment in ["流程保持手动触发", "程保持手动触发", "实际都好差劲"]:
             self.assertNotIn(fragment, flattened)
             self.assertNotIn(fragment, report)
         self.assertGreater(result["diagnostics"]["cjk_phrase_miner_candidate_count"], 0)
         self.assertGreater(result["diagnostics"]["cjk_phrase_miner_accepted_count"], 0)
+
+    def test_corpus_phrase_miner_substring_dominance_uses_bounded_index(self) -> None:
+        def rows(row_count: int) -> list[dict[str, str]]:
+            return [
+                {
+                    "text": "".join(
+                        chr(0x5600 + row_index * 6 + offset) for offset in range(6)
+                    ),
+                    "document_id": f"doc:{row_index}",
+                }
+                for row_index in range(row_count)
+            ]
+
+        small_diagnostics: dict[str, int] = {}
+        large_diagnostics: dict[str, int] = {}
+
+        phrase_mining.mine_corpus_cjk_phrases(
+            rows(40),
+            diagnostics=small_diagnostics,
+            limit=10000,
+            min_frequency=1,
+        )
+        phrase_mining.mine_corpus_cjk_phrases(
+            rows(80),
+            diagnostics=large_diagnostics,
+            limit=10000,
+            min_frequency=1,
+        )
+
+        small_candidates = small_diagnostics["cjk_phrase_miner_candidate_count"]
+        large_candidates = large_diagnostics["cjk_phrase_miner_candidate_count"]
+        small_comparisons = small_diagnostics[
+            "cjk_phrase_miner_substring_dominance_comparison_count"
+        ]
+        large_comparisons = large_diagnostics[
+            "cjk_phrase_miner_substring_dominance_comparison_count"
+        ]
+
+        self.assertGreater(small_candidates, 200)
+        self.assertGreater(large_candidates, small_candidates * 1.8)
+        self.assertLess(small_comparisons, small_candidates * 2)
+        self.assertLess(large_comparisons, large_candidates * 2)
+        self.assertLess(large_comparisons, small_comparisons * 3)
+        self.assertIn("cjk_phrase_miner_elapsed_ms", large_diagnostics)
+
+    def test_substring_dominance_index_preserves_weak_fragment_rejection(self) -> None:
+        raw_stats = {
+            "海马体线": {
+                "frequency": 2,
+                "docs": {"doc:1"},
+                "left": {"置"},
+                "right": {"索"},
+            },
+            "外置海马体线": {
+                "frequency": 2,
+                "docs": {"doc:1"},
+                "left": {"^"},
+                "right": {"索"},
+            },
+            "联想回忆": {
+                "frequency": 2,
+                "docs": {"doc:1", "doc:2"},
+                "left": {"从", "和"},
+                "right": {"与", "。"},
+            },
+        }
+
+        containing_frequencies, comparison_count = (
+            phrase_mining._substring_dominance_frequencies(raw_stats)
+        )
+
+        self.assertGreater(comparison_count, 0)
+        self.assertTrue(
+            phrase_mining._is_substring_dominated(
+                "海马体线",
+                raw_stats["海马体线"],
+                containing_frequencies,
+            )
+        )
+        self.assertFalse(
+            phrase_mining._is_substring_dominated(
+                "联想回忆",
+                raw_stats["联想回忆"],
+                containing_frequencies,
+            )
+        )
+
+    def test_build_associations_reuses_entry_message_pairs_linearly(self) -> None:
+        entries = [
+            {
+                "thread_key": f"session:linear-{index:03d}",
+                "title": f"linear-{index:03d}",
+                "paths": {},
+            }
+            for index in range(32)
+        ]
+        linear_registry = self.root / "registry" / "linear.json"
+        linear_registry.write_text(
+            json.dumps({"schema_version": 1, "threads": entries}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        messages_by_key: dict[str, list[dict[str, str]]] = {}
+
+        def fake_source_messages(entry: dict[str, object], limit: int) -> list[dict[str, str]]:
+            key = str(entry["thread_key"])
+            messages = [{"role": "user", "text": f"{key} 线性构建"}]
+            messages_by_key[key] = messages
+            return messages
+
+        def fake_collect(
+            entry: dict[str, object],
+            terms: dict[str, dict[str, object]],
+            **kwargs: object,
+        ) -> None:
+            key = str(entry["thread_key"])
+            self.assertIs(kwargs["messages"], messages_by_key[key])
+            terms[key] = {
+                "term": key,
+                "status": "staging",
+                "confidence": 0.1,
+                "hit_count": 1,
+                "threads": [],
+            }
+
+        with (
+            mock.patch.object(assoc, "source_messages_for_entry", side_effect=fake_source_messages)
+            as source_messages,
+            mock.patch.object(assoc, "collect_from_entry", side_effect=fake_collect),
+            mock.patch.object(assoc, "mine_corpus_cjk_phrases", return_value={}),
+        ):
+            result = assoc.build_associations(linear_registry)
+
+        build_source = inspect.getsource(assoc.build_associations)
+        self.assertNotIn("candidate is entry", build_source)
+        self.assertEqual(source_messages.call_count, len(entries))
+        self.assertEqual(
+            result["diagnostics"]["association_entry_message_pair_count"],
+            len(entries),
+        )
+        self.assertEqual(
+            result["diagnostics"]["association_entry_message_collect_count"],
+            len(entries),
+        )
+        self.assertEqual(
+            result["diagnostics"]["association_source_message_count"],
+            len(entries),
+        )
 
     def test_ascii_domain_and_repo_terms_emit_component_aliases(self) -> None:
         text = " ".join(

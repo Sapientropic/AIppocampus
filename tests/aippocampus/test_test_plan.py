@@ -220,6 +220,28 @@ class ChangedSurfaceTestPlanTests(unittest.TestCase):
             commands,
         )
 
+    def test_navigation_mining_change_recommends_data_quality_guard(self) -> None:
+        payload = test_plan.build_test_plan(
+            ["skills/aippocampus/scripts/aippocampus_runtime/navigation/concept_graph.py"]
+        )
+        commands = [command["command"] for command in payload["commands"]]
+        reasons = [command["reason"] for command in payload["commands"]]
+
+        self.assertIn("navigation_data_quality", payload["categories"])
+        self.assertTrue(
+            any(
+                "tests.aippocampus.test_build_associations" in command
+                and "tests.aippocampus.test_build_concept_graph" in command
+                for command in commands
+            )
+        )
+        self.assertIn(
+            py_script("tools/aippocampus/navigation_data_quality_guard.py", "--json"),
+            commands,
+        )
+        self.assertTrue(any("accessor-variety" in reason for reason in reasons))
+        self.assertTrue(any("privacy-safe" in reason for reason in reasons))
+
     def test_test_runner_change_recommends_tier_contract_and_report(self) -> None:
         payload = test_plan.build_test_plan(
             [

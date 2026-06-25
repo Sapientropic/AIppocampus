@@ -77,6 +77,14 @@ RECALL_INTEGRATION_READINESS_SURFACES = frozenset(
         "skills/aippocampus/scripts/aippocampus_runtime/recall/feedback_events.py",
     }
 )
+NAVIGATION_DATA_QUALITY_SURFACE_PREFIXES = (
+    "skills/aippocampus/scripts/aippocampus_runtime/navigation/association",
+    "skills/aippocampus/scripts/aippocampus_runtime/navigation/concept_graph",
+    "skills/aippocampus/scripts/aippocampus_runtime/navigation/concept_edge",
+    "skills/aippocampus/scripts/aippocampus_runtime/navigation/cognitive_map",
+    "skills/aippocampus/scripts/aippocampus_runtime/navigation/theme",
+    "skills/aippocampus/scripts/aippocampus_runtime/subconscious/",
+)
 DEBT_REGISTER_SOURCES = (
     REPO_ROOT / "docs" / "architecture" / "architecture-debt-register.md",
     REPO_ROOT / "docs" / "evidence" / "reports" / "architecture-debt-snapshot-2026-06-04.md",
@@ -542,6 +550,8 @@ def classify_changed_files(changed_files: Iterable[str]) -> set[str]:
             categories.add("apw_parity")
         if path in RECALL_INTEGRATION_READINESS_SURFACES:
             categories.add("recall_integration_readiness")
+        if any(path.startswith(prefix) for prefix in NAVIGATION_DATA_QUALITY_SURFACE_PREFIXES):
+            categories.add("navigation_data_quality")
         if path.startswith("plugins/aippocampus/"):
             categories.add("plugin")
     return categories
@@ -890,6 +900,40 @@ def build_test_plan(
                     "classified separately from foreground-callable agent actions."
                 ),
                 scope="focused:recall-integration-readiness",
+            ),
+        )
+
+    if "navigation_data_quality" in categories:
+        _add_command(
+            commands,
+            PlannedCommand(
+                command=py_command(
+                    "-m unittest "
+                    "tests.aippocampus.test_build_associations "
+                    "tests.aippocampus.test_build_concept_graph -v",
+                    local_executable=local_executable,
+                ),
+                reason=(
+                    "Association/concept-graph mining changed; prove CJK/accessor-variety "
+                    "and ingress/topology fixtures before treating a populated graph as useful."
+                ),
+                scope="focused:navigation-data-quality",
+            ),
+        )
+        _add_command(
+            commands,
+            PlannedCommand(
+                command=py_script(
+                    "tools/aippocampus/navigation_data_quality_guard.py",
+                    "--json",
+                    local_executable=local_executable,
+                ),
+                reason=(
+                    "Emit the advisory privacy-safe association/concept-graph quality "
+                    "report when local artifacts exist; warnings are red lights for "
+                    "changed mining surfaces, not source evidence."
+                ),
+                scope="advisory:navigation-data-quality",
             ),
         )
 

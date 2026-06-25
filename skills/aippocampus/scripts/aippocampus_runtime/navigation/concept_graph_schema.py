@@ -91,6 +91,8 @@ def init_schema(con: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_concepts_health
             ON concepts(status, scope_key, thread_count, hit_count);
         CREATE INDEX IF NOT EXISTS idx_concept_edges_src ON concept_edges(src_concept_id, weight DESC);
+        CREATE INDEX IF NOT EXISTS idx_concept_edges_expand
+            ON concept_edges(src_concept_id, status, weight DESC, confidence DESC);
         CREATE INDEX IF NOT EXISTS idx_concept_edges_dst ON concept_edges(dst_concept_id, weight DESC);
         CREATE INDEX IF NOT EXISTS idx_concept_edges_quality
             ON concept_edges(edge_type, status, thread_count, evidence_count, confidence, scope_key);
