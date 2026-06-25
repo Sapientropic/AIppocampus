@@ -135,7 +135,8 @@ class ChangedSurfaceTestPlanTests(unittest.TestCase):
         self.assertIn(advisory, commands)
         advisory_command = next(command for command in payload["commands"] if command["command"] == advisory)
         self.assertEqual(advisory_command["scope"], "changed-surface-advisory")
-        self.assertIn("projector bypasses", advisory_command["reason"])
+        self.assertIn("source IO", advisory_command["reason"])
+        self.assertIn("field-only test", advisory_command["reason"])
         self.assertNotIn("--fail-on-violations", advisory_command["command"])
 
     def test_agent_slop_guard_change_recommends_fixture_and_planner_tests(self) -> None:
@@ -154,19 +155,25 @@ class ChangedSurfaceTestPlanTests(unittest.TestCase):
 
     def test_agent_slop_guard_fixtures_do_not_feed_changed_surface_advisory(self) -> None:
         payload = test_plan.build_test_plan(
-            ["tests/aippocampus/agent_slop_guard_fixtures/bad/mcp/projector_bypass.py"]
+            [
+                "tests/aippocampus/agent_slop_guard_fixtures/bad/mcp/projector_bypass.py",
+                "tests/aippocampus/agent_slop_guard_fixtures/bad/tests/aippocampus/test_recall_field_only.py",
+            ]
         )
         commands = [str(command["command"]) for command in payload["commands"]]
 
         self.assertIn("agent_slop_guard", payload["categories"])
+        self.assertNotIn("tests", payload["categories"])
         self.assertNotIn("agent_slop_advisory", payload["categories"])
         self.assertNotIn("changed_surface_debt", payload["categories"])
+        self.assertEqual(payload["changed_test_groups"], [])
         self.assertFalse(
             any("tools/aippocampus/agent_slop_guard.py --json --changed-file" in command for command in commands)
         )
         self.assertFalse(
             any("tools/aippocampus/docs/debt_report.py --changed-surface-only" in command for command in commands)
         )
+        self.assertFalse(any("tests.aippocampus.test_recall_field_only" in command for command in commands))
         self.assertTrue(any("tests.aippocampus.test_agent_slop_guard" in command for command in commands))
 
     def test_agent_slop_guard_baseline_change_recommends_guard_tests_without_advisory(self) -> None:
