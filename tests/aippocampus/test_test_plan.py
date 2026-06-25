@@ -119,6 +119,64 @@ class ChangedSurfaceTestPlanTests(unittest.TestCase):
             commands,
         )
 
+    def test_python_change_gets_agent_slop_advisory(self) -> None:
+        with mock.patch.object(test_plan, "_debt_report_is_red", return_value=False):
+            payload = test_plan.build_test_plan(
+                ["skills/aippocampus/scripts/aippocampus_runtime/mcp/tool_handlers.py"]
+            )
+        commands = [command["command"] for command in payload["commands"]]
+        advisory = py_script(
+            "tools/aippocampus/agent_slop_guard.py",
+            "--json "
+            "--changed-file skills/aippocampus/scripts/aippocampus_runtime/mcp/tool_handlers.py",
+        )
+
+        self.assertIn("agent_slop_advisory", payload["categories"])
+        self.assertIn(advisory, commands)
+        advisory_command = next(command for command in payload["commands"] if command["command"] == advisory)
+        self.assertEqual(advisory_command["scope"], "changed-surface-advisory")
+        self.assertIn("projector bypasses", advisory_command["reason"])
+        self.assertNotIn("--fail-on-violations", advisory_command["command"])
+
+    def test_agent_slop_guard_change_recommends_fixture_and_planner_tests(self) -> None:
+        payload = test_plan.build_test_plan(["tools/aippocampus/agent_slop_guard.py"])
+        commands = [str(command["command"]) for command in payload["commands"]]
+
+        self.assertIn("agent_slop_guard", payload["categories"])
+        self.assertIn("agent_slop_advisory", payload["categories"])
+        self.assertTrue(
+            any(
+                "tests.aippocampus.test_agent_slop_guard" in command
+                and "tests.aippocampus.test_test_plan" in command
+                for command in commands
+            )
+        )
+
+    def test_agent_slop_guard_fixtures_do_not_feed_changed_surface_advisory(self) -> None:
+        payload = test_plan.build_test_plan(
+            ["tests/aippocampus/agent_slop_guard_fixtures/bad/mcp/projector_bypass.py"]
+        )
+        commands = [str(command["command"]) for command in payload["commands"]]
+
+        self.assertIn("agent_slop_guard", payload["categories"])
+        self.assertNotIn("agent_slop_advisory", payload["categories"])
+        self.assertNotIn("changed_surface_debt", payload["categories"])
+        self.assertFalse(
+            any("tools/aippocampus/agent_slop_guard.py --json --changed-file" in command for command in commands)
+        )
+        self.assertFalse(
+            any("tools/aippocampus/docs/debt_report.py --changed-surface-only" in command for command in commands)
+        )
+        self.assertTrue(any("tests.aippocampus.test_agent_slop_guard" in command for command in commands))
+
+    def test_agent_slop_guard_baseline_change_recommends_guard_tests_without_advisory(self) -> None:
+        payload = test_plan.build_test_plan(["tools/aippocampus/agent_slop_guard_baseline.json"])
+        commands = [str(command["command"]) for command in payload["commands"]]
+
+        self.assertIn("agent_slop_guard", payload["categories"])
+        self.assertNotIn("agent_slop_advisory", payload["categories"])
+        self.assertTrue(any("tests.aippocampus.test_agent_slop_guard" in command for command in commands))
+
     def test_runtime_hook_change_recommends_hook_focus_and_pr_gate(self) -> None:
         commands = commands_for(
             ["skills/aippocampus/scripts/aippocampus_runtime/hooks/prompt.py"]
@@ -314,6 +372,7 @@ class ChangedSurfaceTestPlanTests(unittest.TestCase):
         self.assertFalse(
             any(
                 "debt_report.py" not in command
+                and "agent_slop_guard.py" not in command
                 and "test_active_recall" in command
                 and "test_agent_background" in command
                 and "test_benchmark_graph_extraction_boundary" in command

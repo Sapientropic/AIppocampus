@@ -1,0 +1,192 @@
+{
+  "kind": "aippocampus_agent_slop_guard_baseline",
+  "schema_version": 1,
+  "policy": "Historical advisory findings can be baselined to owner issues; changed-surface unbaselined findings remain visible.",
+  "baseline": [
+    {
+      "fingerprint": "compact_projector_bypass:skills/aippocampus/scripts/aippocampus_runtime/mcp/tool_handlers.py:409:text_result(public_payload(...)) bypasses compact/detail projection.",
+      "owner_issue": "#2696",
+      "reason": "historical MCP handler projector migration debt"
+    },
+    {
+      "fingerprint": "compact_projector_bypass:skills/aippocampus/scripts/aippocampus_runtime/mcp/tool_handlers.py:414:text_result(public_payload(...)) bypasses compact/detail projection.",
+      "owner_issue": "#2696",
+      "reason": "historical MCP handler projector migration debt"
+    },
+    {
+      "fingerprint": "compact_projector_bypass:skills/aippocampus/scripts/aippocampus_runtime/mcp/tool_handlers.py:468:text_result(public_payload(...)) bypasses compact/detail projection.",
+      "owner_issue": "#2696",
+      "reason": "historical MCP handler projector migration debt"
+    },
+    {
+      "fingerprint": "compact_projector_bypass:skills/aippocampus/scripts/aippocampus_runtime/mcp/tool_handlers.py:489:text_result(public_payload(...)) bypasses compact/detail projection.",
+      "owner_issue": "#2696",
+      "reason": "historical MCP handler projector migration debt"
+    },
+    {
+      "fingerprint": "compact_projector_bypass:skills/aippocampus/scripts/aippocampus_runtime/mcp/tool_handlers.py:490:text_result(public_payload(...)) bypasses compact/detail projection.",
+      "owner_issue": "#2696",
+      "reason": "historical MCP handler projector migration debt"
+    },
+    {
+      "fingerprint": "compact_projector_bypass:skills/aippocampus/scripts/aippocampus_runtime/mcp/tool_handlers.py:589:text_result(public_payload(...)) bypasses compact/detail projection.",
+      "owner_issue": "#2696",
+      "reason": "historical MCP handler projector migration debt"
+    },
+    {
+      "fingerprint": "compact_projector_bypass:skills/aippocampus/scripts/aippocampus_runtime/mcp/tool_handlers.py:603:text_result(public_payload(...)) bypasses compact/detail projection.",
+      "owner_issue": "#2696",
+      "reason": "historical MCP handler projector migration debt"
+    },
+    {
+      "fingerprint": "compact_projector_bypass:skills/aippocampus/scripts/aippocampus_runtime/mcp/tool_handlers.py:853:text_result(public_payload(...)) bypasses compact/detail projection.",
+      "owner_issue": "#2696",
+      "reason": "historical MCP handler projector migration debt"
+    },
+    {
+      "fingerprint": "compact_projector_bypass:skills/aippocampus/scripts/aippocampus_runtime/mcp/tool_handlers.py:875:text_result(public_payload(...)) bypasses compact/detail projection.",
+      "owner_issue": "#2696",
+      "reason": "historical MCP handler projector migration debt"
+    },
+    {
+      "fingerprint": "compact_projector_bypass:skills/aippocampus/scripts/aippocampus_runtime/mcp/tool_handlers.py:878:text_result(public_payload(...)) bypasses compact/detail projection.",
+      "owner_issue": "#2696",
+      "reason": "historical MCP handler projector migration debt"
+    },
+    {
+      "fingerprint": "compact_projector_bypass:skills/aippocampus/scripts/aippocampus_runtime/mcp/tool_handlers.py:973:text_result(public_payload(...)) bypasses compact/detail projection.",
+      "owner_issue": "#2696",
+      "reason": "historical MCP handler projector migration debt"
+    },
+    {
+      "fingerprint": "compact_projector_bypass:skills/aippocampus/scripts/aippocampus_runtime/mcp/tool_handlers.py:1024:text_result(public_payload(...)) bypasses compact/detail projection.",
+      "owner_issue": "#2696",
+      "reason": "historical MCP handler projector migration debt"
+    },
+    {
+      "fingerprint": "compact_projector_bypass:skills/aippocampus/scripts/aippocampus_runtime/mcp/tool_handlers.py:1088:text_result(public_payload(...)) bypasses compact/detail projection.",
+      "owner_issue": "#2696",
+      "reason": "historical MCP handler projector migration debt"
+    },
+    {
+      "fingerprint": "compact_projector_bypass:skills/aippocampus/scripts/aippocampus_runtime/mcp/tool_handlers.py:1095:text_result(public_payload(...)) bypasses compact/detail projection.",
+      "owner_issue": "#2696",
+      "reason": "historical MCP handler projector migration debt"
+    },
+    {
+      "fingerprint": "compact_projector_bypass:skills/aippocampus/scripts/aippocampus_runtime/mcp/tool_handlers.py:1106:text_result(public_payload(...)) bypasses compact/detail projection.",
+      "owner_issue": "#2696",
+      "reason": "historical MCP handler projector migration debt"
+    },
+    {
+      "fingerprint": "compact_projector_bypass:skills/aippocampus/scripts/aippocampus_runtime/mcp/tool_handlers.py:1110:text_result(public_payload(...)) bypasses compact/detail projection.",
+      "owner_issue": "#2696",
+      "reason": "historical MCP handler projector migration debt"
+    },
+    {
+      "fingerprint": "compact_projector_bypass:skills/aippocampus/scripts/aippocampus_runtime/mcp/tool_handlers.py:1155:text_result(public_payload(...)) bypasses compact/detail projection.",
+      "owner_issue": "#2696",
+      "reason": "historical MCP handler projector migration debt"
+    },
+    {
+      "fingerprint": "compact_projector_bypass:skills/aippocampus/scripts/aippocampus_runtime/mcp/tool_handlers.py:1184:text_result(public_payload(...)) bypasses compact/detail projection.",
+      "owner_issue": "#2696",
+      "reason": "historical MCP handler projector migration debt"
+    },
+    {
+      "fingerprint": "hot_path_silent_fallback:skills/aippocampus/scripts/aippocampus_runtime/mcp/memory_health_recovery.py:208:broad exception continues or returns empty state without diagnostics.",
+      "owner_issue": "#2697",
+      "reason": "historical all-scan baseline for agent-slop guard adoption"
+    },
+    {
+      "fingerprint": "hot_path_silent_fallback:skills/aippocampus/scripts/aippocampus_runtime/mcp/registry_source_routes.py:231:broad exception continues or returns empty state without diagnostics.",
+      "owner_issue": "#2697",
+      "reason": "historical all-scan baseline for agent-slop guard adoption"
+    },
+    {
+      "fingerprint": "hot_path_silent_fallback:skills/aippocampus/scripts/aippocampus_runtime/mcp/relationship_origin_routes.py:186:broad exception continues or returns empty state without diagnostics.",
+      "owner_issue": "#2697",
+      "reason": "historical all-scan baseline for agent-slop guard adoption"
+    },
+    {
+      "fingerprint": "hot_path_silent_fallback:skills/aippocampus/scripts/aippocampus_runtime/mcp/runtime_provenance.py:38:broad exception continues or returns empty state without diagnostics.",
+      "owner_issue": "#2697",
+      "reason": "historical all-scan baseline for agent-slop guard adoption"
+    },
+    {
+      "fingerprint": "hot_path_silent_fallback:skills/aippocampus/scripts/aippocampus_runtime/mcp/runtime_provenance.py:55:broad exception continues or returns empty state without diagnostics.",
+      "owner_issue": "#2697",
+      "reason": "historical all-scan baseline for agent-slop guard adoption"
+    },
+    {
+      "fingerprint": "compact_projector_bypass:skills/aippocampus/scripts/aippocampus_runtime/mcp/server.py:138:text_result(public_payload(...)) bypasses compact/detail projection.",
+      "owner_issue": "#2696",
+      "reason": "historical all-scan baseline for agent-slop guard adoption"
+    },
+    {
+      "fingerprint": "hot_path_silent_fallback:skills/aippocampus/scripts/aippocampus_runtime/recall/agent_recall_cache.py:143:broad exception continues or returns empty state without diagnostics.",
+      "owner_issue": "#2697",
+      "reason": "historical all-scan baseline for agent-slop guard adoption"
+    },
+    {
+      "fingerprint": "hot_path_silent_fallback:skills/aippocampus/scripts/aippocampus_runtime/recall/agent_recall_cache.py:472:broad exception continues or returns empty state without diagnostics.",
+      "owner_issue": "#2697",
+      "reason": "historical all-scan baseline for agent-slop guard adoption"
+    },
+    {
+      "fingerprint": "hot_path_silent_fallback:skills/aippocampus/scripts/aippocampus_runtime/recall/agent_recall_cache.py:628:broad exception continues or returns empty state without diagnostics.",
+      "owner_issue": "#2697",
+      "reason": "historical all-scan baseline for agent-slop guard adoption"
+    },
+    {
+      "fingerprint": "hot_path_silent_fallback:skills/aippocampus/scripts/aippocampus_runtime/recall/prompt_recall_ambient.py:76:broad exception continues or returns empty state without diagnostics.",
+      "owner_issue": "#2697",
+      "reason": "historical all-scan baseline for agent-slop guard adoption"
+    },
+    {
+      "fingerprint": "hot_path_silent_fallback:skills/aippocampus/scripts/aippocampus_runtime/recall/prompt_recall_ambient.py:509:broad exception continues or returns empty state without diagnostics.",
+      "owner_issue": "#2697",
+      "reason": "historical all-scan baseline for agent-slop guard adoption"
+    },
+    {
+      "fingerprint": "hot_path_silent_fallback:skills/aippocampus/scripts/aippocampus_runtime/recall/prompt_recall_core.py:240:broad exception continues or returns empty state without diagnostics.",
+      "owner_issue": "#2697",
+      "reason": "historical all-scan baseline for agent-slop guard adoption"
+    },
+    {
+      "fingerprint": "hot_path_silent_fallback:skills/aippocampus/scripts/aippocampus_runtime/recall/retrieval.py:670:broad exception continues or returns empty state without diagnostics.",
+      "owner_issue": "#2697",
+      "reason": "historical all-scan baseline for agent-slop guard adoption"
+    },
+    {
+      "fingerprint": "hot_path_silent_fallback:skills/aippocampus/scripts/aippocampus_runtime/source/registry_source_window.py:134:broad exception continues or returns empty state without diagnostics.",
+      "owner_issue": "#2697",
+      "reason": "historical all-scan baseline for agent-slop guard adoption"
+    },
+    {
+      "fingerprint": "hot_path_silent_fallback:skills/aippocampus/scripts/aippocampus_runtime/source/repo_doc_search.py:137:broad exception continues or returns empty state without diagnostics.",
+      "owner_issue": "#2697",
+      "reason": "historical all-scan baseline for agent-slop guard adoption"
+    },
+    {
+      "fingerprint": "hot_path_silent_fallback:skills/aippocampus/scripts/aippocampus_runtime/update/cli.py:106:broad exception continues or returns empty state without diagnostics.",
+      "owner_issue": "#2697",
+      "reason": "historical all-scan baseline for agent-slop guard adoption"
+    },
+    {
+      "fingerprint": "hot_path_silent_fallback:skills/aippocampus/scripts/aippocampus_runtime/update/plugin_marketplace.py:43:broad exception continues or returns empty state without diagnostics.",
+      "owner_issue": "#2697",
+      "reason": "historical all-scan baseline for agent-slop guard adoption"
+    },
+    {
+      "fingerprint": "hot_path_silent_fallback:skills/aippocampus/scripts/aippocampus_runtime/update/plugin_marketplace.py:78:broad exception continues or returns empty state without diagnostics.",
+      "owner_issue": "#2697",
+      "reason": "historical all-scan baseline for agent-slop guard adoption"
+    },
+    {
+      "fingerprint": "hot_path_silent_fallback:skills/aippocampus/scripts/aippocampus_runtime/update/plugin_marketplace.py:86:broad exception continues or returns empty state without diagnostics.",
+      "owner_issue": "#2697",
+      "reason": "historical all-scan baseline for agent-slop guard adoption"
+    }
+  ]
+}
