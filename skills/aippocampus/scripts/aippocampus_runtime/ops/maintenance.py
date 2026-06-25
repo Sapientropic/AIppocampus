@@ -11,6 +11,17 @@ import sys
 from pathlib import Path
 
 from aippocampus_runtime import health as health_runtime
+from aippocampus_runtime.ops.activation_compaction_cli import (
+    activation_payload_compaction_cmd,
+    activation_payload_compaction_failure_result,
+    public_activation_payload_compaction_command,
+)
+from aippocampus_runtime.ops.interrupted_write_recovery import (
+    CLEANUP_INTERRUPTED_WRITES_COMMAND,
+    _registry_root_from_runtime_health,
+    attach_interrupted_write_recovery,
+    cleanup_interrupted_write_artifacts,
+)
 from aippocampus_runtime.ops.maintenance_projection import (
     health_maintenance_status,
     plan_payload,
@@ -108,71 +119,6 @@ def failure_result(
     }
 
 
-def activation_payload_compaction_cmd(args: argparse.Namespace, *, cwd: Path) -> list[str] | None:
-    if not args.activation_dead_letter_manifest:
-        return None
-    cmd = [
-        sys.executable,
-        "-m",
-        "aippocampus_runtime.ops.activation_payload_compaction",
-        "--dead-letter-manifest",
-        str(_path_arg(args.activation_dead_letter_manifest, cwd=cwd)),
-        "--json",
-    ]
-    for option, value in (
-        ("--ambient-cache", args.activation_ambient_cache),
-        ("--working-memory", args.activation_working_memory),
-        ("--semantic-triggers", args.activation_semantic_triggers),
-        ("--active-recall-locks", args.activation_active_recall_locks),
-    ):
-        if value:
-            cmd.extend([option, str(_path_arg(value, cwd=cwd))])
-    if args.activation_compacted_at:
-        cmd.extend(["--compacted-at", str(args.activation_compacted_at)])
-    if args.apply_activation_payload_compaction:
-        cmd.append("--apply")
-    return cmd
-
-
-def _path_arg(value: str, *, cwd: Path) -> Path:
-    path = Path(value)
-    return path if path.is_absolute() else cwd / path
-
-
-def public_activation_payload_compaction_command(cmd: list[str]) -> list[str]:
-    public_cmd = [
-        "python",
-        "-m",
-        "aippocampus_runtime.ops.activation_payload_compaction",
-        "--dead-letter-manifest",
-        "<omitted>",
-        "--json",
-    ]
-    for option in (
-        "--ambient-cache",
-        "--working-memory",
-        "--semantic-triggers",
-        "--active-recall-locks",
-        "--compacted-at",
-    ):
-        if option in cmd:
-            public_cmd.extend([option, "<omitted>"])
-    if "--apply" in cmd:
-        public_cmd.append("--apply")
-    return public_cmd
-
-
-def activation_payload_compaction_failure_result(
-    cmd: list[str], returncode: int, stdout: str = "", stderr: str = ""
-) -> dict:
-    return {
-        "id": "activation_payload_compaction",
-        "command": public_activation_payload_compaction_command(cmd),
-        "returncode": returncode,
-        "message": public_failure_message(stdout, stderr),
-    }
-
-
 def maintenance_status(
     *, failures: list[dict], skipped: list[dict], health_final: dict | None
 ) -> str:
@@ -207,6 +153,8 @@ def graphify_corpus_cmd(cwd: Path) -> list[str]:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """aippocampus-stage-map: parse intent -> probe health -> run explicit actions -> recheck health -> render result."""
+
     parser = argparse.ArgumentParser(
         prog="aippocampus maintenance",
         description=(
@@ -248,6 +196,11 @@ def main(argv: list[str] | None = None) -> int:
         "--fail-fast",
         action="store_true",
         help="Preserve legacy strict behavior: stop on the first failed action.",
+    )
+    apply_group.add_argument(
+        "--cleanup-interrupted-writes",
+        action="store_true",
+        help="Delete stale AIppocampus-owned tmp artifacts after reviewing maintenance status.",
     )
     activation_group.add_argument(
         "--activation-dead-letter-manifest",
@@ -300,6 +253,7 @@ def main(argv: list[str] | None = None) -> int:
                 }
             )
         else:
+            health = attach_interrupted_write_recovery(health)
             action_results.append({"id": "health_initial", "result": health})
         mode = "plan" if args.plan or operation == "plan" else operation
         payload = plan_payload(
@@ -330,8 +284,10 @@ def main(argv: list[str] | None = None) -> int:
     ]
     initial_health_returncode = 0
     initial_health_error = ""
+    registry_root = _registry_root_from_runtime_health(cwd) if args.cleanup_interrupted_writes else None
     if args.fail_fast:
         health = run_json(health_cmd)
+        health = attach_interrupted_write_recovery(health, registry_root=registry_root) or health
         action_results.append({"id": "health_initial", "result": health})
     else:
         code, health_payload, stdout, stderr = run_json_checked(health_cmd)
@@ -341,8 +297,49 @@ def main(argv: list[str] | None = None) -> int:
             action_failures.append(failure_result("health_initial", health_cmd, code, stdout, stderr))
             health = {}
         else:
-            health = health_payload
+            health = (
+                attach_interrupted_write_recovery(health_payload, registry_root=registry_root)
+                or health_payload
+            )
             action_results.append({"id": "health_initial", "result": health})
+
+    if args.cleanup_interrupted_writes:
+        cleanup = cleanup_interrupted_write_artifacts(
+            registry_root=registry_root,
+            projected_health=health if isinstance(health, dict) else None,
+        )
+        action_results.append(
+            {
+                **command_result(
+                    "cleanup_interrupted_writes",
+                    CLEANUP_INTERRUPTED_WRITES_COMMAND,
+                    0 if cleanup.get("ok") else 1,
+                ),
+                "result": cleanup,
+            }
+        )
+        if not cleanup.get("ok"):
+            action_failures.append(
+                {
+                    "id": "cleanup_interrupted_writes",
+                    "command": [
+                        "aippocampus",
+                        "maintenance",
+                        "apply",
+                        "--cleanup-interrupted-writes",
+                        "--summary-json",
+                    ],
+                    "returncode": 1,
+                    "message": "One or more stale AIppocampus tmp artifacts could not be removed.",
+                }
+            )
+        # This flag is a targeted recovery action emitted by maintenance
+        # status. Do not let it implicitly run the broader health-driven
+        # generated-artifact refresh queue; users can run plain
+        # `maintenance apply` when they want that heavier pass.
+        health = {**health, "recommended_actions": []} if isinstance(health, dict) else {}
+        args.no_refresh_cognitive_map = True
+        args.no_refresh_graphify = True
 
     if has_action(health, "build_clean_source"):
         cmd = [
@@ -368,7 +365,13 @@ def main(argv: list[str] | None = None) -> int:
                 )
                 code, health_payload, health_stdout, health_stderr = run_json_checked(health_cmd)
                 if code == 0 and health_payload is not None:
-                    health = health_payload
+                    health = (
+                        attach_interrupted_write_recovery(
+                            health_payload,
+                            registry_root=registry_root,
+                        )
+                        or health_payload
+                    )
                 else:
                     action_failures.append(
                         failure_result(
@@ -398,7 +401,13 @@ def main(argv: list[str] | None = None) -> int:
                 )
                 code, health_payload, health_stdout, health_stderr = run_json_checked(health_cmd)
                 if code == 0 and health_payload is not None:
-                    health = health_payload
+                    health = (
+                        attach_interrupted_write_recovery(
+                            health_payload,
+                            registry_root=registry_root,
+                        )
+                        or health_payload
+                    )
                 else:
                     action_failures.append(
                         failure_result("health_after_build_index", health_cmd, code, health_stdout, health_stderr)
@@ -438,7 +447,13 @@ def main(argv: list[str] | None = None) -> int:
                 )
                 code, health_payload, health_stdout, health_stderr = run_json_checked(health_cmd)
                 if code == 0 and health_payload is not None:
-                    health = health_payload
+                    health = (
+                        attach_interrupted_write_recovery(
+                            health_payload,
+                            registry_root=registry_root,
+                        )
+                        or health_payload
+                    )
                 else:
                     action_failures.append(
                         failure_result("health_after_checkpoint", health_cmd, code, health_stdout, health_stderr)
@@ -461,7 +476,13 @@ def main(argv: list[str] | None = None) -> int:
                         )
                         code, health_payload, health_stdout, health_stderr = run_json_checked(health_cmd)
                         if code == 0 and health_payload is not None:
-                            health = health_payload
+                            health = (
+                                attach_interrupted_write_recovery(
+                                    health_payload,
+                                    registry_root=registry_root,
+                                )
+                                or health_payload
+                            )
                         else:
                             action_failures.append(
                                 failure_result(
@@ -496,7 +517,13 @@ def main(argv: list[str] | None = None) -> int:
                 )
                 code, health_payload, health_stdout, health_stderr = run_json_checked(health_cmd)
                 if code == 0 and health_payload is not None:
-                    health = health_payload
+                    health = (
+                        attach_interrupted_write_recovery(
+                            health_payload,
+                            registry_root=registry_root,
+                        )
+                        or health_payload
+                    )
                 else:
                     action_failures.append(
                         failure_result("health_after_build_segments", health_cmd, code, health_stdout, health_stderr)
@@ -528,7 +555,13 @@ def main(argv: list[str] | None = None) -> int:
                 )
                 code, health_payload, health_stdout, health_stderr = run_json_checked(health_cmd)
                 if code == 0 and health_payload is not None:
-                    health = health_payload
+                    health = (
+                        attach_interrupted_write_recovery(
+                            health_payload,
+                            registry_root=registry_root,
+                        )
+                        or health_payload
+                    )
                 else:
                     action_failures.append(
                         failure_result(
@@ -563,7 +596,13 @@ def main(argv: list[str] | None = None) -> int:
                 )
                 code, health_payload, health_stdout, health_stderr = run_json_checked(health_cmd)
                 if code == 0 and health_payload is not None:
-                    health = health_payload
+                    health = (
+                        attach_interrupted_write_recovery(
+                            health_payload,
+                            registry_root=registry_root,
+                        )
+                        or health_payload
+                    )
                 else:
                     action_failures.append(
                         failure_result(
@@ -635,11 +674,15 @@ def main(argv: list[str] | None = None) -> int:
     else:
         code, health_payload, stdout, stderr = run_json_checked(health_cmd)
         if code == 0 and health_payload is not None:
-            health_final = health_payload
+            health_final = (
+                attach_interrupted_write_recovery(health_payload, registry_root=registry_root)
+                or health_payload
+            )
         else:
             action_failures.append(failure_result("health_final", health_cmd, code, stdout, stderr))
     if (
         not args.fail_fast
+        and not args.cleanup_interrupted_writes
         and health_final
         and has_action(health_final, "build_index")
         and "build_index" not in failed_action_ids(action_failures)
@@ -659,7 +702,13 @@ def main(argv: list[str] | None = None) -> int:
             )
             code, health_payload, health_stdout, health_stderr = run_json_checked(health_cmd)
             if code == 0 and health_payload is not None:
-                health_final = health_payload
+                health_final = (
+                    attach_interrupted_write_recovery(
+                        health_payload,
+                        registry_root=registry_root,
+                    )
+                    or health_payload
+                )
             else:
                 action_failures.append(
                     failure_result(
@@ -699,7 +748,13 @@ def main(argv: list[str] | None = None) -> int:
             )
             code, health_payload, health_stdout, health_stderr = run_json_checked(health_cmd)
             if code == 0 and health_payload is not None:
-                health_final = health_payload
+                health_final = (
+                    attach_interrupted_write_recovery(
+                        health_payload,
+                        registry_root=registry_root,
+                    )
+                    or health_payload
+                )
             else:
                 action_failures.append(
                     failure_result(

@@ -153,7 +153,7 @@ def storage_gc_recovery_payload() -> dict[str, Any]:
             foreground_shell_action(
                 action_id="apply_rebuildable_storage_gc_after_review",
                 label="Apply rebuildable cleanup after review",
-                command="aippocampus storage gc --apply --class rebuildable --summary-json --cwd .",
+                command="aippocampus storage gc --apply --class rebuildable --include-active --summary-json --cwd .",
                 why="Apply is explicit and limited to candidates that pass rebuildability and safety checks.",
                 mutation_risk="explicit_local_delete_of_rebuildable_cache",
                 claim_boundary="operator_action_not_source_evidence",

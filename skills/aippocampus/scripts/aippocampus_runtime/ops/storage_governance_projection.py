@@ -178,57 +178,6 @@ def render_apply_text(result: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def deferred_summary_payload(*, class_filter: str, limit: int, schema_version: int) -> dict[str, Any]:
-    comparable_metrics = f"aippocampus storage gc --dry-run --json --top {max(1, int(limit))} --cwd ."
-    summary_actions = storage_gc_summary_actions(limit=limit, include_apply=False)
-    action_fields = canonical_foreground_action_fields(summary_actions[0], safe_next_actions=summary_actions)
-    return {
-        "kind": "aippocampus_storage_gc_summary",
-        "schema_version": schema_version,
-        "ok": True,
-        "status": "needs_full_scan",
-        "created_at": core.now_utc(),
-        "mode": "dry_run",
-        "read_only": True,
-        "requested_class": class_filter,
-        "needs_full_scan": True,
-        "candidate_count_total": None,
-        "sample_candidate_count": 0,
-        "candidate_detail_deferred": True,
-        "metrics_status": "not_computed_in_summary_mode",
-        "pressure_interpretation": "unknown_until_bounded_audit",
-        "metrics": {
-            "reclaimable_rebuildable_bytes": None,
-            "reclaimable_review_artifact_bytes": None,
-        },
-        "privacy": {
-            "local_private_identifiers_included": False,
-            "raw_session_like_ids_emitted": False,
-        },
-        "risk_boundary": {
-            "apply_requires_explicit_flag": True,
-            "summary_performs_writes": False,
-            "source_history_protected": True,
-            "full_candidate_preconditions_deferred": True,
-        },
-        **action_fields,
-        "safe_next_action": {
-            "decision": "continue without cleanup unless the user explicitly wants storage detail",
-            "continue_without_command": True,
-            "no_command_needed": True,
-            "instruction": "Continue the user's foreground work without running storage cleanup.",
-        },
-        "comparable_metrics_command": comparable_metrics,
-        "full_audit_available": True,
-        "full_audit_flag": "--json --full",
-        "operator_audit_command": "aippocampus storage gc --dry-run --json --full --cwd .",
-        "next_steps": [
-            "Run the bounded audit sample only when a foreground user asks for cleanup detail.",
-            "Use apply only for rebuildable cache candidates after deterministic checks pass.",
-        ],
-    }
-
-
 def _public_candidate(
     item: dict[str, Any],
     *,
@@ -324,9 +273,13 @@ def bounded_cli_projection(
                 "reclaimable_review_artifact_bytes",
             )
         )
+        apply_candidate_present = any(
+            str(item.get("actionability") or "") != "plan_only_aggregate"
+            for item in candidates
+        )
         summary_actions = storage_gc_summary_actions(
             limit=limit,
-            include_apply=bool(candidates) and pressure_present,
+            include_apply=apply_candidate_present and pressure_present,
         )
         action_fields = canonical_foreground_action_fields(
             summary_actions[0],

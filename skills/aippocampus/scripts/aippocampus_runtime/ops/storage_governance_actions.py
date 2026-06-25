@@ -65,7 +65,7 @@ def storage_gc_foreground_actions(
             {
                 "id": "apply_rebuildable_storage_gc_after_review",
                 "label": "Apply rebuildable cleanup after review",
-                "command": "aippocampus storage gc --apply --class rebuildable --summary-json --cwd .",
+                "command": "aippocampus storage gc --apply --class rebuildable --include-active --summary-json --cwd .",
                 "mutation_risk": "explicit_local_delete_of_rebuildable_cache",
                 "claim_boundary": "operator_action_not_source_evidence",
                 "why": "Apply only retention-report-backed rebuildable cache candidates whose checks pass.",
@@ -114,7 +114,7 @@ def storage_gc_summary_actions(*, limit: int, include_apply: bool) -> list[dict[
             {
                 "id": "apply_rebuildable_after_audit",
                 "label": "Apply rebuildable cleanup after audit",
-                "command": "aippocampus storage gc --apply --class rebuildable --summary-json --cwd .",
+                "command": "aippocampus storage gc --apply --class rebuildable --include-active --summary-json --cwd .",
                 "mutation_risk": "explicit_local_delete_of_rebuildable_cache",
                 "claim_boundary": "operator_action_not_source_evidence",
                 "why": "Apply only after the bounded/full audit confirms rebuildable candidates and checks.",

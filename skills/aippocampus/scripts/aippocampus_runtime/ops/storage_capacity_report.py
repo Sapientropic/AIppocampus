@@ -329,6 +329,7 @@ def build_report(
     *,
     top: int = 12,
     include_paths: bool = False,
+    include_candidate_threads: bool = False,
     planner_query: str | None = None,
     fanout_budget: int = 64,
 ) -> dict[str, Any]:
@@ -412,7 +413,7 @@ def build_report(
         reverse=True,
     )[:top]
 
-    return {
+    report: dict[str, Any] = {
         "schema_version": 1,
         "created_at": now_utc(),
         "registry": report_path(root, root, include_paths=include_paths),
@@ -445,6 +446,13 @@ def build_report(
         "unresolved_threads": unresolved,
         "recommendations": recommendations(totals, sync_bytes, fanout_handles),
     }
+    if include_candidate_threads:
+        # `top_threads` is a presentation sample. Storage governance needs the
+        # complete generated-cache owner set so a low `--top` foreground budget
+        # cannot hide GB-scale old generations that happen to sit outside the
+        # displayed sample.
+        report["candidate_threads"] = scanned
+    return report
 
 
 def recommendations(totals: dict[str, Any], sync_bytes: int, fanout_handles: int) -> list[str]:

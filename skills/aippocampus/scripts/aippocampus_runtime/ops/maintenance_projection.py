@@ -15,6 +15,9 @@ PLAN_SUMMARY_COMMAND = "aippocampus maintenance plan --summary-json"
 STATUS_SUMMARY_COMMAND = "aippocampus maintenance status --summary-json"
 STATUS_COMMAND = "aippocampus maintenance status --json"
 STORAGE_GC_BOUNDED_AUDIT_COMMAND = "aippocampus storage gc --dry-run --json --top 1 --cwd ."
+INTERRUPTED_WRITE_CLEANUP_COMMAND = (
+    "aippocampus maintenance apply --cleanup-interrupted-writes --summary-json"
+)
 
 
 def unique_action_ids(action_ids: list[str]) -> list[str]:
@@ -69,6 +72,8 @@ def public_action_command(action_id: str) -> str | None:
         return "aippocampus maintenance apply --append-checkpoint --summary-json"
     if action_id == "storage_gc_rebuildable_cache":
         return STORAGE_GC_BOUNDED_AUDIT_COMMAND
+    if action_id == "cleanup_interrupted_writes":
+        return INTERRUPTED_WRITE_CLEANUP_COMMAND
     if action_id in {
         "build_clean_source",
         "build_index",
@@ -92,6 +97,9 @@ def public_recommended_action(item: dict) -> dict:
         result["command"] = command
         if command == STORAGE_GC_BOUNDED_AUDIT_COMMAND:
             result["mutation_risk"] = "read_only"
+        elif command == INTERRUPTED_WRITE_CLEANUP_COMMAND:
+            result["mutation_risk"] = "explicit_local_delete_of_ai_owned_tmp_artifacts"
+            result["requires_user_consent"] = True
         else:
             result["mutation_risk"] = "explicit_generated_artifact_write"
             result["requires_user_consent"] = True
@@ -368,6 +376,9 @@ def summary_payload(result: dict) -> dict:
             for item in (result.get("action_failures") or [])[:5]
         ],
         "remaining_recommended_actions": remaining,
+        "interrupted_write_recovery": (result.get("health_final") or {}).get(
+            "interrupted_write_recovery"
+        ),
         "user_impact": user_impact(result.get("health_final"), result.get("remaining_recommended_actions") or []),
         "full_audit_available": True,
         "full_audit_flag": "--json",
@@ -438,6 +449,9 @@ def plan_payload(
             for item in recommended[:8]
             if isinstance(item, dict)
         ],
+        "interrupted_write_recovery": (health or {}).get("interrupted_write_recovery")
+        if isinstance(health, dict)
+        else None,
         "user_impact": user_impact(health, recommended),
         "apply_command": APPLY_SUMMARY_COMMAND,
         "full_audit_available": True,

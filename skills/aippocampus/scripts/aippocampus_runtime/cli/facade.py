@@ -146,7 +146,10 @@ def print_storage_recovery_card(*, file: TextIO | None = None) -> None:
     print("why: bare storage should not dump a long cleanup candidate list.", file=target)
     print("next: aippocampus storage gc --dry-run --summary-json --cwd .", file=target)
     print("audit: aippocampus storage gc --dry-run --json --top 1 --cwd .", file=target)
-    print("apply: aippocampus storage gc --apply --class rebuildable --summary-json --cwd .", file=target)
+    print(
+        "apply: aippocampus storage gc --apply --class rebuildable --include-active --summary-json --cwd .",
+        file=target,
+    )
     print("boundary: cleanup is explicit operator work; dry-run before apply.", file=target)
 
 

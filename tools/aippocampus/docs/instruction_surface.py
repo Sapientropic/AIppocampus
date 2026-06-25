@@ -477,6 +477,22 @@ INSTRUCTION_SURFACE_CLASSIFIED_FILES = {
         "owner": "#2664/#2651",
         "why": "owns executable CLI frontdoor contracts for operator/detail actions.",
     },
+    "tests/aippocampus/test_aippocampus_health.py": {
+        "classification": "health_status_test_contract_owner",
+        "owner": "#1868/#1890/#2178/#2651",
+        "why": (
+            "owns health/status compact-vs-detail, storage-pressure, host-state, "
+            "and readiness text contracts; strings are test fixtures, not hidden policy"
+        ),
+    },
+    "tests/aippocampus/test_aippocampus_maintenance.py": {
+        "classification": "maintenance_recovery_test_contract_owner",
+        "owner": "#1868/#2197/#2632/#2651",
+        "why": (
+            "owns maintenance status/plan/apply recovery-card behavior tests; "
+            "wording asserts read-only and explicit-mutation contracts"
+        ),
+    },
     "tests/aippocampus/test_aippocampus_mcp_server_catalog.py": {
         "classification": "mcp_catalog_test_contract_owner",
         "owner": "#2685/#2686/#2651",

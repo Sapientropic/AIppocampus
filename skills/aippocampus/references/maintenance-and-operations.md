@@ -319,7 +319,7 @@ Audit and archive commands:
 - `python -m aippocampus_runtime.ops.rollout_size_audit --cwd "$PWD"`
 - `python -m aippocampus_runtime.ops.storage_capacity_report --json`
 - `aippocampus storage gc --dry-run --json`
-- `aippocampus storage gc --apply --class rebuildable --retention-report "<retention_report.json>" --json`
+- `aippocampus storage gc --apply --class rebuildable --include-active --retention-report "<retention_report.json>" --json`
 - `python tools\aippocampus\smoke\smoke_synthetic_scale_capacity.py --json`
 - `python -m aippocampus_runtime.ops.retention_report --cwd "$PWD" --write`
 - `python -m aippocampus_runtime.ops.cold_archive --cwd "$PWD"`

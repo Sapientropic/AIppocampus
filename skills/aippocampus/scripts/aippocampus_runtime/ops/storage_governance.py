@@ -50,7 +50,6 @@ from aippocampus_runtime.ops.storage_governance_contract import (
 )
 from aippocampus_runtime.ops.storage_governance_projection import (
     bounded_cli_projection,
-    deferred_summary_payload,
     redact_report_sources,
     render_apply_text,
     render_text,
@@ -221,7 +220,7 @@ def _capacity_candidates(
     include_active: bool,
 ) -> list[dict[str, Any]]:
     candidates: list[dict[str, Any]] = []
-    for thread in capacity_report.get("top_threads") or []:
+    for thread in capacity_report.get("candidate_threads") or capacity_report.get("top_threads") or []:
         generated = int(thread.get("generated_index_bytes") or 0)
         semantic = int(thread.get("semantic_sidecar_bytes") or 0)
         size = generated + semantic
@@ -313,6 +312,7 @@ def _load_capacity_report(
         registry_dir,
         top=top,
         include_paths=include_paths,
+        include_candidate_threads=True,
         planner_query=planner_query,
         fanout_budget=fanout_budget,
     )
@@ -609,7 +609,7 @@ or is not allowed.
 `--apply` may delete only candidates that pass deterministic source, manifest,
 lease, active-thread, and rebuildability checks. Prefer the narrow supported
 path:
-  aippocampus storage gc --apply --class rebuildable --summary-json --cwd .
+  aippocampus storage gc --apply --class rebuildable --include-active --summary-json --cwd .
 
 High-risk/private flags:
   --include-active asks apply-time checks to consider paths near active work;
@@ -725,19 +725,6 @@ High-risk/private flags:
         plan_fanout_budget = min(plan_fanout_budget, 16)
         if args.capacity_report is None and args.retention_report is None:
             retention_path, _attempted = _default_retention_report_path(Path(args.cwd).resolve())
-            if retention_path is None and (args.summary_json or not explicit_top):
-                print(
-                    json.dumps(
-                        deferred_summary_payload(
-                            class_filter=args.class_filter,
-                            limit=plan_top,
-                            schema_version=SCHEMA_VERSION,
-                        ),
-                        ensure_ascii=False,
-                        indent=2,
-                    )
-                )
-                return 0
             if retention_path is not None:
                 args.retention_report = str(retention_path)
     try:

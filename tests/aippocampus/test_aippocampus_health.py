@@ -801,7 +801,7 @@ class AippocampusHealthTests(unittest.TestCase):
         )
         self.assertEqual(
             report["repair_command"],
-            "aippocampus storage gc --apply --class rebuildable --summary-json --cwd .",
+            "aippocampus storage gc --apply --class rebuildable --include-active --summary-json --cwd .",
         )
         self.assertTrue(report["source_history_protected"])
         self.assertFalse(report["privacy_boundary"]["paths_included"])
@@ -826,7 +826,7 @@ class AippocampusHealthTests(unittest.TestCase):
                 },
                 "dry_run_command": "aippocampus storage gc --dry-run --json --top 1 --cwd .",
                 "summary_command": "aippocampus storage gc --dry-run --summary-json --cwd .",
-                "repair_command": "aippocampus storage gc --apply --class rebuildable --summary-json --cwd .",
+                "repair_command": "aippocampus storage gc --apply --class rebuildable --include-active --summary-json --cwd .",
                 "source_history_protected": True,
                 "foreground_blocking": False,
             }
