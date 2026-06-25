@@ -17,6 +17,11 @@ from typing import Any, Mapping
 
 from aippocampus_runtime.core import now_utc
 from aippocampus_runtime.io_integrity import atomic_write_json
+from aippocampus_runtime.local_file_lock import (
+    OwnerCheckedFileLease,
+    OwnerCheckedLeaseBusyError,
+    OwnerCheckedLeaseChangedError,
+)
 from aippocampus_runtime.source.io_kernel import load_json_dict
 
 SCHEMA_VERSION = 1
@@ -44,33 +49,20 @@ def _write_json(path: Path, data: dict[str, Any]) -> None:
 
 @contextlib.contextmanager
 def _cache_file_lock(path: Path) -> Iterator[None]:
-    path.parent.mkdir(parents=True, exist_ok=True)
     lock = path.with_suffix(path.suffix + ".lock")
-    deadline = time.monotonic() + _LOCK_TIMEOUT_SECONDS
-    fd: int | None = None
-    while fd is None:
-        try:
-            fd = os.open(str(lock), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-            os.write(fd, f"{os.getpid()} {time.time():.6f}\n".encode("utf-8"))
-        except FileExistsError:
-            try:
-                if time.time() - lock.stat().st_mtime > _LOCK_STALE_AFTER_SECONDS:
-                    lock.unlink()
-                    continue
-            except FileNotFoundError:
-                continue
-            except OSError:
-                pass
-            if time.monotonic() >= deadline:
-                raise TimeoutError("semantic result cache lock busy") from None
-            time.sleep(0.025)
+    lease = OwnerCheckedFileLease(
+        lock,
+        lock_kind="semantic_result_cache",
+        stale_after_seconds=_LOCK_STALE_AFTER_SECONDS,
+        wait_timeout_seconds=_LOCK_TIMEOUT_SECONDS,
+        poll_interval_seconds=0.025,
+        payload_extra={"kind": "aippocampus_semantic_result_cache_lock"},
+    )
     try:
-        yield
-    finally:
-        if fd is not None:
-            os.close(fd)
-        with contextlib.suppress(FileNotFoundError):
-            lock.unlink()
+        with lease:
+            yield
+    except (OwnerCheckedLeaseBusyError, OwnerCheckedLeaseChangedError) as exc:
+        raise TimeoutError("semantic result cache lock busy") from exc
 
 
 def _public_count(value: Any) -> int:

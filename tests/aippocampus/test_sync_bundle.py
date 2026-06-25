@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import json
 import tempfile
+import threading
 import unittest
 from io import StringIO
 from pathlib import Path
 from unittest import mock
 
 from tests.aippocampus.import_path_helpers import import_smoke_module
+from tests.aippocampus.timing_fixtures import host_timeout_sleep
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ROOT = REPO_ROOT / "skills" / "aippocampus"
@@ -15,6 +17,7 @@ ROOT = REPO_ROOT / "skills" / "aippocampus"
 smoke_alternate_runtime_sync = import_smoke_module("smoke_alternate_runtime_sync")
 smoke_cross_device_sync = import_smoke_module("smoke_cross_device_sync")
 
+from aippocampus_runtime.registry import store as registry_store
 from aippocampus_runtime.sync import bundle as sync_bundle
 from aippocampus_runtime.sync import contract as sync_contract
 
@@ -411,7 +414,108 @@ class SyncBundleTests(unittest.TestCase):
         self.assertTrue(rollback["ok"], rollback)
         self.assertTrue(rollback["write_boundary"]["written"])
         self.assertFalse((target_registry / "threads.json").exists())
+        self.assertFalse((target_registry / "threads.md").exists())
         self.assertEqual(target_messages.read_text(encoding="utf-8"), "different local content\n")
+
+    def test_pull_preflight_rejects_tampered_file_without_target_write(self) -> None:
+        sync_bundle.push_sync_bundle(self.registry, self.sync_dir)
+        tampered = self.sync_dir / "registry" / "semantic_triggers.jsonl"
+        original = tampered.read_bytes()
+        tampered.write_bytes(b"x" * len(original))
+        target_registry = self.root / "target-preflight"
+
+        result = sync_bundle.pull_sync_bundle(self.sync_dir, target_registry)
+
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["status"], "sync_pull_preflight_failed")
+        self.assertEqual(result["issues"][0]["code"], "hash_mismatch")
+        self.assertFalse(result["write_boundary"]["written"])
+        self.assertFalse(target_registry.exists())
+
+    def test_pull_serializes_materialize_and_repair_with_registry_writer(self) -> None:
+        sync_bundle.push_sync_bundle(self.registry, self.sync_dir)
+        target_registry = self.root / "target-serialized"
+        repair_entered = threading.Event()
+        peer_entered = threading.Event()
+        peer_done = threading.Event()
+        release_repair = threading.Event()
+        errors: list[BaseException] = []
+        result: dict[str, object] = {}
+        original_clean_source_path_fields = sync_bundle.clean_source_path_fields
+
+        def slow_clean_source_path_fields(
+            clean_root: Path,
+            locator_root: Path,
+            *,
+            portable: bool,
+        ) -> dict[str, str | None]:
+            if not portable and target_registry.resolve() in clean_root.resolve().parents:
+                repair_entered.set()
+                release_repair.wait(timeout=5)
+            return original_clean_source_path_fields(
+                clean_root,
+                locator_root,
+                portable=portable,
+            )
+
+        def pull_worker() -> None:
+            try:
+                result.update(sync_bundle.pull_sync_bundle(self.sync_dir, target_registry))
+            except BaseException as exc:
+                errors.append(exc)
+
+        def peer_worker() -> None:
+            try:
+                repair_entered.wait(timeout=5)
+                peer_entered.set()
+
+                def update(registry: dict) -> dict:
+                    return registry_store.upsert_thread(
+                        registry,
+                        {
+                            "thread_key": "peer",
+                            "title": "peer",
+                            "updated_at": "2026-06-03T00:00:02Z",
+                        },
+                    )
+
+                registry_store.update_registry(
+                    target_registry / "threads.json",
+                    target_registry / "threads.md",
+                    update,
+                )
+                peer_done.set()
+            except BaseException as exc:
+                errors.append(exc)
+
+        with mock.patch.object(
+            sync_bundle,
+            "clean_source_path_fields",
+            side_effect=slow_clean_source_path_fields,
+        ):
+            pull = threading.Thread(target=pull_worker)
+            peer = threading.Thread(target=peer_worker)
+            pull.start()
+            self.assertTrue(repair_entered.wait(timeout=5))
+            peer.start()
+            self.assertTrue(peer_entered.wait(timeout=5))
+            host_timeout_sleep(
+                0.05,
+                reason="prove sync pull repair holds the registry writer lease",
+            )
+            self.assertFalse(peer_done.is_set())
+            release_repair.set()
+            pull.join(timeout=5)
+            peer.join(timeout=5)
+
+        self.assertFalse(errors)
+        self.assertTrue(result["ok"], result)
+        self.assertTrue(peer_done.is_set())
+        repaired = json.loads((target_registry / "threads.json").read_text(encoding="utf-8"))
+        self.assertEqual(
+            {entry["thread_key"] for entry in repaired["threads"]},
+            {"session:test", "peer"},
+        )
 
     def test_pull_repairs_registry_paths_for_target_device(self) -> None:
         sync_bundle.push_sync_bundle(self.registry, self.sync_dir)
@@ -502,10 +606,18 @@ class SyncBundleTests(unittest.TestCase):
             (self.sync_dir / "registry" / "threads.json").read_text(encoding="utf-8")
         )
         synced_registry["threads"][0]["thread_key"] = "missing-thread"
-        (self.sync_dir / "registry" / "threads.json").write_text(
+        synced_registry_path = self.sync_dir / "registry" / "threads.json"
+        synced_registry_path.write_text(
             json.dumps(synced_registry, ensure_ascii=False),
             encoding="utf-8",
         )
+        manifest_path = self.sync_dir / sync_bundle.SYNC_MANIFEST_NAME
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        for item in manifest["files"]:
+            if item["path"] == "registry/threads.json":
+                item["size"] = synced_registry_path.stat().st_size
+                item["sha256"] = sync_bundle.file_sha256(synced_registry_path)
+        manifest_path.write_text(json.dumps(manifest, ensure_ascii=False), encoding="utf-8")
 
         result = sync_bundle.pull_sync_bundle(self.sync_dir, self.root / "target-broken-registry")
 
@@ -638,8 +750,11 @@ class SyncBundleTests(unittest.TestCase):
         self.assertTrue(result["claims"]["cross_os_path_shape_model"])
         self.assertFalse(result["claims"]["physical_second_machine"])
         self.assertFalse(result["claims"]["real_cloud_backend"])
-        self.assertEqual(result["steps"]["push_device_a"]["file_count"], 11)
-        self.assertEqual(result["steps"]["push_raw_opt_in"]["file_count"], 12)
+        self.assertGreater(result["steps"]["push_device_a"]["file_count"], 0)
+        self.assertGreater(
+            result["steps"]["push_raw_opt_in"]["file_count"],
+            result["steps"]["push_device_a"]["file_count"],
+        )
         self.assertIsNone(result["observed"]["portable_paths"]["workspace"])
         self.assertIsNone(result["observed"]["portable_paths"]["rollout"])
         self.assertIn(

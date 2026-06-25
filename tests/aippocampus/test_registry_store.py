@@ -99,5 +99,84 @@ class RegistryStoreTests(unittest.TestCase):
             self.assertIn("thread-1", md_path.read_text(encoding="utf-8"))
             self.assertIn("thread-2", md_path.read_text(encoding="utf-8"))
 
+    def test_update_registry_transaction_holds_lease_during_materialize(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            json_path = root / "threads.json"
+            md_path = root / "threads.md"
+            materialize_started = threading.Event()
+            peer_entered = threading.Event()
+            peer_done = threading.Event()
+            release_materialize = threading.Event()
+            errors: list[BaseException] = []
+
+            def transaction_worker() -> None:
+                try:
+                    def materialize() -> None:
+                        materialize_started.set()
+                        release_materialize.wait(timeout=5)
+
+                    def update(registry: dict) -> dict:
+                        return store.upsert_thread(
+                            registry,
+                            {
+                                "thread_key": "transaction",
+                                "title": "transaction",
+                                "updated_at": "2026-06-03T00:00:01Z",
+                            },
+                        )
+
+                    store.update_registry_transaction(
+                        json_path,
+                        md_path,
+                        materialize=materialize,
+                        updater=update,
+                    )
+                except BaseException as exc:
+                    errors.append(exc)
+
+            def peer_worker() -> None:
+                try:
+                    materialize_started.wait(timeout=5)
+                    peer_entered.set()
+
+                    def update(registry: dict) -> dict:
+                        return store.upsert_thread(
+                            registry,
+                            {
+                                "thread_key": "peer",
+                                "title": "peer",
+                                "updated_at": "2026-06-03T00:00:02Z",
+                            },
+                        )
+
+                    store.update_registry(json_path, md_path, update)
+                    peer_done.set()
+                except BaseException as exc:
+                    errors.append(exc)
+
+            transaction = threading.Thread(target=transaction_worker)
+            peer = threading.Thread(target=peer_worker)
+            transaction.start()
+            self.assertTrue(materialize_started.wait(timeout=5))
+            peer.start()
+            self.assertTrue(peer_entered.wait(timeout=5))
+            host_timeout_sleep(
+                0.05,
+                reason="prove peer registry update waits while transaction materializes",
+            )
+            self.assertFalse(peer_done.is_set())
+            release_materialize.set()
+            transaction.join(timeout=5)
+            peer.join(timeout=5)
+
+            self.assertFalse(errors)
+            self.assertTrue(peer_done.is_set())
+            registry = json.loads(json_path.read_text(encoding="utf-8"))
+            self.assertEqual(
+                {entry["thread_key"] for entry in registry["threads"]},
+                {"transaction", "peer"},
+            )
+
 if __name__ == "__main__":
     unittest.main()
