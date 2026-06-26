@@ -166,13 +166,16 @@ planning material:
 For ordinary repo changes, plan verification from the changed surface first:
 
 ```powershell
-python tools\aippocampus\test_plan.py --json
-python tools\aippocampus\docs\check_docs_health.py --json
-python tools\aippocampus\run_tests.py --tier pr
+python tools\aippocampus\changed_surface_preflight.py --json
 ```
 
-`--tier pr` is the fast local pre-push gate, not the old broad deterministic
-suite. Let focused tests and the planner run first. Use
+`changed_surface_preflight.py` is the executable fail-fast gate for the current
+dirty surface. It runs `git diff --check`, planner-named static/debt/slop gates,
+then focused tests, stopping at the first blocker so agents do not bury a cheap
+failure behind broad test output. Use `python tools\aippocampus\test_plan.py
+--json` when you need the dry-run command plan or detail output without running
+it. `--tier pr` is the fast local pre-push gate, not the old broad deterministic
+suite; run it when the preflight or changed surface names it. Use
 `python tools\aippocampus\run_tests.py --tier broad-pr`, `--tier full`, or the
 specific slow / benchmark tier only when the changed surface or release claim
 owns that broader coverage.

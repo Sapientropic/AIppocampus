@@ -504,12 +504,27 @@ def load(rows):
         self.assertEqual(payload["kind"], "aippocampus_agent_slop_guard")
         self.assertTrue(payload["advisory"])
         self.assertEqual(payload["changed_surface_unbaselined_count"], 1)
-        self.assertEqual(payload["findings"][0]["rule_id"], "compact_projector_bypass")
+        self.assertNotIn("rules", payload)
+        self.assertEqual(payload["blockers"][0]["rule_id"], "compact_projector_bypass")
         self.assertEqual(hard.returncode, 1)
+        hard_payload = json.loads(hard.stdout)
+        self.assertFalse(hard_payload["ok"])
+        self.assertFalse(hard_payload["advisory"])
+        self.assertEqual(hard_payload["gate_status"], "failed")
+        self.assertEqual(hard_payload["status"], "fail")
+        self.assertEqual(hard_payload["blockers"][0]["rule_id"], "compact_projector_bypass")
 
     def test_cli_fixture_self_check_fails_if_expected_bad_or_allowed_contract_breaks(self) -> None:
         proc = subprocess.run(
-            [sys.executable, str(GUARD), "--json", "--fixture-root", str(FIXTURES)],
+            [
+                sys.executable,
+                str(GUARD),
+                "--json",
+                "--detail",
+                "full",
+                "--fixture-root",
+                str(FIXTURES),
+            ],
             cwd=REPO_ROOT,
             text=True,
             encoding="utf-8",

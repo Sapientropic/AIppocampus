@@ -29,7 +29,10 @@ class ChangedSurfaceTestPlanTests(unittest.TestCase):
         self.assertIn("docs", payload["categories"])
         self.assertEqual(
             commands,
-            [py_script("tools/aippocampus/docs/check_docs_health.py", "--json")],
+            [
+                test_plan.GIT_DIFF_CHECK_COMMAND,
+                py_script("tools/aippocampus/docs/check_docs_health.py", "--json"),
+            ],
         )
 
     def test_architecture_debt_tracked_change_recommends_headroom_preflight(self) -> None:
@@ -43,6 +46,8 @@ class ChangedSurfaceTestPlanTests(unittest.TestCase):
         self.assertIn("changed_surface_debt", payload["categories"])
         self.assertIn("static_gates", payload["categories"])
         self.assertIn("type_check", payload["categories"])
+        self.assertIn("worktree_hygiene", payload["categories"])
+        self.assertEqual(commands[0], test_plan.GIT_DIFF_CHECK_COMMAND)
         self.assertIn(test_plan.CI_RUFF_COMMAND, commands)
         self.assertIn(test_plan.CI_MYPY_COMMAND, commands)
         self.assertIn(
@@ -127,7 +132,7 @@ class ChangedSurfaceTestPlanTests(unittest.TestCase):
         commands = [command["command"] for command in payload["commands"]]
         advisory = py_script(
             "tools/aippocampus/agent_slop_guard.py",
-            "--json "
+            "--json --fail-on-violations "
             "--changed-file skills/aippocampus/scripts/aippocampus_runtime/mcp/tool_handlers.py",
         )
 
@@ -138,7 +143,7 @@ class ChangedSurfaceTestPlanTests(unittest.TestCase):
         self.assertIn("source IO", advisory_command["reason"])
         self.assertIn("registry/lock owner", advisory_command["reason"])
         self.assertIn("field-only test", advisory_command["reason"])
-        self.assertNotIn("--fail-on-violations", advisory_command["command"])
+        self.assertIn("--fail-on-violations", advisory_command["command"])
 
     def test_agent_slop_guard_change_recommends_fixture_and_planner_tests(self) -> None:
         payload = test_plan.build_test_plan(["tools/aippocampus/agent_slop_guard.py"])
@@ -265,7 +270,8 @@ class ChangedSurfaceTestPlanTests(unittest.TestCase):
     def test_test_only_change_frontloads_ruff_without_unneeded_mypy(self) -> None:
         commands = commands_for(["tests/aippocampus/test_test_plan.py"])
 
-        self.assertEqual(commands[0], test_plan.CI_RUFF_COMMAND)
+        self.assertEqual(commands[0], test_plan.GIT_DIFF_CHECK_COMMAND)
+        self.assertEqual(commands[1], test_plan.CI_RUFF_COMMAND)
         self.assertNotIn(test_plan.CI_MYPY_COMMAND, commands)
         self.assertTrue(any("tests.aippocampus.test_test_plan" in command for command in commands))
 
@@ -375,9 +381,10 @@ class ChangedSurfaceTestPlanTests(unittest.TestCase):
             ]
         )
 
-        self.assertEqual(commands[0], test_plan.CI_RUFF_COMMAND)
+        self.assertEqual(commands[0], test_plan.GIT_DIFF_CHECK_COMMAND)
+        self.assertEqual(commands[1], test_plan.CI_RUFF_COMMAND)
         self.assertEqual(
-            commands[1],
+            commands[2],
             py_command(
                 "-m unittest "
                 "tests.aippocampus.test_benchmark_longmemeval "

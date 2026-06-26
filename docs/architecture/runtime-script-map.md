@@ -234,11 +234,15 @@ into one giant fixture file. Use this map when changing core recall behavior:
 | Architecture and coupling guardrails | `tests/aippocampus/test_import_coupling.py`, `tests/aippocampus/test_architecture_boundaries.py`, `tests/aippocampus/test_compat_shim_inventory.py` | Import boundaries, no flat runtime scripts, large-module debt registration, and high-risk mypy coverage. |
 
 For ordinary changes, start with
-`python tools/aippocampus/test_plan.py --json` so agents run focused tests
-before escalating. The planner output is the command authority: it emits the
-active interpreter path so Windows, editable installs, and multi-Python shells
-do not turn verification into a guessing game. The examples here are readable
-short forms, not a requirement to rerun work with a different `python`.
+`python tools/aippocampus/changed_surface_preflight.py --json`. It consumes the
+changed-surface planner, runs the cheap hygiene/static/debt/slop gates before
+focused tests, and stops at the first blocker. Use
+`python tools/aippocampus/test_plan.py --json` when you need a dry-run command
+plan or detail output without executing it. The planner remains the command
+authority: it emits the active interpreter path so Windows, editable installs,
+and multi-Python shells do not turn verification into a guessing game. The
+examples here are readable short forms, not a requirement to rerun work with a
+different `python`.
 
 Use `quick` only as a cheap inner loop. Use `pr` as the ordinary local pre-push
 gate; it already includes `quick`, so do not run both during closeout by
