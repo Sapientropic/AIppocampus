@@ -244,12 +244,18 @@ def build_associative_path_agent_fallback(
             active_lock_path=active_lock_path,
         )
     reason_code = str(policy.get("run_reason") or "apw_opt_in_fallback")
+    diagnostic_registry_dir = registry_dir if policy.get("explicit_requested") else None
     diagnostic = build_associative_path_diagnostic(
         query=query,
         cwd=cwd,
         sidecar_dir=sidecar_dir,
         clean_source_dir=clean_source_dir,
-        registry_dir=registry_dir,
+        # Registry-wide APW source search is intentionally explicit-only. The
+        # cheap policy gate already keeps registry candidate detection behind
+        # `--apw-fallback`; keep the diagnostic builder aligned so a
+        # semi-default clean-source/sidecar recovery does not scan the user's
+        # whole registry on every weak foreground recall.
+        registry_dir=diagnostic_registry_dir,
         semantic_bridge_path=semantic_bridge_path,
         navigation_path=navigation_path,
         active_lock_path=active_lock_path,

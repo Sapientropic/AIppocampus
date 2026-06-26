@@ -165,11 +165,47 @@ def _read_only_actions(finding: Mapping[str, Any]) -> list[dict[str, Any]]:
     ]
 
 
-def _finding_summary(finding: Mapping[str, Any]) -> dict[str, Any]:
+def _compact_action(action: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        key: value
+        for key, value in action.items()
+        if key
+        in {
+            "id",
+            "label",
+            "command",
+            "command_template",
+            "requires",
+            "template_only",
+            "mutation_risk",
+            "claim_boundary",
+            "why",
+            "tool_name",
+            "arguments",
+            "arguments_template",
+        }
+        and value not in (None, "", [], {})
+    }
+
+
+def _finding_summary(finding: Mapping[str, Any], *, detail_level: str = "compact") -> dict[str, Any]:
     boundary_raw = finding.get("boundary")
     boundary: Mapping[str, Any] = boundary_raw if isinstance(boundary_raw, Mapping) else {}
     source_raw = finding.get("source")
     source: Mapping[str, Any] = source_raw if isinstance(source_raw, Mapping) else {}
+    if detail_level == "compact":
+        pairs = {
+            "index": finding.get("index"),
+            "finding_id": finding.get("finding_id"),
+            "finding_title": finding.get("finding_title"),
+            "matched_terms": finding.get("matched_terms"),
+            "match_strength": finding.get("match_strength"),
+            "distinctive_match_count": finding.get("distinctive_match_count"),
+            "why_it_may_matter_now": finding.get("why_it_may_matter_now"),
+            "source_ref_count": source.get("source_ref_count"),
+            "source_finding_count": source.get("source_finding_count"),
+        }
+        return {key: value for key, value in pairs.items() if value not in (None, "", [])}
     pairs = {
         "index": finding.get("index"),
         "finding_id": finding.get("finding_id"),
@@ -201,6 +237,22 @@ def _detail_finding(finding: Mapping[str, Any]) -> dict[str, Any]:
     return projected
 
 
+def _action_grammar_for_finding(finding: Mapping[str, Any]) -> str:
+    boundary = finding.get("boundary")
+    boundary_map = boundary if isinstance(boundary, Mapping) else {}
+    return str(boundary_map.get("action_grammar") or "").strip()
+
+
+def _reopenable_first(findings: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return sorted(
+        findings,
+        key=lambda finding: (
+            0 if _action_grammar_for_finding(finding) == "reopenable_route" else 1,
+            int(finding.get("index") or 0),
+        ),
+    )
+
+
 def background_findings_card(
     cue: str,
     *,
@@ -209,6 +261,7 @@ def background_findings_card(
     project: str | None = "AIppocampus",
     limit: int = DEFAULT_BACKGROUND_FINDINGS_LIMIT,
     detail: str = "compact",
+    prefer_reopenable: bool = False,
 ) -> dict[str, Any]:
     task = str(cue or "").strip()
     if not task:
@@ -236,6 +289,8 @@ def background_findings_card(
         _project_finding(row, cue=task, index=index)
         for index, row in enumerate(matches, start=1)
     ]
+    if prefer_reopenable:
+        findings = _reopenable_first(findings)
     primary_action = (
         findings[0]["next_actions"][0]
         if findings
@@ -249,13 +304,27 @@ def background_findings_card(
         )
     )
     detail_level = _normalize_detail(detail)
-    finding_summaries = [_finding_summary(finding) for finding in findings[:3]]
+    finding_summaries = [
+        _finding_summary(finding, detail_level=detail_level) for finding in findings[:3]
+    ]
     best_finding = finding_summaries[0] if finding_summaries else None
     compact_other_summaries = finding_summaries[1:] if detail_level == "compact" else finding_summaries
     action_fields = canonical_foreground_action_fields(
         primary_action,
         safe_next_actions=[primary_action],
     )
+    if detail_level == "compact":
+        action_fields.pop("foreground_action_contract", None)
+        foreground_action = action_fields.get("foreground_action")
+        if isinstance(foreground_action, Mapping):
+            action_fields["foreground_action"] = _compact_action(foreground_action)
+        raw_safe_next_actions = action_fields.get("safe_next_actions")
+        safe_next_actions = raw_safe_next_actions if isinstance(raw_safe_next_actions, list) else []
+        action_fields["safe_next_actions"] = [
+            _compact_action(action)
+            for action in safe_next_actions
+            if isinstance(action, Mapping)
+        ]
     payload = {
         "kind": "aippocampus_background_findings_card",
         "detail": detail_level,
@@ -289,7 +358,10 @@ def background_findings_card(
         )
     if detail_level == "detail":
         detail_findings = [_detail_finding(finding) for finding in findings]
-        detail_summaries = [_finding_summary(finding) for finding in detail_findings[:3]]
+        detail_summaries = [
+            _finding_summary(finding, detail_level=detail_level)
+            for finding in detail_findings[:3]
+        ]
         payload["best_finding"] = detail_summaries[0] if detail_summaries else None
         payload["finding_summaries"] = detail_summaries
         payload["findings"] = detail_findings

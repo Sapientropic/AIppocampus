@@ -8,14 +8,31 @@ from typing import Any
 from aippocampus_runtime import core
 from aippocampus_runtime.contracts import (
     canonical_foreground_action_fields,
-    command_value_needs_input,
-    shell_quote,
+    normalize_foreground_action,
 )
 from aippocampus_runtime.mcp import agent_recall_result_projection as result_projection
 from aippocampus_runtime.mcp import agent_recall_route_projection as route_projection
 from aippocampus_runtime.mcp.compact_profile import strip_compact_foreground_debug_fields
 
-_RECALL_DETAIL_COMMAND_TEMPLATE = 'aippocampus agent recall "{cue}" --json --detail full'
+# Recall compact is an action card, not a foreground protocol dump. Keep only
+# fields an agent can execute or use to choose the next route; full/detail owns
+# selectors inventories, source-proof cards, and operator diagnostics.
+_RECALL_COMPACT_ACTION_KEYS = frozenset(
+    {
+        "id",
+        "label",
+        "tool_name",
+        "arguments",
+        "command",
+        "command_template",
+        "requires",
+        "template_only",
+        "mutation_risk",
+        "claim_boundary",
+        "why",
+        "continue_without_command",
+    }
+)
 
 
 def assemble_compact_recall_payload(
@@ -30,7 +47,6 @@ def assemble_compact_recall_payload(
     apw_recovery: dict[str, Any] | None,
     repo_familiarity_fallback: dict[str, Any] | None,
     background_recovery: dict[str, Any] | None,
-    discussion_atlas_pointer: Any,
     exact_wording_source_search_primary: bool,
 ) -> dict[str, Any]:
     route_receipts = route_projection_result.route_receipts
@@ -40,12 +56,13 @@ def assemble_compact_recall_payload(
             action_options=safe_next_actions,
             foreground_action=foreground_action,
         )
-    detail_fields = _recall_detail_command_fields(context.recovery_cue)
-    detail_command = str(detail_fields.get("operator_detail_command") or "")
-    detail_command_template = str(detail_fields.get("operator_detail_command_template") or "")
     can_use_for = ["next_action_choice"]
     if not context.labels_low_specificity and not exact_wording_source_search_primary:
         can_use_for.append("route_selection")
+    action_fields = _compact_recall_action_fields(
+        foreground_action,
+        safe_next_actions=safe_next_actions,
+    )
     result = {
         "detail": "compact",
         "kind": payload.get("kind"),
@@ -56,57 +73,58 @@ def assemble_compact_recall_payload(
         "apw_recovery_state": apw_recovery.get("state") if isinstance(apw_recovery, dict) else None,
         "foreground_action": foreground_action,
         "miss_recovery_card": miss_recovery_card,
-        "weak_route_recovery_card": weak_route_recovery_card,
         "background_recovery_card": background_recovery,
         "routes": route_receipts,
         "repo_familiarity_fallback": repo_familiarity_fallback,
-        "discussion_atlas_pointer": discussion_atlas_pointer,
-        "claim_boundary": _compact_claim_boundary(
-            can_use_for=can_use_for,
-            must_reopen_for=["source_backed_claims", "exact_wording", "sensitive_or_stale_facts"],
-            detail_command=detail_command or None,
-            detail_command_template=detail_command_template or None,
-        ),
+        "claim_boundary": _compact_claim_boundary(can_use_for=can_use_for),
     }
-    result.update(
-        canonical_foreground_action_fields(
-            foreground_action,
-            safe_next_actions=safe_next_actions,
-        )
-    )
+    result.update(action_fields)
     return strip_compact_foreground_debug_fields(core.strip_empty(result))
 
 
-def _compact_claim_boundary(
+def _compact_recall_action_fields(
+    foreground_action: Mapping[str, object],
     *,
-    can_use_for: list[str],
-    must_reopen_for: list[str],
-    detail_command: str | None = None,
-    detail_command_template: str | None = None,
+    safe_next_actions: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    boundary: dict[str, Any] = {
-        "can_use_for": can_use_for,
-        "must_reopen_for": must_reopen_for,
-    }
-    if detail_command:
-        boundary["detail_available"] = True
-        boundary["detail_mode"] = "full"
-    elif detail_command_template:
-        boundary["detail_available"] = True
-        boundary["detail_mode"] = "full"
-        boundary["detail_requires"] = ["cue"]
-    return boundary
+    action_fields = canonical_foreground_action_fields(
+        foreground_action,
+        safe_next_actions=safe_next_actions,
+    )
+    raw_primary = action_fields.get("foreground_action")
+    primary_map = raw_primary if isinstance(raw_primary, Mapping) else {}
+    nested_secondary = primary_map.get("secondary_action")
+    raw_safe_actions = []
+    if isinstance(nested_secondary, Mapping):
+        raw_safe_actions.append(nested_secondary)
+    raw_safe_actions.extend(action_fields.get("safe_next_actions", []))
+    primary = _compact_recall_action(raw_primary)
+    safe_actions = [
+        action
+        for action in (
+            _compact_recall_action(item)
+            for item in raw_safe_actions
+        )
+        if action and action != primary
+    ]
+    result: dict[str, Any] = {"foreground_action": primary}
+    if safe_actions:
+        result["safe_next_actions"] = safe_actions
+    return result
 
 
-def _recall_detail_command_fields(cue: str) -> dict[str, Any]:
-    if cue and not command_value_needs_input(cue):
-        return {
-            "operator_detail_command": (
-                f"aippocampus agent recall {shell_quote(cue)} --json --detail full"
-            )
-        }
+def _compact_recall_action(action: Any) -> dict[str, Any]:
+    if not isinstance(action, Mapping):
+        return {}
+    normalized = normalize_foreground_action(action)
     return {
-        "operator_detail_command_template": _RECALL_DETAIL_COMMAND_TEMPLATE,
-        "operator_detail_requires": ["cue"],
-        "operator_detail_template_only": True,
+        key: strip_compact_foreground_debug_fields(value)
+        for key, value in normalized.items()
+        if key in _RECALL_COMPACT_ACTION_KEYS and value not in (None, "", [], {})
     }
+
+
+def _compact_claim_boundary(*, can_use_for: list[str]) -> str:
+    if "route_selection" in can_use_for:
+        return "route_selection_ok_after_source_reopen"
+    return "next_action_only_reopen_before_claims"

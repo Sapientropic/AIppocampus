@@ -8,6 +8,67 @@ from collections.abc import Collection
 from aippocampus_runtime.navigation.associations import normalize_term
 from aippocampus_runtime.recall.query_policy import split_query_terms
 
+LOW_INFORMATION_SINGLE_TRIGGER_TERMS = {
+    "background",
+    "card",
+    "cards",
+    "compact",
+    "default",
+    "defaults",
+    "detail",
+    "details",
+    "foreground",
+    "input",
+    "inputs",
+    "output",
+    "outputs",
+    "result",
+    "results",
+    "status",
+    "statuses",
+}
+
+GENERIC_TRIGGER_TERMS = {
+    "user",
+    "project",
+    "memory",
+    "candidate",
+    "issue",
+    "issues",
+    "message",
+    "messages",
+    "preference",
+    "review",
+    "source",
+    "agent",
+    "app",
+    "系统",
+    "项目",
+    "记忆",
+    "候选",
+    "偏好",
+    "用户",
+    "dashboard",
+    "button",
+    "buttons",
+    "hover",
+    "style",
+    "styles",
+    "test",
+    "tests",
+    "implement",
+    "maintain",
+    # Single generic action nouns should not wake a high-risk working-memory
+    # item by themselves. Specific terms in the same row, such as a tool name or
+    # consent gate phrase, remain enough to match.
+    "flow",
+    "mutation",
+    "mutations",
+    "按钮",
+    "样式",
+    "测试",
+} | LOW_INFORMATION_SINGLE_TRIGGER_TERMS
+
 
 def prompt_parts_for(prompt: str, *, generic_terms: Collection[str]) -> list[str]:
     return [

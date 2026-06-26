@@ -2,11 +2,18 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.recall import background_findings, recall_recovery_policy
+
+BACKGROUND_ROUTE_TOKEN_RE = re.compile(r"\b(?:wm|sf)_[A-Za-z0-9]{8,}\b")
+
+
+def contains_background_route_token(query: str) -> bool:
+    return bool(BACKGROUND_ROUTE_TOKEN_RE.search(str(query or "")))
 
 
 def background_recovery_for_weak_recall(
@@ -22,6 +29,12 @@ def background_recovery_for_weak_recall(
 
     if not str(query or "").strip():
         return None
+    if contains_background_route_token(query):
+        # Background recovery is a first-hop scent. Once a foreground action has
+        # injected a reviewed finding/source-finding id into the cue, repeat
+        # recovery would append the same ids again and hide the direct
+        # recall->deepen route in another background action.
+        return None
     if not recall_recovery_policy.ordinary_recall_needs_recovery(
         memory_packets=memory_packets,
         deepen_requests=deepen_requests,
@@ -34,6 +47,7 @@ def background_recovery_for_weak_recall(
         project=project,
         limit=2,
         detail="compact",
+        prefer_reopenable=True,
     )
     if card.get("status") != "ok" or not isinstance(card.get("foreground_action"), Mapping):
         return None

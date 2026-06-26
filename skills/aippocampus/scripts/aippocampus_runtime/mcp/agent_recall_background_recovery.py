@@ -41,16 +41,11 @@ def _compact_background_recovery(card: Mapping[str, Any]) -> dict[str, Any] | No
         key: best_map[key]
         for key in (
             "finding_id",
-            "surface",
-            "shape_label",
             "finding_title",
-            "match_reason",
             "matched_terms",
             "match_strength",
-            "why_it_may_matter_now",
             "source_ref_count",
             "source_finding_count",
-            "use_boundary",
         )
         if key in best_map and best_map[key] not in (None, "", [], {})
     }

@@ -4,15 +4,30 @@
 from __future__ import annotations
 
 import argparse
+import importlib
+import importlib.util
 import json
 import os
 import re
-import subprocess
 import sys
-import urllib.error
-import urllib.request
 from pathlib import Path
 from typing import Any, Mapping
+
+
+def _load_followthrough_helper() -> Any:
+    if __package__:
+        return importlib.import_module(f"{__package__}.closeout_audit_followthrough")
+
+    helper_path = Path(__file__).with_name("closeout_audit_followthrough.py")
+    spec = importlib.util.spec_from_file_location("closeout_audit_followthrough", helper_path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Cannot load closeout audit helper from {helper_path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+closeout_audit_followthrough = _load_followthrough_helper()
 
 SCHEMA_VERSION = 1
 
@@ -486,6 +501,8 @@ def audit_closed_issue_traceability(
     *,
     window_start: str | None = None,
     window_end: str | None = None,
+    retrieval_status: str = "provided",
+    retrieval_error: str | None = None,
 ) -> dict[str, Any]:
     """Audit already-closed issues for source-reachable closeout evidence.
 
@@ -494,8 +511,31 @@ def audit_closed_issue_traceability(
     trails, while historical issue comments remain immutable public history.
     """
 
-    rows = _closed_issue_rows(issues)
+    all_rows = _closed_issue_rows(issues)
+    has_closed_at_values = any(str(row.get("closedAt") or row.get("closed_at") or "").strip() for row in all_rows)
+    rows = (
+        [
+            row
+            for row in all_rows
+            if closeout_audit_followthrough.closed_at_in_window(
+                row,
+                window_start=window_start,
+                window_end=window_end,
+            )
+        ]
+        if has_closed_at_values and (window_start or window_end)
+        else all_rows
+    )
     findings: list[dict[str, Any]] = []
+    if retrieval_status == "failed":
+        findings.append(
+            {
+                "kind": "closed_window_retrieval_failed",
+                "severity": "error",
+                "message": "Closed-window audit could not retrieve trusted closed issue data.",
+                "error": retrieval_error or "unknown",
+            }
+        )
     malformed_comment_issue_count = 0
     missing_pr_or_commit_reference_count = 0
     missing_closeout_comment_count = 0
@@ -562,13 +602,20 @@ def audit_closed_issue_traceability(
                 }
             )
 
+    issue_count = len([raw for raw in rows if _issue_number(raw)])
+    status = "fail" if findings else "pass" if issue_count else "no_closed_issues"
     return {
         "kind": "aippocampus_closed_issue_traceability_audit",
         "schema_version": SCHEMA_VERSION,
         "ok": not findings,
+        "status": status,
         "window": {"start": window_start, "end": window_end},
         "summary": {
-            "closed_issue_count": len([raw for raw in rows if _issue_number(raw)]),
+            "retrieval_status": retrieval_status,
+            "retrieval_error": retrieval_error,
+            "input_issue_count": len([raw for raw in all_rows if _issue_number(raw)]),
+            "window_filtered_count": issue_count,
+            "closed_issue_count": issue_count,
             "issues_with_closed_pr_count": issues_with_closed_pr_count,
             "issues_with_commit_reference_count": issues_with_commit_reference_count,
             "issues_with_closeout_comment_count": issues_with_closeout_comment_count,
@@ -772,7 +819,10 @@ def _evidence_shape(body: str) -> dict[str, bool]:
         "has_synthetic_only_evidence_terms": bool(SYNTHETIC_ONLY_EVIDENCE_RE.search(body)),
         "has_wired_ready_useful_claim": bool(WIRED_READY_USEFUL_RE.search(body)),
         "has_guard_contract_list_evidence": bool(GUARD_CONTRACT_LIST_EVIDENCE_RE.search(body)),
-        "has_guard_command_evidence": bool(GUARD_COMMAND_EVIDENCE_RE.search(body)),
+        "has_guard_command_evidence": closeout_audit_followthrough.has_replayable_guard_command(
+            body,
+            guard_command_re=GUARD_COMMAND_EVIDENCE_RE,
+        ),
     }
 
 
@@ -818,83 +868,6 @@ def _missing_performance_metrics(
     if freshness_required and not performance_evidence_shape["has_freshness_metric"]:
         missing.append("graph_cache_freshness")
     return missing
-
-
-def _fetch_github_issue_metadata(
-    *,
-    repo: str,
-    issue_numbers: list[int],
-    token: str | None = None,
-) -> dict[int, dict[str, Any]]:
-    if not repo or not issue_numbers:
-        return {}
-    out: dict[int, dict[str, Any]] = {}
-    headers = {
-        "Accept": "application/vnd.github+json",
-        "User-Agent": "aippocampus-closeout-audit",
-    }
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
-    for number in issue_numbers:
-        url = f"https://api.github.com/repos/{repo}/issues/{number}"
-        request = urllib.request.Request(url, headers=headers)
-        try:
-            with urllib.request.urlopen(request, timeout=15) as response:
-                payload = json.loads(response.read().decode("utf-8"))
-        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError):
-            fallback = _fetch_github_issue_metadata_with_gh(repo=repo, number=number)
-            if fallback is not None:
-                out[number] = fallback
-            continue
-        if isinstance(payload, Mapping):
-            out[number] = {
-                "number": number,
-                "title": payload.get("title") or "",
-                "body": payload.get("body") or "",
-                "labels": payload.get("labels") or [],
-            }
-    return out
-
-
-def _fetch_github_issue_metadata_with_gh(
-    *,
-    repo: str,
-    number: int,
-) -> dict[str, Any] | None:
-    try:
-        completed = subprocess.run(
-            [
-                "gh",
-                "issue",
-                "view",
-                str(number),
-                "--repo",
-                repo,
-                "--json",
-                "title,body,labels",
-            ],
-            check=False,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            timeout=15,
-        )
-    except (OSError, subprocess.TimeoutExpired):
-        return None
-    if completed.returncode != 0:
-        return None
-    try:
-        payload = json.loads(completed.stdout or "{}")
-    except json.JSONDecodeError:
-        return None
-    if not isinstance(payload, Mapping):
-        return None
-    return {
-        "number": number,
-        "title": payload.get("title") or "",
-        "body": payload.get("body") or "",
-        "labels": payload.get("labels") or [],
-    }
 
 
 def _has_followup_pointer(body: str) -> bool:
@@ -979,6 +952,10 @@ def audit_pr_body(
         PERFORMANCE_FRESHNESS_REQUIRED_RE.search(performance_family_text)
     )
     required_evidence_levels = _flatten_required_levels(issue_intent_levels)
+    placeholder_guard_commands = closeout_audit_followthrough.placeholder_guard_commands(
+        text,
+        guard_command_re=GUARD_COMMAND_EVIDENCE_RE,
+    )
     risky_terms = sorted({match.group(1).casefold() for match in RISKY_CLOSEOUT_RE.finditer(text)})
     has_followup_pointer = _has_followup_pointer(text)
     benchmark_source_side_terms = sorted(
@@ -1000,6 +977,20 @@ def audit_pr_body(
     has_non_benchmark_adoption_rationale = _has_non_benchmark_adoption_rationale(text)
     diagnostic_default_authority = bool(DIAGNOSTIC_DEFAULT_AUTHORITY_RE.search(text))
     findings: list[dict[str, Any]] = []
+
+    if closing_issues and placeholder_guard_commands:
+        findings.append(
+            {
+                "kind": "placeholder_guard_command",
+                "severity": "error",
+                "message": (
+                    "Guard/tooling closeout commands must be copy-pasteable; placeholders "
+                    "such as ...changed files..., <path>, or {changed_files} do not prove replayability."
+                ),
+                "closing_issues": closing_issues,
+                "commands": placeholder_guard_commands[:4],
+            }
+        )
 
     if closing_issues and closeout_class == "narrow_slice_only":
         findings.append(
@@ -1329,7 +1320,7 @@ def _issue_metadata_from_args(args: argparse.Namespace, body: str) -> Any:
         metadata = json.loads(Path(args.issue_metadata_file).read_text(encoding="utf-8"))
     if args.github_repo:
         closing_issues = _unique_issue_numbers(CLOSING_REF_RE.findall(_selected_task_text(body)))
-        fetched = _fetch_github_issue_metadata(
+        fetched = closeout_audit_followthrough.fetch_github_issue_metadata(
             repo=args.github_repo,
             issue_numbers=closing_issues,
             token=os.environ.get(args.github_token_env) if args.github_token_env else None,
@@ -1411,6 +1402,20 @@ def main(argv: list[str] | None = None) -> int:
             window_start=args.closed_window_start,
             window_end=args.closed_window_end,
         )
+    elif args.closed_window_start or args.closed_window_end:
+        repo = args.github_repo or closeout_audit_followthrough.infer_github_repo_from_origin()
+        issues, retrieval_status, retrieval_error = closeout_audit_followthrough.fetch_closed_issues_for_window(
+            repo=repo or "",
+            window_start=args.closed_window_start,
+            window_end=args.closed_window_end,
+        )
+        report = audit_closed_issue_traceability(
+            issues,
+            window_start=args.closed_window_start,
+            window_end=args.closed_window_end,
+            retrieval_status=retrieval_status,
+            retrieval_error=retrieval_error,
+        )
     else:
         body = _body_from_args(args)
         report = audit_pr_body(
@@ -1418,7 +1423,7 @@ def main(argv: list[str] | None = None) -> int:
             issue_metadata=_issue_metadata_from_args(args, body),
         )
     if args.json_output or not args.github_annotations:
-        if args.closed_issues_file or args.detail == "full":
+        if args.closed_issues_file or args.closed_window_start or args.closed_window_end or args.detail == "full":
             payload = report
         else:
             payload = compact_audit_report(

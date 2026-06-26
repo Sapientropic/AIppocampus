@@ -12,6 +12,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from aippocampus_runtime import core
+from aippocampus_runtime.subconscious import match_terms
 
 GENERIC_BACKGROUND_TITLES = {
     "",
@@ -32,7 +33,7 @@ GENERIC_MATCH_TERMS = {
     "candidate",
     "finding",
     "background",
-}
+} | match_terms.LOW_INFORMATION_SINGLE_TRIGGER_TERMS
 SHAPE_LABELS = {
     "hook_trigger": "action_hint_candidate",
     "concept_edge": "source_bridge",

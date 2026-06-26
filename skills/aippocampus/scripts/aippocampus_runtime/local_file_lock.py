@@ -151,11 +151,22 @@ class OwnerCheckedFileLease:
         while True:
             try:
                 self.fd = self._open_new_generation()
-            except FileExistsError as exc:
+            except (FileExistsError, PermissionError) as exc:
                 try:
                     snapshot = self._snapshot()
-                except FileNotFoundError:
-                    continue
+                except (FileNotFoundError, PermissionError, OSError):
+                    # Windows can briefly deny O_EXCL/create while another
+                    # waiter or releaser is touching the lock path, even before
+                    # the payload is readable. Treat that as the same active
+                    # lease contention as FileExistsError; raising here makes
+                    # concurrent semantic-cache writers fail instead of queue.
+                    if time.monotonic() < deadline:
+                        time.sleep(max(0.01, self.poll_interval_seconds))
+                        continue
+                    raise OwnerCheckedLeaseBusyError(
+                        self.path,
+                        wait_timeout_seconds=self.wait_timeout_seconds,
+                    ) from exc
                 age = float(snapshot["age_seconds"])
                 if age > self.stale_after_seconds:
                     self.recovered_stale_lock = True
@@ -183,16 +194,33 @@ class OwnerCheckedFileLease:
         if self.fd is not None:
             os.close(self.fd)
             self.fd = None
-        payload = self._read_payload()
-        if payload.get("owner_token") != self.owner_token:
-            self.release_diagnostic = {
-                "released": False,
-                "reason": "owner_token_changed",
-                "observed_owner_token": payload.get("owner_token"),
-            }
-            return
-        try:
-            self.path.unlink()
-            self.release_diagnostic = {"released": True}
-        except OSError as exc:
-            self.release_diagnostic = {"released": False, "reason": type(exc).__name__}
+        deadline = time.monotonic() + max(0.25, min(2.0, self.poll_interval_seconds * 20))
+        while True:
+            payload = self._read_payload()
+            if payload.get("owner_token") != self.owner_token:
+                self.release_diagnostic = {
+                    "released": False,
+                    "reason": "owner_token_changed",
+                    "observed_owner_token": payload.get("owner_token"),
+                }
+                return
+            try:
+                self.path.unlink()
+                self.release_diagnostic = {"released": True}
+                return
+            except FileNotFoundError:
+                self.release_diagnostic = {"released": True, "already_absent": True}
+                return
+            except OSError as exc:
+                if time.monotonic() >= deadline:
+                    self.release_diagnostic = {
+                        "released": False,
+                        "reason": type(exc).__name__,
+                    }
+                    return
+                # On Windows a concurrent waiter can briefly hold a read handle
+                # on the lock payload while checking owner/stale status. The
+                # owner token still proves this is our generation; retrying the
+                # unlink avoids leaving a fresh orphan lock that makes every
+                # later writer time out until stale recovery.
+                time.sleep(max(0.01, min(0.05, self.poll_interval_seconds)))

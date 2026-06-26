@@ -84,12 +84,13 @@ class AgentOptInRecallRoutesTests(unittest.TestCase):
         self.tmp.cleanup()
 
     def assertCanonicalForegroundAction(self, payload: dict[str, object]) -> None:
-        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v2")
         self.assertIsInstance(payload["foreground_action"], dict)
         self.assertNotIn("agent_next_action", payload)
         self.assertNotIn("next_safe_action", payload)
         self.assertNotIn(payload["foreground_action"], payload.get("safe_next_actions", []))
-        self.assertEqual(foreground_action_contract_violations(payload), [])
+        if "foreground_action_contract" in payload:
+            self.assertEqual(payload["foreground_action_contract"], "foreground-action-v2")
+            self.assertEqual(foreground_action_contract_violations(payload), [])
 
     def _append_clean_rows(self, rows: list[dict[str, object]]) -> None:
         with (self.clean / "messages.jsonl").open("a", encoding="utf-8", newline="\n") as f:
@@ -280,7 +281,7 @@ class AgentOptInRecallRoutesTests(unittest.TestCase):
         self.assertNotIn("last_recall", action["arguments"])
         self.assertIn("--recall-selector {recall_selector}", action["command_template"])
         self.assertEqual(action["requires"], ["recall_selector"])
-        self.assertIn("--last-recall", action["last_recall_fallback_command"])
+        self.assertNotIn("last_recall_fallback_command", action)
         self.assertNotIn("handle_boundary", public)
         self.assertNotIn("local_private_fields", public)
         self.assertNotIn("output_boundary", public)
@@ -342,7 +343,9 @@ class AgentOptInRecallRoutesTests(unittest.TestCase):
         self.assertEqual(payload["finding_count"], 1)
         self.assertNotIn("findings", payload)
         self.assertEqual(payload["best_finding"]["finding_id"], "wm_dream_continuity")
-        self.assertEqual(payload["best_finding"]["surface"], "dream_working_memory")
+        self.assertNotIn("surface", payload["best_finding"])
+        self.assertNotIn("use_boundary", payload["best_finding"])
+        self.assertNotIn("foreground_action_contract", payload)
         self.assertCanonicalForegroundAction(payload)
         finding = full_payload["findings"][0]
         self.assertEqual(finding["finding_id"], "wm_dream_continuity")
@@ -356,10 +359,7 @@ class AgentOptInRecallRoutesTests(unittest.TestCase):
             "reopen_background_finding_source_route",
         )
         self.assertIn("dreamfinding_continuity", payload["foreground_action"]["command"])
-        self.assertEqual(
-            payload["foreground_action"]["target"]["finding_id"],
-            "wm_dream_continuity",
-        )
+        self.assertNotIn("target", payload["foreground_action"])
         self.assertNotIn(
             "materialize_action_hint_from_finding",
             {action["id"] for action in finding["next_actions"]},
@@ -398,7 +398,6 @@ class AgentOptInRecallRoutesTests(unittest.TestCase):
         self.assertEqual(public["foreground_action"]["id"], "recover_recall_miss")
         self.assertEqual(public["foreground_action"]["tool_name"], "search_memory")
         self.assertEqual(public["foreground_action"]["command_template"], 'aippocampus search "{exact_phrase}" --json')
-        self.assertEqual(public["foreground_action"]["arguments_template"]["query"], "{exact_phrase}")
         self.assertEqual(public["foreground_action"]["requires"], ["exact_phrase"])
         self.assertEqual(public["miss_recovery_card"]["miss_class"], "no_route")
         self.assertIn("refine", " ".join(public["miss_recovery_card"]["recovery_actions"]))
@@ -439,8 +438,8 @@ class AgentOptInRecallRoutesTests(unittest.TestCase):
         self.assertNotIn("route_count", public)
         self.assertCanonicalForegroundAction(public)
         self.assertEqual(public["foreground_action"]["id"], "recover_weak_route")
-        self.assertEqual(public["weak_route_recovery_card"]["miss_class"], "weak_route")
-        self.assertIn("exact search", " ".join(public["weak_route_recovery_card"]["recovery_actions"]))
+        self.assertNotIn("weak_route_recovery_card", public)
+        self.assertIn("recover_weak_route", json.dumps(public, ensure_ascii=False))
 
     def test_recall_route_limit_rejects_explicit_zero_negative_and_overlarge(self) -> None:
         ok = agent_continuity.recall(
@@ -1094,9 +1093,16 @@ class AgentOptInRecallRoutesTests(unittest.TestCase):
 
         self.assertNotIn("last_recall_cache_available", projected)
         self.assertNotIn("--last-recall", encoded)
-        self.assertEqual(projected["foreground_action"]["id"], "repair_last_recall_cache")
+        self.assertEqual(projected["foreground_action"]["id"], "refresh_recall_selector")
+        self.assertIn(
+            "--detail compact",
+            projected["foreground_action"].get("command")
+            or projected["foreground_action"].get("command_template", ""),
+        )
+        self.assertNotIn("--detail full", encoded)
         self.assertCanonicalForegroundAction(projected)
-        self.assertIn("last_recall_cache_recovery_card", projected)
+        self.assertNotIn("last_recall_cache_recovery_card", projected)
+        self.assertNotIn("foreground_action_contract", projected)
 
     def test_last_recall_unavailable_recovery_does_not_loop_to_same_command(self) -> None:
         payload = agent_continuity_cli_support.last_recall_unavailable_payload(
@@ -1307,10 +1313,12 @@ class AgentOptInRecallRoutesTests(unittest.TestCase):
 
         self.assertEqual(report["source_anchor_gate"]["status"], "blocked")
         self.assertEqual(report["foreground_action_card"]["decision"], "recover_low_confidence_route")
-        self.assertEqual(report["suggested_next"], "search_memory")
+        self.assertEqual(report["foreground_action_card"]["next_action"], "deepen")
+        self.assertEqual(report["foreground_action_card"]["canonical_action"]["action_id"], "inspect_low_confidence_route")
+        self.assertEqual(report["suggested_next"], "agent deepen")
         self.assertIn("low_source_anchor_coverage", report["memory_packets"][0]["risk_flags"])
-        secondary = report["foreground_action_card"]["safe_next_actions"][1]
-        self.assertEqual(secondary["action_id"], "deepen_low_confidence_route")
+        fallback = report["foreground_action_card"]["safe_next_actions"][1]
+        self.assertEqual(fallback["action_id"], "search_registry_sources_for_original_cue_anchors")
         self.assertTrue(already_opened_report["memory_packets"][0]["already_opened"])
         self.assertEqual(
             already_opened_report["foreground_action_card"]["decision"],

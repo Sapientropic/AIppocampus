@@ -6,6 +6,7 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
+from unittest import mock
 
 try:
     from hypothesis import given, note, settings
@@ -110,6 +111,35 @@ class OwnerCheckedFileLeaseTests(unittest.TestCase):
                         wait_timeout_seconds=0.01,
                     ):
                         self.fail("second active lock should not acquire")
+
+    def test_transient_create_permission_error_retries_as_busy(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            lock_path = Path(tmp) / ".writer.lock"
+            real_open = os.open
+            calls = 0
+
+            def flaky_open(path: str, flags: int, mode: int = 0o777, *, dir_fd: int | None = None) -> int:
+                nonlocal calls
+                calls += 1
+                if calls == 1:
+                    raise PermissionError("transient Windows lock create race")
+                if dir_fd is None:
+                    return real_open(path, flags, mode)
+                return real_open(path, flags, mode, dir_fd=dir_fd)
+
+            with mock.patch("aippocampus_runtime.local_file_lock.os.open", side_effect=flaky_open):
+                with OwnerCheckedFileLease(
+                    lock_path,
+                    lock_kind="unit_test_writer",
+                    stale_after_seconds=60,
+                    wait_timeout_seconds=0.2,
+                    poll_interval_seconds=0.01,
+                ) as lease:
+                    payload = json.loads(lock_path.read_text(encoding="utf-8"))
+                    self.assertEqual(payload["owner_token"], lease.owner_token)
+
+            self.assertGreaterEqual(calls, 2)
+            self.assertFalse(lock_path.exists())
 
     def test_release_preserves_replaced_owner_generation(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

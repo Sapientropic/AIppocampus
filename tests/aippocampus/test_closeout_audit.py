@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import io
 import json
 import subprocess
 import sys
@@ -471,6 +472,35 @@ class CloseoutAuditTests(unittest.TestCase):
         self.assertEqual(finding["kind"], "missing_guard_tooling_closeout_evidence")
         self.assertEqual(finding["missing_evidence"], ["contract_list", "guard_command"])
 
+    def test_placeholder_guard_command_is_not_replayable_evidence(self) -> None:
+        report = closeout_audit.audit_pr_body(
+            """
+            ## Summary
+            Adds an owner-layer guard.
+
+            Closes #2689.
+
+            Guard contracts:
+            - import owners stay explicit.
+
+            Verification:
+            - `python tools/aippocampus/agent_slop_guard.py --json --changed-file ...changed files...`
+            """,
+            issue_metadata={
+                2689: {
+                    "title": "Import-boundary guard",
+                    "body": "Add owner-layer guard-tooling contracts.",
+                    "labels": [{"name": "readiness:guard-tooling"}],
+                }
+            },
+        )
+
+        kinds = [finding["kind"] for finding in report["findings"]]
+        self.assertFalse(report["ok"], report)
+        self.assertIn("placeholder_guard_command", kinds)
+        self.assertIn("missing_guard_tooling_closeout_evidence", kinds)
+        self.assertFalse(report["evidence_shape"]["has_guard_command_evidence"])
+
     def test_non_guard_labeled_issue_is_not_masked_by_guard_words(self) -> None:
         report = closeout_audit.audit_pr_body(
             """
@@ -728,13 +758,17 @@ class CloseoutAuditTests(unittest.TestCase):
 
         with (
             mock.patch.object(
-                closeout_audit.urllib.request,
+                closeout_audit.closeout_audit_followthrough.urllib.request,
                 "urlopen",
-                side_effect=closeout_audit.urllib.error.URLError("rate limit"),
+                side_effect=closeout_audit.closeout_audit_followthrough.urllib.error.URLError("rate limit"),
             ),
-            mock.patch.object(closeout_audit.subprocess, "run", return_value=completed) as run,
+            mock.patch.object(
+                closeout_audit.closeout_audit_followthrough.subprocess,
+                "run",
+                return_value=completed,
+            ) as run,
         ):
-            metadata = closeout_audit._fetch_github_issue_metadata(
+            metadata = closeout_audit.closeout_audit_followthrough.fetch_github_issue_metadata(
                 repo="Sapientropic/AIppocampus",
                 issue_numbers=[2713],
             )
@@ -864,6 +898,183 @@ class CloseoutAuditTests(unittest.TestCase):
         self.assertTrue(report["ok"], report)
         self.assertEqual(report["summary"]["issues_with_closed_pr_count"], 1)
         self.assertEqual(report["findings"], [])
+
+    def test_closed_issue_traceability_filters_closed_window_rows(self) -> None:
+        report = closeout_audit.audit_closed_issue_traceability(
+            {
+                "issues": [
+                    {
+                        "number": 1501,
+                        "closedAt": "2026-06-26T13:35:41Z",
+                        "comments": {
+                            "nodes": [
+                                {
+                                    "body": (
+                                        "Closeout: PR #2754 merged at 2e5067e. "
+                                        "Verification: focused recall/deepen/open command passed."
+                                    )
+                                }
+                            ]
+                        },
+                    },
+                    {
+                        "number": 1502,
+                        "closedAt": "2026-06-26T14:15:00Z",
+                        "comments": {"nodes": []},
+                    },
+                ]
+            },
+            window_start="2026-06-26T13:33:00Z",
+            window_end="2026-06-26T13:40:00Z",
+            retrieval_status="ok",
+        )
+
+        self.assertTrue(report["ok"], report)
+        self.assertEqual(report["summary"]["input_issue_count"], 2)
+        self.assertEqual(report["summary"]["window_filtered_count"], 1)
+        self.assertEqual(report["summary"]["closed_issue_count"], 1)
+
+    def test_closed_window_cli_fetches_issues_instead_of_auditing_empty_pr_body(self) -> None:
+        issues = {
+            "issues": [
+                {
+                    "number": 1503,
+                    "closedAt": "2026-06-26T13:36:00Z",
+                    "comments": {
+                        "nodes": [
+                            {
+                                "body": (
+                                    "Closeout: PR #2756 merged at af11f900. "
+                                    "Verification: closed-window traceability command passed."
+                                )
+                            }
+                        ]
+                    },
+                }
+            ]
+        }
+        with (
+            mock.patch.object(
+                closeout_audit.closeout_audit_followthrough,
+                "infer_github_repo_from_origin",
+                return_value="Sapientropic/AIppocampus",
+            ),
+            mock.patch.object(
+                closeout_audit.closeout_audit_followthrough,
+                "fetch_closed_issues_for_window",
+                return_value=(issues, "ok", None),
+            ) as fetch,
+            mock.patch("sys.stdout", new_callable=io.StringIO) as stdout,
+        ):
+            code = closeout_audit.main(
+                [
+                    "--json",
+                    "--closed-window-start",
+                    "2026-06-26T13:33:00Z",
+                    "--closed-window-end",
+                    "2026-06-26T13:40:00Z",
+                ]
+            )
+
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(code, 0)
+        fetch.assert_called_once()
+        self.assertEqual(payload["kind"], "aippocampus_closed_issue_traceability_audit")
+        self.assertEqual(payload["summary"]["closed_issue_count"], 1)
+
+    def test_closed_window_cli_reports_retrieval_failure_as_failure(self) -> None:
+        with (
+            mock.patch.object(
+                closeout_audit.closeout_audit_followthrough,
+                "infer_github_repo_from_origin",
+                return_value=None,
+            ),
+            mock.patch.object(
+                closeout_audit.closeout_audit_followthrough,
+                "fetch_closed_issues_for_window",
+                return_value=({"issues": []}, "failed", "missing_github_repo"),
+            ),
+            mock.patch("sys.stdout", new_callable=io.StringIO) as stdout,
+        ):
+            code = closeout_audit.main(
+                [
+                    "--json",
+                    "--closed-window-start",
+                    "2026-06-26T13:33:00Z",
+                    "--closed-window-end",
+                    "2026-06-26T13:40:00Z",
+                ]
+            )
+
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(code, 1)
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["findings"][0]["kind"], "closed_window_retrieval_failed")
+
+    def test_closed_window_fetch_keeps_list_comments_when_detail_view_fails(self) -> None:
+        list_completed = subprocess.CompletedProcess(
+            args=["gh", "issue", "list"],
+            returncode=0,
+            stdout=json.dumps(
+                [
+                    {
+                        "number": 2746,
+                        "title": "Route explanation",
+                        "closedAt": "2026-06-26T13:36:20Z",
+                        "comments": [
+                            {
+                                "body": (
+                                    "Closed by PR #2754 / merge `2e5067e`.\n\n"
+                                    "Verification: real recall -> deepen -> opened source; "
+                                    "anchor hits: cue=2."
+                                )
+                            }
+                        ],
+                    }
+                ]
+            ),
+            stderr="",
+        )
+        detail_failed = subprocess.CompletedProcess(
+            args=["gh", "issue", "view"],
+            returncode=1,
+            stdout="",
+            stderr="timeout",
+        )
+
+        with mock.patch.object(
+            closeout_audit.closeout_audit_followthrough.subprocess,
+            "run",
+            side_effect=[list_completed, detail_failed],
+        ):
+            issues, status, error = closeout_audit.closeout_audit_followthrough.fetch_closed_issues_for_window(
+                repo="Sapientropic/AIppocampus",
+                window_start="2026-06-26T13:33:00Z",
+                window_end="2026-06-26T13:40:00Z",
+            )
+
+        report = closeout_audit.audit_closed_issue_traceability(
+            issues,
+            window_start="2026-06-26T13:33:00Z",
+            window_end="2026-06-26T13:40:00Z",
+            retrieval_status=status,
+            retrieval_error=error,
+        )
+        self.assertEqual(status, "ok")
+        self.assertTrue(report["ok"], report)
+        self.assertEqual(report["summary"]["issues_with_closeout_comment_count"], 1)
+
+    def test_closed_window_no_issue_result_is_not_reported_as_pass(self) -> None:
+        report = closeout_audit.audit_closed_issue_traceability(
+            {"issues": []},
+            window_start="2026-06-26T00:00:00Z",
+            window_end="2026-06-26T00:05:00Z",
+            retrieval_status="ok_no_closed_issues_in_window",
+        )
+
+        self.assertTrue(report["ok"], report)
+        self.assertEqual(report["status"], "no_closed_issues")
+        self.assertEqual(report["summary"]["closed_issue_count"], 0)
 
     def test_cli_reads_closed_issue_file_and_returns_traceability_json(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

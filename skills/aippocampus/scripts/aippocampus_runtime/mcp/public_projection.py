@@ -22,7 +22,20 @@ from aippocampus_runtime.source.latest_reply import MAX_COMPACT_FINAL_ANSWER_CHA
 
 def public_payload(arguments: dict[str, Any], payload: Any) -> Any:
     projected = payload if arguments.get("include_private_paths") else redact_sensitive_values(redact_private_paths(payload))
-    return strip_foreground_action_legacy_aliases(projected)
+    projected = strip_foreground_action_legacy_aliases(projected)
+    if (
+        isinstance(projected, dict)
+        and projected.get("kind") == "aippocampus_background_findings_card"
+        and str(projected.get("detail") or "").casefold() == "compact"
+        and projected.get("surface_class") != "foreground_recovery_card"
+    ):
+        # Background compact is a light scent card. The shared legacy-alias
+        # sanitizer helpfully adds the contract marker for most recovery cards,
+        # but here that marker becomes frontstage protocol noise and was called
+        # out in #2752. Detail/full and error recovery still keep the normal
+        # contract envelope.
+        projected.pop("foreground_action_contract", None)
+    return projected
 
 
 def detail_arg(arguments: dict[str, Any]) -> str:
