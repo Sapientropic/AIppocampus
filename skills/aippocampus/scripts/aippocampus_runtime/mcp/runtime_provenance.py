@@ -12,6 +12,7 @@ from typing import Any
 
 from aippocampus_runtime import core
 from aippocampus_runtime.privacy import redact_private_paths
+from aippocampus_runtime.source.io_kernel import load_json_dict
 
 
 def _package_version() -> str:
@@ -35,7 +36,7 @@ def _git_head(cwd: Path) -> str:
             check=False,
             timeout=3,
         )
-    except Exception:
+    except (OSError, subprocess.SubprocessError):
         return ""
     return proc.stdout.strip() if proc.returncode == 0 else ""
 
@@ -52,7 +53,7 @@ def _git_root(cwd: Path) -> bool:
             check=False,
             timeout=3,
         )
-    except Exception:
+    except (OSError, subprocess.SubprocessError):
         return False
     return proc.returncode == 0 and bool(proc.stdout.strip())
 
@@ -69,17 +70,13 @@ def mcp_runtime_provenance(
     registry_root = Path(registry_dir).resolve() if registry_dir else core.aippocampus_registry_dir().resolve()
     registry_json = registry_root / "threads.json"
     registry_entry_count = 0
+    registry_read_loss_count = 0
     if registry_json.is_file():
-        try:
-            import json
-
-            registry_payload = json.loads(registry_json.read_text(encoding="utf-8"))
-            if isinstance(registry_payload, dict):
-                registry_entry_count = len(
-                    [item for item in registry_payload.get("threads") or [] if isinstance(item, dict)]
-                )
-        except Exception:
-            registry_entry_count = 0
+        registry_result = load_json_dict(registry_json)
+        registry_read_loss_count = int(registry_result.loss.get("total_loss_count") or 0)
+        registry_entry_count = len(
+            [item for item in registry_result.data.get("threads") or [] if isinstance(item, dict)]
+        )
     resolution = core.aippocampus_registry_resolution()
     payload = {
         "runtime": "mcp_stdio_handler",
@@ -96,6 +93,8 @@ def mcp_runtime_provenance(
         "registry_root_known": bool(registry_root),
         "registry_entries_available": registry_entry_count > 0,
         "registry_entry_count": registry_entry_count,
+        "registry_read_degraded": bool(registry_read_loss_count),
+        "registry_read_loss_count": registry_read_loss_count,
         "local_paths_serialized": False,
     }
     return redact_private_paths({key: value for key, value in payload.items() if value not in (None, "")})

@@ -22,6 +22,10 @@ from aippocampus_runtime.privacy import (
     redact_private_paths,
     redact_sensitive_values,
 )
+from aippocampus_runtime.source.io_kernel import (
+    empty_jsonl_loss,
+    iter_jsonl_dict_rows_text_with_line_numbers,
+)
 
 BUNDLE_INTEGRITY_NAME = "bundle_integrity.json"
 IMPORT_ORIGIN_BOUNDARY = (
@@ -194,17 +198,23 @@ def _stamp_imported_claim_rows(extract_dir: Path, integrity: Mapping[str, Any]) 
             continue
         output_lines: list[str] = []
         changed = False
-        for line in original_text.splitlines():
+        loss = empty_jsonl_loss()
+        rows_by_line = {
+            line_number: row
+            for line_number, row in iter_jsonl_dict_rows_text_with_line_numbers(
+                original_text,
+                loss=loss,
+            )
+        }
+        malformed_rows += int(loss.get("invalid_json_line_count") or 0) + int(
+            loss.get("non_object_line_count") or 0
+        )
+        for line_number, line in enumerate(original_text.splitlines(), start=1):
             if not line.strip():
                 output_lines.append(line)
                 continue
-            try:
-                payload = json.loads(line)
-            except json.JSONDecodeError:
-                malformed_rows += 1
-                output_lines.append(line)
-                continue
-            if not isinstance(payload, dict):
+            payload = rows_by_line.get(line_number)
+            if payload is None:
                 output_lines.append(line)
                 continue
             if not _claim_promoting_import_row(path, payload):

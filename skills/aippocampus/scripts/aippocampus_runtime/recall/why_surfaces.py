@@ -93,7 +93,7 @@ def handle_surface_report(handle: Any, *, clean_source_dir: Path) -> dict[str, A
     if expected_fingerprint:
         try:
             current_fingerprint = clean_source_fingerprint(clean_source_dir)
-        except Exception:
+        except (RuntimeError, ValueError):
             current_fingerprint = "source_unavailable"
         if expected_fingerprint != current_fingerprint:
             reason_codes.append("stale_handle")

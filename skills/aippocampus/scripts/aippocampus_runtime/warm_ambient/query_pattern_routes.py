@@ -23,6 +23,7 @@ from aippocampus_runtime.core import sanitize_external_model_text
 from aippocampus_runtime.io_integrity import atomic_write_text
 from aippocampus_runtime.ops.route_readiness import safe_source_refs
 from aippocampus_runtime.registry.api import unique_preserve
+from aippocampus_runtime.source.io_kernel import load_jsonl_dict_rows
 from aippocampus_runtime.warm_ambient.query_pattern_alias_hygiene import (
     alias_fanout as _alias_fanout,
 )
@@ -260,18 +261,10 @@ def load_query_pattern_routes(path: Path) -> list[dict[str, Any]]:
     if not path.exists():
         return []
     rows: list[dict[str, Any]] = []
-    with path.open("r", encoding="utf-8") as fh:
-        for line in fh:
-            if not line.strip():
-                continue
-            try:
-                item = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if isinstance(item, Mapping):
-                route = normalize_query_pattern_route(item)
-                if route["query_aliases"] and route["source_refs"]:
-                    rows.append(route)
+    for item in load_jsonl_dict_rows(path).rows:
+        route = normalize_query_pattern_route(item)
+        if route["query_aliases"] and route["source_refs"]:
+            rows.append(route)
     return rows
 
 
@@ -546,21 +539,7 @@ def registry_query_pattern_route_rows(
 def _iter_semantic_trigger_rows(path: Path) -> Iterable[Mapping[str, Any]]:
     if not path.exists():
         return []
-    rows: list[Mapping[str, Any]] = []
-    try:
-        with path.open("r", encoding="utf-8") as fh:
-            for line in fh:
-                if not line.strip():
-                    continue
-                try:
-                    item = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                if isinstance(item, Mapping):
-                    rows.append(item)
-    except OSError:
-        return []
-    return rows
+    return list(load_jsonl_dict_rows(path).rows)
 
 
 def semantic_trigger_query_pattern_route_rows(

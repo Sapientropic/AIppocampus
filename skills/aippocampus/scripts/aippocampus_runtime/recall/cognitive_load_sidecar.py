@@ -13,6 +13,7 @@ import json
 from datetime import datetime, timezone
 from typing import Any, Iterable, Mapping
 
+from aippocampus_runtime.core import dict_or_empty, list_or_empty
 from aippocampus_runtime.source.io_kernel import source_ref_key as canonical_source_ref_key
 
 PROJECTION_BOUNDARY = "routing_caution_not_affect_or_personality_truth"
@@ -85,14 +86,6 @@ def _now(value: str | None) -> datetime:
     return parsed or datetime.now(timezone.utc)
 
 
-def _as_mapping(value: Any) -> Mapping[str, Any]:
-    return value if isinstance(value, Mapping) else {}
-
-
-def _list_items(value: Any) -> list[Any]:
-    return value if isinstance(value, list) else []
-
-
 def _stable_json(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
@@ -112,8 +105,8 @@ def source_ref_hash(source_ref: Mapping[str, Any]) -> str:
 
 def _source_keys(value: Any) -> list[str]:
     keys: list[str] = []
-    for raw_ref in _list_items(value):
-        ref = _as_mapping(raw_ref)
+    for raw_ref in list_or_empty(value):
+        ref = dict_or_empty(raw_ref)
         if ref:
             keys.append(source_ref_hash(ref))
     return sorted(set(keys))
@@ -306,9 +299,9 @@ def build_cognitive_load_calibration_report(
     *,
     private_history_calibration: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-    metrics = _as_mapping(sidecar.get("metrics"))
-    privacy_boundary = _as_mapping(sidecar.get("privacy_boundary"))
-    private_history = _as_mapping(private_history_calibration)
+    metrics = dict_or_empty(sidecar.get("metrics"))
+    privacy_boundary = dict_or_empty(sidecar.get("privacy_boundary"))
+    private_history = dict_or_empty(private_history_calibration)
     private_history_status = str(private_history.get("status") or "not_measured")
     private_history_measured = private_history_status in {
         "measured_public_safe_aggregate",
@@ -318,22 +311,22 @@ def build_cognitive_load_calibration_report(
     boosted_candidate_count = sum(
         1
         for row in candidate_rows
-        if _as_float(_as_mapping(row.get("score_breakdown")).get("cognitive_load_boost")) > 0
+        if _as_float(dict_or_empty(row.get("score_breakdown")).get("cognitive_load_boost")) > 0
     )
     refresh_recommended_count = sum(
         1
         for row in candidate_rows
-        if _as_mapping(row.get("cognitive_load")).get("advisory_action") == "refresh_sources"
+        if dict_or_empty(row.get("cognitive_load")).get("advisory_action") == "refresh_sources"
     )
     source_reopen_recommended_count = sum(
         1
         for row in candidate_rows
-        if str(_as_mapping(row.get("cognitive_load")).get("advisory_action") or "").startswith(
+        if str(dict_or_empty(row.get("cognitive_load")).get("advisory_action") or "").startswith(
             "source_reopen_recommended"
         )
     )
     cannot_claim_values = {
-        *[str(item) for item in _list_items(sidecar.get("cannot_claim"))],
+        *[str(item) for item in list_or_empty(sidecar.get("cannot_claim"))],
         *CALIBRATION_CANNOT_CLAIM,
     }
     if private_history_measured:
@@ -446,7 +439,7 @@ def _public_feedback_case_summary(event: Mapping[str, Any]) -> dict[str, Any]:
         ),
         "event_type": event_type,
         "feedback_outcome": _feedback_outcome(event),
-        "source_ref_count": len(_list_items(event.get("source_refs"))),
+        "source_ref_count": len(list_or_empty(event.get("source_refs"))),
         "load_weight_reviewed": bool(event.get("load_weight_reviewed")),
         "caution_hint_reviewed": bool(event.get("caution_hint_reviewed")),
     }
@@ -473,8 +466,8 @@ def build_public_behavior_trace_feedback_report(
     sidecar = build_cognitive_load_sidecar(signal_events, now=now)
     ranked = apply_cognitive_load_boosts(list(candidates or []), sidecar)
     calibration = build_cognitive_load_calibration_report(sidecar, ranked)
-    sidecar_metrics = _as_mapping(sidecar.get("metrics"))
-    calibration_metrics = _as_mapping(calibration.get("metrics"))
+    sidecar_metrics = dict_or_empty(sidecar.get("metrics"))
+    calibration_metrics = dict_or_empty(calibration.get("metrics"))
     case_summaries = [_public_feedback_case_summary(event) for event in signal_events]
     helpful_caution_hint_count = sum(
         1 for case in case_summaries if case["feedback_outcome"] == "useful_caution_hint"
@@ -529,7 +522,7 @@ def build_public_behavior_trace_feedback_report(
         },
         "cannot_claim": sorted(
             {
-                *[str(item) for item in _list_items(calibration.get("cannot_claim"))],
+                *[str(item) for item in list_or_empty(calibration.get("cannot_claim"))],
                 "default_foreground_policy_quality",
                 "host_timing_quality",
                 "private_history_generality",
@@ -743,7 +736,7 @@ def build_public_default_path_usefulness_report(*, now: str | None = None) -> di
 def _sidecar_index(sidecar: Mapping[str, Any]) -> dict[str, Mapping[str, Any]]:
     return {
         str(entry.get("source_ref_key")): entry
-        for entry in _list_items(sidecar.get("entries"))
+        for entry in list_or_empty(sidecar.get("entries"))
         if isinstance(entry, Mapping)
     }
 

@@ -12,6 +12,8 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
+from aippocampus_runtime.core import dict_or_empty, list_or_empty
+
 SEQUENCE_PACKET_KIND = "aippocampus_sequence_packet"
 CHAIN_TRUTH_STATUS = "source_backed_chain_not_current_validity_fact"
 LOAD_PROJECTION_BOUNDARY = "routing_caution_not_affect_or_personality_truth"
@@ -34,16 +36,8 @@ FORBIDDEN_LOAD_TERMS = (
 )
 
 
-def _as_mapping(value: Any) -> Mapping[str, Any]:
-    return value if isinstance(value, Mapping) else {}
-
-
-def _as_list(value: Any) -> list[Any]:
-    return value if isinstance(value, list) else []
-
-
 def _string_list(value: Any) -> list[str]:
-    return [str(item) for item in _as_list(value) if str(item or "").strip()]
+    return [str(item) for item in list_or_empty(value) if str(item or "").strip()]
 
 
 def _hash_count(values: Any) -> int:
@@ -52,9 +46,9 @@ def _hash_count(values: Any) -> int:
 
 def _event_kind_sequence(timeline: list[Any]) -> list[str]:
     return [
-        str(_as_mapping(event).get("event_kind") or "").strip()
+        str(dict_or_empty(event).get("event_kind") or "").strip()
         for event in timeline
-        if str(_as_mapping(event).get("event_kind") or "").strip()
+        if str(dict_or_empty(event).get("event_kind") or "").strip()
     ]
 
 
@@ -63,7 +57,7 @@ def _timeline_source_coverage(timeline: list[Any]) -> float:
         return 0.0
     covered = 0
     for event in timeline:
-        event_map = _as_mapping(event)
+        event_map = dict_or_empty(event)
         if str(event_map.get("source_ref_hash") or "").startswith("sha256:"):
             covered += 1
     return round(covered / len(timeline), 6)
@@ -73,7 +67,7 @@ def _edge_order_errors(event_order: list[str], edges: list[Any]) -> list[str]:
     positions = {event: index for index, event in enumerate(event_order)}
     errors: list[str] = []
     for edge in edges:
-        edge_map = _as_mapping(edge)
+        edge_map = dict_or_empty(edge)
         start = str(edge_map.get("from") or "").strip()
         end = str(edge_map.get("to") or "").strip()
         relation = str(edge_map.get("relation") or "").strip()
@@ -112,17 +106,17 @@ def _total_strain_signals(counts: Mapping[str, Any]) -> int:
 def evaluate_case_evidence(case: Mapping[str, Any]) -> dict[str, Any]:
     """Return sanitized sequence/load contract flags for one E2E50 case."""
 
-    chain = _as_mapping(case.get("episode_chain"))
-    packet = _as_mapping(case.get("sequence_packet"))
+    chain = dict_or_empty(case.get("episode_chain"))
+    packet = dict_or_empty(case.get("sequence_packet"))
     sequence_present = bool(chain or packet)
     sequence_codes: set[str] = set()
     sequence_raw_valid = True
     expected_sequence_valid = bool(chain.get("expected_valid", True))
 
-    timeline = _as_list(packet.get("timeline"))
+    timeline = list_or_empty(packet.get("timeline"))
     timeline_order = _event_kind_sequence(timeline)
     chain_order = _string_list(chain.get("event_order"))
-    current_assessment = _as_mapping(packet.get("current_assessment"))
+    current_assessment = dict_or_empty(packet.get("current_assessment"))
     proposed_use = str(current_assessment.get("proposed_use") or "").strip()
     source_thickness = str(current_assessment.get("source_thickness") or "thin").strip()
     sequence_gaps = _string_list(chain.get("sequence_gaps")) + _string_list(packet.get("sequence_gaps"))
@@ -156,7 +150,7 @@ def evaluate_case_evidence(case: Mapping[str, Any]) -> dict[str, Any]:
             sequence_codes.add("sequence_missing_chain_source_hash")
         if _timeline_source_coverage(timeline) < 1.0:
             sequence_codes.add("sequence_missing_timeline_source_hash")
-        sequence_codes.update(_edge_order_errors(timeline_order, _as_list(chain.get("causal_edges"))))
+        sequence_codes.update(_edge_order_errors(timeline_order, list_or_empty(chain.get("causal_edges"))))
 
         cannot_claim = set(_string_list(packet.get("cannot_claim")))
         if "current_validity_requires_source_reopen" not in cannot_claim:
@@ -189,15 +183,15 @@ def evaluate_case_evidence(case: Mapping[str, Any]) -> dict[str, Any]:
         and proposed_use != "warn"
     )
 
-    load = _as_mapping(case.get("cognitive_load"))
+    load = dict_or_empty(case.get("cognitive_load"))
     load_present = bool(load)
     load_codes: set[str] = set()
     bucket = str(load.get("load_boost_bucket") or "none").strip()
     bucket_rank = LOAD_BUCKET_RANK.get(bucket, -1)
-    counts = _as_mapping(load.get("strain_signal_counts"))
+    counts = dict_or_empty(load.get("strain_signal_counts"))
     strain_total = _total_strain_signals(counts)
     false_positive = False
-    decay = _as_mapping(load.get("decay"))
+    decay = dict_or_empty(load.get("decay"))
     decay_applied = bool(decay.get("applied") or decay.get("invalidated_by_supersession"))
     overpersonalization_count = 0
     load_source_truth_override = False

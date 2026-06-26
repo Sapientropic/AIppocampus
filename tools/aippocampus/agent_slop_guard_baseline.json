@@ -934,7 +934,7 @@
       "reason": "historical performance hot-path owner debt"
     },
     {
-      "fingerprint": "performance_hot_path_loop_materialization:skills/aippocampus/scripts/aippocampus_runtime/navigation/cognitive_map_query.py:228:loop_materialization:list(get route query_terms) inside region _safe_rows get cognitive_map regions",
+      "fingerprint": "performance_hot_path_loop_materialization:skills/aippocampus/scripts/aippocampus_runtime/navigation/cognitive_map_query.py:224:loop_materialization:list(get route query_terms) inside region _safe_rows get cognitive_map regions",
       "owner_issue": "#2707",
       "reason": "historical performance hot-path owner debt"
     },
@@ -949,32 +949,32 @@
       "reason": "historical performance hot-path owner debt"
     },
     {
-      "fingerprint": "performance_hot_path_loop_materialization:skills/aippocampus/scripts/aippocampus_runtime/recall/prompt_recall_core.py:212:loop_materialization:list(get existing matched_terms) inside source get match threads",
+      "fingerprint": "performance_hot_path_loop_materialization:skills/aippocampus/scripts/aippocampus_runtime/recall/prompt_recall_core.py:213:loop_materialization:list(get existing matched_terms) inside source get match threads",
       "owner_issue": "#2707",
       "reason": "historical performance hot-path owner debt"
     },
     {
-      "fingerprint": "performance_hot_path_loop_materialization:skills/aippocampus/scripts/aippocampus_runtime/recall/prompt_recall_core.py:213:loop_materialization:list(get match matched_terms) inside source get match threads",
+      "fingerprint": "performance_hot_path_loop_materialization:skills/aippocampus/scripts/aippocampus_runtime/recall/prompt_recall_core.py:214:loop_materialization:list(get match matched_terms) inside source get match threads",
       "owner_issue": "#2707",
       "reason": "historical performance hot-path owner debt"
     },
     {
-      "fingerprint": "performance_hot_path_loop_materialization:skills/aippocampus/scripts/aippocampus_runtime/recall/prompt_recall_core.py:220:loop_materialization:list(get item matched_terms) inside source get match threads",
+      "fingerprint": "performance_hot_path_loop_materialization:skills/aippocampus/scripts/aippocampus_runtime/recall/prompt_recall_core.py:221:loop_materialization:list(get item matched_terms) inside source get match threads",
       "owner_issue": "#2707",
       "reason": "historical performance hot-path owner debt"
     },
     {
-      "fingerprint": "performance_hot_path_loop_materialization:skills/aippocampus/scripts/aippocampus_runtime/recall/prompt_recall_core.py:221:loop_materialization:list(get match matched_terms) inside source get match threads",
+      "fingerprint": "performance_hot_path_loop_materialization:skills/aippocampus/scripts/aippocampus_runtime/recall/prompt_recall_core.py:222:loop_materialization:list(get match matched_terms) inside source get match threads",
       "owner_issue": "#2707",
       "reason": "historical performance hot-path owner debt"
     },
     {
-      "fingerprint": "performance_hot_path_loop_materialization:skills/aippocampus/scripts/aippocampus_runtime/recall/prompt_recall_core.py:444:loop_materialization:list(get existing matched_terms) inside thread_key get match thread_keys",
+      "fingerprint": "performance_hot_path_loop_materialization:skills/aippocampus/scripts/aippocampus_runtime/recall/prompt_recall_core.py:441:loop_materialization:list(get existing matched_terms) inside thread_key get match thread_keys",
       "owner_issue": "#2707",
       "reason": "historical performance hot-path owner debt"
     },
     {
-      "fingerprint": "performance_hot_path_loop_materialization:skills/aippocampus/scripts/aippocampus_runtime/recall/prompt_recall_core.py:450:loop_materialization:list(get item matched_terms) inside thread_key get match thread_keys",
+      "fingerprint": "performance_hot_path_loop_materialization:skills/aippocampus/scripts/aippocampus_runtime/recall/prompt_recall_core.py:447:loop_materialization:list(get item matched_terms) inside thread_key get match thread_keys",
       "owner_issue": "#2707",
       "reason": "historical performance hot-path owner debt"
     },

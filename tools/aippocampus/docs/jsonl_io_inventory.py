@@ -6,10 +6,22 @@ from pathlib import Path
 from typing import Iterable
 
 DIRECT_JSONL_APPROVED_OWNER_PATHS = {
+    "skills/aippocampus/scripts/aippocampus_runtime/hooks/claude_code_events.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/mcp/server.py",
     "skills/aippocampus/scripts/aippocampus_runtime/source/io_kernel.py",
     "skills/aippocampus/scripts/aippocampus_runtime/update/plugin_installer.py",
 }
 DIRECT_JSONL_APPROVED_OWNER_REASONS = {
+    # Claude Code hook logs are host-emitted event records. This module owns the
+    # event-log protocol boundary; rows here are not source-backed recall JSONL.
+    "skills/aippocampus/scripts/aippocampus_runtime/hooks/claude_code_events.py": (
+        "claude_code_host_event_jsonl_protocol_owner"
+    ),
+    # MCP stdio is JSON-RPC NDJSON. The server owns request parsing and JSON-RPC
+    # error responses for malformed protocol frames; this is not source JSONL.
+    "skills/aippocampus/scripts/aippocampus_runtime/mcp/server.py": (
+        "mcp_json_rpc_stdio_ndjson_protocol_owner"
+    ),
     "skills/aippocampus/scripts/aippocampus_runtime/source/io_kernel.py": (
         "source_jsonl_loss_accounting_owner"
     ),

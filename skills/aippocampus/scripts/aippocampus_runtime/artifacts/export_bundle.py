@@ -17,6 +17,7 @@ from typing import Any
 from aippocampus_runtime import core, privacy
 from aippocampus_runtime.contracts import canonical_foreground_action_fields
 from aippocampus_runtime.recall import index_builder
+from aippocampus_runtime.source.io_kernel import load_jsonl_dict_rows, write_jsonl_dict_rows
 
 PUBLIC_NO_RAW_PROFILES = {"public-export", "public-metadata"}
 PUBLIC_METADATA_PROFILES = {"public-export", "public-metadata"}
@@ -176,58 +177,36 @@ def _metadata_projection_row(row: dict[str, Any], *, redaction_profile: str) -> 
 def _rewrite_messages_metadata_only(path: Path, *, redaction_profile: str) -> None:
     if not path.exists():
         return
-    projected_rows: list[dict[str, Any]] = []
-    with path.open("r", encoding="utf-8") as fh:
-        for line in fh:
-            if not line.strip():
-                continue
-            try:
-                row = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if isinstance(row, dict):
-                projected_rows.append(
-                    _metadata_projection_row(row, redaction_profile=redaction_profile)
-                )
-    with path.open("w", encoding="utf-8", newline="\n") as fh:
-        for row in projected_rows:
-            fh.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
+    projected_rows = [
+        _metadata_projection_row(row, redaction_profile=redaction_profile)
+        for row in load_jsonl_dict_rows(path).rows
+    ]
+    write_jsonl_dict_rows(path, projected_rows, sort_keys=True)
 
 
 def _rewrite_turns_metadata_only(path: Path) -> None:
     if not path.exists():
         return
     projected_rows: list[dict[str, Any]] = []
-    with path.open("r", encoding="utf-8") as fh:
-        for line in fh:
-            if not line.strip():
-                continue
-            try:
-                row = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if not isinstance(row, dict):
-                continue
-            turn_hash = _public_source_hash("turn", row.get("turn_id"), row.get("turn_index"))
-            message_hashes = [
-                _public_source_hash("message", item, turn_hash)
-                for item in row.get("message_ids") or []
-            ]
-            projected_rows.append(
-                {
-                    "turn_id": turn_hash,
-                    "turn_index": row.get("turn_index"),
-                    "timestamp": row.get("timestamp"),
-                    "message_ids": message_hashes,
-                    "redaction_policy": {
-                        "identifiers_hashed": True,
-                        "source_text_exported": False,
-                    },
-                }
-            )
-    with path.open("w", encoding="utf-8", newline="\n") as fh:
-        for row in projected_rows:
-            fh.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
+    for row in load_jsonl_dict_rows(path).rows:
+        turn_hash = _public_source_hash("turn", row.get("turn_id"), row.get("turn_index"))
+        message_hashes = [
+            _public_source_hash("message", item, turn_hash)
+            for item in row.get("message_ids") or []
+        ]
+        projected_rows.append(
+            {
+                "turn_id": turn_hash,
+                "turn_index": row.get("turn_index"),
+                "timestamp": row.get("timestamp"),
+                "message_ids": message_hashes,
+                "redaction_policy": {
+                    "identifiers_hashed": True,
+                    "source_text_exported": False,
+                },
+            }
+        )
+    write_jsonl_dict_rows(path, projected_rows, sort_keys=True)
 
 
 def _remove_search_index_artifacts(index_dir: Path) -> None:
@@ -274,7 +253,7 @@ def _public_bundle_manifest(manifest: dict[str, Any], *, redaction_profile: str)
             "source_refs_hashed": True,
             "anchors_and_graph_labels_omitted": True,
             "search_index_included": False,
-            "legacy_public_export_boundary": (
+            "public_export_profile_boundary": (
                 "public-export is metadata-only as of 0.3.2; use raw-private "
                 "or redacted-local for private searchable transfer bundles."
             )

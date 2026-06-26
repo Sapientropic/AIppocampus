@@ -34,10 +34,6 @@ USEFULNESS_VALUES = {"unknown", "useful", "not_useful", "prevented_repeat"}
 ANNOYANCE_VALUES = {"unknown", "low", "medium", "high"}
 
 
-def _as_mapping(value: Any) -> Mapping[str, Any]:
-    return value if isinstance(value, Mapping) else {}
-
-
 def _source_refs(value: Any) -> list[dict[str, Any]]:
     if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
         return []
@@ -80,7 +76,7 @@ def host_duplicate_key(ticket: Mapping[str, Any]) -> str:
     source_fp = str(ticket.get("source_ref_fingerprint") or "")
     if not source_fp:
         source_fp = agency.source_ref_fingerprint(_source_refs(ticket.get("source_refs")))
-    scope = _as_mapping(ticket.get("scope"))
+    scope = core.dict_or_empty(ticket.get("scope"))
     return core.stable_json_id(
         "agency_host_duplicate",
         source_fp,
@@ -329,7 +325,7 @@ def _fixture_ticket(affordance_map: Mapping[str, Any], *, topic_epoch: str) -> M
         trigger="user_correction",
         topic_epoch=topic_epoch,
     )
-    return _as_mapping((selection.get("foreground_tickets") or [{}])[0])
+    return core.dict_or_empty((selection.get("foreground_tickets") or [{}])[0])
 
 
 def fixture_host_timing_replay() -> dict[str, Any]:
@@ -510,8 +506,8 @@ def fixture_host_timing_replay() -> dict[str, Any]:
 
 
 def render_text(report: Mapping[str, Any]) -> str:
-    aggregate = _as_mapping(report.get("aggregate"))
-    surface = _as_mapping(report.get("host_surface"))
+    aggregate = core.dict_or_empty(report.get("aggregate"))
+    surface = core.dict_or_empty(report.get("host_surface"))
     return (
         "AIppocampus agency host timing replay\n"
         f"- Host surface: {surface.get('label', HOST_SURFACE_LABEL)}\n"

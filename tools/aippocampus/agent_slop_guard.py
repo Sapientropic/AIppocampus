@@ -78,7 +78,6 @@ SOURCE_REF_HELPER_NAMES = {
     "source_ref_fingerprint",
     "source_ref_digest",
 }
-COMPAT_FIELD_TOKENS = ("compat", "legacy")
 COMPAT_METADATA_TOKENS = ("owner", "removal", "default", "exposure")
 FIELD_ONLY_TEST_PATH_TOKENS = (
     "apw",
@@ -135,6 +134,8 @@ DIAGNOSTIC_TOKENS = (
     "skipped",
     "loss",
 )
+BROAD_EXCEPTION_BOUNDARY_MARKER = "aippocampus-debt-ok: broad-exception-boundary"
+ATOMIC_WRITE_BOUNDARY_MARKER = "aippocampus-agent-slop-ok: directory-replace-boundary"
 PERFORMANCE_UNBOUNDED_TOKENS = (
     "candidate",
     "candidates",
@@ -422,11 +423,13 @@ def _silent_fallback_findings(
     tree: ast.AST,
     *,
     path: str,
+    text: str,
     baseline: Mapping[str, str],
     changed_files: set[str],
 ) -> list[dict[str, Any]]:
     if not path.startswith(HOT_PATH_PREFIXES):
         return []
+    lines = text.splitlines()
     findings: list[dict[str, Any]] = []
     for node in ast.walk(tree):
         if not isinstance(node, ast.ExceptHandler):
@@ -438,11 +441,14 @@ def _silent_fallback_findings(
             continue
         if _handler_has_diagnostic_boundary(node):
             continue
+        line_no = int(getattr(node, "lineno", 0) or 0)
+        if BROAD_EXCEPTION_BOUNDARY_MARKER in _window_text(lines, line_no):
+            continue
         findings.append(
             _finding(
                 rule_id="hot_path_silent_fallback",
                 path=path,
-                line=int(getattr(node, "lineno", 0) or 0),
+                line=line_no,
                 message="broad exception continues or returns empty state without diagnostics.",
                 baseline=baseline,
                 changed_files=changed_files,
@@ -486,15 +492,24 @@ def _node_mentions_tmp(node: ast.AST) -> bool:
     return "tmp" in text or "temp" in text or "staged" in text
 
 
+def _compat_or_legacy_field_name(value: str) -> bool:
+    lowered = value.casefold().replace("-", "_")
+    if "legacy" in lowered:
+        return True
+    return "compat" in [part for part in lowered.split("_") if part]
+
+
 def _atomic_write_owner_bypass_findings(
     tree: ast.AST,
     *,
     path: str,
+    text: str,
     baseline: Mapping[str, str],
     changed_files: set[str],
 ) -> list[dict[str, Any]]:
     if not _is_runtime_path(path) or _is_owner_path(path):
         return []
+    lines = text.splitlines()
     findings: list[dict[str, Any]] = []
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call):
@@ -514,6 +529,11 @@ def _atomic_write_owner_bypass_findings(
             continue
         if isinstance(node.func, ast.Attribute) and node.func.attr in {"replace", "rename"}:
             if len(node.args) == 1 and _node_mentions_tmp(node.func.value):
+                if ATOMIC_WRITE_BOUNDARY_MARKER in _window_text(
+                    lines,
+                    int(getattr(node, "lineno", 0) or 0),
+                ):
+                    continue
                 findings.append(
                     _finding(
                         rule_id="atomic_write_owner_bypass",
@@ -832,7 +852,7 @@ def _compat_field_metadata_missing_findings(
                 continue
             for value in _constant_strings(key):
                 lowered = value.casefold()
-                if not any(token in lowered for token in COMPAT_FIELD_TOKENS):
+                if not _compat_or_legacy_field_name(lowered):
                     continue
                 line_no = int(getattr(key, "lineno", getattr(node, "lineno", 0)) or 0)
                 window = _window_text(lines, line_no)
@@ -970,6 +990,7 @@ def analyze_text(
         _silent_fallback_findings(
             tree,
             path=path,
+            text=text,
             baseline=baseline_map,
             changed_files=changed,
         )
@@ -986,6 +1007,7 @@ def analyze_text(
         _atomic_write_owner_bypass_findings(
             tree,
             path=path,
+            text=text,
             baseline=baseline_map,
             changed_files=changed,
         )

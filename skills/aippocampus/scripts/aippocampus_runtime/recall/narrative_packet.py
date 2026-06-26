@@ -12,6 +12,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from aippocampus_runtime.coding import sequence_packets, sequence_reopen
+from aippocampus_runtime.core import dict_or_empty
 from aippocampus_runtime.ops.route_readiness import safe_source_refs
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 from aippocampus_runtime.recall.authority import (
@@ -356,7 +357,7 @@ def _normalize_active_path(row: Mapping[str, Any]) -> dict[str, Any]:
     action = str(row.get("action_grammar") or "")
     if not action:
         action = ACTION_IGNORE_OR_BLOCKED if _is_blocked(row) else ACTION_REOPENABLE_ROUTE
-    source_boundary = _as_mapping(row.get("source_boundary"))
+    source_boundary = dict_or_empty(row.get("source_boundary"))
     return {
         "title": _safe_text(row.get("title") or row.get("path_id") or row.get("route"), limit=160),
         "route": _safe_text(row.get("route"), limit=40) or "reopen",
@@ -508,17 +509,13 @@ def _is_blocked(row: Mapping[str, Any]) -> bool:
     status = _status(row)
     action = str(row.get("action_grammar") or "")
     route = str(row.get("route") or "").casefold()
-    source_boundary = _as_mapping(row.get("source_boundary"))
+    source_boundary = dict_or_empty(row.get("source_boundary"))
     return bool(
         status in BLOCKED_STATUSES
         or action == ACTION_IGNORE_OR_BLOCKED
         or route == "ignore"
         or source_boundary.get("unsafe_to_use_as_current_fact")
     )
-
-
-def _as_mapping(value: Any) -> Mapping[str, Any]:
-    return value if isinstance(value, Mapping) else {}
 
 
 def _boundary_is_hard(row: Mapping[str, Any]) -> bool:

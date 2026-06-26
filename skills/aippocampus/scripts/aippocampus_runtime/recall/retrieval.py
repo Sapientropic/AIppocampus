@@ -56,6 +56,7 @@ from aippocampus_runtime.recall.structure_time import (
 from aippocampus_runtime.recall.structure_time import (
     parse_temporal_cue as parse_temporal_cue,
 )
+from aippocampus_runtime.source.io_kernel import load_json_dict
 from aippocampus_runtime.text import cjk_ngrams, iter_cjk_sequences
 
 
@@ -412,7 +413,7 @@ def search_rag_chunks_connection(
         anchor_hits = anchor_hit_count(text, anchor_matches)
         try:
             anchor_titles = json.loads(row["anchor_titles"] or "[]")
-        except Exception:
+        except json.JSONDecodeError:
             anchor_titles = []
         signals = item["signals"]
         score = rag_chunk_text_score(
@@ -665,10 +666,7 @@ def search_hybrid_index(
 def graph_neighbors(graph_path: Path, terms: list[str], limit: int = 12) -> list[dict]:
     if not graph_path.exists():
         return []
-    try:
-        graph = json.loads(graph_path.read_text(encoding="utf-8"))
-    except Exception:
-        return []
+    graph = load_json_dict(graph_path).data
     nodes = {node.get("id"): node for node in graph.get("nodes", [])}
     matched_ids: set[str] = set()
     for node_id, node in nodes.items():

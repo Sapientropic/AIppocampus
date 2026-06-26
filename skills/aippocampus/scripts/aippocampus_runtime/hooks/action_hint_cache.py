@@ -30,6 +30,7 @@ from aippocampus_runtime.learning_loop.effectiveness_ledger import (
     load_ledger_rows,
     summarize_effectiveness_ledger,
 )
+from aippocampus_runtime.source.io_kernel import load_jsonl_dict_rows
 
 DEFAULT_ACTION_HINT_CACHE_LABEL = "registry/action-hints/<workspace-scope>/pretooluse-cache.jsonl"
 
@@ -229,27 +230,20 @@ def read_action_hint_records(
 
 def load_action_hint_records_with_diagnostics(path: Path) -> dict[str, Any]:
     records: list[dict[str, Any]] = []
-    malformed_count = 0
-    line_count = 0
     if not path.exists():
         return {
             "records": records,
-            "line_count": line_count,
-            "malformed_cache_line_count": malformed_count,
+            "line_count": 0,
+            "malformed_cache_line_count": 0,
             "cache_exists": False,
         }
-    for line in path.read_text(encoding="utf-8").splitlines():
-        if not line.strip():
-            continue
-        line_count += 1
-        try:
-            payload = json.loads(line)
-        except json.JSONDecodeError:
-            malformed_count += 1
-            continue
-        if isinstance(payload, Mapping) and payload.get("kind") == CACHE_KIND:
+    result = load_jsonl_dict_rows(path)
+    malformed_count = int(result.loss.get("total_loss_count") or 0)
+    line_count = len(result.rows) + malformed_count
+    for payload in result.rows:
+        if payload.get("kind") == CACHE_KIND:
             records.extend(dict(row) for row in payload.get("records") or [] if isinstance(row, Mapping))
-        elif isinstance(payload, Mapping):
+        else:
             records.append(dict(payload))
     return {
         "records": records,
@@ -294,11 +288,7 @@ def _load_provider_rows(path: Path | None) -> list[dict[str, Any]] | None:
     if not path.exists():
         return []
     if path.suffix.lower() == ".jsonl":
-        return [
-            dict(json.loads(line))
-            for line in path.read_text(encoding="utf-8").splitlines()
-            if line.strip()
-        ]
+        return load_jsonl_dict_rows(path).rows
     payload = json.loads(path.read_text(encoding="utf-8"))
     if isinstance(payload, list):
         return [dict(row) for row in payload if isinstance(row, Mapping)]

@@ -11,6 +11,8 @@ from __future__ import annotations
 
 from typing import Any, Mapping, Sequence
 
+from aippocampus_runtime.core import list_or_empty, string_list_or_empty
+
 CAPABILITY_CONFLICT_POLICY_VERSION = "aippocampus.capability_conflict_policy.v1"
 
 PRECEDENCE_CLASSES = (
@@ -27,16 +29,6 @@ DEFAULT_CANNOT_CLAIM = (
     "conflict_resolution_is_activation_policy_not_truth",
     "resolver_does_not_promote_source_claims",
 )
-
-
-def _as_list(value: Any) -> list[Any]:
-    if isinstance(value, list):
-        return value
-    return [value] if value else []
-
-
-def _as_str_list(value: Any) -> list[str]:
-    return [str(item) for item in _as_list(value) if str(item or "").strip()]
 
 
 def _unique(values: Sequence[str]) -> list[str]:
@@ -121,8 +113,10 @@ def resolve_capability_conflicts(
     selected = _sanitize_action(selected_packet, index=selected_index)
 
     suppressed: list[dict[str, Any]] = []
-    reason_codes = _as_str_list(selected_packet.get("reason_codes"))
-    cannot_claim = list(DEFAULT_CANNOT_CLAIM) + _as_str_list(selected_packet.get("cannot_claim"))
+    reason_codes = string_list_or_empty(selected_packet.get("reason_codes"))
+    cannot_claim = list(DEFAULT_CANNOT_CLAIM) + string_list_or_empty(
+        selected_packet.get("cannot_claim")
+    )
     for index, packet in indexed:
         if index == selected_index:
             continue
@@ -137,11 +131,11 @@ def resolve_capability_conflicts(
         )
         suppressed.append(suppressed_action)
         reason_codes.append(suppression_code)
-        cannot_claim.extend(_as_str_list(packet.get("cannot_claim")))
+        cannot_claim.extend(string_list_or_empty(packet.get("cannot_claim")))
 
     questions = [
         dict(item)
-        for item in _as_list(selected_packet.get("questions"))
+        for item in list_or_empty(selected_packet.get("questions"))
         if isinstance(item, Mapping)
     ]
     return {

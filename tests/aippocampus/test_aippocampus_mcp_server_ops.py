@@ -716,7 +716,8 @@ class AippocampusMcpServerOpsTests(unittest.TestCase):
         self.assertEqual(payload["foreground_action"]["tool_name"], "agent_recall")
         self.assertFalse(payload["blocks_first_recall"])
         self.assertEqual(payload["maintenance_next_action"]["id"], "build_index")
-        self.assertTrue(payload["recall_capability"]["source_reopen_success"])
+        self.assertNotIn("recall_capability", payload)
+        self.assertNotIn("source_reopen_success", encoded)
         self.assertEqual(executable_command_violations(payload), [])
         self.assertNotIn(str(self.cwd), encoded)
         self.assertNotIn("debug", encoded)
@@ -727,6 +728,46 @@ class AippocampusMcpServerOpsTests(unittest.TestCase):
         self.assertNotIn("freshness", payload)
         self.assertNotIn("storage_pressure", payload)
         self.assertNotIn("host_state_confounds", payload)
+
+    def test_memory_health_full_keeps_operator_diagnostics(self) -> None:
+        def fake_health_report(cwd: str | Path) -> dict:
+            return {
+                "ok": False,
+                "cwd": str(cwd),
+                "recommended_actions": [
+                    {
+                        "id": "build_index",
+                        "severity": "warning",
+                        "reason": "index is stale",
+                        "command": f"python {self.cwd / 'tools' / 'build_index.py'}",
+                    },
+                ],
+                "debug": {
+                    "command": f"python {self.cwd / 'tools' / 'health.py'} --cwd {self.cwd}",
+                },
+            }
+
+        with mock.patch.object(
+            mcp_handlers.aippocampus_health,
+            "health_report",
+            side_effect=fake_health_report,
+        ):
+            response = mcp.handle_request(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 5810,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "memory_health",
+                        "arguments": {"cwd": str(self.cwd), "detail": "full"},
+                    },
+                }
+            )
+
+        full_payload = self.tool_payload(response)
+        self.assertEqual(full_payload["detail"], "full")
+        self.assertIn("recommended_actions", full_payload)
+        self.assertIn("debug", full_payload)
 
     def test_memory_health_exception_returns_recovery_card_not_bare_tool_error(self) -> None:
         with mock.patch.object(
@@ -745,6 +786,17 @@ class AippocampusMcpServerOpsTests(unittest.TestCase):
                     },
                 }
             )
+            full_response = mcp.handle_request(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 5820,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "memory_health",
+                        "arguments": {"cwd": str(self.cwd), "detail": "full"},
+                    },
+                }
+            )
 
         self.assertFalse(response["result"].get("isError", False))
         payload = self.tool_payload(response)
@@ -755,7 +807,8 @@ class AippocampusMcpServerOpsTests(unittest.TestCase):
         self.assertFalse(payload["ok"])
         self.assertEqual(payload["status"], "degraded")
         self.assertEqual(payload["error"]["code"], "health_artifacts_missing_recall_available")
-        self.assertTrue(payload["recall_capability"]["source_reopen_success"])
+        self.assertNotIn("recall_capability", payload)
+        self.assertNotIn("source_reopen_success", encoded)
         self.assertIn("foreground_action", payload)
         self.assertNotIn("agent_next_action", payload)
         self.assertIn("safe_next_actions", payload)
@@ -764,6 +817,9 @@ class AippocampusMcpServerOpsTests(unittest.TestCase):
         self.assertEqual(executable_command_violations(payload), [])
         self.assertNotIn("runtime_provenance", payload)
         self.assertNotIn(str(self.cwd), encoded)
+        full_payload = self.tool_payload(full_response)
+        self.assertEqual(full_payload["detail"], "full")
+        self.assertTrue(full_payload["recall_capability"]["source_reopen_success"])
 
     def test_agent_recall_import_failure_returns_foreground_runtime_recovery_card(self) -> None:
         with mock.patch.object(

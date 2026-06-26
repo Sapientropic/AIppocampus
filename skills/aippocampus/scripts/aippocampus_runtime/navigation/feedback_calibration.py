@@ -10,11 +10,9 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+from aippocampus_runtime.core import list_or_empty
+
 SCORE_SCALE = 0.22
-
-
-def _as_list(value: Any) -> list[Any]:
-    return value if isinstance(value, list) else []
 
 
 def _float(value: Any, default: float = 0.0) -> float:
@@ -79,7 +77,7 @@ def reason_codes(row: Mapping[str, Any] | None, delta: float | None = None) -> l
     if not row:
         return []
     bounded = bounded_delta(row) if delta is None else delta
-    raw = [str(code) for code in _as_list(row.get("reason_codes")) if str(code).strip()]
+    raw = [str(code) for code in list_or_empty(row.get("reason_codes")) if str(code).strip()]
     codes: list[str] = []
     if bounded > 0:
         codes.append("feedback_calibration_lift")
@@ -160,7 +158,7 @@ def diagnostics(
             "clean_source_mutation_allowed": False,
             "source_open_claim_allowed": False,
         },
-        "cannot_claim": _as_list(calibration_payload.get("cannot_claim"))
+        "cannot_claim": list_or_empty(calibration_payload.get("cannot_claim"))
         or [
             "feedback_event_is_source_truth",
             "feedback_calibration_can_emit_source_open",

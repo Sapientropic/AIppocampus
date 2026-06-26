@@ -15,6 +15,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.source.io_kernel import append_jsonl_dict_rows, load_jsonl_dict_rows
+
 SCHEMA_VERSION = 1
 AUTHORITY = "retrieval_tuning_only_not_source_truth"
 PRIVACY_BOUNDARY = "local_counts_and_route_ids_no_raw_prompt_or_source_text"
@@ -147,30 +149,13 @@ def _assert_event_safe(event: Mapping[str, Any]) -> None:
 
 def write_recall_outcome_event(path: str | Path, event: Mapping[str, Any]) -> None:
     _assert_event_safe(event)
-    out = Path(path)
-    out.parent.mkdir(parents=True, exist_ok=True)
-    with out.open("a", encoding="utf-8", newline="\n") as handle:
-        handle.write(json.dumps(dict(event), ensure_ascii=False, sort_keys=True) + "\n")
+    append_jsonl_dict_rows(Path(path), [event], sort_keys=True)
 
 
 def _read_events(path: Path) -> list[dict[str, Any]]:
     if not path.exists():
         return []
-    rows: list[dict[str, Any]] = []
-    try:
-        with path.open("r", encoding="utf-8") as handle:
-            for line in handle:
-                if not line.strip():
-                    continue
-                try:
-                    item = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                if isinstance(item, dict):
-                    rows.append(item)
-    except OSError:
-        return []
-    return rows
+    return load_jsonl_dict_rows(path).rows
 
 
 def _increment(group: dict[str, Counter[str]], key: str, outcome: str) -> None:

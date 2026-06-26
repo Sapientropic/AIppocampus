@@ -15,6 +15,8 @@ from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.source.io_kernel import append_jsonl_dict_rows, load_jsonl_dict_rows
+
 SCHEMA_VERSION = 1
 REPORT_KIND = "aippocampus_semantic_candidate_effectiveness_report"
 ROW_KIND = "aippocampus_semantic_candidate_effectiveness"
@@ -253,31 +255,18 @@ def append_semantic_effectiveness_rows(
     path: Path,
     rows: Iterable[Mapping[str, Any]],
 ) -> int:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    count = 0
-    with path.open("a", encoding="utf-8", newline="\n") as handle:
-        for row in rows:
-            if row.get("kind") != ROW_KIND:
-                raise ValueError(f"unsupported semantic effectiveness row kind: {row.get('kind')}")
-            handle.write(json.dumps(dict(row), ensure_ascii=False, sort_keys=True) + "\n")
-            count += 1
-    return count
+    prepared: list[Mapping[str, Any]] = []
+    for row in rows:
+        if row.get("kind") != ROW_KIND:
+            raise ValueError(f"unsupported semantic effectiveness row kind: {row.get('kind')}")
+        prepared.append(row)
+    return append_jsonl_dict_rows(path, prepared, sort_keys=True)
 
 
 def load_semantic_effectiveness_rows(path: Path) -> list[dict[str, Any]]:
     if not path.exists():
         return []
-    rows: list[dict[str, Any]] = []
-    for line in path.read_text(encoding="utf-8").splitlines():
-        if not line.strip():
-            continue
-        try:
-            item = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(item, Mapping) and item.get("kind") == ROW_KIND:
-            rows.append(dict(item))
-    return rows
+    return [dict(item) for item in load_jsonl_dict_rows(path).rows if item.get("kind") == ROW_KIND]
 
 
 def apply_semantic_effectiveness_to_candidates(

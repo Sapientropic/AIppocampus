@@ -14,6 +14,10 @@ from aippocampus_runtime.macro.perturbation import (
     build_perturbation_packet,
     compact_perturbation_label,
 )
+from aippocampus_runtime.source.io_kernel import (
+    empty_jsonl_loss,
+    iter_jsonl_dict_rows_with_line_numbers,
+)
 
 SCHEMA_VERSION = "0.1"
 ACTION_GRAMMAR = "direction_only"
@@ -331,52 +335,35 @@ def load_macro_orientation_states(
     if not path.exists():
         return []
     rows: list[dict[str, object]] = []
-    try:
-        lines = path.read_text(encoding="utf-8").splitlines()
-    except OSError as exc:
+    loss = empty_jsonl_loss()
+    for line_number, row in iter_jsonl_dict_rows_with_line_numbers(path, loss=loss):
+        validation = validate_macro_orientation_state(row)
+        validation_errors = validation.get("errors")
+        if isinstance(validation_errors, list) and "unsupported_schema_version" in validation_errors:
+            if warnings is not None:
+                warnings.append(
+                    {
+                        "code": "unsupported_macro_state_schema",
+                        "line": line_number,
+                        "recovery_command": "aippocampus agent macro --init-template --json",
+                    }
+                )
+            continue
+        rows.append(row)
+    if int(loss.get("unreadable_file_count") or 0):
         if warnings is not None:
             warnings.append(
                 {
                     "code": "macro_state_unreadable",
-                    "message": type(exc).__name__,
+                    "message": "OSError",
                 }
             )
         return []
-    for line_number, line in enumerate(lines, start=1):
-        if not line.strip():
-            continue
-        try:
-            row = json.loads(line)
-        except json.JSONDecodeError:
-            if warnings is not None:
-                warnings.append(
-                    {
-                        "code": "invalid_jsonl_row_skipped",
-                        "line": line_number,
-                    }
-                )
-            continue
-        if isinstance(row, dict):
-            validation = validate_macro_orientation_state(row)
-            validation_errors = validation.get("errors")
-            if isinstance(validation_errors, list) and "unsupported_schema_version" in validation_errors:
-                if warnings is not None:
-                    warnings.append(
-                        {
-                            "code": "unsupported_macro_state_schema",
-                            "line": line_number,
-                            "recovery_command": "aippocampus agent macro --init-template --json",
-                        }
-                    )
-                continue
-            rows.append(row)
-        elif warnings is not None:
-            warnings.append(
-                {
-                    "code": "non_object_jsonl_row_skipped",
-                    "line": line_number,
-                }
-            )
+    if warnings is not None:
+        for line_number in loss.get("invalid_json_line_numbers") or []:
+            warnings.append({"code": "invalid_jsonl_row_skipped", "line": line_number})
+        for line_number in loss.get("non_object_line_numbers") or []:
+            warnings.append({"code": "non_object_jsonl_row_skipped", "line": line_number})
     return rows
 
 

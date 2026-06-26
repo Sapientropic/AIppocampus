@@ -18,6 +18,7 @@ from typing import Any
 from aippocampus_runtime.core import now_utc
 from aippocampus_runtime.navigation.associations import normalize_term
 from aippocampus_runtime.registry.api import registry_paths
+from aippocampus_runtime.source.io_kernel import load_jsonl_dict_rows
 
 SCHEMA_VERSION = 1
 EVENT_KIND = "aippocampus_concept_edge_utility_event"
@@ -222,16 +223,7 @@ def record_edge_utility_event(
 def iter_edge_utility_events(events_path: Path) -> list[dict[str, Any]]:
     if not events_path.exists():
         return []
-    rows: list[dict[str, Any]] = []
-    with events_path.open("r", encoding="utf-8") as fh:
-        for line in fh:
-            try:
-                row = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if isinstance(row, dict) and row.get("kind") == EVENT_KIND:
-                rows.append(row)
-    return rows
+    return [row for row in load_jsonl_dict_rows(events_path).rows if row.get("kind") == EVENT_KIND]
 
 
 def _empty_group() -> dict[str, int]:

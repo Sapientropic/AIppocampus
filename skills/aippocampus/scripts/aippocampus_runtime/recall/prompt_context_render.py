@@ -263,6 +263,10 @@ def public_hook_debug_payload(result: dict[str, Any]) -> dict[str, Any]:
     route_delivery = route_delivery_debug_summary(result.get("route_delivery_diagnostic"))
     if route_delivery is not None:
         payload["route_delivery_diagnostic"] = route_delivery
+    if isinstance(result.get("degraded_warnings"), list):
+        payload["degraded_warnings"] = sanitize_external_model_payload(
+            result.get("degraded_warnings")
+        )
     return payload
 
 

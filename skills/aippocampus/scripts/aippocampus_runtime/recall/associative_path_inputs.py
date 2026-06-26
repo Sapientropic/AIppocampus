@@ -28,6 +28,7 @@ from aippocampus_runtime.recall.registry_source_apw_candidates import (
     has_registry_source_candidate_input,
     registry_source_candidate_rows,
 )
+from aippocampus_runtime.source.io_kernel import parse_jsonl_dict_rows_text
 
 __all__ = [
     "build_associative_path_diagnostic",
@@ -140,18 +141,9 @@ def _read_rows(path: Path | None) -> tuple[list[dict[str, Any]], int, str]:
         except json.JSONDecodeError:
             data = None
         if data is None:
-            for line in text.splitlines():
-                if not line.strip():
-                    continue
-                try:
-                    item = json.loads(line)
-                except json.JSONDecodeError:
-                    malformed += 1
-                    continue
-                if isinstance(item, Mapping):
-                    rows.append(dict(item))
-                else:
-                    malformed += 1
+            result = parse_jsonl_dict_rows_text(text)
+            rows.extend(result.rows)
+            malformed = int(result.loss.get("total_loss_count") or 0)
             return rows, malformed, "loaded" if rows else "malformed"
         if not isinstance(data, Mapping):
             return [], 1, "malformed"
@@ -177,18 +169,9 @@ def _read_rows(path: Path | None) -> tuple[list[dict[str, Any]], int, str]:
         rows.extend(dict(item) for item in data if isinstance(item, Mapping))
         malformed = sum(1 for item in data if not isinstance(item, Mapping))
         return rows, malformed, "loaded"
-    for line in text.splitlines():
-        if not line.strip():
-            continue
-        try:
-            item = json.loads(line)
-        except json.JSONDecodeError:
-            malformed += 1
-            continue
-        if isinstance(item, Mapping):
-            rows.append(dict(item))
-        else:
-            malformed += 1
+    result = parse_jsonl_dict_rows_text(text)
+    rows.extend(result.rows)
+    malformed = int(result.loss.get("total_loss_count") or 0)
     return rows, malformed, "loaded" if rows or malformed == 0 else "malformed"
 
 

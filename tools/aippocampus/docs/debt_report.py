@@ -13,6 +13,10 @@ from pathlib import Path
 
 try:
     from tools.aippocampus.docs import guard_pressure
+    from tools.aippocampus.docs.helper_inventory import (
+        CANONICAL_HELPER_PATHS,
+        HELPER_NAME_TO_FAMILY,
+    )
     from tools.aippocampus.docs.instruction_surface import (
         COMPACT_DEBUG_FIELD_LITERALS,
         INSTRUCTION_SURFACE_POLICY_DOC,
@@ -34,6 +38,7 @@ try:
     )
 except ModuleNotFoundError:
     import guard_pressure
+    from helper_inventory import CANONICAL_HELPER_PATHS, HELPER_NAME_TO_FAMILY
     from instruction_surface import (
         COMPACT_DEBUG_FIELD_LITERALS,
         INSTRUCTION_SURFACE_POLICY_DOC,
@@ -91,36 +96,6 @@ HOT_PATH_PREFIXES = (
     "skills/aippocampus/scripts/aippocampus_runtime/update/",
     "skills/aippocampus/scripts/aippocampus_runtime/subconscious/",
 )
-HELPER_NAME_TO_FAMILY = {
-    "_without_empty": "without_empty",
-    "_as_list": "as_list",
-    "_as_dict": "as_dict",
-    "_stable_id": "stable_id",
-    "stable_id": "stable_id",
-    "stable_hash": "stable_hash",
-    "load_json": "json_load",
-    "load_json_dict": "json_load",
-    "iter_jsonl": "jsonl_read",
-    "iter_jsonl_dict_rows": "jsonl_read",
-    "iter_jsonl_dict_rows_with_line_numbers": "jsonl_read",
-    "load_jsonl_dict_rows": "jsonl_read",
-    "write_jsonl": "jsonl_write",
-    "write_jsonl_dict_rows": "jsonl_write",
-    "_write_json_atomic": "json_atomic_write",
-    "write_json_atomic": "json_atomic_write",
-    "source_ref_key": "source_ref_key",
-    "safe_float": "safe_float",
-    "parse_utc": "parse_utc",
-}
-CANONICAL_HELPER_PATHS = {
-    "json_load": {"skills/aippocampus/scripts/aippocampus_runtime/source/io_kernel.py"},
-    "jsonl_read": {"skills/aippocampus/scripts/aippocampus_runtime/source/io_kernel.py"},
-    "jsonl_write": {"skills/aippocampus/scripts/aippocampus_runtime/source/io_kernel.py"},
-    "json_atomic_write": {"skills/aippocampus/scripts/aippocampus_runtime/source/io_kernel.py"},
-    "source_ref_key": {"skills/aippocampus/scripts/aippocampus_runtime/source/io_kernel.py"},
-    "safe_float": {"skills/aippocampus/scripts/aippocampus_runtime/source/io_kernel.py"},
-    "parse_utc": {"skills/aippocampus/scripts/aippocampus_runtime/source/io_kernel.py"},
-}
 BROAD_EXCEPTION_BOUNDARY_MARKER = "aippocampus-debt-ok: broad-exception-boundary"
 GIANT_FUNCTION_STAGE_MAP_MARKER = "aippocampus-stage-map:"
 DIAGNOSTIC_BOUNDARY_TOKENS = (

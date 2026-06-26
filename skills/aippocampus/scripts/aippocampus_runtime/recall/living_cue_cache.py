@@ -17,7 +17,7 @@ from typing import Any
 
 from aippocampus_runtime.core import sanitize_external_model_text
 from aippocampus_runtime.registry.api import unique_preserve
-from aippocampus_runtime.source.io_kernel import source_ref_identity_key
+from aippocampus_runtime.source.io_kernel import load_jsonl_dict_rows, source_ref_identity_key
 
 LIVING_CUE_SCHEMA_VERSION = 1
 LIVING_CUE_KIND = "aippocampus_living_cue_cache_entry"
@@ -185,18 +185,7 @@ def normalize_living_cue_entry(row: dict[str, Any]) -> dict[str, Any]:
 def load_living_cue_entries(path: Path) -> list[dict[str, Any]]:
     if not path.exists():
         return []
-    rows: list[dict[str, Any]] = []
-    with path.open("r", encoding="utf-8") as fh:
-        for line in fh:
-            if not line.strip():
-                continue
-            try:
-                item = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if isinstance(item, dict):
-                rows.append(normalize_living_cue_entry(item))
-    return rows
+    return [normalize_living_cue_entry(item) for item in load_jsonl_dict_rows(path).rows]
 
 
 def _query_terms(prompt: str) -> list[str]:

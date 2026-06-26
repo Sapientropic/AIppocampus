@@ -493,9 +493,38 @@ class DebtReportTests(unittest.TestCase):
             1,
         )
 
-        changed = debt_report.changed_surface_debt(
-            ["skills/aippocampus/scripts/aippocampus_runtime/ops/recall_navigation_attention.py"]
-        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            duplicate = (
+                root
+                / "skills"
+                / "aippocampus"
+                / "scripts"
+                / "aippocampus_runtime"
+                / "recall"
+                / "duplicate_helper.py"
+            )
+            duplicate.parent.mkdir(parents=True, exist_ok=True)
+            duplicate.write_text(
+                "from typing import Any\n\n"
+                "def _as_dict(value: Any) -> dict[str, Any]:\n"
+                "    return value if isinstance(value, dict) else {}\n",
+                encoding="utf-8",
+            )
+            rel_path = (
+                "skills/aippocampus/scripts/aippocampus_runtime/recall/duplicate_helper.py"
+            )
+
+            with (
+                mock.patch.object(debt_report, "REPO_ROOT", root),
+                mock.patch.object(debt_report, "changed_surface_guard_pressure", return_value=[]),
+            ):
+                debt_report.parse_python.cache_clear()
+                try:
+                    changed = debt_report.changed_surface_debt([rel_path])
+                finally:
+                    debt_report.parse_python.cache_clear()
+
         self.assertGreater(changed["acceptance_bearing_warning_count"], 0)
         self.assertTrue(
             all(warning["acceptance_bearing"] for warning in changed["warnings"])

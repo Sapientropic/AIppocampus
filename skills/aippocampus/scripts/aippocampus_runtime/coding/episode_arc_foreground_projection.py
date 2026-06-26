@@ -7,10 +7,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from aippocampus_runtime.contracts import canonical_foreground_action_fields
-
-
-def _as_mapping(value: Any) -> Mapping[str, Any]:
-    return value if isinstance(value, Mapping) else {}
+from aippocampus_runtime.core import dict_or_empty
 
 
 def render_text(report: dict[str, Any]) -> str:
@@ -22,8 +19,8 @@ def render_text(report: dict[str, Any]) -> str:
     )
     raw_privacy = report.get("privacy_boundary")
     privacy: Mapping[str, Any] = raw_privacy if isinstance(raw_privacy, Mapping) else {}
-    current_validity = _as_mapping(report.get("current_validity_counts"))
-    safe_use = _as_mapping(report.get("safe_use_counts"))
+    current_validity = dict_or_empty(report.get("current_validity_counts"))
+    safe_use = dict_or_empty(report.get("safe_use_counts"))
     lines = [
         "AIppocampus episode-arcs",
         f"status: {'ok' if report.get('ok') else 'attention_needed'}",
@@ -51,14 +48,14 @@ def render_text(report: dict[str, Any]) -> str:
 
 
 def summary_projection(report: Mapping[str, Any]) -> dict[str, Any]:
-    metrics = _as_mapping(report.get("metrics"))
-    input_surface = _as_mapping(report.get("input_surface"))
+    metrics = dict_or_empty(report.get("metrics"))
+    input_surface = dict_or_empty(report.get("input_surface"))
     counts_deferred = bool(report.get("counts_deferred"))
     episode_arc_count = None if counts_deferred else int(metrics.get("episode_arc_count") or 0)
     complete_arc_count = None if counts_deferred else metrics.get("complete_arc_count", 0)
     gappy_arc_count = None if counts_deferred else metrics.get("gappy_arc_count", 0)
-    current_validity_counts = dict(_as_mapping(report.get("current_validity_counts")))
-    safe_use_counts = dict(_as_mapping(report.get("safe_use_counts")))
+    current_validity_counts = dict(dict_or_empty(report.get("current_validity_counts")))
+    safe_use_counts = dict(dict_or_empty(report.get("safe_use_counts")))
     summary_metrics = {
         "episode_arc_count": episode_arc_count,
         "complete_arc_count": complete_arc_count,

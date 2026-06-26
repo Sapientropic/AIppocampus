@@ -13,6 +13,7 @@ from collections import Counter
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+from aippocampus_runtime.core import dict_or_empty, list_or_empty
 from aippocampus_runtime.ops import (
     attention_router_auto_gate,
     recall_navigation_comparison_fixtures,
@@ -45,14 +46,6 @@ RED_LINE_KEYS = (
     "claim_without_source_reopen_count",
     "stale_as_current_count",
 )
-def _as_dict(value: Any) -> dict[str, Any]:
-    return value if isinstance(value, dict) else {}
-
-
-def _as_list(value: Any) -> list[Any]:
-    return value if isinstance(value, list) else []
-
-
 def _int(value: Any) -> int:
     try:
         return int(value or 0)
@@ -123,10 +116,10 @@ def _arm_row(
 
 
 def _derived_case(row: Mapping[str, Any]) -> dict[str, Any]:
-    arms = _as_dict(row.get("arms"))
-    direct = _as_dict(arms.get("direct_search"))
-    attention = _as_dict(arms.get(ARM_ATTENTION_NAV))
-    progressive = _as_dict(arms.get("progressive_recall"))
+    arms = dict_or_empty(row.get("arms"))
+    direct = dict_or_empty(arms.get("direct_search"))
+    attention = dict_or_empty(arms.get(ARM_ATTENTION_NAV))
+    progressive = dict_or_empty(arms.get("progressive_recall"))
     case_id = str(row.get("case_id") or "")
     family = str(row.get("case_family") or "unspecified")
     expected_fail_closed = bool(progressive.get("expected_fail_closed"))
@@ -425,7 +418,7 @@ def _fixture_distractor_cases() -> list[dict[str, Any]]:
 
 def _case_rows(comparison_report: Mapping[str, Any]) -> list[dict[str, Any]]:
     return (
-        [_derived_case(row) for row in _as_list(comparison_report.get("cases"))]
+        [_derived_case(row) for row in list_or_empty(comparison_report.get("cases"))]
         + _fixture_distractor_cases()
         + fixture_macro_navigation_cases(
             arm_baseline=ARM_BASELINE,
@@ -464,9 +457,9 @@ def _aggregate_metrics(cases: Sequence[Mapping[str, Any]]) -> dict[str, int]:
         outcome = str(case.get("promotion_outcome") or "")
         metrics["feature_hurt_case_count"] += int(outcome == "feature_hurt")
         metrics["feature_noop_case_count"] += int(outcome == "feature_noop")
-        arms = _as_dict(case.get("arms"))
+        arms = dict_or_empty(case.get("arms"))
         for arm_name in PROMOTION_ARMS:
-            arm = _as_dict(arms.get(arm_name))
+            arm = dict_or_empty(arms.get(arm_name))
             manual = _int(arm.get("manual_search_fallback_count"))
             metrics["manual_search_fallback_count"] += manual
             if arm_name != ARM_BASELINE:
@@ -537,7 +530,7 @@ def _usefulness(metrics: Mapping[str, Any], cases: Sequence[Mapping[str, Any]]) 
     success_count = sum(
         1
         for case in cases
-        if _as_dict(_as_dict(case.get("arms")).get(ARM_PLUS_DEEPEN)).get(
+        if dict_or_empty(dict_or_empty(case.get("arms")).get(ARM_PLUS_DEEPEN)).get(
             "source_backed_success"
         )
     )
@@ -554,7 +547,7 @@ def _usefulness(metrics: Mapping[str, Any], cases: Sequence[Mapping[str, Any]]) 
             "recall_to_source_reopen_attempt_count": sum(
                 1
                 for case in cases
-                if _as_dict(_as_dict(case.get("arms")).get(ARM_PLUS_DEEPEN)).get(
+                if dict_or_empty(dict_or_empty(case.get("arms")).get(ARM_PLUS_DEEPEN)).get(
                     "source_reopen_attempted"
                 )
             ),
@@ -695,7 +688,7 @@ def build_recall_navigation_promotion_report(
         "negative_controls": negative_controls,
         "usefulness_metrics": usefulness,
         "attention_router_readout": {
-            **_as_dict(comparison_report.get("attention_router_activation")),
+            **dict_or_empty(comparison_report.get("attention_router_activation")),
             "comparison_arm": ARM_ATTENTION_NAV,
         },
         "attention_router_public_cohort": public_cohort,
@@ -731,7 +724,7 @@ def fixture_recall_navigation_promotion_report() -> dict[str, Any]:
 
 
 def render_text(report: Mapping[str, Any]) -> str:
-    metrics = _as_dict(report.get("promotion_metrics"))
+    metrics = dict_or_empty(report.get("promotion_metrics"))
     return (
         "AIppocampus recall navigation promotion harness\n"
         f"- Promotion: {report.get('promotion_decision')}\n"

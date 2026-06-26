@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import argparse
+import os
 import time
 from typing import Any
 
@@ -53,6 +55,39 @@ def load_dream_delivery_module() -> tuple[Any | None, str | None]:
         # install so diagnostics do not flatten both into "unavailable".
         return None, "policy_import_error"
     return dream_delivery, None
+
+
+def add_dream_delivery_arguments(parser: argparse.ArgumentParser) -> None:
+    dream_delivery, _reason = load_dream_delivery_module()
+    if dream_delivery is None:
+        parser.add_argument("--dream-shadow-ab", action="store_true")
+        parser.add_argument("--dream-shadow-log")
+        parser.add_argument(
+            "--dream-shadow-salt",
+            default=os.environ.get("AIPPOCAMPUS_DREAM_SHADOW_AB_SALT"),
+        )
+        parser.add_argument("--dream-delivery-mode")
+        parser.add_argument("--dream-rollout-rate", type=float, default=None)
+        return
+    dream_delivery.add_dream_delivery_arguments(parser)
+
+
+def prepare_dream_delivery(
+    *,
+    prompt: str,
+    hook_input: dict[str, Any],
+    args: argparse.Namespace,
+) -> dict[str, Any]:
+    dream_delivery, reason = load_dream_delivery_module()
+    if dream_delivery is None:
+        return {
+            "mode": "off",
+            "event": None,
+            "allow_dream": False,
+            "dream_hypothesis_limit": 0,
+            "reason": reason or "policy_unavailable",
+        }
+    return dream_delivery.prepare_dream_delivery(prompt=prompt, hook_input=hook_input, args=args)
 
 
 def fallback_reason(exc: Exception) -> str:

@@ -20,22 +20,20 @@ from aippocampus_runtime.coding.episode_arc_foreground_projection import (
     render_text,
     summary_projection,
 )
-from aippocampus_runtime.core import aippocampus_registry_dir, now_utc
+from aippocampus_runtime.core import (
+    aippocampus_registry_dir,
+    dict_or_empty,
+    list_or_empty,
+    now_utc,
+)
 from aippocampus_runtime.registry.api import load_registry, registry_paths, unique_preserve
+from aippocampus_runtime.source.io_kernel import load_jsonl_dict_rows
 
 REPORT_KIND = "aippocampus_episode_arc_private_history_adjudication_report"
 SCHEMA_VERSION = 1
 DEFAULT_MAX_THREADS = 100
 DEFAULT_MAX_LINE_GAP = 3_000
 DEFAULT_TOP_ARCS = 5
-
-
-def _as_mapping(value: Any) -> Mapping[str, Any]:
-    return value if isinstance(value, Mapping) else {}
-
-
-def _as_list(value: Any) -> list[Any]:
-    return value if isinstance(value, list) else []
 
 
 def _as_int(value: Any) -> int | None:
@@ -46,28 +44,14 @@ def _as_int(value: Any) -> int | None:
 
 
 def _read_jsonl(path: Path) -> tuple[list[dict[str, Any]], int]:
-    rows: list[dict[str, Any]] = []
-    bad_rows = 0
     if not path.is_file():
-        return rows, bad_rows
-    with path.open("r", encoding="utf-8", errors="replace") as handle:
-        for line in handle:
-            if not line.strip():
-                continue
-            try:
-                item = json.loads(line)
-            except json.JSONDecodeError:
-                bad_rows += 1
-                continue
-            if isinstance(item, dict):
-                rows.append(item)
-            else:
-                bad_rows += 1
-    return rows, bad_rows
+        return [], 0
+    result = load_jsonl_dict_rows(path)
+    return result.rows, int(result.loss.get("total_loss_count") or 0)
 
 
 def _path_from_entry(entry: Mapping[str, Any], key: str) -> Path | None:
-    raw = _as_mapping(entry.get("paths")).get(key)
+    raw = dict_or_empty(entry.get("paths")).get(key)
     return Path(str(raw)) if raw else None
 
 
@@ -81,7 +65,7 @@ def _source_line(row: Mapping[str, Any]) -> int | None:
 def _first_ref_line(candidate: Mapping[str, Any]) -> int | None:
     lines = [
         line
-        for ref in _as_list(candidate.get("source_refs"))
+        for ref in list_or_empty(candidate.get("source_refs"))
         if isinstance(ref, Mapping)
         if (line := _source_line(ref)) is not None
     ]
@@ -129,8 +113,8 @@ def _event_row_from_decision(candidate: Mapping[str, Any], *, episode_id: str) -
         "decision_id": str(candidate.get("decision_id") or ""),
         "event_type": str(candidate.get("event_type") or ""),
         "sequence_index": line,
-        "source_refs": list(_as_list(candidate.get("source_refs"))),
-        "affected_scope": dict(_as_mapping(candidate.get("affected_scope"))),
+        "source_refs": list(list_or_empty(candidate.get("source_refs"))),
+        "affected_scope": dict_or_empty(candidate.get("affected_scope")),
         "origin": "coding_decision_event",
     }
 
@@ -219,7 +203,7 @@ def _count_values(items: Sequence[Mapping[str, Any]], field: str) -> dict[str, i
 def _gap_counts(arcs: Sequence[Mapping[str, Any]]) -> dict[str, int]:
     counts: Counter[str] = Counter()
     for arc in arcs:
-        for gap in _as_list(arc.get("sequence_gaps")):
+        for gap in list_or_empty(arc.get("sequence_gaps")):
             counts[str(gap)] += 1
     return dict(sorted(counts.items()))
 
@@ -228,7 +212,7 @@ def _safe_use_counts(arcs: Sequence[Mapping[str, Any]]) -> dict[str, int]:
     counts: Counter[str] = Counter()
     for arc in arcs:
         plan = episode_arcs.build_reopen_plan(arc)
-        for safe_use in _as_list(plan.get("safe_uses")):
+        for safe_use in list_or_empty(plan.get("safe_uses")):
             counts[str(safe_use)] += 1
     return dict(sorted(counts.items()))
 
@@ -238,7 +222,7 @@ def _arc_handle(arc: Mapping[str, Any]) -> str:
         {
             "episode_id": arc.get("episode_id"),
             "episode_kind": arc.get("episode_kind"),
-            "source_ref_count": len(_as_list(arc.get("source_refs"))),
+            "source_ref_count": len(list_or_empty(arc.get("source_refs"))),
             "origin": arc.get("origin"),
         },
         ensure_ascii=False,
@@ -256,9 +240,9 @@ def _top_arc_cards(arcs: Sequence[Mapping[str, Any]], *, limit: int = DEFAULT_TO
                 "arc_handle": _arc_handle(arc),
                 "episode_kind": str(arc.get("episode_kind") or "unknown"),
                 "current_validity": str(arc.get("current_validity") or "unknown"),
-                "safe_uses": list(_as_list(plan.get("safe_uses")))[:6],
-                "source_ref_count": len(_as_list(arc.get("source_refs"))),
-                "sequence_gap_count": len(_as_list(arc.get("sequence_gaps"))),
+                "safe_uses": list(list_or_empty(plan.get("safe_uses")))[:6],
+                "source_ref_count": len(list_or_empty(arc.get("source_refs"))),
+                "sequence_gap_count": len(list_or_empty(arc.get("sequence_gaps"))),
                 "source_reopen_action": {
                     "kind": "inspect_episode_arc_sources",
                     "command_template": "aippocampus episode-arcs --json --arc-handle {arc_handle}",
@@ -282,7 +266,7 @@ def _sequence_resolution_counts(arcs: Sequence[Mapping[str, Any]]) -> dict[str, 
 
 
 def _thread_entries(registry: Mapping[str, Any], max_threads: int) -> list[Mapping[str, Any]]:
-    entries = [entry for entry in _as_list(registry.get("threads")) if isinstance(entry, Mapping)]
+    entries = [entry for entry in list_or_empty(registry.get("threads")) if isinstance(entry, Mapping)]
     return entries[: max(0, max_threads)]
 
 
@@ -376,7 +360,7 @@ def build_private_history_episode_arc_adjudication_report(
     complete_rejected_route_arcs = [
         arc for arc in rejected_route_arcs if not arc.get("sequence_gaps")
     ]
-    source_ref_count = sum(len(_as_list(arc.get("source_refs"))) for arc in arcs)
+    source_ref_count = sum(len(list_or_empty(arc.get("source_refs"))) for arc in arcs)
     sequence_resolution_counts = _sequence_resolution_counts(arcs)
     safe_use_counts = _safe_use_counts(arcs)
     top_arcs = _top_arc_cards(arcs, limit=DEFAULT_TOP_ARCS)

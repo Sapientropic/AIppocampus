@@ -22,6 +22,7 @@ from aippocampus_runtime.contracts import (
 from aippocampus_runtime.ops import coordination_topology
 from aippocampus_runtime.ops import telepathy_coordination_packet as packets
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
+from aippocampus_runtime.source.io_kernel import append_jsonl_dict_rows, load_jsonl_dict_rows
 
 SCHEMA_VERSION = 1
 EVENT_KIND = "aippocampus_telepathy_handoff_event"
@@ -221,18 +222,7 @@ def sanitize_source_refs(values: Iterable[Any] | None) -> list[dict[str, Any]]:
 def _read_jsonl(path: Path) -> list[dict[str, Any]]:
     if not path.exists():
         return []
-    rows: list[dict[str, Any]] = []
-    with path.open("r", encoding="utf-8") as f:
-        for line in f:
-            if not line.strip():
-                continue
-            try:
-                item = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if isinstance(item, dict):
-                rows.append(item)
-    return rows
+    return load_jsonl_dict_rows(path).rows
 
 
 def load_events(store_path: str | Path) -> list[dict[str, Any]]:
@@ -240,9 +230,7 @@ def load_events(store_path: str | Path) -> list[dict[str, Any]]:
 
 
 def _append_event(path: Path, event: Mapping[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8", newline="\n") as f:
-        f.write(json.dumps(event, ensure_ascii=False, sort_keys=True) + "\n")
+    append_jsonl_dict_rows(path, [event], sort_keys=True)
 
 
 def _card_with_lifecycle(card: Mapping[str, Any], *, status: str, event_time: str) -> dict[str, Any]:

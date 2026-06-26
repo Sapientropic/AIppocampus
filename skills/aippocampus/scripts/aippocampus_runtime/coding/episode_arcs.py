@@ -75,10 +75,6 @@ _RELATIONS = {
 }
 
 
-def _as_mapping(value: Any) -> Mapping[str, Any]:
-    return dict_or_empty(value)
-
-
 def _unique_objects(items: list[Any], *, limit: int) -> list[Any]:
     seen: set[str] = set()
     out: list[Any] = []
@@ -211,7 +207,7 @@ def _normalize_event(row: Mapping[str, Any], fallback_index: int) -> dict[str, A
         "turn_id": str(row.get("turn_id") or ""),
         "turn_index": row.get("turn_index"),
         "source_line": row.get("source_line") or row.get("line"),
-        "affected_scope": _as_mapping(row.get("affected_scope")),
+        "affected_scope": dict_or_empty(row.get("affected_scope")),
         "sequence_gaps": [
             str(item) for item in list_or_empty(row.get("sequence_gaps")) if str(item).strip()
         ],
@@ -303,7 +299,7 @@ def _causal_edges(events: Sequence[Mapping[str, Any]]) -> list[dict[str, str]]:
 def _merge_scope(events: Sequence[Mapping[str, Any]]) -> dict[str, list[Any]]:
     merged: dict[str, list[Any]] = {"files": [], "modules": [], "symbols": []}
     for event in events:
-        scope = _as_mapping(event.get("affected_scope"))
+        scope = dict_or_empty(event.get("affected_scope"))
         for field in merged:
             merged[field].extend(list_or_empty(scope.get(field)))
     return {field: _unique_objects(values, limit=12) for field, values in merged.items() if values}
@@ -454,7 +450,7 @@ def build_reopen_plan(arc: Mapping[str, Any]) -> dict[str, Any]:
             "source_event_ids": [str(value) for value in list_or_empty(arc.get("source_event_ids"))],
             "source_refs": list(list_or_empty(arc.get("source_refs"))),
             "source_ref_hashes": [str(value) for value in list_or_empty(arc.get("source_ref_hashes"))],
-            "source_window": dict(_as_mapping(arc.get("turn_range"))),
+            "source_window": dict(dict_or_empty(arc.get("turn_range"))),
         },
         "cannot_claim": unique_preserve(_cannot_claim(arc) + ["episode_arc_is_not_current_truth"], limit=12),
     }
@@ -467,7 +463,7 @@ def _rate(numerator: int, denominator: int) -> float:
 
 
 def _has_visible_action_projection(packet: Mapping[str, Any], plan: Mapping[str, Any]) -> bool:
-    proposed_use = str(_as_mapping(packet.get("current_assessment")).get("proposed_use") or "")
+    proposed_use = str(dict_or_empty(packet.get("current_assessment")).get("proposed_use") or "")
     safe_uses = {str(value) for value in list_or_empty(plan.get("safe_uses"))}
     return proposed_use in VISIBLE_ACTION_USES or bool(safe_uses & VISIBLE_ACTION_USES)
 
@@ -497,8 +493,8 @@ def _public_case_summary(
         "event_order": event_order,
         "sequence_gaps": sequence_gaps,
         "current_validity": str(arc.get("current_validity") or ""),
-        "source_thickness": str(_as_mapping(packet.get("current_assessment")).get("source_thickness") or ""),
-        "proposed_use": str(_as_mapping(packet.get("current_assessment")).get("proposed_use") or ""),
+        "source_thickness": str(dict_or_empty(packet.get("current_assessment")).get("source_thickness") or ""),
+        "proposed_use": str(dict_or_empty(packet.get("current_assessment")).get("proposed_use") or ""),
         "safe_uses": [str(value) for value in list_or_empty(plan.get("safe_uses"))],
     }
 

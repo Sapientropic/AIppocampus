@@ -13,6 +13,12 @@ from __future__ import annotations
 import hashlib
 from typing import Any, Mapping, Sequence
 
+from aippocampus_runtime.core import (
+    dict_or_empty,
+    schema_block,
+    schema_blocker_codes,
+    string_list_or_empty,
+)
 from aippocampus_runtime.knowledge import answer_gate
 
 CAPABILITY_MANIFEST_SCHEMA_VERSION = "aippocampus.capability_manifest.v1"
@@ -86,28 +92,8 @@ TOOL_PERMISSION_REQUIRED_FIELDS = (
 )
 
 
-def _as_list(value: Any) -> list[str]:
-    if isinstance(value, str):
-        return [value] if value.strip() else []
-    if not isinstance(value, list):
-        return []
-    return [str(item) for item in value if str(item or "").strip()]
-
-
-def _as_mapping(value: Any) -> Mapping[str, Any]:
-    return value if isinstance(value, Mapping) else {}
-
-
 def _unique(values: Sequence[str]) -> list[str]:
     return sorted({item for item in values if item})
-
-
-def _block(code: str, *, field: str, message: str) -> dict[str, str]:
-    return {"code": code, "field": field, "message": message}
-
-
-def _blocker_codes(blockers: Sequence[Mapping[str, str]]) -> list[str]:
-    return sorted({str(item.get("code") or "") for item in blockers if item.get("code")})
 
 
 def _nonempty(value: Any) -> bool:
@@ -172,7 +158,7 @@ def _missing_required_blocks(
     prefix: str,
 ) -> list[dict[str, str]]:
     return [
-        _block(
+        schema_block(
             f"{prefix}_missing_{field}",
             field=field,
             message=f"{field} is required for typed capability manifests.",
@@ -183,37 +169,37 @@ def _missing_required_blocks(
 
 
 def _validate_taxonomy(manifest: Mapping[str, Any]) -> tuple[list[str], list[dict[str, str]]]:
-    taxonomy = _as_mapping(manifest.get("capability_taxonomy"))
+    taxonomy = dict_or_empty(manifest.get("capability_taxonomy"))
     blockers: list[dict[str, str]] = []
-    skill_types = _as_list(taxonomy.get("skill_types"))
+    skill_types = string_list_or_empty(taxonomy.get("skill_types"))
     missing_skill_types = sorted(SKILL_TYPES - set(skill_types))
     if missing_skill_types:
         blockers.append(
-            _block(
+            schema_block(
                 "taxonomy_missing_skill_types",
                 field="capability_taxonomy.skill_types",
                 message="Typed capability taxonomy must include the #518 skill-type set.",
             )
         )
-    if not set(_as_list(taxonomy.get("risk_levels"))).issuperset(RISK_LEVELS):
+    if not set(string_list_or_empty(taxonomy.get("risk_levels"))).issuperset(RISK_LEVELS):
         blockers.append(
-            _block(
+            schema_block(
                 "taxonomy_missing_risk_levels",
                 field="capability_taxonomy.risk_levels",
                 message="Typed capability taxonomy must include low/medium/high/critical risk.",
             )
         )
-    if not set(_as_list(taxonomy.get("runtime_layers"))).issuperset(RUNTIME_LAYERS):
+    if not set(string_list_or_empty(taxonomy.get("runtime_layers"))).issuperset(RUNTIME_LAYERS):
         blockers.append(
-            _block(
+            schema_block(
                 "taxonomy_missing_runtime_layers",
                 field="capability_taxonomy.runtime_layers",
                 message="Typed capability taxonomy must align to cognitive runtime layers.",
             )
         )
-    if not set(_as_list(taxonomy.get("source_boundaries"))).issuperset(SOURCE_BOUNDARIES):
+    if not set(string_list_or_empty(taxonomy.get("source_boundaries"))).issuperset(SOURCE_BOUNDARIES):
         blockers.append(
-            _block(
+            schema_block(
                 "taxonomy_missing_source_boundaries",
                 field="capability_taxonomy.source_boundaries",
                 message="Typed capability taxonomy must distinguish scent/candidate/evidence/fact.",
@@ -231,7 +217,7 @@ def _validate_tool_permissions(
     ]
     if not permissions:
         blockers.append(
-            _block(
+            schema_block(
                 "capability_missing_tool_permissions",
                 field="tool_permissions",
                 message="A typed capability must declare at least one tool permission profile.",
@@ -240,8 +226,8 @@ def _validate_tool_permissions(
         return blockers
 
     risk_level = str(capability.get("risk_level") or "")
-    evaluation_protocols = set(_as_list(capability.get("evaluation_protocols")))
-    source_requirements = _as_mapping(capability.get("source_requirements"))
+    evaluation_protocols = set(string_list_or_empty(capability.get("evaluation_protocols")))
+    source_requirements = dict_or_empty(capability.get("source_requirements"))
     requires_reopen = source_requirements.get("source_reopen_required") is True
     for permission in permissions:
         blockers.extend(
@@ -253,7 +239,7 @@ def _validate_tool_permissions(
         )
         if not isinstance(permission.get("allowed"), bool):
             blockers.append(
-                _block(
+                schema_block(
                     "tool_permission_invalid_allowed",
                     field="tool_permissions.allowed",
                     message="Tool permission allowed must be a boolean.",
@@ -261,7 +247,7 @@ def _validate_tool_permissions(
             )
         if not isinstance(permission.get("requires"), list):
             blockers.append(
-                _block(
+                schema_block(
                     "tool_permission_invalid_requires",
                     field="tool_permissions.requires",
                     message="Tool permission requires must be a list.",
@@ -272,18 +258,18 @@ def _validate_tool_permissions(
             and "high_risk_answer_gate" not in evaluation_protocols
         ):
             blockers.append(
-                _block(
+                schema_block(
                     "tool_permission_missing_high_risk_gate",
                     field="evaluation_protocols",
                     message="High-risk answer emission requires the high-risk answer gate.",
                 )
             )
         if risk_level in HIGH_RISK_LEVELS and permission.get("can_emit_high_risk_answer") is True:
-            requires = set(_as_list(permission.get("requires")))
+            requires = set(string_list_or_empty(permission.get("requires")))
             missing_requires = {"source_reopen", "active_claim", "current_lifecycle"} - requires
             if missing_requires:
                 blockers.append(
-                    _block(
+                    schema_block(
                         "tool_permission_missing_high_risk_requires",
                         field="tool_permissions.requires",
                         message="High-risk permission profiles must require reopen, active claim, and lifecycle checks.",
@@ -291,7 +277,7 @@ def _validate_tool_permissions(
                 )
             if not requires_reopen:
                 blockers.append(
-                    _block(
+                    schema_block(
                         "high_risk_source_reopen_required",
                         field="source_requirements.source_reopen_required",
                         message="High-risk capabilities must require source reopen before answer use.",
@@ -308,7 +294,7 @@ def _validate_capability(capability: Mapping[str, Any]) -> list[dict[str, str]]:
     )
     if capability.get("schema_version") != CAPABILITY_RECORD_SCHEMA_VERSION:
         blockers.append(
-            _block(
+            schema_block(
                 "capability_unsupported_schema_version",
                 field="schema_version",
                 message="Unsupported capability record schema version.",
@@ -318,17 +304,17 @@ def _validate_capability(capability: Mapping[str, Any]) -> list[dict[str, str]]:
     risk_level = str(capability.get("risk_level") or "")
     if risk_level and risk_level not in RISK_LEVELS:
         blockers.append(
-            _block(
+            schema_block(
                 "capability_unknown_risk_level",
                 field="risk_level",
                 message="Capability risk level is outside the typed taxonomy.",
             )
         )
 
-    skill_types = set(_as_list(capability.get("skill_types")))
+    skill_types = set(string_list_or_empty(capability.get("skill_types")))
     if not skill_types:
         blockers.append(
-            _block(
+            schema_block(
                 "capability_missing_skill_type",
                 field="skill_types",
                 message="Each capability must declare at least one typed skill type.",
@@ -336,7 +322,7 @@ def _validate_capability(capability: Mapping[str, Any]) -> list[dict[str, str]]:
         )
     elif not skill_types.issubset(SKILL_TYPES):
         blockers.append(
-            _block(
+            schema_block(
                 "capability_unknown_skill_type",
                 field="skill_types",
                 message="Capability skill_types must come from the typed taxonomy.",
@@ -346,7 +332,7 @@ def _validate_capability(capability: Mapping[str, Any]) -> list[dict[str, str]]:
     runtime_layer = str(capability.get("runtime_layer") or "")
     if runtime_layer and runtime_layer not in RUNTIME_LAYERS:
         blockers.append(
-            _block(
+            schema_block(
                 "capability_unknown_runtime_layer",
                 field="runtime_layer",
                 message="Capability runtime_layer must align to the cognitive runtime taxonomy.",
@@ -356,7 +342,7 @@ def _validate_capability(capability: Mapping[str, Any]) -> list[dict[str, str]]:
     for field in CAPABILITY_OBJECT_FIELDS:
         if field in capability and not isinstance(capability.get(field), Mapping):
             blockers.append(
-                _block(
+                schema_block(
                     f"capability_invalid_{field}",
                     field=field,
                     message=f"{field} must be an object.",
@@ -365,26 +351,26 @@ def _validate_capability(capability: Mapping[str, Any]) -> list[dict[str, str]]:
     for field in ("output_classes", "evaluation_protocols"):
         if field in capability and not isinstance(capability.get(field), list):
             blockers.append(
-                _block(
+                schema_block(
                     f"capability_invalid_{field}",
                     field=field,
                     message=f"{field} must be a list.",
                 )
             )
 
-    source_requirements = _as_mapping(capability.get("source_requirements"))
+    source_requirements = dict_or_empty(capability.get("source_requirements"))
     source_boundary = str(source_requirements.get("source_boundary") or "")
     if source_boundary and source_boundary not in SOURCE_BOUNDARIES:
         blockers.append(
-            _block(
+            schema_block(
                 "capability_unknown_source_boundary",
                 field="source_requirements.source_boundary",
                 message="source_boundary must be scent, candidate, evidence, or fact.",
             )
         )
-    if risk_level in HIGH_RISK_LEVELS and not _as_list(capability.get("cannot_claim")):
+    if risk_level in HIGH_RISK_LEVELS and not string_list_or_empty(capability.get("cannot_claim")):
         blockers.append(
-            _block(
+            schema_block(
                 "capability_missing_cannot_claim",
                 field="cannot_claim",
                 message="High-risk typed capabilities must publish cannot-claim boundaries.",
@@ -404,7 +390,7 @@ def validate_capability_manifest(manifest: Mapping[str, Any]) -> dict[str, Any]:
     )
     if manifest.get("schema_version") != CAPABILITY_MANIFEST_SCHEMA_VERSION:
         blockers.append(
-            _block(
+            schema_block(
                 "manifest_unsupported_schema_version",
                 field="schema_version",
                 message="Unsupported capability manifest schema version.",
@@ -417,7 +403,7 @@ def validate_capability_manifest(manifest: Mapping[str, Any]) -> dict[str, Any]:
     capabilities = _capabilities(manifest)
     if not capabilities:
         blockers.append(
-            _block(
+            schema_block(
                 "manifest_missing_capabilities",
                 field="capabilities",
                 message="A typed capability manifest must include capability records.",
@@ -433,7 +419,7 @@ def validate_capability_manifest(manifest: Mapping[str, Any]) -> dict[str, Any]:
     duplicate_ids = sorted({item for item in capability_ids if capability_ids.count(item) > 1})
     if duplicate_ids:
         blockers.append(
-            _block(
+            schema_block(
                 "manifest_duplicate_capability_id",
                 field="capabilities.capability_id",
                 message="Capability ids must be unique inside a manifest.",
@@ -449,7 +435,7 @@ def validate_capability_manifest(manifest: Mapping[str, Any]) -> dict[str, Any]:
         "truth_boundary": "execution_boundary_not_fact_source",
         "public_api_status": "internal_architecture_prototype",
         "blockers": blockers,
-        "blocker_codes": _blocker_codes(blockers),
+        "blocker_codes": schema_blocker_codes(blockers),
     }
 
 
@@ -461,7 +447,7 @@ def tool_permission_profiles(
 
     profiles: list[dict[str, Any]] = []
     for capability in _capabilities(manifest):
-        privacy_policy = _as_mapping(capability.get("privacy_policy"))
+        privacy_policy = dict_or_empty(capability.get("privacy_policy"))
         for permission in capability.get("tool_permissions") or []:
             if not isinstance(permission, Mapping):
                 continue
@@ -474,12 +460,12 @@ def tool_permission_profiles(
                     "permission_profile": permission.get("permission_profile"),
                     "risk_level": capability.get("risk_level"),
                     "allowed": bool(permission.get("allowed")),
-                    "requires": _as_list(permission.get("requires")),
+                    "requires": string_list_or_empty(permission.get("requires")),
                     "can_emit_high_risk_answer": bool(
                         permission.get("can_emit_high_risk_answer")
                     ),
                     "requires_high_risk_gate": "high_risk_answer_gate"
-                    in _as_list(capability.get("evaluation_protocols")),
+                    in string_list_or_empty(capability.get("evaluation_protocols")),
                     "source_text_allowed_external": bool(
                         permission.get(
                             "source_text_allowed_external",
@@ -508,31 +494,31 @@ def _capability_case_gates(
     case_capability_id = str(case.get("capability_id") or "")
     if case_capability_id and case_capability_id != capability_id:
         gates.append(
-            _block(
+            schema_block(
                 "capability_id_mismatch",
                 field="capability_id",
                 message="Case capability_id does not match the active typed capability.",
             )
         )
 
-    privacy_policy = _as_mapping(capability.get("privacy_policy"))
-    allowed_partitions = set(_as_list(privacy_policy.get("allowed_partitions")))
+    privacy_policy = dict_or_empty(capability.get("privacy_policy"))
+    allowed_partitions = set(string_list_or_empty(privacy_policy.get("allowed_partitions")))
     privacy_partition = str(case.get("privacy_partition") or "")
     if allowed_partitions and privacy_partition not in allowed_partitions:
         gates.append(
-            _block(
+            schema_block(
                 "privacy_partition_not_allowed",
                 field="privacy_partition",
                 message="Case privacy partition is outside the typed capability contract.",
             )
         )
 
-    source_requirements = _as_mapping(capability.get("source_requirements"))
-    allowed_source_types = set(_as_list(source_requirements.get("allowed_source_types")))
-    forbidden_source_types = set(_as_list(source_requirements.get("forbidden_source_types")))
+    source_requirements = dict_or_empty(capability.get("source_requirements"))
+    allowed_source_types = set(string_list_or_empty(source_requirements.get("allowed_source_types")))
+    forbidden_source_types = set(string_list_or_empty(source_requirements.get("forbidden_source_types")))
     claims = _claims_by_id(registry)
     sources = _sources_by_id(registry)
-    for claim_id in _as_list(case.get("selected_claim_ids")):
+    for claim_id in string_list_or_empty(case.get("selected_claim_ids")):
         claim = claims.get(claim_id)
         if not claim:
             continue
@@ -540,7 +526,7 @@ def _capability_case_gates(
         source_type = str(source.get("source_type") or "")
         if allowed_source_types and source_type not in allowed_source_types:
             gates.append(
-                _block(
+                schema_block(
                     "source_type_not_allowed_by_capability",
                     field="source_type",
                     message="Selected source type is outside the typed capability allowlist.",
@@ -548,24 +534,24 @@ def _capability_case_gates(
             )
         if forbidden_source_types and source_type in forbidden_source_types:
             gates.append(
-                _block(
+                schema_block(
                     "source_type_forbidden_by_capability",
                     field="source_type",
                     message="Selected source type is explicitly forbidden by the typed capability.",
                 )
             )
 
-    context = _as_mapping(case.get("context"))
+    context = dict_or_empty(case.get("context"))
     if context.get("external_model_route") and not privacy_policy.get(
         "source_text_allowed_external",
         False,
     ):
-        for claim_id in _as_list(case.get("selected_claim_ids")):
+        for claim_id in string_list_or_empty(case.get("selected_claim_ids")):
             claim = claims.get(claim_id) or {}
             source = sources.get(str(claim.get("source_id") or "")) or {}
             if str(source.get("privacy_class") or "") in answer_gate.PRIVATE_PRIVACY_CLASSES:
                 gates.append(
-                    _block(
+                    schema_block(
                         "private_source_permission_required",
                         field="privacy_class",
                         message="Private source text needs explicit permission before external tool use.",
@@ -586,7 +572,7 @@ def _case_report(
 ) -> dict[str, Any]:
     can_emit = output_state == "answer_with_cited_bounds"
     input_text = str(case.get("input_text") or "")
-    side_effects = _as_mapping(capability.get("side_effects"))
+    side_effects = dict_or_empty(capability.get("side_effects"))
     return {
         "case_id": case.get("case_id"),
         "family": case.get("family"),
@@ -595,18 +581,18 @@ def _case_report(
         "input_sha1": _sha1_text(input_text)[:16] if input_text else None,
         "output_state": output_state,
         "can_emit_high_risk_answer": can_emit,
-        "risk_flags": _as_list(case.get("risk_flags")) if can_emit else [],
+        "risk_flags": string_list_or_empty(case.get("risk_flags")) if can_emit else [],
         "gates": [dict(item) for item in gates],
-        "gate_codes": _blocker_codes(gates),
+        "gate_codes": schema_blocker_codes(gates),
         "missing_context_questions": [dict(item) for item in (questions or [])],
         "cited_boundaries": [dict(item) for item in (cited_boundaries or [])] if can_emit else [],
         "cannot_claim": _unique(list(cannot_claim)),
         "source_boundary": {
-            "source_boundary": _as_mapping(capability.get("source_requirements")).get(
+            "source_boundary": dict_or_empty(capability.get("source_requirements")).get(
                 "source_boundary",
                 "candidate",
             ),
-            "evidence_required": _as_mapping(capability.get("source_requirements")).get(
+            "evidence_required": dict_or_empty(capability.get("source_requirements")).get(
                 "required_evidence",
                 "reopened_source_span",
             ),
@@ -622,7 +608,7 @@ def _case_report(
             "raw_source_text_emitted": False,
         },
         "audit_events": _unique(
-            _as_list(side_effects.get("audit_events")) + ["capability_manifest_case_evaluated"]
+            string_list_or_empty(side_effects.get("audit_events")) + ["capability_manifest_case_evaluated"]
         ),
     }
 
@@ -643,7 +629,7 @@ def evaluate_manifest_case(
             "output_state": "refuse_or_redirect",
             "can_emit_high_risk_answer": False,
             "gates": [
-                _block(
+                schema_block(
                     "missing_manifest_case",
                     field="case_id",
                     message="Case id does not resolve in the capability manifest.",
@@ -667,7 +653,7 @@ def evaluate_manifest_case(
             case=case,
             output_state="refuse_or_redirect",
             gates=[
-                _block(
+                schema_block(
                     "missing_capability",
                     field="capability_id",
                     message="Case capability_id does not resolve in the manifest.",
@@ -677,7 +663,7 @@ def evaluate_manifest_case(
         )
 
     cannot_claim = _unique(
-        _as_list(capability.get("cannot_claim")) + _as_list(case.get("cannot_claim"))
+        string_list_or_empty(capability.get("cannot_claim")) + string_list_or_empty(case.get("cannot_claim"))
     )
     if not manifest_report["ok"]:
         return _case_report(
@@ -700,14 +686,14 @@ def evaluate_manifest_case(
 
     gate_report = answer_gate.evaluate_high_risk_answer_gate(
         registry,
-        claim_ids=_as_list(case.get("selected_claim_ids")),
+        claim_ids=string_list_or_empty(case.get("selected_claim_ids")),
         evidence_items=[
             item for item in case.get("evidence_items") or [] if isinstance(item, Mapping)
         ],
-        context=_as_mapping(case.get("context")),
-        required_context_keys=_as_list(
+        context=dict_or_empty(case.get("context")),
+        required_context_keys=string_list_or_empty(
             case.get("required_context_keys")
-            or _as_mapping(capability.get("source_requirements")).get("required_context_keys")
+            or dict_or_empty(capability.get("source_requirements")).get("required_context_keys")
         ),
     )
     return _case_report(
@@ -715,7 +701,7 @@ def evaluate_manifest_case(
         case=case,
         output_state=str(gate_report.get("output_state") or "human_review_required"),
         gates=[item for item in gate_report.get("gates") or [] if isinstance(item, Mapping)],
-        cannot_claim=cannot_claim + _as_list(gate_report.get("cannot_claim")),
+        cannot_claim=cannot_claim + string_list_or_empty(gate_report.get("cannot_claim")),
         cited_boundaries=[
             item for item in gate_report.get("cited_boundaries") or [] if isinstance(item, Mapping)
         ],
@@ -749,12 +735,12 @@ def run_manifest_smoke(
         {
             claim
             for case in cases
-            for claim in _as_list(case.get("cannot_claim"))
+            for claim in string_list_or_empty(case.get("cannot_claim"))
         }
         | {
             claim
             for capability in _capabilities(manifest)
-            for claim in _as_list(capability.get("cannot_claim"))
+            for claim in string_list_or_empty(capability.get("cannot_claim"))
         }
     )
     return {

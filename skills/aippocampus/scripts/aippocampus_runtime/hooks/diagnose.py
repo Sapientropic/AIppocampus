@@ -24,6 +24,7 @@ from aippocampus_runtime.hooks.host_boundary import (
     add_host_integration,
     host_integration_text_lines,
 )
+from aippocampus_runtime.source.io_kernel import load_json_dict
 
 DEFAULT_EVENTS = ("UserPromptSubmit", "PreToolUse", "Stop")
 DEFAULT_DIAGNOSTIC_PROMPT = (
@@ -52,11 +53,16 @@ SHELL_CONTROL_MARKERS = (";", "|", ">", "<", "`", "$(", "${")
 def load_hooks(path: Path) -> dict[str, Any]:
     if not path.exists():
         return {"hooks": {}}
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        return {"hooks": {}}
-    return data if isinstance(data, dict) else {"hooks": {}}
+    result = load_json_dict(path)
+    data = dict(result.data)
+    if int(result.loss.get("total_loss_count") or 0) > 0:
+        data["_load_diagnostic"] = {
+            "code": "hooks_json_read_degraded",
+            "path_label": "hooks.json",
+            "total_loss_count": int(result.loss.get("total_loss_count") or 0),
+            "warning_codes": list(result.loss.get("warning_codes") or []),
+        }
+    return data if data else {"hooks": {}}
 
 
 def configured_handlers(data: dict[str, Any], events: set[str]) -> list[dict[str, Any]]:

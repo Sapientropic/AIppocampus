@@ -25,6 +25,7 @@ from aippocampus_runtime.registry.api import (
     registry_paths,
     unique_preserve,
 )
+from aippocampus_runtime.source.io_kernel import load_json_dict
 
 GATE_POLICY = PROMPT_RECALL_GATE_POLICY
 PROMPT_HOOK_SEMANTIC_TIMEOUT = int(os.environ.get("AIPPOCAMPUS_PROMPT_SEMANTIC_TIMEOUT", "12"))
@@ -235,11 +236,7 @@ def default_project_timeline_path(registry_path: Path) -> Path:
 def load_project_timeline(path: Path) -> dict[str, Any]:
     if not path.exists():
         return {}
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        return {}
-    return data if isinstance(data, dict) else {}
+    return load_json_dict(path).data
 
 
 def project_matches_prompt(project: dict[str, Any], prompt: str, cwd: Path) -> bool:
@@ -597,7 +594,7 @@ def current_project_label(registry: dict[str, Any], cwd: Path) -> str | None:
             continue
         try:
             workspace_low = str(Path(workspace).resolve()).casefold()
-        except Exception:
+        except (OSError, RuntimeError, ValueError):
             workspace_low = workspace.casefold()
         if workspace_low == target:
             score = 3
