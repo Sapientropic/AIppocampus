@@ -51,6 +51,8 @@ policy does not become another mirrored issue register.
 | File | Classification | Reason |
 | --- | --- | --- |
 | `skills/aippocampus/scripts/aippocampus_runtime/mcp/agent_recall_projection.py` | `compact_projection_owner` | Owns compact recall card translation while keeping proof in detail/operator/tests. |
+| `skills/aippocampus/scripts/aippocampus_runtime/mcp/agent_recall_route_projection.py` | `compact_route_receipt_owner` | Owns compact route labels/actions without carrying source proof or ranking diagnostics. |
+| `skills/aippocampus/scripts/aippocampus_runtime/mcp/agent_recall_result_assembly.py` | `compact_projection_result_owner` | Owns final compact recall assembly and strips detail/operator/debug fields. |
 | `skills/aippocampus/scripts/aippocampus_runtime/mcp/public_projection.py` | `mcp_public_projection_owner` | Owns MCP default-vs-full projection and redaction text. |
 | `skills/aippocampus/scripts/aippocampus_runtime/recall/agent_continuity.py` | `runtime_prompt_and_route_owner` | Owns recall route/action selection text before projection. |
 | `skills/aippocampus/scripts/aippocampus_runtime/source/io_kernel.py` | `source_io_trust_boundary_owner` | Owns JSONL/source-ref loss-accounting boundary text. |
