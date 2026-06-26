@@ -392,7 +392,7 @@ class AippocampusMcpServerCatalogTests(unittest.TestCase):
         self.assertNotIn("metrics", payload)
         self.assertNotIn("audit_available", payload)
         self.assertNotIn("cannot_claim", payload)
-        self.assertIn("source_backed_claims", payload["claim_boundary"]["must_reopen_for"])
+        self.assertIn("reopen", payload["claim_boundary"])
         action = payload["foreground_action"]
         self.assertEqual(action["id"], "agent_deepen_selected_route")
         self.assertEqual(action["tool_name"], "agent_deepen")

@@ -151,6 +151,228 @@ class ChangedSurfacePreflightTests(unittest.TestCase):
         self.assertIn("--detail full", report["planner_detail_command"])
         self.assertIn("--local-executable", report["planner_detail_command"])
 
+    def test_default_preflight_skips_explicit_pr_tier(self) -> None:
+        seen: list[str] = []
+
+        def fake_command(command: str) -> preflight.CommandResult:
+            seen.append(command)
+            return preflight.CommandResult(
+                command=command,
+                scope="unknown",
+                status="pass",
+                returncode=0,
+                elapsed_ms=1,
+                stdout="",
+                stderr="",
+            )
+
+        with (
+            mock.patch.object(preflight.test_plan, "_debt_report_is_red", return_value=False),
+            mock.patch.object(preflight, "run_shell_command", side_effect=fake_command),
+        ):
+            report = preflight.run_preflight(
+                changed_files=[
+                    "skills/aippocampus/scripts/aippocampus_runtime/recall/associative_path_fallback.py"
+                ],
+                base="origin/main",
+            )
+
+        self.assertEqual(report["mode"], "preflight")
+        self.assertGreater(report["skipped_by_mode_count"], 0)
+        self.assertTrue(
+            any("run_tests.py --tier pr" in row["command"] for row in report["skipped_by_mode"])
+        )
+        self.assertFalse(any("run_tests.py --tier pr" in command for command in seen))
+        self.assertIn("--mode closeout", report["closeout_command"])
+
+    def test_default_preflight_skips_slow_focused_proof_slices(self) -> None:
+        seen: list[str] = []
+
+        def fake_command(command: str) -> preflight.CommandResult:
+            seen.append(command)
+            return preflight.CommandResult(
+                command=command,
+                scope="unknown",
+                status="pass",
+                returncode=0,
+                elapsed_ms=1,
+                stdout="",
+                stderr="",
+            )
+
+        with (
+            mock.patch.object(preflight.test_plan, "_debt_report_is_red", return_value=False),
+            mock.patch.object(preflight, "run_shell_command", side_effect=fake_command),
+        ):
+            report = preflight.run_preflight(
+                changed_files=[
+                    "skills/aippocampus/scripts/aippocampus_runtime/mcp/agent_recall_projection.py",
+                    "skills/aippocampus/scripts/aippocampus_runtime/recall/associative_path_fallback.py",
+                    "tests/aippocampus/test_agent_background.py",
+                    "tests/aippocampus/test_agent_opt_in_cli_contracts.py",
+                    "tests/aippocampus/test_agent_opt_in_recall_routes.py",
+                    "tests/aippocampus/test_agent_recall_apw_fallback.py",
+                    "tests/aippocampus/test_agent_recall_compact_projection.py",
+                    "tests/aippocampus/test_changed_surface_preflight.py",
+                ],
+                base="origin/main",
+            )
+
+        skipped_scopes = {row["scope"] for row in report["skipped_by_mode"]}
+        self.assertIn("focused:broad-runtime", skipped_scopes)
+        self.assertIn("focused:apw-parity", skipped_scopes)
+        self.assertIn("focused:recall-integration-readiness", skipped_scopes)
+        self.assertTrue(
+            any(row["scope"] == "focused" for row in report["skipped_by_mode"])
+        )
+        proof_commands = [
+            command
+            for command in seen
+            if "-m unittest" in command or "recall_integration_readiness.py" in command
+        ]
+        joined = "\n".join(proof_commands)
+        self.assertNotIn("test_aippocampus_mcp_server_recall", joined)
+        self.assertNotIn("test_agent_recall_apw_fallback", joined)
+        self.assertNotIn("recall_integration_readiness.py", joined)
+
+    def test_default_preflight_allows_small_focused_unittest_probe(self) -> None:
+        seen: list[str] = []
+
+        def fake_command(command: str) -> preflight.CommandResult:
+            seen.append(command)
+            return preflight.CommandResult(
+                command=command,
+                scope="unknown",
+                status="pass",
+                returncode=0,
+                elapsed_ms=1,
+                stdout="",
+                stderr="",
+            )
+
+        with (
+            mock.patch.object(preflight.test_plan, "_debt_report_is_red", return_value=False),
+            mock.patch.object(preflight, "run_shell_command", side_effect=fake_command),
+        ):
+            report = preflight.run_preflight(
+                changed_files=["tests/aippocampus/test_changed_surface_preflight.py"],
+                base="origin/main",
+            )
+
+        self.assertEqual(report["mode"], "preflight")
+        self.assertTrue(
+            any("test_changed_surface_preflight" in command for command in seen)
+        )
+
+    def test_closeout_mode_runs_explicit_pr_tier(self) -> None:
+        seen: list[str] = []
+
+        def fake_command(command: str) -> preflight.CommandResult:
+            seen.append(command)
+            return preflight.CommandResult(
+                command=command,
+                scope="unknown",
+                status="pass",
+                returncode=0,
+                elapsed_ms=1,
+                stdout="",
+                stderr="",
+            )
+
+        with (
+            mock.patch.object(preflight.test_plan, "_debt_report_is_red", return_value=False),
+            mock.patch.object(preflight, "run_shell_command", side_effect=fake_command),
+        ):
+            report = preflight.run_preflight(
+                changed_files=[
+                    "skills/aippocampus/scripts/aippocampus_runtime/recall/associative_path_fallback.py"
+                ],
+                base="origin/main",
+                mode="closeout",
+            )
+
+        self.assertEqual(report["mode"], "closeout")
+        self.assertEqual(report["skipped_by_mode_count"], 0)
+        self.assertTrue(any("run_tests.py --tier pr" in command for command in seen))
+
+    def test_closeout_mode_runs_slow_focused_proof_slices(self) -> None:
+        seen: list[str] = []
+
+        def fake_command(command: str) -> preflight.CommandResult:
+            seen.append(command)
+            return preflight.CommandResult(
+                command=command,
+                scope="unknown",
+                status="pass",
+                returncode=0,
+                elapsed_ms=1,
+                stdout="",
+                stderr="",
+            )
+
+        with (
+            mock.patch.object(preflight.test_plan, "_debt_report_is_red", return_value=False),
+            mock.patch.object(preflight, "run_shell_command", side_effect=fake_command),
+        ):
+            report = preflight.run_preflight(
+                changed_files=[
+                    "skills/aippocampus/scripts/aippocampus_runtime/mcp/agent_recall_projection.py",
+                    "skills/aippocampus/scripts/aippocampus_runtime/recall/associative_path_fallback.py",
+                    "tests/aippocampus/test_agent_background.py",
+                    "tests/aippocampus/test_agent_opt_in_cli_contracts.py",
+                    "tests/aippocampus/test_agent_opt_in_recall_routes.py",
+                    "tests/aippocampus/test_agent_recall_apw_fallback.py",
+                    "tests/aippocampus/test_agent_recall_compact_projection.py",
+                    "tests/aippocampus/test_changed_surface_preflight.py",
+                ],
+                base="origin/main",
+                mode="closeout",
+            )
+
+        joined = "\n".join(seen)
+        self.assertEqual(report["mode"], "closeout")
+        self.assertEqual(report["skipped_by_mode_count"], 0)
+        self.assertIn("test_aippocampus_mcp_server_recall", joined)
+        self.assertIn("test_agent_recall_apw_fallback", joined)
+        self.assertIn("recall_integration_readiness.py", joined)
+
+    def test_duplicate_focused_modules_are_reported(self) -> None:
+        def fake_command(command: str) -> preflight.CommandResult:
+            return preflight.CommandResult(
+                command=command,
+                scope="unknown",
+                status="pass",
+                returncode=0,
+                elapsed_ms=1,
+                stdout="",
+                stderr="",
+            )
+
+        with (
+            mock.patch.object(preflight.test_plan, "_debt_report_is_red", return_value=False),
+            mock.patch.object(preflight, "run_shell_command", side_effect=fake_command),
+        ):
+            report = preflight.run_preflight(
+                changed_files=[
+                    "skills/aippocampus/scripts/aippocampus_runtime/mcp/agent_recall_projection.py"
+                ],
+                base="origin/main",
+            )
+
+        duplicate_modules = {
+            row["module"]: row for row in report["duplicate_test_modules"]
+        }
+        self.assertIn(
+            "tests.aippocampus.test_aippocampus_mcp_server_recall",
+            duplicate_modules,
+        )
+        self.assertGreaterEqual(
+            duplicate_modules[
+                "tests.aippocampus.test_aippocampus_mcp_server_recall"
+            ]["command_count"],
+            2,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

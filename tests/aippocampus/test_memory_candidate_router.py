@@ -8,6 +8,7 @@ from pathlib import Path
 from aippocampus_runtime.dream import working_memory_publication
 from aippocampus_runtime.recall import feedback_events
 from aippocampus_runtime.subconscious import candidate_router as router
+from tests.aippocampus.continuity_domain_fixtures import write_jsonl
 
 
 class MemoryCandidateRouterTests(unittest.TestCase):
@@ -19,12 +20,6 @@ class MemoryCandidateRouterTests(unittest.TestCase):
 
     def tearDown(self) -> None:
         self.tmp.cleanup()
-
-    def write_jsonl(self, path: Path, rows: list[dict]) -> None:
-        path.write_text(
-            "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows),
-            encoding="utf-8",
-        )
 
     def base_candidate(self, **overrides) -> dict:
         data = {
@@ -43,7 +38,7 @@ class MemoryCandidateRouterTests(unittest.TestCase):
         return data
 
     def write_finding(self) -> None:
-        self.write_jsonl(
+        write_jsonl(
             self.jobs,
             [
                 {
@@ -70,7 +65,7 @@ class MemoryCandidateRouterTests(unittest.TestCase):
 
     def test_project_memory_routes_to_use_with_source(self) -> None:
         self.write_finding()
-        self.write_jsonl(self.candidates, [self.base_candidate()])
+        write_jsonl(self.candidates, [self.base_candidate()])
 
         result = router.route_candidates(self.candidates, self.jobs)
         row = result["rows"][0]
@@ -84,7 +79,7 @@ class MemoryCandidateRouterTests(unittest.TestCase):
 
     def test_preference_with_limited_evidence_confirms_when_relevant(self) -> None:
         self.write_finding()
-        self.write_jsonl(
+        write_jsonl(
             self.candidates,
             [
                 self.base_candidate(
@@ -103,7 +98,7 @@ class MemoryCandidateRouterTests(unittest.TestCase):
 
     def test_low_confidence_candidate_is_parked(self) -> None:
         self.write_finding()
-        self.write_jsonl(self.candidates, [self.base_candidate(confidence=0.3)])
+        write_jsonl(self.candidates, [self.base_candidate(confidence=0.3)])
 
         row = router.route_candidates(self.candidates, self.jobs)["rows"][0]
 
@@ -112,7 +107,7 @@ class MemoryCandidateRouterTests(unittest.TestCase):
 
     def test_working_memory_match_requires_project_scope_and_concrete_term(self) -> None:
         self.write_finding()
-        self.write_jsonl(self.candidates, [self.base_candidate()])
+        write_jsonl(self.candidates, [self.base_candidate()])
         row = router.route_candidates(self.candidates, self.jobs)["rows"][0]
 
         matched = router.match_working_memory(
@@ -131,9 +126,27 @@ class MemoryCandidateRouterTests(unittest.TestCase):
         self.assertEqual(wrong_project, [])
         self.assertEqual(broad_only, [])
 
+    def test_working_memory_match_ignores_low_information_single_terms(self) -> None:
+        row = {
+            "status": "active",
+            "route": router.USE_WITH_SOURCE,
+            "project_label": "AIppocampus",
+            "candidate_type": "project_memory",
+            "trigger_terms": ["output", "status", "compact"],
+            "confidence": 0.9,
+        }
+
+        matched = router.match_working_memory(
+            "agent-facing UX compact output status",
+            [row],
+            project_label="AIppocampus",
+        )
+
+        self.assertEqual(matched, [])
+
     def test_activation_cues_drive_working_memory_trigger_terms(self) -> None:
         self.write_finding()
-        self.write_jsonl(
+        write_jsonl(
             self.candidates,
             [
                 self.base_candidate(
@@ -162,7 +175,7 @@ class MemoryCandidateRouterTests(unittest.TestCase):
         self.assertEqual(matched[0]["matched_terms"], ["最近让我很烦"])
 
     def test_source_semantic_candidate_survives_low_strength_as_navigation_route(self) -> None:
-        self.write_jsonl(
+        write_jsonl(
             self.jobs,
             [
                 {
@@ -181,7 +194,7 @@ class MemoryCandidateRouterTests(unittest.TestCase):
                 }
             ],
         )
-        self.write_jsonl(
+        write_jsonl(
             self.candidates,
             [
                 self.base_candidate(
@@ -350,8 +363,8 @@ class MemoryCandidateRouterTests(unittest.TestCase):
             ),
         ]
         feedback_path = self.root / "feedback.jsonl"
-        self.write_jsonl(self.candidates, [candidate])
-        self.write_jsonl(feedback_path, feedback)
+        write_jsonl(self.candidates, [candidate])
+        write_jsonl(feedback_path, feedback)
 
         result = router.route_candidates(self.candidates, self.jobs, feedback_path)
         row = result["rows"][0]
@@ -383,7 +396,7 @@ class MemoryCandidateRouterTests(unittest.TestCase):
 
     def test_working_memory_ignores_generic_app_term(self) -> None:
         self.write_finding()
-        self.write_jsonl(
+        write_jsonl(
             self.candidates,
             [
                 self.base_candidate(

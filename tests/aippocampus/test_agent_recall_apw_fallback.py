@@ -457,6 +457,34 @@ class AgentRecallApwFallbackTests(unittest.TestCase):
         self.assertIn("黏菌 联想回忆 探索算法", compact_deepened["primary_source_snippet"]["text"])
         self.assertNotIn("<goal_context>", compact_deepened["primary_source_snippet"]["text"])
 
+    def test_semidefault_clean_source_apw_does_not_scan_registry_sources(self) -> None:
+        self._append_clean_message(
+            {
+                "message_id": "msg-clean-apw",
+                "turn_id": "turn-clean-apw",
+                "turn_index": 8,
+                "source_id": "src-clean-apw",
+                "source_line": 21,
+                "role": "assistant",
+                "phase": "final_answer",
+                "is_final": True,
+                "text": "公开 fixture 锚点：黏菌 联想回忆 探索算法，供 APW parity gate 追踪。",
+            }
+        )
+
+        with patch(
+            "aippocampus_runtime.recall.associative_path_inputs.registry_source_candidate_rows",
+            side_effect=AssertionError("semi-default APW should not scan registry sources"),
+        ):
+            payload = self._recall(include_apw=False)
+
+        policy = payload["associative_path_policy"]
+        self.assertEqual(policy["run_reason"], "apw_semi_default_recovery")
+        self.assertTrue(policy["apw_candidate_input_available"])
+        fallback = payload["associative_path_fallback"]
+        self.assertEqual(fallback["status"], "route_candidate")
+        self.assertEqual(fallback["candidate_source_kind"], "current_clean_source")
+
     def test_registry_source_apw_fallback_deepens_registered_source(self) -> None:
         self._write_registry_clean_source(
             thread_key="session:registry-apw",

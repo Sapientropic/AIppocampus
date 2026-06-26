@@ -22,6 +22,7 @@ from aippocampus_runtime.mcp import agent_recall_recovery_projection as recovery
 from aippocampus_runtime.mcp import agent_recall_repo_projection as repo_projection
 from aippocampus_runtime.mcp import agent_recall_result_assembly as result_assembly
 from aippocampus_runtime.mcp import agent_recall_route_projection as route_projection
+from aippocampus_runtime.mcp import agent_recall_semantic_recovery as semantic_recovery_projection
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 from aippocampus_runtime.recall import associative_path_foreground_gate as apw_gate
 from aippocampus_runtime.recall.query_profile import classify_query_profile
@@ -65,7 +66,6 @@ class ApwProjectionState:
 class FallbackPromotionState:
     foreground_action: dict[str, Any]
     safe_next_actions: list[dict[str, Any]]
-    discussion_atlas_pointer: Any
     repo_familiarity_fallback: dict[str, Any] | None
     background_recovery: dict[str, Any] | None
 
@@ -623,13 +623,11 @@ def _apply_fallback_promotions(
     foreground_action: dict[str, Any],
     safe_next_actions: list[dict[str, Any]],
 ) -> FallbackPromotionState:
-    if recall_choices.is_exact_wording_source_search_action(foreground_action):
-        discussion_atlas_pointer = payload.get("discussion_atlas_pointer")
-    else:
+    if not recall_choices.is_exact_wording_source_search_action(foreground_action):
         (
             foreground_action,
             safe_next_actions,
-            discussion_atlas_pointer,
+            _discussion_atlas_pointer,
         ) = discussion_projection.maybe_promote_discussion_atlas_action(
             payload=payload,
             foreground_action=foreground_action,
@@ -667,7 +665,6 @@ def _apply_fallback_promotions(
     return FallbackPromotionState(
         foreground_action=foreground_action,
         safe_next_actions=safe_next_actions,
-        discussion_atlas_pointer=discussion_atlas_pointer,
         repo_familiarity_fallback=repo_familiarity_fallback,
         background_recovery=background_recovery,
     )
@@ -696,6 +693,12 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
             safe_next_actions=selection.safe_next_actions,
         )
     )
+    foreground_action, safe_next_actions = semantic_recovery_projection.maybe_promote_semantic_recovery(
+        memory_packets=context.memory_packets,
+        foreground_action=foreground_action,
+        followup_actions=safe_next_actions,
+        recall_selector=context.recall_selector,
+    )
     apw_state = _apply_associative_path_recovery(
         payload,
         context,
@@ -720,6 +723,5 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
         apw_recovery=apw_state.apw_recovery,
         repo_familiarity_fallback=fallback_state.repo_familiarity_fallback,
         background_recovery=fallback_state.background_recovery,
-        discussion_atlas_pointer=fallback_state.discussion_atlas_pointer,
         exact_wording_source_search_primary=exact_wording_source_search_primary,
     )

@@ -7,7 +7,7 @@ from pathlib import Path
 
 from aippocampus_runtime.mcp import server as mcp
 from aippocampus_runtime.mcp.compact_profile import mcp_tool_result_payload
-from aippocampus_runtime.recall import background_findings
+from aippocampus_runtime.recall import background_findings, background_recovery
 
 
 def write_background_working_memory(path: Path) -> None:
@@ -60,6 +60,33 @@ def write_generic_issue_working_memory(path: Path) -> None:
         encoding="utf-8",
     )
 
+
+def write_generic_output_working_memory(path: Path) -> None:
+    path.write_text(
+        json.dumps(
+            {
+                "kind": "aippocampus_working_memory",
+                "status": "active",
+                "route": "use_with_source",
+                "candidate_type": "project_memory",
+                "candidate_key": "wm_generic_output",
+                "title": "Output",
+                "summary": "Generic output review should not look task-specific.",
+                "activation_cues": ["output"],
+                "trigger_terms": ["output"],
+                "source_finding_ids": ["sf_generic_output"],
+                "confidence": 0.9,
+                "project_label": "AIppocampus",
+                "review_state": "agent_adjudicated",
+                "route_reason": "Only a generic output term matched.",
+            },
+            ensure_ascii=False,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+
 class AgentBackgroundTests(unittest.TestCase):
     def tool_payload(self, response: dict) -> dict:
         result = response["result"]
@@ -80,7 +107,7 @@ class AgentBackgroundTests(unittest.TestCase):
         finding = payload["best_finding"]
         encoded = json.dumps(payload, ensure_ascii=False)
         self.assertEqual(payload["detail"], "compact")
-        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v2")
+        self.assertNotIn("foreground_action_contract", payload)
         self.assertNotIn("agent_next_action", payload)
         self.assertNotIn(payload["foreground_action"], payload["safe_next_actions"])
         self.assertNotIn("findings", payload)
@@ -97,15 +124,14 @@ class AgentBackgroundTests(unittest.TestCase):
         self.assertEqual(payload["foreground_action"]["id"], "reopen_background_finding_source_route")
         self.assertEqual(payload["foreground_action"]["mutation_risk"], "read_only")
         self.assertEqual(finding["source_ref_count"], 0)
-        self.assertEqual(finding["use_boundary"]["use"], "navigation_only")
-        self.assertEqual(finding["use_boundary"]["before_claiming"], "reopen_source_route")
+        self.assertNotIn("use_boundary", finding)
         self.assertNotIn("durable_low_authority_feedback_write", encoded)
         self.assertNotIn("materialize_action_hint_from_finding", encoded)
-        self.assertEqual(finding["shape_label"], "action_hint_candidate")
+        self.assertNotIn("shape_label", finding)
         self.assertEqual(finding["finding_title"], "Action hint candidate")
         self.assertEqual(finding["match_strength"], "distinctive")
         self.assertGreaterEqual(finding["distinctive_match_count"], 1)
-        self.assertIn("Action-time learning", finding["match_reason"])
+        self.assertNotIn("match_reason", finding)
         self.assertNotEqual(finding["matched_terms"], ["action"])
         self.assertIn("action-time learning", finding["matched_terms"])
 
@@ -125,6 +151,21 @@ class AgentBackgroundTests(unittest.TestCase):
         self.assertEqual(payload["foreground_action"]["id"], "ordinary_recall")
         self.assertIn("agent recall", payload["foreground_action"]["command"])
         self.assertNotIn("Preference review", json.dumps(payload, ensure_ascii=False))
+
+    def test_agent_background_downgrades_generic_output_only_match(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            working_memory = Path(tmp) / "working_memory.jsonl"
+            write_generic_output_working_memory(working_memory)
+
+            payload = background_findings.background_findings_card(
+                "agent-facing UX compact output",
+                working_memory_path=working_memory,
+            )
+
+        self.assertEqual(payload["status"], "no_relevant_background_findings")
+        self.assertEqual(payload["finding_count"], 0)
+        self.assertIsNone(payload["best_finding"])
+        self.assertEqual(payload["foreground_action"]["id"], "ordinary_recall")
 
     def test_agent_background_actions_target_the_selected_finding(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -150,6 +191,8 @@ class AgentBackgroundTests(unittest.TestCase):
             ["finding_action_learning"],
         )
         self.assertIn("finding_action_learning", actions["reopen_background_finding_source_route"]["command"])
+        self.assertIn("--detail compact", actions["reopen_background_finding_source_route"]["command"])
+        self.assertIn("agent recall", actions["reopen_background_finding_source_route"]["command"])
         self.assertEqual(
             actions["mark_background_finding_helpful"]["target"]["finding_id"],
             "wm_action_time_learning",
@@ -170,6 +213,22 @@ class AgentBackgroundTests(unittest.TestCase):
             actions["materialize_action_hint_from_finding"]["mutation_risk"],
             "explicit_local_cache_write",
         )
+
+    def test_background_recovery_does_not_reappend_existing_finding_ids(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            registry_dir = Path(tmp)
+            write_background_working_memory(registry_dir / "working_memory.jsonl")
+
+            payload = background_recovery.background_recovery_for_weak_recall(
+                query="repeated coding mistakes wm_action_time_learning finding_action_learning sf_12345678",
+                registry_dir=registry_dir,
+                project="AIppocampus",
+                memory_packets=[],
+                deepen_requests=[],
+                triage_metrics={"memory_packet_count": 0, "deepen_request_count": 0},
+            )
+
+        self.assertIsNone(payload)
 
     def test_agent_background_detail_keeps_reopen_actions_without_feedback_writes(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -252,16 +311,16 @@ class AgentBackgroundTests(unittest.TestCase):
         self.assertFalse(response["result"].get("isError", False), payload)
         self.assertEqual(payload["kind"], "aippocampus_background_findings_card")
         self.assertEqual(payload["surface"], "agent_background")
-        self.assertEqual(payload["foreground_action_contract"], "foreground-action-v2")
+        self.assertNotIn("foreground_action_contract", payload)
         self.assertNotIn("agent_next_action", payload)
         self.assertNotIn(payload["foreground_action"], payload["safe_next_actions"])
         self.assertEqual(payload["finding_count"], 1)
-        self.assertEqual(payload["best_finding"]["shape_label"], "action_hint_candidate")
-        self.assertIn("Action-time learning", payload["best_finding"]["match_reason"])
+        self.assertNotIn("shape_label", payload["best_finding"])
+        self.assertNotIn("match_reason", payload["best_finding"])
         self.assertNotIn("boundary", payload["best_finding"])
         self.assertNotIn("source_summary", payload["best_finding"])
         self.assertNotIn("next_actions", payload["best_finding"])
-        self.assertIn("use_boundary", payload["best_finding"])
+        self.assertNotIn("use_boundary", payload["best_finding"])
         self.assertNotIn("findings", payload)
         self.assertNotIn("reader_diagnostic", payload)
         self.assertNotIn("operator_detail_command", payload)

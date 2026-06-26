@@ -457,12 +457,9 @@ def _select_recall_action(
     )
     if repo_action_card:
         action_card = repo_action_card
-    action_decision = str(action_card.get("decision") or "")
     suggested_next_command = (
         repo_suggested_next_command
         if repo_suggested_next_command
-        else None
-        if action_decision == "recover_low_confidence_route"
         else packets.deepen_requests[0].get("copy_paste_command")
         if packets.deepen_requests
         else None
@@ -470,8 +467,6 @@ def _select_recall_action(
     suggested_next = (
         "open_repo_familiarity_source"
         if repo_action_card
-        else "search_memory"
-        if action_decision == "recover_low_confidence_route"
         else "agent deepen"
         if packets.deepen_requests
         else "search_memory"

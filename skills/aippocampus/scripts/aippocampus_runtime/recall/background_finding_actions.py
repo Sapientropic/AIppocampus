@@ -80,20 +80,32 @@ def finding_next_actions(row: Mapping[str, Any], *, cue: str) -> list[dict[str, 
     target = _action_target(row)
     finding_id = str(target["finding_id"])
     source_finding_ids = [str(item) for item in target["source_finding_ids"]]
-    route_cue = " ".join(
-        item for item in [cue, finding_id, *source_finding_ids[:2]] if item
+    action_grammar = str(target.get("action_grammar") or "")
+    primary_command = (
+        "aippocampus agent background "
+        f"{shell_quote(' '.join(item for item in [cue, finding_id, *source_finding_ids[:2]] if item))} "
+        "--json --detail compact"
     )
-    recall_command = f"aippocampus agent recall {shell_quote(route_cue)} --json"
+    primary_why = (
+        "This finding is navigation-only; inspect the compact background card, "
+        "then use an emitted recall/deepen route before making claims."
+    )
+    if action_grammar == "reopenable_route":
+        route_cue = " ".join(
+            item for item in [cue, finding_id, *source_finding_ids[:2]] if item
+        )
+        primary_command = f"aippocampus agent recall {shell_quote(route_cue)} --json --detail compact"
+        primary_why = (
+            "Use this finding id and source-finding ids as a narrow compact recall cue; "
+            "then execute the emitted agent_deepen action before factual claims."
+        )
     quoted_finding_id = shell_quote(finding_id)
     actions = [
         foreground_shell_action(
             action_id="reopen_background_finding_source_route",
             label="Reopen this finding's source route",
-            command=recall_command,
-            why=(
-                "Use this finding id and source-finding ids as a narrow recall cue; "
-                "deepen before factual claims."
-            ),
+            command=primary_command,
+            why=primary_why,
             mutation_risk="read_only",
             claim_boundary="no_claim_before_reopen",
         ),

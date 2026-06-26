@@ -99,43 +99,7 @@ FRONTIER_TYPES = {"frontier_marker"}
 SOURCE_SEMANTIC_TYPES = {"source_semantic_candidate"}
 PARK_TYPES = {"archive", "dedup_review"}
 
-GENERIC_TRIGGER_TERMS = {
-    "user",
-    "project",
-    "memory",
-    "candidate",
-    "issue", "issues", "message", "messages",
-    "preference",
-    "review",
-    "source",
-    "agent",
-    "app",
-    "系统",
-    "项目",
-    "记忆",
-    "候选",
-    "偏好",
-    "用户",
-    "dashboard",
-    "button",
-    "buttons",
-    "hover",
-    "style",
-    "styles",
-    "test",
-    "tests",
-    "implement",
-    "maintain",
-    # Single generic action nouns should not wake a high-risk working-memory
-    # item by themselves. Specific terms in the same row, such as a tool name or
-    # consent gate phrase, remain enough to match.
-    "flow",
-    "mutation",
-    "mutations",
-    "按钮",
-    "样式",
-    "测试",
-}
+GENERIC_TRIGGER_TERMS = match_terms.GENERIC_TRIGGER_TERMS
 
 
 def activation_cues_for(candidate: dict[str, Any], *, limit: int = 12) -> list[str]:

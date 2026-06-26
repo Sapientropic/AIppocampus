@@ -126,7 +126,7 @@ def _next_action(decision: str, request: Mapping[str, Any], packet: Mapping[str,
     if decision == "recover_no_route":
         return "search_memory"
     if decision == "recover_low_confidence_route":
-        return "search_memory"
+        return "deepen" if request else "search_memory"
     if decision == "use_opened_context":
         return "continue_with_opened_context"
     if decision in {"use_route_first", "deepen_before_claim"}:
@@ -207,6 +207,16 @@ def _canonical_action(
     *,
     source_registered: bool | None,
 ) -> dict[str, Any]:
+    if decision == "recover_low_confidence_route" and request:
+        action = _deepen_route_action(request)
+        action["action_id"] = "inspect_low_confidence_route"
+        action["label"] = "Inspect low-confidence recall route"
+        action["claim_boundary"] = "low_confidence_no_claim_before_reopen"
+        action["why"] = (
+            "A route surfaced but failed target-anchor confidence; open it read-only as "
+            "navigation inspection before broad source search."
+        )
+        return action
     if decision in {"recover_no_route", "recover_low_confidence_route"}:
         if source_registered is False:
             return _onboarding_register_action()
@@ -229,6 +239,10 @@ def _canonical_action(
             "arguments": {},
             "claim_boundary": "no_route_claim",
         }
+    return _deepen_route_action(request)
+
+
+def _deepen_route_action(request: Mapping[str, Any]) -> dict[str, Any]:
     request_index = request.get("request_index") or 1
     try:
         request_index = int(request_index)
@@ -295,18 +309,19 @@ def build_recall_foreground_action_card(
             actions.append(search_action)
         card["safe_next_actions"] = actions
     if decision == "recover_low_confidence_route":
-        low_confidence_action = _canonical_action(
-            "use_route_first",
-            request,
-            query,
-            source_registered=source_registered,
+        search_action = (
+            _search_recovery_action(query, registry_wide=True)
+            if source_registered is not False
+            else _onboarding_status_action()
         )
-        low_confidence_action["action_id"] = "deepen_low_confidence_route"
-        low_confidence_action["claim_boundary"] = "low_confidence_no_claim_before_reopen"
-        low_confidence_action["why"] = (
-            "Secondary only: the opened top source did not carry enough distinctive cue anchors."
-        )
-        card["safe_next_actions"] = [card["canonical_action"], low_confidence_action]
+        if request:
+            search_action["why"] = (
+                "Fallback only: use broad source search if the low-confidence route "
+                "does not open the right source."
+            )
+            card["safe_next_actions"] = [card["canonical_action"], search_action]
+        else:
+            card["safe_next_actions"] = [card["canonical_action"], search_action]
     if packet:
         card["route_label"] = _route_label(packet)
         card["route_family"] = _safe_text(

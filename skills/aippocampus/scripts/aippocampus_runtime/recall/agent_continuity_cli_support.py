@@ -753,41 +753,45 @@ def public_recall_projection(payload: Mapping[str, Any], *, query: str | None = 
         )
         if command_value_needs_input(recovery_cue):
             recovery_cue = ""
-        repair_action: dict[str, Any] = {
-            "id": "repair_last_recall_cache",
-            "label": "Repair last recall cache",
+        refresh_action: dict[str, Any] = {
+            "id": "refresh_recall_selector",
+            "label": "Refresh recall selector",
             "tool_name": "agent_recall",
             "why": (
-                "Recall found route-shaped context, but the same-machine request cache was "
-                "not written, so request-index deepen is not available from compact output."
+                "Recall found route-shaped context, but no fresh selector was available; "
+                "rerun compact recall before deepening."
             ),
             "mutation_risk": "read_only",
             "claim_boundary": "no_claim_before_reopen",
         }
         if recovery_cue:
-            repair_action.update(
+            refresh_action.update(
                 {
-                    "arguments": {"query": recovery_cue, "detail": "full"},
-                    "command": f"aippocampus agent recall {shell_quote(recovery_cue)} --json --detail full",
+                    "arguments": {"query": recovery_cue},
+                    "command": f"aippocampus agent recall {shell_quote(recovery_cue)} --json --detail compact",
                 }
             )
         else:
-            repair_action.update(
+            refresh_action.update(
                 {
-                    "arguments_template": {"query": "{cue}", "detail": "full"},
+                    "arguments_template": {"query": "{cue}"},
                     "requires": ["cue"],
                     "template_only": True,
-                    "command_template": 'aippocampus agent recall "{cue}" --json --detail full',
+                    "command_template": 'aippocampus agent recall "{cue}" --json --detail compact',
                 }
             )
-        projected["foreground_action"] = repair_action
-        projected.update(canonical_foreground_action_fields(repair_action))
-        projected["last_recall_cache_recovery_card"] = {
-            "status": "cache_unavailable",
-            "primary_action": "rerun_recall_or_use_full_local_diagnostics",
-            "safe_actions": [repair_action],
-            "boundary": "full detail may expose local-private handles; keep it local",
-        }
+        safe_actions = [
+            item
+            for item in projected.get("safe_next_actions") or []
+            if isinstance(item, Mapping) and not action_depends_on_same_machine_recall(item)
+        ]
+        projected["foreground_action"] = refresh_action
+        if safe_actions:
+            projected["safe_next_actions"] = safe_actions[:3]
+        else:
+            projected.pop("safe_next_actions", None)
+        projected.pop("foreground_action_contract", None)
+        projected.pop("last_recall_cache_recovery_card", None)
     return projected
 
 

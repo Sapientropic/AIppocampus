@@ -235,8 +235,11 @@ into one giant fixture file. Use this map when changing core recall behavior:
 
 For ordinary changes, start with
 `python tools/aippocampus/changed_surface_preflight.py --json`. It consumes the
-changed-surface planner, runs the cheap hygiene/static/debt/slop gates before
-focused tests, and stops at the first blocker. Use
+changed-surface planner, runs the cheap hygiene/static/debt/slop gates plus
+only explicitly light focused probes, and stops at the first blocker. Slow
+MCP/APW/readiness/navigation proof remains in the planner but requires
+`--mode closeout` or `--mode pre-push` so routine iteration does not replay a
+full acceptance run. Use
 `python tools/aippocampus/test_plan.py --json` when you need a dry-run command
 plan or detail output without executing it. The planner remains the command
 authority: it emits the active interpreter path so Windows, editable installs,

@@ -190,7 +190,9 @@ def _compact_route(route: Any) -> dict[str, Any]:
     return result
 
 
-def _compact_claim_boundary(boundary: Any) -> dict[str, Any]:
+def _compact_claim_boundary(boundary: Any) -> dict[str, Any] | str:
+    if isinstance(boundary, str):
+        return boundary.strip()
     if not isinstance(boundary, Mapping):
         return {}
     return {
@@ -198,6 +200,48 @@ def _compact_claim_boundary(boundary: Any) -> dict[str, Any]:
         for key, value in boundary.items()
         if key in MCP_CLAIM_BOUNDARY_KEYS and value not in (None, "")
     }
+
+
+def _compact_background_recovery_card(card: Any) -> dict[str, Any]:
+    if not isinstance(card, Mapping):
+        return {}
+    best = card.get("best_finding")
+    best_map = best if isinstance(best, Mapping) else {}
+    best_summary = {
+        key: strip_compact_foreground_debug_fields(value)
+        for key, value in best_map.items()
+        if key
+        in {
+            "finding_id",
+            "finding_title",
+            "matched_terms",
+            "match_strength",
+            "source_ref_count",
+            "source_finding_count",
+        }
+        and value not in (None, "", [], {})
+    }
+    result = {
+        key: strip_compact_foreground_debug_fields(card[key])
+        for key in ("kind", "status", "summary", "primary_action", "claim_boundary")
+        if key in card and card[key] not in (None, "", [], {})
+    }
+    if best_summary:
+        result["best_finding"] = best_summary
+    return result
+
+
+def _compact_background_safe_action(payload: Mapping[str, Any]) -> list[dict[str, Any]]:
+    actions = [
+        _compact_action(safe_action)
+        for safe_action in payload.get("safe_next_actions") or []
+        if isinstance(safe_action, Mapping)
+    ]
+    return [
+        action
+        for action in actions
+        if action and action.get("id") == "reopen_background_finding_source_route"
+    ][:1]
 
 
 def _compact_error(error: Any) -> dict[str, Any]:
@@ -420,10 +464,17 @@ def compact_mcp_structured_content(payload: Any) -> Any:
         ][:2]
         if safe_next_actions:
             card["safe_next_actions"] = safe_next_actions
+    else:
+        background_safe_actions = _compact_background_safe_action(payload)
+        if background_safe_actions:
+            card["safe_next_actions"] = background_safe_actions
     routes = [_compact_route(route) for route in payload.get("routes") or []]
     routes = [route for route in routes if route][:2]
     if routes:
         card["routes"] = routes
+    background_recovery = _compact_background_recovery_card(payload.get("background_recovery_card"))
+    if background_recovery:
+        card["background_recovery_card"] = background_recovery
     snippet = payload.get("primary_source_snippet")
     if isinstance(snippet, Mapping):
         card["primary_source_snippet"] = strip_compact_foreground_debug_fields(dict(snippet))

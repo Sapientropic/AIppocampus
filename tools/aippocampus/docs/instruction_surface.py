@@ -253,6 +253,15 @@ INSTRUCTION_SURFACE_CLASSIFIED_FILES = {
             "background findings are navigation until recall/deepen reopens source"
         ),
     },
+    "skills/aippocampus/scripts/aippocampus_runtime/recall/background_finding_actions.py": {
+        "classification": "background_finding_action_owner",
+        "owner": "#2742/#2752/#2651",
+        "why": (
+            "owns executable background-finding action labels, commands, and "
+            "detail-only source-boundary wording; compact callers should surface "
+            "only the smallest behavior-bearing action"
+        ),
+    },
     "skills/aippocampus/scripts/aippocampus_runtime/recall/ambient_cards.py": {
         "classification": "ambient_recall_card_owner",
         "owner": "#2628/#2636/#2651",
@@ -544,6 +553,15 @@ INSTRUCTION_SURFACE_CLASSIFIED_FILES = {
             "stay fail-open and must not become a proof or job-output surface"
         ),
     },
+    "skills/aippocampus/scripts/aippocampus_runtime/subconscious/candidate_router.py": {
+        "classification": "subconscious_candidate_route_owner",
+        "owner": "#2742/#2752/#2636/#2651",
+        "why": (
+            "owns subconscious candidate route reasons and trigger filtering "
+            "contracts; wording can guide navigation but source claims still "
+            "require recall/deepen/open follow-through"
+        ),
+    },
     "skills/aippocampus/scripts/aippocampus_runtime/subconscious/shell_selection.py": {
         "classification": "subconscious_shell_selection_owner",
         "owner": "#2636/#2651",
@@ -705,6 +723,15 @@ INSTRUCTION_SURFACE_CLASSIFIED_FILES = {
         "why": (
             "owns PR-body and issue-closeout fixture text for the closeout audit; "
             "these strings are test inputs, not runtime foreground instructions"
+        ),
+    },
+    "tests/aippocampus/test_agent_recall_compact_projection.py": {
+        "classification": "recall_compact_projection_test_contract_owner",
+        "owner": "#2741/#2742/#2743/#2636/#2651",
+        "why": (
+            "owns compact-vs-full recall projection fixture text and executable "
+            "foreground-action assertions; tests should guard behavior, not "
+            "promote diagnostics into compact output"
         ),
     },
     "tests/aippocampus/test_question_tracking.py": {
