@@ -17,7 +17,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 
 from aippocampus_runtime.source import latest_reply as latest_reply_module
-from tests.aippocampus.cli_fixtures import run_aippocampus_cli
+from tests.aippocampus.cli_fixtures import parse_cli_json, run_aippocampus_cli
 
 
 class AippocampusCliTests(unittest.TestCase):
@@ -109,7 +109,7 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertNotIn("<local-feedback.jsonl>", pause_help.stdout)
 
         self.assertEqual(pause.returncode, 0, pause.stderr)
-        pause_payload = json.loads(pause.stdout)
+        pause_payload = parse_cli_json(self, pause)
         self.assertEqual(pause_payload["mode"], "pause")
         self.assertNotEqual(pause_payload["status"], "plan_card")
         pause_encoded = json.dumps(pause_payload, ensure_ascii=False)
@@ -139,7 +139,7 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertNotIn("route to pause", pause_encoded)
 
         self.assertEqual(forget_plan.returncode, 0, forget_plan.stderr)
-        forget_plan_payload = json.loads(forget_plan.stdout)
+        forget_plan_payload = parse_cli_json(self, forget_plan)
         self.assertEqual(forget_plan_payload["mode"], "forget")
         self.assertEqual(forget_plan_payload["status"], "needs_scope")
         self.assertEqual(forget_plan_payload["foreground_action"]["id"], "find_forget_target")
@@ -159,7 +159,7 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertNotIn("export --help", forget_plan.stdout)
 
         self.assertEqual(forget.returncode, 0, forget.stderr)
-        forget_payload = json.loads(forget.stdout)
+        forget_payload = parse_cli_json(self, forget)
         self.assertEqual(forget_payload["mode"], "forget")
         self.assertEqual(forget_payload["target"], "route:test")
         self.assertNotEqual(forget_payload["status"], "plan_card")
@@ -180,10 +180,10 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertNotIn("aippocampus do-not-use-here --help", privacy.stdout)
 
         self.assertEqual(why_not.returncode, 0, why_not.stderr)
-        self.assertEqual(json.loads(why_not.stdout)["mode"], "why-not-recall")
+        self.assertEqual(parse_cli_json(self, why_not)["mode"], "why-not-recall")
 
         self.assertEqual(learning.returncode, 0, learning.stderr)
-        learning_payload = json.loads(learning.stdout)
+        learning_payload = parse_cli_json(self, learning)
         self.assertEqual(learning_payload["kind"], "aippocampus_learning_frontdoor")
         self.assertEqual(learning_payload["mode"], "status")
         self.assertEqual(learning_payload["foreground_action"]["id"], "review_semantic_guidance_candidate")
@@ -192,7 +192,7 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertTrue(learning_payload["privacy_boundary"]["raw_rollouts_serialized"] is False)
 
         self.assertEqual(learning_replay.returncode, 2, learning_replay.stderr)
-        replay_payload = json.loads(learning_replay.stdout)
+        replay_payload = parse_cli_json(self, learning_replay)
         replay_encoded = json.dumps(replay_payload, ensure_ascii=False)
         self.assertEqual(replay_payload["status"], "needs_source_selection")
         self.assertFalse(replay_payload["fixture_input"])
@@ -206,7 +206,7 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertEqual(learning_human.returncode, 2, learning_human.stderr)
         self.assertIn("needs source selection", learning_human.stdout)
         self.assertEqual(learning_status.returncode, 0, learning_status.stderr)
-        status_payload = json.loads(learning_status.stdout)
+        status_payload = parse_cli_json(self, learning_status)
         status_encoded = json.dumps(status_payload, ensure_ascii=False)
         self.assertNotIn("cannot_claim", status_payload)
         self.assertNotIn("cannot_claim", status_payload["boundary_detail"])
@@ -260,7 +260,7 @@ class AippocampusCliTests(unittest.TestCase):
             "aippocampus learning guidance --operator-json",
         )
         self.assertEqual(learning_status_operator.returncode, 0, learning_status_operator.stderr)
-        status_operator_payload = json.loads(learning_status_operator.stdout)
+        status_operator_payload = parse_cli_json(self, learning_status_operator)
         self.assertNotIn(
             "guidance_lifecycle_ledger",
             status_operator_payload["semantic_guidance_lifecycle"],
@@ -308,13 +308,13 @@ class AippocampusCliTests(unittest.TestCase):
             check=False,
         )
         self.assertEqual(module_status.returncode, 0, module_status.stderr)
-        module_payload = json.loads(module_status.stdout)
+        module_payload = parse_cli_json(self, module_status)
         self.assertEqual(module_payload["kind"], "aippocampus_learning_frontdoor")
         self.assertEqual(module_payload["mode"], "status")
         self.assertEqual(module_payload["foreground_action_contract"], "foreground-action-v2")
 
         self.assertEqual(learning_guidance.returncode, 0, learning_guidance.stderr)
-        guidance_payload = json.loads(learning_guidance.stdout)
+        guidance_payload = parse_cli_json(self, learning_guidance)
         self.assertEqual(guidance_payload["mode"], "guidance")
         self.assertNotIn("cannot_claim", guidance_payload)
         self.assertNotIn("cannot_claim", guidance_payload["boundary_detail"])
@@ -329,7 +329,7 @@ class AippocampusCliTests(unittest.TestCase):
             "--json",
         )
         self.assertEqual(targeted_guidance.returncode, 0, targeted_guidance.stderr)
-        targeted_payload = json.loads(targeted_guidance.stdout)
+        targeted_payload = parse_cli_json(self, targeted_guidance)
         self.assertEqual(len(targeted_payload["current_guidance"]), 1)
         self.assertEqual(targeted_payload["current_guidance"][0]["guidance_id"], guidance_id)
         self.assertNotIn("semantic_loop", guidance_payload)
@@ -345,7 +345,7 @@ class AippocampusCliTests(unittest.TestCase):
             0,
             learning_guidance_operator.stderr,
         )
-        guidance_operator_payload = json.loads(learning_guidance_operator.stdout)
+        guidance_operator_payload = parse_cli_json(self, learning_guidance_operator)
         self.assertIn("cannot_claim", guidance_operator_payload["boundary_detail"])
         self.assertIn("semantic_loop", guidance_operator_payload)
         self.assertEqual(
@@ -469,9 +469,9 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertEqual(recall.returncode, 0, recall.stderr)
         self.assertEqual(default_durable.returncode, 0, default_durable.stderr)
         self.assertEqual(ticket.returncode, 0, ticket.stderr)
-        recall_payload = json.loads(recall.stdout)
-        default_payload = json.loads(default_durable.stdout)
-        ticket_payload = json.loads(ticket.stdout)
+        recall_payload = parse_cli_json(self, recall)
+        default_payload = parse_cli_json(self, default_durable)
+        ticket_payload = parse_cli_json(self, ticket)
         self.assertEqual(default_payload["status"], "captured")
         self.assertTrue(default_payload["quieted_future_routes"])
         self.assertEqual(default_payload["write_boundary"]["storage"], "jsonl")
@@ -508,7 +508,7 @@ class AippocampusCliTests(unittest.TestCase):
             proc = self.run_cli_with_env("do-not-use-here", "--json", env=env)
 
         self.assertEqual(proc.returncode, 2)
-        payload = json.loads(proc.stdout)
+        payload = parse_cli_json(self, proc)
         encoded = json.dumps(payload, ensure_ascii=False)
         self.assertEqual(payload["status"], "needs_target")
         self.assertEqual({item["surface"] for item in payload["safe_next_actions"]}, {"control-boundary"})
@@ -533,7 +533,7 @@ class AippocampusCliTests(unittest.TestCase):
 
         for proc in (pause, forget, quiet):
             self.assertIn(proc.returncode, {0, 2}, proc.stderr)
-            payload = json.loads(proc.stdout)
+            payload = parse_cli_json(self, proc)
             self.assertEqual(payload["foreground_action"]["mutation_risk"], "read_only")
             self.assertIn("command_template", payload["foreground_action"])
             cached_actions = [
@@ -610,7 +610,7 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertIn("surface=prompt hook", full_proc.stdout)
         self.assertIn("default=3500", full_proc.stdout)
         self.assertEqual(json_proc.returncode, 0, json_proc.stderr)
-        payload = json.loads(json_proc.stdout)
+        payload = parse_cli_json(self, json_proc)
         self.assertEqual(payload["kind"], "aippocampus_config_doctor_summary")
 
     def test_agent_recall_and_deepen_help_start_with_foreground_cards(self) -> None:
@@ -663,7 +663,7 @@ class AippocampusCliTests(unittest.TestCase):
             )
 
         self.assertEqual(public.returncode, 0, public.stderr)
-        payload = json.loads(public.stdout)
+        payload = parse_cli_json(self, public)
         encoded = json.dumps(payload, ensure_ascii=False)
         self.assertEqual(payload["path"], "<local-path-redacted>")
         self.assertTrue(payload["path_redacted"])
@@ -675,7 +675,7 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertNotIn(private_command, encoded)
         self.assertNotIn(str(root), encoded)
         self.assertEqual(operator.returncode, 0, operator.stderr)
-        operator_payload = json.loads(operator.stdout)
+        operator_payload = parse_cli_json(self, operator)
         self.assertEqual(
             operator_payload["events"]["SessionStart"][0],
             private_command,
@@ -692,7 +692,7 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertIn("usage: aippocampus version", help_proc.stdout)
         self.assertNotIn("AIppocampus 0.", help_proc.stdout)
         self.assertEqual(json_proc.returncode, 0, json_proc.stderr)
-        payload = json.loads(json_proc.stdout)
+        payload = parse_cli_json(self, json_proc)
         raw = json_proc.stdout + json_proc.stderr
         self.assertEqual(payload["kind"], "aippocampus_version")
         self.assertTrue(payload["version"])
@@ -775,7 +775,7 @@ class AippocampusCliTests(unittest.TestCase):
             )
 
         self.assertEqual(final_proc.returncode, 0, final_proc.stderr)
-        final_payload = json.loads(final_proc.stdout)
+        final_payload = parse_cli_json(self, final_proc)
         self.assertTrue(final_payload["closeout_available"])
         self.assertEqual(final_payload["foreground_action_contract"], "foreground-action-v2")
         self.assertNotIn("agent_next_action", final_payload)
@@ -798,7 +798,7 @@ class AippocampusCliTests(unittest.TestCase):
             "source_open_within_latest_final_answer_scope",
         )
         self.assertNotEqual(commentary_proc.returncode, 0)
-        commentary_payload = json.loads(commentary_proc.stdout)
+        commentary_payload = parse_cli_json(self, commentary_proc)
         encoded_commentary = json.dumps(commentary_payload, ensure_ascii=False)
         self.assertEqual(commentary_payload["foreground_action_contract"], "foreground-action-v2")
         self.assertNotIn("agent_next_action", commentary_payload)
@@ -837,7 +837,7 @@ class AippocampusCliTests(unittest.TestCase):
 
         raw = proc.stdout + proc.stderr
         self.assertEqual(proc.returncode, 2, raw)
-        payload = json.loads(proc.stdout)
+        payload = parse_cli_json(self, proc)
         self.assertEqual(payload["status"], "no_latest_reply_source_found")
         self.assertEqual(payload["foreground_action_contract"], "foreground-action-v2")
         self.assertNotIn("agent_next_action", payload)
@@ -859,7 +859,7 @@ class AippocampusCliTests(unittest.TestCase):
         proc = self.run_cli("doctor", "config", "--compact-json")
 
         self.assertEqual(proc.returncode, 0, proc.stderr)
-        payload = json.loads(proc.stdout)
+        payload = parse_cli_json(self, proc)
         self.assertEqual(payload["kind"], "aippocampus_config_doctor_summary")
         self.assertLess(len(proc.stdout.splitlines()), 60)
         self.assertTrue(payload["audit_json_available"])
@@ -929,7 +929,7 @@ class AippocampusCliTests(unittest.TestCase):
         proc = self.run_cli("mcp", "list-tools", "--json")
 
         self.assertEqual(proc.returncode, 0, proc.stderr)
-        payload = json.loads(proc.stdout)
+        payload = parse_cli_json(self, proc)
         self.assertIn("tools", payload)
         self.assertTrue(any(tool.get("name") == "memory_health" for tool in payload["tools"]))
         by_name = {tool.get("name"): tool for tool in payload["tools"]}
@@ -946,14 +946,14 @@ class AippocampusCliTests(unittest.TestCase):
 
         self.assertEqual(shortcut.returncode, 0, shortcut.stderr)
         self.assertEqual(explicit.returncode, 0, explicit.stderr)
-        self.assertEqual(json.loads(shortcut.stdout), json.loads(explicit.stdout))
-        self.assertIn("agent_recall", json.loads(shortcut.stdout)["tool_names"])
+        self.assertEqual(parse_cli_json(self, shortcut), parse_cli_json(self, explicit))
+        self.assertIn("agent_recall", parse_cli_json(self, shortcut)["tool_names"])
 
     def test_mcp_list_tools_compact_summary_is_scan_friendly(self) -> None:
         proc = self.run_cli("mcp", "list-tools", "--compact")
 
         self.assertEqual(proc.returncode, 0, proc.stderr)
-        payload = json.loads(proc.stdout)
+        payload = parse_cli_json(self, proc)
         self.assertEqual(payload["kind"], "aippocampus_mcp_tool_readiness")
         self.assertTrue(payload["agent_native_tools_present"])
         self.assertIn("agent_recall", payload["key_tools_present"])
@@ -963,7 +963,7 @@ class AippocampusCliTests(unittest.TestCase):
         proc = self.run_cli("mcp", "status")
 
         self.assertEqual(proc.returncode, 0, proc.stderr)
-        payload = json.loads(proc.stdout)
+        payload = parse_cli_json(self, proc)
         self.assertEqual(payload["kind"], "aippocampus_mcp_tool_readiness")
         self.assertIn("agent_recall", payload["key_tools_present"])
         self.assertNotIn("tools", payload)
@@ -972,7 +972,7 @@ class AippocampusCliTests(unittest.TestCase):
         proc = self.run_cli("mcp")
 
         self.assertEqual(proc.returncode, 0, proc.stderr)
-        payload = json.loads(proc.stdout)
+        payload = parse_cli_json(self, proc)
         self.assertEqual(payload["kind"], "aippocampus_mcp_tool_readiness")
         self.assertTrue(payload["agent_native_tools_present"])
 
@@ -1005,7 +1005,7 @@ class AippocampusCliTests(unittest.TestCase):
         operator_json = self.run_cli("plugin", "status", "--operator-json", "--no-child-check")
 
         self.assertEqual(update_json.returncode, 0, update_json.stderr)
-        update_payload = json.loads(update_json.stdout)
+        update_payload = parse_cli_json(self, update_json)
         self.assertEqual(update_payload["kind"], "aippocampus_update_status_agent_json")
         self.assertIn("setup_card", update_payload)
         self.assertIn("safe_next_actions", update_payload)
@@ -1013,13 +1013,13 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertNotIn("surfaces", update_payload)
 
         self.assertEqual(plugin_json.returncode, 0, plugin_json.stderr)
-        plugin_payload = json.loads(plugin_json.stdout)
+        plugin_payload = parse_cli_json(self, plugin_json)
         self.assertEqual(plugin_payload["kind"], "aippocampus_update_status_agent_json")
         self.assertIn("setup_card", plugin_payload)
         self.assertNotIn("surfaces", plugin_payload)
 
         self.assertEqual(operator_json.returncode, 0, operator_json.stderr)
-        operator_payload = json.loads(operator_json.stdout)
+        operator_payload = parse_cli_json(self, operator_json)
         self.assertEqual(operator_payload["kind"], "aippocampus_update_status")
         self.assertIn("surfaces", operator_payload)
 
@@ -1454,7 +1454,7 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertTrue(result.ok)
         self.assertEqual(result.exit_code, 0)
         self.assertEqual(result.invocation.command, "mcp")
-        payload = json.loads(result.stdout)
+        payload = parse_cli_json(self, result)
         self.assertIn("tools", payload)
         self.assertTrue(any(tool["name"] == "agent_recall" for tool in payload["tools"]))
         self.assertNotIn("missing_key_tools", payload)
@@ -1518,7 +1518,7 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertIn("Commands:", unknown_result.stderr)
 
         unknown_json = facade.run_command(["nope", "--json"], capture_output=True)
-        payload = json.loads(unknown_json.stdout)
+        payload = parse_cli_json(self, unknown_json)
         self.assertFalse(unknown_json.ok)
         self.assertEqual(unknown_json.exit_code, 2)
         self.assertEqual(payload["error"]["code"], "unsupported_operation")
@@ -1532,16 +1532,16 @@ class AippocampusCliTests(unittest.TestCase):
         full = self.run_cli("mcp", "list-tools", "--json")
 
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
-        default_tools = json.loads(proc.stdout)["tools"]
+        default_tools = parse_cli_json(self, proc)["tools"]
         self.assertTrue(any(tool["name"] == "agent_recall" for tool in default_tools))
         self.assertIn("inputSchema", proc.stdout)
         self.assertEqual(status.returncode, 0, status.stdout + status.stderr)
-        readiness = json.loads(status.stdout)
+        readiness = parse_cli_json(self, status)
         self.assertEqual(readiness["kind"], "aippocampus_mcp_tool_readiness")
         self.assertIn("agent_recall", readiness["key_tools_present"])
         self.assertNotIn("inputSchema", status.stdout)
         self.assertEqual(full.returncode, 0, full.stdout + full.stderr)
-        tools = json.loads(full.stdout)["tools"]
+        tools = parse_cli_json(self, full)["tools"]
         self.assertTrue(any(tool["name"] == "search_memory" for tool in tools))
 
     def test_first_run_command_aliases_are_copy_pasteable(self) -> None:
@@ -1571,7 +1571,7 @@ class AippocampusCliTests(unittest.TestCase):
         proc = self.run_cli("sync", "status", "--json")
 
         self.assertEqual(proc.returncode, 0)
-        data = json.loads(proc.stdout)
+        data = parse_cli_json(self, proc)
         self.assertEqual(data["status"], "available_requires_sync_dir")
         self.assertEqual(data["backend"], "local_folder")
         self.assertIn("push", data["commands"])
@@ -1591,7 +1591,7 @@ class AippocampusCliTests(unittest.TestCase):
             proc = self.run_cli("sync", "status", "--sync-dir", tmp, "--json")
 
         self.assertEqual(proc.returncode, 2)
-        data = json.loads(proc.stdout)
+        data = parse_cli_json(self, proc)
         self.assertFalse(data["ok"])
         self.assertFalse(data["manifest_exists"])
 
@@ -1617,12 +1617,12 @@ class AippocampusCliTests(unittest.TestCase):
 
         self.assertEqual(export_proc.returncode, 2)
         self.assertNotIn("Traceback", export_proc.stderr + export_proc.stdout)
-        export_payload = json.loads(export_proc.stdout)
+        export_payload = parse_cli_json(self, export_proc)
         self.assertEqual(export_payload["error"]["code"], "public_export_requires_no_raw")
 
         self.assertEqual(import_proc.returncode, 2)
         self.assertNotIn("Traceback", import_proc.stderr + import_proc.stdout)
-        import_payload = json.loads(import_proc.stdout)
+        import_payload = parse_cli_json(self, import_proc)
         self.assertEqual(import_payload["error"]["code"], "bundle_not_found")
         self.assertIn("<local-path-redacted>", import_payload["error"]["message"])
         self.assertNotIn(str(Path(tmp)), import_proc.stdout)
@@ -1708,11 +1708,11 @@ class AippocampusCliTests(unittest.TestCase):
             )
 
         self.assertEqual(zero.returncode, 0, zero.stderr)
-        zero_payload = json.loads(zero.stdout)
+        zero_payload = parse_cli_json(self, zero)
         self.assertEqual(zero_payload["matches"][0]["snippet"], "")
         self.assertTrue(zero_payload["matches"][0]["snippet_omitted"])
         self.assertEqual(public.returncode, 0, public.stderr)
-        public_payload = json.loads(public.stdout)
+        public_payload = parse_cli_json(self, public)
         encoded_public = json.dumps(public_payload, ensure_ascii=False)
         self.assertEqual(
             public_payload["output_boundary"],
@@ -1737,11 +1737,11 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertIn("<local-path-redacted>", public_human.stdout)
         self.assertNotIn(private_marker, public_human.stdout)
         self.assertNotEqual(negative.returncode, 0)
-        negative_payload = json.loads(negative.stdout)
+        negative_payload = parse_cli_json(self, negative)
         self.assertEqual(negative_payload["error"]["code"], "usage_error")
         self.assertIn("must be >= 1", negative_payload["error"]["message"])
         self.assertNotEqual(no_match.returncode, 0)
-        no_match_payload = json.loads(no_match.stdout)
+        no_match_payload = parse_cli_json(self, no_match)
         self.assertEqual(no_match_payload["match_count"], 0)
         self.assertEqual(no_match_payload["decision"], "no_source_backed_snippet_found")
         self.assertIn("agent recall", " ".join(no_match_payload["recovery_actions"]))
@@ -1763,7 +1763,7 @@ class AippocampusCliTests(unittest.TestCase):
 
         raw = proc.stdout + proc.stderr
         self.assertEqual(proc.returncode, 0, raw)
-        payload = json.loads(proc.stdout)
+        payload = parse_cli_json(self, proc)
         activity = payload["summary"]
         self.assertEqual(payload["kind"], "aippocampus_warm_ambient_status_card")
         self.assertEqual(payload["detail"], "compact")

@@ -16,8 +16,13 @@ from aippocampus_runtime.navigation import attention_route_projection
 from aippocampus_runtime.recall import (
     agent_continuity,
     agent_continuity_cli_support,
+    agent_recall_pipeline,
+    agent_recall_primitives,
     background_findings,
     feedback_events,
+)
+from aippocampus_runtime.recall import (
+    agent_facade_contract as facade,
 )
 from aippocampus_runtime.registry import api as registry_api
 from tests.aippocampus.product_probe_helpers import (
@@ -234,7 +239,7 @@ class AgentOptInRecallRoutesTests(unittest.TestCase):
             ],
         }
 
-        with patch.object(agent_continuity, "recall_context_packet", return_value=fake_packet):
+        with patch.object(agent_recall_pipeline, "recall_context_packet", return_value=fake_packet):
             report = agent_continuity.recall(
                 "topology attention router macro sheaf callable handle UX",
                 cwd=self.cwd,
@@ -654,7 +659,7 @@ class AgentOptInRecallRoutesTests(unittest.TestCase):
             "route_count": len(routes),
         }
 
-        with patch.object(agent_continuity, "recall_context_packet", return_value=fake_packet):
+        with patch.object(agent_recall_pipeline, "recall_context_packet", return_value=fake_packet):
             default_report = agent_continuity.recall(
                 "attention router topology score fusion route selection",
                 cwd=self.cwd,
@@ -764,7 +769,7 @@ class AgentOptInRecallRoutesTests(unittest.TestCase):
             "route_count": len(routes),
         }
 
-        with patch.object(agent_continuity, "recall_context_packet", return_value=fake_packet):
+        with patch.object(agent_recall_pipeline, "recall_context_packet", return_value=fake_packet):
             report = agent_continuity.recall(
                 "attention router route feedback calibration",
                 cwd=self.cwd,
@@ -990,7 +995,7 @@ class AgentOptInRecallRoutesTests(unittest.TestCase):
             "route_count": 1,
         }
 
-        with patch.object(agent_continuity, "recall_context_packet", return_value=fake_packet):
+        with patch.object(agent_recall_pipeline, "recall_context_packet", return_value=fake_packet):
             payload = agent_continuity.recall(
                 "weak registry thread hint",
                 cwd=self.cwd,
@@ -1137,11 +1142,11 @@ class AgentOptInRecallRoutesTests(unittest.TestCase):
             "risk_flags": ["source_reopen_required", "check_currentness"],
         }
 
-        fitted = agent_continuity._fit_memory_packet_with_route_delta(dict(packet))
+        fitted = agent_recall_primitives._fit_memory_packet_with_route_delta(dict(packet))
 
         self.assertLessEqual(
-            agent_continuity._json_bytes(fitted),
-            agent_continuity.facade.FOREGROUND_PACKET_BYTE_BUDGET,
+            agent_recall_primitives._json_bytes(fitted),
+            facade.FOREGROUND_PACKET_BYTE_BUDGET,
         )
         self.assertIn("route_label", fitted)
         self.assertTrue(fitted["route_label"])
@@ -1172,7 +1177,7 @@ class AgentOptInRecallRoutesTests(unittest.TestCase):
             ],
         }
 
-        with patch.object(agent_continuity, "recall_context_packet", return_value=fake_packet):
+        with patch.object(agent_recall_pipeline, "recall_context_packet", return_value=fake_packet):
             report = agent_continuity.recall(
                 "attention router score fusion route selection",
                 cwd=self.cwd,
@@ -1225,9 +1230,9 @@ class AgentOptInRecallRoutesTests(unittest.TestCase):
         }
 
         with (
-            patch.object(agent_continuity, "recall_context_packet", return_value=fake_packet),
+            patch.object(agent_recall_pipeline, "recall_context_packet", return_value=fake_packet),
             patch.object(
-                agent_continuity.attention_router_policy,
+                agent_recall_pipeline.attention_router_policy,
                 "explicit_recall_auto_gate",
                 return_value=blocked_gate,
             ),
@@ -1283,7 +1288,7 @@ class AgentOptInRecallRoutesTests(unittest.TestCase):
             ],
         }
 
-        with patch.object(agent_continuity, "recall_context_packet", return_value=fake_packet):
+        with patch.object(agent_recall_pipeline, "recall_context_packet", return_value=fake_packet):
             report = agent_continuity.recall(
                 "benchmark 实测检索不弱 recall deepen 实际都好差劲",
                 cwd=self.cwd,
@@ -1349,7 +1354,7 @@ class AgentOptInRecallRoutesTests(unittest.TestCase):
             ],
         }
 
-        with patch.object(agent_continuity, "recall_context_packet", return_value=fake_packet):
+        with patch.object(agent_recall_pipeline, "recall_context_packet", return_value=fake_packet):
             report = agent_continuity.recall(
                 "黏菌 联想回忆 探索算法",
                 cwd=self.cwd,
@@ -1381,7 +1386,7 @@ class AgentOptInRecallRoutesTests(unittest.TestCase):
             momentum={"basis": {"support_delta": 0.2}},
         )
 
-        with patch.object(agent_continuity, "recall_context_packet", return_value=fake_packet):
+        with patch.object(agent_recall_pipeline, "recall_context_packet", return_value=fake_packet):
             report = agent_continuity.recall(
                 "继续架构验收，判断下一步该查哪条产品路径",
                 cwd=self.cwd,

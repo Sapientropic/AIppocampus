@@ -55,6 +55,7 @@ policy does not become another mirrored issue register.
 | `skills/aippocampus/scripts/aippocampus_runtime/mcp/agent_recall_result_assembly.py` | `compact_projection_result_owner` | Owns final compact recall assembly and strips detail/operator/debug fields. |
 | `skills/aippocampus/scripts/aippocampus_runtime/mcp/public_projection.py` | `mcp_public_projection_owner` | Owns MCP default-vs-full projection and redaction text. |
 | `skills/aippocampus/scripts/aippocampus_runtime/recall/agent_continuity.py` | `runtime_prompt_and_route_owner` | Owns recall route/action selection text before projection. |
+| `skills/aippocampus/scripts/aippocampus_runtime/recall/agent_recall_primitives.py` | `recall_route_primitive_owner` | Owns shared route-to-packet boundary wording without taking over source proof or compact projection. |
 | `skills/aippocampus/scripts/aippocampus_runtime/recall/agent_continuity_cli.py` | `recall_cli_dispatch_owner` | Owns CLI parser/help and compact-vs-full dispatch without taking over recovery projection logic. |
 | `skills/aippocampus/scripts/aippocampus_runtime/recall/agent_recall_cache.py` | `last_recall_cache_navigation_owner` | Owns same-machine selector/cache recovery text; local handles stay private. |
 | `skills/aippocampus/scripts/aippocampus_runtime/recall/prompt_context_render.py` | `prompt_hook_context_render_owner` | Owns prompt-hook compact context and operator debug projection separation. |

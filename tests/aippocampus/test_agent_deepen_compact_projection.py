@@ -19,6 +19,7 @@ from aippocampus_runtime.recall.agent_recall_cache import (
     write_last_recall_cache,
     write_recall_selector_snapshot,
 )
+from tests.aippocampus.cli_fixtures import parse_cli_json
 from tests.aippocampus.frontstage_assertions import (
     assert_compact_frontstage_payload,
 )
@@ -106,8 +107,8 @@ class AgentDeepenCompactProjectionTests(unittest.TestCase):
         self.assertEqual(recall_proc.returncode, 0, recall_proc.stderr)
         self.assertEqual(compact_proc.returncode, 0, compact_proc.stderr)
         self.assertEqual(full_proc.returncode, 0, full_proc.stderr)
-        compact_payload = json.loads(compact_proc.stdout)
-        full_payload = json.loads(full_proc.stdout)
+        compact_payload = parse_cli_json(self, compact_proc, expected_returncode=0, label="agent deepen compact")
+        full_payload = parse_cli_json(self, full_proc, expected_returncode=0, label="agent deepen full")
         compact_encoded = json.dumps(compact_payload, ensure_ascii=False, sort_keys=True)
 
         self.assertEqual(compact_payload["detail"], "compact")
@@ -175,8 +176,8 @@ class AgentDeepenCompactProjectionTests(unittest.TestCase):
         self.assertEqual(recall_proc.returncode, 0, recall_proc.stderr)
         self.assertEqual(compact_proc.returncode, 0, compact_proc.stderr)
         self.assertEqual(full_proc.returncode, 0, full_proc.stderr)
-        compact_payload = json.loads(compact_proc.stdout)
-        full_payload = json.loads(full_proc.stdout)
+        compact_payload = parse_cli_json(self, compact_proc, expected_returncode=0, label="agent explain compact")
+        full_payload = parse_cli_json(self, full_proc, expected_returncode=0, label="agent explain full")
         compact_encoded = json.dumps(compact_payload, ensure_ascii=False, sort_keys=True)
 
         self.assertEqual(compact_payload["detail"], "compact")
@@ -229,7 +230,7 @@ class AgentDeepenCompactProjectionTests(unittest.TestCase):
             "--json",
         )
 
-        payload = json.loads(proc.stdout)
+        payload = parse_cli_json(self, proc, expected_returncode=2, label="agent explain last-recall missing")
         encoded = json.dumps(payload, ensure_ascii=False)
         self.assertEqual(proc.returncode, 2, proc.stderr)
         self.assertEqual(payload["detail"], "compact")
@@ -264,7 +265,7 @@ class AgentDeepenCompactProjectionTests(unittest.TestCase):
     def test_agent_continuity_module_deepen_handle_json_returns_recovery_card(self) -> None:
         proc = self._run_agent_module("deepen", "--handle", "not-a-real-handle", "--json")
 
-        payload = json.loads(proc.stdout)
+        payload = parse_cli_json(self, proc, expected_returncode=2, label="agent continuity module deepen")
         encoded = json.dumps(payload, ensure_ascii=False)
         self.assertEqual(proc.returncode, 2, proc.stderr)
         self.assertEqual(proc.stderr.strip(), "")
