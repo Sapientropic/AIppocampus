@@ -5,7 +5,12 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from aippocampus_runtime.mcp.agent_deepen_projection import compact_agent_deepen_payload
 from aippocampus_runtime.recall import agent_continuity, agent_continuity_cli_support
+from aippocampus_runtime.recall.agent_recall_cache import (
+    LastRecallCacheError,
+    read_last_recall_cache_result,
+)
 
 
 class AgentLastRecallRecoveryTests(unittest.TestCase):
@@ -84,6 +89,48 @@ class AgentLastRecallRecoveryTests(unittest.TestCase):
         self.assertEqual(recovery["foreground_action"]["id"], "recall_with_cue_full_detail")
         self.assertIn("current task cue for this thread", recovery["foreground_action"]["command"])
         self.assertNotIn("previous_cached_cue", recovery["foreground_action"])
+
+    def test_corrupt_last_recall_cache_returns_typed_recovery_instead_of_empty_state(self) -> None:
+        cache_path = self.cwd / "corrupt-last-recall.json"
+        cache_path.write_text("{not-json", encoding="utf-8")
+
+        result = read_last_recall_cache_result(cache_path)
+        with self.assertRaises(LastRecallCacheError) as raised:
+            agent_continuity_cli_support.handle_from_last_recall_cache(
+                request_index=1,
+                path=cache_path,
+            )
+        recovery = agent_continuity_cli_support.last_recall_unavailable_payload(
+            mode="deepen",
+            exc=raised.exception,
+            schema_version=agent_continuity.SCHEMA_VERSION,
+            kind="aippocampus_agent_continuity_path",
+            cue=agent_continuity_cli_support.query_from_last_recall_cache(cache_path),
+        )
+        encoded = json.dumps(recovery, ensure_ascii=False)
+        compact = compact_agent_deepen_payload(
+            recovery,
+            request_index=1,
+            last_recall=True,
+            surface="agent_cli_source_court_compact",
+        )
+        compact_encoded = json.dumps(compact, ensure_ascii=False)
+
+        self.assertFalse(result.ok)
+        self.assertEqual(result.diagnostic.status, "malformed")
+        self.assertEqual(result.diagnostic.reason_code, "invalid_json")
+        self.assertEqual(recovery["status"], "cannot_verify")
+        self.assertEqual(recovery["cache_recovery"]["state"], "malformed")
+        self.assertEqual(recovery["foreground_action"]["id"], "recall_with_cue_full_detail")
+        self.assertIn("cache_read_diagnostic", recovery["result"])
+        self.assertEqual(compact["surface"], "agent_cli_source_court_compact")
+        self.assertEqual(compact["status"], "cannot_verify")
+        self.assertEqual(compact["foreground_action"]["id"], "recall_with_cue_full_detail")
+        self.assertNotIn("cache_read_diagnostic", compact_encoded)
+        self.assertNotIn("malformed", compact_encoded)
+        self.assertNotIn("invalid_json", compact_encoded)
+        self.assertNotIn(str(self.cwd), encoded)
+        self.assertNotIn("{not-json", encoded)
 
 if __name__ == "__main__":
     unittest.main()

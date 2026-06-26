@@ -177,6 +177,12 @@ def compact_agent_deepen_payload(
         safe_next_actions = [primary_action] if primary_action else []
         if follow_up_action and follow_up_action != primary_action:
             safe_next_actions.append(follow_up_action)
+        error = result.get("error") or source.get("error")
+        if isinstance(error, Mapping) and error.get("code") == "last_recall_unavailable":
+            error = {
+                "code": "last_recall_unavailable",
+                "message": "Last-recall cache is unavailable; rerun recall for a fresh route.",
+            }
         foreground_fields = (
             canonical_foreground_action_fields(
                 primary_action,
@@ -195,7 +201,7 @@ def compact_agent_deepen_payload(
                 "surface_class": source.get("surface_class"),
                 "status": source.get("status"),
                 "ok": False,
-                "error": result.get("error") or source.get("error"),
+                "error": error,
                 **foreground_fields,
                 "follow_up_action": follow_up_action,
                 "claim_boundary": source.get("claim_boundary"),

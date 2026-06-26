@@ -73,8 +73,17 @@ def _active_lock_roi_summary(cache_file: Path) -> dict[str, Any]:
         return {}
     try:
         return summarize_lock_roi(lock_path)
-    except Exception:
-        return {}
+    except Exception as exc:
+        return {
+            "status": "unavailable",
+            "diagnostic": {
+                "reason": "active_lock_roi_summary_unavailable",
+                "error_type": type(exc).__name__,
+                "local_path_redacted": True,
+            },
+            "source_backed_hit_count": 0,
+            "wrong_or_stale_route_count": 0,
+        }
 
 
 def prompt_topic_signal_context(
@@ -182,6 +191,8 @@ def attach_ambient_recall(
     warm_timeout: float | None,
     warm_quorum: int | None,
 ) -> dict[str, Any]:
+    """aippocampus-stage-map: load thread cache -> render ambient card -> apply filters/locks -> schedule warm background."""
+
     if not use_thread_cache or not thread_id:
         result["ambient_recall"] = ambient_recall_from_decision(result, prompt=prompt)
         return result
@@ -240,6 +251,8 @@ def attach_ambient_recall(
             "topic_epoch_decision": cached.get("topic_epoch_decision") or None,
             "visibility_bias": cached.get("visibility_bias") or "",
         }
+        if isinstance(cached.get("cache_read_diagnostic"), dict):
+            cache_status["cache_read_diagnostic"] = cached["cache_read_diagnostic"]
         result["ambient_recall"] = ambient_recall_from_decision(
             result,
             cached_cards=cached.get("cards") or [],
@@ -504,10 +517,7 @@ def cached_cards_for_policy(
         ambient_cache_path=ambient_cache_path,
         registry_path=registry_path,
     )
-    try:
-        cached = read_latest_thread_cache(cache_file, thread_id=thread_id, workspace=workspace)
-    except Exception:
-        return []
+    cached = read_latest_thread_cache(cache_file, thread_id=thread_id, workspace=workspace)
     return [card for card in cached.get("cards") or [] if isinstance(card, dict)]
 
 

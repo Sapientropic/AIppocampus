@@ -138,6 +138,14 @@ INSTRUCTION_SURFACE_CLASSIFIED_FILES = {
             "owns recall route/action selection text that later projections render"
         ),
     },
+    "skills/aippocampus/scripts/aippocampus_runtime/recall/agent_continuity_cli.py": {
+        "classification": "recall_cli_dispatch_owner",
+        "owner": "#2676/#2530/#2651",
+        "why": (
+            "owns agent recall CLI parser/help and compact-vs-full output dispatch; "
+            "error recovery must delegate projection to focused helpers"
+        ),
+    },
     "skills/aippocampus/scripts/aippocampus_runtime/recall/foreground_action_card.py": {
         "classification": "recall_foreground_action_card_owner",
         "owner": "#2716/#2651",
@@ -160,6 +168,15 @@ INSTRUCTION_SURFACE_CLASSIFIED_FILES = {
         "why": (
             "owns agent recall/deepen compact-vs-detail CLI rendering; source proof "
             "and diagnostics must stay in detail/operator surfaces"
+        ),
+    },
+    "skills/aippocampus/scripts/aippocampus_runtime/recall/agent_recall_cache.py": {
+        "classification": "last_recall_cache_navigation_owner",
+        "owner": "#2676/#2629/#2651",
+        "why": (
+            "owns same-machine last-recall selector/cache navigation text and "
+            "typed cache-read recovery; local handles stay private and source "
+            "claims require deepen/open follow-through"
         ),
     },
     "skills/aippocampus/scripts/aippocampus_runtime/recall/associative_path_fallback.py": {
@@ -248,6 +265,24 @@ INSTRUCTION_SURFACE_CLASSIFIED_FILES = {
         "why": (
             "owns prompt-hook affordance text and quieting rules; broad agent words "
             "must not become unsolicited foreground recall nudges"
+        ),
+    },
+    "skills/aippocampus/scripts/aippocampus_runtime/recall/prompt_context_render.py": {
+        "classification": "prompt_hook_context_render_owner",
+        "owner": "#2676/#2651",
+        "why": (
+            "owns prompt-hook compact context and operator debug projection; cache "
+            "read diagnostics stay in debug/detail output instead of foreground "
+            "additionalContext"
+        ),
+    },
+    "skills/aippocampus/scripts/aippocampus_runtime/recall/prompt_recall_ambient.py": {
+        "classification": "prompt_hook_ambient_coordinator_owner",
+        "owner": "#2676/#2629/#2651",
+        "why": (
+            "owns prompt-hook ambient cache coordination, policy filtering, active "
+            "locks, and warm scheduling; degraded cache state is diagnostic, not "
+            "foreground proof"
         ),
     },
     "skills/aippocampus/scripts/aippocampus_runtime/recall/prompt_cues.py": {

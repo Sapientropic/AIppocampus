@@ -133,6 +133,41 @@ class PromptHookAmbientCacheTests(AmbientRecallHookCase):
         context = hook.context_for_hook(result)
         self.assertIn("cached warm candidate", context.casefold())
 
+    def test_prompt_hook_keeps_corrupt_cache_diagnostics_out_of_foreground_context(self) -> None:
+        cache_path = self.root / "ambient-cache-corrupt.json"
+        cache_path.write_text("{not-json", encoding="utf-8")
+
+        result = hook.assess_prompt(
+            "hook 机制就像人类的触发式联想，我们可以把小海马体做得更主动一点",
+            cwd=self.workspace,
+            registry_path=self.registry,
+            thread_id="thread-a",
+            topic_epoch="epoch-corrupt",
+            ambient_cache_path=cache_path,
+            warm_background=False,
+            search_budget=0,
+        )
+        foreground = hook.hook_stdout_payload(result)
+        debug_payload = hook.public_hook_debug_payload(result)
+        foreground_text = json.dumps(foreground, ensure_ascii=False)
+
+        self.assertEqual(result["ambient_recall"]["cache_status"]["status"], "unavailable")
+        self.assertEqual(
+            result["ambient_recall"]["cache_status"]["cache_read_diagnostic"]["status"],
+            "malformed",
+        )
+        self.assertNotIn("cache_read_diagnostic", foreground_text)
+        self.assertNotIn("invalid_json", foreground_text)
+        self.assertNotIn(str(self.root), foreground_text)
+        self.assertEqual(
+            debug_payload["ambient_recall"]["cache"]["read_diagnostic"]["status"],
+            "malformed",
+        )
+        self.assertEqual(
+            debug_payload["ambient_recall"]["cache"]["read_diagnostic"]["reason_code"],
+            "invalid_json",
+        )
+
     def test_prompt_hook_uses_related_cache_after_paraphrase_epoch_miss(self) -> None:
         cache_path = self.root / "ambient-cache-related.json"
         registry_path = self._write_single_thread_registry(

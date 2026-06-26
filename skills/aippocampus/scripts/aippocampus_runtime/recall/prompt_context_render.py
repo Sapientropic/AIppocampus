@@ -71,6 +71,10 @@ def ambient_debug_summary(result: dict[str, Any]) -> dict[str, Any] | None:
             reopen_recommended_for_exact_quote_count += 1
     raw_cache_status = ambient.get("cache_status")
     cache_status: dict[str, Any] = raw_cache_status if isinstance(raw_cache_status, dict) else {}
+    raw_cache_diagnostic = cache_status.get("cache_read_diagnostic")
+    cache_diagnostic: dict[str, Any] = (
+        raw_cache_diagnostic if isinstance(raw_cache_diagnostic, dict) else {}
+    )
     raw_brief_precision = ambient.get("brief_precision")
     brief_precision: dict[str, Any] = (
         raw_brief_precision if isinstance(raw_brief_precision, dict) else {}
@@ -88,6 +92,18 @@ def ambient_debug_summary(result: dict[str, Any]) -> dict[str, Any] | None:
             "topic_epoch": cache_status.get("topic_epoch"),
             "card_count": cache_status.get("card_count"),
             "write_status": cache_status.get("write_status"),
+            **(
+                {
+                    "read_diagnostic": {
+                        "status": cache_diagnostic.get("status"),
+                        "reason_code": cache_diagnostic.get("reason_code"),
+                        "warning_count": cache_diagnostic.get("warning_count"),
+                        "path_label": cache_diagnostic.get("path_label"),
+                    }
+                }
+                if cache_diagnostic
+                else {}
+            ),
         },
         "brief_precision": brief_precision_debug_summary(brief_precision),
         "warm_background": {
@@ -465,6 +481,8 @@ def _needs_source_court_boundary(cards: list[dict[str, Any]]) -> bool:
 
 
 def context_for_hook(result: dict[str, Any], *, max_chars: int = MAX_CONTEXT_CHARS) -> str | None:
+    """aippocampus-stage-map: classify decision -> render source-safe route lines -> append soft sidecars -> compact."""
+
     if result.get("decision") == "skip" and not _has_foregroundable_ambient_card(result):
         affordance_lines = prepend_hook_agent_affordance(result, [])
         if not affordance_lines:

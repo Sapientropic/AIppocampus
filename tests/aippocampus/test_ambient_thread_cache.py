@@ -423,6 +423,85 @@ class AmbientThreadCacheTests(unittest.TestCase):
         self.assertNotIn("private/workspace", raw.replace("\\", "/"))
         self.assertNotIn("thread-a", raw)
 
+    def test_corrupt_thread_cache_reports_loss_without_raw_path_or_content(self) -> None:
+        cache_path = self.root / "ambient-thread-cache.json"
+        cache_path.write_text("{not-json", encoding="utf-8")
+
+        loaded = cache.read_thread_cache(
+            cache_path,
+            thread_id="thread-a",
+            workspace="E:/private/workspace",
+            topic_epoch="epoch-corrupt",
+        )
+        written = cache.write_thread_cache(
+            cache_path,
+            thread_id="thread-a",
+            workspace="E:/private/workspace",
+            topic_epoch="epoch-corrupt",
+            cards=[{"card_id": "arc_recovered", "theme": "recovered cache"}],
+        )
+        encoded = json.dumps({"loaded": loaded, "written": written}, ensure_ascii=False)
+
+        self.assertEqual(loaded["status"], "unavailable")
+        self.assertEqual(loaded["cards"], [])
+        self.assertEqual(loaded["cache_read_diagnostic"]["status"], "malformed")
+        self.assertEqual(loaded["cache_read_diagnostic"]["reason_code"], "invalid_json")
+        self.assertEqual(
+            written["previous_cache_read_diagnostic"]["status"],
+            "malformed",
+        )
+        self.assertNotIn(str(self.root), encoded)
+        self.assertNotIn("{not-json", encoded)
+
+    def test_corrupt_signal_accumulator_and_residue_jsonl_report_loss(self) -> None:
+        signal_path = self.root / "ambient-signal-accumulator.json"
+        signal_path.write_text("{not-json", encoding="utf-8")
+
+        signal = cache.read_topic_signal_state(
+            signal_path,
+            thread_id="thread-a",
+            workspace="workspace",
+            topic_epoch="epoch-signal",
+            terms=["ambient recall"],
+        )
+        written_signal = cache.record_topic_signal(
+            signal_path,
+            thread_id="thread-a",
+            workspace="workspace",
+            topic_epoch="epoch-signal",
+            terms=["ambient recall"],
+            outcome="weak_signal",
+        )
+
+        cache_path = self.root / "ambient-thread-cache-with-residue.json"
+        residue_path = self.root / "ambient-residue.jsonl"
+        residue_path.write_text("not-json\n", encoding="utf-8")
+        written = cache.write_thread_cache(
+            cache_path,
+            thread_id="thread-a",
+            workspace="workspace",
+            topic_epoch="epoch-residue",
+            cards=[
+                {
+                    "card_id": "arc_seed",
+                    "theme": "residue seed",
+                    "source_refs": [{"thread_key": "session:old", "line": 1}],
+                }
+            ],
+            residue_path=residue_path,
+        )
+
+        self.assertEqual(signal["status"], "unavailable")
+        self.assertEqual(signal["cache_read_diagnostic"]["status"], "malformed")
+        self.assertEqual(
+            written_signal["previous_cache_read_diagnostic"]["status"],
+            "malformed",
+        )
+        residue = written["residue_export"]
+        self.assertEqual(residue["status"], "written")
+        self.assertEqual(residue["residue_read_diagnostic"]["invalid_json_line_count"], 1)
+        self.assertEqual(residue["residue_read_diagnostic"]["path"], "ambient_residue.jsonl")
+
     def test_optional_residue_export_writes_dream_seed_without_raw_prompt_or_workspace(self) -> None:
         cache_path = self.root / "ambient-thread-cache.json"
         residue_path = self.root / "ambient-residue.jsonl"
