@@ -15,23 +15,12 @@ from time import perf_counter
 from typing import Any, Mapping
 
 from aippocampus_runtime.artifacts.publish import (
-    index_generation_diagnostics,
-    resolve_sqlite_index_path,
     segment_generation_diagnostics,
 )
 from aippocampus_runtime.cli.errors import cli_exit_code_for_error_code
 from aippocampus_runtime.core import (
-    aippocampus_registry_resolution,
-    codex_home,
-    default_thread_checkpoint_state_path,
-    default_thread_clean_source_dir,
-    default_thread_graphify_corpus_dir,
-    default_thread_index_dir,
-    default_thread_segments_dir,
     file_sha256,
-    locate_rollout,
     parse_anchor_file,
-    resolve_artifact_path,
 )
 from aippocampus_runtime.first_recall_readiness import (
     missing_rollout_readiness_fields,
@@ -43,22 +32,24 @@ from aippocampus_runtime.health_host_state import codex_host_state_confounds
 from aippocampus_runtime.health_recall_availability import (
     build_product_readiness,
     operator_detail_placeholder,
-    registry_recall_availability,
 )
 from aippocampus_runtime.health_registry import registry_health_report
 from aippocampus_runtime.health_render import render_health_text, render_registry_health_text
+from aippocampus_runtime.health_stages import (
+    activity_class,
+    age_seconds_since,
+    evaluate_index_state,
+    resolve_health_inputs,
+)
 from aippocampus_runtime.health_trajectory import attach_health_trajectory
-from aippocampus_runtime.legacy_aliases import legacy_alias_diagnostics
 from aippocampus_runtime.mcp.public_projection import compact_health_payload
 from aippocampus_runtime.ops import log_retention
-from aippocampus_runtime.ops.storage_eviction import latest_intentional_eviction
 from aippocampus_runtime.privacy import (
     LOCAL_PATH_REDACTION,
     redact_private_paths,
     redact_sensitive_values,
 )
 from aippocampus_runtime.question.constants import DEFAULT_DORMANT_AFTER_DAYS
-from aippocampus_runtime.registry.store import registry_paths
 from aippocampus_runtime.source.io_kernel import load_json_dict
 from aippocampus_runtime.source.source_intake_health import clean_source_health_summaries
 
@@ -98,7 +89,6 @@ class HealthOptions:
     include_expensive_diagnostics: bool = False
     operator_timeout_ms: int = DEFAULT_OPERATOR_DIAGNOSTIC_TIMEOUT_MS
     slow_section_threshold_ms: int = DEFAULT_SLOW_HEALTH_SECTION_MS
-
 
 def safe_int(value: Any, default: int = 0) -> int:
     try:
@@ -167,56 +157,10 @@ def health_performance_diagnostics(
     }
 
 
-def parse_timestamp(value: Any) -> datetime | None:
-    if not isinstance(value, str) or not value:
-        return None
-    try:
-        text = value.replace("Z", "+00:00")
-        parsed = datetime.fromisoformat(text)
-    except ValueError:
-        return None
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(timezone.utc)
-
-
-def age_seconds_since(value: Any, *, now: datetime | None = None) -> int | None:
-    parsed = parse_timestamp(value)
-    if parsed is None:
-        return None
-    current = now or datetime.now(timezone.utc)
-    return max(0, int((current - parsed).total_seconds()))
-
-
 def ratio(numerator: int, denominator: int) -> float:
     if denominator <= 0:
         return 0.0
     return round(float(max(0, numerator)) / float(denominator), 4)
-
-
-def activity_class(
-    *,
-    message_delta: int,
-    byte_delta: int,
-    stale_age_seconds: int | None,
-    max_stale_messages: int,
-    max_stale_bytes: int,
-) -> str:
-    if message_delta <= 0 and byte_delta <= 0:
-        return "quiet"
-    if stale_age_seconds is None:
-        return "unknown"
-    # Activity classification is advisory. It should help operators spot fast
-    # growing threads without changing the existing absolute stale thresholds.
-    if stale_age_seconds <= 3600 and (
-        message_delta >= max_stale_messages or byte_delta >= max_stale_bytes
-    ):
-        return "high_activity"
-    if stale_age_seconds >= 24 * 3600 and (
-        message_delta < max_stale_messages and byte_delta < max_stale_bytes
-    ):
-        return "quiet"
-    return "normal"
 
 
 def question_health_stats(*args: Any, **kwargs: Any) -> dict[str, Any]:
@@ -478,43 +422,20 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
 
     section_timings: list[dict[str, Any]] = []
     core_started_at = perf_counter()
-    cwd = Path(options.cwd).resolve()
-    host_home = codex_home()
-    rollout = locate_rollout(cwd, host_home)
-    index_dir = resolve_artifact_path(options.index_dir, cwd, default_thread_index_dir(cwd, rollout))
-    anchors = Path(options.anchors)
-    if not anchors.is_absolute():
-        anchors = cwd / anchors
-    graphify_corpus = resolve_artifact_path(
-        options.graphify_corpus, cwd, default_thread_graphify_corpus_dir(cwd, rollout)
-    )
-    segments_dir = resolve_artifact_path(
-        options.segments_dir, cwd, default_thread_segments_dir(cwd, rollout)
-    )
-    checkpoint_state = resolve_artifact_path(
-        options.checkpoint_state, cwd, default_thread_checkpoint_state_path(cwd, rollout)
-    )
-    clean_source_dir = resolve_artifact_path(
-        options.clean_source_dir, cwd, default_thread_clean_source_dir(cwd, rollout)
-    )
-    registry_path = (
-        Path(options.registry).resolve()
-        if options.registry
-        else registry_paths(Path(options.registry_dir).resolve() if options.registry_dir else None)[0]
-    )
-    registry_recall = registry_recall_availability(registry_path)
-    registry_resolution = aippocampus_registry_resolution()
-    legacy_aliases = legacy_alias_diagnostics(
-        registry_resolution=registry_resolution,
-        workspace=cwd,
-        project_local_paths={
-            "index": index_dir,
-            "clean_source": clean_source_dir,
-            "graphify": graphify_corpus,
-            "segments": segments_dir,
-            "checkpoint": checkpoint_state,
-        },
-    )
+    resolved = resolve_health_inputs(options)
+    cwd = resolved.cwd
+    host_home = resolved.host_home
+    rollout = resolved.rollout
+    index_dir = resolved.index_dir
+    anchors = resolved.anchors
+    graphify_corpus = resolved.graphify_corpus
+    segments_dir = resolved.segments_dir
+    checkpoint_state = resolved.checkpoint_state
+    clean_source_dir = resolved.clean_source_dir
+    registry_path = resolved.registry_path
+    registry_recall = resolved.registry_recall
+    registry_resolution = resolved.registry_resolution
+    legacy_aliases = resolved.legacy_aliases
     jobs_path = (
         Path(options.jobs_output).resolve()
         if options.jobs_output
@@ -527,49 +448,6 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
     last_line = visibility.last_message_line
     current_anchor_count = len(parse_anchor_file(anchors))
     current_anchor_sha = file_sha256(anchors) if anchors.exists() else None
-
-    manifest_path = index_dir / "manifest.json"
-    messages_path = index_dir / "messages.jsonl"
-    stable_sqlite_path = index_dir / "source_index.sqlite"
-    sqlite_path = resolve_sqlite_index_path(stable_sqlite_path)
-    index_generations = index_generation_diagnostics(
-        stable_sqlite_path,
-        root=index_dir,
-        include_paths=False,
-    )
-    manifest = load_json_dict(manifest_path).data
-    index_intentional_eviction = {"detected": False}
-    if not sqlite_path.exists():
-        candidate_eviction = latest_intentional_eviction(index_dir, "source_index.sqlite")
-        eviction_time = parse_timestamp(candidate_eviction.get("evicted_at"))
-        manifest_time = parse_timestamp(manifest.get("created_at"))
-        if (
-            candidate_eviction.get("detected")
-            and eviction_time is not None
-            and manifest_time is not None
-            and manifest_time > eviction_time
-        ):
-            index_intentional_eviction = {"detected": False}
-        else:
-            index_intentional_eviction = candidate_eviction
-
-    index_reasons: list[str] = []
-    if not manifest:
-        index_reasons.append("index manifest is missing")
-    if not messages_path.exists():
-        index_reasons.append("messages.jsonl is missing")
-    if not sqlite_path.exists():
-        if index_intentional_eviction.get("detected") and index_intentional_eviction.get(
-            "rebuildable"
-        ):
-            index_reasons.append("source_index.sqlite intentionally evicted as rebuildable cache")
-        else:
-            index_reasons.append("source_index.sqlite is missing")
-    indexed_messages = int(manifest.get("message_count") or 0)
-    indexed_bytes = int(manifest.get("source_rollout_size") or 0)
-    indexed_last_line = manifest.get("last_message_line")
-    message_delta = max(0, current_message_count - indexed_messages)
-    byte_delta = max(0, rollout_stat.st_size - indexed_bytes)
     live_delta_tolerance = max(0, int(options.live_delta_tolerance_messages))
     # A live foreground thread writes new rollout rows while health and
     # maintenance are running. Treat small deltas as a fresh window so the
@@ -579,27 +457,30 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
         live_delta_tolerance + 1,
         int(options.max_stale_messages),
     )
-    if manifest and message_delta >= stale_message_threshold:
-        index_reasons.append(
-            f"{message_delta} latest visible message(s) are newer than the index"
-        )
-    if manifest and byte_delta >= options.max_stale_bytes:
-        index_reasons.append(f"{byte_delta} new rollout bytes since last index")
-    if manifest and current_anchor_sha and manifest.get("anchor_sha256") != current_anchor_sha:
-        index_reasons.append("thread-anchors.md changed since last index")
-    rag_manifest = manifest.get("rag") or {}
-    if manifest and not rag_manifest.get("enabled"):
-        index_reasons.append("rag-lite chunk cache is missing from index manifest")
-
-    index_stale = bool(index_reasons)
-    index_stale_age_seconds = age_seconds_since(manifest.get("created_at"), now=now)
-    index_activity_class = activity_class(
-        message_delta=message_delta,
-        byte_delta=byte_delta,
-        stale_age_seconds=index_stale_age_seconds,
-        max_stale_messages=options.max_stale_messages,
-        max_stale_bytes=options.max_stale_bytes,
+    index_stage = evaluate_index_state(
+        index_dir=index_dir,
+        rollout_size=rollout_stat.st_size,
+        current_message_count=current_message_count,
+        current_anchor_sha=current_anchor_sha,
+        stale_message_threshold=stale_message_threshold,
+        now=now,
+        options=options,
     )
+    manifest_path = index_stage.manifest_path
+    manifest = index_stage.manifest
+    sqlite_path = index_stage.sqlite_path
+    stable_sqlite_path = index_stage.stable_sqlite_path
+    index_generations = index_stage.generations
+    index_intentional_eviction = index_stage.intentional_eviction
+    index_reasons = index_stage.reasons
+    indexed_messages = index_stage.indexed_messages
+    indexed_last_line = index_stage.indexed_last_line
+    message_delta = index_stage.message_delta
+    byte_delta = index_stage.byte_delta
+    rag_manifest = index_stage.rag_manifest
+    index_stale = index_stage.stale
+    index_stale_age_seconds = index_stage.stale_age_seconds
+    index_activity_class = index_stage.activity_class
 
     clean_manifest_path = clean_source_dir / "manifest.json"
     clean_messages_path = clean_source_dir / "messages.jsonl"
@@ -653,7 +534,7 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
 
     corpus_manifest_path = graphify_corpus / "corpus_manifest.json"
     corpus_manifest = load_json_dict(corpus_manifest_path).data
-    current_manifest_sha = file_sha256(manifest_path) if manifest_path.exists() else None
+    current_manifest_sha = index_stage.manifest_sha
     graphify_reasons: list[str] = []
     if not graphify_corpus.exists():
         graphify_reasons.append("graphify corpus is missing")
@@ -953,6 +834,8 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
         "storage": {
             "default_registry_dir": registry_resolution["path"],
             "default_registry_source": registry_resolution["source"],
+            # owner #2651; removal: when legacy registry env fallback is retired;
+            # default exposure: full health payload only, compact projection redacts it.
             "legacy_fallback": registry_resolution["legacy_fallback"],
             "active_registry": str(registry_path),
             "active_registry_source": (
@@ -964,6 +847,8 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
             ),
         },
         "continuity_recall": registry_recall,
+        # owner #2651; removal: when legacy alias diagnostics are no longer needed;
+        # default exposure: operator/full diagnostics, with values path-redacted publicly.
         "legacy_aliases": legacy_aliases,
         "index": {
             "dir": str(index_dir),

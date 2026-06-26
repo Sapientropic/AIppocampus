@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import unittest
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -31,17 +32,30 @@ def write_clean_source_thread(clean_dir: Path, rows: Sequence[Mapping[str, objec
     clean_dir.mkdir(parents=True, exist_ok=True)
     message_rows = [dict(row) for row in rows]
     write_jsonl_dict_rows(clean_dir / "messages.jsonl", message_rows)
+    turns: list[dict[str, object]] = []
+    turn_indexes: dict[tuple[object, object], int] = {}
+    for row in message_rows:
+        key = (row["turn_id"], row["turn_index"])
+        index = turn_indexes.get(key)
+        if index is None:
+            turn_indexes[key] = len(turns)
+            turns.append(
+                {
+                    "turn_id": row["turn_id"],
+                    "turn_index": row["turn_index"],
+                    "message_ids": [],
+                    "assistant_phase": row.get("phase") or row.get("role"),
+                }
+            )
+            index = len(turns) - 1
+        message_ids = turns[index]["message_ids"]
+        if isinstance(message_ids, list):
+            message_ids.append(row["message_id"])
+        if row.get("phase") == "final_answer":
+            turns[index]["assistant_phase"] = "final_answer"
     write_jsonl_dict_rows(
         clean_dir / "turns.jsonl",
-        (
-            {
-                "turn_id": row["turn_id"],
-                "turn_index": row["turn_index"],
-                "message_ids": [row["message_id"]],
-                "assistant_phase": row.get("phase") or row.get("role"),
-            }
-            for row in message_rows
-        ),
+        turns,
     )
 
 
@@ -73,6 +87,16 @@ def run_cli_json(
     return payload
 
 
+def run_agent_cli(
+    *args: str,
+    env: Mapping[str, str] | None = None,
+) -> subprocess.CompletedProcess[str]:
+    """Run the agent CLI through the same facade path product probes use."""
+
+    merged_env = {**os.environ, **dict(env or {})}
+    return run_aippocampus_cli("agent", *args, env=merged_env)
+
+
 def call_mcp_tool_payload(name: str, arguments: Mapping[str, object]) -> dict[str, Any]:
     response = mcp.handle_request(
         {
@@ -82,7 +106,14 @@ def call_mcp_tool_payload(name: str, arguments: Mapping[str, object]) -> dict[st
             "params": {"name": name, "arguments": dict(arguments)},
         }
     )
-    return mcp_tool_result_payload(response["result"])
+    return mcp_response_payload(response)
+
+
+def mcp_response_payload(response: Mapping[str, Any]) -> dict[str, Any]:
+    result = response["result"]
+    if not isinstance(result, Mapping):
+        raise TypeError("MCP response result must be a mapping")
+    return mcp_tool_result_payload(result)
 
 
 def assert_deepen_opened_expected_source(

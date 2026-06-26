@@ -24,6 +24,10 @@ from tests.aippocampus.mcp_server_fixtures import (
     assert_recall_template_action,
     field_path_count,
 )
+from tests.aippocampus.product_probe_helpers import (
+    call_mcp_tool_payload,
+    mcp_response_payload,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
@@ -83,24 +87,6 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
         else:
             os.environ["AIPPOCAMPUS_REGISTRY_DIR"] = self.old_registry_dir
         self.tmp.cleanup()
-
-    def tool_payload(self, response: dict) -> dict:
-        structured = response["result"].get("structuredContent")
-        if isinstance(structured, dict):
-            return structured
-        text = response["result"]["content"][0]["text"]
-        return json.loads(text)
-
-    def call_tool_payload(self, name: str, arguments: dict[str, object]) -> dict:
-        response = mcp.handle_request(
-            {
-                "jsonrpc": "2.0",
-                "id": f"call-{name}",
-                "method": "tools/call",
-                "params": {"name": name, "arguments": arguments},
-            }
-        )
-        return self.tool_payload(response)
 
     def append_clean_message(self, row: dict[str, object]) -> None:
         with (self.clean / "messages.jsonl").open("a", encoding="utf-8", newline="\n") as f:
@@ -202,11 +188,11 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
             "last_recall_path": str(cache_path),
             **({"apw_feedback_path": str(feedback_path)} if feedback_path else {}),
         }
-        full_recall_payload = self.call_tool_payload(
+        full_recall_payload = call_mcp_tool_payload(
             "agent_recall",
             {**recall_args, "detail": "full"},
         )
-        compact_recall_payload = self.call_tool_payload(
+        compact_recall_payload = call_mcp_tool_payload(
             "agent_recall",
             {**recall_args, "detail": "compact"},
         )
@@ -234,7 +220,7 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
         self.assertLessEqual(field_path_count(compact_recall_payload), 60)
         self.assertEqual(executable_command_violations(compact_recall_payload), [])
 
-        deepen_payload = self.call_tool_payload(
+        deepen_payload = call_mcp_tool_payload(
             "agent_deepen",
             {
                 "request_index": action["arguments"]["request_index"],
@@ -326,7 +312,7 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
                 source_text="source-shape narrative mesh slime mold pathlet",
                 cache_name="mcp-en-last-recall.json",
             )
-            diagnostic = self.call_tool_payload(
+            diagnostic = call_mcp_tool_payload(
                 "recall_diagnostic",
                 {
                     "cue": "黏菌 联想回忆 探索算法",
@@ -352,7 +338,7 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
             )
             self.assertTrue(receipt["wrote_event"])
 
-            rerun = self.call_tool_payload(
+            rerun = call_mcp_tool_payload(
                 "agent_recall",
                 {
                     "query": "黏菌 联想回忆 探索算法",
@@ -392,11 +378,11 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
                 "apw_fallback": True,
                 "last_recall_path": str(cache_path),
             }
-            recall_payload = self.call_tool_payload(
+            recall_payload = call_mcp_tool_payload(
                 "agent_recall",
                 {**recall_args, "detail": "full"},
             )
-            compact_recall_payload = self.call_tool_payload(
+            compact_recall_payload = call_mcp_tool_payload(
                 "agent_recall",
                 {**recall_args, "detail": "compact"},
             )
@@ -412,7 +398,7 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
         self.assertEqual(action["tool_name"], "agent_deepen")
         self.assertIn("recall_selector", action["arguments"])
 
-        deepen_payload = self.call_tool_payload(
+        deepen_payload = call_mcp_tool_payload(
             "agent_deepen",
             {
                 "request_index": action["arguments"]["request_index"],
@@ -438,7 +424,7 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
         )
         self.assertIn("黏菌启发的联想回忆和探索算法", window_text)
 
-        diagnostic = self.call_tool_payload(
+        diagnostic = call_mcp_tool_payload(
             "recall_diagnostic",
             {
                 "cue": "黏菌 联想回忆 探索算法",
@@ -479,8 +465,8 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
 
         self.assertTrue(empty_response["result"]["isError"])
         self.assertTrue(missing_confirm_response["result"]["isError"])
-        empty_payload = self.tool_payload(empty_response)
-        missing_confirm_payload = self.tool_payload(missing_confirm_response)
+        empty_payload = mcp_response_payload(empty_response)
+        missing_confirm_payload = mcp_response_payload(missing_confirm_response)
         self.assertEqual(empty_payload["error"]["code"], "explicit_write_required")
         self.assertEqual(missing_confirm_payload["error"]["code"], "explicit_write_required")
         for payload in (empty_payload, missing_confirm_payload):
@@ -517,7 +503,7 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
                 }
             )
 
-        payload = self.tool_payload(response)
+        payload = mcp_response_payload(response)
         self.assertEqual(payload["status"], "registered")
         provider = register.call_args.kwargs["provider"]
         self.assertEqual(provider.name, "codex")
@@ -559,7 +545,7 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
                 }
             )
 
-        payload = self.tool_payload(response)
+        payload = mcp_response_payload(response)
         encoded = json.dumps(payload, ensure_ascii=False)
         self.assertFalse(response["result"].get("isError"), payload)
         self.assertEqual(payload["status"], "registered")
@@ -604,7 +590,7 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
             )
 
         self.assertTrue(response["result"]["isError"])
-        payload = self.tool_payload(response)
+        payload = mcp_response_payload(response)
         self.assertEqual(payload["error"]["code"], "registry_writer_busy")
         self.assertTrue(payload["error"]["retryable"])
 
@@ -719,7 +705,7 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
             }
         )
 
-        payload = self.tool_payload(response)
+        payload = mcp_response_payload(response)
         self.assertFalse(response["result"].get("isError", False))
         self.assertIn("structuredContent", response["result"])
         self.assertFalse(response["result"]["content"][0]["text"].lstrip().startswith("{"))
@@ -755,7 +741,7 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
             }
         )
 
-        payload = self.tool_payload(response)
+        payload = mcp_response_payload(response)
         self.assertFalse(response["result"].get("isError", False))
         self.assertNotIn("matches", payload)
         self.assertEqual(payload["source_hits"][0]["index"], 1)
@@ -779,7 +765,7 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
                 },
             }
         )
-        full_payload = self.tool_payload(full_response)
+        full_payload = mcp_response_payload(full_response)
         self.assertEqual(full_payload["matches"][0]["message_id"], "msg_final")
         self.assertIn("不是摘要替代事实", full_payload["matches"][0]["snippet"])
 
@@ -840,7 +826,7 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
                 },
             }
         )
-        payload = self.tool_payload(response)
+        payload = mcp_response_payload(response)
         encoded = json.dumps(payload, ensure_ascii=False)
 
         self.assertFalse(response["result"].get("isError", False))
@@ -911,7 +897,7 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
                 },
             }
         )
-        compact_payload = self.tool_payload(compact_response)
+        compact_payload = mcp_response_payload(compact_response)
         compact_encoded = json.dumps(compact_payload, ensure_ascii=False)
 
         self.assertEqual(compact_payload["match_count"], 1)
@@ -936,7 +922,7 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
                 },
             }
         )
-        full_payload = self.tool_payload(full_response)
+        full_payload = mcp_response_payload(full_response)
         duplicate_refs = full_payload["matches"][0]["duplicate_source_refs"]
 
         self.assertEqual([ref["source_ref_index"] for ref in duplicate_refs], [1, 2])
@@ -964,7 +950,7 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
                 },
             }
         )
-        open_payload = self.tool_payload(open_response)
+        open_payload = mcp_response_payload(open_response)
 
         self.assertEqual(open_payload["kind"], "aippocampus_registry_source_window")
         self.assertEqual(open_payload["source_boundary"]["authority"], "source_open")
@@ -1027,7 +1013,7 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
                     },
                 }
             )
-        payload = self.tool_payload(response)
+        payload = mcp_response_payload(response)
 
         self.assertFalse(response["result"].get("isError", False))
         self.assertEqual(payload["mcp_search_scope"], "all_registered_sources")
@@ -1052,7 +1038,7 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
             }
         )
 
-        payload = self.tool_payload(response)
+        payload = mcp_response_payload(response)
         encoded = json.dumps(payload, ensure_ascii=False)
         self.assertFalse(response["result"].get("isError", False))
         self.assertIn("structuredContent", response["result"])
@@ -1097,7 +1083,7 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
             }
         )
 
-        payload = self.tool_payload(response)
+        payload = mcp_response_payload(response)
         self.assertFalse(response["result"].get("isError", False), payload)
         self.assertEqual(payload["detail"], "full")
         self.assertEqual(payload["routes"][0]["source_refs"][0]["message_id"], "msg_final")
@@ -1120,7 +1106,7 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
                 },
             }
         )
-        handle = self.tool_payload(context_response)["routes"][0]["handle"]
+        handle = mcp_response_payload(context_response)["routes"][0]["handle"]
 
         response = mcp.handle_request(
             {
@@ -1134,7 +1120,7 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
             }
         )
 
-        payload = self.tool_payload(response)
+        payload = mcp_response_payload(response)
         encoded = json.dumps(payload, ensure_ascii=False)
         self.assertFalse(response["result"].get("isError", False))
         self.assertEqual(payload["kind"], "aippocampus_recall_deepen")
@@ -1180,7 +1166,7 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
             }
         )
 
-        payload = self.tool_payload(response)
+        payload = mcp_response_payload(response)
         self.assertFalse(response["result"].get("isError", False))
         self.assertEqual(payload["source_refs"][0]["message_id"], "msg_user")
         self.assertEqual(payload["source_reopen_path"]["arguments"]["message_id"], "msg_user")
@@ -1201,7 +1187,7 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
                 },
             }
         )
-        route = self.tool_payload(context_response)["routes"][0]
+        route = mcp_response_payload(context_response)["routes"][0]
 
         response = mcp.handle_request(
             {
@@ -1215,7 +1201,7 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
             }
         )
 
-        payload = self.tool_payload(response)
+        payload = mcp_response_payload(response)
         self.assertFalse(response["result"].get("isError", False), payload)
         self.assertEqual(payload["source_refs"][0]["message_id"], "msg_final")
         self.assertEqual(payload["source_reopen_path"]["arguments"]["turn_id"], "turn_1")
@@ -1236,7 +1222,7 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
                 },
             }
         )
-        reopen_args = self.tool_payload(context_response)["routes"][0]["source_reopen_path"][
+        reopen_args = mcp_response_payload(context_response)["routes"][0]["source_reopen_path"][
             "arguments"
         ]
 
@@ -1252,7 +1238,7 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
             }
         )
 
-        payload = self.tool_payload(response)
+        payload = mcp_response_payload(response)
         self.assertFalse(response["result"].get("isError", False), payload)
         self.assertEqual(payload["source_refs"][0]["message_id"], "msg_final")
         self.assertEqual(payload["source_reopen_path"]["tool"], "get_turn_context")
@@ -1271,7 +1257,7 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
         )
 
         self.assertTrue(response["result"]["isError"])
-        payload = self.tool_payload(response)
+        payload = mcp_response_payload(response)
         self.assertEqual(payload["error"]["code"], "malformed_recall_handle")
         self.assertIn("deepen_requests[].handle", payload["error"]["message"])
 
@@ -1289,7 +1275,7 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
         )
 
         self.assertTrue(response["result"]["isError"])
-        payload = self.tool_payload(response)
+        payload = mcp_response_payload(response)
         self.assertEqual(payload["error"]["code"], "malformed_recall_handle")
         self.assertEqual(
             payload["error"]["details"]["callable_handle_field"],
@@ -1312,7 +1298,7 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
                 },
             }
         )
-        handle = self.tool_payload(context_response)["routes"][0]["handle"]
+        handle = mcp_response_payload(context_response)["routes"][0]["handle"]
         with (self.clean / "messages.jsonl").open("a", encoding="utf-8", newline="\n") as f:
             f.write(
                 json.dumps(
@@ -1344,7 +1330,7 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
         )
 
         self.assertTrue(response["result"]["isError"])
-        payload = self.tool_payload(response)
+        payload = mcp_response_payload(response)
         encoded = json.dumps(payload, ensure_ascii=False)
         self.assertEqual(payload["error"]["code"], "stale_recall_handle")
         self.assertNotIn("Later source", encoded)
@@ -1434,7 +1420,7 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
                 },
             }
         )
-        handle = self.tool_payload(context_response)["routes"][0]["handle"]
+        handle = mcp_response_payload(context_response)["routes"][0]["handle"]
 
         response = mcp.handle_request(
             {
@@ -1448,7 +1434,7 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
             }
         )
 
-        payload = self.tool_payload(response)
+        payload = mcp_response_payload(response)
         encoded = json.dumps(payload, ensure_ascii=False)
         self.assertFalse(response["result"].get("isError", False))
         self.assertNotIn(local_path, encoded)
@@ -1471,7 +1457,7 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
                 },
             }
         )
-        handle = self.tool_payload(context_response)["routes"][0]["handle"]
+        handle = mcp_response_payload(context_response)["routes"][0]["handle"]
         response = mcp.handle_request(
             {
                 "jsonrpc": "2.0",
@@ -1483,7 +1469,7 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
                 },
             }
         )
-        payload = self.tool_payload(response)
+        payload = mcp_response_payload(response)
         by_id = {item["message_id"]: item for item in payload["source_window"]["messages"]}
         self.assertEqual(by_id["msg_process"]["source_use_class"], "audit_or_commentary_source")
         self.assertEqual(by_id["msg_process"]["ordinary_continuity_priority"], "low")
@@ -1506,7 +1492,7 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
             }
         )
 
-        payload = self.tool_payload(response)
+        payload = mcp_response_payload(response)
         self.assertNotIn("limit", payload)
 
         full_response = mcp.handle_request(
@@ -1525,7 +1511,7 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
                 },
             }
         )
-        full_payload = self.tool_payload(full_response)
+        full_payload = mcp_response_payload(full_response)
         self.assertEqual(full_payload["limit"], 25)
 
     def test_search_memory_redacts_local_source_path_by_default(self) -> None:
@@ -1541,7 +1527,7 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
             }
         )
 
-        payload = self.tool_payload(response)
+        payload = mcp_response_payload(response)
         self.assertNotIn("source", payload)
         self.assertNotIn(str(self.clean), json.dumps(payload, ensure_ascii=False))
 
@@ -1561,7 +1547,7 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
                 },
             }
         )
-        private_payload = self.tool_payload(private_response)
+        private_payload = mcp_response_payload(private_response)
         self.assertIn(str(self.clean), private_payload["source"])
 
     def test_get_turn_context_returns_turn_messages_without_raw_rollout(self) -> None:
@@ -1577,7 +1563,7 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
             }
         )
 
-        payload = self.tool_payload(response)
+        payload = mcp_response_payload(response)
         self.assertEqual(payload["turn"]["turn_id"], "turn_1")
         self.assertEqual(
             [item["message_id"] for item in payload["messages"]], ["msg_user", "msg_final"]
@@ -1632,7 +1618,7 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
             }
         )
 
-        payload = self.tool_payload(response)
+        payload = mcp_response_payload(response)
         self.assertEqual([item["message_id"] for item in payload["messages"]], ["msg_zero", "msg_one"])
 
     def test_get_turn_context_requires_explicit_selector(self) -> None:
@@ -1646,7 +1632,7 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
         )
 
         self.assertTrue(response["result"]["isError"])
-        payload = self.tool_payload(response)
+        payload = mcp_response_payload(response)
         self.assertEqual(payload["error"]["code"], "missing_turn_selector")
         self.assertIn("turn_id", payload["error"]["required_any"])
         self.assertEqual(
@@ -1676,7 +1662,7 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
         )
 
         self.assertTrue(agent_response["result"]["isError"])
-        agent_payload = self.tool_payload(agent_response)
+        agent_payload = mcp_response_payload(agent_response)
         self.assertEqual(agent_payload["status"], "needs_input")
         self.assertEqual(agent_payload["surface_class"], "foreground_recovery_card")
         self.assertEqual(agent_payload["foreground_action_contract"], "foreground-action-v2")
@@ -1694,7 +1680,7 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
         self.assertEqual(agent_payload["follow_up_action"]["requires"], ["recall_selector", "request_index"])
 
         self.assertTrue(recall_response["result"]["isError"])
-        recall_payload = self.tool_payload(recall_response)
+        recall_payload = mcp_response_payload(recall_response)
         self.assertEqual(recall_payload["error"]["code"], "missing_recall_handle")
         self.assertIn("foreground_action", recall_payload)
         self.assertNotIn("agent_next_action", recall_payload)
@@ -1718,7 +1704,7 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
         )
 
         self.assertTrue(response["result"]["isError"])
-        payload = self.tool_payload(response)
+        payload = mcp_response_payload(response)
         self.assertEqual(payload["error"]["code"], "message_not_found")
         self.assertEqual(payload["error"]["details"]["message_id"], "msg_missing")
 
@@ -1741,7 +1727,7 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
         )
 
         self.assertTrue(response["result"]["isError"])
-        payload = self.tool_payload(response)
+        payload = mcp_response_payload(response)
         self.assertEqual(payload["error"]["code"], "clean_source_unavailable")
         self.assertEqual(
             payload["error"]["details"]["clean_source_dir"], mcp_handlers.LOCAL_PATH_REDACTION
@@ -1767,7 +1753,7 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
             }
         )
 
-        payload = self.tool_payload(response)
+        payload = mcp_response_payload(response)
         self.assertEqual(payload["error"]["details"]["clean_source_dir"], str(missing_clean))
 
 if __name__ == "__main__":

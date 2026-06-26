@@ -171,6 +171,14 @@ INSTRUCTION_SURFACE_CLASSIFIED_FILES = {
             "error recovery must delegate projection to focused helpers"
         ),
     },
+    "skills/aippocampus/scripts/aippocampus_runtime/recall/agent_continuity_cli_dispatch.py": {
+        "classification": "recall_cli_execution_owner",
+        "owner": "#2631/#2676/#2651",
+        "why": (
+            "owns parsed agent CLI command execution branches split out of the "
+            "parser; foreground text must remain compact and source-boundary aware"
+        ),
+    },
     "skills/aippocampus/scripts/aippocampus_runtime/recall/foreground_action_card.py": {
         "classification": "recall_foreground_action_card_owner",
         "owner": "#2716/#2651",

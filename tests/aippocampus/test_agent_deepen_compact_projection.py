@@ -13,7 +13,6 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 ROOT = REPO_ROOT / "skills" / "aippocampus"
 SCRIPTS = ROOT / "scripts"
 
-from aippocampus_runtime.mcp import server as mcp
 from aippocampus_runtime.recall import agent_continuity
 from aippocampus_runtime.recall.agent_recall_cache import (
     recall_selector_cache_path,
@@ -23,6 +22,11 @@ from aippocampus_runtime.recall.agent_recall_cache import (
 from tests.aippocampus.frontstage_assertions import (
     assert_compact_frontstage_payload,
 )
+from tests.aippocampus.product_probe_helpers import (
+    call_mcp_tool_payload,
+    run_agent_cli,
+    write_clean_source_thread,
+)
 
 
 class AgentDeepenCompactProjectionTests(unittest.TestCase):
@@ -30,62 +34,36 @@ class AgentDeepenCompactProjectionTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.cwd = Path(self.tmp.name)
         self.clean = self.cwd / ".aippocampus" / "clean-source"
-        self.clean.mkdir(parents=True)
-        messages = [
-            {
-                "message_id": "msg_user",
-                "turn_id": "turn_1",
-                "source_id": "src_test",
-                "source_line": 2,
-                "role": "user",
-                "phase": "",
-                "turn_index": 1,
-                "is_final": False,
-                "text": "小海马体需要 source-backed continuity。",
-            },
-            {
-                "message_id": "msg_final",
-                "turn_id": "turn_1",
-                "source_id": "src_test",
-                "source_line": 3,
-                "role": "assistant",
-                "phase": "final_answer",
-                "turn_index": 1,
-                "is_final": True,
-                "text": "AIppocampus 使用 clean source，而不是摘要替代事实。",
-            },
-        ]
-        with (self.clean / "messages.jsonl").open("w", encoding="utf-8", newline="\n") as f:
-            for item in messages:
-                f.write(json.dumps(item, ensure_ascii=False) + "\n")
-        with (self.clean / "turns.jsonl").open("w", encoding="utf-8", newline="\n") as f:
-            f.write(
-                json.dumps(
-                    {
-                        "turn_id": "turn_1",
-                        "turn_index": 1,
-                        "message_ids": ["msg_user", "msg_final"],
-                        "assistant_phase": "final_answer",
-                    },
-                    ensure_ascii=False,
-                )
-                + "\n"
-            )
+        write_clean_source_thread(
+            self.clean,
+            [
+                {
+                    "message_id": "msg_user",
+                    "turn_id": "turn_1",
+                    "source_id": "src_test",
+                    "source_line": 2,
+                    "role": "user",
+                    "phase": "",
+                    "turn_index": 1,
+                    "is_final": False,
+                    "text": "小海马体需要 source-backed continuity。",
+                },
+                {
+                    "message_id": "msg_final",
+                    "turn_id": "turn_1",
+                    "source_id": "src_test",
+                    "source_line": 3,
+                    "role": "assistant",
+                    "phase": "final_answer",
+                    "turn_index": 1,
+                    "is_final": True,
+                    "text": "AIppocampus 使用 clean source，而不是摘要替代事实。",
+                },
+            ],
+        )
 
     def tearDown(self) -> None:
         self.tmp.cleanup()
-
-    def _run_agent(self, *args: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
-        return subprocess.run(
-            [sys.executable, "-m", "aippocampus_runtime.cli.facade", "agent", *args],
-            cwd=SCRIPTS,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            capture_output=True,
-            check=False,
-            env=env,
-        )
 
     def _run_agent_module(self, *args: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
@@ -98,29 +76,12 @@ class AgentDeepenCompactProjectionTests(unittest.TestCase):
             check=False,
         )
 
-    def _tool_payload(self, response: dict) -> dict:
-        result = response["result"]
-        if isinstance(result.get("structuredContent"), dict):
-            return result["structuredContent"]
-        return json.loads(result["content"][0]["text"])
-
-    def _call_tool_payload(self, name: str, arguments: dict[str, object]) -> dict:
-        response = mcp.handle_request(
-            {
-                "jsonrpc": "2.0",
-                "id": f"call-{name}",
-                "method": "tools/call",
-                "params": {"name": name, "arguments": arguments},
-            }
-        )
-        return self._tool_payload(response)
-
     def test_cli_agent_deepen_json_defaults_to_compact_source_court_card(self) -> None:
         env = {
             **os.environ,
             agent_continuity.LAST_RECALL_CACHE_ENV: str(self.cwd / "last-recall-json.json"),
         }
-        recall_proc = self._run_agent(
+        recall_proc = run_agent_cli(
             "recall",
             "source-backed continuity",
             "--cwd",
@@ -130,8 +91,8 @@ class AgentDeepenCompactProjectionTests(unittest.TestCase):
             "--json",
             env=env,
         )
-        compact_proc = self._run_agent("deepen", "--request", "1", "--last-recall", "--json", env=env)
-        full_proc = self._run_agent(
+        compact_proc = run_agent_cli("deepen", "--request", "1", "--last-recall", "--json", env=env)
+        full_proc = run_agent_cli(
             "deepen",
             "--request",
             "1",
@@ -182,7 +143,7 @@ class AgentDeepenCompactProjectionTests(unittest.TestCase):
             **os.environ,
             agent_continuity.LAST_RECALL_CACHE_ENV: str(self.cwd / "last-recall-explain.json"),
         }
-        recall_proc = self._run_agent(
+        recall_proc = run_agent_cli(
             "recall",
             "source-backed continuity",
             "--cwd",
@@ -192,8 +153,8 @@ class AgentDeepenCompactProjectionTests(unittest.TestCase):
             "--json",
             env=env,
         )
-        compact_proc = self._run_agent("explain", "--request", "1", "--last-recall", "--json", env=env)
-        full_proc = self._run_agent(
+        compact_proc = run_agent_cli("explain", "--request", "1", "--last-recall", "--json", env=env)
+        full_proc = run_agent_cli(
             "explain",
             "--request",
             "1",
@@ -251,7 +212,7 @@ class AgentDeepenCompactProjectionTests(unittest.TestCase):
         self.assertIn("cannot_claim", full_payload["explanation"])
 
     def test_cli_agent_explain_last_recall_error_is_compact_recovery_card(self) -> None:
-        proc = self._run_agent(
+        proc = run_agent_cli(
             "explain",
             "--request",
             "1",
@@ -277,7 +238,7 @@ class AgentDeepenCompactProjectionTests(unittest.TestCase):
 
     def test_cli_agent_explain_last_recall_text_redacts_path_and_shows_recovery(self) -> None:
         missing_path = self.cwd / "missing-last-recall.json"
-        proc = self._run_agent(
+        proc = run_agent_cli(
             "explain",
             "--request",
             "1",
@@ -317,7 +278,7 @@ class AgentDeepenCompactProjectionTests(unittest.TestCase):
             if old_last_recall is None
             else os.environ.__setitem__(agent_continuity.LAST_RECALL_CACHE_ENV, old_last_recall)
         )
-        recall_payload = self._call_tool_payload(
+        recall_payload = call_mcp_tool_payload(
             "agent_recall",
             {
                 "query": "clean source continuity",
@@ -344,7 +305,7 @@ class AgentDeepenCompactProjectionTests(unittest.TestCase):
         self.assertNotIn('"callable_handle":', encoded_recall)
         self.assertNotIn('"source_refs":', encoded_recall)
 
-        explain_payload = self._call_tool_payload("agent_explain", route_action["arguments"])
+        explain_payload = call_mcp_tool_payload("agent_explain", route_action["arguments"])
         explain_encoded = json.dumps(explain_payload, ensure_ascii=False)
         self.assertEqual(explain_payload["detail"], "compact")
         self.assertEqual(explain_payload["kind"], "aippocampus_route_explain_card")
@@ -356,7 +317,7 @@ class AgentDeepenCompactProjectionTests(unittest.TestCase):
         self.assertNotIn("macro_navigation_diagnostics", explain_payload)
         self.assertNotIn("cannot_claim", explain_encoded)
 
-        compact_payload = self._call_tool_payload("agent_deepen", route_action["arguments"])
+        compact_payload = call_mcp_tool_payload("agent_deepen", route_action["arguments"])
         compact_encoded = json.dumps(compact_payload, ensure_ascii=False)
         self.assertEqual(compact_payload["detail"], "compact")
         self.assertEqual(compact_payload["surface"], "mcp_agent_deepen_compact")
@@ -380,7 +341,7 @@ class AgentDeepenCompactProjectionTests(unittest.TestCase):
         self.assertNotIn("carry_next_actions", compact_payload)
         self.assertNotIn("AIppocampus 使用 clean source", compact_encoded)
 
-        full_payload = self._call_tool_payload(
+        full_payload = call_mcp_tool_payload(
             "agent_deepen",
             {**route_action["arguments"], "detail": "full"},
         )
@@ -430,7 +391,7 @@ class AgentDeepenCompactProjectionTests(unittest.TestCase):
         selector = write_recall_selector_snapshot(cache_path)
         self.assertIsNotNone(selector)
 
-        payload = self._call_tool_payload(
+        payload = call_mcp_tool_payload(
             "agent_deepen",
             {
                 "request_index": 1,
@@ -523,7 +484,7 @@ class AgentDeepenCompactProjectionTests(unittest.TestCase):
 
         self.addCleanup(restore_env)
 
-        recall_payload = self._call_tool_payload(
+        recall_payload = call_mcp_tool_payload(
             "agent_recall",
             {
                 "query": "clean source continuity",
@@ -539,7 +500,7 @@ class AgentDeepenCompactProjectionTests(unittest.TestCase):
         self.assertTrue((registry_dir / "agent" / "recall-selectors" / f"{selector}.json").exists())
 
         os.environ.pop(agent_continuity.LAST_RECALL_CACHE_ENV, None)
-        payload = self._call_tool_payload(
+        payload = call_mcp_tool_payload(
             "agent_deepen",
             {
                 "request_index": 1,
@@ -573,7 +534,7 @@ class AgentDeepenCompactProjectionTests(unittest.TestCase):
         self.addCleanup(restore_env)
         registry_dir = self.cwd / "explicit-registry"
 
-        recall_payload = self._call_tool_payload(
+        recall_payload = call_mcp_tool_payload(
             "agent_recall",
             {
                 "query": "clean source continuity",
@@ -601,7 +562,7 @@ class AgentDeepenCompactProjectionTests(unittest.TestCase):
             encoding="utf-8",
         )
 
-        payload = self._call_tool_payload(
+        payload = call_mcp_tool_payload(
             "agent_deepen",
             {
                 "request_index": 1,
