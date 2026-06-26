@@ -505,6 +505,7 @@ def load(rows):
         self.assertTrue(payload["advisory"])
         self.assertEqual(payload["changed_surface_unbaselined_count"], 1)
         self.assertNotIn("rules", payload)
+        self.assertNotIn("owner_layer_contracts", payload)
         self.assertEqual(payload["blockers"][0]["rule_id"], "compact_projector_bypass")
         self.assertEqual(hard.returncode, 1)
         hard_payload = json.loads(hard.stdout)
@@ -534,6 +535,8 @@ def load(rows):
 
         self.assertEqual(proc.returncode, 0, proc.stderr)
         payload = json.loads(proc.stdout)
+        self.assertIn("rules", payload)
+        self.assertIn("owner_layer_contracts", payload)
         self.assertEqual(payload["fixture_failure_count"], 0)
         self.assertTrue(all(item["passed"] for item in payload["fixture_results"]))
 

@@ -13,6 +13,11 @@ from pathlib import Path
 
 try:
     from tools.aippocampus.docs import guard_pressure
+    from tools.aippocampus.docs.debt_report_projection import (
+        compact_changed_surface_report,
+        compact_debt_report,
+        compact_headroom_report,
+    )
     from tools.aippocampus.docs.helper_inventory import (
         CANONICAL_HELPER_PATHS,
         HELPER_NAME_TO_FAMILY,
@@ -38,6 +43,11 @@ try:
     )
 except ModuleNotFoundError:
     import guard_pressure
+    from debt_report_projection import (
+        compact_changed_surface_report,
+        compact_debt_report,
+        compact_headroom_report,
+    )
     from helper_inventory import CANONICAL_HELPER_PATHS, HELPER_NAME_TO_FAMILY
     from instruction_surface import (
         COMPACT_DEBUG_FIELD_LITERALS,
@@ -1156,8 +1166,8 @@ def main() -> int:
     )
     parser.add_argument(
         "--detail",
-        choices=("summary", "full"),
-        default="summary",
+        choices=("compact", "full"),
+        default="compact",
         help="Use full only when an operator needs every helper/exception definition.",
     )
     parser.add_argument(
@@ -1183,6 +1193,8 @@ def main() -> int:
                 print(f"write with: {REFRESH_REGISTER_COUNTS_COMMAND}")
         return 0
 
+    report_detail = "full" if args.detail == "full" else "summary"
+
     if args.changed_surface_only:
         changed_surface = changed_surface_debt(list(args.changed_file or []))
         result = {
@@ -1191,7 +1203,15 @@ def main() -> int:
             "changed_surface": changed_surface,
         }
         if args.json_output:
-            print(json.dumps(result, ensure_ascii=False, indent=2))
+            payload = (
+                result
+                if args.detail == "full"
+                else compact_changed_surface_report(
+                    result,
+                    changed_files=list(args.changed_file or []),
+                )
+            )
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
         else:
             print(
                 "changed-surface debt: "
@@ -1201,9 +1221,10 @@ def main() -> int:
         return 0 if result["ok"] else 1
 
     if args.headroom_only:
-        report = build_headroom_report(detail=str(args.detail))
+        report = build_headroom_report(detail=report_detail)
         if args.json_output:
-            print(json.dumps(report, ensure_ascii=False, indent=2))
+            payload = report if args.detail == "full" else compact_headroom_report(report)
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
         else:
             summary = report["headroom_summary"]
             print(
@@ -1214,9 +1235,14 @@ def main() -> int:
             )
         return 0 if report["ok"] else 1
 
-    report = build_report(changed_files=list(args.changed_file or []), detail=str(args.detail))
+    report = build_report(changed_files=list(args.changed_file or []), detail=report_detail)
     if args.json_output:
-        print(json.dumps(report, ensure_ascii=False, indent=2))
+        payload = (
+            report
+            if args.detail == "full"
+            else compact_debt_report(report, changed_files=list(args.changed_file or []))
+        )
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
     else:
         for row in report["rows"]:
             print(

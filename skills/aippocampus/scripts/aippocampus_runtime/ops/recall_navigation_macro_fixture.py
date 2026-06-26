@@ -6,15 +6,12 @@ import json
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+from aippocampus_runtime.core import dict_or_empty
 from aippocampus_runtime.macro import state as macro_state
 from aippocampus_runtime.recall import macro_live_recall
 
 ACTIVE_PROMOTION_OWNER_ISSUE = "#2559"
 HISTORICAL_MACRO_PROMOTION_ISSUES = ["#1300"]
-
-
-def _as_dict(value: Any) -> dict[str, Any]:
-    return value if isinstance(value, dict) else {}
 
 
 def _int(value: Any) -> int:
@@ -92,7 +89,10 @@ def _macro_context_fixture() -> dict[str, Any]:
         hexagram="乾",
         changing_lines=(1, 2, 3),
         source_refs=({"source_id": "macro-promotion-fixture"},),
-        updated_at="2026-06-11T10:00:00Z",
+        # This fixture intentionally exercises the current-navigation path.
+        # A fixed date silently expires under the real stale-after policy and
+        # turns promotion tests into calendar time bombs.
+        updated_at=macro_state.utc_now_iso(),
         active_layer="人",
         momentum={"basis": {"counter_evidence_delta": 0.2}},
     )
@@ -234,9 +234,9 @@ def macro_navigation_readout(
     claim_without_reopen = 0
     wrong_source = 0
     for case in macro_cases:
-        arms = _as_dict(case.get("arms"))
-        baseline = _as_dict(arms.get(arm_baseline))
-        nav_only = _as_dict(arms.get(arm_nav_only))
+        arms = dict_or_empty(case.get("arms"))
+        baseline = dict_or_empty(arms.get(arm_baseline))
+        nav_only = dict_or_empty(arms.get(arm_nav_only))
         if _int(baseline.get("manual_search_fallback_count")) > _int(
             nav_only.get("manual_search_fallback_count")
         ):

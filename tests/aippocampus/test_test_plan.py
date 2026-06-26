@@ -565,6 +565,50 @@ class ChangedSurfaceTestPlanTests(unittest.TestCase):
             )
         )
 
+    def test_cli_json_defaults_to_compact_changed_surface_plan(self) -> None:
+        with (
+            io.StringIO() as stdout,
+            contextlib.redirect_stdout(stdout),
+            mock.patch.object(
+                test_plan,
+                "collect_changed_files",
+                return_value=["tools/aippocampus/test_plan.py"],
+            ),
+        ):
+            exit_code = test_plan.main(["--json"])
+            payload = json.loads(stdout.getvalue())
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(payload["kind"], "aippocampus_changed_surface_test_plan_compact")
+        self.assertEqual(payload["status"], "pass")
+        self.assertEqual(payload["changed_surface"]["changed_file_count"], 1)
+        self.assertIn("changed_surface_preflight.py --json", payload["preflight_command"])
+        self.assertIn("--detail full", payload["detail_command"])
+        self.assertLessEqual(len(payload["next_commands"]), 3)
+        self.assertNotIn("commands", payload)
+        self.assertNotIn("python_environment", payload)
+
+    def test_cli_json_full_preserves_complete_changed_surface_plan(self) -> None:
+        with (
+            io.StringIO() as stdout,
+            contextlib.redirect_stdout(stdout),
+        ):
+            exit_code = test_plan.main(
+                [
+                    "--json",
+                    "--detail",
+                    "full",
+                    "--changed-file",
+                    "tools/aippocampus/test_plan.py",
+                ]
+            )
+            payload = json.loads(stdout.getvalue())
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(payload["kind"], "aippocampus_changed_surface_test_plan")
+        self.assertIn("commands", payload)
+        self.assertIn("python_environment", payload)
+
     def test_release_preflight_cli_emits_json_without_changed_file_scan(self) -> None:
         with (
             io.StringIO() as stdout,
@@ -575,7 +619,24 @@ class ChangedSurfaceTestPlanTests(unittest.TestCase):
             payload = json.loads(stdout.getvalue())
 
         self.assertEqual(exit_code, 0)
+        self.assertEqual(payload["kind"], "aippocampus_release_preflight_plan_compact")
+        self.assertLessEqual(len(payload["next_commands"]), 3)
+        self.assertIn("--detail full", payload["detail_command"])
+        self.assertNotIn("local_required", payload)
+        collect_changed_files.assert_not_called()
+
+    def test_release_preflight_cli_full_preserves_operator_plan(self) -> None:
+        with (
+            io.StringIO() as stdout,
+            contextlib.redirect_stdout(stdout),
+            mock.patch.object(test_plan, "collect_changed_files") as collect_changed_files,
+        ):
+            exit_code = test_plan.main(["--release-preflight", "--json", "--detail", "full"])
+            payload = json.loads(stdout.getvalue())
+
+        self.assertEqual(exit_code, 0)
         self.assertEqual(payload["kind"], "aippocampus_release_preflight_plan")
+        self.assertIn("local_required", payload)
         collect_changed_files.assert_not_called()
 
     def test_collect_changed_files_includes_untracked_files(self) -> None:

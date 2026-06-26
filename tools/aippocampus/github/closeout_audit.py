@@ -1340,6 +1340,43 @@ def _issue_metadata_from_args(args: argparse.Namespace, body: str) -> Any:
     return metadata
 
 
+def compact_audit_report(report: Mapping[str, Any], *, detail_command: str | None) -> dict[str, Any]:
+    findings = list(report.get("findings") or [])
+    return {
+        "kind": "aippocampus_closeout_audit_compact",
+        "schema_version": report.get("schema_version"),
+        "ok": report.get("ok"),
+        "status": "pass" if report.get("ok") else "fail",
+        "closing_issues": report.get("closing_issues") or [],
+        "blocker_count": len(findings),
+        "blockers": [
+            {
+                "kind": item.get("kind"),
+                "severity": item.get("severity"),
+                "message": item.get("message"),
+                "closing_issues": item.get("closing_issues"),
+            }
+            for item in findings
+        ],
+        "detail_command": detail_command,
+    }
+
+
+def _detail_command_from_args(args: argparse.Namespace) -> str | None:
+    parts = ["python", "tools/aippocampus/github/closeout_audit.py", "--json", "--detail", "full"]
+    if args.body_file:
+        parts.extend(["--body-file", str(args.body_file)])
+    elif args.body_env:
+        parts.extend(["--body-env", str(args.body_env)])
+    elif args.body is not None:
+        return None
+    if args.issue_metadata_file:
+        parts.extend(["--issue-metadata-file", str(args.issue_metadata_file)])
+    if args.github_repo:
+        parts.extend(["--github-repo", str(args.github_repo)])
+    return " ".join(parts)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--body-file", type=Path)
@@ -1359,6 +1396,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--closed-window-start")
     parser.add_argument("--closed-window-end")
     parser.add_argument("--json", action="store_true", dest="json_output")
+    parser.add_argument(
+        "--detail",
+        choices=("compact", "full"),
+        default="compact",
+        help="Compact is blocker-first; full includes evidence-shape and policy diagnostics.",
+    )
     parser.add_argument("--github-annotations", action="store_true")
     args = parser.parse_args(argv)
 
@@ -1375,7 +1418,14 @@ def main(argv: list[str] | None = None) -> int:
             issue_metadata=_issue_metadata_from_args(args, body),
         )
     if args.json_output or not args.github_annotations:
-        print(json.dumps(report, ensure_ascii=False, indent=2))
+        if args.closed_issues_file or args.detail == "full":
+            payload = report
+        else:
+            payload = compact_audit_report(
+                report,
+                detail_command=_detail_command_from_args(args),
+            )
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
     if args.github_annotations:
         for finding in report["findings"]:
             print(f"::error::{finding['message']}", file=sys.stderr)

@@ -766,7 +766,40 @@ class CloseoutAuditTests(unittest.TestCase):
 
         self.assertEqual(completed.returncode, 1)
         payload = json.loads(completed.stdout)
+        self.assertEqual(payload["kind"], "aippocampus_closeout_audit_compact")
         self.assertFalse(payload["ok"])
+        self.assertEqual(payload["status"], "fail")
+        self.assertGreater(payload["blocker_count"], 0)
+        self.assertNotIn("evidence_shape", payload)
+        self.assertNotIn("policy", payload)
+
+    def test_cli_full_detail_preserves_closeout_diagnostics(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            body = Path(tmp) / "body.md"
+            body.write_text(
+                "Closes #1193\n\nfailure report without follow-up\n",
+                encoding="utf-8",
+            )
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    str(MODULE_PATH),
+                    "--body-file",
+                    str(body),
+                    "--json",
+                    "--detail",
+                    "full",
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+
+        self.assertEqual(completed.returncode, 1)
+        payload = json.loads(completed.stdout)
+        self.assertEqual(payload["kind"], "aippocampus_closeout_audit")
+        self.assertIn("evidence_shape", payload)
+        self.assertIn("policy", payload)
 
     def test_closed_issue_traceability_flags_malformed_and_missing_evidence(self) -> None:
         report = closeout_audit.audit_closed_issue_traceability(

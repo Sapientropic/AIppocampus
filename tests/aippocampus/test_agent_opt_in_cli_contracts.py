@@ -95,7 +95,7 @@ class AgentOptInCliContractsTests(unittest.TestCase):
             hexagram="乾",
             changing_lines=(1, 2, 3),
             source_refs=({"source_id": f"macro-live-{active_layer}"},),
-            updated_at="2026-06-11T10:00:00Z",
+            updated_at=macro_state.utc_now_iso(),
             active_layer=active_layer,
             momentum=momentum,
         )
@@ -114,7 +114,7 @@ class AgentOptInCliContractsTests(unittest.TestCase):
             hexagram="乾",
             changing_lines=changing_lines,
             source_refs=({"source_id": f"default-macro-{active_layer}"},),
-            updated_at="2026-06-11T10:00:00Z",
+            updated_at=macro_state.utc_now_iso(),
             active_layer=active_layer,
             momentum={"basis": {"counter_evidence_delta": 0.2}},
         )

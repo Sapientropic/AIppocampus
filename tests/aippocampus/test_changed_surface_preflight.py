@@ -124,6 +124,33 @@ class ChangedSurfacePreflightTests(unittest.TestCase):
         self.assertEqual(report["status"], "pass")
         self.assertEqual(report["commands"][0]["stdout"], "full diagnostic payload")
 
+    def test_detail_commands_open_full_operator_views(self) -> None:
+        def fake_command(command: str) -> preflight.CommandResult:
+            return preflight.CommandResult(
+                command=command,
+                scope="unknown",
+                status="pass",
+                returncode=0,
+                elapsed_ms=1,
+                stdout="",
+                stderr="",
+            )
+
+        with (
+            mock.patch.object(preflight.test_plan, "_debt_report_is_red", return_value=False),
+            mock.patch.object(preflight, "run_shell_command", side_effect=fake_command),
+        ):
+            report = preflight.run_preflight(
+                changed_files=["tools/aippocampus/changed_surface_preflight.py"],
+                base="origin/main",
+                local_executable=True,
+            )
+
+        self.assertIn("--detail full", report["detail_command"])
+        self.assertIn("--local-executable", report["detail_command"])
+        self.assertIn("--detail full", report["planner_detail_command"])
+        self.assertIn("--local-executable", report["planner_detail_command"])
+
 
 if __name__ == "__main__":
     unittest.main()

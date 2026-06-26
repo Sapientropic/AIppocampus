@@ -169,8 +169,16 @@ def run_preflight(
             {"command": item["command"], "scope": item["scope"]}
             for item in skipped[:5]
         ],
-        "detail_command": _detail_command(normalized_changed, base=base),
-        "planner_detail_command": _planner_detail_command(normalized_changed, base=base),
+        "detail_command": _detail_command(
+            normalized_changed,
+            base=base,
+            local_executable=local_executable,
+        ),
+        "planner_detail_command": _planner_detail_command(
+            normalized_changed,
+            base=base,
+            local_executable=local_executable,
+        ),
         "plan_categories": plan.get("categories") or [],
     }
 
@@ -182,8 +190,15 @@ def _changed_file_args(changed_files: Sequence[str]) -> list[str]:
     return args
 
 
-def _detail_command(changed_files: Sequence[str], *, base: str) -> str:
+def _detail_command(
+    changed_files: Sequence[str],
+    *,
+    base: str,
+    local_executable: bool,
+) -> str:
     parts = ["python", "tools/aippocampus/changed_surface_preflight.py", "--json", "--detail", "full"]
+    if local_executable:
+        parts.append("--local-executable")
     if changed_files:
         parts.extend(_changed_file_args(changed_files))
     else:
@@ -191,8 +206,15 @@ def _detail_command(changed_files: Sequence[str], *, base: str) -> str:
     return " ".join(parts)
 
 
-def _planner_detail_command(changed_files: Sequence[str], *, base: str) -> str:
-    parts = ["python", "tools/aippocampus/test_plan.py", "--json"]
+def _planner_detail_command(
+    changed_files: Sequence[str],
+    *,
+    base: str,
+    local_executable: bool,
+) -> str:
+    parts = ["python", "tools/aippocampus/test_plan.py", "--json", "--detail", "full"]
+    if local_executable:
+        parts.append("--local-executable")
     if changed_files:
         parts.extend(_changed_file_args(changed_files))
     else:
