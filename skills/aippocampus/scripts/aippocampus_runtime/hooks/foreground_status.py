@@ -235,16 +235,19 @@ def prompt_status_contract(
         )
     last_repair = str((last_summary or {}).get("next_repair") or "")
     latency_status = str((latency_risk or {}).get("status") or "")
+    latency_current_status = str((latency_risk or {}).get("current_status") or latency_status)
+    latency_freshness_status = str((latency_risk or {}).get("freshness_status") or "")
+    latency_historical_status = str((latency_risk or {}).get("historical_status") or "")
     latency_repair = str((latency_risk or {}).get("repair_action") or "")
     latency_repair_action = None
-    if status == "installed" and latency_status == "near_host_timeout_risk":
+    if status == "installed" and latency_current_status == "near_host_timeout_risk":
         primary = _status_action(
             action_id="inspect_prompt_hook_output",
             label="Inspect prompt hook output",
             command="aippocampus hooks prompt status --last --json",
         )
         primary["why"] = (
-            "Recent prompt-hook runs are near the host timeout; keep the foreground "
+            "Fresh prompt-hook telemetry is near the host timeout; keep the foreground "
             "step read-only and refresh only if the user chooses repair."
         )
         latency_repair_action = _write_action(
@@ -252,7 +255,7 @@ def prompt_status_contract(
             label="Refresh prompt hook safe budget",
             command=latency_repair or "aippocampus hooks prompt install --json",
             why=(
-                "Aggregate prompt-hook telemetry shows near-host-timeout runs; "
+                "Fresh prompt-hook telemetry shows near-host-timeout runs; "
                 "reinstall with the safer foreground budget only as an explicit repair."
             ),
         )
@@ -328,12 +331,22 @@ def prompt_status_contract(
         extra={
             "command_count": int(command_count),
             "provider_key_bridge_installed": bool(provider_key_bridge_installed),
-            "prompt_hook_latency_risk_status": latency_status,
+            "prompt_hook_latency_risk_status": latency_current_status,
+            "prompt_hook_latency_current_status": latency_current_status,
+            "prompt_hook_latency_freshness_status": latency_freshness_status,
+            "prompt_hook_latency_historical_status": latency_historical_status,
             "foreground_latency_red_line_violation_count": int(
                 (latency_risk or {}).get("foreground_latency_red_line_violation_count") or 0
             ),
             "prompt_hook_near_timeout_event_count": int(
                 (latency_risk or {}).get("near_timeout_event_count") or 0
+            ),
+            "historical_foreground_latency_red_line_violation_count": int(
+                (latency_risk or {}).get("historical_foreground_latency_red_line_violation_count")
+                or 0
+            ),
+            "historical_prompt_hook_near_timeout_event_count": int(
+                (latency_risk or {}).get("historical_near_timeout_event_count") or 0
             ),
             "last_prompt_hook_status": str(last_prompt_hook.get("status") or "")
             if isinstance(last_prompt_hook, Mapping)

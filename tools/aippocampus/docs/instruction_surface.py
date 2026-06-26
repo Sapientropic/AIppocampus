@@ -687,6 +687,22 @@ INSTRUCTION_SURFACE_CLASSIFIED_FILES = {
         "owner": "#2667/#2651",
         "why": "owns question source-ref reopen contracts instead of title-search fallbacks.",
     },
+    "tests/aippocampus/test_prompt_hook_latency_status.py": {
+        "classification": "prompt_hook_latency_status_test_contract_owner",
+        "owner": "#2732/#2632/#2651",
+        "why": (
+            "owns prompt-hook current-vs-historical latency status fixtures; "
+            "strings are operator/status contracts, not foreground policy payloads"
+        ),
+    },
+    "tests/aippocampus/test_search_clean_source.py": {
+        "classification": "clean_source_search_test_contract_owner",
+        "owner": "#2720/#2632/#2651",
+        "why": (
+            "owns clean-source search/source-open follow-through fixtures; "
+            "source-like strings are test evidence, not hidden agent instructions"
+        ),
+    },
     "tests/aippocampus/test_task_orientation_packet.py": {
         "classification": "task_orientation_test_contract_owner",
         "owner": "#2670/#2651",

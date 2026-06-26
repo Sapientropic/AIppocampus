@@ -171,7 +171,11 @@ def _ambient_hook_readiness() -> dict[str, Any]:
     warm_activity = dict_or_empty(warm.get("job_activity"))
     red_lines = _as_int(prompt.get("foreground_latency_red_line_violation_count"))
     near_timeout = _as_int(prompt.get("near_timeout_event_count"))
-    prompt_latency_status = str(prompt.get("prompt_hook_latency_risk_status") or "")
+    prompt_latency_status = str(
+        prompt.get("prompt_hook_latency_current_status")
+        or prompt.get("prompt_hook_latency_risk_status")
+        or ""
+    )
     warm_status = str(warm.get("status") or "")
     warm_queue_state = str(warm_activity.get("queue_state") or "")
     degraded = (
@@ -188,6 +192,12 @@ def _ambient_hook_readiness() -> dict[str, Any]:
         "prompt_hook": {
             "installed": bool(prompt.get("installed")),
             "latency_risk_status": prompt_latency_status or "unknown",
+            "latency_freshness_status": str(
+                prompt.get("prompt_hook_latency_freshness_status") or "unknown"
+            ),
+            "latency_historical_status": str(
+                prompt.get("prompt_hook_latency_historical_status") or "unknown"
+            ),
             "foreground_latency_red_line_violation_count": red_lines,
             "near_timeout_event_count": near_timeout,
         },

@@ -18,7 +18,35 @@ def registry_search_actions(
     first_match: Mapping[str, Any] | None,
     useful_target_hit: bool = True,
     first_match_usefulness_status: str = "",
+    low_coverage_only_matches: bool = False,
 ) -> list[dict[str, Any]]:
+    if low_coverage_only_matches:
+        return [
+            foreground_shell_action(
+                action_id="broaden_registry_search_for_query_anchors",
+                label="Broaden registry search",
+                command=(
+                    f"aippocampus search --all {shell_quote(query)} "
+                    "--search-budget deep --json"
+                ),
+                why=(
+                    "Registry search found nearby snippets, but none carried the "
+                    "distinctive query anchors together; search deeper or refine the phrase "
+                    "before opening a source."
+                ),
+                mutation_risk="read_only",
+                claim_boundary="search_matches_not_target_evidence",
+            ),
+            foreground_template_action(
+                action_id="refine_registry_exact_search",
+                label="Refine registry exact search",
+                command_template='aippocampus search --all "{distinctive_phrase}" --json',
+                requires=["distinctive_phrase"],
+                why="Use a more distinctive phrase before treating nearby registry hits as source evidence.",
+                mutation_risk="read_only",
+                claim_boundary="no_claim_before_reopen",
+            ),
+        ]
     if has_matches and first_match:
         if match_is_demoted_artifact(first_match):
             return [
@@ -68,6 +96,34 @@ def registry_search_actions(
                         why="Use this if the expected old source may not be registered locally.",
                         mutation_risk="read_only",
                         claim_boundary="host_status_not_source_evidence",
+                    ),
+                ]
+            if first_match_usefulness_status == "source_route_not_reopenable":
+                return [
+                    foreground_shell_action(
+                        action_id="broaden_registry_search_for_reopenable_source",
+                        label="Broaden registry search",
+                        command=(
+                            f"aippocampus search --all {shell_quote(query)} "
+                            "--search-budget deep --json"
+                        ),
+                        why=(
+                            "The first registry hit lacks a stable clean-source reopen key; "
+                            "search deeper before treating it as source evidence."
+                        ),
+                        mutation_risk="read_only",
+                        claim_boundary="search_hit_not_reopenable_source",
+                    ),
+                    foreground_template_action(
+                        action_id="refine_registry_exact_search",
+                        label="Refine registry exact search",
+                        command_template='aippocampus search --all "{distinctive_phrase}" --json',
+                        requires=["distinctive_phrase"],
+                        why=(
+                            "Use a phrase that can reopen a clean-source window, not only an index hit."
+                        ),
+                        mutation_risk="read_only",
+                        claim_boundary="no_claim_before_reopen",
                     ),
                 ]
             return [

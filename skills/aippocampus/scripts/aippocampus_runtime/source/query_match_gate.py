@@ -109,12 +109,16 @@ def match_query_profile(
     if exact_identifier_query and not identifier_match:
         accepted = False
         suppression_reason = "exact_source_identifier_not_found_in_match"
-    if gate.get("phrase_like_query") and not exact_phrase_match:
-        min_matched = int(gate.get("minimum_matched_anchors") or 0)
-        min_coverage = float(gate.get("minimum_anchor_coverage") or 0)
+    min_matched = int(gate.get("minimum_matched_anchors") or 0)
+    min_coverage = float(gate.get("minimum_anchor_coverage") or 0)
+    if anchor_count and not exact_phrase_match:
         if len(matched) < min_matched or coverage < min_coverage:
             accepted = False
-            suppression_reason = "distinctive_anchor_coverage_too_low_for_phrase_like_query"
+            suppression_reason = (
+                "distinctive_anchor_coverage_too_low_for_phrase_like_query"
+                if gate.get("phrase_like_query")
+                else "distinctive_anchor_coverage_too_low_for_query"
+            )
     return {
         "phrase_like_query": bool(gate.get("phrase_like_query")),
         "exact_identifier_query": exact_identifier_query,
@@ -124,6 +128,8 @@ def match_query_profile(
         "distinctive_anchor_count": anchor_count,
         "matched_distinctive_anchor_count": len(matched),
         "distinctive_anchor_coverage": coverage,
+        "minimum_matched_anchors": min_matched,
+        "minimum_anchor_coverage": min_coverage,
         "matched_distinctive_anchors": matched[:8],
         "accepted": accepted,
         "suppression_reason": suppression_reason,

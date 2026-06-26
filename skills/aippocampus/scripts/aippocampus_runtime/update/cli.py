@@ -702,11 +702,27 @@ def status_hooks(codex_home_path: Path, hooks_json: Path | None = None) -> dict[
             "prompt_hook_latency_risk_status": prompt_hook_status.get(
                 "prompt_hook_latency_risk_status"
             ),
+            "prompt_hook_latency_current_status": prompt_hook_status.get(
+                "prompt_hook_latency_current_status"
+            ),
+            "prompt_hook_latency_freshness_status": prompt_hook_status.get(
+                "prompt_hook_latency_freshness_status"
+            ),
+            "prompt_hook_latency_historical_status": prompt_hook_status.get(
+                "prompt_hook_latency_historical_status"
+            ),
             "foreground_latency_red_line_violation_count": int(
                 prompt_hook_status.get("foreground_latency_red_line_violation_count") or 0
             ),
             "near_timeout_event_count": int(
                 prompt_hook_status.get("prompt_hook_near_timeout_event_count") or 0
+            ),
+            "historical_foreground_latency_red_line_violation_count": int(
+                prompt_hook_status.get("historical_foreground_latency_red_line_violation_count")
+                or 0
+            ),
+            "historical_near_timeout_event_count": int(
+                prompt_hook_status.get("historical_prompt_hook_near_timeout_event_count") or 0
             ),
             "diagnostic_command": "aippocampus hooks prompt status --last --json",
         },
