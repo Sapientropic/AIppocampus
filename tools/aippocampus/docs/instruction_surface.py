@@ -35,6 +35,22 @@ INSTRUCTION_SURFACE_CLASSIFIED_FILES = {
             "detail/operator/tests, not default MCP payload expansion"
         ),
     },
+    "skills/aippocampus/scripts/aippocampus_runtime/mcp/agent_recall_result_assembly.py": {
+        "classification": "compact_projection_result_owner",
+        "owner": "#2679/#2636/#2651",
+        "why": (
+            "owns final compact recall payload assembly and debug-field stripping; "
+            "route proof remains in deepen/open follow-through and detail output"
+        ),
+    },
+    "skills/aippocampus/scripts/aippocampus_runtime/mcp/agent_recall_route_projection.py": {
+        "classification": "compact_route_receipt_owner",
+        "owner": "#2679/#2636/#2651",
+        "why": (
+            "owns compact route receipt labels and low-confidence navigation; "
+            "source proof and ranking diagnostics stay out of default MCP output"
+        ),
+    },
     "skills/aippocampus/scripts/aippocampus_runtime/mcp/agent_deepen_projection.py": {
         "classification": "mcp_deepen_projection_owner",
         "owner": "#2679/#2686/#2651",
