@@ -201,7 +201,7 @@ The CLI contract applies to documented operator commands, especially:
 - `aippocampus health` human output as a bounded repair card. It may show the
   highest-priority copy-pasteable `Next:` commands from structured
   `recommended_actions`; automation should still use `--json`.
-- `aippocampus storage gc --apply --class rebuildable` as the explicit
+- `aippocampus storage gc --apply --class rebuildable --include-active` as the explicit
   path-level rebuildable-cache eviction path for retention-report-backed main
   SQLite caches and capacity-report-backed old source-index / segment
   generation directories whose reader-pin/TTL, current/LKG pointer, source,

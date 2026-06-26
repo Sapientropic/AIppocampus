@@ -14,14 +14,27 @@ import os
 import time
 from collections.abc import Iterable, Iterator, Mapping
 from contextlib import contextmanager
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.io_tmp_recovery import (
+    cleanup_stale_tmp_artifacts as cleanup_stale_tmp_artifacts,
+)
+from aippocampus_runtime.io_tmp_recovery import (
+    stale_tmp_artifacts as stale_tmp_artifacts,
+)
+from aippocampus_runtime.io_tmp_recovery import (
+    stale_tmp_recovery_card as stale_tmp_recovery_card,
+)
+from aippocampus_runtime.io_tmp_recovery import (
+    tmp_artifact_pattern as tmp_artifact_pattern,
+)
+from aippocampus_runtime.io_tmp_recovery import (
+    tmp_artifact_summary as tmp_artifact_summary,
+)
 from aippocampus_runtime.safety import sanitize_external_model_payload
 
 TMP_SUFFIX = ".tmp"
-PLUGIN_INSTALL_TMP_SUFFIX = ".tmp-aippocampus-install"
 
 
 def public_safe_payload(value: Any, *, project_root: str | Path | None = None) -> Any:
@@ -121,64 +134,3 @@ def atomic_write_jsonl(
         for row in materialized
     )
     _atomic_replace_bytes(path, body.encode("utf-8"))
-
-
-def stale_tmp_recovery_card(root: Path, *, max_age_seconds: float = 300.0) -> dict[str, Any]:
-    """Inspect AIppocampus temporary artifacts under one root.
-
-    The card is safe for foreground startup/readiness paths: it reports counts
-    and one recovery command, not private paths. Callers that own a specific
-    operator view may expose exact paths behind an explicit detail mode.
-    """
-
-    now = time.time()
-    stale_tmp = 0
-    plugin_orphans = 0
-    if root.exists():
-        for item in root.rglob("*"):
-            name = item.name
-            if not (
-                name.endswith(TMP_SUFFIX)
-                or name.endswith(PLUGIN_INSTALL_TMP_SUFFIX)
-                or ".aippocampus-" in name
-            ):
-                continue
-            try:
-                age = now - item.stat().st_mtime
-            except OSError:
-                continue
-            if age < max_age_seconds:
-                continue
-            if item.is_dir() and name.endswith(PLUGIN_INSTALL_TMP_SUFFIX):
-                plugin_orphans += 1
-            elif item.is_file() and name.endswith(TMP_SUFFIX):
-                stale_tmp += 1
-    found = stale_tmp + plugin_orphans
-    return {
-        "kind": "aippocampus_interrupted_write_recovery",
-        "ok": found == 0,
-        "status": "ok" if found == 0 else "interrupted_write_artifacts_found",
-        "checked_at": datetime.now(timezone.utc)
-        .replace(microsecond=0)
-        .isoformat()
-        .replace("+00:00", "Z"),
-        "stale_tmp_file_count": stale_tmp,
-        "orphaned_plugin_install_dir_count": plugin_orphans,
-        "foreground_action": (
-            {
-                "id": "review_interrupted_writes",
-                "command": "aippocampus maintenance status --json",
-                "mutation_risk": "read_only",
-                "claim_boundary": "local_recovery_diagnostic_not_source_truth",
-                "why": "Interrupted write artifacts were detected; review maintenance before relying on generated recall state.",
-            }
-            if found
-            else {
-                "id": "no_interrupted_write_artifacts",
-                "kind": "no_op",
-                "mutation_risk": "none",
-                "claim_boundary": "local_recovery_diagnostic_not_source_truth",
-                "why": "No stale AIppocampus tmp or orphaned plugin install artifacts were detected.",
-            }
-        ),
-    }

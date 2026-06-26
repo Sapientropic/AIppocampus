@@ -382,7 +382,7 @@ def registry_cache_pressure_report(cwd: Path, registry_dir: Path) -> dict[str, A
         },
         "dry_run_command": "aippocampus storage gc --dry-run --json --top 1 --cwd .",
         "summary_command": "aippocampus storage gc --dry-run --summary-json --cwd .",
-        "repair_command": "aippocampus storage gc --apply --class rebuildable --summary-json --cwd .",
+        "repair_command": "aippocampus storage gc --apply --class rebuildable --include-active --summary-json --cwd .",
         "source_history_protected": True,
         "foreground_blocking": False,
         "privacy_boundary": {

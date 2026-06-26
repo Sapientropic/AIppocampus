@@ -392,17 +392,10 @@ class StorageGovernanceTests(unittest.TestCase):
         self.assertNotIn("command", payload["safe_next_action"])
         self.assertEqual(payload["pressure_interpretation"], "pressure_present")
 
-    def test_summary_json_without_existing_reports_defers_full_scan_instead_of_building_capacity(
+    def test_summary_json_without_existing_reports_computes_bounded_capacity_pressure(
         self,
     ) -> None:
-        with (
-            patch.object(
-                storage_governance.storage_capacity_report,
-                "build_report",
-                side_effect=AssertionError("summary card should not build capacity report"),
-            ),
-            patch("sys.stdout", new=StringIO()) as stdout,
-        ):
+        with patch("sys.stdout", new=StringIO()) as stdout:
             code = storage_governance.main(
                 [
                     "gc",
@@ -419,11 +412,12 @@ class StorageGovernanceTests(unittest.TestCase):
 
         self.assertEqual(code, 0)
         self.assertEqual(payload["kind"], "aippocampus_storage_gc_summary")
-        self.assertEqual(payload["status"], "needs_full_scan")
+        self.assertEqual(payload["status"], "dry_run_ready")
         self.assertTrue(payload["read_only"])
-        self.assertTrue(payload["needs_full_scan"])
         self.assertTrue(payload["candidate_detail_deferred"])
-        self.assertEqual(payload["metrics_status"], "not_computed_in_summary_mode")
+        self.assertEqual(payload["metrics_status"], "computed")
+        self.assertEqual(payload["pressure_interpretation"], "pressure_present")
+        self.assertGreater(payload["metrics"]["reclaimable_rebuildable_bytes"], 0)
         self.assertEqual(payload["foreground_action_contract"], "foreground-action-v2")
         self.assertEqual(payload["foreground_action"]["id"], "stop_without_cleanup")
         self.assertEqual(payload["safe_next_actions"][0]["id"], "bounded_storage_audit")
@@ -443,14 +437,7 @@ class StorageGovernanceTests(unittest.TestCase):
         )
 
     def test_default_json_without_existing_reports_is_bounded_foreground_card(self) -> None:
-        with (
-            patch.object(
-                storage_governance.storage_capacity_report,
-                "build_report",
-                side_effect=AssertionError("default foreground json should not run a full capacity scan"),
-            ),
-            patch("sys.stdout", new=StringIO()) as stdout,
-        ):
+        with patch("sys.stdout", new=StringIO()) as stdout:
             code = storage_governance.main(
                 [
                     "gc",
@@ -466,9 +453,12 @@ class StorageGovernanceTests(unittest.TestCase):
         payload = json.loads(stdout.getvalue())
 
         self.assertEqual(code, 0)
-        self.assertEqual(payload["kind"], "aippocampus_storage_gc_summary")
-        self.assertEqual(payload["status"], "needs_full_scan")
-        self.assertTrue(payload["foreground_action"]["continue_without_command"])
+        self.assertEqual(payload["status"], "dry_run_ready")
+        self.assertEqual(payload["surface_class"], "foreground_storage_gc_plan")
+        self.assertEqual(payload["candidate_count_total"], 1)
+        self.assertEqual(payload["candidates_returned"], 1)
+        self.assertEqual(payload["full_audit_flag"], "--full")
+        self.assertFalse(payload["privacy"]["raw_session_like_ids_emitted"])
         self.assertEqual(payload["safe_next_actions"][0]["id"], "bounded_storage_audit")
         self.assertNotEqual(
             payload["foreground_action"].get("command"),
@@ -517,6 +507,90 @@ class StorageGovernanceTests(unittest.TestCase):
         self.assertTrue(
             all(" --apply " not in action["command"] for action in plan["safe_next_actions"])
         )
+
+    def test_summary_top_budget_does_not_hide_old_generation_cleanup_candidates(self) -> None:
+        # Make session-one dominate the presentation sample while a smaller
+        # session-two owns the actual old-generation cleanup candidate.
+        (self.index / "large-sidecar.bin").write_bytes(b"x" * 1024)
+        second_thread = self.registry / "threads" / "session-two"
+        second_clean = second_thread / "clean-source"
+        second_index = second_thread / "index"
+        second_clean.mkdir(parents=True)
+        second_index.mkdir(parents=True)
+        (second_clean / "manifest.json").write_text(
+            json.dumps({"kind": "aippocampus_clean_source"}),
+            encoding="utf-8",
+        )
+        (second_clean / "messages.jsonl").write_text("{}\n", encoding="utf-8")
+        (second_clean / "turns.jsonl").write_text("{}\n", encoding="utf-8")
+        current = second_index / "generations" / "gen_20260605T010000_current"
+        old = second_index / "generations" / "gen_20260605T004500_old"
+        current.mkdir(parents=True)
+        old.mkdir(parents=True)
+        (current / "source_index.sqlite").write_bytes(b"c" * 11)
+        (old / "source_index.sqlite").write_bytes(b"o" * 13)
+        for path in [old, *old.rglob("*")]:
+            self._mark_path_old(path)
+        pointer_path = second_index / "source_index.pointer.json"
+        pointer_path.write_text(
+            json.dumps(
+                {
+                    "kind": "aippocampus_sqlite_index_pointer",
+                    "current_generation": current.name,
+                    "last_known_good_generation": current.name,
+                    "current": f"generations/{current.name}/source_index.sqlite",
+                    "last_known_good": f"generations/{current.name}/source_index.sqlite",
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        self._mark_path_old(pointer_path)
+        registry = json.loads((self.registry / "threads.json").read_text(encoding="utf-8"))
+        registry["threads"].append(
+            {
+                "thread_key": "session:two",
+                "paths": {
+                    "rollout": str(self.raw_rollout),
+                    "registry_thread_store": "threads/session-two",
+                },
+            }
+        )
+        (self.registry / "threads.json").write_text(json.dumps(registry), encoding="utf-8")
+
+        with patch("sys.stdout", new=StringIO()) as stdout:
+            code = storage_governance.main(
+                [
+                    "gc",
+                    "--dry-run",
+                    "--cwd",
+                    str(self.root),
+                    "--registry-dir",
+                    str(self.registry),
+                    "--top",
+                    "1",
+                    "--summary-json",
+                ]
+            )
+
+        payload = json.loads(stdout.getvalue())
+
+        self.assertEqual(code, 0)
+        self.assertGreaterEqual(payload["candidate_count_total"], 2)
+        self.assertGreaterEqual(
+            payload["metrics"]["reclaimable_rebuildable_bytes"],
+            13,
+        )
+        self.assertIn(
+            "apply_rebuildable_after_audit",
+            [item["id"] for item in payload["safe_next_actions"]],
+        )
+        apply_action = next(
+            item
+            for item in payload["safe_next_actions"]
+            if item["id"] == "apply_rebuildable_after_audit"
+        )
+        self.assertIn("--include-active", apply_action["command"])
 
     def test_capacity_fallback_cli_redacts_session_like_ids_by_default(self) -> None:
         with patch("sys.stdout", new=StringIO()) as stdout:

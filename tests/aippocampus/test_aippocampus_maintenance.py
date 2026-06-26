@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import os
 import tempfile
+import time
 import unittest
 from io import StringIO
 from pathlib import Path
@@ -745,6 +747,158 @@ class AippocampusMaintenanceTests(unittest.TestCase):
             "aippocampus storage gc --dry-run --json --top 1 --cwd .",
         )
         self.assertNotIn("operator_detail", payload)
+
+    def test_status_surfaces_interrupted_write_recovery_without_cleanup(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            registry = root / "registry"
+            registry.mkdir()
+            (registry / "threads.json").write_text('{"threads":[]}', encoding="utf-8")
+            stale = registry / ".threads.json.tmp-20260625"
+            stale.write_text("stale", encoding="utf-8")
+            old = time.time() - 600
+            os.utime(stale, (old, old))
+
+            def fake_probe(cwd: Path) -> tuple[int, dict | None, str]:
+                return (
+                    0,
+                    {
+                        "ok": True,
+                        "storage": {"active_registry": str(registry / "threads.json")},
+                        "product_readiness": {
+                            "ready": True,
+                            "ordinary_first_recall_usable": True,
+                            "maintenance_recommended": False,
+                            "maintenance_required_before_recall": False,
+                        },
+                        "recommended_actions": [],
+                    },
+                    "",
+                )
+
+            with (
+                mock.patch.object(maintenance, "read_only_health_probe", side_effect=fake_probe),
+                mock.patch.object(
+                    maintenance,
+                    "run_json_checked",
+                    side_effect=AssertionError("read-only status must not run full health"),
+                ),
+                mock.patch("sys.stdout", new=StringIO()) as stdout,
+            ):
+                code = maintenance.main(["status", "--cwd", str(root), "--json"])
+
+            payload = json.loads(stdout.getvalue())
+
+            self.assertEqual(code, 0)
+            self.assertTrue(stale.exists())
+        recovery = payload["interrupted_write_recovery"]
+        self.assertEqual(recovery["status"], "interrupted_write_artifacts_found")
+        self.assertEqual(recovery["stale_tmp_by_pattern"]["legacy_threads_json_tmp_dash"]["count"], 1)
+        self.assertIn("cleanup_interrupted_writes", payload["recommended_action_ids"])
+        cleanup_action = next(
+            item
+            for item in payload["remaining_recommended_actions"]
+            if item["id"] == "cleanup_interrupted_writes"
+        )
+        self.assertEqual(
+            cleanup_action["command"],
+            "aippocampus maintenance apply --cleanup-interrupted-writes --summary-json",
+        )
+        self.assertEqual(
+            cleanup_action["mutation_risk"],
+            "explicit_local_delete_of_ai_owned_tmp_artifacts",
+        )
+
+    def test_apply_cleanup_interrupted_writes_deletes_only_ai_owned_tmp(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            registry = root / "registry"
+            registry.mkdir()
+            (registry / "threads.json").write_text('{"threads":[]}', encoding="utf-8")
+            stale = registry / ".threads.json.tmp-20260625"
+            stale.write_text("stale", encoding="utf-8")
+            ignored = registry / "user-owned.tmp"
+            ignored.write_text("keep", encoding="utf-8")
+            old = time.time() - 600
+            for path in [stale, ignored]:
+                os.utime(path, (old, old))
+
+            health_payloads = [
+                {
+                    "ok": True,
+                    "storage": {"active_registry": "<local-path-redacted>"},
+                    "product_readiness": {
+                        "ready": True,
+                        "ordinary_first_recall_usable": True,
+                        "maintenance_recommended": False,
+                        "maintenance_required_before_recall": False,
+                    },
+                    "recommended_actions": [],
+                },
+                {
+                    "ok": False,
+                    "storage": {"active_registry": "<local-path-redacted>"},
+                    "product_readiness": {
+                        "ready": False,
+                        "ordinary_first_recall_usable": True,
+                        "maintenance_recommended": True,
+                        "maintenance_required_before_recall": False,
+                    },
+                    "recommended_actions": [
+                        {
+                            "id": "build_index",
+                            "severity": "warning",
+                            "reason": "index stale after cleanup",
+                        }
+                    ],
+                },
+            ]
+
+            def fake_json(cmd: list[str]) -> tuple[int, dict | None, str, str]:
+                return (
+                    0,
+                    health_payloads.pop(0),
+                    "{}",
+                    "",
+                )
+
+            with (
+                mock.patch.object(maintenance, "run_json_checked", side_effect=fake_json),
+                mock.patch.object(
+                    maintenance,
+                    "run_text_checked",
+                    side_effect=AssertionError(
+                        "targeted interrupted-write cleanup must not run index catchup"
+                    ),
+                ),
+                mock.patch.object(
+                    maintenance,
+                    "_registry_root_from_runtime_health",
+                    return_value=registry,
+                ),
+                mock.patch("sys.stdout", new=StringIO()) as stdout,
+            ):
+                code = maintenance.main(
+                    [
+                        "apply",
+                        "--cwd",
+                        str(root),
+                        "--cleanup-interrupted-writes",
+                        "--no-refresh-cognitive-map",
+                        "--no-refresh-graphify",
+                        "--summary-json",
+                    ]
+                )
+
+            payload = json.loads(stdout.getvalue())
+
+            self.assertEqual(code, 0)
+            self.assertFalse(stale.exists())
+            self.assertTrue(ignored.exists())
+        self.assertIn("cleanup_interrupted_writes", payload["action_ids"])
+        self.assertNotIn("build_index_final_catchup", payload["action_ids"])
+        self.assertEqual(payload["interrupted_write_recovery"]["status"], "ok")
+        self.assertEqual(payload["interrupted_write_recovery"]["safe_next_actions"], [])
 
     def test_default_help_hides_activation_compaction_flags(self) -> None:
         with (
