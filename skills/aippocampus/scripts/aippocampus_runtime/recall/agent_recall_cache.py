@@ -21,6 +21,13 @@ from typing import Any
 from aippocampus_runtime import core
 from aippocampus_runtime.io_integrity import atomic_write_json
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
+from aippocampus_runtime.recall.cache_read_diagnostics import (
+    CacheReadDiagnostic,
+    CacheReadResult,
+    CacheReadStatus,
+    cache_read_result,
+    read_json_cache,
+)
 from aippocampus_runtime.recall.local_reopen_token import (
     LOCAL_REOPEN_TOKEN_ENCODING,
     decode_local_reopen_context,
@@ -35,6 +42,23 @@ SENSITIVE_ASSIGNMENT_RE = re.compile(
     r"\b[A-Za-z0-9_]*(?:TOKEN|SECRET|PASSWORD|API_KEY|ACCESS_KEY)[A-Za-z0-9_]*=\S+",
     re.I,
 )
+LAST_RECALL_CACHE_NAME = "agent_last_recall_cache"
+LAST_RECALL_CACHE_PATH_LABEL = "registry/agent/last-recall.json"
+
+
+class LastRecallCacheError(ValueError):
+    """Raised when local last-recall navigation state cannot be trusted."""
+
+    def __init__(self, diagnostic: CacheReadDiagnostic):
+        self.diagnostic = diagnostic
+        super().__init__(diagnostic.message)
+
+
+def last_recall_cache_diagnostic_from_exception(exc: Exception) -> dict[str, Any] | None:
+    diagnostic = exc.diagnostic if isinstance(exc, LastRecallCacheError) else None
+    if diagnostic is None:
+        return None
+    return diagnostic.public_detail(include_missing=True)
 
 
 def last_recall_cache_path(explicit: str | Path | None = None) -> Path:
@@ -138,10 +162,10 @@ def write_recall_selector_snapshot(path: str | Path | None = None) -> str | None
     stable local id without exposing the private reopen token or a machine path.
     """
 
-    try:
-        cache = read_last_recall_cache(path)
-    except Exception:
+    result = read_last_recall_cache_result(path)
+    if not result.ok:
         return None
+    cache = result.data
     requests = [item for item in cache.get("requests") or [] if isinstance(item, Mapping)]
     if not requests:
         return None
@@ -277,10 +301,10 @@ def _opened_routes_by_key(cache: Mapping[str, Any]) -> dict[str, dict[str, Any]]
 
 
 def opened_route_keys_from_last_recall_cache(path: str | Path | None = None) -> set[str]:
-    try:
-        cache = read_last_recall_cache(path)
-    except Exception:
+    result = read_last_recall_cache_result(path)
+    if not result.ok:
         return set()
+    cache = result.data
     keys = set(_opened_routes_by_key(cache))
     for item in cache.get("opened_routes") or []:
         if isinstance(item, Mapping):
@@ -305,9 +329,12 @@ def write_last_recall_cache(
 ) -> bool:
     requests: list[dict[str, Any]] = []
     target = last_recall_cache_path(path)
-    try:
-        previous_cache = read_last_recall_cache(path) if target.exists() else {}
-    except Exception:
+    previous_diagnostic: dict[str, Any] | None = None
+    if target.exists():
+        previous_result = read_last_recall_cache_result(path)
+        previous_cache = previous_result.data if previous_result.ok else {}
+        previous_diagnostic = previous_result.diagnostic.public_detail()
+    else:
         previous_cache = {}
     previous_opened = _opened_routes_by_key(previous_cache)
     for request in deepen_requests:
@@ -380,6 +407,8 @@ def write_last_recall_cache(
             "local_reopen_token_encoding_is_encryption": False,
         },
     }
+    if previous_diagnostic:
+        cache["previous_cache_read_diagnostic"] = previous_diagnostic
     try:
         # Local-only reopen handles are not credentials, but they are still
         # intentionally private navigation tokens. The cache stores an encoded
@@ -435,13 +464,49 @@ def mark_last_recall_request_opened(
     return True
 
 
-def read_last_recall_cache(path: str | Path | None = None) -> dict[str, Any]:
+def _last_recall_default_cache() -> dict[str, Any]:
+    return {}
+
+
+def _last_recall_cache_path_label(path: str | Path | None) -> str:
+    if path is None:
+        return LAST_RECALL_CACHE_PATH_LABEL
+    return "explicit-or-selector-last-recall-cache"
+
+
+def _last_recall_cache_result(
+    *,
+    data: dict[str, Any],
+    path: str | Path | None,
+    status: CacheReadStatus,
+    reason_code: str,
+    message: str,
+    warning_count: int = 1,
+) -> CacheReadResult:
+    return cache_read_result(
+        data=data,
+        cache_name=LAST_RECALL_CACHE_NAME,
+        status=status,
+        reason_code=reason_code,
+        message=message,
+        path_label=_last_recall_cache_path_label(path),
+        warning_count=warning_count,
+    )
+
+
+def read_last_recall_cache_result(path: str | Path | None = None) -> CacheReadResult:
     target = last_recall_cache_path(path)
-    data = json.loads(target.read_text(encoding="utf-8"))
-    if not isinstance(data, dict):
-        raise ValueError("last recall cache has an unsupported shape")
+    result = read_json_cache(
+        target,
+        cache_name=LAST_RECALL_CACHE_NAME,
+        default_factory=_last_recall_default_cache,
+        path_label=_last_recall_cache_path_label(path),
+    )
+    if not result.ok:
+        return result
+    data = result.data
     if data.get("kind") == "aippocampus_agent_last_recall":
-        return data
+        return result
     if (
         path is not None
         and data.get("kind") == "aippocampus_agent_continuity_path"
@@ -449,14 +514,37 @@ def read_last_recall_cache(path: str | Path | None = None) -> dict[str, Any]:
     ):
         default_target = last_recall_cache_path(None)
         if target != default_target and default_target.exists():
-            fallback = read_last_recall_cache(None)
+            fallback_result = read_last_recall_cache_result(None)
+            if not fallback_result.ok:
+                return fallback_result
+            fallback = fallback_result.data
             fallback["public_projection_request_path"] = True
             fallback["public_projection_route_ids"] = _public_projection_route_ids(data)
-            return fallback
-        raise ValueError(
-            "public compact recall projection needs the same-machine last recall cache; rerun agent recall"
+            return CacheReadResult(data=fallback, diagnostic=result.diagnostic)
+        return _last_recall_cache_result(
+            data={},
+            path=path,
+            status="unsupported_schema",
+            reason_code="public_projection_missing_same_machine_cache",
+            message=(
+                "public compact recall projection needs the same-machine last recall cache; "
+                "rerun agent recall"
+            ),
         )
-    raise ValueError("last recall cache has an unsupported shape")
+    return _last_recall_cache_result(
+        data={},
+        path=path,
+        status="unsupported_schema",
+        reason_code="unsupported_last_recall_cache_kind",
+        message="last recall cache has an unsupported shape; rerun agent recall",
+    )
+
+
+def read_last_recall_cache(path: str | Path | None = None) -> dict[str, Any]:
+    result = read_last_recall_cache_result(path)
+    if not result.ok:
+        raise LastRecallCacheError(result.diagnostic)
+    return result.data
 
 
 def last_recall_route_choices(path: str | Path | None = None, *, limit: int = 5) -> list[dict[str, Any]]:
@@ -467,10 +555,10 @@ def last_recall_route_choices(path: str | Path | None = None, *, limit: int = 5)
     these foreground cards; those remain in deepen/explain flows.
     """
 
-    try:
-        cache = read_last_recall_cache(path)
-    except Exception:
+    result = read_last_recall_cache_result(path)
+    if not result.ok:
         return []
+    cache = result.data
     choices: list[dict[str, Any]] = []
     seen: set[str] = set()
     for request in cache.get("requests") or []:
@@ -623,10 +711,10 @@ def attach_recall_gate_context_to_payload(
 
 
 def query_from_last_recall_cache(path: str | Path | None = None) -> str | None:
-    try:
-        cache = read_last_recall_cache(path)
-    except Exception:
+    result = read_last_recall_cache_result(path)
+    if not result.ok:
         return None
+    cache = result.data
     context_value = cache.get("context")
     if not isinstance(context_value, Mapping):
         return None

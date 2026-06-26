@@ -550,6 +550,20 @@ def main(argv: list[str] | None = None) -> int:
                     cue=query_from_last_recall_cache(selector_cache_path),
                 )
                 if args.json:
+                    if args.detail == "full":
+                        payload = {
+                            "detail": "full",
+                            "output_boundary": "local_private_diagnostic_full",
+                            **payload,
+                        }
+                    else:
+                        payload = compact_agent_deepen_payload(
+                            payload,
+                            request_index=int(args.request or 1),
+                            last_recall=True,
+                            recall_selector=str(args.recall_selector or ""),
+                            surface="agent_cli_source_court_compact",
+                        )
                     _json_out(payload)
                 else:
                     print(render_deepen_human(payload))

@@ -26,6 +26,7 @@ from aippocampus_runtime.recall import agent_recall_cache as _agent_recall_cache
 from aippocampus_runtime.recall.agent_recall_cache import (
     LAST_RECALL_CACHE_ENV,
     attach_recall_gate_context_to_payload,
+    last_recall_cache_diagnostic_from_exception,
     last_recall_cache_path,
     last_recall_route_choices,
     last_recall_route_key,
@@ -48,6 +49,7 @@ __all__ = [
     "LAST_RECALL_CACHE_ENV",
     "attach_recall_gate_context_to_payload",
     "handle_from_last_recall_cache",
+    "last_recall_cache_diagnostic_from_exception",
     "last_recall_cache_path",
     "last_recall_route_choices",
     "last_recall_route_key",
@@ -154,7 +156,6 @@ def policy_boundary() -> dict[str, Any]:
     return {
         "opt_in_required": False,
         "activation_model": "explicit_foreground_action",
-        "legacy_opt_in_wording_retired": True,
         "default_hook_foreground": False,
         "navigation_only_not_fact": True,
         "source_reopen_required_for_strong_claims": True,
@@ -435,6 +436,17 @@ def last_recall_unavailable_payload(
     cue: str | None = None,
     cue_role: str = "previous_cached_cue",
 ) -> dict[str, Any]:
+    cache_read_diagnostic = last_recall_cache_diagnostic_from_exception(exc)
+    cache_recovery = (
+        {
+            "state": str(cache_read_diagnostic.get("status") or "unavailable"),
+            "reason_code": cache_read_diagnostic.get("reason_code"),
+            "action": "rerun_agent_recall",
+            "path_local_redacted": True,
+        }
+        if cache_read_diagnostic
+        else None
+    )
     return _public_payload(
         {
             "kind": kind,
@@ -447,8 +459,10 @@ def last_recall_unavailable_payload(
                 "error": {
                     "code": "last_recall_unavailable",
                     "message": str(exc),
-                }
+                },
+                **({"cache_read_diagnostic": cache_read_diagnostic} if cache_read_diagnostic else {}),
             },
+            **({"cache_recovery": cache_recovery} if cache_recovery else {}),
             **last_recall_cache_recovery_fields(mode, cue=cue, cue_role=cue_role),
             "claim_boundary": "last-recall cache unavailable; rerun recall before selecting a route.",
             "operator_detail_command": _recall_detail_command(

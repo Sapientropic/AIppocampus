@@ -23,24 +23,39 @@ from aippocampus_runtime.core import (
 )
 from aippocampus_runtime.io_integrity import atomic_write_json
 from aippocampus_runtime.recall.ambient_cards import cached_card_with_provenance
+from aippocampus_runtime.recall.ambient_signal_accumulator import (
+    DEFAULT_SIGNAL_ACCUMULATOR_NAME as DEFAULT_SIGNAL_ACCUMULATOR_NAME,
+)
+from aippocampus_runtime.recall.ambient_signal_accumulator import (
+    read_topic_signal_state as read_topic_signal_state,
+)
+from aippocampus_runtime.recall.ambient_signal_accumulator import (
+    record_topic_signal as record_topic_signal,
+)
+from aippocampus_runtime.recall.ambient_signal_accumulator import (
+    topic_signal_fingerprint as topic_signal_fingerprint,
+)
+from aippocampus_runtime.recall.cache_read_diagnostics import (
+    CacheReadResult,
+    read_json_cache,
+)
 from aippocampus_runtime.registry.api import registry_paths, unique_preserve
+from aippocampus_runtime.source.io_kernel import jsonl_loss_warning, load_jsonl_dict_rows
 
 CACHE_SCHEMA_VERSION = 1
 RESIDUE_SCHEMA_VERSION = 1
-SIGNAL_ACCUMULATOR_SCHEMA_VERSION = 1
 DEFAULT_CACHE_NAME = "ambient_thread_cache.json"
 DEFAULT_RESIDUE_NAME = "ambient_residue.jsonl"
-DEFAULT_SIGNAL_ACCUMULATOR_NAME = "ambient_signal_accumulator.json"
 DEFAULT_TTL_SECONDS = 6 * 60 * 60
 DEFAULT_MAX_ENTRIES = 128
 DEFAULT_MAX_CARDS = 8
 DEFAULT_RESIDUE_REVIEW_AFTER_SECONDS = 7 * 24 * 60 * 60
-DEFAULT_MAX_SIGNAL_ENTRIES = 128
+AMBIENT_CACHE_NAME = "ambient_thread_cache"
+AMBIENT_CACHE_PATH_LABEL = DEFAULT_CACHE_NAME
+RESIDUE_PATH_LABEL = DEFAULT_RESIDUE_NAME
 
 RELATED_STRONG_PREFIXES = ("src_", "cand_", "sem_", "scope_", "topic_", "card_")
 RELATED_WEAK_PREFIXES = ("alias_",)
-POSITIVE_SIGNAL_OUTCOMES = {"weak_signal", "source_backed_hit", "candidate_backed_hit"}
-NEGATIVE_SIGNAL_OUTCOMES = {"wrong_route", "stale_route", "ignored_route", "negative_roi"}
 
 
 def default_ambient_cache_path(
@@ -102,213 +117,35 @@ def topic_epoch_from_terms(terms: list[str], *, limit: int = 8) -> str:
     return _fingerprint("\n".join(stable_terms), prefix="epoch")
 
 
-def topic_signal_fingerprint(terms: list[str], *, limit: int = 8) -> str:
-    cleaned: list[str] = []
-    for term in terms:
-        text = compact_text(str(term or "").strip(), 80)
-        if len(text) < 2:
-            continue
-        cleaned.append(text.casefold())
-    stable_terms = sorted(unique_preserve(cleaned, limit=limit))
-    if not stable_terms:
-        return "sig_empty"
-    return _fingerprint("\n".join(stable_terms), prefix="sig")
+def _empty_cache() -> dict[str, Any]:
+    return {"schema_version": CACHE_SCHEMA_VERSION, "updated_at": None, "entries": {}}
 
 
-def _load_cache(path: Path) -> dict[str, Any]:
-    if not path.exists():
-        return {"schema_version": CACHE_SCHEMA_VERSION, "updated_at": None, "entries": {}}
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
-        return {"schema_version": CACHE_SCHEMA_VERSION, "updated_at": None, "entries": {}}
-    if not isinstance(data, dict):
-        return {"schema_version": CACHE_SCHEMA_VERSION, "updated_at": None, "entries": {}}
+def _cache_diagnostic_detail(result: CacheReadResult) -> dict[str, Any] | None:
+    return result.diagnostic.public_detail()
+
+
+def _load_cache_result(path: Path) -> CacheReadResult:
+    result = read_json_cache(
+        path,
+        cache_name=AMBIENT_CACHE_NAME,
+        default_factory=_empty_cache,
+        path_label=AMBIENT_CACHE_PATH_LABEL,
+    )
+    data = dict(result.data)
     entries = data.get("entries")
     if not isinstance(entries, dict):
         data["entries"] = {}
     data["schema_version"] = CACHE_SCHEMA_VERSION
-    return data
+    return CacheReadResult(data=data, diagnostic=result.diagnostic)
+
+
+def _load_cache(path: Path) -> dict[str, Any]:
+    return _load_cache_result(path).data
 
 
 def _write_cache(path: Path, data: dict[str, Any]) -> None:
     atomic_write_json(path, data, indent=2)
-
-
-def _load_signal_accumulator(path: Path) -> dict[str, Any]:
-    if not path.exists():
-        return {
-            "schema_version": SIGNAL_ACCUMULATOR_SCHEMA_VERSION,
-            "updated_at": None,
-            "entries": {},
-        }
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
-        return {
-            "schema_version": SIGNAL_ACCUMULATOR_SCHEMA_VERSION,
-            "updated_at": None,
-            "entries": {},
-        }
-    if not isinstance(data, dict):
-        return {
-            "schema_version": SIGNAL_ACCUMULATOR_SCHEMA_VERSION,
-            "updated_at": None,
-            "entries": {},
-        }
-    entries = data.get("entries")
-    if not isinstance(entries, dict):
-        data["entries"] = {}
-    data["schema_version"] = SIGNAL_ACCUMULATOR_SCHEMA_VERSION
-    return data
-
-
-def _write_signal_accumulator(path: Path, data: dict[str, Any]) -> None:
-    atomic_write_json(path, data, indent=2)
-
-
-def _signal_key(
-    *,
-    thread_id: str,
-    workspace: str,
-    topic_epoch: str,
-    topic_fingerprint: str,
-) -> str:
-    workspace_key = cache_workspace_identity(workspace)
-    return _fingerprint(
-        f"{thread_id}\n{workspace_key}\n{topic_epoch}\n{topic_fingerprint}",
-        prefix="sigkey",
-    )
-
-
-def _compact_reason_codes(values: list[str] | None) -> list[str]:
-    return unique_preserve(
-        [
-            compact_text(str(value or "").strip().casefold(), 80)
-            for value in values or []
-            if str(value or "").strip()
-        ],
-        limit=8,
-    )
-
-
-def read_topic_signal_state(
-    path: Path | str,
-    *,
-    thread_id: str,
-    workspace: str,
-    topic_epoch: str,
-    terms: list[str],
-) -> dict[str, Any]:
-    topic_fingerprint = topic_signal_fingerprint(terms)
-    key = _signal_key(
-        thread_id=thread_id,
-        workspace=workspace,
-        topic_epoch=topic_epoch,
-        topic_fingerprint=topic_fingerprint,
-    )
-    data = _load_signal_accumulator(Path(path))
-    entry = data.get("entries", {}).get(key)
-    if not isinstance(entry, dict):
-        return {
-            "status": "miss",
-            "topic_epoch": topic_epoch,
-            "topic_fingerprint": topic_fingerprint,
-            "weak_signal_count": 0,
-            "positive_strength": 0.0,
-            "negative_strength": 0.0,
-            "reason_codes": [],
-        }
-    return {
-        "status": "hit",
-        "topic_epoch": topic_epoch,
-        "topic_fingerprint": topic_fingerprint,
-        "weak_signal_count": int(entry.get("weak_signal_count") or 0),
-        "positive_strength": float(entry.get("positive_strength") or 0.0),
-        "negative_strength": float(entry.get("negative_strength") or 0.0),
-        "reason_codes": _compact_reason_codes(entry.get("reason_codes") or []),
-        "updated_at": entry.get("updated_at"),
-    }
-
-
-def record_topic_signal(
-    path: Path | str,
-    *,
-    thread_id: str,
-    workspace: str,
-    topic_epoch: str,
-    terms: list[str],
-    outcome: str,
-    reason_codes: list[str] | None = None,
-    max_entries: int = DEFAULT_MAX_SIGNAL_ENTRIES,
-) -> dict[str, Any]:
-    topic_fingerprint = topic_signal_fingerprint(terms)
-    if topic_fingerprint == "sig_empty":
-        return {"status": "empty", "topic_epoch": topic_epoch, "topic_fingerprint": topic_fingerprint}
-    target = Path(path)
-    data = _load_signal_accumulator(target)
-    entries: dict[str, Any] = dict(data.get("entries") or {})
-    key = _signal_key(
-        thread_id=thread_id,
-        workspace=workspace,
-        topic_epoch=topic_epoch,
-        topic_fingerprint=topic_fingerprint,
-    )
-    raw_prior = entries.get(key)
-    prior: dict[str, Any] = raw_prior if isinstance(raw_prior, dict) else {}
-    clean_outcome = compact_text(str(outcome or "").strip().casefold(), 80)
-    positive_delta = 0.0
-    negative_delta = 0.0
-    weak_delta = 0
-    if clean_outcome in POSITIVE_SIGNAL_OUTCOMES:
-        positive_delta = 1.0 if clean_outcome == "weak_signal" else 1.5
-        weak_delta = 1 if clean_outcome == "weak_signal" else 0
-    elif clean_outcome in NEGATIVE_SIGNAL_OUTCOMES:
-        negative_delta = 1.5 if clean_outcome in {"wrong_route", "stale_route"} else 1.0
-    else:
-        return {
-            "status": "ignored_unknown_outcome",
-            "topic_epoch": topic_epoch,
-            "topic_fingerprint": topic_fingerprint,
-        }
-    updated = {
-        "updated_at": now_utc(),
-        "updated_unix": time.time(),
-        "thread_fingerprint": _fingerprint(thread_id, prefix="thread"),
-        "workspace_fingerprint": workspace_fingerprint(workspace),
-        "topic_epoch": topic_epoch,
-        "topic_fingerprint": topic_fingerprint,
-        "weak_signal_count": int(prior.get("weak_signal_count") or 0) + weak_delta,
-        "positive_strength": round(float(prior.get("positive_strength") or 0.0) + positive_delta, 3),
-        "negative_strength": round(float(prior.get("negative_strength") or 0.0) + negative_delta, 3),
-        "reason_codes": _compact_reason_codes(
-            [*(prior.get("reason_codes") or []), clean_outcome, *(reason_codes or [])]
-        ),
-    }
-    entries[key] = updated
-    if len(entries) > max_entries:
-        entries = dict(
-            sorted(
-                entries.items(),
-                key=lambda item: float((item[1] or {}).get("updated_unix") or 0.0),
-                reverse=True,
-            )[:max_entries]
-        )
-    data = {
-        "schema_version": SIGNAL_ACCUMULATOR_SCHEMA_VERSION,
-        "updated_at": now_utc(),
-        "entries": entries,
-    }
-    _write_signal_accumulator(target, data)
-    return {
-        "status": "written",
-        "topic_epoch": topic_epoch,
-        "topic_fingerprint": topic_fingerprint,
-        "weak_signal_count": updated["weak_signal_count"],
-        "positive_strength": updated["positive_strength"],
-        "negative_strength": updated["negative_strength"],
-        "reason_codes": updated["reason_codes"],
-    }
 
 
 def _append_jsonl(path: Path, row: dict[str, Any]) -> None:
@@ -317,21 +154,22 @@ def _append_jsonl(path: Path, row: dict[str, Any]) -> None:
         fh.write(json.dumps(row, ensure_ascii=False) + "\n")
 
 
-def _existing_residue_ids(path: Path) -> set[str]:
-    if not path.exists():
-        return set()
+def _existing_residue_ids_with_diagnostic(path: Path) -> tuple[set[str], dict[str, Any] | None]:
+    result = load_jsonl_dict_rows(path)
     ids: set[str] = set()
-    with path.open("r", encoding="utf-8") as fh:
-        for line in fh:
-            if not line.strip():
-                continue
-            try:
-                item = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            residue_id = str(item.get("residue_id") or "")
-            if residue_id:
-                ids.add(residue_id)
+    for item in result.rows:
+        residue_id = str(item.get("residue_id") or "")
+        if residue_id:
+            ids.add(residue_id)
+    return ids, jsonl_loss_warning(
+        result.loss,
+        stage="ambient_residue_existing_ids",
+        path_label=RESIDUE_PATH_LABEL,
+    )
+
+
+def _existing_residue_ids(path: Path) -> set[str]:
+    ids, _diagnostic = _existing_residue_ids_with_diagnostic(path)
     return ids
 
 
@@ -568,10 +406,17 @@ def export_thread_residue(
     review_after_seconds: int = DEFAULT_RESIDUE_REVIEW_AFTER_SECONDS,
 ) -> dict[str, Any]:
     key = cache_key(thread_id=thread_id, workspace=workspace, topic_epoch=topic_epoch)
-    data = _load_cache(Path(cache_path))
+    result = _load_cache_result(Path(cache_path))
+    data = result.data
+    cache_diagnostic = _cache_diagnostic_detail(result)
     entry = (data.get("entries") or {}).get(key)
     if not isinstance(entry, dict):
-        return {"status": "miss", "topic_epoch": topic_epoch, "residue_count": 0}
+        return {
+            "status": "miss",
+            "topic_epoch": topic_epoch,
+            "residue_count": 0,
+            **({"cache_read_diagnostic": cache_diagnostic} if cache_diagnostic else {}),
+        }
     record = _residue_record(
         entry_key=key,
         entry=entry,
@@ -581,12 +426,14 @@ def export_thread_residue(
     if record is None:
         return {"status": "skipped_no_source_refs", "topic_epoch": topic_epoch, "residue_count": 0}
     target = Path(residue_path)
-    if record["residue_id"] in _existing_residue_ids(target):
+    existing_ids, residue_diagnostic = _existing_residue_ids_with_diagnostic(target)
+    if record["residue_id"] in existing_ids:
         return {
             "status": "duplicate",
             "topic_epoch": topic_epoch,
             "residue_count": 0,
             "residue_id": record["residue_id"],
+            **({"residue_read_diagnostic": residue_diagnostic} if residue_diagnostic else {}),
         }
     _append_jsonl(target, record)
     return {
@@ -595,6 +442,7 @@ def export_thread_residue(
         "residue_count": 1,
         "residue_id": record["residue_id"],
         "output": str(target),
+        **({"residue_read_diagnostic": residue_diagnostic} if residue_diagnostic else {}),
     }
 
 
@@ -608,7 +456,16 @@ def read_thread_cache(
 ) -> dict[str, Any]:
     target = Path(path)
     key = cache_key(thread_id=thread_id, workspace=workspace, topic_epoch=topic_epoch)
-    data = _load_cache(target)
+    result = _load_cache_result(target)
+    data = result.data
+    diagnostic = _cache_diagnostic_detail(result)
+    if diagnostic:
+        return {
+            "status": "unavailable",
+            "topic_epoch": topic_epoch,
+            "cards": [],
+            "cache_read_diagnostic": diagnostic,
+        }
     entry = (data.get("entries") or {}).get(key)
     if not isinstance(entry, dict):
         return {"status": "miss", "topic_epoch": topic_epoch, "cards": []}
@@ -712,7 +569,16 @@ def read_related_thread_cache(
     requested = set(related_fingerprints or [])
     if not requested:
         return {"status": "miss", "topic_epoch": topic_epoch, "cards": []}
-    data = _load_cache(Path(path))
+    result = _load_cache_result(Path(path))
+    data = result.data
+    diagnostic = _cache_diagnostic_detail(result)
+    if diagnostic:
+        return {
+            "status": "unavailable",
+            "topic_epoch": topic_epoch,
+            "cards": [],
+            "cache_read_diagnostic": diagnostic,
+        }
     entries = sorted(
         _same_thread_workspace_entries(
             data,
@@ -775,7 +641,11 @@ def read_latest_thread_cache(
     """
 
     target = Path(path)
-    data = _load_cache(target)
+    result = _load_cache_result(target)
+    data = result.data
+    diagnostic = _cache_diagnostic_detail(result)
+    if diagnostic:
+        return {"status": "unavailable", "cards": [], "cache_read_diagnostic": diagnostic}
     entries = _same_thread_workspace_entries(
         data,
         thread_id=thread_id,
@@ -823,7 +693,9 @@ def write_thread_cache(
     compact_cards = [_compact_card(card) for card in cards if isinstance(card, dict)][:max_cards]
     if not compact_cards:
         return {"status": "empty", "topic_epoch": topic_epoch, "card_count": 0}
-    data = _load_cache(target)
+    cache_result = _load_cache_result(target)
+    data = cache_result.data
+    previous_diagnostic = _cache_diagnostic_detail(cache_result)
     entries: dict[str, Any] = dict(data.get("entries") or {})
     key = cache_key(thread_id=thread_id, workspace=workspace, topic_epoch=topic_epoch)
     source_ref_fingerprints = _source_ref_fingerprints(compact_cards)
@@ -859,15 +731,16 @@ def write_thread_cache(
         entries = dict(kept)
     data = {"schema_version": CACHE_SCHEMA_VERSION, "updated_at": now_utc(), "entries": entries}
     _write_cache(target, data)
-    result = {
+    write_result = {
         "status": "written",
         "topic_epoch": topic_epoch,
         "card_count": len(compact_cards),
         "source_ref_fingerprints": entries[key].get("source_ref_fingerprints") or [],
         "related_fingerprints": entries[key].get("related_fingerprints") or [],
+        **({"previous_cache_read_diagnostic": previous_diagnostic} if previous_diagnostic else {}),
     }
     if residue_path is not None:
-        result["residue_export"] = export_thread_residue(
+        write_result["residue_export"] = export_thread_residue(
             target,
             Path(residue_path),
             thread_id=thread_id,
@@ -875,4 +748,4 @@ def write_thread_cache(
             topic_epoch=topic_epoch,
             reason=residue_reason,
         )
-    return result
+    return write_result
