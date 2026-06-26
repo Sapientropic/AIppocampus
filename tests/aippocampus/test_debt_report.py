@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import importlib.util
+import json
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -533,6 +536,92 @@ class DebtReportTests(unittest.TestCase):
             "changed_surface_duplicate_helper",
             {warning["code"] for warning in changed["warnings"]},
         )
+
+    def test_headroom_cli_defaults_to_compact_output_with_full_detail_escape_hatch(self) -> None:
+        compact = subprocess.run(
+            [
+                sys.executable,
+                str(DEBT_REPORT),
+                "--headroom-only",
+                "--json",
+            ],
+            cwd=REPO_ROOT,
+            text=True,
+            encoding="utf-8",
+            capture_output=True,
+            check=False,
+        )
+        full = subprocess.run(
+            [
+                sys.executable,
+                str(DEBT_REPORT),
+                "--headroom-only",
+                "--json",
+                "--detail",
+                "full",
+            ],
+            cwd=REPO_ROOT,
+            text=True,
+            encoding="utf-8",
+            capture_output=True,
+            check=False,
+        )
+
+        compact_payload = json.loads(compact.stdout)
+        full_payload = json.loads(full.stdout)
+        self.assertEqual(compact_payload["kind"], "aippocampus_debt_headroom_compact")
+        self.assertIn("detail_command", compact_payload)
+        self.assertIn("--detail full", compact_payload["detail_command"])
+        self.assertNotIn("system_weight", compact_payload)
+        self.assertNotIn("rows", compact_payload)
+        self.assertIn("system_weight", full_payload)
+        self.assertIn("rows", full_payload)
+
+    def test_changed_surface_cli_defaults_to_compact_blocker_output(self) -> None:
+        compact = subprocess.run(
+            [
+                sys.executable,
+                str(DEBT_REPORT),
+                "--changed-surface-only",
+                "--json",
+                "--changed-file",
+                "docs/guides/install-guide.md",
+            ],
+            cwd=REPO_ROOT,
+            text=True,
+            encoding="utf-8",
+            capture_output=True,
+            check=False,
+        )
+        full = subprocess.run(
+            [
+                sys.executable,
+                str(DEBT_REPORT),
+                "--changed-surface-only",
+                "--json",
+                "--detail",
+                "full",
+                "--changed-file",
+                "docs/guides/install-guide.md",
+            ],
+            cwd=REPO_ROOT,
+            text=True,
+            encoding="utf-8",
+            capture_output=True,
+            check=False,
+        )
+
+        compact_payload = json.loads(compact.stdout)
+        full_payload = json.loads(full.stdout)
+        self.assertEqual(compact.returncode, 0, compact.stderr)
+        self.assertEqual(full.returncode, 0, full.stderr)
+        self.assertEqual(compact_payload["kind"], "aippocampus_changed_surface_debt_gate_compact")
+        self.assertEqual(compact_payload["status"], "pass")
+        self.assertEqual(compact_payload["blockers"], [])
+        self.assertIn("--detail full", compact_payload["detail_command"])
+        self.assertNotIn("guard_pressure", compact_payload)
+        self.assertEqual(full_payload["kind"], "aippocampus_changed_surface_debt_gate")
+        self.assertIn("guard_pressure", full_payload["changed_surface"])
 
 if __name__ == "__main__":
     unittest.main()

@@ -703,6 +703,15 @@ INSTRUCTION_SURFACE_CLASSIFIED_FILES = {
             "strings are operator/status contracts, not foreground policy payloads"
         ),
     },
+    "tests/aippocampus/test_agent_opt_in_recall_routes.py": {
+        "classification": "agent_opt_in_recall_route_test_contract_owner",
+        "owner": "#2636/#2651",
+        "why": (
+            "owns opt-in recall route, foreground action, and macro navigation "
+            "fixture strings as test contracts; these are expected outputs, not "
+            "runtime instructions"
+        ),
+    },
     "tests/aippocampus/test_search_clean_source.py": {
         "classification": "clean_source_search_test_contract_owner",
         "owner": "#2720/#2632/#2651",

@@ -338,6 +338,8 @@ class ArchitectureBoundaryTests(unittest.TestCase):
                 str(DEBT_REPORT),
                 "--changed-surface-only",
                 "--json",
+                "--detail",
+                "full",
                 "--changed-file",
                 "skills/aippocampus/scripts/aippocampus_runtime/mcp/agent_recall_projection.py",
             ],
@@ -391,6 +393,8 @@ class ArchitectureBoundaryTests(unittest.TestCase):
                 str(DEBT_REPORT),
                 "--changed-surface-only",
                 "--json",
+                "--detail",
+                "full",
                 "--changed-file",
                 unclassified_rel,
             ],
@@ -680,7 +684,7 @@ class ArchitectureBoundaryTests(unittest.TestCase):
 
     def test_architecture_debt_report_emits_full_inventory(self) -> None:
         proc = subprocess.run(
-            [sys.executable, str(DEBT_REPORT), "--json"],
+            [sys.executable, str(DEBT_REPORT), "--json", "--detail", "full"],
             text=True,
             encoding="utf-8",
             errors="replace",

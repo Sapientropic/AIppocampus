@@ -21,7 +21,7 @@ def _write_macro_state(
         hexagram="乾",
         changing_lines=changing,
         source_refs=({"source_id": "macro-source-1"},) if source_refs else (),
-        updated_at="2026-06-11T10:00:00Z",
+        updated_at=state.utc_now_iso(),
         active_layer="人",
         momentum={"basis": momentum_basis or {"support_delta": 0.20}},
     )

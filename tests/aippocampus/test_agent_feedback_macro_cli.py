@@ -328,7 +328,7 @@ class AgentFeedbackMacroCliTests(unittest.TestCase):
             hexagram="乾",
             changing_lines=(1,),
             source_refs=({"source_id": "macro-cli-source"},),
-            updated_at="2026-06-11T10:00:00Z",
+            updated_at=macro_state.utc_now_iso(),
         )
         macro_state.append_macro_orientation_state(macro_path, entry)
         proc = self.run_agent(
