@@ -13,7 +13,7 @@ from typing import Iterable, cast
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEBT_REPORT_SCRIPT = "tools/aippocampus/docs/debt_report.py"
 AGENT_SLOP_GUARD_SCRIPT = "tools/aippocampus/agent_slop_guard.py"
-PORTABLE_PYTHON_COMMAND = "python"
+GIT_DIFF_CHECK_COMMAND = "git diff --check"
 CI_RUFF_COMMAND = "ruff check skills plugins tests tools benchmarks benchmark_corpus"
 CI_MYPY_COMMAND = "mypy"
 FALLBACK_CANONICAL_CI_PYTHON = "3.12"
@@ -30,8 +30,10 @@ STATIC_CONFIG_PATHS = {
 }
 CHECK_TOOLING_PATHS = {
     "tools/aippocampus/agent_slop_guard.py",
+    "tools/aippocampus/changed_surface_preflight.py",
     "tools/aippocampus/run_tests.py",
     "tools/aippocampus/test_tier_manifest.py",
+    "tools/aippocampus/test_plan_commands.py",
     "tools/aippocampus/test_plan.py",
 }
 APW_PARITY_SURFACES = frozenset(
@@ -103,6 +105,7 @@ from benchmark_test_classification import (
     is_benchmark_shaped_module,
 )
 from run_ci_parity import find_python_for_minor
+from test_plan_commands import py_command, py_script, shell_arg
 from test_tier_manifest import TEST_MODULE_CLASSIFICATIONS
 
 
@@ -119,40 +122,6 @@ class PlannedCommand:
 def _repo_relative(path: str) -> str:
     normalized = path.replace("\\", "/").strip()
     return normalized[2:] if normalized.startswith("./") else normalized
-
-
-def local_python_command() -> str:
-    """Return the interpreter that is running the planner, shell-quoted."""
-    executable = str(Path(sys.executable).resolve())
-    return '"' + executable.replace('"', '\\"') + '"'
-
-
-def python_command(*, local_executable: bool = False) -> str:
-    """Return a copy-pasteable Python command.
-
-    The default must stay portable because planner JSON is often pasted into PRs,
-    issues, and handoffs. Operators who need the exact interpreter can opt in with
-    ``--local-executable`` instead of leaking a host-specific path by accident.
-    """
-
-    if local_executable:
-        return local_python_command()
-    return PORTABLE_PYTHON_COMMAND
-
-
-def py_command(args: str, *, local_executable: bool = False) -> str:
-    return f"{python_command(local_executable=local_executable)} {args}"
-
-
-def py_script(script: str, args: str = "", *, local_executable: bool = False) -> str:
-    suffix = f" {args}" if args else ""
-    return f"{python_command(local_executable=local_executable)} {script}{suffix}"
-
-
-def shell_arg(value: str) -> str:
-    if not value or any(char.isspace() or char in {'"', "'"} for char in value):
-        return '"' + value.replace('"', '\\"') + '"'
-    return value
 
 
 def debt_report_args(changed_files: Iterable[str]) -> str:
@@ -178,7 +147,7 @@ def agent_slop_guard_args(changed_files: Iterable[str]) -> str:
     changed_args = " ".join(
         f"--changed-file {shell_arg(path)}" for path in sorted(scannable_files)
     )
-    prefix = "--json"
+    prefix = "--json --fail-on-violations"
     return prefix if not changed_args else f"{prefix} {changed_args}"
 
 
@@ -512,6 +481,7 @@ def classify_changed_files(changed_files: Iterable[str]) -> set[str]:
             "tools/aippocampus/run_tests.py",
             "tools/aippocampus/run_ci_parity.py",
             "tools/aippocampus/test_tier_manifest.py",
+            "tools/aippocampus/test_plan_commands.py",
             "tools/aippocampus/test_plan.py",
         }:
             categories.add("test_runner")
@@ -675,6 +645,20 @@ def build_test_plan(
                 ),
                 reason="No changed files were detected; quick is the lowest-cost sanity check.",
                 scope="sanity",
+            ),
+        )
+
+    if normalized_files:
+        categories.add("worktree_hygiene")
+        _add_command(
+            commands,
+            PlannedCommand(
+                command=GIT_DIFF_CHECK_COMMAND,
+                reason=(
+                    "Run whitespace/conflict-marker hygiene before tests so broken diffs "
+                    "are not discovered after functional verification or in CI."
+                ),
+                scope="worktree",
             ),
         )
 

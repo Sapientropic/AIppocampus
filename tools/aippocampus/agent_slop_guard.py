@@ -1244,6 +1244,54 @@ def build_report(
     }
 
 
+def apply_hard_gate_semantics(report: dict[str, Any], *, fail_on_violations: bool) -> None:
+    if report.get("fixture_failure_count"):
+        report["ok"] = False
+        report["gate_status"] = "failed"
+        report["advisory"] = False
+        return
+    if fail_on_violations and report.get("changed_surface_unbaselined_count"):
+        report["ok"] = False
+        report["gate_status"] = "failed"
+        report["advisory"] = False
+        report["failure_reason"] = "changed_surface_unbaselined_findings"
+
+
+def compact_report(report: Mapping[str, Any], *, detail_command: str) -> dict[str, Any]:
+    findings = list(report.get("findings") or [])
+    blockers = [
+        {
+            "rule_id": item.get("rule_id"),
+            "path": item.get("path"),
+            "line": item.get("line"),
+            "owner_issue": item.get("owner_issue"),
+            "message": item.get("message") or item.get("description"),
+        }
+        for item in findings
+        if item.get("baseline_status") != "baselined"
+        and item.get("changed_surface") is True
+    ]
+    return {
+        "kind": report.get("kind"),
+        "schema_version": report.get("schema_version"),
+        "ok": report.get("ok"),
+        "status": "pass" if report.get("ok") else "fail",
+        "gate_status": report.get("gate_status"),
+        "advisory": report.get("advisory"),
+        "mode": report.get("mode"),
+        "scanned_file_count": report.get("scanned_file_count"),
+        "finding_count": report.get("finding_count"),
+        "changed_surface_unbaselined_count": report.get("changed_surface_unbaselined_count"),
+        "fixture_failure_count": report.get("fixture_failure_count"),
+        "blockers": blockers,
+        "detail_command": detail_command,
+        "policy": (
+            "Compact output omits rule catalogs and owner-layer contracts. "
+            "Use the detail command for full diagnostics."
+        ),
+    }
+
+
 def _paths_from_args(args: argparse.Namespace) -> tuple[list[Path], set[str], str]:
     if args.all:
         paths = _scan_roots()
@@ -1260,6 +1308,12 @@ def _paths_from_args(args: argparse.Namespace) -> tuple[list[Path], set[str], st
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run advisory AIppocampus agent-slop red lights.")
     parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
+    parser.add_argument(
+        "--detail",
+        choices=("compact", "full"),
+        default="compact",
+        help="Compact is failure-first; full includes rule catalogs and owner contracts.",
+    )
     parser.add_argument("--all", action="store_true", help="Scan default repo Python roots instead of changed files.")
     parser.add_argument("--changed-file", action="append", help="Repo-relative changed file to scan.")
     parser.add_argument(
@@ -1276,6 +1330,19 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _detail_command(args: argparse.Namespace) -> str:
+    parts = ["python", "tools/aippocampus/agent_slop_guard.py", "--json", "--detail", "full"]
+    if args.all:
+        parts.append("--all")
+    for path in args.changed_file or []:
+        parts.extend(["--changed-file", path])
+    if args.fixture_root:
+        parts.extend(["--fixture-root", str(args.fixture_root)])
+    if args.fail_on_violations:
+        parts.append("--fail-on-violations")
+    return " ".join(parts)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -1288,7 +1355,13 @@ def main(argv: list[str] | None = None) -> int:
         fixture_root=args.fixture_root,
     )
     report["mode"] = mode
-    output = json.dumps(report, ensure_ascii=False, indent=2 if args.json else None)
+    apply_hard_gate_semantics(report, fail_on_violations=bool(args.fail_on_violations))
+    payload: Mapping[str, Any] = (
+        report
+        if args.detail == "full"
+        else compact_report(report, detail_command=_detail_command(args))
+    )
+    output = json.dumps(payload, ensure_ascii=False, indent=2 if args.json else None)
     print(output)
     if report["fixture_failure_count"]:
         return 1
