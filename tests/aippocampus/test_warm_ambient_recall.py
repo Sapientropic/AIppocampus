@@ -538,13 +538,71 @@ class WarmAmbientRecallTests(unittest.TestCase):
         self.assertEqual(activity["pending_recent_count"], 1)
         self.assertFalse(activity["worker_process_active"])
         self.assertFalse(activity["pending_jobs_are_worker_evidence"])
+        self.assertEqual(activity["usefulness_evidence"], "no_recent_useful_result")
         self.assertEqual(payload["action_code"], "wait_or_run_worker_when_ready")
         self.assertTrue(payload["ordinary_recall_usable"])
+        self.assertEqual(payload["warm_ambient_state"], "active")
+        self.assertFalse(payload["warm_ambient_recently_useful"])
         self.assertEqual(payload["next_command"], "aippocampus warm status --json")
         self.assertEqual(payload["foreground_action_contract"], "foreground-action-v2")
         self.assertNotIn("agent_next_action", payload)
         self.assertNotIn(payload["foreground_action"], payload.get("safe_next_actions", []))
         self.assertEqual(payload["foreground_action"]["id"], "check_warm_status")
+
+    def test_warm_status_empty_queue_is_callable_not_useful(self) -> None:
+        job_dir = self.root / "warm-jobs"
+        job_dir.mkdir()
+        payload = warm_scheduler.warm_status_payload(job_dir=job_dir, enabled=True)
+        compact = warm_cli.compact_warm_status_card(payload)
+
+        self.assertTrue(payload["ok"])
+        self.assertTrue(payload["ordinary_recall_usable"])
+        self.assertFalse(payload["warm_ambient_ok"])
+        self.assertEqual(payload["warm_ambient_state"], "callable")
+        self.assertFalse(payload["warm_ambient_recently_useful"])
+        self.assertEqual(payload["action_code"], "ordinary_recall_usable_warm_not_useful")
+        self.assertEqual(payload["foreground_action"]["id"], "continue_with_ordinary_recall")
+        self.assertEqual(compact["warm_ambient_state"], "callable")
+        self.assertFalse(compact["warm_ambient_recently_useful"])
+        self.assertEqual(compact["foreground_action"]["id"], "continue_with_ordinary_recall")
+        self.assertNotEqual(compact["foreground_action"]["id"], "no_warm_action_needed")
+        self.assertIn("ordinary recall", compact["decision"]["reason"].casefold())
+
+    def test_warm_status_useful_only_after_result_summary_reports_useful_output(self) -> None:
+        job_dir = self.root / "warm-jobs"
+        job_dir.mkdir()
+        (job_dir / "warm-public.json").write_text(
+            json.dumps({"created_at": "2026-06-06T09:35:00Z"}),
+            encoding="utf-8",
+        )
+        (job_dir / "warm-public.result.json").write_text(
+            json.dumps(
+                {
+                    "kind": "aippocampus_warm_ambient_recall_job_result",
+                    "created_at": "2026-06-06T09:36:00Z",
+                    "status": "written",
+                    "useful_signal_quorum_met": True,
+                    "card_count": 2,
+                    "cache_write": {"status": "written"},
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        payload = warm_scheduler.warm_status_payload(
+            job_dir=job_dir,
+            now=warm_scheduler.datetime(2026, 6, 6, 9, 40, 0, tzinfo=warm_scheduler.timezone.utc),
+        )
+        compact = warm_cli.compact_warm_status_card(payload)
+
+        self.assertTrue(payload["warm_ambient_ok"])
+        self.assertEqual(payload["warm_ambient_state"], "useful")
+        self.assertTrue(payload["warm_ambient_recently_useful"])
+        self.assertEqual(payload["job_activity"]["useful_result_count"], 1)
+        self.assertEqual(payload["foreground_action"]["id"], "warm_ambient_recently_useful")
+        self.assertEqual(compact["summary"]["useful_result_count"], 1)
+        self.assertEqual(compact["warm_ambient_state"], "useful")
+        self.assertTrue(compact["warm_ambient_recently_useful"])
 
     def test_warm_status_accepts_cwd_as_machine_wide_noop(self) -> None:
         job_dir = self.root / "warm-jobs"
@@ -555,6 +613,9 @@ class WarmAmbientRecallTests(unittest.TestCase):
         )
         self.assertEqual(code, 0)
         self.assertEqual(payload["status"], "idle")
+        self.assertEqual(payload["warm_ambient_state"], "callable")
+        self.assertFalse(payload["warm_ambient_recently_useful"])
+        self.assertEqual(payload["foreground_action"]["id"], "continue_with_ordinary_recall")
         self.assertNotIn(str(self.workspace), raw_output)
 
     def test_stale_warm_queue_is_optional_not_first_recall_failure(self) -> None:

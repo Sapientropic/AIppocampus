@@ -26,6 +26,13 @@ PUBLIC_SKIP_REASONS = {
     "project_name_not_resolved",
 }
 
+AGENT_FALLBACK_EXECUTOR_COMMAND = (
+    "python -m aippocampus_runtime.subconscious.agent_fallback_executor --json"
+)
+AGENT_FALLBACK_MATERIALIZER_COMMAND = (
+    "python -m aippocampus_runtime.subconscious.agent_fallback_materializer --json"
+)
+
 
 def public_skip_reason(value: Any) -> str | None:
     reason = str(value or "").strip()
@@ -98,15 +105,39 @@ def public_scheduler_payload(result: dict[str, Any]) -> dict[str, Any]:
     }
     if isinstance(result.get("cognitive_worker"), dict):
         worker = result["cognitive_worker"]
+        contracts = worker.get("contracts") if isinstance(worker.get("contracts"), dict) else {}
+        resolved_mode = worker.get("resolved_mode")
         payload["cognitive_worker"] = {
             "status": worker.get("status"),
-            "resolved_mode": worker.get("resolved_mode"),
+            "resolved_mode": resolved_mode,
+            "ambient_state": worker.get("ambient_state"),
             "provider_key_visible": bool(worker.get("provider_key_visible")),
             "agent_fallback_available": bool(worker.get("agent_fallback_available")),
             "foreground_hook_waits_for_agent_fallback": bool(
-                (worker.get("contracts") or {}).get("foreground_hook_waits_for_agent_fallback")
+                contracts.get("foreground_hook_waits_for_agent_fallback")
+            ),
+            "queued_task_is_readiness_evidence": bool(
+                contracts.get("queued_task_is_readiness_evidence")
+            ),
+            "queued_task_is_usefulness_evidence": bool(
+                contracts.get("queued_task_is_usefulness_evidence")
             ),
         }
+        if resolved_mode == "agent_fallback":
+            payload["agent_fallback_follow_through"] = {
+                "state": "scaffold_manual_only",
+                "ambient_state": "callable",
+                "queued_task_is_readiness_evidence": False,
+                "queued_task_is_usefulness_evidence": False,
+                "manual_operator_commands": [
+                    AGENT_FALLBACK_EXECUTOR_COMMAND,
+                    AGENT_FALLBACK_MATERIALIZER_COMMAND,
+                ],
+                "claim_boundary": (
+                    "queued fallback tasks are work orders; they do not prove "
+                    "reviewed findings reached recall/background surfaces"
+                ),
+            }
     if result.get("queued"):
         payload["queued"] = True
         payload["agent_fallback_task_count"] = int(result.get("agent_fallback_task_count") or 0)

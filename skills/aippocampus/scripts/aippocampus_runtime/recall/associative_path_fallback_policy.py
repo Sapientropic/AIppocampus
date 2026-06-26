@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.recall import associative_path_inputs as apw_inputs
+from aippocampus_runtime.recall import recall_recovery_policy
 
 SCHEMA_VERSION = 1
 PROMOTION_MODE_ENV = "AIPPOCAMPUS_APW_PROMOTION_MODE"
@@ -48,15 +49,10 @@ def _ordinary_recall_needs_recovery(
     deepen_requests: list[dict[str, Any]],
     triage_metrics: Mapping[str, Any],
 ) -> bool:
-    specificity_floor = float(triage_metrics.get("route_label_specificity_floor") or 0.0)
-    return (
-        not memory_packets
-        or not deepen_requests
-        # A single scope-bucket route can look "distinctive" only because there
-        # is nothing else to compare it against. Treat labels below 0.5 as weak
-        # so APW can surface matched anchors without changing ordinary ranking.
-        or specificity_floor < 0.5
-        or float(triage_metrics.get("packet_triage_distinctiveness") or 0.0) < 0.5
+    return recall_recovery_policy.ordinary_recall_needs_recovery(
+        memory_packets=memory_packets,
+        deepen_requests=deepen_requests,
+        triage_metrics=triage_metrics,
     )
 
 
@@ -64,10 +60,21 @@ def _ordinary_recall_needs_semidefault_recovery(
     *,
     memory_packets: list[dict[str, Any]],
     deepen_requests: list[dict[str, Any]],
+    triage_metrics: Mapping[str, Any],
 ) -> bool:
-    """Gate default APW recovery to silent or non-reopenable ordinary recall."""
+    """Gate default APW recovery to recall that is silent, non-reopenable, or weak.
 
-    return not memory_packets or not deepen_requests
+    APW is still navigation-only and source-gated. The semi-default trigger is
+    intentionally limited to the same weak-recall shape that would otherwise
+    make compact recall fall back to manual source search, so APW does not
+    perturb strong ordinary recall.
+    """
+
+    return _ordinary_recall_needs_recovery(
+        memory_packets=memory_packets,
+        deepen_requests=deepen_requests,
+        triage_metrics=triage_metrics,
+    )
 
 
 def _sidecar_root(cwd: str | Path | None, sidecar_dir: str | Path | None) -> Path:
@@ -165,6 +172,7 @@ def recall_fallback_policy(
     semidefault_recovery_needed = _ordinary_recall_needs_semidefault_recovery(
         memory_packets=memory_packets,
         deepen_requests=deepen_requests,
+        triage_metrics=triage_metrics,
     )
     candidate_input_available = has_associative_path_candidate_input(
         query=query,
@@ -207,7 +215,7 @@ def recall_fallback_policy(
     elif not explicit_requested and mode == MODE_OPT_IN:
         run_reason = "apw_fallback_requires_explicit_opt_in"
     elif recovery_needed and not semidefault_recovery_needed:
-        run_reason = "apw_label_weakness_requires_explicit_opt_in"
+        run_reason = "apw_recovery_not_semi_default_eligible"
     elif not candidate_input_available:
         run_reason = "apw_candidate_input_missing"
     else:

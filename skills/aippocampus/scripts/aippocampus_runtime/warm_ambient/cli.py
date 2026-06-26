@@ -380,6 +380,11 @@ def _status_main(argv: Sequence[str]) -> int:
         )
         print("AIppocampus warm ambient")
         print(f"status: {payload.get('status')}")
+        print(f"warm ambient: {payload.get('warm_ambient_state')}")
+        print(
+            "warm useful: "
+            f"{'yes' if payload.get('warm_ambient_recently_useful') else 'no'}"
+        )
         print(f"ordinary recall: {'usable' if payload.get('ordinary_recall_usable') else 'degraded'}")
         print(
             "jobs: "

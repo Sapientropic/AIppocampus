@@ -295,23 +295,22 @@ def compact_agent_deepen_payload(
                 "target_source_matched": bool(target_source_matched),
             },
             "primary_source_snippet": primary_snippet,
-            "claim_boundary": {
-                "can_use_for": [
-                    "diagnostic_orientation"
-                    if source_open_posture == "opened_diagnostic_only"
-                    else "source_open_within_returned_window",
-                    "exact_wording_inside_opened_window"
-                    if source_open_posture == "target_evidence_opened"
-                    else "no_source_backed_claim_from_this_window",
-                ],
-                "must_reopen_for": [
-                    "facts_outside_opened_window",
-                    "wider_context",
-                    "conflicts",
-                    "sensitive_or_stale_claims",
-                ],
-                "source_summary_is_not_quote": True,
-            },
+            "source_scope": (
+                "diagnostic_orientation_only"
+                if source_open_posture == "opened_diagnostic_only"
+                else "opened_window_only"
+            ),
+            "use_this_for": (
+                "orientation only; do not make source-backed claims from this window"
+                if source_open_posture == "opened_diagnostic_only"
+                else "quote or paraphrase only the opened source window"
+            ),
+            "reopen_more_if": [
+                "facts outside this window",
+                "wider context",
+                "conflicts",
+                "sensitive or stale claims",
+            ],
             **foreground_fields,
         }
     )

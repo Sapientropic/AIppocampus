@@ -20,6 +20,10 @@ from aippocampus_runtime.recall import (
     feedback_events,
 )
 from aippocampus_runtime.registry import api as registry_api
+from tests.aippocampus.product_probe_helpers import (
+    SourceOpenExpectation,
+    assert_deepen_opened_expected_source,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
@@ -132,7 +136,10 @@ class AgentOptInRecallRoutesTests(unittest.TestCase):
             clean_source_dir=self.clean,
             max_routes=3,
         )
-        encoded = json.dumps(report, ensure_ascii=False, sort_keys=True)
+        compact_report = agent_continuity_cli_support.public_recall_projection(
+            {**report, "last_recall_cache_available": True}
+        )
+        encoded = json.dumps(compact_report, ensure_ascii=False, sort_keys=True)
 
         self.assertEqual(report["kind"], "aippocampus_agent_continuity_path")
         self.assertEqual(report["mode"], "recall")
@@ -205,7 +212,11 @@ class AgentOptInRecallRoutesTests(unittest.TestCase):
         self.assertEqual(deepened["mode"], "deepen")
         self.assertEqual(deepened["surface"], "recall")
         self.assertEqual(deepened["result"]["evidence_level"], "source_backed")
-        self.assertIn("compact MemoryPacket", json.dumps(deepened, ensure_ascii=False))
+        assert_deepen_opened_expected_source(
+            self,
+            deepened,
+            SourceOpenExpectation(window_terms=("compact MemoryPacket",)),
+        )
 
     def test_human_recall_does_not_print_opaque_aippo_nav_handle(self) -> None:
         long_handle = "aippo-nav:" + ("x" * 540)
@@ -372,7 +383,7 @@ class AgentOptInRecallRoutesTests(unittest.TestCase):
         encoded = json.dumps(public, ensure_ascii=False)
 
         self.assertEqual(public["status"], "no_routes")
-        self.assertEqual(public["route_count"], 0)
+        self.assertNotIn("route_count", public)
         self.assertNotIn("suggested_next_command", public)
         self.assertNotIn("public_safe_command_preview", public)
         self.assertNotIn("<local-private-handle>", encoded)
@@ -420,7 +431,7 @@ class AgentOptInRecallRoutesTests(unittest.TestCase):
             }
         )
 
-        self.assertEqual(public["route_count"], 1)
+        self.assertNotIn("route_count", public)
         self.assertCanonicalForegroundAction(public)
         self.assertEqual(public["foreground_action"]["id"], "recover_weak_route")
         self.assertEqual(public["weak_route_recovery_card"]["miss_class"], "weak_route")
@@ -491,7 +502,10 @@ class AgentOptInRecallRoutesTests(unittest.TestCase):
             max_routes=5,
         )
         packets = report["memory_packets"]
-        encoded = json.dumps(report, ensure_ascii=False, sort_keys=True)
+        compact_report = agent_continuity_cli_support.public_recall_projection(
+            {**report, "last_recall_cache_available": True}
+        )
+        encoded = json.dumps(compact_report, ensure_ascii=False, sort_keys=True)
         topics = {packet.get("route_topic") for packet in packets}
 
         self.assertIn("benchmark_claim_posture", topics)
@@ -1073,7 +1087,7 @@ class AgentOptInRecallRoutesTests(unittest.TestCase):
         projected = agent_continuity_cli_support.public_recall_projection(payload)
         encoded = json.dumps(projected, ensure_ascii=False)
 
-        self.assertFalse(projected["last_recall_cache_available"])
+        self.assertNotIn("last_recall_cache_available", projected)
         self.assertNotIn("--last-recall", encoded)
         self.assertEqual(projected["foreground_action"]["id"], "repair_last_recall_cache")
         self.assertCanonicalForegroundAction(projected)
@@ -1544,7 +1558,10 @@ class AgentOptInRecallRoutesTests(unittest.TestCase):
             max_routes=2,
             macro_state_path=earth_path,
         )
-        encoded = json.dumps(human, ensure_ascii=False, sort_keys=True)
+        compact_human = agent_continuity_cli_support.public_recall_projection(
+            {**human, "last_recall_cache_available": True}
+        )
+        encoded = json.dumps(compact_human, ensure_ascii=False, sort_keys=True)
 
         self.assertFalse(baseline["metrics"]["macro_orientation_applied"])
         self.assertTrue(human["metrics"]["macro_orientation_applied"])
@@ -1554,7 +1571,7 @@ class AgentOptInRecallRoutesTests(unittest.TestCase):
         self.assertEqual(earth["macro_navigation"]["active_layer"], "earth")
         self.assertEqual(human["memory_packets"][0]["route_topic"], "issue_backlog_interpretation")
         self.assertEqual(earth["memory_packets"][0]["route_topic"], "benchmark_claim_posture")
-        self.assertIn("macro_active_layer_human", encoded)
+        self.assertIn("macro_active_layer_human", json.dumps(human, ensure_ascii=False, sort_keys=True))
         self.assertNotIn("source_refs", encoded)
         self.assertNotIn("macro-live", encoded)
 
@@ -1593,7 +1610,10 @@ class AgentOptInRecallRoutesTests(unittest.TestCase):
             clean_source_dir=self.clean,
             max_routes=2,
         )
-        encoded = json.dumps(report, ensure_ascii=False, sort_keys=True)
+        compact_report = agent_continuity_cli_support.public_recall_projection(
+            {**report, "last_recall_cache_available": True}
+        )
+        encoded = json.dumps(compact_report, ensure_ascii=False, sort_keys=True)
 
         self.assertTrue(report["metrics"]["macro_orientation_applied"])
         self.assertEqual(report["macro_navigation"]["status"], "applied")

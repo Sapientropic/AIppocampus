@@ -216,7 +216,8 @@ class ProviderDoctorTests(unittest.TestCase):
         self.assertFalse(report["ok"])
         self.assertEqual(report["status"], "missing_provider_env_var")
         self.assertEqual(report["cognitive_worker"]["resolved_mode"], "agent_fallback")
-        self.assertEqual(report["cognitive_worker"]["status"], "agent_fallback_active")
+        self.assertEqual(report["cognitive_worker"]["status"], "agent_fallback_scaffold_only")
+        self.assertEqual(report["cognitive_worker"]["ambient_state"], "callable")
         self.assertTrue(report["cognitive_worker"]["agent_fallback_available"])
         self.assertNotIn("secret", encoded.casefold())
 

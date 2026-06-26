@@ -62,8 +62,8 @@ def _mcp_ordinary_recall_action() -> dict[str, Any]:
         "template_only": True,
         "mutation_risk": "read_only",
         "claim_boundary": "no_claim_before_reopen",
-        "label": "Use ordinary source-backed recall",
-        "why": "Use recall when source routes matter more than background navigation scent.",
+        "label": "Ordinary source-backed recall",
+        "why": "Recall is the source route when background navigation scent is not enough.",
         "cli_fallback": {
             "id": "ordinary_recall_cli_fallback",
             "command_template": 'aippocampus agent recall "{old_decision_or_handoff_cue}" --json',
@@ -241,9 +241,9 @@ def background_findings_card(
         if findings
         else foreground_shell_action(
             action_id="ordinary_recall",
-            label="Use ordinary source-backed recall",
+            label="Ordinary source-backed recall",
             command=f"aippocampus agent recall {background_finding_actions.shell_quote(task)} --json",
-            why="No reviewed background finding matched; use ordinary recall/search before claims.",
+            why="No reviewed background finding matched; ordinary recall/search remains the source route before claims.",
             mutation_risk="read_only",
             claim_boundary="no_claim_before_reopen",
         )
@@ -263,25 +263,30 @@ def background_findings_card(
         "status": "ok" if findings else "no_relevant_background_findings",
         "mode": "background",
         "surface": "agent_background",
-        "cue_used": task,
         "finding_count": len(findings),
         "best_finding": best_finding,
         "finding_summaries": compact_other_summaries,
         **action_fields,
-        "boundary": {
-            "background_findings_are_source_truth": False,
-            "dream_findings_are_fact": False,
-            "subconscious_rows_are_fact": False,
-            "navigation_only_until_source_reopened": True,
-            "raw_private_text_emitted": False,
-            "raw_local_paths_emitted": False,
-        },
-        "operator_detail_command": (
-            "aippocampus agent background "
-            f"{background_finding_actions.shell_quote(task)} --json --detail full"
-        ),
-        "output_boundary": "compact_foreground_no_reader_or_operator_diagnostics",
     }
+    if detail_level != "compact":
+        payload.update(
+            {
+                "cue_used": task,
+                "boundary": {
+                    "background_findings_are_source_truth": False,
+                    "dream_findings_are_fact": False,
+                    "subconscious_rows_are_fact": False,
+                    "navigation_only_until_source_reopened": True,
+                    "raw_private_text_emitted": False,
+                    "raw_local_paths_emitted": False,
+                },
+                "operator_detail_command": (
+                    "aippocampus agent background "
+                    f"{background_finding_actions.shell_quote(task)} --json --detail full"
+                ),
+                "output_boundary": "detail_no_reader_or_operator_diagnostics",
+            }
+        )
     if detail_level == "detail":
         detail_findings = [_detail_finding(finding) for finding in findings]
         detail_summaries = [_finding_summary(finding) for finding in detail_findings[:3]]
@@ -290,26 +295,30 @@ def background_findings_card(
         payload["findings"] = detail_findings
         payload["output_boundary"] = "detail_no_feedback_write_actions"
     if detail_level in {"full", "operator"}:
-        payload["findings"] = findings
-        payload["reader_diagnostic"] = {
-            "status": diagnostic.get("status"),
-            "row_count": diagnostic.get("row_count"),
-            "invalid_line_count": diagnostic.get("invalid_line_count"),
-            "writer_in_progress": diagnostic.get("writer_in_progress"),
-            "diagnostics": diagnostic.get("diagnostics") or [],
-            "path_emitted": False,
-        }
-        payload["operator_detail"] = {
-            "working_memory_path_label": "registry/working_memory.jsonl",
-            "full_review_sources": [
-                "skills/aippocampus/references/subconscious-jobs.md",
-                "docs/research/dream-task-design.md",
-            ],
-        }
-        payload["output_boundary"] = (
-            "local_operator_diagnostic_redacted"
-            if detail_level == "operator"
-            else "local_full_diagnostic_redacted"
+        payload.update(
+            {
+                "findings": findings,
+                "reader_diagnostic": {
+                    "status": diagnostic.get("status"),
+                    "row_count": diagnostic.get("row_count"),
+                    "invalid_line_count": diagnostic.get("invalid_line_count"),
+                    "writer_in_progress": diagnostic.get("writer_in_progress"),
+                    "diagnostics": diagnostic.get("diagnostics") or [],
+                    "path_emitted": False,
+                },
+                "operator_detail": {
+                    "working_memory_path_label": "registry/working_memory.jsonl",
+                    "full_review_sources": [
+                        "skills/aippocampus/references/subconscious-jobs.md",
+                        "docs/research/dream-task-design.md",
+                    ],
+                },
+                "output_boundary": (
+                    "local_operator_diagnostic_redacted"
+                    if detail_level == "operator"
+                    else "local_full_diagnostic_redacted"
+                ),
+            }
         )
     return _public_payload(payload)
 
@@ -321,8 +330,8 @@ def background_recovery_card(command: str) -> dict[str, Any]:
         status="use_foreground_route",
         error_code=f"{command}_is_not_a_foreground_command",
         message=(
-            f"{label} work is surfaced through reviewed foreground background findings, "
-            "not a broad operator command."
+            f"{label} output belongs in reviewed foreground background findings, "
+            "not broad operator mode."
         ),
         safe_next_actions=[
             foreground_template_action(

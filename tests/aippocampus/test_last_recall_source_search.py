@@ -808,8 +808,10 @@ class LastRecallSourceSearchTests(unittest.TestCase):
         deepen_payload = json.loads(deepen_stdout.getvalue())
 
         self.assertEqual(recall_code, 0)
-        self.assertTrue(recall_payload["last_recall_cache_available"])
-        self.assertGreaterEqual(recall_payload["route_count"], 1)
+        self.assertTrue(cache_path.exists())
+        self.assertNotIn("last_recall_cache_available", recall_payload)
+        self.assertNotIn("route_count", recall_payload)
+        self.assertGreaterEqual(len(recall_payload["routes"]), 1)
         self.assertEqual(recall_payload["routes"][0]["label"], "Registry source route")
         self.assertIn("agent deepen --request 1", recall_payload["foreground_action"]["command"])
         self.assertEqual(deepen_code, 0)

@@ -29,14 +29,15 @@ def _agent_fallback_entry(llm: dict[str, Any]) -> dict[str, Any]:
     worker = dict_or_empty(llm.get("cognitive_worker"))
     resolved = str(worker.get("resolved_mode") or "").strip()
     diagnostic_status = str(worker.get("status") or "unknown").strip() or "unknown"
-    ready = resolved == "agent_fallback" and bool(worker.get("agent_fallback_available"))
-    if ready:
-        status = "agent_fallback_staging_only"
+    available = resolved == "agent_fallback" and bool(worker.get("agent_fallback_available"))
+    ready = False
+    if available:
+        status = "agent_fallback_scaffold_manual_only"
         what_works = (
-            "staging-only agent fallback queue plus source-joined fallback "
-            "result materialization for no-key background preparation"
+            "callable no-key fallback work queue plus manual source-joined "
+            "result materialization; not automatic ambient cognition"
         )
-        next_command = "aippocampus doctor provider --json"
+        next_command = "python -m aippocampus_runtime.subconscious.agent_fallback_executor --json"
     elif resolved == "external_model":
         status = "not_selected_external_model_active"
         what_works = "external-model background cognition is selected; agent fallback is not active"
@@ -50,14 +51,16 @@ def _agent_fallback_entry(llm: dict[str, Any]) -> dict[str, Any]:
     return {
         "id": "agent_fallback_ready",
         "ready": ready,
+        "stage": "callable" if available else "installed",
+        "ambient_state": str(worker.get("ambient_state") or ("callable" if available else "installed")),
         "status": status,
         "diagnostic_status": diagnostic_status,
         "what_works": what_works,
         "next_command": next_command,
         "claim_boundary": (
-            "staging-only fallback readiness is not a host-agent executor, "
-            "Dream quality claim, or promotion/adjudication path; materialized "
-            "fallback results still require existing source-backed finding joins"
+            "fallback queue presence is not readiness or usefulness evidence; "
+            "materialized fallback results still require manual execution, "
+            "existing source-backed finding joins, and later review before recall claims"
         ),
     }
 

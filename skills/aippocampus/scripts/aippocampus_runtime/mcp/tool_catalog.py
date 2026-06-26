@@ -162,7 +162,7 @@ TOOLS: list[dict[str, Any]] = [
     ),
     tool_schema(
         "recall_context",
-        "Get a compact route card for a fuzzy continuity cue. When: prefer over agent_recall for a lightweight route list without semantic or macro diagnostics; use search_memory for exact phrases. After: call recall_deepen on the useful route.",
+        "Legacy/detail route-handle tool for recall_deepen clients. When: prefer agent_recall for ordinary foreground continuity; use recall_context only when an existing workflow needs recall_deepen handles. After: call recall_deepen on a selected full-detail route, or rerun with agent_recall.",
         {
             "intent": {"type": "string"},
             "query": {"type": "string"},

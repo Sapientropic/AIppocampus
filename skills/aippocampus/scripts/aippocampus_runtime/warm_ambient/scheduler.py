@@ -19,7 +19,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
-from aippocampus_runtime.contracts import canonical_foreground_action_fields
+from aippocampus_runtime.contracts import (
+    canonical_foreground_action_fields,
+    foreground_template_action,
+)
 from aippocampus_runtime.core import (
     now_utc,
     sanitize_external_model_payload,
@@ -171,6 +174,48 @@ def _result_path_for_job(job_path: Path) -> Path:
     return job_path.with_name(job_path.stem + ".result.json")
 
 
+def _safe_count(value: Any) -> int:
+    try:
+        return max(0, int(value or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _result_has_useful_warm_signal(result: dict[str, Any]) -> bool:
+    """Return true only when a completed job says it produced useful cache work.
+
+    A result file proves a detached process finished; it does not by itself
+    prove warm ambient improved recall. Keep the usefulness upgrade tied to the
+    public summary emitted by the worker so a queued/completed scaffold cannot
+    masquerade as a useful ambient layer.
+    """
+
+    cache_write = result.get("cache_write")
+    cache_status = str(cache_write.get("status") or "") if isinstance(cache_write, dict) else ""
+    return bool(result.get("useful_signal_quorum_met")) or (
+        _safe_count(result.get("card_count")) > 0
+        and str(result.get("status") or "") in {"ready", "written"}
+        and cache_status in {"ready", "written", ""}
+    )
+
+
+def warm_ambient_state_for_activity(
+    activity: dict[str, Any],
+    *,
+    status: str,
+    enabled: bool,
+) -> str:
+    """Project warm ambient into the shared four-stage ambient vocabulary."""
+
+    if not enabled:
+        return "installed"
+    if _safe_count(activity.get("useful_result_count")) > 0:
+        return "useful"
+    if status in {"pending", "complete", "blocked"} or _safe_count(activity.get("scanned_job_count")) > 0:
+        return "active"
+    return "callable"
+
+
 def warm_job_activity(
     job_dir: Path | str,
     *,
@@ -183,6 +228,8 @@ def warm_job_activity(
     pending_recent = 0
     pending_stale = 0
     completed = 0
+    useful_results = 0
+    latest_useful = None
     scanned = 0
     if not target.exists():
         return {
@@ -191,11 +238,14 @@ def warm_job_activity(
             "pending_recent_count": 0,
             "pending_stale_count": 0,
             "completed_count": 0,
+            "useful_result_count": 0,
             "scanned_job_count": 0,
             "queue_state": "missing",
             "stale_queue_blocked": False,
             "worker_process_active": False,
             "worker_evidence": "not_available",
+            "usefulness_evidence": "none",
+            "latest_useful_at": None,
             "pending_jobs_are_worker_evidence": False,
             "status_command": WARM_STATUS_COMMAND,
         }
@@ -210,6 +260,10 @@ def warm_job_activity(
         latest = _latest_timestamp(latest, result_latest)
         if result_path.exists():
             completed += 1
+            result_payload = _load_warm_job_json(result_path)
+            if _result_has_useful_warm_signal(result_payload):
+                useful_results += 1
+                latest_useful = _latest_timestamp(latest_useful, result_latest)
             continue
         age = _age_seconds_since(job_latest, now=current)
         if age is not None and age <= stale_after_seconds:
@@ -230,6 +284,7 @@ def warm_job_activity(
         "pending_recent_count": pending_recent,
         "pending_stale_count": pending_stale,
         "completed_count": completed,
+        "useful_result_count": useful_results,
         "scanned_job_count": scanned,
         "queue_state": queue_state,
         "stale_queue_blocked": bool(pending_stale),
@@ -237,6 +292,10 @@ def warm_job_activity(
         # alive. Keep this false until the scheduler grows an explicit heartbeat.
         "worker_process_active": False,
         "worker_evidence": "not_available",
+        "usefulness_evidence": (
+            "useful_result_summary" if useful_results else "no_recent_useful_result"
+        ),
+        "latest_useful_at": latest_useful,
         "pending_jobs_are_worker_evidence": False,
         "status_command": WARM_STATUS_COMMAND,
     }
@@ -249,6 +308,7 @@ def warm_status_payload(
     now: datetime | None = None,
 ) -> dict[str, Any]:
     activity = warm_job_activity(job_dir, now=now)
+    enabled_now = warm_background_enabled(enabled)
     if activity.get("stale_queue_blocked"):
         status = "blocked"
     elif activity.get("pending_recent_count"):
@@ -257,6 +317,12 @@ def warm_status_payload(
         status = "complete"
     else:
         status = "idle"
+    warm_ambient_state = warm_ambient_state_for_activity(
+        activity,
+        status=status,
+        enabled=enabled_now,
+    )
+    warm_ambient_recently_useful = warm_ambient_state == "useful"
     foreground_action: dict[str, Any]
     safe_next_actions: list[dict[str, Any]]
     if status == "blocked":
@@ -265,8 +331,11 @@ def warm_status_payload(
     elif status == "pending":
         action_code = "wait_or_run_worker_when_ready"
         next_command = WARM_STATUS_COMMAND
+    elif warm_ambient_recently_useful:
+        action_code = "warm_recently_useful_no_action"
+        next_command = WARM_STATUS_COMMAND
     else:
-        action_code = "no_action"
+        action_code = "ordinary_recall_usable_warm_not_useful"
         next_command = WARM_STATUS_COMMAND
     if status == "blocked":
         foreground_action = {
@@ -346,30 +415,56 @@ def warm_status_payload(
             "why": "Recent warm jobs are queued; recheck status rather than assuming a worker is alive.",
         }
         safe_next_actions = [foreground_action]
-    else:
+    elif warm_ambient_recently_useful:
         foreground_action = {
-            "id": "no_warm_action_needed",
-            "label": "No warm action needed",
+            "id": "warm_ambient_recently_useful",
+            "label": "Warm ambient recently useful",
             "command": WARM_STATUS_COMMAND,
             "mutation_risk": "read_only",
-            "claim_boundary": "warm_status_is_optional_background_readout",
-            "why": "Warm ambient has no blocking foreground action.",
+            "claim_boundary": "recent_warm_result_summary_not_source_truth",
+            "why": "A completed warm job reported useful cache output; ordinary recall still reopens sources before claims.",
         }
         safe_next_actions = [foreground_action]
+    else:
+        foreground_action = foreground_template_action(
+            action_id="continue_with_ordinary_recall",
+            label="Continue with ordinary recall",
+            command_template='aippocampus agent recall "{cue}" --json',
+            requires=["cue"],
+            mutation_risk="read_only",
+            claim_boundary="ordinary_recall_usable_warm_ambient_not_usefulness_evidence",
+            why=(
+                "No recent useful warm result is available; use ordinary recall "
+                "for the concrete cue instead of treating warm ambient as live."
+            ),
+        )
+        safe_next_actions = [
+            foreground_action,
+            {
+                "id": "recheck_warm_status",
+                "label": "Recheck warm status",
+                "command": WARM_STATUS_COMMAND,
+                "mutation_risk": "read_only",
+                "claim_boundary": "warm_ambient_optional_liveness_check",
+                "why": "Use this when you specifically need to inspect optional warm ambient liveness.",
+            },
+        ]
     action_fields = canonical_foreground_action_fields(
         foreground_action,
         safe_next_actions=safe_next_actions,
     )
-    warm_ambient_ok = status != "blocked"
+    warm_ambient_ok = status != "blocked" and warm_ambient_state in {"active", "useful"}
     ordinary_recall_usable = True
     return {
         "kind": "aippocampus_warm_ambient_status",
         "command_ok": True,
         "warm_ambient_ok": warm_ambient_ok,
+        "warm_ambient_state": warm_ambient_state,
+        "warm_ambient_recently_useful": warm_ambient_recently_useful,
         "foreground_recall_ready": ordinary_recall_usable,
         "foreground_recall_blocked_by_warm_ambient": False,
         "ok": status != "blocked",
-        "enabled": warm_background_enabled(enabled),
+        "enabled": enabled_now,
         "status": status,
         "job_activity": activity,
         "action_code": action_code,
@@ -379,6 +474,8 @@ def warm_status_payload(
         "readiness": {
             "command_ok": True,
             "warm_ambient_ok": warm_ambient_ok,
+            "warm_ambient_state": warm_ambient_state,
+            "warm_ambient_recently_useful": warm_ambient_recently_useful,
             "ordinary_recall_usable": ordinary_recall_usable,
             "warm_ambient_required_for_first_recall": False,
             "strict_exit_code_still_reports_blocked_warm_queue": True,

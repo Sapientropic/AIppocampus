@@ -65,6 +65,13 @@ def compact_warm_status_card(payload: Mapping[str, Any]) -> dict[str, Any]:
         foreground_action,
         safe_next_actions=[foreground_action, *safe_next_actions, detail_action][:4],
     )
+    warm_ambient_state = str(payload.get("warm_ambient_state") or "callable")
+    warm_ambient_recently_useful = bool(payload.get("warm_ambient_recently_useful"))
+    primary_command = (
+        foreground_action.get("command")
+        or foreground_action.get("command_template")
+        or payload.get("next_command")
+    )
     card = {
         "kind": "aippocampus_warm_ambient_status_card",
         "schema_version": JOB_SCHEMA_VERSION,
@@ -74,6 +81,8 @@ def compact_warm_status_card(payload: Mapping[str, Any]) -> dict[str, Any]:
         "ok": bool(payload.get("ok")),
         "status": "blocked_stale_queue" if blocked_stale else status,
         "warm_ambient_ok": bool(payload.get("warm_ambient_ok")),
+        "warm_ambient_state": warm_ambient_state,
+        "warm_ambient_recently_useful": warm_ambient_recently_useful,
         "ordinary_recall_usable": bool(payload.get("ordinary_recall_usable")),
         "warm_not_blocking_recall": True,
         "summary": {
@@ -81,15 +90,19 @@ def compact_warm_status_card(payload: Mapping[str, Any]) -> dict[str, Any]:
             "pending_recent_count": _safe_int(activity.get("pending_recent_count")),
             "pending_stale_count": _safe_int(activity.get("pending_stale_count")),
             "completed_count": _safe_int(activity.get("completed_count")),
+            "useful_result_count": _safe_int(activity.get("useful_result_count")),
             "worker": str(activity.get("worker_evidence") or "not_available"),
+            "usefulness_evidence": str(activity.get("usefulness_evidence") or "none"),
         },
         "decision": {
             "primary": foreground_action.get("label") or "Check warm status",
-            "primary_command": foreground_action.get("command") or payload.get("next_command"),
+            "primary_command": primary_command,
             "reason": (
                 "Warm ambient has a blocked stale queue; inspect provider status before more optional warming."
                 if blocked_stale
-                else "Warm ambient is optional; ordinary recall can continue."
+                else "Warm ambient recently produced useful cache output; ordinary recall can still reopen sources."
+                if warm_ambient_recently_useful
+                else "Ordinary recall is usable; warm ambient is optional and not currently useful evidence."
             ),
         },
         **action_fields,

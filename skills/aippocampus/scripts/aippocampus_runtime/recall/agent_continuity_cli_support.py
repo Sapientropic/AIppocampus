@@ -711,7 +711,6 @@ def public_recall_projection(payload: Mapping[str, Any], *, query: str | None = 
     projected["routes"] = _public_compact_route_receipts(projected.get("routes"))
     projected.pop("policy_boundary", None)
     cache_available = bool(source.get("last_recall_cache_available"))
-    projected["last_recall_cache_available"] = cache_available
     action = projected.get("foreground_action")
     action_map = action if isinstance(action, Mapping) else {}
     raw_card = source.get("foreground_action_card")
@@ -1242,9 +1241,6 @@ def render_recall_human(payload: Mapping[str, Any]) -> str:
         reason_codes = packet.get("route_delta_reason_codes") or packet.get("triage_rank_reason_codes")
         if isinstance(reason_codes, list) and reason_codes:
             lines.append("   codes: " + ", ".join(str(code) for code in reason_codes[:3]))
-    omitted_duplicate_count = sum(duplicate_counts.values())
-    if omitted_duplicate_count:
-        lines.append(f"Collapsed duplicate route labels: {omitted_duplicate_count}.")
     navigation = payload.get("navigation_signals")
     if isinstance(navigation, Mapping):
         signals = [str(signal) for signal in navigation.get("signals") or [] if str(signal)]

@@ -3,9 +3,9 @@
 This module deliberately answers a small routing question only: which background
 cognition lane is allowed for semantic/subconscious/Dream-adjacent work in this
 process?  It does not start workers, inspect key values, or certify host agent
-quality.  The first agent-fallback slice is staging-only so a no-key local
-install can queue source-backed work without smuggling model output into source
-truth or foreground hooks.
+quality.  The first agent-fallback slice is scaffold/manual-only so a no-key
+local install can queue source-backed work without smuggling model output into
+source truth, foreground hooks, or "ambient useful" readiness claims.
 """
 
 from __future__ import annotations
@@ -116,7 +116,7 @@ def resolve_cognitive_worker_mode(
     elif requested == "agent_fallback":
         if fallback_available:
             resolved = "agent_fallback"
-            status = "agent_fallback_active"
+            status = "agent_fallback_scaffold_only"
         else:
             resolved = "deterministic_only"
             status = "deterministic_only_agent_fallback_unavailable"
@@ -135,7 +135,7 @@ def resolve_cognitive_worker_mode(
         status = "external_model_active"
     elif fallback_available:
         resolved = "agent_fallback"
-        status = "agent_fallback_active"
+        status = "agent_fallback_scaffold_only"
     else:
         resolved = "deterministic_only"
         status = "deterministic_only_missing_provider_and_agent"
@@ -150,6 +150,15 @@ def resolve_cognitive_worker_mode(
         "degraded_from": degraded_from,
         "reason": reason,
         "provider_key_visible": key_visible,
+        "ambient_state": (
+            "callable"
+            if resolved == "agent_fallback"
+            else "active"
+            if resolved == "external_model"
+            else "installed"
+            if resolved == "deterministic_only"
+            else "installed"
+        ),
         "background_model_consent_required": bool(require_background_model_consent),
         "background_model_consent": bool(background_consent),
         "background_model_consent_env": BACKGROUND_MODEL_CONSENT_ENV,
@@ -157,8 +166,9 @@ def resolve_cognitive_worker_mode(
         "agent_fallback_capability_env": AGENT_FALLBACK_AVAILABLE_ENV,
         "contracts": {
             "external_model_optional": True,
-            "agent_fallback_staging_only": resolved == "agent_fallback",
-            "staging_only": resolved == "agent_fallback",
+            "agent_fallback_manual_only": resolved == "agent_fallback",
+            "queued_task_is_readiness_evidence": False,
+            "queued_task_is_usefulness_evidence": False,
             "source_refs_required_before_promotion": True,
             "foreground_hook_waits_for_agent_fallback": False,
             "source_truth_unchanged": True,

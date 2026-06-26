@@ -85,7 +85,11 @@ class AgentBackgroundTests(unittest.TestCase):
         self.assertNotIn(payload["foreground_action"], payload["safe_next_actions"])
         self.assertNotIn("findings", payload)
         self.assertNotIn("operator_detail", payload)
+        self.assertNotIn("operator_detail_command", payload)
         self.assertNotIn("reader_diagnostic", payload)
+        self.assertNotIn("boundary", payload)
+        self.assertNotIn("output_boundary", payload)
+        self.assertNotIn("cue_used", payload)
         self.assertNotIn(payload["best_finding"], payload.get("finding_summaries", []))
         self.assertNotIn("boundary", finding)
         self.assertNotIn("source_summary", finding)
@@ -260,6 +264,9 @@ class AgentBackgroundTests(unittest.TestCase):
         self.assertIn("use_boundary", payload["best_finding"])
         self.assertNotIn("findings", payload)
         self.assertNotIn("reader_diagnostic", payload)
+        self.assertNotIn("operator_detail_command", payload)
+        self.assertNotIn("boundary", payload)
+        self.assertNotIn("output_boundary", payload)
         self.assertNotIn(str(working_memory), encoded)
 
     def test_agent_background_mcp_full_detail_keeps_operator_payload(self) -> None:

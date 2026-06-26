@@ -29,25 +29,16 @@ def assemble_compact_recall_payload(
     weak_route_recovery_card: dict[str, Any] | None,
     apw_recovery: dict[str, Any] | None,
     repo_familiarity_fallback: dict[str, Any] | None,
+    background_recovery: dict[str, Any] | None,
     discussion_atlas_pointer: Any,
     exact_wording_source_search_primary: bool,
 ) -> dict[str, Any]:
     route_receipts = route_projection_result.route_receipts
-    duplicate_omission_rows = result_projection.sorted_duplicate_label_omissions(
-        route_projection_result.duplicate_label_omissions
-    )
-    hidden_route_count_fields = result_projection.hidden_route_count_fields(
-        route_receipts=route_receipts,
-        memory_packets=context.memory_packets,
-        labels_low_specificity=context.labels_low_specificity,
-    )
     if context.labels_low_specificity and context.memory_packets:
-        weak_route_recovery_card = result_projection.low_specificity_weak_route_recovery_card(
-            weak_route_recovery_card=weak_route_recovery_card,
-            safe_next_actions=safe_next_actions,
+        weak_route_recovery_card = result_projection.low_specificity_route_guidance_card(
+            base_card=weak_route_recovery_card,
+            action_options=safe_next_actions,
             foreground_action=foreground_action,
-            memory_packets=context.memory_packets,
-            displayed_route_count=int(hidden_route_count_fields.get("displayed_route_count") or 0),
         )
     detail_fields = _recall_detail_command_fields(context.recovery_cue)
     detail_command = str(detail_fields.get("operator_detail_command") or "")
@@ -63,25 +54,11 @@ def assemble_compact_recall_payload(
         "surface": "mcp_agent_recall_compact",
         "status": context.status,
         "apw_recovery_state": apw_recovery.get("state") if isinstance(apw_recovery, dict) else None,
-        "last_recall_cache_available": context.cache_available,
-        "recall_selector_available": bool(context.recall_selector),
-        "recall_selector_id": context.recall_selector or None,
         "foreground_action": foreground_action,
         "miss_recovery_card": miss_recovery_card,
         "weak_route_recovery_card": weak_route_recovery_card,
+        "background_recovery_card": background_recovery,
         "routes": route_receipts,
-        "route_count": len(context.memory_packets),
-        **hidden_route_count_fields,
-        "hidden_low_confidence_route_count": (
-            route_projection_result.suppressed_low_confidence_route_count or None
-        ),
-        "omitted_duplicate_route_label_count": sum(
-            int(row["omitted_count"]) for row in duplicate_omission_rows
-        )
-        or None,
-        "route_label_omissions": {"duplicate_label_count": len(duplicate_omission_rows)}
-        if duplicate_omission_rows
-        else None,
         "repo_familiarity_fallback": repo_familiarity_fallback,
         "discussion_atlas_pointer": discussion_atlas_pointer,
         "claim_boundary": _compact_claim_boundary(
