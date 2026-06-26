@@ -15,7 +15,11 @@ from typing import Any, Iterable, Mapping, cast
 
 from aippocampus_runtime.core import now_utc
 from aippocampus_runtime.registry.api import registry_paths, unique_preserve
-from aippocampus_runtime.source.io_kernel import load_jsonl_dict_rows_with_line_field, parse_utc
+from aippocampus_runtime.source.io_kernel import (
+    iter_jsonl_dict_rows_text_with_line_numbers,
+    load_jsonl_dict_rows_with_line_field,
+    parse_utc,
+)
 
 REPORT_KIND = "aippocampus_subconscious_staging_maintenance_report"
 ARCHIVE_MANIFEST_KIND = "aippocampus_subconscious_staging_archive_manifest"
@@ -141,16 +145,12 @@ def iter_recent_jsonl_tail(
     lines = text.splitlines()
     if start > 0 and lines:
         lines = lines[1:]
-    rows: list[dict[str, Any]] = []
-    for line in lines:
-        if not line.strip():
-            continue
-        try:
-            item = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(item, dict):
-            rows.append(item)
+    rows = [
+        item
+        for _, item in iter_jsonl_dict_rows_text_with_line_numbers(
+            "\n".join(lines),
+        )
+    ]
     return rows[-max(1, int(max_rows)) :]
 
 

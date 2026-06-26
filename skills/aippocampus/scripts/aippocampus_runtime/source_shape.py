@@ -17,6 +17,7 @@ from aippocampus_runtime.core import compact_text, now_utc, stable_json_join_id
 from aippocampus_runtime.ops.route_readiness import safe_source_refs
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 from aippocampus_runtime.runtime_recheck_events import RUNTIME_RECHECK_EVENT_KIND
+from aippocampus_runtime.source.io_kernel import parse_jsonl_dict_rows_text
 
 SOURCE_SHAPE_DESCRIPTOR_KIND = "source_shape_descriptor"
 SOURCE_SHAPE_SCHEMA_VERSION = 1
@@ -691,7 +692,10 @@ def load_source_shape_diagnostics(path: str | Path) -> list[dict[str, Any]]:
         return []
     rows: list[Any]
     if input_path.suffix.lower() == ".jsonl":
-        rows = [json.loads(line) for line in text.splitlines() if line.strip()]
+        result = parse_jsonl_dict_rows_text(text, strict=True)
+        if int(result.loss.get("total_loss_count") or 0):
+            raise ValueError("source-shape diagnostics JSONL contains malformed rows")
+        rows = result.rows
     else:
         parsed = json.loads(text)
         rows = parsed if isinstance(parsed, list) else [parsed]

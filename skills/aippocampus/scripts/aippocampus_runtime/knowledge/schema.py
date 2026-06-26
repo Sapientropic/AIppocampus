@@ -6,6 +6,8 @@ from __future__ import annotations
 import re
 from typing import Any, Mapping
 
+from aippocampus_runtime.core import schema_block, schema_blocker_codes
+
 SOURCE_SCHEMA_VERSION = "aippocampus.knowledge_source_manifest.v1"
 CLAIM_SCHEMA_VERSION = "aippocampus.knowledge_claim.v1"
 UPDATE_EVENT_SCHEMA_VERSION = "aippocampus.knowledge_update_event.v1"
@@ -135,20 +137,12 @@ def _as_string_list(value: Any) -> list[str]:
     return [str(item) for item in value if str(item or "").strip()]
 
 
-def _block(code: str, *, field: str, message: str) -> dict[str, str]:
-    return {"code": code, "field": field, "message": message}
-
-
 def _missing_blocks(payload: Mapping[str, Any], fields: tuple[str, ...]) -> list[dict[str, str]]:
     return [
-        _block(f"missing_{field}", field=field, message=f"{field} is required.")
+        schema_block(f"missing_{field}", field=field, message=f"{field} is required.")
         for field in fields
         if not _nonempty(payload.get(field))
     ]
-
-
-def _blocker_codes(blocks: list[dict[str, str]]) -> list[str]:
-    return sorted({str(item.get("code") or "") for item in blocks if item.get("code")})
 
 
 def _valid_sha256(value: Any) -> bool:
@@ -203,7 +197,7 @@ def validate_knowledge_source_manifest(
 
     if manifest.get("schema_version") not in {SOURCE_SCHEMA_VERSION, None, ""}:
         errors.append(
-            _block(
+            schema_block(
                 "unsupported_schema_version",
                 field="schema_version",
                 message="Unsupported knowledge source schema version.",
@@ -211,7 +205,7 @@ def validate_knowledge_source_manifest(
         )
     if ingest_status and ingest_status not in INGEST_STATUSES:
         errors.append(
-            _block(
+            schema_block(
                 "unknown_ingest_status",
                 field="ingest_status",
                 message="Unknown source ingest status.",
@@ -221,7 +215,7 @@ def validate_knowledge_source_manifest(
         manifest.get("content_hash_sha256")
     ):
         errors.append(
-            _block(
+            schema_block(
                 "invalid_content_hash_sha256",
                 field="content_hash_sha256",
                 message="content_hash_sha256 must be a 64-character hex digest.",
@@ -235,7 +229,7 @@ def validate_knowledge_source_manifest(
             manifest.get("content_hash_sha256")
         ):
             blockers.append(
-                _block(
+                schema_block(
                     "invalid_content_hash_sha256",
                     field="content_hash_sha256",
                     message="High-stakes source manifests require a valid content hash.",
@@ -244,7 +238,7 @@ def validate_knowledge_source_manifest(
 
     if ingest_status not in ACTIVE_SOURCE_STATUSES:
         blockers.append(
-            _block(
+            schema_block(
                 "source_not_active",
                 field="ingest_status",
                 message="Only reviewed or active sources can support activated claims.",
@@ -252,7 +246,7 @@ def validate_knowledge_source_manifest(
         )
     if ingest_status in INACTIVE_SOURCE_STATUSES or manifest.get("superseded_by"):
         blockers.append(
-            _block(
+            schema_block(
                 "source_retired_or_superseded",
                 field="ingest_status",
                 message="Retired, retracted, or superseded sources remain auditable but inactive.",
@@ -260,7 +254,7 @@ def validate_knowledge_source_manifest(
         )
     if str(manifest.get("retracted_status") or "") not in {"", "not_retracted", "unknown"}:
         blockers.append(
-            _block(
+            schema_block(
                 "source_retracted",
                 field="retracted_status",
                 message="Retracted sources cannot support activated claims.",
@@ -268,7 +262,7 @@ def validate_knowledge_source_manifest(
         )
     if source_type in GENERATED_SOURCE_TYPES:
         blockers.append(
-            _block(
+            schema_block(
                 "generated_source_artifact",
                 field="source_type",
                 message="Generated summaries or triples are navigation artifacts, not truth sources.",
@@ -276,7 +270,7 @@ def validate_knowledge_source_manifest(
         )
     if source_type in LOW_AUTHORITY_SOURCE_TYPES:
         blockers.append(
-            _block(
+            schema_block(
                 "low_authority_source",
                 field="source_type",
                 message="Low-authority material must remain quarantined or candidate-only.",
@@ -284,7 +278,7 @@ def validate_knowledge_source_manifest(
         )
     if taints & ACTIVATION_BLOCKING_TAINTS:
         blockers.append(
-            _block(
+            schema_block(
                 "tainted_source",
                 field="taint_labels",
                 message="Generated, untrusted, copied, or provenance-missing material is not activation eligible.",
@@ -309,7 +303,7 @@ def validate_knowledge_source_manifest(
         "errors": errors,
         "warnings": warnings,
         "blockers": blockers,
-        "blocker_codes": _blocker_codes(blockers),
+        "blocker_codes": schema_blocker_codes(blockers),
         "taint_labels": sorted(taints),
     }
 
@@ -364,7 +358,7 @@ def validate_knowledge_claim(
 
     if claim.get("schema_version") not in {CLAIM_SCHEMA_VERSION, None, ""}:
         errors.append(
-            _block(
+            schema_block(
                 "unsupported_schema_version",
                 field="schema_version",
                 message="Unsupported knowledge claim schema version.",
@@ -372,7 +366,7 @@ def validate_knowledge_claim(
         )
     if promotion_status and promotion_status not in CLAIM_PROMOTION_STATUSES:
         errors.append(
-            _block(
+            schema_block(
                 "unknown_promotion_status",
                 field="promotion_status",
                 message="Unknown claim promotion status.",
@@ -380,7 +374,7 @@ def validate_knowledge_claim(
         )
     if review_status and review_status not in CLAIM_REVIEW_STATUSES:
         errors.append(
-            _block(
+            schema_block(
                 "unknown_review_status",
                 field="review_status",
                 message="Unknown claim review status.",
@@ -388,7 +382,7 @@ def validate_knowledge_claim(
         )
     if conflict_status and conflict_status not in CLAIM_CONFLICT_STATUSES:
         errors.append(
-            _block(
+            schema_block(
                 "unknown_conflict_status",
                 field="conflict_status",
                 message="Unknown claim conflict status.",
@@ -398,7 +392,7 @@ def validate_knowledge_claim(
     source_report: dict[str, Any] | None = None
     if source is None:
         blockers.append(
-            _block(
+            schema_block(
                 "missing_source_manifest",
                 field="source_id",
                 message="Claim source_id does not resolve to a manifest.",
@@ -408,7 +402,7 @@ def validate_knowledge_claim(
         source_report = validate_knowledge_source_manifest(source, high_stakes=high_stakes)
         if promotion_status == "activated" and not source_report["activation_eligible"]:
             blockers.append(
-                _block(
+                schema_block(
                     "source_not_activation_eligible",
                     field="source_id",
                     message="Activated claims require an activation-eligible source.",
@@ -416,7 +410,7 @@ def validate_knowledge_claim(
             )
         if _claim_exceeds_source_scope(claim, source):
             blockers.append(
-                _block(
+                schema_block(
                     "claim_scope_exceeds_source_scope",
                     field="claim_scope",
                     message="Claim domain scope must stay within the source domain scope.",
@@ -424,7 +418,7 @@ def validate_knowledge_claim(
             )
         if _claim_exceeds_source_jurisdiction(claim, source):
             blockers.append(
-                _block(
+                schema_block(
                     "claim_jurisdiction_exceeds_source_scope",
                     field="jurisdiction_scope",
                     message="Claim jurisdiction scope must stay within the source jurisdiction scope.",
@@ -435,7 +429,7 @@ def validate_knowledge_claim(
         claim.get("source_anchor")
     ):
         blockers.append(
-            _block(
+            schema_block(
                 "missing_source_anchor_span",
                 field="source_anchor",
                 message="Activated claims require an assertion-level source span, not whole-document blessing.",
@@ -446,7 +440,7 @@ def validate_knowledge_claim(
             blockers.extend(_missing_blocks(claim, CLAIM_ACTIVATION_REQUIRED))
         if review_status != "reviewed":
             blockers.append(
-                _block(
+                schema_block(
                     "claim_not_reviewed",
                     field="review_status",
                     message="Activated claims require a reviewed status.",
@@ -454,7 +448,7 @@ def validate_knowledge_claim(
             )
         if conflict_status not in CLAIM_CLEAR_CONFLICT_STATUSES:
             blockers.append(
-                _block(
+                schema_block(
                     "claim_conflict_not_cleared",
                     field="conflict_status",
                     message="Conflicted, uncertain, or unreviewed claims must not activate.",
@@ -462,7 +456,7 @@ def validate_knowledge_claim(
             )
         if claim.get("superseded_by"):
             blockers.append(
-                _block(
+                schema_block(
                     "claim_superseded",
                     field="superseded_by",
                     message="Superseded claims remain auditable but cannot stay activated.",
@@ -472,7 +466,7 @@ def validate_knowledge_claim(
             claim
         ) in LOW_CONFIDENCE_LEVELS:
             blockers.append(
-                _block(
+                schema_block(
                     "claim_confidence_too_low",
                     field="confidence",
                     message="Activated high-stakes claims require non-low confidence.",
@@ -483,7 +477,7 @@ def validate_knowledge_claim(
     authority = str(claim.get("authority_level") or "")
     if "model_generated" in provenance or authority == "generated_summary":
         blockers.append(
-            _block(
+            schema_block(
                 "generated_claim_artifact",
                 field="extraction_provenance",
                 message="Model-generated summaries and extracted navigation artifacts cannot activate claims.",
@@ -506,7 +500,7 @@ def validate_knowledge_claim(
         "truth_boundary": "activated_claim" if promotion_eligible else "candidate_or_blocked",
         "errors": errors,
         "blockers": blockers,
-        "blocker_codes": _blocker_codes(blockers),
+        "blocker_codes": schema_blocker_codes(blockers),
         "source_report": source_report,
     }
 
@@ -536,7 +530,7 @@ def validate_knowledge_update_event(
 
     if event.get("schema_version") not in {UPDATE_EVENT_SCHEMA_VERSION, None, ""}:
         errors.append(
-            _block(
+            schema_block(
                 "unsupported_schema_version",
                 field="schema_version",
                 message="Unsupported knowledge update event schema version.",
@@ -544,7 +538,7 @@ def validate_knowledge_update_event(
         )
     if diff_type and diff_type not in UPDATE_DIFF_TYPES:
         errors.append(
-            _block(
+            schema_block(
                 "unknown_diff_type",
                 field="diff_type",
                 message="Unknown knowledge update diff type.",
@@ -552,7 +546,7 @@ def validate_knowledge_update_event(
         )
     if not isinstance(requires_review, bool):
         errors.append(
-            _block(
+            schema_block(
                 "invalid_requires_review",
                 field="requires_review",
                 message="requires_review must be a boolean.",
@@ -560,7 +554,7 @@ def validate_knowledge_update_event(
         )
     if "affected_claims" not in event:
         errors.append(
-            _block(
+            schema_block(
                 "missing_affected_claims",
                 field="affected_claims",
                 message="affected_claims is required, even when no claims are affected.",
@@ -568,7 +562,7 @@ def validate_knowledge_update_event(
         )
     elif not isinstance(event.get("affected_claims"), list):
         errors.append(
-            _block(
+            schema_block(
                 "invalid_affected_claims",
                 field="affected_claims",
                 message="affected_claims must be a list of claim ids.",
@@ -576,7 +570,7 @@ def validate_knowledge_update_event(
         )
     if review_status and review_status not in CLAIM_REVIEW_STATUSES:
         errors.append(
-            _block(
+            schema_block(
                 "unknown_review_status",
                 field="review_status",
                 message="Unknown update review status.",
@@ -585,7 +579,7 @@ def validate_knowledge_update_event(
 
     if diff_type in UPDATE_OLD_SOURCE_REQUIRED and not old_source_id:
         errors.append(
-            _block(
+            schema_block(
                 "missing_old_source_id",
                 field="old_source_id",
                 message="This update type requires old_source_id.",
@@ -593,7 +587,7 @@ def validate_knowledge_update_event(
         )
     if diff_type in UPDATE_NEW_SOURCE_REQUIRED and not new_source_id:
         errors.append(
-            _block(
+            schema_block(
                 "missing_new_source_id",
                 field="new_source_id",
                 message="This update type requires new_source_id.",
@@ -601,7 +595,7 @@ def validate_knowledge_update_event(
         )
     if diff_type in UPDATE_ROLLBACK_REQUIRED and not rollback_source_id:
         errors.append(
-            _block(
+            schema_block(
                 "missing_rollback_source_id",
                 field="rollback_source_id",
                 message="Lifecycle updates need an auditable rollback pointer.",
@@ -615,7 +609,7 @@ def validate_knowledge_update_event(
     ):
         if source_id and source_id not in sources:
             errors.append(
-                _block(
+                schema_block(
                     f"unresolved_{field}",
                     field=field,
                     message="Update event source pointer does not resolve.",
@@ -625,7 +619,7 @@ def validate_knowledge_update_event(
     activation_requested = bool(event.get("activated_at")) or review_status == "reviewed"
     if high_stakes and requires_review is True and review_status != "reviewed":
         blockers.append(
-            _block(
+            schema_block(
                 "update_review_required",
                 field="review_status",
                 message="High-stakes updates may create candidates, but activation requires review.",
@@ -642,7 +636,7 @@ def validate_knowledge_update_event(
         )
         if activation_requested and not new_source_report["activation_eligible"]:
             blockers.append(
-                _block(
+                schema_block(
                     "new_source_not_activation_eligible",
                     field="new_source_id",
                     message="Reviewed update events cannot activate an ineligible source.",
@@ -666,7 +660,7 @@ def validate_knowledge_update_event(
         "rollback_available": bool(rollback_source_id and rollback_source_id in sources),
         "errors": errors,
         "blockers": blockers,
-        "blocker_codes": _blocker_codes(blockers),
+        "blocker_codes": schema_blocker_codes(blockers),
         "new_source_report": new_source_report,
     }
 

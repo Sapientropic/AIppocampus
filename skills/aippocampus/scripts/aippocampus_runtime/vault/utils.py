@@ -10,6 +10,8 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from aippocampus_runtime.source.io_kernel import load_jsonl_dict_rows_with_line_field
+
 SCRIPT_DIR = Path(__file__).resolve().parents[2]
 
 
@@ -100,13 +102,9 @@ def read_recent_messages(path: Path, limit: int = 8) -> list[dict]:
     if not path.exists():
         return []
     rows = []
-    with path.open("r", encoding="utf-8") as f:
-        for idx, line in enumerate(f, start=1):
-            if not line.strip():
-                continue
-            item = json.loads(line)
-            item.setdefault("id", idx)
-            rows.append(item)
+    for item in load_jsonl_dict_rows_with_line_field(path, line_field="_source_line").rows:
+        item.setdefault("id", item.pop("_source_line", None))
+        rows.append(item)
     return rows[-limit:]
 
 

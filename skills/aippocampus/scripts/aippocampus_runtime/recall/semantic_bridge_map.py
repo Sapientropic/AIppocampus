@@ -23,6 +23,7 @@ from aippocampus_runtime.recall.query_policy import normalize_term, unique_prese
 from aippocampus_runtime.recall.semantic_effectiveness import (
     apply_semantic_effectiveness_to_candidates,
 )
+from aippocampus_runtime.source.io_kernel import parse_jsonl_dict_rows_text
 
 SCHEMA_VERSION = 1
 BRIDGE_KIND = "aippocampus_semantic_bridge_candidate"
@@ -378,15 +379,7 @@ def load_semantic_bridge_rows(path: str | Path | None) -> list[dict[str, Any]]:
         except json.JSONDecodeError:
             return []
         return [dict(item) for item in data if isinstance(item, Mapping)]
-    for line in text.splitlines():
-        if not line.strip():
-            continue
-        try:
-            item = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(item, Mapping):
-            rows.append(dict(item))
+    rows.extend(parse_jsonl_dict_rows_text(text).rows)
     return rows
 
 

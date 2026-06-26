@@ -12,8 +12,9 @@ from typing import Any
 
 from aippocampus_runtime.hooks.prompt_fallbacks import (
     _has_final_diagnostic_budget,
+    add_dream_delivery_arguments,
     fallback_payload,
-    load_dream_delivery_module,
+    prepare_dream_delivery,
     prompt_hook_audit_status,
     write_debug_log,
     write_prompt_hook_audit_status,
@@ -34,27 +35,10 @@ _RUNTIME_CACHE: dict[str, Any] | None = None
 
 
 def _add_dream_delivery_arguments(parser: argparse.ArgumentParser) -> None:
-    dream_delivery, _reason = load_dream_delivery_module()
-    if dream_delivery is None:
-        parser.add_argument("--dream-shadow-ab", action="store_true")
-        parser.add_argument("--dream-shadow-log")
-        parser.add_argument("--dream-shadow-salt", default=os.environ.get("AIPPOCAMPUS_DREAM_SHADOW_AB_SALT"))
-        parser.add_argument("--dream-delivery-mode")
-        parser.add_argument("--dream-rollout-rate", type=float, default=None)
-    else:
-        dream_delivery.add_dream_delivery_arguments(parser)
+    add_dream_delivery_arguments(parser)
 
 def _prepare_dream_delivery(*, prompt: str, hook_input: dict[str, Any], args: argparse.Namespace) -> dict[str, Any]:
-    dream_delivery, reason = load_dream_delivery_module()
-    if dream_delivery is None:
-        return {
-            "mode": "off",
-            "event": None,
-            "allow_dream": False,
-            "dream_hypothesis_limit": 0,
-            "reason": reason or "policy_unavailable",
-        }
-    return dream_delivery.prepare_dream_delivery(prompt=prompt, hook_input=hook_input, args=args)
+    return prepare_dream_delivery(prompt=prompt, hook_input=hook_input, args=args)
 
 
 def _emit_json(payload: Any, *, indent: int | None = None) -> None:
@@ -64,6 +48,19 @@ def _emit_json(payload: Any, *, indent: int | None = None) -> None:
     emit_public_text(
         json.dumps(sanitize_external_model_payload(payload), ensure_ascii=False, indent=indent)
     )
+
+
+def _append_detail_warning(result: dict[str, Any], *, code: str, exc: BaseException) -> None:
+    warnings = result.setdefault("degraded_warnings", [])
+    if isinstance(warnings, list):
+        warnings.append(
+            {
+                "code": code,
+                "message": str(exc) or exc.__class__.__name__,
+                "surface": "prompt_hook_final_diagnostics",
+                "foreground_action_required": False,
+            }
+        )
 
 
 def _load_runtime() -> dict[str, Any]:
@@ -221,10 +218,10 @@ def main(argv: list[str] | None = None) -> int:
                     hook_total_ms=round((time.perf_counter() - main_start) * 1000, 2),
                     telemetry_write_ms=round((time.perf_counter() - telemetry_start) * 1000, 2),
                 )
-        except Exception:
+        except Exception as exc:
             if args.strict:
                 raise
-            pass
+            _append_detail_warning(result, code="skip_telemetry_write_failed", exc=exc)
         if not args.no_audit_status:
             try:
                 if _has_final_diagnostic_budget(
@@ -235,10 +232,10 @@ def main(argv: list[str] | None = None) -> int:
                         result,
                         status_path=Path(args.audit_status_path) if args.audit_status_path else None,
                     )
-            except Exception:
+            except Exception as exc:
                 if args.strict:
                     raise
-                pass
+                _append_detail_warning(result, code="audit_status_write_failed", exc=exc)
         if args.log or args.log_skip:
             write_debug_log(result, hook_input=hook_input, include_skip=args.log_skip)
         if args.json_output:

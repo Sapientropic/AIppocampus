@@ -134,7 +134,7 @@ def repo_checkout_doc_matches(
         return []
     try:
         rows = repo_familiarity.current_checkout_source_rows(cwd)
-    except Exception:
+    except (OSError, ValueError):
         return []
     matches = [
         match

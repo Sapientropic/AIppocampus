@@ -16,9 +16,10 @@ from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
-from aippocampus_runtime.core import stable_text_join_digest
+from aippocampus_runtime.core import dict_or_empty, stable_text_join_digest
 from aippocampus_runtime.recall import cognitive_load_sidecar as sidecar
 from aippocampus_runtime.registry.store import load_registry, registry_paths
+from aippocampus_runtime.source.io_kernel import load_jsonl_dict_rows
 
 SCHEMA_VERSION = 1
 KIND = "aippocampus_cognitive_load_private_history_calibration"
@@ -135,10 +136,6 @@ CALIBRATION_CANNOT_CLAIM = (
 )
 
 
-def _as_mapping(value: Any) -> Mapping[str, Any]:
-    return value if isinstance(value, Mapping) else {}
-
-
 def _as_path(value: Any) -> Path | None:
     text = str(value or "").strip()
     return Path(text) if text else None
@@ -152,22 +149,8 @@ def _contains_any(text: str, terms: Iterable[str]) -> bool:
 def _read_jsonl(path: Path | None) -> tuple[list[dict[str, Any]], int]:
     if path is None or not path.is_file():
         return [], 0
-    rows: list[dict[str, Any]] = []
-    bad_rows = 0
-    with path.open("r", encoding="utf-8", errors="replace") as handle:
-        for line in handle:
-            if not line.strip():
-                continue
-            try:
-                item = json.loads(line)
-            except json.JSONDecodeError:
-                bad_rows += 1
-                continue
-            if isinstance(item, dict):
-                rows.append(item)
-            else:
-                bad_rows += 1
-    return rows, bad_rows
+    result = load_jsonl_dict_rows(path)
+    return result.rows, int(result.loss.get("total_loss_count") or 0)
 
 
 def _source_ref_from_row(row: Mapping[str, Any], *, fallback_kind: str) -> dict[str, Any]:
@@ -342,7 +325,7 @@ def extract_cognitive_load_events_from_clean_source(
 def _diagnostic_candidates(sidecar_payload: Mapping[str, Any]) -> list[dict[str, Any]]:
     candidates: list[dict[str, Any]] = []
     for row in sidecar_payload.get("entries") or []:
-        entry = _as_mapping(row)
+        entry = dict_or_empty(row)
         key = str(entry.get("source_ref_key") or "")
         if not key:
             continue
@@ -381,7 +364,7 @@ def build_private_history_cognitive_load_calibration(
     input_surface: str = "clean_source_messages_and_events",
     registry_metrics: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-    registry_metrics = _as_mapping(registry_metrics)
+    registry_metrics = dict_or_empty(registry_metrics)
     load_events, extraction = extract_cognitive_load_events_from_clean_source(
         messages,
         behavior_events,
@@ -404,11 +387,11 @@ def build_private_history_cognitive_load_calibration(
             "signal_event_count": extraction["signal_event_count"],
         },
     )
-    entries = [_as_mapping(row) for row in sidecar_payload.get("entries") or []]
+    entries = [dict_or_empty(row) for row in sidecar_payload.get("entries") or []]
     boosted_candidate_count = sum(
         1
         for row in ranked
-        if float(_as_mapping(row.get("score_breakdown")).get("cognitive_load_boost") or 0.0) > 0
+        if float(dict_or_empty(row.get("score_breakdown")).get("cognitive_load_boost") or 0.0) > 0
     )
 
     return {
@@ -502,7 +485,7 @@ def run_private_history_calibration(
         for entry in registry.get("threads") or []:
             if thread_count_scanned >= max_threads:
                 break
-            paths = _as_mapping(_as_mapping(entry).get("paths"))
+            paths = dict_or_empty(dict_or_empty(entry).get("paths"))
             msg_path = _as_path(paths.get("clean_source_messages_jsonl"))
             evt_path = _as_path(paths.get("clean_source_events_jsonl"))
             if msg_path is None and evt_path is None:
@@ -535,8 +518,8 @@ def run_private_history_calibration(
 
 
 def _render_text(payload: Mapping[str, Any]) -> str:
-    metrics = _as_mapping(payload.get("extraction_metrics"))
-    input_surface = _as_mapping(payload.get("input_surface"))
+    metrics = dict_or_empty(payload.get("extraction_metrics"))
+    input_surface = dict_or_empty(payload.get("input_surface"))
     return "\n".join(
         [
             f"Status: {payload.get('status')}",

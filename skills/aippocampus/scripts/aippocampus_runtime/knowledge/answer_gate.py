@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from typing import Any, Mapping, Sequence
 
+from aippocampus_runtime.core import dict_or_empty, string_list_or_empty
 from aippocampus_runtime.knowledge import schema
 
 POLICY_VERSION = "aippocampus.high_risk_answer_gate.v1"
@@ -41,21 +42,12 @@ BASE_CANNOT_CLAIM = [
 ]
 
 
-def _as_list(value: Any) -> list[str]:
-    if not isinstance(value, list):
-        return []
-    return [str(item) for item in value if str(item or "").strip()]
-
-
 def _as_set(value: Any) -> set[str]:
-    return set(_as_list(value))
+    return set(string_list_or_empty(value))
 
 
 def _critical_variables(context: Mapping[str, Any]) -> Mapping[str, Any]:
-    variables = context.get("critical_variables")
-    if isinstance(variables, Mapping):
-        return variables
-    return {}
+    return dict_or_empty(context.get("critical_variables"))
 
 
 def _add_gate(
@@ -229,7 +221,7 @@ def _claim_validity_gates(
                 field="claim_id",
                 message="Selected high-risk claim is not promotion eligible.",
             )
-        for blocker_code in _as_list(report.get("blocker_codes")):
+        for blocker_code in string_list_or_empty(report.get("blocker_codes")):
             _add_gate(
                 gates,
                 f"claim_blocker:{blocker_code}",
@@ -238,7 +230,7 @@ def _claim_validity_gates(
             )
         source_report = report.get("source_report")
         if isinstance(source_report, Mapping):
-            for blocker_code in _as_list(source_report.get("blocker_codes")):
+            for blocker_code in string_list_or_empty(source_report.get("blocker_codes")):
                 _add_gate(
                     gates,
                     f"source_blocker:{blocker_code}",
@@ -292,13 +284,17 @@ def _conflict_sets(
                 "claim_ids": sorted(str(claim.get("claim_id") or "") for claim in members),
                 "source_ids": sorted(str(claim.get("source_id") or "") for claim in members),
                 "domain_scopes": sorted(
-                    {scope for claim in members for scope in _as_list(claim.get("claim_scope"))}
+                    {
+                        scope
+                        for claim in members
+                        for scope in string_list_or_empty(claim.get("claim_scope"))
+                    }
                 ),
                 "jurisdiction_scopes": sorted(
                     {
                         scope
                         for claim in members
-                        for scope in _as_list(claim.get("jurisdiction_scope"))
+                        for scope in string_list_or_empty(claim.get("jurisdiction_scope"))
                     }
                 ),
                 "resolution": "human_review_required",
@@ -321,8 +317,8 @@ def _cited_boundaries(
                 "source_anchor": claim.get("source_anchor"),
                 "authority_level": claim.get("authority_level"),
                 "evidence_grade": source.get("evidence_grade"),
-                "domain_scope": _as_list(claim.get("claim_scope")),
-                "jurisdiction_scope": _as_list(claim.get("jurisdiction_scope")),
+                "domain_scope": string_list_or_empty(claim.get("claim_scope")),
+                "jurisdiction_scope": string_list_or_empty(claim.get("jurisdiction_scope")),
                 "effective_date_scope": claim.get("effective_date_scope"),
                 "conflict_status": claim.get("conflict_status"),
                 "uncertainty_notes": claim.get("uncertainty_notes"),

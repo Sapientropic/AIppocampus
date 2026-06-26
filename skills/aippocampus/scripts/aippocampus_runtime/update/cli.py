@@ -19,6 +19,7 @@ from aippocampus_runtime.contracts import write_boundary
 from aippocampus_runtime.core import codex_home, now_utc
 from aippocampus_runtime.hooks import install_action_hint, install_lifecycle, install_prompt
 from aippocampus_runtime.public_output import emit_public_text
+from aippocampus_runtime.source.io_kernel import load_json_dict
 from aippocampus_runtime.update import status_actions as update_actions
 from aippocampus_runtime.update import status_foreground
 from aippocampus_runtime.update.agent_callable import (
@@ -101,11 +102,7 @@ RESOLVED_INSTALLED_CACHE_AUTO_STATUSES = {"unique", "unique_version_match"}
 
 def _plugin_manifest_version(root: Path) -> str | None:
     manifest = root / ".codex-plugin" / "plugin.json"
-    try:
-        data = json.loads(manifest.read_text(encoding="utf-8"))
-    except Exception:
-        return None
-    version = data.get("version") if isinstance(data, dict) else None
+    version = load_json_dict(manifest).data.get("version")
     return str(version) if version else None
 
 
@@ -963,7 +960,13 @@ def _replace_tree_with_backup(
         backup = _backup_root(backup_parent) / f"{target.name}-{_update_operation_id()}"
         target.rename(backup)
     try:
+        # aippocampus-agent-slop-ok: directory-replace-boundary
+        # This replaces an already-built directory tree after target backup.
+        # File-level prepared_atomic_replace cannot preserve rollback semantics here.
         source_tmp.replace(target)
+    # aippocampus-debt-ok: broad-exception-boundary
+    # Hook install is a write boundary: restore the backup for any process-level
+    # failure, then re-raise so apply does not claim success after a partial write.
     except BaseException:
         if target.exists():
             shutil.rmtree(target, ignore_errors=True)
@@ -1181,6 +1184,9 @@ def apply_hooks(args: argparse.Namespace) -> dict[str, Any]:
     try:
         prompt = install_prompt.install(hooks_path)
         lifecycle = install_lifecycle.install(hooks_path)
+    # aippocampus-debt-ok: broad-exception-boundary
+    # Hook install is a write boundary: restore backup for process-level failure,
+    # then re-raise so apply cannot claim success after a partial write.
     except BaseException:
         if backup is not None and backup.exists():
             hooks_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1377,6 +1383,9 @@ def rollback_update(args: argparse.Namespace) -> dict[str, Any]:
         if target.exists():
             target.rename(displaced)
         try:
+            # aippocampus-agent-slop-ok: directory-replace-boundary
+            # Skill rollback swaps a staged directory into place, then restores
+            # the displaced tree on failure. File atomic helpers are the wrong owner.
             tmp.replace(target)
         except BaseException:
             if target.exists():
@@ -1505,6 +1514,10 @@ def apply_update(args: argparse.Namespace) -> dict[str, Any]:
                         "write_boundary": write_boundary(written=False),
                     }
                 )
+        # aippocampus-debt-ok: broad-exception-boundary
+        # Per-surface apply is the CLI recovery boundary. The returned recovery
+        # card carries the failed surface and rollback context instead of
+        # pretending the remaining surfaces prove local sync is healthy.
         except Exception as exc:
             return _apply_failure_recovery(surface, args, exc, results)
     if getattr(args, "force_dirty_worktree", False):

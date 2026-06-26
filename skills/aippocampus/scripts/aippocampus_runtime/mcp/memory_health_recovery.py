@@ -205,6 +205,10 @@ def _probe_deepen_success(
             project=str(arguments.get("project") or "AIppocampus"),
             max_matches=1,
         )
+    # aippocampus-debt-ok: broad-exception-boundary
+    # This is an MCP readiness probe boundary: deepen failures degrade the
+    # probe to source_reopen_success=false while the surrounding report still
+    # exposes route/deepen availability instead of blocking compact recall.
     except Exception:
         return False
     result = payload.get("result") if isinstance(payload, dict) else None

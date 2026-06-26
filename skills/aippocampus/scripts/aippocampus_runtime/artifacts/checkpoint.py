@@ -21,7 +21,10 @@ from aippocampus_runtime.core import (
     now_utc,
     resolve_artifact_path,
 )
-from aippocampus_runtime.source.io_kernel import load_json_dict
+from aippocampus_runtime.source.io_kernel import (
+    load_json_dict,
+    load_jsonl_dict_rows_with_line_field,
+)
 
 SCRIPT_DIR = Path(__file__).resolve().parents[2]
 KNOWN_TERMS = [
@@ -60,13 +63,10 @@ def run_build_index(cwd: Path, index_dir: Path, anchors: Path) -> None:
 
 def read_messages(path: Path) -> list[dict]:
     messages = []
-    with path.open("r", encoding="utf-8") as f:
-        for idx, line in enumerate(f, start=1):
-            if not line.strip():
-                continue
-            item = json.loads(line)
-            item.setdefault("id", idx)
-            messages.append(item)
+    for item in load_jsonl_dict_rows_with_line_field(path, line_field="_source_line").rows:
+        idx = item.pop("_source_line", None)
+        item.setdefault("id", idx)
+        messages.append(item)
     return messages
 
 

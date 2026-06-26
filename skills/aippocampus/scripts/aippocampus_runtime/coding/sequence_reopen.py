@@ -14,19 +14,12 @@ import json
 from typing import Any, Mapping, Sequence
 
 from aippocampus_runtime.coding import sequence_packets
+from aippocampus_runtime.core import dict_or_empty, list_or_empty
 from aippocampus_runtime.question.source_refs import clean_source_ref, source_ref_key
 from aippocampus_runtime.registry.api import unique_preserve
 
 SEQUENCE_PACKET_REOPEN_PLAN_KIND = "aippocampus_sequence_packet_reopen_plan"
 SAFE_NAVIGATION_USES = ["ask", "refresh_sources"]
-
-
-def _as_mapping(value: Any) -> Mapping[str, Any]:
-    return value if isinstance(value, Mapping) else {}
-
-
-def _as_list(value: Any) -> list[Any]:
-    return value if isinstance(value, list) else []
 
 
 def _string_items(value: Any) -> list[str]:
@@ -60,7 +53,7 @@ def _unique_refs(refs: list[dict[str, Any]], *, limit: int = 24) -> list[dict[st
 
 def _clean_refs(row: Mapping[str, Any]) -> list[dict[str, Any]]:
     candidates: list[Any] = []
-    candidates.extend(_as_list(row.get("source_refs")))
+    candidates.extend(list_or_empty(row.get("source_refs")))
     if row.get("source_ref") is not None:
         candidates.append(row.get("source_ref"))
     if not candidates:
@@ -131,8 +124,8 @@ def _index_catalog(
 
 def _timeline(packet: Mapping[str, Any]) -> list[dict[str, str]]:
     events: list[dict[str, str]] = []
-    for event in _as_list(packet.get("timeline")):
-        row = _as_mapping(event)
+    for event in list_or_empty(packet.get("timeline")):
+        row = dict_or_empty(event)
         event_id = str(row.get("event_id") or "").strip()
         event_kind = str(row.get("event_kind") or "").strip()
         source_hash = str(row.get("source_ref_hash") or row.get("source_hash") or "").strip()
@@ -160,7 +153,7 @@ def _resolution_status(*, packet_kind_valid: bool, timeline: Sequence[Mapping[st
 def _recommended_use(packet: Mapping[str, Any], status: str) -> str:
     if status != "complete" or packet.get("sequence_gaps"):
         return "refresh_sources"
-    proposed = str(_as_mapping(packet.get("current_assessment")).get("proposed_use") or "").strip()
+    proposed = str(dict_or_empty(packet.get("current_assessment")).get("proposed_use") or "").strip()
     if proposed in {"ask", "refresh_sources", "remind"}:
         return proposed
     return "refresh_sources"

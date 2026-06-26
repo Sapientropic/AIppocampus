@@ -3,13 +3,12 @@
 
 from __future__ import annotations
 
-import json
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
-from aippocampus_runtime.source.io_kernel import safe_float
+from aippocampus_runtime.source.io_kernel import load_jsonl_dict_rows, safe_float
 
 ShellDecision = Literal[
     "deterministic_only",
@@ -96,18 +95,8 @@ def staging_signals(root: Path, project_label: str) -> dict[str, int]:
     for path in (root / "subconscious_edges.jsonl", root / "subconscious_jobs.jsonl"):
         if not path.exists():
             continue
-        try:
-            lines = path.read_text(encoding="utf-8").splitlines()
-        except OSError:
-            continue
-        for line in lines:
-            if not line.strip():
-                continue
-            try:
-                row = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if not isinstance(row, dict) or not _row_mentions_project(row, project_label):
+        for row in load_jsonl_dict_rows(path).rows:
+            if not _row_mentions_project(row, project_label):
                 continue
             if row.get("status") in {None, "staging"}:
                 backlog += 1

@@ -7,6 +7,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.core import dict_or_empty, list_or_empty
 from aippocampus_runtime.mcp import tool_handlers as mcp_tools
 from aippocampus_runtime.mcp.compact_profile import mcp_tool_result_payload
 from aippocampus_runtime.navigation import attention_hot_router
@@ -22,14 +23,6 @@ from aippocampus_runtime.recall.query_policy import split_query_terms
 ARM_ATTENTION_NAV = "attention_router_navigation_only"
 
 
-def _as_list(value: Any) -> list[Any]:
-    return value if isinstance(value, list) else []
-
-
-def _as_dict(value: Any) -> dict[str, Any]:
-    return value if isinstance(value, dict) else {}
-
-
 def _tool_payload(result: Mapping[str, Any]) -> dict[str, Any]:
     return mcp_tool_result_payload(result)
 
@@ -37,7 +30,7 @@ def _tool_payload(result: Mapping[str, Any]) -> dict[str, Any]:
 def _safe_error(result: Mapping[str, Any], payload: Mapping[str, Any]) -> dict[str, Any] | None:
     if not result.get("isError") and not payload.get("error"):
         return None
-    error = _as_dict(payload.get("error"))
+    error = dict_or_empty(payload.get("error"))
     return {
         "code": str(error.get("code") or "tool_error"),
         "message": str(error.get("message") or "MCP tool returned an error."),
@@ -157,7 +150,7 @@ def run_attention_router_navigation_only(
             },
         }
 
-    routes = [route for route in _as_list(context_payload.get("routes")) if isinstance(route, Mapping)]
+    routes = [route for route in list_or_empty(context_payload.get("routes")) if isinstance(route, Mapping)]
     tokens = [attention_token_for_route(route, index=index) for index, route in enumerate(routes)]
     packets = attention_hot_router.route_attention(
         {
@@ -263,7 +256,7 @@ def attention_router_activation_readout(
     alias_cases = [
         row
         for row in rows
-        if _as_dict(_as_dict(row.get("arms")).get(ARM_ATTENTION_NAV)).get(
+        if dict_or_empty(dict_or_empty(row.get("arms")).get(ARM_ATTENTION_NAV)).get(
             "known_alias_cross_language_activation"
         )
     ]
@@ -281,7 +274,7 @@ def attention_router_activation_readout(
     hit_count = sum(
         1
         for row in alias_cases
-        if _as_dict(_as_dict(row.get("arms")).get(ARM_ATTENTION_NAV)).get(
+        if dict_or_empty(dict_or_empty(row.get("arms")).get(ARM_ATTENTION_NAV)).get(
             "route_family_selected_before_manual_search"
         )
     )
@@ -299,7 +292,7 @@ def attention_router_activation_readout(
             ),
             "attention_router_applied_but_no_help_count": sum(
                 int(
-                    _as_dict(_as_dict(row.get("arms")).get(ARM_ATTENTION_NAV)).get(
+                    dict_or_empty(dict_or_empty(row.get("arms")).get(ARM_ATTENTION_NAV)).get(
                         "attention_router_applied_but_no_help_count"
                     )
                     or 0
@@ -309,7 +302,7 @@ def attention_router_activation_readout(
             "zero_overlap_without_bridge_reason_count": sum(
                 int(
                     bool(
-                        _as_dict(_as_dict(row.get("arms")).get(ARM_ATTENTION_NAV)).get(
+                        dict_or_empty(dict_or_empty(row.get("arms")).get(ARM_ATTENTION_NAV)).get(
                             "zero_overlap_without_bridge_reason"
                         )
                     )
@@ -319,14 +312,14 @@ def attention_router_activation_readout(
             "route_label_specificity_below_floor_count": sum(
                 int(
                     float(
-                        _as_dict(_as_dict(row.get("arms")).get(ARM_ATTENTION_NAV)).get(
+                        dict_or_empty(dict_or_empty(row.get("arms")).get(ARM_ATTENTION_NAV)).get(
                             "route_label_specificity_floor"
                         )
                         or 0.0
                     )
                     < 0.5
                     and bool(
-                        _as_dict(_as_dict(row.get("arms")).get(ARM_ATTENTION_NAV)).get(
+                        dict_or_empty(dict_or_empty(row.get("arms")).get(ARM_ATTENTION_NAV)).get(
                             "route_actionable"
                         )
                     )
@@ -335,7 +328,7 @@ def attention_router_activation_readout(
             ),
             "broad_search_after_router_available_count": sum(
                 int(
-                    _as_dict(_as_dict(row.get("arms")).get(ARM_ATTENTION_NAV)).get(
+                    dict_or_empty(dict_or_empty(row.get("arms")).get(ARM_ATTENTION_NAV)).get(
                         "broad_search_after_router_available_count"
                     )
                     or 0

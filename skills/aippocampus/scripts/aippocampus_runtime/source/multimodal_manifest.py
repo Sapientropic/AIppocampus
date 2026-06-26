@@ -11,6 +11,8 @@ from __future__ import annotations
 import re
 from typing import Any, Mapping, Sequence
 
+from aippocampus_runtime.core import dict_or_empty, schema_block, schema_blocker_codes
+
 REGISTRY_SCHEMA_VERSION = "aippocampus.multimodal_source_registry.v1"
 SOURCE_SCHEMA_VERSION = "aippocampus.multimodal_source.v1"
 DERIVED_ARTIFACT_SCHEMA_VERSION = "aippocampus.multimodal_derived_artifact.v1"
@@ -127,18 +129,6 @@ def _nonempty(value: Any) -> bool:
     return True
 
 
-def _as_mapping(value: Any) -> Mapping[str, Any]:
-    return value if isinstance(value, Mapping) else {}
-
-
-def _block(code: str, *, field: str, message: str) -> dict[str, str]:
-    return {"code": code, "field": field, "message": message}
-
-
-def _blocker_codes(blockers: Sequence[Mapping[str, str]]) -> list[str]:
-    return sorted({str(item.get("code") or "") for item in blockers if item.get("code")})
-
-
 def _report_key(value: Any, *, prefix: str, index: int) -> str:
     identifier = str(value or "")
     return identifier if identifier else f"<missing-{prefix}-{index}>"
@@ -151,7 +141,7 @@ def _missing_blocks(
     prefix: str,
 ) -> list[dict[str, str]]:
     return [
-        _block(
+        schema_block(
             f"{prefix}_missing_{field}",
             field=field,
             message=f"{field} is required.",
@@ -166,7 +156,7 @@ def _valid_sha256(value: Any) -> bool:
 
 
 def _source_anchor_id(source: Mapping[str, Any]) -> str:
-    return str(_as_mapping(source.get("source_anchor")).get("anchor_id") or "")
+    return str(dict_or_empty(source.get("source_anchor")).get("anchor_id") or "")
 
 
 def _source_report(source: Mapping[str, Any]) -> dict[str, Any]:
@@ -177,12 +167,12 @@ def _source_report(source: Mapping[str, Any]) -> dict[str, Any]:
     media_type = str(source.get("media_type") or "")
     origin_policy = str(source.get("origin_policy") or "")
     access_policy = str(source.get("access_policy") or "")
-    anchor = _as_mapping(source.get("source_anchor"))
-    task_access = _as_mapping(source.get("task_scoped_access"))
+    anchor = dict_or_empty(source.get("source_anchor"))
+    task_access = dict_or_empty(source.get("task_scoped_access"))
 
     if schema_version != SOURCE_SCHEMA_VERSION:
         blockers.append(
-            _block(
+            schema_block(
                 "source_unsupported_schema_version",
                 field="schema_version",
                 message="Unsupported multimodal source schema version.",
@@ -190,7 +180,7 @@ def _source_report(source: Mapping[str, Any]) -> dict[str, Any]:
         )
     if source_type and source_type not in SOURCE_TYPES:
         blockers.append(
-            _block(
+            schema_block(
                 "source_unknown_source_type",
                 field="source_type",
                 message="Unknown multimodal source type.",
@@ -198,7 +188,7 @@ def _source_report(source: Mapping[str, Any]) -> dict[str, Any]:
         )
     if media_type and media_type not in MEDIA_TYPES:
         blockers.append(
-            _block(
+            schema_block(
                 "source_unknown_media_type",
                 field="media_type",
                 message="Unknown multimodal media type.",
@@ -206,7 +196,7 @@ def _source_report(source: Mapping[str, Any]) -> dict[str, Any]:
         )
     if origin_policy and origin_policy not in MEDIA_ORIGIN_POLICIES:
         blockers.append(
-            _block(
+            schema_block(
                 "source_unknown_origin_policy",
                 field="origin_policy",
                 message="Unknown media-origin policy.",
@@ -216,7 +206,7 @@ def _source_report(source: Mapping[str, Any]) -> dict[str, Any]:
         source.get("content_hash_sha256")
     ):
         blockers.append(
-            _block(
+            schema_block(
                 "source_invalid_content_hash_sha256",
                 field="content_hash_sha256",
                 message="content_hash_sha256 must be a 64-character hex digest.",
@@ -224,7 +214,7 @@ def _source_report(source: Mapping[str, Any]) -> dict[str, Any]:
         )
     if not anchor.get("anchor_id"):
         blockers.append(
-            _block(
+            schema_block(
                 "source_missing_anchor",
                 field="source_anchor.anchor_id",
                 message="Original multimodal sources require a reopenable source anchor.",
@@ -232,7 +222,7 @@ def _source_report(source: Mapping[str, Any]) -> dict[str, Any]:
         )
     if not isinstance(source.get("provenance_chain"), list):
         blockers.append(
-            _block(
+            schema_block(
                 "source_invalid_provenance_chain",
                 field="provenance_chain",
                 message="provenance_chain must be a list.",
@@ -251,7 +241,7 @@ def _source_report(source: Mapping[str, Any]) -> dict[str, Any]:
 
     if origin_policy == "user_provided_media" and not current_task_access:
         blockers.append(
-            _block(
+            schema_block(
                 "user_provided_media_current_task_not_allowed",
                 field="task_scoped_access.current_task_access_allowed",
                 message="User-provided media should be usable for the current task.",
@@ -260,7 +250,7 @@ def _source_report(source: Mapping[str, Any]) -> dict[str, Any]:
     if origin_policy == "connected_library_media":
         if not configured_scope_required or not task_access.get("configured_scope_id"):
             blockers.append(
-                _block(
+                schema_block(
                     "connected_media_scope_not_configured",
                     field="task_scoped_access.configured_scope_id",
                     message="Connected libraries require a configured scope before access.",
@@ -269,7 +259,7 @@ def _source_report(source: Mapping[str, Any]) -> dict[str, Any]:
     if origin_policy == "background_filesystem_media":
         if current_task_access or access_policy != "denied_by_default":
             blockers.append(
-                _block(
+                schema_block(
                     "background_media_default_access_not_denied",
                     field="task_scoped_access.current_task_access_allowed",
                     message="Unselected background media must be denied by default.",
@@ -277,7 +267,7 @@ def _source_report(source: Mapping[str, Any]) -> dict[str, Any]:
             )
     if hidden_durable_write_allowed:
         blockers.append(
-            _block(
+            schema_block(
                 "hidden_durable_write_allowed",
                 field="task_scoped_access.hidden_durable_write_allowed",
                 message="Task-scoped media access must not silently create durable memories.",
@@ -285,7 +275,7 @@ def _source_report(source: Mapping[str, Any]) -> dict[str, Any]:
         )
     if cross_domain_reuse_allowed:
         blockers.append(
-            _block(
+            schema_block(
                 "cross_domain_reuse_allowed",
                 field="task_scoped_access.cross_domain_reuse_allowed",
                 message="Task-scoped media access does not grant cross-domain reuse.",
@@ -293,7 +283,7 @@ def _source_report(source: Mapping[str, Any]) -> dict[str, Any]:
         )
     if not audit_event_required:
         blockers.append(
-            _block(
+            schema_block(
                 "source_audit_event_not_required",
                 field="task_scoped_access.audit_event_required",
                 message="Multimodal source access should leave an auditable policy decision.",
@@ -317,7 +307,7 @@ def _source_report(source: Mapping[str, Any]) -> dict[str, Any]:
         "audit_event_required": audit_event_required,
         "user_visible_confirmation_required": user_visible_confirmation_required,
         "blockers": blockers,
-        "blocker_codes": _blocker_codes(blockers),
+        "blocker_codes": schema_blocker_codes(blockers),
     }
 
 
@@ -333,11 +323,11 @@ def _derived_artifact_report(
     parent_source = sources.get(parent_source_id)
     parent_anchor_id = str(artifact.get("parent_anchor_id") or "")
     parent_source_anchor_id = _source_anchor_id(parent_source or {})
-    anchor = _as_mapping(artifact.get("source_anchor"))
+    anchor = dict_or_empty(artifact.get("source_anchor"))
 
     if artifact.get("schema_version") != DERIVED_ARTIFACT_SCHEMA_VERSION:
         blockers.append(
-            _block(
+            schema_block(
                 "derived_artifact_unsupported_schema_version",
                 field="schema_version",
                 message="Unsupported derived artifact schema version.",
@@ -345,7 +335,7 @@ def _derived_artifact_report(
         )
     if artifact_type and artifact_type not in DERIVED_ARTIFACT_TYPES:
         blockers.append(
-            _block(
+            schema_block(
                 "derived_artifact_unknown_type",
                 field="artifact_type",
                 message="Unknown multimodal derived artifact type.",
@@ -353,7 +343,7 @@ def _derived_artifact_report(
         )
     if parent_source is None:
         blockers.append(
-            _block(
+            schema_block(
                 "derived_artifact_unknown_parent_source",
                 field="parent_source_id",
                 message="Derived artifacts must point at a known original source.",
@@ -361,7 +351,7 @@ def _derived_artifact_report(
         )
     elif not parent_source_anchor_id or parent_anchor_id != parent_source_anchor_id:
         blockers.append(
-            _block(
+            schema_block(
                 "derived_artifact_parent_anchor_mismatch",
                 field="parent_anchor_id",
                 message="Derived artifacts must reopen through the parent source anchor.",
@@ -369,7 +359,7 @@ def _derived_artifact_report(
         )
     if not anchor.get("anchor_id"):
         blockers.append(
-            _block(
+            schema_block(
                 "derived_artifact_missing_anchor",
                 field="source_anchor.anchor_id",
                 message="Derived artifacts need their own artifact anchor.",
@@ -377,7 +367,7 @@ def _derived_artifact_report(
         )
     if artifact.get("authority") != "navigation_only":
         blockers.append(
-            _block(
+            schema_block(
                 "derived_artifact_not_navigation_only",
                 field="authority",
                 message="Derived captions/OCR/tags/schema rows are route hints, not truth.",
@@ -385,7 +375,7 @@ def _derived_artifact_report(
         )
     if not isinstance(artifact.get("output_artifacts"), list):
         blockers.append(
-            _block(
+            schema_block(
                 "derived_artifact_invalid_output_artifacts",
                 field="output_artifacts",
                 message="output_artifacts must be a list.",
@@ -393,7 +383,7 @@ def _derived_artifact_report(
         )
     if not isinstance(artifact.get("provenance_chain"), list):
         blockers.append(
-            _block(
+            schema_block(
                 "derived_artifact_invalid_provenance_chain",
                 field="provenance_chain",
                 message="provenance_chain must be a list.",
@@ -414,7 +404,7 @@ def _derived_artifact_report(
         "authority": artifact.get("authority"),
         "truth_source": False,
         "blockers": blockers,
-        "blocker_codes": _blocker_codes(blockers),
+        "blocker_codes": schema_blocker_codes(blockers),
     }
 
 
@@ -424,16 +414,16 @@ def validate_multimodal_source_registry(registry: Mapping[str, Any]) -> dict[str
     blockers: list[dict[str, str]] = []
     if registry.get("schema_version") != REGISTRY_SCHEMA_VERSION:
         blockers.append(
-            _block(
+            schema_block(
                 "registry_unsupported_schema_version",
                 field="schema_version",
                 message="Unsupported multimodal source registry schema version.",
             )
         )
-    boundary = _as_mapping(registry.get("boundary"))
+    boundary = dict_or_empty(registry.get("boundary"))
     if boundary.get("derived_artifacts_are_navigation_only") is not True:
         blockers.append(
-            _block(
+            schema_block(
                 "registry_missing_navigation_boundary",
                 field="boundary.derived_artifacts_are_navigation_only",
                 message="Registry must declare derived artifacts as navigation only.",
@@ -452,7 +442,7 @@ def validate_multimodal_source_registry(registry: Mapping[str, Any]) -> dict[str
     )
     if duplicates:
         blockers.append(
-            _block(
+            schema_block(
                 "registry_duplicate_source_id",
                 field="sources.source_id",
                 message="Multimodal source ids must be unique.",
@@ -485,7 +475,7 @@ def validate_multimodal_source_registry(registry: Mapping[str, Any]) -> dict[str
     )
     if duplicate_artifact_ids:
         blockers.append(
-            _block(
+            schema_block(
                 "registry_duplicate_derived_artifact_id",
                 field="derived_artifacts.artifact_id",
                 message="Multimodal derived artifact ids must be unique.",
@@ -533,5 +523,5 @@ def validate_multimodal_source_registry(registry: Mapping[str, Any]) -> dict[str
             "background_filesystem_media_default_denied": True,
         },
         "blockers": blockers,
-        "blocker_codes": _blocker_codes(blockers),
+        "blocker_codes": schema_blocker_codes(blockers),
     }

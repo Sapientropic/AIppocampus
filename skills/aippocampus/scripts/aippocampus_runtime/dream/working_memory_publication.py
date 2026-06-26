@@ -16,6 +16,7 @@ from typing import Any, Iterable, Mapping
 from aippocampus_runtime.core import now_utc
 from aippocampus_runtime.io_integrity import atomic_write_text
 from aippocampus_runtime.io_mtime_cache import load_jsonl_objects
+from aippocampus_runtime.source.io_kernel import load_jsonl_dict_rows
 
 POINTER_KIND = "aippocampus_dream_working_memory_publication_pointer"
 WORKING_MEMORY_KIND = "aippocampus_working_memory"
@@ -109,22 +110,11 @@ def read_jsonl_rows(path: Path, *, strict: bool = False) -> tuple[list[dict[str,
     cached = load_jsonl_objects(path, strict=strict)
     if cached is not None:
         return cached
-    rows: list[dict[str, Any]] = []
-    invalid = 0
-    with path.open("r", encoding="utf-8") as fh:
-        for line in fh:
-            if not line.strip():
-                continue
-            try:
-                item = json.loads(line)
-            except json.JSONDecodeError:
-                invalid += 1
-                if strict:
-                    return [], invalid
-                continue
-            if isinstance(item, dict):
-                rows.append(item)
-    return rows, invalid
+    result = load_jsonl_dict_rows(path)
+    invalid = int(result.loss.get("total_loss_count") or 0)
+    if strict and invalid:
+        return [], invalid
+    return result.rows, invalid
 
 
 def working_rows(rows: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:

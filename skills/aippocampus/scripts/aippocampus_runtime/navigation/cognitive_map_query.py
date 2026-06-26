@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Iterable, Protocol
 
-from aippocampus_runtime.core import compact_text
+from aippocampus_runtime.core import compact_text, dict_or_empty
 from aippocampus_runtime.navigation.associations import (
     normalize_term,
     source_text_is_noise,
@@ -44,10 +44,6 @@ class NearMatcher(Protocol):
         limit: int = 4,
     ) -> list[dict[str, Any]]:
         ...
-
-
-def _as_dict(value: Any) -> dict[str, Any]:
-    return value if isinstance(value, dict) else {}
 
 
 def _safe_rows(value: Any) -> list[dict[str, Any]]:
@@ -124,7 +120,7 @@ def map_query_diagnostics(scale: str) -> dict[str, bool | str]:
 
 
 def map_query_coverage(cognitive_map: dict[str, Any], **extra: int) -> dict[str, int]:
-    overview = _as_dict(cognitive_map.get("registry_overview"))
+    overview = dict_or_empty(cognitive_map.get("registry_overview"))
     coverage = {
         "episode_count": int(cognitive_map.get("episode_count") or 0),
         "landmark_count": int(cognitive_map.get("landmark_count") or 0),
@@ -149,7 +145,7 @@ def _far_theme_counts(routes: list[dict[str, Any]], cognitive_map: dict[str, Any
     theme_counts = _count_dict(theme_terms)
     if theme_counts:
         return theme_counts
-    overview = _as_dict(cognitive_map.get("registry_overview"))
+    overview = dict_or_empty(cognitive_map.get("registry_overview"))
     return _count_dict(
         str(label)
         for cluster in _safe_rows(overview.get("clusters"))

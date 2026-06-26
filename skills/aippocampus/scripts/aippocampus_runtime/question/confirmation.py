@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping
 
 from aippocampus_runtime.core import compact_text, now_utc
+from aippocampus_runtime.source.io_kernel import iter_jsonl_dict_rows
 
 DEFAULT_CONFIRMATION_MAX_AGE_DAYS = 14
 DEFAULT_CONFIRMATION_REQUESTS_NAME = "question_pair_confirmation_requests.jsonl"
@@ -37,16 +38,7 @@ def default_confirmation_artifacts_path(jobs_output_path: Path) -> Path:
 def iter_confirmation_jsonl(path: Path) -> Iterable[dict[str, Any]]:
     if not path.exists():
         return
-    with path.open("r", encoding="utf-8") as fh:
-        for line in fh:
-            if not line.strip():
-                continue
-            try:
-                item = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if isinstance(item, dict):
-                yield item
+    yield from iter_jsonl_dict_rows(path)
 
 
 def confirmation_pair_key(source_finding_ids: Iterable[str]) -> str:

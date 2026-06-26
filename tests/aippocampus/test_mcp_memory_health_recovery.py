@@ -162,6 +162,17 @@ class McpMemoryHealthRecoveryTests(unittest.TestCase):
                     "params": {"name": "memory_health", "arguments": {"cwd": str(self.cwd)}},
                 }
             )
+            full_response = mcp.handle_request(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 58230,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "memory_health",
+                        "arguments": {"cwd": str(self.cwd), "detail": "full"},
+                    },
+                }
+            )
 
         self.assertFalse(response["result"].get("isError", False))
         payload = self.tool_payload(response)
@@ -169,12 +180,9 @@ class McpMemoryHealthRecoveryTests(unittest.TestCase):
         self.assertEqual(payload["kind"], "aippocampus_memory_health_recovery")
         self.assertEqual(payload["status"], "degraded")
         self.assertTrue(payload["health_artifacts_missing"])
-        self.assertTrue(payload["recall_capability"]["clean_source_available"])
-        self.assertTrue(payload["recall_capability"]["recall_tool_available"])
-        self.assertEqual(payload["recall_capability"]["route_probe_status"], "routes_available")
-        self.assertGreaterEqual(payload["recall_capability"]["route_count"], 1)
-        self.assertTrue(payload["recall_capability"]["deepen_tool_available"])
-        self.assertTrue(payload["recall_capability"]["source_reopen_success"])
+        self.assertNotIn("recall_capability", payload)
+        self.assertNotIn("route_count", encoded)
+        self.assertNotIn("source_reopen_success", encoded)
         self.assertNotIn("agent_next_action", payload)
         self.assertEqual(payload["foreground_action"]["id"], "try_agent_recall_with_cue")
         self.assertEqual(payload["foreground_action"]["tool_name"], "agent_recall")
@@ -188,6 +196,14 @@ class McpMemoryHealthRecoveryTests(unittest.TestCase):
         self.assertNotIn(str(self.cwd), encoded)
         self.assertNotIn("AIppocampus 使用 clean source", encoded)
         self.assertNotIn("小海马体", encoded)
+        full_payload = self.tool_payload(full_response)
+        self.assertEqual(full_payload["detail"], "full")
+        self.assertTrue(full_payload["recall_capability"]["clean_source_available"])
+        self.assertTrue(full_payload["recall_capability"]["recall_tool_available"])
+        self.assertEqual(full_payload["recall_capability"]["route_probe_status"], "routes_available")
+        self.assertGreaterEqual(full_payload["recall_capability"]["route_count"], 1)
+        self.assertTrue(full_payload["recall_capability"]["deepen_tool_available"])
+        self.assertTrue(full_payload["recall_capability"]["source_reopen_success"])
 
     def test_memory_health_keeps_recall_primary_when_health_report_is_pessimistic(self) -> None:
         pessimistic_health = {
@@ -236,10 +252,9 @@ class McpMemoryHealthRecoveryTests(unittest.TestCase):
         self.assertEqual(payload["kind"], "aippocampus_health_card")
         self.assertEqual(payload["status"], "degraded")
         self.assertTrue(payload["health_artifacts_missing"])
-        self.assertTrue(payload["recall_capability"]["recall_tool_available"])
-        self.assertEqual(payload["recall_capability"]["route_probe_status"], "routes_available")
-        self.assertGreaterEqual(payload["recall_capability"]["route_count"], 1)
-        self.assertTrue(payload["recall_capability"]["source_reopen_success"])
+        self.assertNotIn("recall_capability", payload)
+        self.assertNotIn("route_count", encoded)
+        self.assertNotIn("source_reopen_success", encoded)
         self.assertNotIn("agent_next_action", payload)
         self.assertEqual(payload["foreground_action"]["id"], "try_agent_recall_with_cue")
         self.assertEqual(payload["foreground_action"]["tool_name"], "agent_recall")

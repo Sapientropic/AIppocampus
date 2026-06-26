@@ -10,7 +10,6 @@ open when the overlay is missing, corrupt, or read-only.
 from __future__ import annotations
 
 import hashlib
-import json
 import re
 import time
 from dataclasses import dataclass
@@ -21,6 +20,7 @@ from typing import Any
 from aippocampus_runtime.core import compact_text, now_utc, workspace_fingerprint
 from aippocampus_runtime.recall.query_policy import split_query_terms
 from aippocampus_runtime.registry.api import registry_paths, unique_preserve
+from aippocampus_runtime.source.io_kernel import append_jsonl_dict_rows, load_jsonl_dict_rows
 
 POLICY_SCHEMA_VERSION = 1
 DEFAULT_POLICY_NAME = "ambient_recall_policy.jsonl"
@@ -147,16 +147,9 @@ def load_policy_events(path: Path | str | None) -> list[dict[str, Any]]:
             # compaction/maintenance is due; do not synchronously parse it inside
             # the prompt hook and risk making recall feel stuck.
             return []
-        with target.open("r", encoding="utf-8") as fh:
-            for line in fh:
-                if not line.strip():
-                    continue
-                try:
-                    item = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                if item.get("kind") == "aippocampus_ambient_policy_event":
-                    rows.append(item)
+        for item in load_jsonl_dict_rows(target).rows:
+            if item.get("kind") == "aippocampus_ambient_policy_event":
+                rows.append(item)
     except OSError:
         return []
     return rows
@@ -165,11 +158,7 @@ def load_policy_events(path: Path | str | None) -> list[dict[str, Any]]:
 def append_policy_events(path: Path | str, rows: list[dict[str, Any]]) -> None:
     if not rows:
         return
-    target = Path(path)
-    target.parent.mkdir(parents=True, exist_ok=True)
-    with target.open("a", encoding="utf-8", newline="\n") as fh:
-        for row in rows:
-            fh.write(json.dumps(row, ensure_ascii=False) + "\n")
+    append_jsonl_dict_rows(Path(path), rows)
 
 
 def detect_policy_intent(prompt: str) -> AmbientPolicyIntent | None:

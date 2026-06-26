@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.core import stable_json_tuple_id
+from aippocampus_runtime.source.io_kernel import load_jsonl_dict_rows
 
 SCHEMA_VERSION = 1
 LEDGER_ROW_KIND = "aippocampus_learning_guidance_effectiveness_row"
@@ -252,11 +253,8 @@ def load_ledger_rows(path: Path) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     if not path.exists():
         return rows
-    for line in path.read_text(encoding="utf-8").splitlines():
-        if not line.strip():
-            continue
-        payload = json.loads(line)
-        if isinstance(payload, Mapping) and payload.get("kind") == LEDGER_ROW_KIND:
+    for payload in load_jsonl_dict_rows(path).rows:
+        if payload.get("kind") == LEDGER_ROW_KIND:
             row = dict(payload)
             row["verified_origin"] = False
             row["origin_verified"] = False

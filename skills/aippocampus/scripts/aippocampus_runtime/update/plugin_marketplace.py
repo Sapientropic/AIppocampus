@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import json
 import tomllib
 from pathlib import Path
 
 from aippocampus_runtime.core import codex_home
+from aippocampus_runtime.source.io_kernel import load_json_dict
 
 PLUGIN_NAME = "aippocampus"
 MARKETPLACE_NAME = "aippocampus-local"
@@ -40,7 +40,7 @@ def configured_marketplace_root(
         return None
     try:
         data = tomllib.loads(config_path.read_text(encoding="utf-8"))
-    except Exception:
+    except (OSError, tomllib.TOMLDecodeError):
         return None
     marketplaces = data.get("marketplaces")
     if not isinstance(marketplaces, dict):
@@ -73,18 +73,12 @@ def owned_marketplace_manifest(
 ) -> bool:
     marker = marketplace_root / MARKETPLACE_MARKER
     if marker.exists():
-        try:
-            data = json.loads(marker.read_text(encoding="utf-8"))
-        except Exception:
-            return False
+        data = load_json_dict(marker).data
         return data.get("owner") == plugin_name and data.get("safe_to_remove") is True
     manifest = marketplace_manifest_path(marketplace_root)
     if not manifest.exists():
         return False
-    try:
-        data = json.loads(manifest.read_text(encoding="utf-8"))
-    except Exception:
-        return False
+    data = load_json_dict(manifest).data
     plugins = data.get("plugins")
     return (
         data.get("name") == marketplace_name

@@ -8,13 +8,12 @@ outputs; `aippocampus_runtime.onboarding.codex` owns that orchestration.
 
 from __future__ import annotations
 
-import json
 import sqlite3
 from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.registry.api import load_registry, registry_paths
-from aippocampus_runtime.source.io_kernel import load_json_dict
+from aippocampus_runtime.source.io_kernel import load_json_dict, load_jsonl_dict_rows
 
 
 def path_exists(value: Any) -> bool:
@@ -67,40 +66,31 @@ def clean_source_missing_sqlite_lines(
     checked = 0
     missing_count = 0
     samples: list[dict[str, Any]] = []
-    try:
-        with clean_source_messages.open("r", encoding="utf-8") as f:
-            for line in f:
-                try:
-                    message = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                if not isinstance(message, dict):
-                    continue
-                line_range = clean_source_line_range(message)
-                if not line_range:
-                    continue
-                checked += 1
-                start, end = line_range
-                if any(
-                    raw_line in sqlite_lines for raw_line in range(start, min(end, start + 100) + 1)
-                ):
-                    continue
-                missing_count += 1
-                if len(samples) < sample_limit:
-                    samples.append(
-                        {
-                            "message_id": message.get("message_id") or message.get("id"),
-                            "line_start": start,
-                            "line_end": end,
-                        }
-                    )
-    except OSError as exc:
+    result = load_jsonl_dict_rows(clean_source_messages)
+    if int(result.loss.get("unreadable_file_count") or 0):
         return {
             "checked": checked,
             "missing_count": missing_count,
             "samples": samples,
-            "error": str(exc),
+            "error": "OSError",
         }
+    for message in result.rows:
+        line_range = clean_source_line_range(message)
+        if not line_range:
+            continue
+        checked += 1
+        start, end = line_range
+        if any(raw_line in sqlite_lines for raw_line in range(start, min(end, start + 100) + 1)):
+            continue
+        missing_count += 1
+        if len(samples) < sample_limit:
+            samples.append(
+                {
+                    "message_id": message.get("message_id") or message.get("id"),
+                    "line_start": start,
+                    "line_end": end,
+                }
+            )
     return {"checked": checked, "missing_count": missing_count, "samples": samples}
 
 

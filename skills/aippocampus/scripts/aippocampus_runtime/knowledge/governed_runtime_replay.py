@@ -9,8 +9,9 @@ forming an answer while preserving the ordinary personal recall path boundary.
 from __future__ import annotations
 
 from copy import deepcopy
-from typing import Any, Mapping, Sequence
+from typing import Any, Mapping
 
+from aippocampus_runtime.core import dict_or_empty, schema_blocker_codes, string_list_or_empty
 from aippocampus_runtime.knowledge import answer_gate, capability_contract
 
 REPLAY_PROFILE = "enterprise_governed"
@@ -25,22 +26,6 @@ REPLAY_CASE_IDS = (
     "external_tool_text_transfer_block",
     "ordinary_personal_default_nonadoption",
 )
-
-
-def _as_list(value: Any) -> list[str]:
-    if isinstance(value, str):
-        return [value] if value.strip() else []
-    if not isinstance(value, list):
-        return []
-    return [str(item) for item in value if str(item or "").strip()]
-
-
-def _as_mapping(value: Any) -> Mapping[str, Any]:
-    return value if isinstance(value, Mapping) else {}
-
-
-def _gate_codes(gates: Sequence[Mapping[str, Any]]) -> list[str]:
-    return sorted({str(item.get("code") or "") for item in gates if item.get("code")})
 
 
 def _copy_case(base: Mapping[str, Any], case_id: str) -> dict[str, Any]:
@@ -143,7 +128,7 @@ def replay_runtime_caller(
     ceremony to default personal recall.
     """
 
-    contract = _as_mapping(fixture.get("capability_contract"))
+    contract = dict_or_empty(fixture.get("capability_contract"))
     replay_registry = _registry_with_runtime_conflict(registry)
     reports: list[dict[str, Any]] = []
     for case in replay_cases(fixture, replay_registry):
@@ -178,12 +163,12 @@ def replay_runtime_caller(
         else:
             gate_report = answer_gate.evaluate_high_risk_answer_gate(
                 replay_registry,
-                claim_ids=_as_list(case.get("selected_claim_ids")),
+                claim_ids=string_list_or_empty(case.get("selected_claim_ids")),
                 evidence_items=[
                     item for item in case.get("evidence_items") or [] if isinstance(item, Mapping)
                 ],
-                context=_as_mapping(case.get("context")),
-                required_context_keys=_as_list(case.get("required_context_keys")),
+                context=dict_or_empty(case.get("context")),
+                required_context_keys=string_list_or_empty(case.get("required_context_keys")),
             )
         report = dict(gate_report)
         report.update(
@@ -194,7 +179,7 @@ def replay_runtime_caller(
                 "runtime_replay_profile": REPLAY_PROFILE,
                 "runtime_replay_boundary": REPLAY_BOUNDARY,
                 "knowledge_gate_called": True,
-                "gate_codes": _gate_codes(
+                "gate_codes": schema_blocker_codes(
                     [item for item in report.get("gates") or [] if isinstance(item, Mapping)]
                 ),
                 "raw_source_text_emitted": False,

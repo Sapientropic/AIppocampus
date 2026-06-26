@@ -12,6 +12,12 @@ from __future__ import annotations
 import hashlib
 from typing import Any, Mapping, Sequence
 
+from aippocampus_runtime.core import (
+    dict_or_empty,
+    schema_block,
+    schema_blocker_codes,
+    string_list_or_empty,
+)
 from aippocampus_runtime.source import multimodal_manifest
 
 ANSWER_GATE_FIXTURE_SCHEMA_VERSION = "aippocampus.multimodal_answer_gate_fixture.v1"
@@ -42,26 +48,6 @@ PACKET_REQUIRED_FIELDS = ("packet_id", "join_reasons", "candidates")
 CASE_REQUIRED_FIELDS = ("case_id", "request", "candidate_packet", "expected_output_state")
 
 
-def _as_list(value: Any) -> list[str]:
-    if isinstance(value, str):
-        return [value] if value.strip() else []
-    if not isinstance(value, list):
-        return []
-    return [str(item) for item in value if str(item or "").strip()]
-
-
-def _as_mapping(value: Any) -> Mapping[str, Any]:
-    return value if isinstance(value, Mapping) else {}
-
-
-def _block(code: str, *, field: str, message: str) -> dict[str, str]:
-    return {"code": code, "field": field, "message": message}
-
-
-def _blocker_codes(blockers: Sequence[Mapping[str, str]]) -> list[str]:
-    return sorted({str(item.get("code") or "") for item in blockers if item.get("code")})
-
-
 def _sha1_text(value: str) -> str:
     return hashlib.sha1(value.encode("utf-8")).hexdigest()[:16]
 
@@ -73,7 +59,7 @@ def _missing_blocks(
     prefix: str,
 ) -> list[dict[str, str]]:
     return [
-        _block(
+        schema_block(
             f"{prefix}_missing_{field}",
             field=field,
             message=f"{field} is required for multimodal answer-gate packets.",
@@ -95,7 +81,7 @@ def _case_by_id(fixture: Mapping[str, Any], case_id: str) -> Mapping[str, Any] |
 
 
 def _packet(case: Mapping[str, Any]) -> Mapping[str, Any]:
-    return _as_mapping(case.get("candidate_packet"))
+    return dict_or_empty(case.get("candidate_packet"))
 
 
 def _candidates(case: Mapping[str, Any]) -> list[Mapping[str, Any]]:
@@ -120,7 +106,7 @@ def validate_answer_gate_fixture(fixture: Mapping[str, Any]) -> dict[str, Any]:
     blockers: list[dict[str, str]] = []
     if fixture.get("schema_version") != ANSWER_GATE_FIXTURE_SCHEMA_VERSION:
         blockers.append(
-            _block(
+            schema_block(
                 "fixture_unsupported_schema_version",
                 field="schema_version",
                 message="Unsupported multimodal answer-gate fixture schema version.",
@@ -131,22 +117,22 @@ def validate_answer_gate_fixture(fixture: Mapping[str, Any]) -> dict[str, Any]:
         blockers.extend(_missing_blocks(case, CASE_REQUIRED_FIELDS, prefix="case"))
         packet = _packet(case)
         blockers.extend(_missing_blocks(packet, PACKET_REQUIRED_FIELDS, prefix="packet"))
-        unknown_join_reasons = set(_as_list(packet.get("join_reasons"))) - JOIN_REASONS
+        unknown_join_reasons = set(string_list_or_empty(packet.get("join_reasons"))) - JOIN_REASONS
         if unknown_join_reasons:
             blockers.append(
-                _block(
+                schema_block(
                     "packet_unknown_join_reason",
                     field="candidate_packet.join_reasons",
                     message="Join reasons must come from the #543 taxonomy.",
                 )
             )
-        join_reasons.update(_as_list(packet.get("join_reasons")))
+        join_reasons.update(string_list_or_empty(packet.get("join_reasons")))
         for candidate in _candidates(case):
             media_type = str(candidate.get("media_type") or "")
             origin_policy = str(candidate.get("origin_policy") or "")
             if media_type and media_type not in multimodal_manifest.MEDIA_TYPES:
                 blockers.append(
-                    _block(
+                    schema_block(
                         "candidate_unknown_media_type",
                         field="media_type",
                         message="Candidate media_type must match the multimodal source taxonomy.",
@@ -154,7 +140,7 @@ def validate_answer_gate_fixture(fixture: Mapping[str, Any]) -> dict[str, Any]:
                 )
             if origin_policy and origin_policy not in multimodal_manifest.MEDIA_ORIGIN_POLICIES:
                 blockers.append(
-                    _block(
+                    schema_block(
                         "candidate_unknown_origin_policy",
                         field="origin_policy",
                         message="Candidate origin_policy must match the source-manifest taxonomy.",
@@ -171,7 +157,7 @@ def validate_answer_gate_fixture(fixture: Mapping[str, Any]) -> dict[str, Any]:
             "source_reopen_required_for_visual_document_claims": True,
         },
         "blockers": blockers,
-        "blocker_codes": _blocker_codes(blockers),
+        "blocker_codes": schema_blocker_codes(blockers),
     }
 
 
@@ -193,7 +179,7 @@ def _conflict_precedence_blocks(case: Mapping[str, Any]) -> list[dict[str, str]]
         best = max(members, key=_candidate_rank)
         if best.get("source_id") != selected.get("source_id"):
             blockers.append(
-                _block(
+                schema_block(
                     "source_authority_precedence_violation",
                     field="conflict_set_id",
                     message="Selected conflicting evidence is not the latest/final/strongest source.",
@@ -209,8 +195,8 @@ def _candidate_blocks(case: Mapping[str, Any]) -> tuple[list[dict[str, str]], di
         "background_scan_violation_count": 0,
         "hidden_durable_write_violation_count": 0,
     }
-    request = _as_mapping(case.get("request"))
-    depends_on_raw = bool(set(_as_list(request.get("depends_on_raw_media_types"))))
+    request = dict_or_empty(case.get("request"))
+    depends_on_raw = bool(set(string_list_or_empty(request.get("depends_on_raw_media_types"))))
     requires_visible_detail = request.get("requires_visible_detail") is True
     selected = _selected_candidates(case)
 
@@ -224,7 +210,7 @@ def _candidate_blocks(case: Mapping[str, Any]) -> tuple[list[dict[str, str]], di
         if background_denied:
             metrics["background_scan_violation_count"] += 1
             blockers.append(
-                _block(
+                schema_block(
                     "background_media_denied_by_default",
                     field="origin_policy",
                     message="Background media cannot support answer-time claims without selection.",
@@ -237,17 +223,17 @@ def _candidate_blocks(case: Mapping[str, Any]) -> tuple[list[dict[str, str]], di
         ):
             metrics["source_reopen_required_violation_count"] += 1
             blockers.append(
-                _block(
+                schema_block(
                     "source_reopen_required",
                     field="candidate_packet.candidates.reopened_original_source",
                     message="Visual/document claims require reopening the original source anchor.",
                 )
             )
-        task_access = _as_mapping(candidate.get("task_scoped_access"))
+        task_access = dict_or_empty(candidate.get("task_scoped_access"))
         if task_access.get("hidden_durable_write_performed") is True:
             metrics["hidden_durable_write_violation_count"] += 1
             blockers.append(
-                _block(
+                schema_block(
                     "hidden_durable_write_performed",
                     field="task_scoped_access.hidden_durable_write_performed",
                     message="Task-scoped media use must not silently write durable memory.",
@@ -258,7 +244,7 @@ def _candidate_blocks(case: Mapping[str, Any]) -> tuple[list[dict[str, str]], di
         candidate.get("supports_requested_detail") is True for candidate in selected
     ):
         blockers.append(
-            _block(
+            schema_block(
                 "unsupported_detail_not_visible",
                 field="request.requested_detail",
                 message="Requested detail is not visible or source-backed in reopened evidence.",
@@ -269,7 +255,7 @@ def _candidate_blocks(case: Mapping[str, Any]) -> tuple[list[dict[str, str]], di
 
 
 def _output_state(blockers: Sequence[Mapping[str, str]]) -> str:
-    codes = set(_blocker_codes(blockers))
+    codes = set(schema_blocker_codes(blockers))
     if {"background_media_denied_by_default", "hidden_durable_write_performed"} & codes:
         return "blocked_policy_violation"
     if "source_reopen_required" in codes:
@@ -291,7 +277,7 @@ def evaluate_answer_gate_case(
     case = _case_by_id(fixture, case_id)
     if case is None:
         blockers = [
-            _block(
+            schema_block(
                 "missing_answer_gate_case",
                 field="case_id",
                 message="Answer-gate case id does not exist.",
@@ -309,17 +295,17 @@ def evaluate_answer_gate_case(
         blockers, metrics = _candidate_blocks(case)
         packet = _packet(case)
         selected = _selected_candidates(case)
-        raw_prompt = str(_as_mapping(case.get("request")).get("raw_prompt_text") or "")
+        raw_prompt = str(dict_or_empty(case.get("request")).get("raw_prompt_text") or "")
     output_state = _output_state(blockers)
     return {
         "case_id": case_id,
         "packet_id": packet.get("packet_id"),
         "output_state": output_state,
         "can_emit_answer": output_state == "answer_with_reopened_sources",
-        "join_reasons": _as_list(packet.get("join_reasons")),
+        "join_reasons": string_list_or_empty(packet.get("join_reasons")),
         "selected_source_ids": sorted(str(item.get("source_id") or "") for item in selected),
         "blockers": blockers,
-        "blocker_codes": _blocker_codes(blockers),
+        "blocker_codes": schema_blocker_codes(blockers),
         "metrics": metrics,
         "candidate_packet_boundary": {
             "candidate_packet_is_not_answer": True,
@@ -376,7 +362,7 @@ def run_answer_gate_smoke(fixture: Mapping[str, Any]) -> dict[str, Any]:
             ),
             "unexpected_output_state_count": len(unexpected),
             **{
-                name: sum(int(_as_mapping(case.get("metrics")).get(name) or 0) for case in cases)
+                name: sum(int(dict_or_empty(case.get("metrics")).get(name) or 0) for case in cases)
                 for name in metric_names
             },
         },
@@ -387,7 +373,7 @@ def run_answer_gate_smoke(fixture: Mapping[str, Any]) -> dict[str, Any]:
             "raw_prompt_text_emitted": False,
             "absolute_paths_emitted": False,
             "hidden_durable_write_payload_emitted": False,
-            "output_shape": "sanitized_ids_hashes_join_reasons_blocker_codes_and_metrics",
+            "output_shape": "sanitized_ids_hashes_join_reasonsschema_blocker_codes_and_metrics",
         },
         "cannot_claim": [
             "live_provider_vision_quality",

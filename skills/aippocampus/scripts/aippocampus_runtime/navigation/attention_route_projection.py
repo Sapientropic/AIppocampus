@@ -12,6 +12,7 @@ import json
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+from aippocampus_runtime.core import dict_or_empty, list_or_empty
 from aippocampus_runtime.navigation import (
     attention_hot_router,
     attention_route_tokens,
@@ -20,14 +21,6 @@ from aippocampus_runtime.navigation import (
 from aippocampus_runtime.navigation import (
     feedback_calibration as route_feedback_calibration,
 )
-
-
-def _as_list(value: Any) -> list[Any]:
-    return value if isinstance(value, list) else []
-
-
-def _as_dict(value: Any) -> dict[str, Any]:
-    return value if isinstance(value, dict) else {}
 
 
 def _float(value: Any, default: float = 0.0) -> float:
@@ -55,13 +48,13 @@ def _route_hints(*sources: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
 
 def _hint_terms(route_hints: Mapping[str, Mapping[str, Any]]) -> list[str]:
     terms: list[Any] = []
-    semantic = _as_dict(route_hints.get("semantic_warming"))
-    familiarity = _as_dict(route_hints.get("familiarity_map"))
-    topology = _as_dict(route_hints.get("topology_explain_only"))
-    terms.extend(_as_list(semantic.get("semantic_aliases")))
-    terms.extend(_as_list(semantic.get("scout_family_votes")))
+    semantic = dict_or_empty(route_hints.get("semantic_warming"))
+    familiarity = dict_or_empty(route_hints.get("familiarity_map"))
+    topology = dict_or_empty(route_hints.get("topology_explain_only"))
+    terms.extend(list_or_empty(semantic.get("semantic_aliases")))
+    terms.extend(list_or_empty(semantic.get("scout_family_votes")))
     terms.append(semantic.get("topic_epoch_label"))
-    terms.extend(_as_list(familiarity.get("route_terms")))
+    terms.extend(list_or_empty(familiarity.get("route_terms")))
     terms.append(familiarity.get("first_source_to_reopen"))
     terms.append(familiarity.get("freshness"))
     terms.append(topology.get("topology_shape"))
@@ -69,13 +62,13 @@ def _hint_terms(route_hints: Mapping[str, Mapping[str, Any]]) -> list[str]:
 
 
 def _semantic_hint_score(route_hints: Mapping[str, Mapping[str, Any]]) -> float:
-    semantic = _as_dict(route_hints.get("semantic_warming"))
+    semantic = dict_or_empty(route_hints.get("semantic_warming"))
     return _float(semantic.get("semantic_score"))
 
 
 def _topology_risk_codes(route_hints: Mapping[str, Mapping[str, Any]]) -> list[str]:
-    topology = _as_dict(route_hints.get("topology_explain_only"))
-    return [str(code) for code in _as_list(topology.get("risk_reason_codes")) if str(code)]
+    topology = dict_or_empty(route_hints.get("topology_explain_only"))
+    return [str(code) for code in list_or_empty(topology.get("risk_reason_codes")) if str(code)]
 
 
 def packet_bytes(value: Mapping[str, Any]) -> int:
@@ -85,7 +78,7 @@ def packet_bytes(value: Mapping[str, Any]) -> int:
 def public_attention_packet(packet: Mapping[str, Any] | None) -> dict[str, Any]:
     if packet is None:
         return {}
-    diagnostics = _as_dict(packet.get("router_diagnostics"))
+    diagnostics = dict_or_empty(packet.get("router_diagnostics"))
     public = {
         "route_id": str(packet.get("route_id") or ""),
         "output_mode": str(packet.get("output_mode") or ""),
@@ -93,12 +86,12 @@ def public_attention_packet(packet: Mapping[str, Any] | None) -> dict[str, Any]:
         "claim_permission": str(packet.get("claim_permission") or ""),
         "emitted": bool(packet.get("emitted")),
         "route_label": str(packet.get("route_label") or ""),
-        "source_handle_count": len(_as_list(packet.get("source_handles"))),
+        "source_handle_count": len(list_or_empty(packet.get("source_handles"))),
         "score": diagnostics.get("score"),
         "threshold": diagnostics.get("threshold"),
-        "reason_codes": _as_list(diagnostics.get("reason_codes"))[:6],
+        "reason_codes": list_or_empty(diagnostics.get("reason_codes"))[:6],
     }
-    contract = _as_dict(packet.get("contract"))
+    contract = dict_or_empty(packet.get("contract"))
     if contract:
         public["contract"] = {
             "attention_score_is_not_evidence": bool(contract.get("attention_score_is_not_evidence")),
@@ -115,7 +108,7 @@ def public_attention_packet(packet: Mapping[str, Any] | None) -> dict[str, Any]:
 
 def source_handles_for_attention_route(route: Mapping[str, Any]) -> list[dict[str, Any]]:
     handles: list[dict[str, Any]] = []
-    for ref in _as_list(route.get("source_refs")):
+    for ref in list_or_empty(route.get("source_refs")):
         if not isinstance(ref, Mapping):
             continue
         source_id = str(ref.get("source_id") or ref.get("thread_key") or "clean_source")
@@ -192,7 +185,7 @@ def attention_token_for_route(
         0.45 if route.get("route_topic") else 0.25,
         _semantic_hint_score(route_hints),
     )
-    risk_flags = [*_as_list(route.get("risk_flags")), *_topology_risk_codes(route_hints)]
+    risk_flags = [*list_or_empty(route.get("risk_flags")), *_topology_risk_codes(route_hints)]
     if compatibility_hint and compatibility_hint["severity"] > 0:
         risk_flags.append(f"route_bundle_{compatibility_hint['status']}")
     conflict = str(route.get("conflict") or "none")
@@ -207,12 +200,12 @@ def attention_token_for_route(
         "token_id": str(route.get("route_id") or f"attention_route_{index}"),
         "route_token_level": "source_span_token" if source_handles else "episode_or_question_token",
         "source_handles": source_handles,
-        "hard_masks": _as_list(route.get("hard_masks")),
+        "hard_masks": list_or_empty(route.get("hard_masks")),
         "route_label": str(route.get("route_label") or ""),
         "why_may_matter": str(route.get("why_this_may_matter") or ""),
         "scope": "project:AIppocampus",
         "risk_flags": risk_flags,
-        "triage_rank_reason_codes": _as_list(route.get("triage_rank_reason_codes")),
+        "triage_rank_reason_codes": list_or_empty(route.get("triage_rank_reason_codes")),
         "route_metadata": {
             "salience": "high" if index < 2 else "medium",
             "currentness": currentness,
@@ -231,8 +224,8 @@ def attention_token_for_route(
 
 
 def _token_terms(token: Mapping[str, Any]) -> set[str]:
-    features = _as_dict(token.get("route_features"))
-    return set(_split_terms(_as_list(features.get("terms"))))
+    features = dict_or_empty(token.get("route_features"))
+    return set(_split_terms(list_or_empty(features.get("terms"))))
 
 
 def route_helpfulness_diagnostics(
@@ -275,9 +268,9 @@ def route_helpfulness_diagnostics(
     reason_codes = set(
         _split_terms(
             [
-                *(_as_list(_as_dict(packet).get("reason_codes"))),
-                *(_as_list(_as_dict(_as_dict(packet).get("router_diagnostics")).get("reason_codes"))),
-                *(_as_list(route.get("triage_rank_reason_codes"))),
+                *(list_or_empty(dict_or_empty(packet).get("reason_codes"))),
+                *(list_or_empty(dict_or_empty(dict_or_empty(packet).get("router_diagnostics")).get("reason_codes"))),
+                *(list_or_empty(route.get("triage_rank_reason_codes"))),
             ]
         )
     )
@@ -311,7 +304,7 @@ def select_attention_packet(
             continue
         if packet.get("output_mode") != "reopenable_route":
             continue
-        score = float(_as_dict(packet.get("router_diagnostics")).get("score") or 0.0)
+        score = float(dict_or_empty(packet.get("router_diagnostics")).get("score") or 0.0)
         ranked.append((score, index, packet))
     if not ranked:
         return None, None
@@ -377,7 +370,7 @@ def rerank_routes_with_attention_router(
             compatibility_penalty = _compatibility_score_penalty(
                 compatibility_by_route.get(route_id)
             )
-            raw_score = float(_as_dict(packet.get("router_diagnostics")).get("score") or 0.0)
+            raw_score = float(dict_or_empty(packet.get("router_diagnostics")).get("score") or 0.0)
             ranked.append(
                 (
                     raw_score
@@ -461,7 +454,7 @@ def rerank_routes_with_attention_router(
         selected_route = original_routes[0]
         selected_packet = packets[0] if packets else None
         selected_score = float(
-            _as_dict(_as_dict(selected_packet or {}).get("router_diagnostics")).get("score") or 0.0
+            dict_or_empty(dict_or_empty(selected_packet or {}).get("router_diagnostics")).get("score") or 0.0
         )
         selected_overlap = original_top_overlap
         selected_specificity = len(original_top_terms)
@@ -561,7 +554,7 @@ def metrics_for_attention_navigation(diagnostics: Mapping[str, Any]) -> dict[str
             diagnostics.get("compatibility_diagnostic_count") or 0
         ),
         "attention_router_feedback_calibration_matched_count": int(
-            _as_dict(diagnostics.get("feedback_calibration")).get("matched_route_count") or 0
+            dict_or_empty(diagnostics.get("feedback_calibration")).get("matched_route_count") or 0
         ),
     }
 

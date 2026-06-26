@@ -40,11 +40,14 @@ COMPACT_DEBUG_FIELD_DENYLIST = frozenset(
         "private_handle_boundary",
         "provider_key_bridge",
         "recall_gate_context",
+        "recall_capability",
+        "route_probe_status",
         "route_choice_posture",
         "runtime_provenance",
         "safe_operator_commands",
         "semantic_gate_diagnostics",
         "source_anchor_gate",
+        "source_reopen_success",
         "target_source_matched",
     }
 )

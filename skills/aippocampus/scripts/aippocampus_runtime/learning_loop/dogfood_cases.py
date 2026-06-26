@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
+from aippocampus_runtime.source.io_kernel import load_jsonl_dict_rows
 
 SCHEMA_VERSION = 1
 REPORT_KIND = "aippocampus_learning_loop_second_user_dogfood_report"
@@ -219,11 +220,7 @@ def build_sanitized_repro_package(
 
 
 def load_second_user_cases(path: Path) -> list[dict[str, Any]]:
-    return [
-        dict(json.loads(line))
-        for line in path.read_text(encoding="utf-8").splitlines()
-        if line.strip()
-    ]
+    return load_jsonl_dict_rows(path).rows
 
 
 def _phase_cases(rows: Iterable[Mapping[str, Any]]) -> dict[str, dict[str, Mapping[str, Any]]]:

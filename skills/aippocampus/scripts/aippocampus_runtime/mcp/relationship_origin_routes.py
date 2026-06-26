@@ -11,6 +11,7 @@ from aippocampus_runtime.mcp.registry_source_routes import (
     route_from_source_ref,
     source_ref_exists,
 )
+from aippocampus_runtime.registry.api import RegistryReadError
 from aippocampus_runtime.source.registry_search import search_registry_sources
 from aippocampus_runtime.source.relationship_origin import (
     RELATIONSHIP_ORIGIN_ROUTE_TOPIC,
@@ -183,7 +184,7 @@ def relationship_origin_registry_routes(
             per_thread_limit=2,
             cwd=cwd,
         )
-    except Exception:
+    except (OSError, ValueError, RegistryReadError):
         return []
     routes: list[dict[str, Any]] = []
     seen: set[str] = set()

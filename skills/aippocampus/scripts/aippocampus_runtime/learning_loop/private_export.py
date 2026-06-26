@@ -15,6 +15,7 @@ from typing import Any
 
 from aippocampus_runtime.core import stable_json_tuple_id
 from aippocampus_runtime.source.behavior_events import extract_rollout_behavior_events
+from aippocampus_runtime.source.io_kernel import parse_jsonl_dict_rows_text
 
 SCHEMA_VERSION = 1
 EXPORT_REPORT_KIND = "aippocampus_learning_loop_private_replay_export_report"
@@ -233,23 +234,20 @@ def _stamp_loaded_behavior_rows(rows: Iterable[Mapping[str, Any]]) -> list[dict[
 def load_behavior_event_rows(path: Path) -> list[dict[str, Any]]:
     text = _read_text_for_replay(path)
     if path.suffix.lower() == ".jsonl":
-        rows: list[dict[str, Any]] = []
-        for line_number, line in enumerate(text.splitlines(), start=1):
-            if not line.strip():
-                continue
-            try:
-                item = json.loads(line)
-            except json.JSONDecodeError as exc:
-                raise LearningReplayInputError(
-                    "learning_events_malformed_jsonl",
-                    f"Behavior events JSONL is malformed at line {line_number}.",
-                ) from exc
-            if not isinstance(item, Mapping):
-                raise LearningReplayInputError(
-                    "learning_events_malformed_jsonl",
-                    f"Behavior events JSONL row {line_number} is not an object.",
-                )
-            rows.append(dict(item))
+        result = parse_jsonl_dict_rows_text(text, strict=True)
+        if int(result.loss.get("invalid_json_line_count") or 0):
+            line_number = (result.loss.get("invalid_json_line_numbers") or [0])[0]
+            raise LearningReplayInputError(
+                "learning_events_malformed_jsonl",
+                f"Behavior events JSONL is malformed at line {line_number}.",
+            )
+        if int(result.loss.get("non_object_line_count") or 0):
+            line_number = (result.loss.get("non_object_line_numbers") or [0])[0]
+            raise LearningReplayInputError(
+                "learning_events_malformed_jsonl",
+                f"Behavior events JSONL row {line_number} is not an object.",
+            )
+        rows = result.rows
         return _validate_behavior_event_rows(_stamp_loaded_behavior_rows(rows))
     try:
         payload = json.loads(text)

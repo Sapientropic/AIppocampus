@@ -26,7 +26,7 @@ def registry_clean_source_dir_for_ref(
     try:
         registry_path, _ = registry.registry_paths(registry_dir)
         registry_payload = registry.load_registry(registry_path)
-    except Exception:
+    except (OSError, ValueError, registry.RegistryReadError):
         registry_payload = {"threads": []}
     for entry in registry_payload.get("threads") or []:
         if not isinstance(entry, dict) or str(entry.get("thread_key") or "") != thread_key:

@@ -69,6 +69,33 @@ def list_or_empty(value: Any) -> list[Any]:
     return list(value) if isinstance(value, list) else []
 
 
+def string_list_or_empty(value: Any) -> list[str]:
+    """Normalize optional string-or-string-list schema fields.
+
+    Keep this distinct from `list_or_empty()`: some product schemas accept a
+    single string as shorthand, while JSON array fields should not silently gain
+    scalar compatibility.
+    """
+
+    if isinstance(value, str):
+        return [value] if value.strip() else []
+    if not isinstance(value, list):
+        return []
+    return [str(item) for item in value if str(item or "").strip()]
+
+
+def schema_block(code: str, *, field: str, message: str) -> dict[str, str]:
+    """Return the shared blocker shape used by schema and gate reports."""
+
+    return {"code": code, "field": field, "message": message}
+
+
+def schema_blocker_codes(blockers: Iterable[Mapping[str, Any]]) -> list[str]:
+    """Return stable blocker codes without freezing local blocker objects."""
+
+    return sorted({str(item.get("code") or "") for item in blockers if item.get("code")})
+
+
 def _projection_value_is_empty(value: Any, *, drop_empty_dicts: bool) -> bool:
     return value in (None, "", []) or (drop_empty_dicts and value == {})
 

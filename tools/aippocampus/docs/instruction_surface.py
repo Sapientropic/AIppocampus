@@ -91,6 +91,15 @@ INSTRUCTION_SURFACE_CLASSIFIED_FILES = {
             "MCP tools; detailed source/operator payload stays in full profile"
         ),
     },
+    "skills/aippocampus/scripts/aippocampus_runtime/mcp/memory_health_recovery.py": {
+        "classification": "mcp_memory_health_recovery_owner",
+        "owner": "#2629/#2651",
+        "why": (
+            "owns memory_health recovery-card split state; compact may choose "
+            "recall vs setup actions, while probe evidence stays in full/detail "
+            "and compact filtering"
+        ),
+    },
     "skills/aippocampus/scripts/aippocampus_runtime/mcp/public_projection.py": {
         "classification": "mcp_public_projection_owner",
         "owner": "#2666/#2651",
@@ -99,12 +108,28 @@ INSTRUCTION_SURFACE_CLASSIFIED_FILES = {
             "diagnostics stay in full/detail surfaces"
         ),
     },
+    "skills/aippocampus/scripts/aippocampus_runtime/mcp/runtime_provenance.py": {
+        "classification": "mcp_runtime_provenance_detail_owner",
+        "owner": "#2629/#2651",
+        "why": (
+            "owns sanitized MCP runtime provenance for full/detail profiles; "
+            "compact projection must keep this diagnostic family stripped"
+        ),
+    },
     "skills/aippocampus/scripts/aippocampus_runtime/mcp/continuity_routes.py": {
         "classification": "mcp_continuity_route_owner",
         "owner": "#2628/#2651",
         "why": (
             "owns MCP continuity-domain route handles and route-count diagnostics; "
             "compact proof must stay in follow-through, not foreground field dumps"
+        ),
+    },
+    "skills/aippocampus/scripts/aippocampus_runtime/mcp/relationship_origin_routes.py": {
+        "classification": "relationship_origin_route_owner",
+        "owner": "#2635/#2651",
+        "why": (
+            "owns the canonical relationship-origin route labels and handoff "
+            "wording; routes remain navigation until deepen/source-open follow-through"
         ),
     },
     "skills/aippocampus/scripts/aippocampus_runtime/mcp/recall_navigation.py": {
@@ -195,12 +220,28 @@ INSTRUCTION_SURFACE_CLASSIFIED_FILES = {
             "proof remains in fallback/deepen follow-through, not policy text"
         ),
     },
+    "skills/aippocampus/scripts/aippocampus_runtime/recall/associative_path_inputs.py": {
+        "classification": "apw_input_sidecar_owner",
+        "owner": "#2635/#2636/#2651",
+        "why": (
+            "owns APW sidecar input-status and diagnostic wording; sidecars guide "
+            "navigation only and source-open proof stays in deepen/open probes"
+        ),
+    },
     "skills/aippocampus/scripts/aippocampus_runtime/recall/ambient_cards.py": {
         "classification": "ambient_recall_card_owner",
         "owner": "#2628/#2636/#2651",
         "why": (
             "owns compact ambient-card guidance and its source-boundary warnings; "
             "cards may orient attention but cannot assert source-open facts"
+        ),
+    },
+    "skills/aippocampus/scripts/aippocampus_runtime/recall/ambient_policy.py": {
+        "classification": "ambient_policy_owner",
+        "owner": "#2636/#2651",
+        "why": (
+            "owns ambient anti-nag and dismissal policy strings for the foreground "
+            "hot path; policy state quiets or reopens hints without becoming evidence"
         ),
     },
     "skills/aippocampus/scripts/aippocampus_runtime/recall/ambient_cache.py": {
@@ -276,6 +317,14 @@ INSTRUCTION_SURFACE_CLASSIFIED_FILES = {
             "additionalContext"
         ),
     },
+    "skills/aippocampus/scripts/aippocampus_runtime/recall/prompt_recall_core.py": {
+        "classification": "prompt_recall_policy_owner",
+        "owner": "#2629/#2651",
+        "why": (
+            "owns prompt-recall scoring, gate, and latency-bound local invariant "
+            "text; explicit deepen/search remains the source-backed path"
+        ),
+    },
     "skills/aippocampus/scripts/aippocampus_runtime/recall/prompt_recall_ambient.py": {
         "classification": "prompt_hook_ambient_coordinator_owner",
         "owner": "#2676/#2629/#2651",
@@ -307,6 +356,14 @@ INSTRUCTION_SURFACE_CLASSIFIED_FILES = {
         "why": (
             "owns retrieval score-fusion contract text; score richness is ranking "
             "metadata, not source eligibility"
+        ),
+    },
+    "skills/aippocampus/scripts/aippocampus_runtime/recall/retrieval.py": {
+        "classification": "recall_retrieval_policy_owner",
+        "owner": "#2635/#2651",
+        "why": (
+            "owns dependency-free recall retrieval and source-route expansion "
+            "comments; lexical sidecars guide search and cannot replace source-open proof"
         ),
     },
     "skills/aippocampus/scripts/aippocampus_runtime/recall/task_orientation.py": {
@@ -421,12 +478,53 @@ INSTRUCTION_SURFACE_CLASSIFIED_FILES = {
             "opened window and detail payload rather than compact debug fields"
         ),
     },
+    "skills/aippocampus/scripts/aippocampus_runtime/hooks/action_hint_cache.py": {
+        "classification": "action_hint_cache_owner",
+        "owner": "#2635/#2651",
+        "why": (
+            "owns prepared action-hint cache path, recovery, and operator refresh "
+            "wording; compact hook output stays action-sized"
+        ),
+    },
+    "skills/aippocampus/scripts/aippocampus_runtime/hooks/diagnose.py": {
+        "classification": "hook_diagnostic_operator_owner",
+        "owner": "#2629/#2651",
+        "why": (
+            "owns operator-only hook host emulation, latency, and timeout diagnostics; "
+            "diagnostic command strings must not become foreground memory guidance"
+        ),
+    },
+    "skills/aippocampus/scripts/aippocampus_runtime/hooks/prompt.py": {
+        "classification": "prompt_hook_entrypoint_owner",
+        "owner": "#2629/#2651",
+        "why": (
+            "owns prompt-hook CLI/help and fail-open telemetry warnings; foreground "
+            "additionalContext stays compact while degraded warnings stay detail/debug"
+        ),
+    },
+    "skills/aippocampus/scripts/aippocampus_runtime/hooks/prompt_fallbacks.py": {
+        "classification": "prompt_hook_fallback_owner",
+        "owner": "#2629/#2651",
+        "why": (
+            "owns optional prompt-hook fallback glue kept off the hot entrypoint; "
+            "missing optional foreground material fails open with detail/debug "
+            "diagnostics rather than blocking prompt submission"
+        ),
+    },
     "skills/aippocampus/scripts/aippocampus_runtime/subconscious/scheduler.py": {
         "classification": "lifecycle_scheduler_boundary_owner",
         "owner": "#2635/#2651",
         "why": (
             "owns hook-safe scheduler boundary text; lifecycle foreground must "
             "stay fail-open and must not become a proof or job-output surface"
+        ),
+    },
+    "skills/aippocampus/scripts/aippocampus_runtime/subconscious/shell_selection.py": {
+        "classification": "subconscious_shell_selection_owner",
+        "owner": "#2636/#2651",
+        "why": (
+            "owns dry-run shell-selection policy wording for subconscious work; "
+            "private queue-shape signals stay diagnostic and do not start work alone"
         ),
     },
     "skills/aippocampus/scripts/aippocampus_runtime/hooks/foreground_status.py": {
@@ -499,6 +597,14 @@ INSTRUCTION_SURFACE_CLASSIFIED_FILES = {
         "why": (
             "owns update/readiness foreground action cards and mutation-risk labels "
             "for CLI and MCP follow-through"
+        ),
+    },
+    "skills/aippocampus/scripts/aippocampus_runtime/update/cli.py": {
+        "classification": "update_cli_operator_owner",
+        "owner": "#2629/#2651",
+        "why": (
+            "owns update/install/status operator command wording and key-safety "
+            "warnings; readiness claims must still come from status projections"
         ),
     },
     "skills/aippocampus/scripts/aippocampus_runtime/update/plugin_installer.py": {
@@ -609,12 +715,14 @@ COMPACT_DEBUG_FIELD_LITERALS = (
     "runtime_provenance",
     "source_anchor_gate",
     "operator_detail_command",
+    "recall_capability",
     "safe_next_actions",
     "weak_route_recovery_card",
     "apw_recovery_state",
     "last_recall_cache_available",
     "recall_selector_id",
     "route_count",
+    "source_reopen_success",
 )
 INSTRUCTION_SURFACE_TERMS = (
     "must",
