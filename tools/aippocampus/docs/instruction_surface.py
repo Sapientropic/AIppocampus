@@ -163,6 +163,15 @@ INSTRUCTION_SURFACE_CLASSIFIED_FILES = {
             "owns recall route/action selection text that later projections render"
         ),
     },
+    "skills/aippocampus/scripts/aippocampus_runtime/recall/agent_recall_primitives.py": {
+        "classification": "recall_route_primitive_owner",
+        "owner": "#2631/#2651",
+        "why": (
+            "owns shared route-to-packet boundary wording and local invariant "
+            "comments for the thin facade and staged recall pipeline; source "
+            "proof still belongs in deepen/open or detail/operator surfaces"
+        ),
+    },
     "skills/aippocampus/scripts/aippocampus_runtime/recall/agent_continuity_cli.py": {
         "classification": "recall_cli_dispatch_owner",
         "owner": "#2676/#2530/#2651",

@@ -12,7 +12,7 @@ from typing import Any
 from aippocampus_runtime.mcp import server as mcp
 from aippocampus_runtime.mcp.compact_profile import mcp_tool_result_payload
 from aippocampus_runtime.source.io_kernel import write_jsonl_dict_rows
-from tests.aippocampus.cli_fixtures import run_aippocampus_cli
+from tests.aippocampus.cli_fixtures import parse_cli_json, run_aippocampus_cli
 
 
 @dataclass(frozen=True)
@@ -78,13 +78,7 @@ def run_cli_json(
 ) -> dict[str, Any]:
     merged_env = {**os.environ, **dict(env or {})}
     proc = run_aippocampus_cli(*args, env=merged_env)
-    test.assertEqual(proc.returncode, 0, proc.stderr + proc.stdout)
-    try:
-        payload = json.loads(proc.stdout)
-    except json.JSONDecodeError as exc:
-        test.fail(f"CLI did not return JSON: {exc}: {proc.stdout}")
-    test.assertIsInstance(payload, dict)
-    return payload
+    return parse_cli_json(test, proc, expected_returncode=0, label="aippocampus CLI")
 
 
 def run_agent_cli(

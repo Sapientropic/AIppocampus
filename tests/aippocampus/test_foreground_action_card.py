@@ -9,6 +9,7 @@ from aippocampus_runtime.mcp.public_projection import compact_health_payload
 from aippocampus_runtime.recall import (
     agent_continuity,
     agent_continuity_cli_support,
+    agent_recall_pipeline,
     foreground_action_card,
 )
 
@@ -49,7 +50,7 @@ class ForegroundActionCardTests(unittest.TestCase):
         }
 
     def _recall_with_routes(self, routes: list[dict[str, object]]) -> dict[str, object]:
-        with patch.object(agent_continuity, "recall_context_packet", return_value=self._packet(routes)):
+        with patch.object(agent_recall_pipeline, "recall_context_packet", return_value=self._packet(routes)):
             return agent_continuity.recall(
                 "foreground action card",
                 cwd=self.cwd,

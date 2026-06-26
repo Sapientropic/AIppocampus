@@ -5,6 +5,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
@@ -26,6 +27,36 @@ def run_aippocampus_cli(
         capture_output=True,
         check=False,
     )
+
+
+def parse_cli_json(
+    test: Any,
+    proc: subprocess.CompletedProcess[str],
+    *,
+    expected_returncode: int | set[int] | None = None,
+    label: str = "CLI",
+) -> dict[str, Any]:
+    """Parse CLI JSON with failure output that points at the broken command surface."""
+
+    if expected_returncode is not None:
+        allowed = (
+            {expected_returncode}
+            if isinstance(expected_returncode, int)
+            else set(expected_returncode)
+        )
+        test.assertIn(
+            proc.returncode,
+            allowed,
+            f"{label} exit {proc.returncode}\nSTDERR:\n{proc.stderr}\nSTDOUT:\n{proc.stdout}",
+        )
+    try:
+        payload = json.loads(proc.stdout)
+    except json.JSONDecodeError as exc:
+        test.fail(
+            f"{label} did not return JSON: {exc}\nSTDERR:\n{proc.stderr}\nSTDOUT:\n{proc.stdout}"
+        )
+    test.assertIsInstance(payload, dict)
+    return payload
 
 
 def registry_env(root: Path, **extra: str) -> dict[str, str]:

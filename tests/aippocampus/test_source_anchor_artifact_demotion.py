@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from aippocampus_runtime.recall import agent_continuity
+from aippocampus_runtime.recall import agent_continuity, agent_recall_pipeline
 
 
 class SourceAnchorArtifactDemotionTests(unittest.TestCase):
@@ -62,7 +62,7 @@ class SourceAnchorArtifactDemotionTests(unittest.TestCase):
                 }
             ],
         }
-        with patch.object(agent_continuity, "recall_context_packet", return_value=fake_packet):
+        with patch.object(agent_recall_pipeline, "recall_context_packet", return_value=fake_packet):
             report = agent_continuity.recall(
                 "黏菌 联想回忆 探索算法",
                 cwd=self.cwd,

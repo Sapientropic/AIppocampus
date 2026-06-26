@@ -26,10 +26,10 @@ from aippocampus_runtime.source.last_recall_actions import (
 from aippocampus_runtime.source.last_recall_actions import (
     selector_cache_path as _selector_cache_path,
 )
-from aippocampus_runtime.source.last_recall_search import (
-    _handle_source_refs,
-    _safe_context_path,
-    _stale_local_source_invalidations,
+from aippocampus_runtime.source.last_recall_search_pipeline import (
+    handle_source_refs,
+    safe_context_path,
+    stale_local_source_invalidations,
 )
 from aippocampus_runtime.source.query_match_gate import match_query_profile, query_match_gate
 from aippocampus_runtime.source.search_core import iter_clean_messages
@@ -258,7 +258,7 @@ def open_last_recall_source_window(
             request_index=int(request_index),
             path=cache_path,
         )
-        normalized, refs = _handle_source_refs(handle)
+        normalized, refs = handle_source_refs(handle)
     except RecallNavigationError as exc:
         return _source_window_recovery(
             code=exc.code,
@@ -274,9 +274,9 @@ def open_last_recall_source_window(
         )
 
     cwd_path = Path(cwd).expanduser().resolve()
-    clean_source_dir = _safe_context_path(context.get("clean_source_dir")) or default_thread_clean_source_dir(cwd_path)
-    registry_dir = _safe_context_path(context.get("registry_dir"))
-    invalidations = _stale_local_source_invalidations(
+    clean_source_dir = safe_context_path(context.get("clean_source_dir")) or default_thread_clean_source_dir(cwd_path)
+    registry_dir = safe_context_path(context.get("registry_dir"))
+    invalidations = stale_local_source_invalidations(
         normalized,
         refs,
         clean_source_dir=clean_source_dir,
