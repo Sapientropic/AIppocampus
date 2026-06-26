@@ -6,14 +6,22 @@ import json
 import os
 import platform
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 from aippocampus_runtime import core as runtime_core
 from aippocampus_runtime.io_integrity import atomic_write_json
+from aippocampus_runtime.local_file_lock import (
+    OwnerCheckedFileLease,
+    OwnerCheckedLeaseBusyError,
+    OwnerCheckedLeaseChangedError,
+)
 
 PROMPT_SKIP_TELEMETRY_ENV = "AIPPOCAMPUS_PROMPT_SKIP_TELEMETRY"
 HOST_TIMEOUT_RISK_BUCKET = "gte_4300"
+CURRENT_LATENCY_WINDOW_SECONDS = 60 * 60
+TELEMETRY_LOCK_STALE_AFTER_SECONDS = 30
 
 
 def _flag_enabled(value: str | None, *, default: bool = True) -> bool:
@@ -100,13 +108,44 @@ def _bucket_count(container: Any, *keys: str) -> int:
         return 0
 
 
+def _parse_utc(value: Any) -> datetime | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _latency_value_at_least(container: Mapping[str, Any], key: str, threshold: float) -> bool:
+    try:
+        value = float(container.get(key) or 0.0)
+    except (TypeError, ValueError):
+        return False
+    return value >= threshold
+
+
 def prompt_hook_latency_risk(
     *,
     telemetry_path: Path | None = None,
     host_timeout_ms: int = 5000,
     safe_internal_budget_ms: int = 3500,
+    now: datetime | None = None,
+    current_window_seconds: int = CURRENT_LATENCY_WINDOW_SECONDS,
 ) -> dict[str, Any]:
-    """Project aggregate prompt-hook timeout risk without prompt/source content."""
+    """Project prompt-hook timeout risk without confusing stale history for now.
+
+    The telemetry file is an aggregate skip ledger, not a live prompt-hook probe.
+    Historical red-line counters stay visible for operator diagnosis, but the
+    foreground status only becomes `near_host_timeout_risk` when a fresh latest
+    sample is itself near the host timeout. This prevents old 4300ms-budget
+    history from blocking every later session after the hook has already moved
+    to the safer foreground budget.
+    """
 
     path = telemetry_path or _default_skip_telemetry_path()
     telemetry = _load_skip_telemetry(path)
@@ -114,8 +153,12 @@ def prompt_hook_latency_risk(
         return {
             "kind": "aippocampus_prompt_hook_latency_risk",
             "status": "no_aggregate_telemetry",
+            "current_status": "no_recent_telemetry",
+            "freshness_status": "no_aggregate_telemetry",
+            "historical_status": "no_history",
             "telemetry_found": False,
             "near_timeout_event_count": 0,
+            "historical_near_timeout_event_count": 0,
             "repair_action": "",
             "privacy_boundary": "aggregate_only_no_prompt_source_or_local_path",
         }
@@ -142,35 +185,73 @@ def prompt_hook_latency_risk(
                 continue
             if budget >= 4300:
                 high_budget_count += max(0, count)
-    status = (
-        "near_host_timeout_risk"
+    historical_status = (
+        "historical_near_timeout_seen"
         if near_timeout_event_count > 0 or high_budget_count > 0
         else "within_safe_margin"
     )
-    foreground_latency_red_line_violation_count = max(
+    historical_red_line_count = max(
         near_timeout_event_count,
         high_budget_count,
     )
+    last = dict(latency.get("last") or {}) if isinstance(latency, dict) else {}
+    last_event = telemetry.get("last_event")
+    last_timestamp = str((last_event or {}).get("timestamp") or telemetry.get("updated_at") or "")
+    current = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
+    parsed_last = _parse_utc(last_timestamp)
+    age_seconds = int((current - parsed_last).total_seconds()) if parsed_last else None
+    fresh = bool(age_seconds is not None and 0 <= age_seconds <= int(current_window_seconds))
+    near_timeout_threshold = max(0.0, float(host_timeout_ms) * 0.86)
+    latest_near_timeout = any(
+        _latency_value_at_least(last, key, near_timeout_threshold)
+        for key in ("hook_elapsed", "hook_total", "runtime_load", "startup_import_io")
+    )
+    latest_budget_overrun = _latency_value_at_least(last, "hook_elapsed", safe_internal_budget_ms)
+    current_red_line_count = 1 if fresh and (latest_near_timeout or latest_budget_overrun) else 0
+    current_near_timeout_count = 1 if fresh and latest_near_timeout else 0
+    if current_red_line_count:
+        current_status = "near_host_timeout_risk"
+    elif fresh:
+        current_status = "within_safe_margin"
+    elif historical_status == "historical_near_timeout_seen":
+        current_status = "stale_history_only"
+    else:
+        current_status = "no_recent_telemetry"
+    freshness_status = (
+        "fresh_current_window"
+        if fresh
+        else "stale_history_only"
+        if historical_status == "historical_near_timeout_seen"
+        else "no_recent_telemetry"
+    )
     return {
         "kind": "aippocampus_prompt_hook_latency_risk",
-        "status": status,
+        "status": current_status,
+        "current_status": current_status,
+        "freshness_status": freshness_status,
+        "historical_status": historical_status,
         "telemetry_found": True,
         "total_events": int(telemetry.get("total_events") or 0),
-        "foreground_latency_red_line_violation_count": foreground_latency_red_line_violation_count,
-        "near_timeout_event_count": near_timeout_event_count,
+        "foreground_latency_red_line_violation_count": current_red_line_count,
+        "near_timeout_event_count": current_near_timeout_count,
+        "historical_foreground_latency_red_line_violation_count": historical_red_line_count,
+        "historical_near_timeout_event_count": near_timeout_event_count,
         "high_internal_budget_event_count": high_budget_count,
         "host_timeout_ms": int(host_timeout_ms),
         "safe_internal_budget_ms": int(safe_internal_budget_ms),
+        "current_window_seconds": int(current_window_seconds),
+        "last_event_timestamp": last_timestamp,
+        "last_event_age_seconds": age_seconds,
         "latency_bucket_counts": {
             "hook_elapsed_gte_4300": hook_elapsed_near,
             "hook_total_gte_4300": hook_total_near,
             "runtime_load_gte_4300": runtime_load_near,
             "startup_import_io_gte_4300": startup_import_near,
         },
-        "last": dict(latency.get("last") or {}) if isinstance(latency, dict) else {},
+        "last": last,
         "repair_action": (
             "aippocampus hooks prompt install --json"
-            if status == "near_host_timeout_risk"
+            if current_status == "near_host_timeout_risk"
             else ""
         ),
         "diagnostic_action": "aippocampus hooks prompt status --last --json",
@@ -178,32 +259,20 @@ def prompt_hook_latency_risk(
         "cannot_claim": [
             "raw_prompt_or_source_text",
             "single_latest_run_proves_host_safety",
+            "stale_history_proves_current_prompt_latency",
         ],
     }
 
 
-def _try_claim_telemetry_lock(path: Path) -> int | None:
+def _telemetry_lease(path: Path) -> OwnerCheckedFileLease:
     lock_path = path.with_suffix(path.suffix + ".lock")
-    try:
-        return os.open(str(lock_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-    except FileExistsError:
-        return None
-    except OSError:
-        return None
-
-
-def _release_telemetry_lock(path: Path, fd: int | None) -> None:
-    if fd is None:
-        return
-    lock_path = path.with_suffix(path.suffix + ".lock")
-    try:
-        os.close(fd)
-    except OSError:
-        pass
-    try:
-        lock_path.unlink()
-    except OSError:
-        pass
+    return OwnerCheckedFileLease(
+        lock_path,
+        lock_kind="prompt_hook_skip_telemetry",
+        stale_after_seconds=TELEMETRY_LOCK_STALE_AFTER_SECONDS,
+        wait_timeout_seconds=0.0,
+        payload_extra={"kind": "aippocampus_prompt_hook_skip_telemetry_lease"},
+    )
 
 
 def _nested_counter(root: dict[str, Any], *keys: str) -> dict[str, Any]:
@@ -240,25 +309,21 @@ def write_skip_telemetry(
         path.parent.mkdir(parents=True, exist_ok=True)
     except OSError:
         return
-    lock_fd = _try_claim_telemetry_lock(path)
-    if lock_fd is None:
+    try:
+        with _telemetry_lease(path):
+            _write_skip_telemetry_locked(
+                result,
+                path=path,
+                hook_budget_ms=hook_budget_ms,
+                semantic_timeout=semantic_timeout,
+                runtime_load_ms=runtime_load_ms,
+                hook_total_ms=hook_total_ms,
+                telemetry_write_ms=telemetry_write_ms,
+            )
+    except (OwnerCheckedLeaseBusyError, OwnerCheckedLeaseChangedError, OSError):
         # UserPromptSubmit is foreground work; drop this sample instead of
         # waiting behind another hook and stretching the prompt latency budget.
         return
-    try:
-        _write_skip_telemetry_locked(
-            result,
-            path=path,
-            hook_budget_ms=hook_budget_ms,
-            semantic_timeout=semantic_timeout,
-            runtime_load_ms=runtime_load_ms,
-            hook_total_ms=hook_total_ms,
-            telemetry_write_ms=telemetry_write_ms,
-        )
-    except OSError:
-        return
-    finally:
-        _release_telemetry_lock(path, lock_fd)
 
 
 def _write_skip_telemetry_locked(

@@ -39,9 +39,13 @@ from aippocampus_runtime.source.registry_search_duplicates import (
     process_noise_reason,
 )
 from aippocampus_runtime.source.registry_search_evidence import (
+    duplicate_ref_has_direct_source_open_route,
+    first_match_usefulness_status,
     match_evidence_diagnostics,
+    match_has_direct_source_open_route,
     match_is_useful_registry_target,
     query_anchor_rank,
+    suppressed_match_state,
 )
 from aippocampus_runtime.source.registry_search_skips import (
     registry_entry_ref,
@@ -188,15 +192,18 @@ def _annotate_last_search_reopen_commands(
                 match["source_window_command"] = command
                 match["last_search_reopen_command"] = command
             continue
-        source_window_command = registry_source_window_command(
-            route,
-            registry_dir=registry_dir,
-            include_registry_dir=include_paths,
-        )
         match["hit_index"] = index
-        match["reopen_command"] = source_window_command
-        match["source_window_command"] = source_window_command
-        match["last_search_reopen_command"] = f"aippocampus search --hit {index} --last-search --json"
+        if match_has_direct_source_open_route(match):
+            source_window_command = registry_source_window_command(
+                route,
+                registry_dir=registry_dir,
+                include_registry_dir=include_paths,
+            )
+            match["reopen_command"] = source_window_command
+            match["source_window_command"] = source_window_command
+            match["last_search_reopen_command"] = (
+                f"aippocampus search --hit {index} --last-search --json"
+            )
         duplicate_refs = [
             ref for ref in match.get("duplicate_source_refs") or [] if isinstance(ref, dict)
         ]
@@ -207,6 +214,8 @@ def _annotate_last_search_reopen_commands(
                 line=ref.get("line"),
             )
             if not route_ref.get("thread_key"):
+                continue
+            if not duplicate_ref_has_direct_source_open_route(match, ref, route_ref):
                 continue
             ref_command = registry_source_window_command(
                 route_ref,
@@ -464,6 +473,17 @@ def _render_registry_search_payload(
         else False
     )
     useful_target_hit = bool(first_match and first_match_useful)
+    no_phrase_like_matches, low_coverage_only_matches = suppressed_match_state(
+        phrase_like_query=bool(inputs.query_gate.get("phrase_like_query")),
+        visible_match_count=len(matches),
+        suppressed_match_count=len(evaluation.suppressed_matches),
+    )
+    first_match_status = first_match_usefulness_status(
+        first_match,
+        first_match_profile=first_match_profile,
+        first_match_useful=first_match_useful,
+        low_coverage_only_matches=low_coverage_only_matches,
+    )
     discussion_pointer = discussion_atlas_pointer_for_query(
         inputs.query_text,
         cwd=inputs.registry_root or Path.cwd(),
@@ -474,24 +494,11 @@ def _render_registry_search_payload(
         has_matches=bool(matches),
         first_match=matches[0] if matches else None,
         useful_target_hit=useful_target_hit,
-        first_match_usefulness_status=(
-            "identifier_not_found"
-            if first_match_profile.get("exact_identifier_query")
-            and not first_match_profile.get("identifier_match")
-            else "demoted_artifact"
-            if first_match is not None and match_is_demoted_artifact(first_match)
-            else "query_anchor_missing"
-            if first_match is not None and not first_match_useful
-            else "topic_bearing_candidate"
-        ),
+        first_match_usefulness_status=first_match_status,
+        low_coverage_only_matches=low_coverage_only_matches,
     )
     if discussion_action:
         actions = [discussion_action, *actions]
-    no_phrase_like_matches = (
-        bool(inputs.query_gate.get("phrase_like_query"))
-        and not matches
-        and bool(evaluation.suppressed_matches)
-    )
     diagnostic_output = include_paths or search_budget == "deep"
     output_matches = (
         [diagnostic_registry_match(match) for match in matches]
@@ -506,10 +513,10 @@ def _render_registry_search_payload(
             if useful_target_hit
             else "identifier_not_found"
             if inputs.query_gate.get("exact_identifier_query")
-            else "matches_need_broadened_source_search"
-            if matches
             else "no_phrase_like_matches"
             if no_phrase_like_matches
+            else "matches_need_broadened_source_search"
+            if matches or low_coverage_only_matches
             else "no_matches"
         ),
         "search_scope": "registered_clean_source_and_indexes",
@@ -526,14 +533,7 @@ def _render_registry_search_payload(
         "useful_target_hit": useful_target_hit,
         "first_match_usefulness": (
             {
-                "status": "demoted_artifact"
-                if first_match is not None and match_is_demoted_artifact(first_match)
-                else "identifier_not_found"
-                if first_match_profile.get("exact_identifier_query")
-                and not first_match_profile.get("identifier_match")
-                else "query_anchor_missing"
-                if not first_match_useful
-                else "topic_bearing_candidate",
+                "status": first_match_status,
                 "artifact_role": first_match.get("artifact_role") if first_match else None,
                 "first_hit_demoted": bool(
                     first_match is not None and match_is_demoted_artifact(first_match)
@@ -598,6 +598,7 @@ def _render_registry_search_payload(
             "source_reopen_required_before_claim": True,
             "demoted_artifact_matches_are_diagnostic": bool(matches) and not useful_target_hit,
             "search_miss_is_not_absence_of_memory": not bool(matches),
+            "low_coverage_matches_suppressed": low_coverage_only_matches,
             "phrase_like_low_coverage_suppressed": no_phrase_like_matches,
         },
         "privacy": {

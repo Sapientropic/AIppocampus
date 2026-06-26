@@ -96,7 +96,7 @@ def run_registry_search_cli(args: Any, render_human_search_result: Any) -> int:
         print(json.dumps(result, ensure_ascii=False, indent=2))
     else:
         print(render_human_search_result(result))
-    return 0 if result["matches"] else 1
+    return 0 if result.get("ok") else 1
 
 
 __all__ = [

@@ -430,6 +430,74 @@ class InstallAmbientRecallHookTests(unittest.TestCase):
         self.assertGreaterEqual(risk["foreground_latency_red_line_violation_count"], 1)
         self.assertGreaterEqual(risk["near_timeout_event_count"], 1)
 
+    def test_status_last_separates_stale_latency_history_from_current_risk(self) -> None:
+        telemetry_path = self.codex_home / "prompt_hook_skip_telemetry.json"
+        telemetry_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "updated_at": "2000-01-01T00:00:00Z",
+                    "total_events": 12,
+                    "hook_budget_ms_counts": {"4300": 7},
+                    "latency_ms": {
+                        "buckets": {
+                            "hook_elapsed": {"gte_4300": 2},
+                            "hook_total": {"gte_4300": 3},
+                        },
+                        "last": {
+                            "hook_elapsed": 2597.04,
+                            "hook_total": 2737.06,
+                            "runtime_load": 76.2,
+                            "startup_import_io": 140.02,
+                        },
+                    },
+                    "last_event": {
+                        "timestamp": "2000-01-01T00:00:00Z",
+                        "decision": "skip",
+                    },
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        installer.install(self.hooks_json, timeout=5)
+
+        result = installer.status(
+            self.hooks_json,
+            include_last=True,
+            telemetry_path=telemetry_path,
+        )
+        action_ids = [action["id"] for action in result["safe_next_actions"]]
+
+        self.assertEqual(result["prompt_hook_latency_risk_status"], "stale_history_only")
+        self.assertEqual(result["prompt_hook_latency_current_status"], "stale_history_only")
+        self.assertEqual(result["prompt_hook_latency_freshness_status"], "stale_history_only")
+        self.assertEqual(
+            result["prompt_hook_latency_historical_status"],
+            "historical_near_timeout_seen",
+        )
+        self.assertEqual(result["foreground_latency_red_line_violation_count"], 0)
+        self.assertEqual(result["prompt_hook_near_timeout_event_count"], 0)
+        self.assertGreaterEqual(
+            result["historical_foreground_latency_red_line_violation_count"],
+            1,
+        )
+        self.assertNotIn("refresh_prompt_hook_safe_budget", action_ids)
+
+        operator = installer.status(
+            self.hooks_json,
+            include_last=True,
+            telemetry_path=telemetry_path,
+            include_operator_detail=True,
+        )
+        risk = operator["prompt_hook_latency_risk"]
+        self.assertEqual(risk["status"], "stale_history_only")
+        self.assertEqual(risk["foreground_latency_red_line_violation_count"], 0)
+        self.assertGreaterEqual(
+            risk["historical_foreground_latency_red_line_violation_count"],
+            1,
+        )
+
     def test_status_last_includes_sanitized_prompt_hook_audit_summary(self) -> None:
         log_path = self.codex_home / "prompt_hook_debug.jsonl"
         write_debug_log(

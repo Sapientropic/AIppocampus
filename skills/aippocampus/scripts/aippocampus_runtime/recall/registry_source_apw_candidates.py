@@ -183,6 +183,12 @@ def registry_source_candidate_rows(
         return [], _component("registry_clean_source_candidates", status="unreadable", row_count=0)
     candidates: list[dict[str, Any]] = []
     skip_reasons: Counter[str] = Counter()
+    # The registry query gate may suppress thin anchor hits before APW sees
+    # candidate rows; keep that loss visible in APW diagnostics so a safe
+    # abstain does not look like the registry source path was never tested.
+    upstream_low_coverage_filtered_count = int(
+        payload.get("suppressed_low_coverage_match_count") or 0
+    )
     demoted_count = 0
     malformed_count = 0
     for match in payload.get("matches") or []:
@@ -213,7 +219,8 @@ def registry_source_candidate_rows(
             "registry_match_count": int(payload.get("match_count") or 0),
             "demoted_artifact_match_count": demoted_count,
             "low_actual_source_anchor_coverage_filtered_count": int(
-                skip_reasons.get("low_actual_source_anchor_coverage", 0)
+                upstream_low_coverage_filtered_count
+                + skip_reasons.get("low_actual_source_anchor_coverage", 0)
                 + skip_reasons.get("missing_cjk_context_anchor", 0)
             ),
             "source_reopenable_candidate_count": len(candidates),

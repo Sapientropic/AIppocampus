@@ -367,7 +367,7 @@ class SearchCleanSourceTests(unittest.TestCase):
                     str(self.source),
                     "--public",
                 ]
-            )
+        )
 
         output = stdout.getvalue()
         self.assertEqual(code, 0)
@@ -1234,7 +1234,7 @@ class SearchCleanSourceTests(unittest.TestCase):
             )
         payload = json.loads(stdout.getvalue())
 
-        self.assertEqual(code, 0)
+        self.assertEqual(code, 1)
         self.assertFalse(payload["ok"])
         self.assertEqual(payload["status"], "matches_need_broadened_source_search")
         self.assertEqual(payload["match_count"], 1)
@@ -1330,9 +1330,11 @@ class SearchCleanSourceTests(unittest.TestCase):
 
         self.assertEqual(code, 0)
         self.assertEqual(payload["matches"][0]["message_id"], "msg_anchor_algorithm")
-        self.assertGreater(
+        self.assertEqual(payload["match_count"], 1)
+        self.assertEqual(payload["suppressed_low_coverage_match_count"], 1)
+        self.assertEqual(
             payload["matches"][0]["query_match_profile"]["matched_distinctive_anchor_count"],
-            payload["matches"][1]["query_match_profile"]["matched_distinctive_anchor_count"],
+            3,
         )
 
     def test_search_all_registry_collapses_mirrored_duplicate_snippets(self) -> None:

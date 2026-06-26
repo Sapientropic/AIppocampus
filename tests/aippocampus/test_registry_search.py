@@ -227,7 +227,9 @@ class RegistrySourceSearchUsefulnessTests(unittest.TestCase):
 
         self.assertFalse(result["useful_target_hit"])
         self.assertEqual(result["status"], "matches_need_broadened_source_search")
-        self.assertEqual(result["first_match_usefulness"]["status"], "query_anchor_missing")
+        self.assertEqual(result["match_count"], 0)
+        self.assertEqual(result["suppressed_low_coverage_match_count"], 1)
+        self.assertNotIn("first_match_usefulness", result)
         self.assertEqual(result["source_boundary"]["authority"], "direction_only")
         self.assertEqual(
             result["foreground_action"]["id"],
@@ -281,6 +283,213 @@ class RegistrySourceSearchUsefulnessTests(unittest.TestCase):
             result["foreground_action"]["id"],
             "open_registry_search_source_window",
         )
+
+    def test_short_multi_anchor_partial_hits_are_suppressed_before_open(self) -> None:
+        def fake_deep_search_entry_result(
+            entry: dict,
+            terms: list[str],
+            *,
+            max_hits: int,
+            search_budget: object = None,
+        ) -> dict:
+            del entry, terms, max_hits, search_budget
+            return {
+                "hits": [
+                    {
+                        "source": "sqlite",
+                        "line": 135501,
+                        "role": "assistant",
+                        "phase": "commentary",
+                        "score": 200.0,
+                        "snippet": "开发者真实水平 这条只是搜索排名诊断，不含另一个锚点。",
+                    }
+                ]
+            }
+
+        with patch.object(
+            registry_search,
+            "deep_search_entry_result",
+            side_effect=fake_deep_search_entry_result,
+        ):
+            result = source_registry_search.search_registry_sources(
+                ["开发者真实水平 小号"],
+                registry_dir=self.root,
+                cwd=self.root,
+            )
+
+        self.assertFalse(result["ok"])
+        self.assertFalse(result["useful_target_hit"])
+        self.assertEqual(result["status"], "matches_need_broadened_source_search")
+        self.assertEqual(result["match_count"], 0)
+        self.assertEqual(result["suppressed_low_coverage_match_count"], 1)
+        self.assertEqual(
+            result["foreground_action"]["id"],
+            "broaden_registry_search_for_query_anchors",
+        )
+        self.assertEqual(result["source_boundary"]["authority"], "direction_only")
+
+    def test_sqlite_line_only_hit_does_not_emit_source_open_action(self) -> None:
+        def fake_deep_search_entry_result(
+            entry: dict,
+            terms: list[str],
+            *,
+            max_hits: int,
+            search_budget: object = None,
+        ) -> dict:
+            del entry, terms, max_hits, search_budget
+            return {
+                "hits": [
+                    {
+                        "source": "sqlite",
+                        "line": 135501,
+                        "role": "assistant",
+                        "phase": "commentary",
+                        "score": 200.0,
+                        "snippet": "开发者真实水平 和 小号 都在旧索引里，但没有 clean-source message id。",
+                    }
+                ]
+            }
+
+        with patch.object(
+            registry_search,
+            "deep_search_entry_result",
+            side_effect=fake_deep_search_entry_result,
+        ):
+            result = source_registry_search.search_registry_sources(
+                ["开发者真实水平 小号"],
+                registry_dir=self.root,
+                cwd=self.root,
+            )
+
+        self.assertFalse(result["ok"])
+        self.assertFalse(result["useful_target_hit"])
+        self.assertEqual(result["status"], "matches_need_broadened_source_search")
+        self.assertEqual(result["match_count"], 1)
+        self.assertEqual(
+            result["first_match_usefulness"]["status"],
+            "source_route_not_reopenable",
+        )
+        self.assertNotIn("reopen_command", result["matches"][0])
+        self.assertEqual(
+            result["foreground_action"]["id"],
+            "broaden_registry_search_for_reopenable_source",
+        )
+        self.assertEqual(result["source_boundary"]["authority"], "direction_only")
+
+    def test_partial_sqlite_hit_loses_to_reopenable_exact_clean_source(self) -> None:
+        partial_clean = self.root / "partial-clean"
+        exact_clean = self.root / "exact-clean"
+        partial_clean.mkdir()
+        exact_clean.mkdir()
+        (partial_clean / "messages.jsonl").write_text("", encoding="utf-8")
+        exact_text = "那开发者真实水平你怎么定，像谁的小号吗？"
+        (exact_clean / "messages.jsonl").write_text(
+            json.dumps(
+                {
+                    "id": "msg_exact_user",
+                    "message_id": "msg_exact_user",
+                    "source_line": 42,
+                    "role": "user",
+                    "is_final": False,
+                    "text": exact_text,
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (self.root / "threads.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "threads": [
+                        {
+                            "thread_key": "session:partial",
+                            "title": "partial diagnostic",
+                            "paths": {
+                                "clean_source_messages_jsonl": str(
+                                    partial_clean / "messages.jsonl"
+                                )
+                            },
+                        },
+                        {
+                            "thread_key": "session:exact",
+                            "title": "exact source",
+                            "paths": {
+                                "clean_source_messages_jsonl": str(
+                                    exact_clean / "messages.jsonl"
+                                )
+                            },
+                        },
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        def fake_deep_search_entry_result(
+            entry: dict,
+            terms: list[str],
+            *,
+            max_hits: int,
+            search_budget: object = None,
+        ) -> dict:
+            del terms, max_hits, search_budget
+            path = str(((entry.get("paths") or {}).get("clean_source_messages_jsonl") or ""))
+            if "partial-clean" in path:
+                return {
+                    "hits": [
+                        {
+                            "source": "sqlite",
+                            "line": 135501,
+                            "role": "assistant",
+                            "phase": "commentary",
+                            "score": 500.0,
+                            "snippet": "开发者真实水平 ranking diagnostic only。",
+                        }
+                    ]
+                }
+            return {
+                "hits": [
+                    {
+                        "source": "clean_source",
+                        "message_id": "msg_exact_user",
+                        "line": 42,
+                        "role": "user",
+                        "score": 1.0,
+                        "snippet": exact_text,
+                    }
+                ]
+            }
+
+        with patch.object(
+            registry_search,
+            "deep_search_entry_result",
+            side_effect=fake_deep_search_entry_result,
+        ):
+            result = source_registry_search.search_registry_sources(
+                ["开发者真实水平 小号"],
+                registry_dir=self.root,
+                cwd=self.root,
+                record_last_search=True,
+            )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["matches"][0]["thread"]["thread_key"], "session:exact")
+        self.assertEqual(result["foreground_action"]["id"], "open_registry_search_source_window")
+
+        reopened = source_registry_search.open_registry_source_window(
+            registry_dir=self.root,
+            hit_index=1,
+            use_last_search=True,
+        )
+        opened = json.dumps(reopened["source_window"], ensure_ascii=False)
+
+        self.assertTrue(reopened["ok"])
+        self.assertEqual(reopened["source_boundary"]["authority"], "source_open")
+        self.assertIn("开发者真实水平", opened)
+        self.assertIn("小号", opened)
 
     def test_deep_search_ranks_exact_hit_after_public_snippet_cutoff_first(self) -> None:
         exact_clean = self.root / "exact-clean"

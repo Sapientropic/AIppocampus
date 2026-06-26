@@ -49,8 +49,12 @@ class CompactStatusState:
     warm_ambient_status: dict[str, Any]
     warm_activity: dict[str, Any]
     prompt_latency_status: str
+    prompt_latency_freshness_status: str
+    prompt_latency_historical_status: str
     foreground_latency_red_lines: int
     prompt_near_timeout_count: int
+    historical_foreground_latency_red_lines: int
+    historical_prompt_near_timeout_count: int
     prompt_latency_risk: bool
     warm_status: str
     warm_queue_state: str
@@ -116,11 +120,27 @@ def normalize_status_surfaces(report: dict[str, Any]) -> CompactStatusState:
     warm_activity = warm_ambient_status.get("job_activity")
     if not isinstance(warm_activity, dict):
         warm_activity = {}
-    prompt_latency_status = str(prompt_hook_status.get("prompt_hook_latency_risk_status") or "")
+    prompt_latency_status = str(
+        prompt_hook_status.get("prompt_hook_latency_current_status")
+        or prompt_hook_status.get("prompt_hook_latency_risk_status")
+        or ""
+    )
+    prompt_latency_freshness_status = str(
+        prompt_hook_status.get("prompt_hook_latency_freshness_status") or ""
+    )
+    prompt_latency_historical_status = str(
+        prompt_hook_status.get("prompt_hook_latency_historical_status") or ""
+    )
     foreground_latency_red_lines = _safe_int(
         prompt_hook_status.get("foreground_latency_red_line_violation_count")
     )
     prompt_near_timeout_count = _safe_int(prompt_hook_status.get("near_timeout_event_count"))
+    historical_foreground_latency_red_lines = _safe_int(
+        prompt_hook_status.get("historical_foreground_latency_red_line_violation_count")
+    )
+    historical_prompt_near_timeout_count = _safe_int(
+        prompt_hook_status.get("historical_near_timeout_event_count")
+    )
     prompt_latency_risk = (
         prompt_latency_status == "near_host_timeout_risk"
         or foreground_latency_red_lines > 0
@@ -149,8 +169,12 @@ def normalize_status_surfaces(report: dict[str, Any]) -> CompactStatusState:
         warm_ambient_status=warm_ambient_status,
         warm_activity=warm_activity,
         prompt_latency_status=prompt_latency_status,
+        prompt_latency_freshness_status=prompt_latency_freshness_status,
+        prompt_latency_historical_status=prompt_latency_historical_status,
         foreground_latency_red_lines=foreground_latency_red_lines,
         prompt_near_timeout_count=prompt_near_timeout_count,
+        historical_foreground_latency_red_lines=historical_foreground_latency_red_lines,
+        historical_prompt_near_timeout_count=historical_prompt_near_timeout_count,
         prompt_latency_risk=prompt_latency_risk,
         warm_status=warm_status,
         warm_queue_state=warm_queue_state,
@@ -465,8 +489,14 @@ def build_ambient_recall_status(
         "hot_path_active": state.action_hints_hot_path_active,
         "latency_risk": {
             "status": state.prompt_latency_status or "not_checked",
+            "freshness_status": state.prompt_latency_freshness_status or "not_checked",
+            "historical_status": state.prompt_latency_historical_status or "not_checked",
             "foreground_latency_red_line_violation_count": state.foreground_latency_red_lines,
             "near_timeout_event_count": state.prompt_near_timeout_count,
+            "historical_foreground_latency_red_line_violation_count": (
+                state.historical_foreground_latency_red_lines
+            ),
+            "historical_near_timeout_event_count": state.historical_prompt_near_timeout_count,
             "diagnostic_command": "aippocampus hooks prompt status --last --json",
         },
         "warm_queue": {
