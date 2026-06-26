@@ -9,7 +9,7 @@ from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
-from aippocampus_runtime import health
+from aippocampus_runtime import health, health_stages
 from aippocampus_runtime.artifacts import generation_pins
 from aippocampus_runtime.ops import storage_eviction, storage_governance
 from aippocampus_runtime.recall import index_builder, rollout_search
@@ -666,7 +666,7 @@ class StorageGovernanceTests(unittest.TestCase):
             include_paths=True,
         )
 
-        with patch.object(health, "locate_rollout", return_value=self.raw_rollout):
+        with patch.object(health_stages, "locate_rollout", return_value=self.raw_rollout):
             degraded = health.build_health_report(
                 health.HealthOptions(
                     cwd=self.root,
@@ -701,7 +701,7 @@ class StorageGovernanceTests(unittest.TestCase):
                 ]
             )
 
-        with patch.object(health, "locate_rollout", return_value=self.raw_rollout):
+        with patch.object(health_stages, "locate_rollout", return_value=self.raw_rollout):
             restored = health.build_health_report(
                 health.HealthOptions(
                     cwd=self.root,

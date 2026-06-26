@@ -8,6 +8,7 @@ from unittest import mock
 
 from aippocampus_runtime import health as health
 from aippocampus_runtime import health_host_state as health_host_state
+from aippocampus_runtime import health_stages
 
 
 def _write_minimal_health_inputs(root: Path) -> dict[str, Path]:
@@ -83,7 +84,7 @@ class HealthOperatorDiagnosticsTests(unittest.TestCase):
             root = Path(tmp)
             paths = _write_minimal_health_inputs(root)
             with (
-                mock.patch.object(health, "locate_rollout", return_value=paths["rollout"]),
+                mock.patch.object(health_stages, "locate_rollout", return_value=paths["rollout"]),
                 mock.patch.object(
                     health,
                     "registry_cache_pressure_report",
@@ -127,7 +128,7 @@ class HealthOperatorDiagnosticsTests(unittest.TestCase):
             root = Path(tmp)
             paths = _write_minimal_health_inputs(root)
             with (
-                mock.patch.object(health, "locate_rollout", return_value=paths["rollout"]),
+                mock.patch.object(health_stages, "locate_rollout", return_value=paths["rollout"]),
                 mock.patch.object(
                     health,
                     "registry_cache_pressure_report",

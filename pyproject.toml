@@ -433,6 +433,7 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/recall/understanding_state.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/agent_continuity.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/agent_continuity_cli.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/recall/agent_continuity_cli_dispatch.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/agent_continuity_cli_support.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/agent_recall_cache.py",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/local_reopen_token.py",

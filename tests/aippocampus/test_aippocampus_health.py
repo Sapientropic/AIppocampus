@@ -9,6 +9,7 @@ from pathlib import Path
 from unittest import mock
 
 from aippocampus_runtime import health as health
+from aippocampus_runtime import health_stages
 from aippocampus_runtime.warm_ambient.hook_seen_threads import (
     hook_seen_ledger_path_for_registry,
     hook_seen_thread_ref,
@@ -831,7 +832,7 @@ class AippocampusHealthTests(unittest.TestCase):
                 "foreground_blocking": False,
             }
             with (
-                mock.patch.object(health, "locate_rollout", return_value=rollout),
+                mock.patch.object(health_stages, "locate_rollout", return_value=rollout),
                 mock.patch.object(
                     health,
                     "registry_cache_pressure_report",
@@ -886,8 +887,8 @@ class AippocampusHealthTests(unittest.TestCase):
             )
 
             with (
-                mock.patch.object(health, "codex_home", return_value=codex),
-                mock.patch.object(health, "locate_rollout", return_value=rollout),
+                mock.patch.object(health_stages, "codex_home", return_value=codex),
+                mock.patch.object(health_stages, "locate_rollout", return_value=rollout),
             ):
                 payload = health.build_health_report(
                     health.HealthOptions(cwd=workspace, registry_dir=registry_dir, include_operator_diagnostics=True, **paths)
@@ -910,7 +911,7 @@ class AippocampusHealthTests(unittest.TestCase):
         with health_workspace() as (root, workspace):
             rollout, paths = self.write_latest_turn_gap_artifacts(root, workspace)
 
-            with mock.patch.object(health, "locate_rollout", return_value=rollout):
+            with mock.patch.object(health_stages, "locate_rollout", return_value=rollout):
                 payload = health.build_health_report(
                     health.HealthOptions(
                         cwd=workspace,
@@ -936,7 +937,7 @@ class AippocampusHealthTests(unittest.TestCase):
         with health_workspace() as (root, workspace):
             rollout, paths = self.write_latest_turn_gap_artifacts(root, workspace)
 
-            with mock.patch.object(health, "locate_rollout", return_value=rollout):
+            with mock.patch.object(health_stages, "locate_rollout", return_value=rollout):
                 payload = health.build_health_report(
                     health.HealthOptions(
                         cwd=workspace,
@@ -987,7 +988,7 @@ class AippocampusHealthTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            with mock.patch.object(health, "locate_rollout", return_value=rollout):
+            with mock.patch.object(health_stages, "locate_rollout", return_value=rollout):
                 payload = health.build_health_report(health.HealthOptions(cwd=workspace, **paths))
 
         self.assertTrue(payload["ok"])
@@ -1024,14 +1025,14 @@ class AippocampusHealthTests(unittest.TestCase):
             ]
 
             with (
-                mock.patch.object(health, "locate_rollout", return_value=rollout),
+                mock.patch.object(health_stages, "locate_rollout", return_value=rollout),
                 mock.patch("sys.stdout", new=StringIO()) as stdout,
             ):
                 code = health.main(args)
             public_payload = json.loads(stdout.getvalue())
 
             with (
-                mock.patch.object(health, "locate_rollout", return_value=rollout),
+                mock.patch.object(health_stages, "locate_rollout", return_value=rollout),
                 mock.patch("sys.stdout", new=StringIO()) as stdout,
             ):
                 include_code = health.main(
@@ -1064,7 +1065,7 @@ class AippocampusHealthTests(unittest.TestCase):
             self.write_rollout(rollout, workspace)
             paths = self.write_current_artifacts(root, workspace, rollout)
 
-            with mock.patch.object(health, "locate_rollout", return_value=rollout):
+            with mock.patch.object(health_stages, "locate_rollout", return_value=rollout):
                 payload = health.build_health_report(health.HealthOptions(cwd=workspace, **paths))
 
         public_payload = health.public_health_report(payload)
@@ -1095,7 +1096,7 @@ class AippocampusHealthTests(unittest.TestCase):
                 clean_created_at="2026-06-01T00:00:00Z",
             )
 
-            with mock.patch.object(health, "locate_rollout", return_value=rollout):
+            with mock.patch.object(health_stages, "locate_rollout", return_value=rollout):
                 payload = health.build_health_report(health.HealthOptions(cwd=workspace, **paths))
 
         trajectory = payload["health_trajectory"]
@@ -1121,7 +1122,7 @@ class AippocampusHealthTests(unittest.TestCase):
                 clean_upgrade_contract=False,
             )
 
-            with mock.patch.object(health, "locate_rollout", return_value=rollout):
+            with mock.patch.object(health_stages, "locate_rollout", return_value=rollout):
                 payload = health.build_health_report(health.HealthOptions(cwd=workspace, **paths))
 
         trajectory = payload["health_trajectory"]
@@ -1145,7 +1146,7 @@ class AippocampusHealthTests(unittest.TestCase):
             self.write_rollout(rollout, workspace)
             paths = self.write_current_artifacts(root, workspace, rollout)
 
-            with mock.patch.object(health, "locate_rollout", return_value=rollout):
+            with mock.patch.object(health_stages, "locate_rollout", return_value=rollout):
                 payload = health.build_health_report(health.HealthOptions(cwd=workspace, **paths))
 
         texture = payload["clean_source"]["source_texture"]
@@ -1188,7 +1189,7 @@ class AippocampusHealthTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            with mock.patch.object(health, "locate_rollout", return_value=rollout):
+            with mock.patch.object(health_stages, "locate_rollout", return_value=rollout):
                 payload = health.build_health_report(health.HealthOptions(cwd=workspace, **paths))
 
         source_intake = payload["clean_source"]["source_intake"]
@@ -1220,7 +1221,7 @@ class AippocampusHealthTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            with mock.patch.object(health, "locate_rollout", return_value=rollout):
+            with mock.patch.object(health_stages, "locate_rollout", return_value=rollout):
                 payload = health.build_health_report(
                     health.HealthOptions(
                         cwd=workspace,
@@ -1340,7 +1341,7 @@ class AippocampusHealthTests(unittest.TestCase):
 
     def test_activity_diagnostics_are_advisory_not_threshold_replacements(self) -> None:
         self.assertEqual(
-            health.activity_class(
+            health_stages.activity_class(
                 message_delta=30,
                 byte_delta=0,
                 stale_age_seconds=300,
@@ -1350,7 +1351,7 @@ class AippocampusHealthTests(unittest.TestCase):
             "high_activity",
         )
         self.assertEqual(
-            health.activity_class(
+            health_stages.activity_class(
                 message_delta=2,
                 byte_delta=10,
                 stale_age_seconds=2 * 24 * 3600,
@@ -1719,7 +1720,7 @@ class AippocampusHealthTests(unittest.TestCase):
             segments = root / "segments"
             checkpoint = root / "checkpoint_state.json"
 
-            with mock.patch.object(health, "locate_rollout", return_value=rollout):
+            with mock.patch.object(health_stages, "locate_rollout", return_value=rollout):
                 payload = health.build_health_report(
                     health.HealthOptions(
                         cwd=workspace,
@@ -1789,7 +1790,7 @@ class AippocampusHealthTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            with mock.patch.object(health, "locate_rollout", return_value=rollout):
+            with mock.patch.object(health_stages, "locate_rollout", return_value=rollout):
                 payload = health.build_health_report(
                     health.HealthOptions(
                         cwd=workspace,
@@ -1854,7 +1855,7 @@ class AippocampusHealthTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            with mock.patch.object(health, "locate_rollout", return_value=rollout):
+            with mock.patch.object(health_stages, "locate_rollout", return_value=rollout):
                 payload = health.build_health_report(
                     health.HealthOptions(
                         cwd=workspace,
@@ -1956,7 +1957,7 @@ class AippocampusHealthTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            with mock.patch.object(health, "locate_rollout", return_value=rollout):
+            with mock.patch.object(health_stages, "locate_rollout", return_value=rollout):
                 payload = health.build_health_report(
                     health.HealthOptions(
                         cwd=workspace,
@@ -2035,10 +2036,10 @@ class AippocampusHealthTests(unittest.TestCase):
 
             with (
                 mock.patch.dict(health.os.environ, {"USERPROFILE": str(root / "home")}, clear=True),
-                mock.patch.object(health, "codex_home", return_value=root / "codex-home"),
-                mock.patch.object(health, "locate_rollout", return_value=rollout),
+                mock.patch.object(health_stages, "codex_home", return_value=root / "codex-home"),
+                mock.patch.object(health_stages, "locate_rollout", return_value=rollout),
                 mock.patch.object(
-                    health,
+                    health_stages,
                     "aippocampus_registry_resolution",
                     return_value={
                         "path": str(root / "codex-home" / "aippocampus-registry"),
