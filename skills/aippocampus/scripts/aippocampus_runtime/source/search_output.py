@@ -209,42 +209,50 @@ def public_search_result(
 ) -> dict[str, Any]:
     public = dict(result) if include_paths else redact_sensitive_values(redact_private_paths(result))
     if query_text is not None:
-        public["query_text"] = str(query_text)
+        public["query_text"] = (
+            str(query_text)
+            if include_paths
+            else str(redact_sensitive_values(redact_private_paths(str(query_text))))
+        )
     original_matches = [item for item in result.get("matches") or [] if isinstance(item, dict)]
     annotate_current_search_reopen_commands(
         original_matches,
         source_path=result.get("source"),
         include_paths=include_paths,
     )
+    public_matches = [
+        dict(item) if include_paths else redact_sensitive_values(redact_private_paths(dict(item)))
+        for item in original_matches
+    ]
     if not metadata_only:
-        public["matches"] = [dict(item) for item in original_matches]
+        public["matches"] = [dict(item) for item in public_matches]
     if metadata_only:
         matches: list[dict[str, Any]] = []
-        for index, match in enumerate(original_matches, start=1):
+        for index, match in enumerate(public_matches, start=1):
             timestamp = str(match.get("timestamp") or "")
             raw_snippet = "" if match.get("search_noise") else str(match.get("snippet") or "")
             snippet = compact_text(raw_snippet, DEFAULT_PUBLIC_SNIPPET_CHARS) if raw_snippet else ""
-            matches.append(
-                {
-                    "match_index": index,
-                    "score": match.get("score"),
-                    "role": match.get("role"),
-                    "phase": match.get("phase") or "",
-                    "is_final": bool(match.get("is_final")),
-                    "scope_labels": match.get("scope_labels") or [],
-                    "semantic_scope_labels": match.get("semantic_scope_labels") or [],
-                    "date": timestamp[:10] if timestamp else None,
-                    "snippet": snippet,
-                    "snippet_omitted": not bool(snippet),
-                    "source_refs_omitted": True,
-                    "hit_index": index,
-                    "reopen_command": match.get("reopen_command"),
-                    "search_noise": bool(match.get("search_noise")),
-                    "noise_reason": match.get("noise_reason"),
-                    "artifact_role": match.get("artifact_role"),
-                    "artifact_demoted": bool(match.get("artifact_demoted")),
-                }
-            )
+            public_match = {
+                "match_index": index,
+                "score": match.get("score"),
+                "role": match.get("role"),
+                "phase": match.get("phase") or "",
+                "is_final": bool(match.get("is_final")),
+                "scope_labels": match.get("scope_labels") or [],
+                "semantic_scope_labels": match.get("semantic_scope_labels") or [],
+                "date": timestamp[:10] if timestamp else None,
+                "snippet": snippet,
+                "snippet_omitted": not bool(snippet),
+                "source_refs_omitted": True,
+                "hit_index": index,
+                "search_noise": bool(match.get("search_noise")),
+                "noise_reason": match.get("noise_reason"),
+                "artifact_role": match.get("artifact_role"),
+                "artifact_demoted": bool(match.get("artifact_demoted")),
+            }
+            if include_paths:
+                public_match["reopen_command"] = match.get("reopen_command")
+            matches.append(public_match)
         public["matches"] = matches
         if not include_paths:
             public["source"] = LOCAL_PATH_REDACTION
@@ -300,7 +308,7 @@ def public_search_result(
     foreground_action = public.get("foreground_action")
     if isinstance(foreground_action, Mapping):
         public.update(canonical_foreground_action_fields(foreground_action))
-    return public
+    return public if include_paths else redact_sensitive_values(redact_private_paths(public))
 
 
 def search_recovery_payload() -> dict[str, Any]:

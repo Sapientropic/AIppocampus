@@ -934,6 +934,8 @@ def main() -> int:
             emit_public_text(f"subconscious scheduler started: pid {result.get('pid')}")
         elif result.get("ran"):
             emit_public_text("subconscious scheduler ran")
+        elif result.get("queued") and result.get("skipped") == "agent_fallback_queued":
+            emit_public_text("subconscious agent fallback queued: scaffold/manual-only")
         else:
             emit_public_text(f"subconscious scheduler skipped: {public_skip_reason(result.get('skipped'))}")
         return 0

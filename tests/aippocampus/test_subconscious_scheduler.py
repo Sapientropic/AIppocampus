@@ -156,6 +156,10 @@ class SubconsciousSchedulerTests(unittest.TestCase):
         self.assertEqual(result["skipped"], "agent_fallback_queued")
         self.assertEqual(result["agent_fallback_task_count"], 1)
         self.assertEqual(result["cognitive_worker"]["resolved_mode"], "agent_fallback")
+        self.assertEqual(result["cognitive_worker"]["status"], "agent_fallback_scaffold_only")
+        self.assertEqual(result["cognitive_worker"]["ambient_state"], "callable")
+        self.assertFalse(result["cognitive_worker"]["contracts"]["queued_task_is_readiness_evidence"])
+        self.assertFalse(result["cognitive_worker"]["contracts"]["queued_task_is_usefulness_evidence"])
         self.assertNotIn("cmd", captured)
         self.assertEqual(queued[0]["kind"], "agent_fallback_subconscious_task")
         self.assertEqual(queued[0]["provenance"], "agent_fallback")
@@ -163,6 +167,18 @@ class SubconsciousSchedulerTests(unittest.TestCase):
         self.assertTrue(queued[0]["output_contract"]["source_refs_required"])
         self.assertFalse(queued[0]["output_contract"]["foreground_sync_wait"])
         self.assertNotIn(str(self.cwd), json.dumps(queued, ensure_ascii=False))
+        public = scheduler.public_scheduler_payload(result)
+        self.assertTrue(public["queued"])
+        self.assertEqual(public["cognitive_worker"]["ambient_state"], "callable")
+        self.assertFalse(public["cognitive_worker"]["queued_task_is_readiness_evidence"])
+        self.assertFalse(public["cognitive_worker"]["queued_task_is_usefulness_evidence"])
+        follow_through = public["agent_fallback_follow_through"]
+        self.assertEqual(follow_through["state"], "scaffold_manual_only")
+        self.assertEqual(follow_through["ambient_state"], "callable")
+        self.assertFalse(follow_through["queued_task_is_readiness_evidence"])
+        self.assertFalse(follow_through["queued_task_is_usefulness_evidence"])
+        self.assertIn("agent_fallback_executor", follow_through["manual_operator_commands"][0])
+        self.assertIn("agent_fallback_materializer", follow_through["manual_operator_commands"][1])
 
     def test_maybe_start_respects_subconscious_hook_disable_env(self) -> None:
         with patch.dict(

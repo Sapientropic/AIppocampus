@@ -236,6 +236,14 @@ INSTRUCTION_SURFACE_CLASSIFIED_FILES = {
             "navigation only and source-open proof stays in deepen/open probes"
         ),
     },
+    "skills/aippocampus/scripts/aippocampus_runtime/recall/background_findings.py": {
+        "classification": "background_findings_projection_owner",
+        "owner": "#2742/#2752/#2651",
+        "why": (
+            "owns reviewed background compact/detail cards and recovery wording; "
+            "background findings are navigation until recall/deepen reopens source"
+        ),
+    },
     "skills/aippocampus/scripts/aippocampus_runtime/recall/ambient_cards.py": {
         "classification": "ambient_recall_card_owner",
         "owner": "#2628/#2636/#2651",

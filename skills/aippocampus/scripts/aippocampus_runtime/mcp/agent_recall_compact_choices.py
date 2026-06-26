@@ -269,6 +269,32 @@ def registry_source_search_fallback_action(cue: str | None) -> dict[str, Any] | 
     }
 
 
+def current_source_anchor_search_action(
+    cue: str | None,
+    *,
+    anchor_query: str | None = None,
+) -> dict[str, Any] | None:
+    query = core.compact_text(str(anchor_query or "").strip(), 160)
+    if not query:
+        query = registry_source_search_anchor_query(cue)
+    if not query or command_value_needs_input(query):
+        return None
+    return {
+        "id": "search_current_source_for_cue_anchors",
+        "label": "Search current source for cue anchors",
+        "tool_name": "search_memory",
+        "arguments": {"query": query, "scope": "current_resolved_source", "max": 5},
+        "command": f"aippocampus search {shell_quote(query)} --json",
+        "search_anchor_query": query,
+        "mutation_risk": "read_only",
+        "claim_boundary": "source_reopen_required_before_claim",
+        "why": (
+            "The current source already has matching cue anchors; search/open that "
+            "source before following broader low-confidence routes."
+        ),
+    }
+
+
 def exact_wording_source_search_action(cue: str | None) -> dict[str, Any] | None:
     query = registry_source_search_anchor_query(cue, max_tokens=12)
     if not query or command_value_needs_input(query):
@@ -362,10 +388,11 @@ def with_low_specificity_foreground_action(
     secondary = dict(action)
     secondary["original_id"] = secondary.get("id") or secondary.get("action_id")
     secondary["id"] = "deepen_top_route_low_confidence"
+    secondary["label"] = "Inspect top recall route"
     secondary["route_choice_posture"] = "labels_low_specificity"
     secondary["why"] = (
-        "Source reopen is still read-only, but compact labels are not enough to "
-        "make this the default route choice."
+        "This is a low-confidence recall route; open it read-only before choosing, "
+        "and do not make claims unless the source window matches."
     )
     low_confidence_deepen_action = {
         key: value
@@ -384,21 +411,10 @@ def with_low_specificity_foreground_action(
         "tool_name": "agent_recall",
         "tighter_cue_template": tighter_cue_template,
         "route_choice_posture": "labels_low_specificity",
-        "route_label_specificity_floor": _metric_float(
-            metrics,
-            "route_label_specificity_floor",
-        ),
-        "topic_label_present_count": _metric_int(metrics, "topic_label_present_count"),
-        "packet_triage_distinctiveness": _metric_float(
-            metrics,
-            "packet_triage_distinctiveness",
-        ),
         "mutation_risk": "read_only",
         "why": (
-            "Route labels are not meaningfully distinguishable, or they fail to carry "
-            "the distinctive cue anchors in compact output; use a tighter cue before "
-            "choosing a route. Blind deepen remains a secondary low-confidence "
-            "navigation option only."
+            "If the low-confidence route does not open the right source, tighten the "
+            "cue with a more specific person, object, phrase, or time clue."
         ),
         "claim_boundary": "no_claim_before_reopen",
     }
@@ -416,28 +432,25 @@ def with_low_specificity_foreground_action(
         if value not in (None, "", [])
     }
     registry_fallback = registry_source_search_fallback_action(clean_cue)
+    safe_next_actions: list[dict[str, Any]] = [refine_action]
     if registry_fallback:
         registry_fallback.update(
             {
                 "route_choice_posture": "labels_low_specificity",
-                "route_label_specificity_floor": refine_action.get("route_label_specificity_floor"),
-                "topic_label_present_count": refine_action.get("topic_label_present_count"),
-                "packet_triage_distinctiveness": refine_action.get("packet_triage_distinctiveness"),
-                "same_cue_fallback": "registry_wide_source_search_before_new_user_cue",
-                "alternative_action_ids": [
-                    str(low_confidence_deepen_action.get("id") or ""),
-                    str(refine_action.get("id") or ""),
-                ],
+                "same_cue_fallback": "registry_wide_source_search_after_route_inspection",
+                "why": (
+                    "Use this fallback only if the low-confidence route does not open a "
+                    "useful source for the original cue anchors."
+                ),
             }
         )
         if repeated_route_label:
             registry_fallback["repeated_route_label"] = repeated_route_label
-        primary = {
+        source_search_action = {
             key: value
             for key, value in normalize_foreground_action(registry_fallback).items()
             if value not in (None, "", [])
         }
-        primary["_safe_next_actions"] = [low_confidence_deepen_action, refine_action]
-        return primary
-    refine_action["_safe_next_actions"] = [low_confidence_deepen_action]
-    return refine_action
+        safe_next_actions.append(source_search_action)
+    low_confidence_deepen_action["_safe_next_actions"] = safe_next_actions
+    return low_confidence_deepen_action

@@ -8,22 +8,6 @@ from typing import Any
 from aippocampus_runtime import core
 
 
-def hidden_route_count_fields(
-    *,
-    route_receipts: Sequence[Mapping[str, Any]],
-    memory_packets: Sequence[Mapping[str, Any]],
-    labels_low_specificity: bool,
-) -> dict[str, int]:
-    displayed_route_count = len(route_receipts)
-    omitted_route_count = max(0, len(memory_packets) - displayed_route_count)
-    if not omitted_route_count and not labels_low_specificity:
-        return {}
-    fields = {"displayed_route_count": displayed_route_count}
-    if omitted_route_count:
-        fields["omitted_route_count"] = omitted_route_count
-    return fields
-
-
 def sorted_duplicate_label_omissions(
     duplicate_label_omissions: Mapping[str, Mapping[str, Any]],
 ) -> list[Mapping[str, Any]]:
@@ -33,16 +17,14 @@ def sorted_duplicate_label_omissions(
     )
 
 
-def low_specificity_weak_route_recovery_card(
+def low_specificity_route_guidance_card(
     *,
-    weak_route_recovery_card: Mapping[str, Any] | None,
-    safe_next_actions: Sequence[Mapping[str, Any]],
+    base_card: Mapping[str, Any] | None,
+    action_options: Sequence[Mapping[str, Any]],
     foreground_action: Mapping[str, Any],
-    memory_packets: Sequence[Mapping[str, Any]],
-    displayed_route_count: int,
 ) -> dict[str, Any]:
     safe_action_ids = [
-        str(action.get("id") or action.get("action_id") or "") for action in safe_next_actions
+        str(action.get("id") or action.get("action_id") or "") for action in action_options
     ]
     refine_action_id = next(
         (action_id for action_id in safe_action_ids if action_id.startswith("refine")),
@@ -52,16 +34,27 @@ def low_specificity_weak_route_recovery_card(
         (action_id for action_id in safe_action_ids if action_id.startswith("deepen")),
         None,
     )
+    source_search_action_id = next(
+        (
+            action_id
+            for action_id in safe_action_ids
+            if action_id == "search_registry_sources_for_original_cue_anchors"
+        ),
+        None,
+    )
     primary_action = foreground_action.get("id") or foreground_action.get("action_id")
     return core.strip_empty(
         {
-            **(weak_route_recovery_card or {}),
+            **(base_card or {}),
             "posture": "labels_low_specificity",
-            "route_count": len(memory_packets),
-            "displayed_as_choices": displayed_route_count,
+            "summary": (
+                "Recall has route-shaped context, but compact labels are weak; "
+                "open the route before relying on it."
+            ),
             "primary_action": primary_action,
-            "source_search_fallback_action_id": primary_action,
+            "source_search_fallback_action_id": source_search_action_id,
             "refine_action_id": refine_action_id,
             "deepen_action_id": deepen_action_id,
+            "claim_boundary": "no_claim_before_reopen",
         }
     )

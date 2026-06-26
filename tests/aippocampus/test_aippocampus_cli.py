@@ -1633,6 +1633,7 @@ class AippocampusCliTests(unittest.TestCase):
             clean = root / ".aippocampus" / "clean-source"
             clean.mkdir(parents=True)
             private_marker = "private source tail should never appear in metadata mode"
+            private_path = "E:\\SDY\\Private Vault\\memory.md"
             (clean / "messages.jsonl").write_text(
                 json.dumps(
                     {
@@ -1647,7 +1648,7 @@ class AippocampusCliTests(unittest.TestCase):
                         "is_final": True,
                         "scope_labels": ["technical_work"],
                         "timestamp": "2026-06-15T00:00:00Z",
-                        "text": "aippocampus " + ("context " * 80) + private_marker,
+                        "text": f"aippocampus {private_path} " + ("context " * 80) + private_marker,
                     },
                     ensure_ascii=False,
                 )
@@ -1682,6 +1683,19 @@ class AippocampusCliTests(unittest.TestCase):
                 "20",
                 "--public",
             )
+            public_human = self.run_cli(
+                "search",
+                "aippocampus",
+                "--cwd",
+                str(root),
+                "--clean-source-dir",
+                str(clean),
+                "--max",
+                "1",
+                "--snippet-chars",
+                "80",
+                "--public",
+            )
             negative = self.run_cli("search", "aippocampus", "--max", "-1", "--json")
             no_match = self.run_cli(
                 "search",
@@ -1706,13 +1720,22 @@ class AippocampusCliTests(unittest.TestCase):
         )
         self.assertTrue(public_payload["privacy"]["metadata_only"])
         self.assertTrue(public_payload["matches"][0]["snippet"])
-        self.assertLessEqual(len(public_payload["matches"][0]["snippet"]), 24)
+        self.assertLessEqual(len(public_payload["matches"][0]["snippet"]), 260)
         self.assertFalse(public_payload["matches"][0]["snippet_omitted"])
         self.assertTrue(public_payload["matches"][0]["source_refs_omitted"])
         self.assertNotIn("message_id", encoded_public)
+        self.assertNotIn("reopen_command", encoded_public)
         self.assertNotIn("turn_private", encoded_public)
         self.assertNotIn("session:private", encoded_public)
+        self.assertNotIn(private_path, encoded_public)
+        self.assertNotIn("E:\\SDY", encoded_public)
+        self.assertIn("<local-path-redacted>", encoded_public)
         self.assertNotIn(private_marker, encoded_public)
+        self.assertEqual(public_human.returncode, 0, public_human.stderr)
+        self.assertNotIn(private_path, public_human.stdout)
+        self.assertNotIn("E:\\SDY", public_human.stdout)
+        self.assertIn("<local-path-redacted>", public_human.stdout)
+        self.assertNotIn(private_marker, public_human.stdout)
         self.assertNotEqual(negative.returncode, 0)
         negative_payload = json.loads(negative.stdout)
         self.assertEqual(negative_payload["error"]["code"], "usage_error")

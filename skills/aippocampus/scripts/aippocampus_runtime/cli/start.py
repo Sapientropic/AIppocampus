@@ -18,6 +18,7 @@ from aippocampus_runtime.first_recall_readiness import start_first_recall_readin
 from aippocampus_runtime.onboarding.facade import provider_status_report
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 from aippocampus_runtime.public_output import emit_public_json, emit_public_text
+from aippocampus_runtime.source.clean_source_resolver import resolve_clean_source_dir
 
 SCHEMA_VERSION = 1
 LOW_SPECIFICITY_TERMS = {
@@ -69,7 +70,7 @@ def _json_file(path: Path) -> dict[str, Any]:
 
 
 def _clean_source_state(cwd: Path, explicit_dir: str | None = None) -> dict[str, Any]:
-    clean_dir = Path(explicit_dir).expanduser() if explicit_dir else core.default_thread_clean_source_dir(cwd)
+    clean_dir = resolve_clean_source_dir(cwd, explicit_dir)
     messages = clean_dir / "messages.jsonl"
     manifest = _json_file(clean_dir / "manifest.json")
     message_count = int(manifest.get("message_count") or 0)

@@ -43,6 +43,7 @@ from aippocampus_runtime.recall import (
     macro_field_live,
     macro_foreground,
     macro_live_recall,
+    recall_recovery_layers,
 )
 from aippocampus_runtime.recall import (
     agent_facade_contract as facade,
@@ -893,7 +894,12 @@ def recall(
     associative_path_active_lock_path: str | Path | None = None,
     associative_path_feedback_path: str | Path | None = None,
 ) -> dict[str, Any]:
-    """Return compact MemoryPackets plus explicit deepen handles for an agent pull."""
+    """Return compact MemoryPackets plus explicit deepen handles for an agent pull.
+
+    aippocampus-stage-map: this function wires recall stages only. Ranking,
+    recovery layers, source gates, and foreground-card policy belong in their
+    owner modules so future issue fixes do not keep expanding this hot path.
+    """
 
     cwd_path = core.canonical_path(cwd or Path.cwd())
     source_dir = _clean_source_dir(cwd_path, clean_source_dir)
@@ -1033,23 +1039,26 @@ def recall(
         deepen_requests=deepen_requests,
     )
     triage_metrics = _memory_packet_triage_metrics(memory_packets)
-    associative_path_policy, associative_path_fallback = (
-        apw_fallback.maybe_append_associative_path_fallback_with_policy(
-            include_associative_fallback=include_associative_fallback,
-            query=str(query or ""),
-            ordinary_status="ok" if memory_packets else "no_routes",
-            memory_packets=memory_packets,
-            deepen_requests=deepen_requests,
-            triage_metrics=triage_metrics,
-            cwd=cwd_path,
-            sidecar_dir=associative_path_sidecar_dir,
-            clean_source_dir=source_dir,
-            registry_dir=registry_path,
-            semantic_bridge_path=associative_path_bridge_path,
-            navigation_path=associative_path_navigation_path,
-            active_lock_path=associative_path_active_lock_path,
-            feedback_path=associative_path_feedback_path or feedback_path,
-        )
+    (
+        background_recovery_card,
+        associative_path_policy,
+        associative_path_fallback,
+    ) = recall_recovery_layers.weak_recall_recovery_layers(
+        query=str(query or ""),
+        cwd=cwd_path,
+        clean_source_dir=source_dir,
+        project=project,
+        registry_dir=registry_path,
+        memory_packets=memory_packets,
+        deepen_requests=deepen_requests,
+        triage_metrics=triage_metrics,
+        include_associative_fallback=include_associative_fallback,
+        associative_path_sidecar_dir=associative_path_sidecar_dir,
+        associative_path_bridge_path=associative_path_bridge_path,
+        associative_path_navigation_path=associative_path_navigation_path,
+        associative_path_active_lock_path=associative_path_active_lock_path,
+        associative_path_feedback_path=associative_path_feedback_path,
+        feedback_path=feedback_path,
     )
     already_opened_count = _mark_already_opened_routes(
         memory_packets,
@@ -1147,6 +1156,7 @@ def recall(
         "semantic_gate_diagnostics": semantic_diagnostics,
         "associative_path_policy": associative_path_policy,
         "associative_path_fallback": associative_path_fallback,
+        "background_recovery": background_recovery_card,
         "repo_familiarity_fallback": repo_familiarity_fallback,
         "current_source_anchor_probe": current_source_anchor_probe,
         "source_anchor_gate": source_anchor_gate,

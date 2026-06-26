@@ -224,11 +224,11 @@ class AgentOptInCliContractsTests(unittest.TestCase):
         )
         self.assertEqual(recall_proc.returncode, 0, recall_proc.stderr)
         recall_payload = json.loads(recall_proc.stdout)
-        self.assertTrue(recall_payload["last_recall_cache_available"])
         recall_action = recall_payload["foreground_action"]
         self.assertIn("--recall-selector", recall_action["command"])
+        self.assertRegex(recall_action["command"], r"--recall-selector sel_[0-9a-f]{16}")
         self.assertNotIn(str(registry), recall_proc.stdout)
-        selector_id = recall_action["arguments"]["recall_selector"]
+        selector_id = str(recall_action["arguments"].get("recall_selector") or "")
 
         overwrite_proc = subprocess.run(
             [
@@ -602,9 +602,10 @@ class AgentOptInCliContractsTests(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stderr)
         payload = json.loads(proc.stdout)
         encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertTrue(last_recall_path.exists())
         cache_text = last_recall_path.read_text(encoding="utf-8")
-        self.assertTrue(payload["last_recall_cache_available"])
         self.assertEqual(payload["surface"], "agent_cli_public_compact")
+        self.assertNotIn("last_recall_cache_available", payload)
         self.assertNotIn("deepen_requests", payload)
         self.assertNotIn("foreground_action_card", payload)
         self.assertNotIn("memory_packets", payload)

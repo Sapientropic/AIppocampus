@@ -1186,10 +1186,12 @@ class UpdateSyncTests(unittest.TestCase):
         self.assertEqual(code, 0)
         by_id = {item["id"]: item for item in payload["summary"]["capability_ladder"]}
         fallback = by_id["agent_fallback_ready"]
-        self.assertTrue(fallback["ready"])
-        self.assertEqual(fallback["status"], "agent_fallback_staging_only")
-        self.assertEqual(fallback["diagnostic_status"], "agent_fallback_active")
-        self.assertIn("staging-only", fallback["claim_boundary"])
+        self.assertFalse(fallback["ready"])
+        self.assertEqual(fallback["stage"], "callable")
+        self.assertEqual(fallback["ambient_state"], "callable")
+        self.assertEqual(fallback["status"], "agent_fallback_scaffold_manual_only")
+        self.assertEqual(fallback["diagnostic_status"], "agent_fallback_scaffold_only")
+        self.assertIn("not readiness or usefulness evidence", fallback["claim_boundary"])
 
     def test_status_does_not_claim_hook_provider_visibility_when_child_check_skipped(
         self,

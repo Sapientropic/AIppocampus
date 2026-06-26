@@ -17,6 +17,42 @@ def assert_command_args(test: unittest.TestCase, command: str, expected: list[st
     test.assertEqual(shlex.split(command), expected)
 
 class AgentRecallCompactProjectionTests(unittest.TestCase):
+    def _background_recovery_fixture(self) -> dict:
+        return {
+            "kind": "aippocampus_background_findings_card",
+            "detail": "compact",
+            "status": "ok",
+            "surface": "agent_background",
+            "finding_count": 1,
+            "best_finding": {
+                "finding_id": "wm_recall_natural",
+                "surface": "subconscious_working_memory",
+                "shape_label": "action_hint_candidate",
+                "finding_title": "Recall naturalness",
+                "match_reason": "Matched reviewed action hint cues: recall 不够自然.",
+                "matched_terms": ["recall 不够自然", "辛苦去捞"],
+                "match_strength": "distinctive",
+                "why_it_may_matter_now": "Reviewed finding may point to the old recall UX complaint.",
+                "source_finding_count": 1,
+                "use_boundary": {
+                    "use": "navigation_only",
+                    "before_claiming": "reopen_source_route",
+                    "action_grammar": "reopenable_route",
+                },
+            },
+            "foreground_action": {
+                "id": "reopen_background_finding_source_route",
+                "label": "Reopen this finding's source route",
+                "command": (
+                    "aippocampus agent recall 'recall 不够自然 辛苦去捞 "
+                    "wm_recall_natural finding_recall_natural' --json"
+                ),
+                "mutation_risk": "read_only",
+                "claim_boundary": "no_claim_before_reopen",
+                "why": "Use this finding id and source-finding ids as a narrow recall cue; deepen before factual claims.",
+            },
+        }
+
     def test_compact_detail_boundary_does_not_serialize_operator_commands(self) -> None:
         safe = agent_continuity_cli_support.public_recall_projection(
             {
@@ -128,20 +164,18 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
             }
         )
 
-        self.assertEqual(public["route_count"], 3)
         self.assertEqual(public["foreground_action_contract"], "foreground-action-v2")
         self.assertNotIn("agent_next_action", public)
         self.assertNotIn(public["foreground_action"], public.get("safe_next_actions", []))
         action = public["foreground_action"]
-        self.assertEqual(action["id"], "search_registry_sources_for_original_cue_anchors")
+        self.assertEqual(action["id"], "deepen_top_route_low_confidence")
         self.assertNotIn("action_id", action)
-        self.assertEqual(action["tool_name"], "search_memory")
-        self.assertEqual(action["arguments"]["scope"], "all_registered_sources")
-        self.assertIn("aippocampus search --all", action["command"])
+        self.assertEqual(action["tool_name"], "agent_deepen")
+        self.assertEqual(action["arguments"]["request_index"], 1)
         self.assertNotIn("secondary_action", action)
         safe_by_id = {item["id"]: item for item in public["safe_next_actions"]}
         refine_action = safe_by_id["refine_low_specificity_recall_cue"]
-        deepen_action = safe_by_id["deepen_top_route_low_confidence"]
+        search_action = safe_by_id["search_registry_sources_for_original_cue_anchors"]
         self.assertEqual(refine_action["id"], "refine_low_specificity_recall_cue")
         self.assertEqual(refine_action["previous_low_specificity_cue"], "dashboard mobile continuity state")
         self.assertEqual(refine_action["previous_cue_role"], "context_only_not_executable")
@@ -157,15 +191,16 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
             refine_action["tighter_cue_template"]["command_template"],
             'aippocampus agent recall "{tighter_cue}" --json',
         )
-        self.assertEqual(action["route_label_specificity_floor"], 0.0)
-        self.assertEqual(action["topic_label_present_count"], 0)
-        self.assertIn("Search registered sources", action["label"])
-        self.assertEqual(deepen_action["original_id"], "agent_deepen_selected_route")
-        self.assertEqual(deepen_action["id"], "deepen_top_route_low_confidence")
-        self.assertEqual(deepen_action["tool_name"], "agent_deepen")
-        self.assertEqual(public["displayed_route_count"], 3)
+        self.assertEqual(search_action["tool_name"], "search_memory")
+        self.assertEqual(search_action["arguments"]["scope"], "all_registered_sources")
+        self.assertIn("aippocampus search --all", search_action["command"])
+        self.assertIn("fallback only", search_action["why"])
+        self.assertNotIn("route_count", public)
+        self.assertNotIn("displayed_route_count", public)
         self.assertNotIn("omitted_route_count", public)
         self.assertNotIn("hidden_low_confidence_route_count", public)
+        self.assertNotIn("recall_selector_id", public)
+        self.assertNotIn("last_recall_cache_available", public)
         self.assertEqual(len(public["routes"]), 3)
         first_route = public["routes"][0]
         self.assertEqual(first_route["claim_boundary"], "no_claim_before_reopen")
@@ -178,13 +213,13 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
         self.assertNotIn("route_selection", public["claim_boundary"]["can_use_for"])
         recovery = public["weak_route_recovery_card"]
         self.assertEqual(recovery["posture"], "labels_low_specificity")
-        self.assertEqual(recovery["displayed_as_choices"], 3)
-        self.assertEqual(recovery["primary_action"], "search_registry_sources_for_original_cue_anchors")
+        self.assertEqual(recovery["primary_action"], "deepen_top_route_low_confidence")
         self.assertEqual(
             recovery["source_search_fallback_action_id"],
             "search_registry_sources_for_original_cue_anchors",
         )
-        self.assertEqual(recovery["deepen_action_id"], "deepen_top_route_low_confidence")
+        self.assertNotIn("route_count", recovery)
+        self.assertNotIn("displayed_as_choices", recovery)
         self.assertEqual(recovery["refine_action_id"], "refine_low_specificity_recall_cue")
         self.assertNotIn("route_availability_summary", public)
         encoded = json.dumps(public, ensure_ascii=False, sort_keys=True)
@@ -196,6 +231,98 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
         self.assertNotIn("source_refs", encoded)
         self.assertNotIn("C:\\", encoded)
         assert_compact_frontstage_payload(self, public, max_top_level_diagnostics=1)
+
+    def test_no_route_recall_uses_reviewed_background_before_broad_search(self) -> None:
+        public = agent_continuity_cli_support.public_recall_projection(
+            {
+                "kind": "aippocampus_agent_continuity_path",
+                "schema_version": "agent-continuity-path-v1",
+                "mode": "recall",
+                "status": "no_routes",
+                "query": "recall 不够自然 辛苦去捞",
+                "opt_in_required": False,
+                "foreground_action_card": {},
+                "memory_packets": [],
+                "background_recovery": self._background_recovery_fixture(),
+            },
+            query="recall 不够自然 辛苦去捞",
+        )
+
+        self.assertEqual(public["foreground_action"]["id"], "reopen_background_finding_source_route")
+        safe_ids = [action["id"] for action in public["safe_next_actions"]]
+        self.assertIn("search_registry_sources_for_original_cue_anchors", safe_ids)
+        self.assertLess(
+            safe_ids.index("search_registry_sources_for_original_cue_anchors"),
+            len(safe_ids),
+        )
+        self.assertEqual(public["background_recovery_card"]["status"], "background_finding_available")
+        self.assertEqual(
+            public["background_recovery_card"]["best_finding"]["source_finding_count"],
+            1,
+        )
+        encoded = json.dumps(public, ensure_ascii=False)
+        self.assertNotIn("operator_detail_command", encoded)
+        self.assertNotIn("output_boundary", encoded)
+        self.assertEqual(executable_command_violations(public), [])
+        assert_compact_frontstage_payload(self, public, max_top_level_diagnostics=2)
+
+    def test_low_specificity_recall_keeps_route_primary_but_background_before_broad_search(self) -> None:
+        public = agent_continuity_cli_support.public_recall_projection(
+            {
+                "kind": "aippocampus_agent_continuity_path",
+                "schema_version": "agent-continuity-path-v1",
+                "mode": "recall",
+                "status": "ok",
+                "query": "recall 不够自然 辛苦去捞",
+                "opt_in_required": False,
+                "last_recall_cache_available": True,
+                "foreground_action_card": {
+                    "decision": "use_route_first",
+                    "canonical_action": {
+                        "action_id": "agent_deepen_selected_route",
+                        "tool_name": "agent_deepen",
+                        "arguments": {"request_index": 1, "last_recall": True},
+                        "claim_boundary": "no_claim_before_reopen",
+                    },
+                },
+                "memory_packets": [
+                    {
+                        "route_id": "route_thread_1",
+                        "route_label": "thread_candidate: AIppocampus",
+                        "route_kind": "thread_candidate",
+                        "output_mode": "reopenable_route",
+                        "claim_permission": "no_claim_before_reopen",
+                    },
+                    {
+                        "route_id": "route_thread_2",
+                        "route_label": "thread_candidate: AIppocampus",
+                        "route_kind": "thread_candidate",
+                        "output_mode": "reopenable_route",
+                        "claim_permission": "no_claim_before_reopen",
+                    },
+                ],
+                "metrics": {
+                    "memory_packet_count": 2,
+                    "deepen_request_count": 2,
+                    "route_label_specificity_floor": 0.0,
+                    "topic_label_present_count": 0,
+                },
+                "background_recovery": self._background_recovery_fixture(),
+            },
+            query="recall 不够自然 辛苦去捞",
+        )
+
+        self.assertEqual(public["foreground_action"]["id"], "deepen_top_route_low_confidence")
+        safe_ids = [action["id"] for action in public["safe_next_actions"]]
+        self.assertIn("reopen_background_finding_source_route", safe_ids)
+        self.assertIn("search_registry_sources_for_original_cue_anchors", safe_ids)
+        self.assertLess(
+            safe_ids.index("reopen_background_finding_source_route"),
+            safe_ids.index("search_registry_sources_for_original_cue_anchors"),
+        )
+        self.assertEqual(public["background_recovery_card"]["primary_action"], "reopen_background_finding_source_route")
+        self.assertEqual(executable_command_violations(public), [])
+        assert_compact_frontstage_payload(self, public, max_top_level_diagnostics=2)
 
     def test_low_specificity_registry_search_preserves_short_latin_acronym_anchor(self) -> None:
         public = agent_continuity_cli_support.public_recall_projection(
@@ -295,7 +422,8 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
         )
 
         action = public["foreground_action"]
-        self.assertEqual(action["id"], "search_registry_sources_for_original_cue_anchors")
+        self.assertEqual(action["id"], "deepen_top_route_low_confidence")
+        self.assertEqual(action["tool_name"], "agent_deepen")
         secondary = action["secondary_action"]
         self.assertEqual(secondary["id"], "run_apw_opt_in_recovery")
         self.assertEqual(secondary["tool_name"], "agent_recall")
@@ -310,6 +438,8 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
         encoded = json.dumps(public, ensure_ascii=False, sort_keys=True)
         self.assertNotIn("source_refs", encoded)
         self.assertNotIn("deepen_associative_path_fallback", encoded)
+        safe_ids = {item["id"] for item in public["safe_next_actions"]}
+        self.assertIn("search_registry_sources_for_original_cue_anchors", safe_ids)
         self.assertEqual(executable_command_violations(public), [])
         assert_compact_frontstage_payload(self, public, max_top_level_diagnostics=2)
 
@@ -495,12 +625,12 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
             }
         )
 
-        self.assertEqual(public["route_count"], 5)
-        self.assertEqual(public["displayed_route_count"], 1)
-        self.assertEqual(public["omitted_route_count"], 4)
-        self.assertEqual(public["hidden_low_confidence_route_count"], 4)
-        self.assertEqual(public["omitted_duplicate_route_label_count"], 4)
-        self.assertEqual(public["route_label_omissions"]["duplicate_label_count"], 1)
+        self.assertNotIn("route_count", public)
+        self.assertNotIn("displayed_route_count", public)
+        self.assertNotIn("omitted_route_count", public)
+        self.assertNotIn("hidden_low_confidence_route_count", public)
+        self.assertNotIn("omitted_duplicate_route_label_count", public)
+        self.assertNotIn("route_label_omissions", public)
         self.assertEqual(len(public["routes"]), 1)
         self.assertNotIn("route_choice_posture", public["routes"][0])
         self.assertNotIn("confidence", public["routes"][0])
@@ -509,11 +639,10 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
             "Potential route, but compact labels are not specific enough; refine or search source before choosing.",
         )
         action = public["foreground_action"]
-        self.assertEqual(action["id"], "search_registry_sources_for_original_cue_anchors")
-        self.assertEqual(action["topic_label_present_count"], 5)
-        self.assertEqual(action["packet_triage_distinctiveness"], 0.4)
-        self.assertEqual(action["repeated_route_label"], "benchmark_claim_posture")
-        self.assertIn("aippocampus search --all", action["command"])
+        self.assertEqual(action["id"], "deepen_top_route_low_confidence")
+        self.assertEqual(action["tool_name"], "agent_deepen")
+        self.assertEqual(action["arguments"]["request_index"], 1)
+        self.assertIn("low-confidence recall route", action["why"])
         safe_by_id = {item["id"]: item for item in public["safe_next_actions"]}
         refine_action = safe_by_id["refine_low_specificity_recall_cue"]
         self.assertEqual(refine_action["requires"], ["tighter_cue"])
@@ -521,11 +650,19 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
             refine_action["previous_low_specificity_cue"],
             "AIppocampus UX review foreground agent usability noisy cannot_claim",
         )
-        self.assertEqual(safe_by_id["deepen_top_route_low_confidence"]["id"], "deepen_top_route_low_confidence")
+        source_search = safe_by_id["search_registry_sources_for_original_cue_anchors"]
+        self.assertEqual(source_search["tool_name"], "search_memory")
+        self.assertEqual(source_search["arguments"]["scope"], "all_registered_sources")
+        self.assertIn("aippocampus search --all", source_search["command"])
+        self.assertIn("fallback only", source_search["why"])
         recovery = public["weak_route_recovery_card"]
-        self.assertEqual(recovery["route_count"], 5)
-        self.assertEqual(recovery["displayed_as_choices"], 1)
-        self.assertEqual(recovery["primary_action"], "search_registry_sources_for_original_cue_anchors")
+        self.assertEqual(recovery["primary_action"], "deepen_top_route_low_confidence")
+        self.assertEqual(
+            recovery["source_search_fallback_action_id"],
+            "search_registry_sources_for_original_cue_anchors",
+        )
+        self.assertNotIn("route_count", recovery)
+        self.assertNotIn("displayed_as_choices", recovery)
         self.assertNotIn("route_availability_summary", public)
         assert_compact_frontstage_payload(self, public, max_top_level_diagnostics=1)
 
@@ -673,18 +810,24 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
         )
 
         action = public["foreground_action"]
-        self.assertEqual(action["id"], "search_registry_sources_for_original_cue_anchors")
-        self.assertEqual(action["tool_name"], "search_memory")
+        self.assertEqual(action["id"], "deepen_top_route_low_confidence")
+        self.assertEqual(action["tool_name"], "agent_deepen")
         safe_by_id = {item["id"]: item for item in public["safe_next_actions"]}
         self.assertEqual(safe_by_id["refine_low_specificity_recall_cue"]["id"], "refine_low_specificity_recall_cue")
-        self.assertEqual(safe_by_id["deepen_top_route_low_confidence"]["id"], "deepen_top_route_low_confidence")
-        self.assertIn("original cue anchors", action["why"])
+        self.assertEqual(
+            safe_by_id["search_registry_sources_for_original_cue_anchors"]["tool_name"],
+            "search_memory",
+        )
+        self.assertIn("low-confidence recall route", action["why"])
         self.assertEqual(len(public["routes"]), 1)
         self.assertNotIn("route_choice_posture", public["routes"][0])
         self.assertNotIn("confidence", public["routes"][0])
-        self.assertEqual(public["displayed_route_count"], 1)
+        self.assertNotIn("displayed_route_count", public)
         self.assertNotIn("hidden_low_confidence_route_count", public)
-        self.assertEqual(public["weak_route_recovery_card"]["displayed_as_choices"], 1)
+        self.assertEqual(
+            public["weak_route_recovery_card"]["primary_action"],
+            "deepen_top_route_low_confidence",
+        )
         self.assertNotIn("route_availability_summary", public)
 
     def test_low_specificity_repo_doc_cue_prefers_current_checkout_source_action(
@@ -769,7 +912,7 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
         )
         self.assertEqual(
             public["repo_familiarity_fallback"]["ordinary_recovery_action_id"],
-            "search_registry_sources_for_original_cue_anchors",
+            "deepen_top_route_low_confidence",
         )
         safe_ids = {item["id"] for item in public["safe_next_actions"]}
         self.assertIn("search_registry_sources_for_original_cue_anchors", safe_ids)
@@ -847,12 +990,11 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
         )
 
         action = public["foreground_action"]
-        self.assertEqual(action["id"], "search_registry_sources_for_original_cue_anchors")
-        self.assertEqual(action["tool_name"], "search_memory")
-        self.assertEqual(action["arguments"]["query"], "黏菌 联想回忆 探索算法")
+        self.assertEqual(action["id"], "deepen_top_route_low_confidence")
+        self.assertEqual(action["tool_name"], "agent_deepen")
         self.assertNotIn("repo_familiarity_fallback", public)
         safe_ids = {item["id"] for item in public["safe_next_actions"]}
-        self.assertIn("deepen_top_route_low_confidence", safe_ids)
+        self.assertIn("search_registry_sources_for_original_cue_anchors", safe_ids)
 
     def test_current_source_anchor_probe_blocks_repo_familiarity_primary(
         self,
@@ -928,8 +1070,10 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
         )
 
         action = public["foreground_action"]
-        self.assertEqual(action["id"], "search_registry_sources_for_original_cue_anchors")
+        self.assertEqual(action["id"], "search_current_source_for_cue_anchors")
         self.assertEqual(action["tool_name"], "search_memory")
+        self.assertEqual(action["arguments"]["scope"], "current_resolved_source")
+        self.assertNotIn("--all", action["command"])
         self.assertNotIn("repo_familiarity_fallback", public)
 
     def test_already_opened_compact_without_source_receipt_reopens_read_only(

@@ -617,53 +617,74 @@ def _recall_context_foreground_action(route: dict[str, Any], index: int) -> dict
     }
 
 
+def _agent_recall_redirect_action() -> dict[str, Any]:
+    return {
+        "id": "use_agent_recall_for_foreground_continuity",
+        "label": "Use agent_recall for foreground continuity",
+        "tool_name": "agent_recall",
+        "command_template": 'aippocampus agent recall "{same_continuity_cue}" --json',
+        "arguments_template": {"query": "{same_continuity_cue}"},
+        "requires": ["same_continuity_cue"],
+        "template_only": True,
+        "mutation_risk": "read_only",
+        "claim_boundary": "no_claim_before_reopen",
+        "why": (
+            "recall_context is a legacy/detail route-handle tool; use agent_recall "
+            "for ordinary foreground continuity, then agent_deepen before claims."
+        ),
+    }
+
+
 def compact_recall_context_payload(payload: dict[str, Any]) -> dict[str, Any]:
     routes = [route for route in payload.get("routes") or [] if isinstance(route, dict)]
     compact_routes: list[dict[str, Any]] = []
-    for index, route in enumerate(routes[:5], start=1):
+    for index, route in enumerate(routes[:2], start=1):
         compact_routes.append(
             core.strip_empty(
                 {
-                    "route_index": index,
-                    "route_id": route.get("route_id"),
-                    "kind": route.get("kind"),
+                    "index": index,
+                    "label": core.compact_text(str(route.get("route_label") or "legacy route"), 120),
                     "route_label": core.compact_text(
                         str(route.get("route_label") or route.get("title") or "memory route"),
                         120,
                     ),
                     "summary": core.compact_text(str(route.get("summary") or ""), 180),
                     "evidence_level": route.get("evidence_level"),
-                    "support_level": route.get("support_level"),
-                    "source_ref_count": len(
-                        [ref for ref in route.get("source_refs") or [] if isinstance(ref, dict)]
-                    ),
-                    "handle_sha256_12": _handle_digest(route.get("handle")),
-                    "foreground_action": _recall_context_foreground_action(route, index),
+                    "claim_boundary": "source_reopen_required_before_claim",
+                    "action": _recall_context_foreground_action(route, index),
                 }
             )
         )
+    redirect_action = _agent_recall_redirect_action()
+    route_actions = [
+        route["action"]
+        for route in compact_routes
+        if isinstance(route, dict) and isinstance(route.get("action"), dict)
+    ]
     result = {
         "detail": "compact",
         "kind": payload.get("kind"),
         "schema_version": payload.get("schema_version"),
-        "support_level": payload.get("support_level"),
+        "surface": "mcp_recall_context_legacy_compact",
         "status": payload.get("status"),
+        "summary": (
+            "recall_context is legacy/detail-only for route handles; prefer agent_recall "
+            "for ordinary foreground continuity."
+        ),
+        # Compatibility metadata: owner #2753. Removal condition: delete this
+        # field when recall_context leaves the MCP catalog. Default exposure:
+        # compact only redirects to agent_recall; route-handle detail remains
+        # behind explicit full/detail calls.
+        "legacy_tool_state": "legacy_detail_only",
         "routes": compact_routes,
-        "route_count": len(routes),
-        "suggested_next": "follow_route_foreground_action" if routes else payload.get("suggested_next"),
-        "continuity_route_status": payload.get("continuity_route_status"),
         "claim_boundary": _compact_claim_boundary(
-            can_use_for=["route_selection", "recall_deepen_target_choice"],
+            can_use_for=["legacy_route_receipts", "next_action_choice"],
             must_reopen_for=["source_backed_claims", "exact_wording", "sensitive_or_stale_facts"],
             detail_command='recall_context with {"detail":"full"}',
         ),
-        "metrics": {
-            "funnel_stage": (payload.get("metrics") or {}).get("funnel_stage"),
-            "route_count": len(routes),
-        },
-        "output_boundary": "compact_foreground_no_local_private_handles",
-        "next_step_hint": (
-            "Use routes[].foreground_action; request detail=full only for opaque handle diagnostics."
+        **canonical_foreground_action_fields(
+            redirect_action,
+            safe_next_actions=route_actions,
         ),
         "warnings": payload.get("warnings"),
     }

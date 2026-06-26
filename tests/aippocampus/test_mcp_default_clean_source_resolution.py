@@ -8,7 +8,8 @@ from pathlib import Path
 from typing import Any
 from unittest import mock
 
-from aippocampus_runtime import core
+from aippocampus_runtime import core, health, health_stages
+from aippocampus_runtime.cli import start as start_cli
 from aippocampus_runtime.mcp import server as mcp
 from aippocampus_runtime.mcp.clean_source_resolution import resolve_mcp_clean_source_dir
 from aippocampus_runtime.mcp.compact_profile import mcp_tool_result_payload
@@ -111,19 +112,19 @@ class McpDefaultCleanSourceResolutionTests(unittest.TestCase):
             stale,
             cwd=self.cwd,
             source_transcript_mtime=1,
-            text="stale same cwd should lose",
+            text="stale same-cwd resolver fixture",
         )
         self._write_manifest_clean_source(
             fresh,
             cwd=self.cwd,
             source_transcript_mtime=3,
-            text="fresh same cwd should win",
+            text="fresh same-cwd resolver fixture",
         )
         self._write_manifest_clean_source(
             other_cwd,
             cwd=self.cwd / "other",
             source_transcript_mtime=5,
-            text="newer different cwd should not win",
+            text="newer different-cwd resolver fixture",
         )
 
         with mock.patch(
@@ -136,6 +137,79 @@ class McpDefaultCleanSourceResolutionTests(unittest.TestCase):
             )
 
         self.assertEqual(resolved, fresh.resolve())
+
+    def test_start_default_resolution_uses_shared_fresher_registry_clean_source(self) -> None:
+        threads = self.cwd / "registry" / "threads"
+        stale = threads / "session-stale-start" / "clean-source"
+        fresh = threads / "session-fresh-start" / "clean-source"
+        self._write_manifest_clean_source(
+            stale,
+            cwd=self.cwd,
+            source_transcript_mtime=1,
+            text="stale start-source resolver fixture",
+        )
+        stale_manifest = json.loads((stale / "manifest.json").read_text(encoding="utf-8"))
+        stale_manifest["stale"] = True
+        (stale / "manifest.json").write_text(
+            json.dumps(stale_manifest, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        self._write_manifest_clean_source(
+            fresh,
+            cwd=self.cwd,
+            source_transcript_mtime=3,
+            text="fresh start-source resolver fixture",
+        )
+
+        with (
+            mock.patch(
+                "aippocampus_runtime.source.clean_source_resolver.core.default_thread_clean_source_dir",
+                return_value=stale,
+            ),
+            mock.patch.object(
+                start_cli,
+                "provider_status_report",
+                return_value={"data": {"providers": []}},
+            ),
+        ):
+            payload = start_cli.build_start_card(self.cwd)
+
+        self.assertEqual(payload["decision"], "continue_from_existing_source")
+        self.assertTrue(payload["state_summary"]["clean_source"]["exists"])
+        self.assertFalse(payload["state_summary"]["clean_source"]["stale"])
+
+    def test_health_default_resolution_uses_shared_fresher_registry_clean_source(self) -> None:
+        threads = self.cwd / "registry" / "threads"
+        stale = threads / "session-stale-health" / "clean-source"
+        fresh = threads / "session-fresh-health" / "clean-source"
+        self._write_manifest_clean_source(
+            stale,
+            cwd=self.cwd,
+            source_transcript_mtime=1,
+            text="stale health source should not drive readiness",
+        )
+        self._write_manifest_clean_source(
+            fresh,
+            cwd=self.cwd,
+            source_transcript_mtime=3,
+            text="fresh health source should drive readiness",
+        )
+
+        with (
+            mock.patch(
+                "aippocampus_runtime.health_stages.locate_rollout",
+                return_value=self.cwd / "rollout.jsonl",
+            ),
+            mock.patch(
+                "aippocampus_runtime.source.clean_source_resolver.core.default_thread_clean_source_dir",
+                return_value=stale,
+            ),
+        ):
+            resolved = health_stages.resolve_health_inputs(
+                health.HealthOptions(cwd=self.cwd, registry_dir=self.cwd / "registry")
+            )
+
+        self.assertEqual(resolved.clean_source_dir, fresh.resolve())
 
     def test_mcp_default_resolution_keeps_explicit_clean_source_dir(self) -> None:
         threads = self.cwd / "registry" / "threads"

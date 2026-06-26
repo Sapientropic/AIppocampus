@@ -13,6 +13,9 @@ from aippocampus_runtime.contracts import (
     normalize_foreground_action,
     shell_quote,
 )
+from aippocampus_runtime.mcp import (
+    agent_recall_background_recovery as background_recovery_projection,
+)
 from aippocampus_runtime.mcp import agent_recall_compact_choices as recall_choices
 from aippocampus_runtime.mcp import agent_recall_discussion_projection as discussion_projection
 from aippocampus_runtime.mcp import agent_recall_recovery_projection as recovery_projection
@@ -36,6 +39,8 @@ class RecallProjectionContext:
     cache_available: bool
     recall_selector: str
     status: str
+    current_source_anchor_matched: bool
+    current_source_anchor_query: str
 
 
 @dataclass(frozen=True)
@@ -62,6 +67,7 @@ class FallbackPromotionState:
     safe_next_actions: list[dict[str, Any]]
     discussion_atlas_pointer: Any
     repo_familiarity_fallback: dict[str, Any] | None
+    background_recovery: dict[str, Any] | None
 
 
 def _canonical_agent_action(card: Any) -> dict[str, Any]:
@@ -301,6 +307,10 @@ def _projection_context(payload: Mapping[str, Any]) -> RecallProjectionContext:
     )
     cache_available = bool(payload.get("last_recall_cache_available"))
     recall_selector = str(payload.get("recall_selector_id") or "").strip() if cache_available else ""
+    current_source_anchor_probe = payload.get("current_source_anchor_probe")
+    current_source_anchor_probe = (
+        current_source_anchor_probe if isinstance(current_source_anchor_probe, Mapping) else {}
+    )
     return RecallProjectionContext(
         recovery_cue=recovery_cue,
         exact_wording_source_search_requested=exact_wording_source_search_requested,
@@ -312,6 +322,8 @@ def _projection_context(payload: Mapping[str, Any]) -> RecallProjectionContext:
         cache_available=cache_available,
         recall_selector=recall_selector,
         status=str(payload.get("status") or ""),
+        current_source_anchor_matched=int(current_source_anchor_probe.get("match_count") or 0) > 0,
+        current_source_anchor_query=str(current_source_anchor_probe.get("anchor_query") or "").strip(),
     )
 
 
@@ -435,6 +447,22 @@ def _apply_source_open_and_exact_search_actions(
                 safe_next_actions = [ordinary_recovery_action, *safe_next_actions]
             foreground_action = exact_search_action
             exact_wording_source_search_primary = True
+    elif (
+        context.current_source_anchor_matched
+        and not _source_open_primary_action(foreground_action)
+    ):
+        current_source_action = recall_choices.current_source_anchor_search_action(
+            context.recovery_cue,
+            anchor_query=context.current_source_anchor_query,
+        )
+        if current_source_action:
+            ordinary_recovery_action = core.strip_empty(
+                normalize_foreground_action(foreground_action),
+                drop_empty_dicts=True,
+            )
+            if ordinary_recovery_action:
+                safe_next_actions = [ordinary_recovery_action, *safe_next_actions]
+            foreground_action = current_source_action
     return foreground_action, safe_next_actions, exact_wording_source_search_primary
 
 
@@ -627,13 +655,22 @@ def _apply_fallback_promotions(
         repo_familiarity_fallback=repo_familiarity_fallback,
         repo_familiarity_action=repo_familiarity_action,
     )
+    (
+        foreground_action,
+        safe_next_actions,
+        background_recovery,
+    ) = background_recovery_projection.apply_background_recovery(
+        payload=payload,
+        foreground_action=foreground_action,
+        followup_actions=safe_next_actions,
+    )
     return FallbackPromotionState(
         foreground_action=foreground_action,
         safe_next_actions=safe_next_actions,
         discussion_atlas_pointer=discussion_atlas_pointer,
         repo_familiarity_fallback=repo_familiarity_fallback,
+        background_recovery=background_recovery,
     )
-
 
 def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
     """Project agent_recall into one foreground action plus compact route receipts.
@@ -682,6 +719,7 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
         weak_route_recovery_card=apw_state.weak_route_recovery_card,
         apw_recovery=apw_state.apw_recovery,
         repo_familiarity_fallback=fallback_state.repo_familiarity_fallback,
+        background_recovery=fallback_state.background_recovery,
         discussion_atlas_pointer=fallback_state.discussion_atlas_pointer,
         exact_wording_source_search_primary=exact_wording_source_search_primary,
     )

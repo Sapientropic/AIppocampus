@@ -604,6 +604,7 @@ class ContinuityDomainTests(unittest.TestCase):
                             "registry_dir": str(repo.cwd / "empty-registry"),
                             "continuity_domains_snapshot": str(missing_snapshot),
                             "max": 5,
+                            "detail": "full",
                         },
                     },
                 }

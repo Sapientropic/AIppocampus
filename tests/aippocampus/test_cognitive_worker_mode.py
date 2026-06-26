@@ -46,10 +46,13 @@ class CognitiveWorkerModeTests(unittest.TestCase):
             report = cognitive_worker_mode.resolve_cognitive_worker_mode()
 
         self.assertEqual(report["resolved_mode"], "agent_fallback")
-        self.assertEqual(report["status"], "agent_fallback_active")
+        self.assertEqual(report["status"], "agent_fallback_scaffold_only")
+        self.assertEqual(report["ambient_state"], "callable")
         self.assertFalse(report["provider_key_visible"])
         self.assertTrue(report["agent_fallback_available"])
-        self.assertTrue(report["contracts"]["staging_only"])
+        self.assertTrue(report["contracts"]["agent_fallback_manual_only"])
+        self.assertFalse(report["contracts"]["queued_task_is_readiness_evidence"])
+        self.assertFalse(report["contracts"]["queued_task_is_usefulness_evidence"])
         self.assertFalse(report["contracts"]["foreground_hook_waits_for_agent_fallback"])
 
     def test_auto_degrades_to_deterministic_only_without_key_or_agent(self) -> None:

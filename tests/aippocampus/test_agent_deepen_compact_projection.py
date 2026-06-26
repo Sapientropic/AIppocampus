@@ -119,6 +119,13 @@ class AgentDeepenCompactProjectionTests(unittest.TestCase):
         self.assertNotIn('"messages"', compact_encoded)
         self.assertNotIn("macro_navigation_diagnostics", compact_encoded)
         self.assertNotIn("cannot_claim", compact_payload)
+        self.assertNotIn("claim_boundary", compact_payload)
+        self.assertEqual(compact_payload["source_scope"], "opened_window_only")
+        self.assertEqual(
+            compact_payload["use_this_for"],
+            "quote or paraphrase only the opened source window",
+        )
+        self.assertIn("wider context", compact_payload["reopen_more_if"])
         self.assertEqual(
             compact_payload["primary_source_snippet"]["text"],
             "小海马体需要 source-backed continuity。",
@@ -310,6 +317,8 @@ class AgentDeepenCompactProjectionTests(unittest.TestCase):
         self.assertEqual(explain_payload["detail"], "compact")
         self.assertEqual(explain_payload["kind"], "aippocampus_route_explain_card")
         self.assertEqual(explain_payload["surface"], "mcp_agent_explain_compact")
+        self.assertEqual(explain_payload["decision"], "reopenable_route_available")
+        self.assertIn("reopen source", explain_payload["route_reason"])
         self.assertEqual(explain_payload["foreground_action_contract"], "foreground-action-v2")
         self.assertNotIn(explain_payload["foreground_action"], explain_payload.get("safe_next_actions", []))
         self.assertEqual(explain_payload["foreground_action"]["tool_name"], "agent_deepen")
@@ -330,6 +339,13 @@ class AgentDeepenCompactProjectionTests(unittest.TestCase):
         self.assertNotIn("result", compact_payload)
         self.assertNotIn("source_window", compact_payload)
         self.assertNotIn('"messages"', compact_encoded)
+        self.assertNotIn("claim_boundary", compact_payload)
+        self.assertEqual(compact_payload["source_scope"], "opened_window_only")
+        self.assertEqual(
+            compact_payload["use_this_for"],
+            "quote or paraphrase only the opened source window",
+        )
+        self.assertIn("sensitive or stale claims", compact_payload["reopen_more_if"])
         self.assertEqual(
             compact_payload["primary_source_snippet"]["text"],
             "小海马体需要 source-backed continuity。",

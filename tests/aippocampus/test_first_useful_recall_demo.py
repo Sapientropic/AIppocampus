@@ -46,8 +46,11 @@ class FirstUsefulRecallDemoSmokeTests(unittest.TestCase):
             self.assertEqual(recall_proc.returncode, 0, recall_proc.stderr)
             recall_payload = json.loads(recall_proc.stdout)
             self.assertEqual(recall_payload["status"], "ok")
-            self.assertTrue(recall_payload["last_recall_cache_available"])
-            self.assertIn("foreground_action", recall_payload)
+            self.assertTrue(cache_path.exists())
+            recall_action = recall_payload["foreground_action"]
+            self.assertEqual(recall_action["tool_name"], "agent_deepen")
+            self.assertEqual(recall_action["arguments"]["request_index"], 1)
+            self.assertIn("recall_selector", recall_action["arguments"])
 
             deepen_proc = subprocess.run(
                 [

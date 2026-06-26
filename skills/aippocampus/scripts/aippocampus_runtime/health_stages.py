@@ -15,7 +15,6 @@ from aippocampus_runtime.core import (
     aippocampus_registry_resolution,
     codex_home,
     default_thread_checkpoint_state_path,
-    default_thread_clean_source_dir,
     default_thread_graphify_corpus_dir,
     default_thread_index_dir,
     default_thread_segments_dir,
@@ -27,6 +26,7 @@ from aippocampus_runtime.health_recall_availability import registry_recall_avail
 from aippocampus_runtime.legacy_aliases import legacy_alias_diagnostics
 from aippocampus_runtime.ops.storage_eviction import latest_intentional_eviction
 from aippocampus_runtime.registry.store import registry_paths
+from aippocampus_runtime.source.clean_source_resolver import resolve_clean_source_dir
 from aippocampus_runtime.source.io_kernel import load_json_dict
 
 
@@ -148,11 +148,7 @@ def resolve_health_inputs(options: Any) -> HealthResolvedInputs:
         cwd,
         default_thread_checkpoint_state_path(cwd, rollout),
     )
-    clean_source_dir = resolve_artifact_path(
-        options.clean_source_dir,
-        cwd,
-        default_thread_clean_source_dir(cwd, rollout),
-    )
+    clean_source_dir = resolve_clean_source_dir(cwd, options.clean_source_dir)
     registry_path = (
         Path(options.registry).resolve()
         if options.registry
