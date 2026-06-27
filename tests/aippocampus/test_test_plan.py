@@ -144,6 +144,31 @@ class ChangedSurfaceTestPlanTests(unittest.TestCase):
         self.assertIn("registry/lock owner", advisory_command["reason"])
         self.assertIn("field-only test", advisory_command["reason"])
         self.assertIn("--fail-on-violations", advisory_command["command"])
+        self.assertEqual(advisory_command["guard_id"], "agent-slop-guard")
+        self.assertEqual(advisory_command["gate_class"], "advisory")
+        self.assertEqual(advisory_command["verification_owner"], "local_fail_fast")
+        self.assertTrue(advisory_command["acceptance_bearing"])
+
+    def test_plan_commands_include_stable_gate_metadata(self) -> None:
+        with mock.patch.object(test_plan, "_debt_report_is_red", return_value=False):
+            payload = test_plan.build_test_plan(
+                ["skills/aippocampus/scripts/aippocampus_runtime/mcp/tool_handlers.py"]
+            )
+
+        for command in payload["commands"]:
+            self.assertIn(command["gate_class"], {"hard", "advisory", "ci_owned"})
+            self.assertIn("verification_owner", command)
+            self.assertIn("guard_id", command)
+            self.assertIn("owner_doc", command)
+            self.assertIn("cost_budget", command)
+            self.assertIn("ci_owned", command)
+
+        by_guard = {command["guard_id"]: command for command in payload["commands"]}
+        self.assertEqual(by_guard["git-diff-check"]["gate_class"], "hard")
+        self.assertEqual(by_guard["static-ruff"]["verification_owner"], "local_fail_fast")
+        self.assertEqual(by_guard["tier-pr"]["verification_owner"], "local_closeout")
+        self.assertEqual(by_guard["tier-pr"]["cost_budget"], "medium")
+        self.assertEqual(payload["manual_required_claims"][0]["gate_class"], "manual_required")
 
     def test_agent_slop_guard_change_recommends_fixture_and_planner_tests(self) -> None:
         payload = test_plan.build_test_plan(["tools/aippocampus/agent_slop_guard.py"])
@@ -528,13 +553,20 @@ class ChangedSurfaceTestPlanTests(unittest.TestCase):
             command["reason"]
             for command in payload["local_if_ci_unavailable_or_changed_after_ci"]
         ]
-        ci_owned = payload["ci_owned_do_not_repeat_locally_by_default"]
+        ci_owned = [
+            command["command"]
+            for command in payload["ci_owned_do_not_repeat_locally_by_default"]
+        ]
+        publish_owned = [command["command"] for command in payload["publish_workflow_owned"]]
 
         self.assertEqual(payload["kind"], "aippocampus_release_preflight_plan")
         self.assertTrue(payload["gate_policy"]["do_not_stack_quick_before_pr"])
         self.assertIn(
             py_script("tools/aippocampus/run_tests.py", "--tier pr"),
-            payload["local_closeout_sequence"],
+            [command["command"] for command in payload["local_closeout_sequence"]],
+        )
+        self.assertTrue(
+            all(isinstance(command, dict) and "gate_class" in command for command in payload["local_required"])
         )
         self.assertIn(
             py_script(
@@ -549,9 +581,12 @@ class ChangedSurfaceTestPlanTests(unittest.TestCase):
         )
         self.assertIn(py_script("tools/aippocampus/run_tests.py", "--tier pr"), fallback)
         self.assertIn(py_script("tools/aippocampus/run_tests.py", "--tier full"), ci_owned)
+        self.assertTrue(
+            all(command["ci_owned"] for command in payload["ci_owned_do_not_repeat_locally_by_default"])
+        )
         self.assertTrue(any("`pr` includes `quick`" in reason for reason in fallback_reasons))
-        self.assertIn(py_command('-m pip install -e ".[release]"'), payload["publish_workflow_owned"])
-        self.assertTrue(any("PyPI publish" in command for command in payload["publish_workflow_owned"]))
+        self.assertIn(py_command('-m pip install -e ".[release]"'), publish_owned)
+        self.assertTrue(any("PyPI publish" in command for command in publish_owned))
         self.assertTrue(
             any(
                 "--wait-ready" in command["command"]
@@ -585,8 +620,12 @@ class ChangedSurfaceTestPlanTests(unittest.TestCase):
         self.assertIn("changed_surface_preflight.py --json", payload["preflight_command"])
         self.assertIn("--detail full", payload["detail_command"])
         self.assertLessEqual(len(payload["next_commands"]), 3)
+        self.assertIn("gate_class", payload["next_commands"][0])
+        self.assertIn("guard_id", payload["next_commands"][0])
+        self.assertIn("verification_owner", payload["next_commands"][0])
         self.assertNotIn("commands", payload)
         self.assertNotIn("python_environment", payload)
+        self.assertNotIn("warnings", payload)
 
     def test_cli_json_full_preserves_complete_changed_surface_plan(self) -> None:
         with (
@@ -608,6 +647,8 @@ class ChangedSurfaceTestPlanTests(unittest.TestCase):
         self.assertEqual(payload["kind"], "aippocampus_changed_surface_test_plan")
         self.assertIn("commands", payload)
         self.assertIn("python_environment", payload)
+        self.assertIn("verification_ownership", payload)
+        self.assertIn("manual_required_claims", payload)
 
     def test_release_preflight_cli_emits_json_without_changed_file_scan(self) -> None:
         with (

@@ -35,6 +35,9 @@ CHECK_TOOLING_PATHS = {
     "tools/aippocampus/test_plan_projection.py",
     "tools/aippocampus/test_plan_cli.py",
     "tools/aippocampus/test_plan.py",
+    "tools/aippocampus/guard_registry.py",
+    "tools/aippocampus/release_preflight_plan.py",
+    "tools/aippocampus/github/guard_only_closeout_policy.py",
 }
 APW_PARITY_SURFACES = frozenset(
     {
@@ -104,6 +107,10 @@ from benchmark_test_classification import (
     benchmark_fast_lane_profile_for,
     is_benchmark_shaped_module,
 )
+from guard_registry import decorate_command, guard_registry_summary
+from release_preflight_plan import (
+    build_release_preflight_plan as _build_release_preflight_plan,
+)
 from run_ci_parity import find_python_for_minor
 from test_plan_commands import py_command, py_script, shell_arg
 from test_tier_manifest import TEST_MODULE_CLASSIFICATIONS
@@ -115,8 +122,10 @@ class PlannedCommand:
     reason: str
     scope: str
 
-    def as_dict(self) -> dict[str, str]:
-        return {"command": self.command, "reason": self.reason, "scope": self.scope}
+    def as_dict(self) -> dict[str, object]:
+        return decorate_command(
+            {"command": self.command, "reason": self.reason, "scope": self.scope}
+        )
 
 
 def _repo_relative(path: str) -> str:
@@ -482,15 +491,20 @@ def classify_changed_files(changed_files: Iterable[str]) -> set[str]:
             "tools/aippocampus/run_ci_parity.py",
             "tools/aippocampus/test_tier_manifest.py",
             "tools/aippocampus/test_plan_commands.py",
-            "tools/aippocampus/test_plan_projection.py",
-            "tools/aippocampus/test_plan_cli.py",
-            "tools/aippocampus/test_plan.py",
-        }:
+                "tools/aippocampus/test_plan_projection.py",
+                "tools/aippocampus/test_plan_cli.py",
+                "tools/aippocampus/test_plan.py",
+                "tools/aippocampus/guard_registry.py",
+                "tools/aippocampus/release_preflight_plan.py",
+                "tools/aippocampus/github/guard_only_closeout_policy.py",
+            }:
             categories.add("test_runner")
         if (
             path
             in {
                 "tools/aippocampus/agent_slop_guard.py",
+                "tools/aippocampus/agent_slop_compact_fields.py",
+                "tools/aippocampus/agent_slop_projection.py",
                 "tools/aippocampus/agent_slop_guard_baseline.json",
             }
             or _is_agent_slop_fixture(path)
@@ -969,12 +983,31 @@ def build_test_plan(
         "kind": "aippocampus_changed_surface_test_plan",
         "schema_version": 2,
         "command_mode": "local_executable" if local_executable else "portable",
+        "verification_ownership": guard_registry_summary(),
         "python_environment": environment,
         "warnings": warnings,
         "changed_files": normalized_files,
         "changed_test_groups": changed_test_groups,
         "categories": sorted(categories),
         "commands": [command.as_dict() for command in commands],
+        "manual_required_claims": (
+            [
+                {
+                    "gate_class": "manual_required",
+                    "verification_owner": "manual_dogfood",
+                    "guard_id": "recall-mcp-source-followthrough",
+                    "owner_doc": "docs/architecture/ops/guard-lifecycle-registry.md",
+                    "reason": (
+                        "Recall/MCP/APW/source-open product claims still need real cue "
+                        "follow-through: agent recall -> deepen/open -> opened source "
+                        "anchor hits."
+                    ),
+                }
+            ]
+            if categories
+            & {"mcp", "apw_parity", "recall_integration_readiness", "hooks", "runtime"}
+            else []
+        ),
         "followup": [
             "Run planner-named static gates (`ruff check ...` and `mypy` when listed) before PR closeout.",
             "Run the focused commands first; run `pr` once when the planner names it, CI is unavailable, or CI is stale.",
@@ -989,218 +1022,11 @@ def build_test_plan(
 
 
 def build_release_preflight_plan(*, local_executable: bool = False) -> dict[str, object]:
-    """Describe the lean local gate before tagging a CI-green release.
-
-    Release verification has two owners that should not be collapsed into a
-    single local ritual: PR CI proves the merged code, and the tag publish
-    workflow proves the package artifact while publishing it. The local
-    preflight only checks the pieces that can drift between "PR is green" and
-    "tag is pushed": metadata coherence, public-boundary hygiene, and any
-    focused surface checks the changed-file planner requested.
-    """
-
-    return {
-        "kind": "aippocampus_release_preflight_plan",
-        "schema_version": 2,
-        "command_mode": "local_executable" if local_executable else "portable",
-        "assumption": "Use after the release PR CI is green and before pushing the tag.",
-        "gate_policy": {
-            "default_local_closeout": "focused_plan_then_pr_once",
-            "do_not_stack_quick_before_pr": True,
-            "do_not_repeat_ci_owned_gates_after_green_pr": True,
-            "broad_pr_benchmark_full_are_escalations": True,
-            "publish_workflow_owns_wheel_and_registry_checks": True,
-        },
-        "local_closeout_sequence": [
-            py_script(
-                "tools/aippocampus/test_plan.py",
-                "--json",
-                local_executable=local_executable,
-            ),
-            "run focused commands named by the plan that have not already passed",
-            py_script(
-                "tools/aippocampus/run_tests.py",
-                "--tier pr",
-                local_executable=local_executable,
-            ),
-            py_script(
-                "tools/aippocampus/release/check_public_boundary.py",
-                "--json",
-                local_executable=local_executable,
-            ),
-            py_script(
-                "tools/aippocampus/docs/check_docs_health.py",
-                "--json",
-                local_executable=local_executable,
-            ),
-        ],
-        "local_required": [
-            {
-                "command": py_script(
-                    "tools/aippocampus/test_plan.py",
-                    "--json",
-                    local_executable=local_executable,
-                ),
-                "reason": (
-                    "Record the changed-surface plan and run only the focused commands it "
-                    "names that have not already passed in CI."
-                ),
-                "scope": "decision",
-            },
-            {
-                "command": py_script(
-                    "tools/aippocampus/docs/check_docs_health.py",
-                    "--json",
-                    local_executable=local_executable,
-                ),
-                "reason": "Release notes, docs pointers, and public claims must still resolve.",
-                "scope": "release-preflight",
-            },
-            {
-                "command": py_script(
-                    "tools/aippocampus/release/check_public_boundary.py",
-                    "--json",
-                    local_executable=local_executable,
-                ),
-                "reason": "Scan release-facing tracked files for local paths, credentials, and private strings.",
-                "scope": "public-boundary",
-            },
-            {
-                "command": py_script(
-                    "tools/aippocampus/release/check_agent_discovery_release.py",
-                    "--offline --json",
-                    local_executable=local_executable,
-                ),
-                "reason": (
-                    "Before publication, verify local PyPI/MCP metadata without waiting on "
-                    "remote indexes that cannot contain the new version yet."
-                ),
-                "scope": "release-preflight",
-            },
-            {
-                "command": "git clean -ndX",
-                "reason": (
-                    "Preview ignored generated artifacts; remove only owned build output, "
-                    "never private memory surfaces."
-                ),
-                "scope": "public-boundary",
-            },
-            {
-                "command": "git diff --check",
-                "reason": "Catch whitespace/conflict-marker mistakes cheaply before tagging.",
-                "scope": "public-boundary",
-            },
-        ],
-        "local_if_ci_unavailable_or_changed_after_ci": [
-            {
-                "command": CI_RUFF_COMMAND,
-                "reason": "CI already owns this for a green PR; rerun locally only if CI is unavailable or stale.",
-                "scope": "fallback",
-            },
-            {
-                "command": CI_MYPY_COMMAND,
-                "reason": "CI already owns this for a green PR; rerun locally only if CI is unavailable or stale.",
-                "scope": "fallback",
-            },
-            {
-                "command": py_script(
-                    "tools/aippocampus/run_tests.py",
-                    "--tier pr",
-                    local_executable=local_executable,
-                ),
-                "reason": (
-                    "`pr` includes `quick`; do not run both as a closeout ritual. CI "
-                    "already owns this for a green PR."
-                ),
-                "scope": "fallback",
-            },
-        ],
-        "ci_owned_do_not_repeat_locally_by_default": [
-            py_script(
-                "tools/aippocampus/run_tests.py",
-                "--tier quick",
-                local_executable=local_executable,
-            ),
-            py_script(
-                "tools/aippocampus/run_tests.py",
-                "--tier broad-pr",
-                local_executable=local_executable,
-            ),
-            py_script(
-                "tools/aippocampus/run_tests.py",
-                "--tier benchmark-smoke --benchmark-suite-profile public-fast",
-                local_executable=local_executable,
-            ),
-            py_script(
-                "tools/aippocampus/run_coverage.py",
-                "--tier pr",
-                local_executable=local_executable,
-            ),
-            py_script(
-                "tools/aippocampus/run_tests.py",
-                "--tier full",
-                local_executable=local_executable,
-            ),
-            "gh workflow run macos-install-smoke.yml -f runner-label=macos-latest -f python-version=3.12",
-        ],
-        "publish_workflow_owned": [
-            py_command('-m pip install -e ".[release]"', local_executable=local_executable),
-            py_script(
-                "tools/aippocampus/run_tests.py",
-                "--tier pr",
-                local_executable=local_executable,
-            ),
-            "check-jsonschema server.json",
-            py_command("-m build --sdist --wheel", local_executable=local_executable),
-            py_command("-m twine check dist/*", local_executable=local_executable),
-            py_script(
-                "tools/aippocampus/release/check_wheel_contract.py",
-                "--wheel dist/*.whl --json",
-                local_executable=local_executable,
-            ),
-            "PyPI publish",
-            "MCP Registry validate and publish",
-        ],
-        "escalate_locally_when": [
-            "Run broad-pr locally only for tier-runner/manifest/CI changes when waiting for CI would hide the failure source.",
-            "Run benchmark-smoke locally only for benchmark runner, benchmark fixture, or public benchmark claim changes.",
-            "Run full locally only for repository-health or public-readiness claims that explicitly need the slow/benchmark/release-heavy surface.",
-            "Run manual macOS install smoke for package/install/path-identity changes, or when the release itself claims fresh macOS install behavior.",
-        ],
-        "post_publish_required": [
-            {
-                "command": py_script(
-                    "tools/aippocampus/release/check_agent_discovery_release.py",
-                    "--wait-ready --wait-seconds 300 --poll-interval 20 "
-                    "--fail-on-not-ready --json",
-                    local_executable=local_executable,
-                ),
-                "reason": "After PyPI and MCP Registry publication, remote agent discovery must be claim-ready.",
-                "scope": "post-publish",
-            },
-            {
-                "command": py_command(
-                    "-m pip index versions aippocampus --no-cache-dir",
-                    local_executable=local_executable,
-                ),
-                "reason": "Confirm PyPI's public simple/index view has caught up before saying latest is available.",
-                "scope": "post-publish",
-            },
-            {
-                "command": py_command(
-                    "-m pip install aippocampus==<version>",
-                    local_executable=local_executable,
-                ),
-                "reason": "Install the released wheel in a fresh environment, not the checkout.",
-                "scope": "post-publish",
-            },
-        ],
-        "boundary": (
-            "A routine patch/minor release should not re-run broad-pr, benchmark-smoke, "
-            "coverage, full, and manual macOS smoke locally after green PR CI. Those "
-            "lanes are escalation tools or CI/publish responsibilities."
-        ),
-    }
+    return _build_release_preflight_plan(
+        local_executable=local_executable,
+        ci_ruff_command=CI_RUFF_COMMAND,
+        ci_mypy_command=CI_MYPY_COMMAND,
+    )
 
 
 def main(argv: list[str] | None = None) -> int:

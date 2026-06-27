@@ -455,6 +455,12 @@ class RunTestsTierTests(unittest.TestCase):
         self.assertEqual(report["budget"]["elapsed_seconds_target"], 30.0)
         self.assertEqual(report["budget"]["elapsed_seconds_status"], "over_target")
         self.assertIn("drift", report["budget"]["note"])
+        self.assertEqual(report["compact_summary"]["status"], "advisory_over_target")
+        self.assertEqual(
+            report["compact_summary"]["top_slow_modules"][0]["module"],
+            "tests.aippocampus.test_alpha",
+        )
+        self.assertIn("advisory", report["compact_summary"]["policy"])
 
     def test_timings_report_includes_manifest_freshness_metadata(self) -> None:
         rows = [

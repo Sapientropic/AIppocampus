@@ -28,6 +28,27 @@ def _warning_refresh_command(warnings: Sequence[Mapping[str, Any]]) -> str | Non
     return None
 
 
+def _first_warning(warnings: Sequence[Mapping[str, Any]]) -> dict[str, Any] | None:
+    if not warnings:
+        return None
+    warning = warnings[0]
+    return {
+        key: warning[key]
+        for key in ("code", "message", "acceptance_bearing", "refresh_command")
+        if key in warning
+    }
+
+
+def _changed_surface_summary(changed_files: Sequence[str]) -> dict[str, Any]:
+    summary: dict[str, Any] = {"changed_file_count": len(changed_files)}
+    affected = list(changed_files)[:3]
+    if affected:
+        summary["affected_files"] = affected
+    if len(changed_files) > len(affected):
+        summary["affected_files_truncated"] = True
+    return summary
+
+
 def compact_headroom_report(report: Mapping[str, Any]) -> dict[str, Any]:
     warnings = list(report.get("warnings") or [])
     blockers: list[dict[str, Any]] = []
@@ -51,7 +72,7 @@ def compact_headroom_report(report: Mapping[str, Any]) -> dict[str, Any]:
         "status": "pass" if report.get("ok") else "fail",
         "blockers": blockers,
         "warning_count": len(warnings),
-        "warnings": warnings[:3],
+        "first_warning": _first_warning(warnings),
         "refresh_command": _warning_refresh_command(warnings),
         "detail_command": _detail_command(mode="headroom", changed_files=[]),
     }
@@ -70,12 +91,12 @@ def compact_changed_surface_report(
         "ok": report.get("ok"),
         "status": changed_surface.get("status") or ("pass" if report.get("ok") else "fail"),
         "changed_surface": {
-            "changed_file_count": len(changed_files),
-            "changed_files": list(changed_files),
+            **_changed_surface_summary(changed_files),
             "acceptance_bearing_warning_count": warning_count,
         },
         "blockers": warnings if warning_count else [],
         "warning_count": len(warnings),
+        "first_warning": _first_warning(warnings),
         "detail_command": _detail_command(
             mode="changed_surface",
             changed_files=changed_files,
@@ -93,13 +114,10 @@ def compact_debt_report(
         "kind": "aippocampus_debt_report_compact",
         "ok": report.get("ok"),
         "status": "pass" if report.get("ok") else "fail",
-        "changed_surface": {
-            "changed_file_count": len(changed_files),
-            "changed_files": list(changed_files),
-        },
+        "changed_surface": _changed_surface_summary(changed_files),
         "blockers": warnings if not report.get("ok") else [],
         "warning_count": len(warnings),
-        "warnings": warnings[:3],
+        "first_warning": _first_warning(warnings),
         "refresh_command": _warning_refresh_command(warnings),
         "detail_command": _detail_command(mode="full", changed_files=changed_files),
     }

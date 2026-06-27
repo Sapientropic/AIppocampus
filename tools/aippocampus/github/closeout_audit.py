@@ -13,21 +13,25 @@ import sys
 from pathlib import Path
 from typing import Any, Mapping
 
+if __package__:
+    closeout_audit_followthrough = importlib.import_module(
+        f"{__package__}.closeout_audit_followthrough"
+    )
+    guard_only_closeout_policy = importlib.import_module(
+        f"{__package__}.guard_only_closeout_policy"
+    )
+else:
+    def _load_sibling_module(name: str) -> Any:
+        path = Path(__file__).with_name(f"{name}.py")
+        spec = importlib.util.spec_from_file_location(name, path)
+        if spec is None or spec.loader is None:
+            raise ImportError(f"Cannot load sibling module {name!r} from {path}")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
 
-def _load_followthrough_helper() -> Any:
-    if __package__:
-        return importlib.import_module(f"{__package__}.closeout_audit_followthrough")
-
-    helper_path = Path(__file__).with_name("closeout_audit_followthrough.py")
-    spec = importlib.util.spec_from_file_location("closeout_audit_followthrough", helper_path)
-    if spec is None or spec.loader is None:
-        raise ImportError(f"Cannot load closeout audit helper from {helper_path}")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-closeout_audit_followthrough = _load_followthrough_helper()
+    closeout_audit_followthrough = _load_sibling_module("closeout_audit_followthrough")
+    guard_only_closeout_policy = _load_sibling_module("guard_only_closeout_policy")
 
 SCHEMA_VERSION = 1
 
@@ -185,13 +189,6 @@ GUARD_TOOLING_FAMILY_RE = re.compile(
 COMPACT_DETAIL_FAMILY_RE = re.compile(
     r"\b(compact|detail|foreground projection|foreground surface|projection)\b",
     re.I,
-)
-GUARD_CONTRACT_LIST_EVIDENCE_RE = re.compile(
-    r"\b("
-    r"contract list|owner[-_ ]layer contracts?|runtime owner[-_ ]layer contracts?|"
-    r"agent[-_ ]slop guard report"
-    r")\b|\bMCP projection\b.{0,180}\bsource IO\b.{0,180}\bregistry\b.{0,180}\block\b",
-    re.I | re.S,
 )
 GUARD_COMMAND_EVIDENCE_RE = re.compile(
     r"\bpython\s+tools[/\\]aippocampus[/\\]"
@@ -815,10 +812,10 @@ def _evidence_shape(body: str) -> dict[str, bool]:
         "has_compact_output_evidence": bool(COMPACT_OUTPUT_EVIDENCE_RE.search(body)),
         "has_detail_or_operator_output_evidence": bool(DETAIL_OUTPUT_EVIDENCE_RE.search(body)),
         "has_debt_removed_evidence": bool(DEBT_REMOVED_EVIDENCE_RE.search(body)),
+        **guard_only_closeout_policy.evidence_shape(body),
         "has_field_only_evidence_terms": bool(FIELD_ONLY_EVIDENCE_RE.search(body)),
         "has_synthetic_only_evidence_terms": bool(SYNTHETIC_ONLY_EVIDENCE_RE.search(body)),
         "has_wired_ready_useful_claim": bool(WIRED_READY_USEFUL_RE.search(body)),
-        "has_guard_contract_list_evidence": bool(GUARD_CONTRACT_LIST_EVIDENCE_RE.search(body)),
         "has_guard_command_evidence": closeout_audit_followthrough.has_replayable_guard_command(
             body,
             guard_command_re=GUARD_COMMAND_EVIDENCE_RE,
@@ -1124,26 +1121,14 @@ def audit_pr_body(
             }
         )
 
-    if closing_issues and "guard_tooling_contract" in high_risk_families:
-        missing_guard_evidence: list[str] = []
-        if not evidence_shape["has_guard_contract_list_evidence"]:
-            missing_guard_evidence.append("contract_list")
-        if not evidence_shape["has_guard_command_evidence"]:
-            missing_guard_evidence.append("guard_command")
-        if missing_guard_evidence:
-            findings.append(
-                {
-                    "kind": "missing_guard_tooling_closeout_evidence",
-                    "severity": "error",
-                    "message": (
-                        "Guard-tooling closeouts need the owner-contract list and "
-                        "the command agents should run before claiming cleanup."
-                    ),
-                    "closing_issues": closing_issues,
-                    "high_risk_issue_families": high_risk_issue_families,
-                    "missing_evidence": missing_guard_evidence,
-                }
-            )
+    guard_tooling_finding = guard_only_closeout_policy.guard_tooling_closeout_finding(
+        closing_issues=closing_issues,
+        high_risk_families=high_risk_families,
+        high_risk_issue_families=high_risk_issue_families,
+        evidence_shape=evidence_shape,
+    )
+    if guard_tooling_finding:
+        findings.append(guard_tooling_finding)
 
     if (
         closing_issues
@@ -1184,23 +1169,14 @@ def audit_pr_body(
             }
         )
 
-    if (
-        closing_issues
-        and "cleanup_test_guard_debt" in high_risk_families
-        and not evidence_shape["has_debt_removed_evidence"]
-    ):
-        findings.append(
-            {
-                "kind": "missing_debt_removed_evidence",
-                "severity": "error",
-                "message": (
-                    "Closing cleanup/test-debt/guard-debt work needs deleted or migrated "
-                    "paths, before/after inventory, or a remaining owner issue."
-                ),
-                "closing_issues": closing_issues,
-                "high_risk_issue_families": high_risk_issue_families,
-            }
-        )
+    cleanup_debt_finding = guard_only_closeout_policy.cleanup_debt_closeout_finding(
+        closing_issues=closing_issues,
+        high_risk_families=high_risk_families,
+        high_risk_issue_families=high_risk_issue_families,
+        evidence_shape=evidence_shape,
+    )
+    if cleanup_debt_finding:
+        findings.append(cleanup_debt_finding)
 
     if closing_issues and "performance_user_visible" in high_risk_families:
         missing_performance_metrics = _missing_performance_metrics(

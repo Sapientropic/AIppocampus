@@ -595,7 +595,122 @@ class CloseoutAuditTests(unittest.TestCase):
         )
 
         self.assertFalse(report["ok"], report)
-        self.assertEqual(report["findings"][0]["kind"], "missing_debt_removed_evidence")
+        self.assertEqual(
+            report["findings"][0]["kind"],
+            "guard_report_only_closeout_missing_debt_resolution",
+        )
+
+    def test_guard_report_only_closeout_requires_debt_resolution_evidence(self) -> None:
+        report = closeout_audit.audit_pr_body(
+            """
+            ## Summary
+            Adds a report-only red-light guard for field-only tests.
+
+            Guard contracts:
+            - field-only tests must use follow-through helpers.
+
+            ## Verification
+            - `python tools/aippocampus/agent_slop_guard.py --json --fail-on-violations`
+
+            Closes #2603.
+            """,
+            issue_metadata={
+                2603: {
+                    "title": "Clean up test-debt and guard-debt around field-only tests",
+                    "body": "Debt cleanup needs deleted or migrated paths and before/after inventory.",
+                }
+            },
+        )
+
+        self.assertFalse(report["ok"], report)
+        kinds = {finding["kind"] for finding in report["findings"]}
+        self.assertIn("guard_report_only_closeout_missing_debt_resolution", kinds)
+        self.assertTrue(report["evidence_shape"]["has_guard_or_report_only_signal"])
+
+    def test_guard_report_only_closeout_accepts_centralized_debt_evidence(self) -> None:
+        report = closeout_audit.audit_pr_body(
+            """
+            ## Summary
+            Adds the red-light check and centralizes duplicate guard policy in
+            the closeout audit owner helper.
+
+            Debt removed: merged duplicate guard wording into the central owner helper.
+            Before/after inventory: duplicate policy snippets 2 -> 0.
+
+            Closes #2603.
+            """,
+            issue_metadata={
+                2603: {
+                    "title": "Clean up test-debt and guard-debt around field-only tests",
+                    "body": "Debt cleanup needs deleted or migrated paths and before/after inventory.",
+                }
+            },
+        )
+
+        self.assertTrue(report["ok"], report)
+        self.assertTrue(report["evidence_shape"]["has_debt_resolution_evidence"])
+
+    def test_explicit_guard_only_closeout_accepts_lifecycle_condition(self) -> None:
+        report = closeout_audit.audit_pr_body(
+            """
+            ## Summary
+            Guard-only: yes. This issue is scoped to guard lifecycle registry work.
+
+            Guard contracts:
+            - Agent-slop guard catches field-only tests.
+
+            Promotion condition: make it hard after two changed-surface PRs pass
+            without false positives; removal condition: retire when product probes
+            own the same failure directly.
+
+            ## Verification
+            - `python tools/aippocampus/agent_slop_guard.py --json --fail-on-violations`
+
+            Closes #2689.
+            """,
+            issue_metadata={
+                2689: {
+                    "title": "Add runtime owner-layer import boundary checks",
+                    "body": "Add owner-layer guard-tooling contracts; guard-only work is explicitly allowed.",
+                    "labels": [{"name": "readiness:guard-tooling"}],
+                }
+            },
+        )
+
+        self.assertTrue(report["ok"], report)
+        self.assertTrue(report["evidence_shape"]["has_explicit_guard_only_label"])
+        self.assertTrue(
+            report["evidence_shape"]["has_guard_only_promotion_or_retirement_condition"]
+        )
+
+    def test_explicit_guard_only_without_condition_does_not_close_debt_issue(self) -> None:
+        report = closeout_audit.audit_pr_body(
+            """
+            ## Summary
+            Guard-only: yes.
+
+            Guard contracts:
+            - Field-only tests need source follow-through.
+
+            ## Verification
+            - `python tools/aippocampus/agent_slop_guard.py --json --fail-on-violations`
+
+            Closes #2689.
+            """,
+            issue_metadata={
+                2689: {
+                    "title": "Add runtime owner-layer import boundary checks",
+                    "body": "Add owner-layer guard-tooling contracts.",
+                    "labels": [{"name": "readiness:guard-tooling"}],
+                }
+            },
+        )
+
+        self.assertFalse(report["ok"], report)
+        self.assertIn(
+            "missing_guard_tooling_closeout_evidence",
+            {finding["kind"] for finding in report["findings"]},
+        )
 
     def test_build_incrementality_closeout_does_not_inherit_non_goal_recall_noise(
         self,

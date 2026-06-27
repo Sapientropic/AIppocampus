@@ -618,6 +618,12 @@ class DebtReportTests(unittest.TestCase):
         self.assertEqual(compact_payload["kind"], "aippocampus_changed_surface_debt_gate_compact")
         self.assertEqual(compact_payload["status"], "pass")
         self.assertEqual(compact_payload["blockers"], [])
+        self.assertEqual(compact_payload["changed_surface"]["changed_file_count"], 1)
+        self.assertEqual(
+            compact_payload["changed_surface"]["affected_files"],
+            ["docs/guides/install-guide.md"],
+        )
+        self.assertNotIn("changed_files", compact_payload["changed_surface"])
         self.assertIn("--detail full", compact_payload["detail_command"])
         self.assertNotIn("guard_pressure", compact_payload)
         self.assertEqual(full_payload["kind"], "aippocampus_changed_surface_debt_gate")
