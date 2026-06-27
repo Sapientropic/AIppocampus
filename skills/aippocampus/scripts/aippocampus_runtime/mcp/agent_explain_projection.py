@@ -8,7 +8,7 @@ from typing import Any
 from aippocampus_runtime import core
 from aippocampus_runtime.contracts import canonical_foreground_action_fields, shell_quote
 from aippocampus_runtime.mcp.compact_profile import strip_compact_foreground_debug_fields
-from aippocampus_runtime.mcp.contracts import build_mcp_compact_card
+from aippocampus_runtime.mcp.contracts import MCPCompactResponseContract, build_mcp_compact_card
 
 
 def _detail_command(
@@ -109,7 +109,7 @@ def compact_agent_explain_payload(
     last_recall: bool = False,
     recall_selector: str = "",
     surface: str = "agent_explain_compact",
-) -> dict[str, Any]:
+) -> dict[str, Any] | MCPCompactResponseContract:
     """Return a compact route explanation before macro/operator diagnostics.
 
     The full explain envelope remains available for local diagnostics. Compact
@@ -223,7 +223,7 @@ def project_agent_explain_payload(
     recall_selector: str = "",
     detail: str = "compact",
     surface: str = "agent_explain_compact",
-) -> dict[str, Any]:
+) -> dict[str, Any] | MCPCompactResponseContract:
     if detail == "full":
         return {"detail": "full", "output_boundary": "local_private_diagnostic_full", **dict(payload)}
     return compact_agent_explain_payload(
@@ -240,7 +240,7 @@ def project_agent_explain_cli_payload(
     args: Any,
     *,
     surface: str,
-) -> dict[str, Any]:
+) -> dict[str, Any] | MCPCompactResponseContract:
     has_request_selector = bool(
         getattr(args, "recall_selector", None)
         or getattr(args, "last_recall", False)

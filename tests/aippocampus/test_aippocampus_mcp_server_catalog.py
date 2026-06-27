@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 import json
 import os
 import tempfile
@@ -601,6 +602,33 @@ class AippocampusMcpServerCatalogTests(unittest.TestCase):
                 self.assertTrue(response["result"]["isError"])
                 self.assertEqual(payload["error"]["code"], "invalid_argument")
                 self.assertIn(message, payload["error"]["message"])
+
+    def test_agent_recall_invalid_max_survives_cli_support_reload(self) -> None:
+        from aippocampus_runtime.recall import agent_continuity_cli_support
+
+        importlib.reload(agent_continuity_cli_support)
+
+        response = mcp.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 2035,
+                "method": "tools/call",
+                "params": {
+                    "name": "agent_recall",
+                    "arguments": {
+                        "query": "clean source continuity",
+                        "cwd": str(self.cwd),
+                        "clean_source_dir": str(self.clean),
+                        "max": 0,
+                    },
+                },
+            }
+        )
+
+        payload = self.tool_payload(response)
+        self.assertTrue(response["result"]["isError"])
+        self.assertEqual(payload["error"]["code"], "invalid_argument")
+        self.assertIn("max must be >= 1", payload["error"]["message"])
 
     def test_agent_deepen_marks_cannot_verify_as_mcp_error(self) -> None:
         response = mcp.handle_request(

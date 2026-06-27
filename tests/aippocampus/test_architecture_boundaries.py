@@ -91,6 +91,7 @@ OPS_DIRECT_RECALL_HOOK_IMPORT_ALLOWLIST = {
         "aippocampus_runtime.recall.ambient_cards",
         "aippocampus_runtime.recall.prompt_context_render",
         "aippocampus_runtime.recall.prompt_recall_decision",
+        "aippocampus_runtime.recall.prompt_recall_result_tiers",
     },
     "aippocampus_runtime.ops.recall_navigation_macro_fixture": {
         "aippocampus_runtime.recall",

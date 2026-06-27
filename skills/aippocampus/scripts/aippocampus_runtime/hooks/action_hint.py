@@ -489,6 +489,7 @@ def compact_probe_report(report: Mapping[str, Any]) -> dict[str, Any]:
             if refresh_query
             else "aippocampus hooks action refresh-cache --write --json"
         )
+        mutation_risk = "read_only" if refresh_query else "explicit_local_cache_write"
         action = {
             "id": "refresh_probe_source_route",
             "label": "Refresh probe source route",
@@ -497,7 +498,7 @@ def compact_probe_report(report: Mapping[str, Any]) -> dict[str, Any]:
                 "The probe did not validate a live source route; refresh recall/source "
                 "routing before treating action-time hints as useful."
             ),
-            "mutation_risk": "read_only",
+            "mutation_risk": mutation_risk,
             "claim_boundary": "action_hints_are_navigation_not_source_truth",
         }
     compact_hint = None

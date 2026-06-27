@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+# aippocampus-instruction-surface: semantic-gate prompt-hook test fixtures; prompt strings are test contracts, not runtime instructions.
+from aippocampus_runtime.recall.prompt_recall_result_tiers import result_hot_path_funnel
 from tests.aippocampus.prompt_hook_fixtures import (
     AmbientRecallHookCase,
     cue_cache,
@@ -480,6 +482,7 @@ class PromptHookSemanticGateTests(AmbientRecallHookCase):
             semantic_gate_fn=fail_semantic_gate,
             use_semantic_gate=False,
             search_budget=0,
+            detail="detail",
         )
 
         self.assertEqual(result["decision"], "scent")
@@ -522,6 +525,7 @@ class PromptHookSemanticGateTests(AmbientRecallHookCase):
             registry_path=self.registry,
             use_semantic_gate=False,
             search_budget=0,
+            detail="trace",
         )
         public = hook.public_hook_debug_payload(result)
         encoded_public = json.dumps(public, ensure_ascii=False, sort_keys=True)
@@ -533,8 +537,9 @@ class PromptHookSemanticGateTests(AmbientRecallHookCase):
         self.assertIsNone(result["semantic_gate"])
         self.assertIn("living cue cache", " ".join(result["reasons"]))
         self.assertEqual(result["candidates"][0]["thread_key"], "session:test-old")
+        hot_path = result_hot_path_funnel(result)
         self.assertEqual(
-            result["hot_path_funnel"]["living_cue_cache"]["diagnostics"]["live_llm_call_count"],
+            hot_path["living_cue_cache"]["diagnostics"]["live_llm_call_count"],
             0,
         )
         self.assertEqual(
@@ -731,6 +736,7 @@ class PromptHookSemanticGateTests(AmbientRecallHookCase):
             semantic_gate_fn=fail_semantic_gate,
             use_semantic_gate=False,
             search_budget=0,
+            detail="detail",
         )
 
         self.assertEqual(result["decision"], "scent")
@@ -800,6 +806,7 @@ class PromptHookSemanticGateTests(AmbientRecallHookCase):
             semantic_gate_fn=fail_semantic_gate,
             use_semantic_gate=False,
             search_budget=0,
+            detail="detail",
         )
 
         self.assertEqual(result["decision"], "scent")
@@ -862,6 +869,7 @@ class PromptHookSemanticGateTests(AmbientRecallHookCase):
             semantic_gate_fn=fail_semantic_gate,
             use_semantic_gate=False,
             search_budget=0,
+            detail="detail",
         )
 
         self.assertEqual(result["decision"], "skip")

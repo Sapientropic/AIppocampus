@@ -24,6 +24,7 @@ from aippocampus_runtime.mcp import agent_recall_repo_projection as repo_project
 from aippocampus_runtime.mcp import agent_recall_result_assembly as result_assembly
 from aippocampus_runtime.mcp import agent_recall_route_projection as route_projection
 from aippocampus_runtime.mcp import agent_recall_semantic_recovery as semantic_recovery_projection
+from aippocampus_runtime.mcp.contracts import MCPCompactResponseContract
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 from aippocampus_runtime.recall import associative_path_foreground_gate as apw_gate
 from aippocampus_runtime.recall.query_profile import classify_query_profile
@@ -680,7 +681,7 @@ def _apply_fallback_promotions(
     )
 
 
-def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
+def compact_agent_recall_payload(payload: dict[str, Any]) -> MCPCompactResponseContract:
     """Project agent_recall into one foreground action plus compact route receipts.
 
     aippocampus-stage-map: sanitize cue -> choose primary action -> keep APW

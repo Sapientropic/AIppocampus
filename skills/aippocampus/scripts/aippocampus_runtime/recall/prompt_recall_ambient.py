@@ -36,6 +36,9 @@ from aippocampus_runtime.recall.prompt_recall_feedback_filter import (
     apply_feedback_filter,
     feedback_report_for_prompt,
 )
+from aippocampus_runtime.recall.prompt_recall_result_tiers import (
+    update_result_route_delivery_diagnostic,
+)
 from aippocampus_runtime.warm_ambient.hook_seen_threads import (
     hook_seen_ledger_path_for_cache,
     record_hook_seen_thread,
@@ -408,12 +411,15 @@ def attach_ambient_recall(
             )
             warm_status = public_warm_schedule_status(scheduled)
             result["ambient_recall"]["warm_background"] = warm_status
-            route_diagnostic = result.get("route_delivery_diagnostic")
-            if isinstance(route_diagnostic, dict):
-                route_diagnostic["background_scheduled"] = bool(
-                    warm_status.get("spawned")
-                    or warm_status.get("status") in {"queued", "scheduled"}
-                )
+            update_result_route_delivery_diagnostic(
+                result,
+                {
+                    "background_scheduled": bool(
+                        warm_status.get("spawned")
+                        or warm_status.get("status") in {"queued", "scheduled"}
+                    )
+                },
+            )
     except Exception as exc:
         result["ambient_recall"] = ambient_recall_from_decision(
             result,

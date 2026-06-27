@@ -10,7 +10,9 @@ from aippocampus_runtime.mcp.agent_recall_result_assembly import (
 )
 from aippocampus_runtime.mcp.compact_profile import compact_search_memory_payload
 from aippocampus_runtime.mcp.contracts import (
+    ForegroundActionContract,
     MCPCompactBoundaryError,
+    MCPCompactResponseContract,
     build_mcp_compact_card,
 )
 
@@ -28,6 +30,45 @@ def _bad_template_action() -> dict[str, object]:
 
 
 class McpCompactBoundaryTests(unittest.TestCase):
+    def test_builder_returns_field_level_compact_contract(self) -> None:
+        payload = build_mcp_compact_card(
+            {
+                "detail": "compact",
+                "ok": True,
+                "status": "ok",
+                "foreground_action": {
+                    "action_id": "open_source_route",
+                    "command": "aippocampus agent deepen --request 1 --json",
+                    "tool_name": "agent_deepen",
+                    "arguments": {"request": 1},
+                    "mutation_risk": "read_only",
+                    "claim_boundary": "no_claim_before_reopen",
+                },
+                "safe_next_actions": [
+                    {
+                        "id": "search_exact_source",
+                        "command": "aippocampus search --all cue --json",
+                        "mutation_risk": "read_only",
+                    }
+                ],
+                "error": {
+                    "code": "stale_recall_handle",
+                    "message": "Rerun recall for a fresh route.",
+                    "retryable": True,
+                },
+            },
+            surface="mcp_agent_recall_compact",
+        )
+
+        self.assertIn("detail", MCPCompactResponseContract.__annotations__)
+        self.assertIn("id", ForegroundActionContract.__annotations__)
+        self.assertEqual(payload["detail"], "compact")
+        self.assertEqual(payload["surface"], "mcp_agent_recall_compact")
+        self.assertEqual(payload["foreground_action"]["id"], "open_source_route")
+        self.assertNotIn("action_id", payload["foreground_action"])
+        self.assertEqual(payload["safe_next_actions"][0]["id"], "search_exact_source")
+        self.assertEqual(payload["error"]["code"], "stale_recall_handle")
+
     def test_template_primary_must_mark_required_inputs_or_non_action(self) -> None:
         with self.assertRaises(MCPCompactBoundaryError):
             build_mcp_compact_card(
