@@ -20,6 +20,7 @@ from aippocampus_runtime.recall import (
     associative_path_fallback,
 )
 from aippocampus_runtime.recall.associative_path_inputs import build_associative_path_diagnostic
+from aippocampus_runtime.source.registry_search import search_registry_sources
 
 
 class AgentRecallApwFallbackTests(unittest.TestCase):
@@ -316,7 +317,7 @@ class AgentRecallApwFallbackTests(unittest.TestCase):
         self.assertNotIn("route_choice_posture", public["foreground_action"])
         self.assertNotIn("associative_path_policy", public)
         self.assertNotIn("associative_path_fallback", public)
-        self.assertIn("search_registry_sources_for_original_cue_anchors", encoded)
+        self.assertNotIn("search_registry_sources_for_original_cue_anchors", encoded)
         self.assertNotIn("source_refs", encoded)
         self.assertNotIn("msg-apw", encoded)
         self.assertEqual(executable_command_violations(public), [])
@@ -485,6 +486,110 @@ class AgentRecallApwFallbackTests(unittest.TestCase):
         self.assertEqual(fallback["status"], "route_candidate")
         self.assertEqual(fallback["candidate_source_kind"], "current_clean_source")
 
+    def test_apw_demotes_memory_product_meta_echo_to_original_anchor_search(self) -> None:
+        self._append_clean_message(
+            {
+                "message_id": "msg-meta-echo",
+                "turn_id": "turn-meta-echo",
+                "turn_index": 31,
+                "source_id": "src-meta-echo",
+                "source_line": 144,
+                "role": "user",
+                "phase": "final_answer",
+                "is_final": False,
+                "text": (
+                    "recall 的初衷不是关键词检索器，而是让未来 agent 知道该从哪里打开源。"
+                    "我会把产品契约压成一句：search 负责我有词，recall 负责气味；"
+                    "旧源里那句看起来不够自然，得是你辛苦去捞，只能作为引用回声。"
+                ),
+            }
+        )
+        original = (
+            "太好了，至少AIppocampus确实能起作用，不过这个过程似乎还得打磨，"
+            "看起来不够自然，得是你辛苦去捞。"
+        )
+        self._write_registry_clean_source(
+            thread_key="session:original-anchor",
+            message_id="msg-original-anchor",
+            source_text=original,
+        )
+
+        diagnostic = build_associative_path_diagnostic(
+            query="recall 不够自然 辛苦去捞",
+            cwd=self.root,
+            clean_source_dir=self.clean,
+        )
+        payload = agent_continuity.recall(
+            "recall 不够自然 辛苦去捞",
+            cwd=self.root,
+            clean_source_dir=self.clean,
+            registry_dir=self.registry,
+        )
+        payload["background_recovery"] = {
+            "status": "ok",
+            "foreground_action": {
+                "id": "reopen_background_finding_source_route",
+                "label": "Open this finding's source window",
+                "command": (
+                    "aippocampus search --open-source --thread-key session:recall-natural "
+                    "--message-id msg-recall-natural --line 284 --json"
+                ),
+                "tool_name": "search_memory",
+                "arguments": {
+                    "query": "recall 不够自然 辛苦去捞",
+                    "scope": "all_registered_sources",
+                    "open_source": True,
+                    "thread_key": "session:recall-natural",
+                    "message_id": "msg-recall-natural",
+                    "line": 284,
+                },
+                "mutation_risk": "read_only",
+                "claim_boundary": "source_reopen_required_before_claim",
+            },
+            "best_finding": {
+                "finding_id": "wm_recall_natural",
+                "finding_title": "Natural recall not yet achieved",
+                "matched_terms": ["recall"],
+                "match_strength": "distinctive",
+                "source_ref_count": 2,
+                "source_finding_count": 1,
+            },
+        }
+        public = agent_continuity_cli_support.public_recall_projection(
+            payload,
+            query="recall 不够自然 辛苦去捞",
+        )
+        search_payload = search_registry_sources(
+            ["不够自然 辛苦去捞"],
+            registry_dir=self.registry,
+            cwd=self.root,
+            limit=3,
+            search_budget="deep",
+        )
+
+        self.assertIn("memory_product_meta_echo_demoted", diagnostic["reason_codes"])
+        self.assertEqual(payload["associative_path_fallback"]["status"], "abstained")
+        self.assertIn(
+            "memory_product_meta_echo_demoted",
+            payload["associative_path_fallback"]["reason_codes"],
+        )
+        self.assertEqual(
+            public["foreground_action"]["id"],
+            "search_registry_sources_for_original_cue_anchors",
+        )
+        self.assertEqual(
+            public["safe_next_actions"][0]["id"],
+            "reopen_background_finding_source_route",
+        )
+        safe_ids = [action["id"] for action in public["safe_next_actions"]]
+        self.assertNotIn("search_registry_sources_for_original_cue_anchors", safe_ids)
+        self.assertIn(
+            "current clean-source echo",
+            public["foreground_action"]["why"],
+        )
+        self.assertEqual(search_payload["matches"][0]["message_id"], "msg-original-anchor")
+        self.assertIn("辛苦去捞", search_payload["matches"][0]["snippet"])
+
     def test_registry_source_apw_fallback_deepens_registered_source(self) -> None:
         self._write_registry_clean_source(
             thread_key="session:registry-apw",
@@ -632,7 +737,9 @@ class AgentRecallApwFallbackTests(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stderr)
         payload = json.loads(proc.stdout)
         encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True)
+        self.assertEqual(payload["status"], "ok")
         self.assertEqual(payload["foreground_action"]["id"], "deepen_associative_path_fallback")
+        self.assertNotIn("miss_recovery_card", payload)
         self.assertNotIn("associative_path_fallback", payload)
         self.assertNotIn("associative_path_policy", payload)
         self.assertNotIn("source_refs", encoded)
@@ -675,7 +782,9 @@ class AgentRecallApwFallbackTests(unittest.TestCase):
 
         self.assertEqual(proc.returncode, 0, proc.stderr)
         payload = json.loads(proc.stdout)
+        self.assertEqual(payload["status"], "ok")
         self.assertEqual(payload["foreground_action"]["id"], "deepen_associative_path_fallback")
+        self.assertNotIn("miss_recovery_card", payload)
         self.assertNotIn("route_choice_posture", payload["foreground_action"])
         self.assertNotIn("associative_path_policy", payload)
         self.assertNotIn("associative_path_fallback", payload)

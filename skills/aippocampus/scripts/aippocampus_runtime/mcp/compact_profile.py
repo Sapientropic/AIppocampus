@@ -104,6 +104,8 @@ MCP_SEARCH_SOURCE_BOUNDARY_KEYS = frozenset(
     {
         "authority",
         "source_reopen_required_before_claim",
+        "source_backed_claim_allowed",
+        "claim_scope",
         "search_miss_is_not_absence_of_memory",
         "demoted_artifact_matches_are_diagnostic",
         "capped_snippets_are_bounded_receipts",
@@ -255,6 +257,57 @@ def _compact_error(error: Any) -> dict[str, Any]:
     }
 
 
+def _compact_source_window_message(message: Any, *, text_key: str = "text_preview") -> dict[str, Any]:
+    if not isinstance(message, Mapping):
+        return {}
+    raw_text = str(message.get("text") or message.get("text_preview") or "").strip()
+    result = {
+        "message_id": message.get("message_id") or message.get("id"),
+        "turn_id": message.get("turn_id"),
+        "line": message.get("line") or message.get("source_line"),
+        "role": message.get("role"),
+        "phase": message.get("phase"),
+        "turn_index": message.get("turn_index"),
+        "is_final": message.get("is_final"),
+        text_key: core.compact_text(raw_text, 420),
+        "text_char_limit": 420,
+    }
+    return {
+        key: strip_compact_foreground_debug_fields(value)
+        for key, value in result.items()
+        if value not in (None, "", [], {})
+    }
+
+
+def _primary_source_snippet(payload: Mapping[str, Any]) -> dict[str, Any]:
+    window = [item for item in payload.get("source_window") or [] if isinstance(item, Mapping)]
+    if not window:
+        return {}
+    target_message_id = str(core.dict_or_empty(payload.get("source_route")).get("message_id") or "")
+    selected_index = 0
+    if target_message_id:
+        for index, message in enumerate(window):
+            current_id = str(message.get("message_id") or message.get("id") or "")
+            if current_id == target_message_id:
+                selected_index = index
+                break
+    snippet = _compact_source_window_message(window[selected_index], text_key="text")
+    if snippet:
+        snippet["source_scope"] = "opened_window_primary_message"
+        snippet["claim_boundary"] = "exact_wording_inside_this_snippet_only"
+        snippet["max_chars"] = 420
+    return snippet
+
+
+def _source_window_preview(payload: Mapping[str, Any]) -> list[dict[str, Any]]:
+    window = [item for item in payload.get("source_window") or [] if isinstance(item, Mapping)]
+    return [
+        preview
+        for preview in (_compact_source_window_message(item) for item in window[:3])
+        if preview
+    ]
+
+
 def _search_hit_label(match: Mapping[str, Any]) -> str:
     thread = match.get("thread")
     thread_map = thread if isinstance(thread, Mapping) else {}
@@ -334,7 +387,7 @@ def compact_search_memory_payload(
             if key in payload and payload[key] not in (None, "")
         }
         source_open_card["summary"] = (
-            "Source window opened; use full detail only when exact source text is needed."
+            "Source window opened; use the bounded snippet or preview only within scope."
             if payload.get("ok")
             else "Source window could not be opened; rerun search for a fresh source route."
         )
@@ -343,6 +396,12 @@ def compact_search_memory_payload(
         window_count = metrics_map.get("window_message_count")
         if isinstance(window_count, int):
             source_open_card["source_window_summary"] = {"message_count": window_count}
+        primary_snippet = _primary_source_snippet(payload)
+        if primary_snippet:
+            source_open_card["primary_source_snippet"] = primary_snippet
+        preview = _source_window_preview(payload)
+        if preview:
+            source_open_card["source_window_preview"] = preview
         action = _compact_action(payload.get("foreground_action"))
         if action:
             source_open_card["foreground_action"] = action

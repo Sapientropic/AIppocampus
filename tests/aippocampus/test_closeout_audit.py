@@ -1011,6 +1011,49 @@ class CloseoutAuditTests(unittest.TestCase):
         self.assertFalse(payload["ok"])
         self.assertEqual(payload["findings"][0]["kind"], "closed_window_retrieval_failed")
 
+    def test_empty_body_env_is_not_a_vacuous_pass(self) -> None:
+        with (
+            mock.patch.dict("os.environ", {"PR_BODY": ""}, clear=False),
+            mock.patch("sys.stdout", new_callable=io.StringIO) as stdout,
+        ):
+            code = closeout_audit.main(
+                [
+                    "--body-env",
+                    "PR_BODY",
+                    "--github-repo",
+                    "Sapientropic/AIppocampus",
+                    "--json",
+                    "--detail",
+                    "full",
+                ]
+            )
+
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(code, 1)
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["status"], "not_audited")
+        self.assertEqual(payload["closing_issues"], [])
+        self.assertEqual(payload["findings"][0]["kind"], "audit_input_missing")
+
+    def test_empty_body_env_compact_status_is_not_audited(self) -> None:
+        with (
+            mock.patch.dict("os.environ", {"PR_BODY": ""}, clear=False),
+            mock.patch("sys.stdout", new_callable=io.StringIO) as stdout,
+        ):
+            code = closeout_audit.main(
+                [
+                    "--body-env",
+                    "PR_BODY",
+                    "--json",
+                ]
+            )
+
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(code, 1)
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["status"], "not_audited")
+        self.assertEqual(payload["blockers"][0]["kind"], "audit_input_missing")
+
     def test_closed_window_fetch_keeps_list_comments_when_detail_view_fails(self) -> None:
         list_completed = subprocess.CompletedProcess(
             args=["gh", "issue", "list"],

@@ -130,8 +130,6 @@ def project_route_receipts(
                         route_count=len(memory_packets),
                         labels_low_specificity=labels_low_specificity,
                     ),
-                    "request_index": index if route_is_callable else None,
-                    "recall_selector": recall_selector if route_is_callable and recall_selector else None,
                     "already_opened": already_opened or None,
                     "source_boundary": "reopen_required_before_claim",
                     "action": route_deepen_action(

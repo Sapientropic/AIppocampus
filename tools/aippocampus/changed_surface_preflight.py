@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 import test_plan
+from test_plan_commands import py_script, shell_arg
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCHEMA_VERSION = 1
@@ -363,6 +364,10 @@ def _changed_file_args(changed_files: Sequence[str]) -> list[str]:
     return args
 
 
+def _changed_file_args_text(changed_files: Sequence[str]) -> str:
+    return " ".join(f"--changed-file {shell_arg(path)}" for path in changed_files)
+
+
 def _detail_command(
     changed_files: Sequence[str],
     *,
@@ -370,16 +375,20 @@ def _detail_command(
     local_executable: bool,
     mode: str,
 ) -> str:
-    parts = ["python", "tools/aippocampus/changed_surface_preflight.py", "--json", "--detail", "full"]
+    parts = ["--json", "--detail full"]
     if mode != DEFAULT_MODE:
         parts.extend(["--mode", mode])
     if local_executable:
         parts.append("--local-executable")
     if changed_files:
-        parts.extend(_changed_file_args(changed_files))
+        parts.append(_changed_file_args_text(changed_files))
     else:
-        parts.extend(["--base", base])
-    return " ".join(parts)
+        parts.append(f"--base {shell_arg(base)}")
+    return py_script(
+        "tools/aippocampus/changed_surface_preflight.py",
+        " ".join(parts),
+        local_executable=local_executable,
+    )
 
 
 def _planner_detail_command(
@@ -388,14 +397,18 @@ def _planner_detail_command(
     base: str,
     local_executable: bool,
 ) -> str:
-    parts = ["python", "tools/aippocampus/test_plan.py", "--json", "--detail", "full"]
+    parts = ["--json", "--detail full"]
     if local_executable:
         parts.append("--local-executable")
     if changed_files:
-        parts.extend(_changed_file_args(changed_files))
+        parts.append(_changed_file_args_text(changed_files))
     else:
-        parts.extend(["--base", base])
-    return " ".join(parts)
+        parts.append(f"--base {shell_arg(base)}")
+    return py_script(
+        "tools/aippocampus/test_plan.py",
+        " ".join(parts),
+        local_executable=local_executable,
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:

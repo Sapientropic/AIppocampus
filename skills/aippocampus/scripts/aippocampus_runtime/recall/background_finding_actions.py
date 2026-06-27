@@ -13,6 +13,7 @@ from typing import Any
 
 from aippocampus_runtime.contracts import foreground_shell_action
 from aippocampus_runtime.contracts import shell_quote as _shell_quote
+from aippocampus_runtime.source.registry_source_routes import registry_source_window_command
 from aippocampus_runtime.subconscious import candidate_router
 
 
@@ -76,39 +77,92 @@ def _action_target(row: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def _first_reopenable_source_ref(row: Mapping[str, Any]) -> Mapping[str, Any] | None:
+    for ref in row.get("source_refs") or []:
+        if not isinstance(ref, Mapping):
+            continue
+        thread_key = str(ref.get("thread_key") or "").strip()
+        message_id = str(ref.get("message_id") or ref.get("id") or "").strip()
+        line = ref.get("line") or ref.get("source_line")
+        if thread_key and (message_id or line not in (None, "")):
+            return ref
+    return None
+
+
+def _open_source_arguments(cue: str, ref: Mapping[str, Any]) -> dict[str, Any]:
+    line = ref.get("line") or ref.get("source_line")
+    arguments = {
+        "query": cue,
+        "scope": "all_registered_sources",
+        "open_source": True,
+        "thread_key": ref.get("thread_key"),
+        "message_id": ref.get("message_id") or ref.get("id"),
+        "line": line,
+    }
+    return {key: value for key, value in arguments.items() if value not in (None, "", [], {})}
+
+
+def _background_source_action(
+    row: Mapping[str, Any],
+    *,
+    cue: str,
+) -> dict[str, object]:
+    source_ref = _first_reopenable_source_ref(row)
+    if route_action_grammar(row) == "reopenable_route" and source_ref is not None:
+        command = registry_source_window_command(source_ref)
+        if command:
+            # Background findings are scent. When the reviewer preserved a
+            # concrete clean-source handle, the foreground action should open
+            # that handle directly; routing the agent back through recall lets
+            # atlas/APW/familiarity layers steal the next step from the source.
+            action = foreground_shell_action(
+                action_id="reopen_background_finding_source_route",
+                label="Open this finding's source window",
+                command=command,
+                why=(
+                    "This reviewed background finding kept a clean-source handle; "
+                    "open that bounded source window before using the scent."
+                ),
+                mutation_risk="read_only",
+                claim_boundary="source_reopen_required_before_claim",
+            )
+            action["tool_name"] = "search_memory"
+            action["arguments"] = _open_source_arguments(cue, source_ref)
+            return action
+
+    # Direction-only rows may be useful orientation, but their source refs are
+    # often provenance for the reviewed finding rather than the target evidence
+    # for the user's current cue. Searching the cue keeps the foreground path
+    # source-led without letting background ids hijack recall ranking.
+    why = (
+        "This reviewed direction-only finding kept provenance refs, but they may not be "
+        "target evidence for the current cue; search the cue instead of appending "
+        "background ids to recall."
+        if source_ref is not None
+        else (
+            "This reviewed background finding has no direct clean-source handle; "
+            "search the original cue instead of appending background ids to recall."
+        )
+    )
+    action = foreground_shell_action(
+        action_id="search_sources_for_background_cue",
+        label="Search sources for this background cue",
+        command=f"aippocampus search --all {shell_quote(cue)} --json",
+        why=why,
+        mutation_risk="read_only",
+        claim_boundary="background_scent_needs_source_search",
+    )
+    action["tool_name"] = "search_memory"
+    action["arguments"] = {"query": cue, "scope": "all_registered_sources"}
+    return action
+
+
 def finding_next_actions(row: Mapping[str, Any], *, cue: str) -> list[dict[str, Any]]:
     target = _action_target(row)
     finding_id = str(target["finding_id"])
-    source_finding_ids = [str(item) for item in target["source_finding_ids"]]
-    action_grammar = str(target.get("action_grammar") or "")
-    primary_command = (
-        "aippocampus agent background "
-        f"{shell_quote(' '.join(item for item in [cue, finding_id, *source_finding_ids[:2]] if item))} "
-        "--json --detail compact"
-    )
-    primary_why = (
-        "This finding is navigation-only; inspect the compact background card, "
-        "then use an emitted recall/deepen route before making claims."
-    )
-    if action_grammar == "reopenable_route":
-        route_cue = " ".join(
-            item for item in [cue, finding_id, *source_finding_ids[:2]] if item
-        )
-        primary_command = f"aippocampus agent recall {shell_quote(route_cue)} --json --detail compact"
-        primary_why = (
-            "Use this finding id and source-finding ids as a narrow compact recall cue; "
-            "then execute the emitted agent_deepen action before factual claims."
-        )
     quoted_finding_id = shell_quote(finding_id)
     actions = [
-        foreground_shell_action(
-            action_id="reopen_background_finding_source_route",
-            label="Reopen this finding's source route",
-            command=primary_command,
-            why=primary_why,
-            mutation_risk="read_only",
-            claim_boundary="no_claim_before_reopen",
-        ),
+        _background_source_action(row, cue=cue),
         foreground_shell_action(
             action_id="mark_background_finding_helpful",
             label="Mark this route helpful",

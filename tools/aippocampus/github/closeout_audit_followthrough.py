@@ -74,6 +74,68 @@ def has_replayable_guard_command(body: str, *, guard_command_re: Pattern[str]) -
     )
 
 
+def missing_body_env_report(body_env: str, *, schema_version: int) -> dict[str, Any]:
+    env_name = str(body_env or "").strip()
+    message = (
+        f"--body-env {env_name} was requested, but the environment variable was empty; "
+        "provide --body-file/--body or use --closed-window-start/--closed-window-end."
+    )
+    return {
+        "kind": "aippocampus_closeout_audit",
+        "schema_version": schema_version,
+        "ok": False,
+        "status": "not_audited",
+        "closing_issues": [],
+        "closeout_class": "not_audited",
+        "high_risk_families": [],
+        "evidence_shape": {},
+        "performance_evidence_shape": {},
+        "findings": [
+            {
+                "kind": "audit_input_missing",
+                "severity": "blocker",
+                "message": message,
+                "closing_issues": [],
+                "recovery": {
+                    "body_env": env_name,
+                    "accepted_inputs": [
+                        "--body-file <path>",
+                        "--body <text>",
+                        "--closed-window-start <iso> --closed-window-end <iso>",
+                    ],
+                },
+            }
+        ],
+        "policy": {
+            "empty_body_env_is_not_audit_evidence": True,
+            "heuristic_only": True,
+        },
+    }
+
+
+def compact_audit_report(report: Mapping[str, Any], *, detail_command: str | None) -> dict[str, Any]:
+    findings = list(report.get("findings") or [])
+    status = str(report.get("status") or "").strip()
+    return {
+        "kind": "aippocampus_closeout_audit_compact",
+        "schema_version": report.get("schema_version"),
+        "ok": report.get("ok"),
+        "status": status or ("pass" if report.get("ok") else "fail"),
+        "closing_issues": report.get("closing_issues") or [],
+        "blocker_count": len(findings),
+        "blockers": [
+            {
+                "kind": item.get("kind"),
+                "severity": item.get("severity"),
+                "message": item.get("message"),
+                "closing_issues": item.get("closing_issues"),
+            }
+            for item in findings
+        ],
+        "detail_command": detail_command,
+    }
+
+
 def infer_github_repo_from_origin() -> str | None:
     try:
         completed = subprocess.run(

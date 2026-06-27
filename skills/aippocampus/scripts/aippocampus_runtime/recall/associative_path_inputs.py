@@ -478,6 +478,11 @@ def build_associative_path_input_pack(
     )
     if validation_report_demoted_count:
         reason_codes.append("self_referential_validation_report_demoted")
+    memory_product_meta_echo_filtered_count = int(
+        clean_source_component.get("memory_product_meta_echo_filtered_count") or 0
+    )
+    if memory_product_meta_echo_filtered_count:
+        reason_codes.append("memory_product_meta_echo_demoted")
     low_actual_anchor_filtered_count = int(
         clean_source_component.get("low_actual_source_anchor_coverage_filtered_count") or 0
     )
@@ -535,6 +540,9 @@ def build_associative_path_input_pack(
             ),
             "same_thread_task_echo_filtered_count": task_echo_filtered_count,
             "self_referential_validation_report_demoted_count": validation_report_demoted_count,
+            "memory_product_meta_echo_filtered_count": (
+                memory_product_meta_echo_filtered_count
+            ),
             "low_actual_source_anchor_coverage_filtered_count": low_actual_anchor_filtered_count,
             "registry_low_actual_source_anchor_coverage_filtered_count": (
                 registry_low_actual_anchor_filtered_count

@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime import core
+from aippocampus_runtime.command_policy import current_python_script_command
 from aippocampus_runtime.contracts import foreground_shell_action, shell_quote
 
 ATLAS_REL_PATH = Path("docs") / "research" / "discussion-atlas.md"
@@ -175,9 +176,9 @@ def discussion_atlas_action(
     action = foreground_shell_action(
         action_id="open_discussion_atlas_pointer",
         label=f"Open Discussion #{pointer.get('discussion')} pointer",
-        command=(
-            "python tools/aippocampus/docs/discussion_atlas_guard.py "
-            f"--pointer-query {shell_quote(query)} --json"
+        command=current_python_script_command(
+            "tools/aippocampus/docs/discussion_atlas_guard.py",
+            f"--pointer-query {shell_quote(query)} --json",
         ),
         why=why,
         mutation_risk="read_only",

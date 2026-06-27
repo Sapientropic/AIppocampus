@@ -82,6 +82,12 @@ def _background_action(card: Mapping[str, Any]) -> dict[str, Any] | None:
 
 def _background_should_replace_primary(action: Mapping[str, Any]) -> bool:
     action_id = _action_id(action)
+    if (
+        action_id == "search_registry_sources_for_original_cue_anchors"
+        and str(action.get("route_choice_posture") or "")
+        == "apw_meta_echo_demoted_original_source_search_first"
+    ):
+        return False
     if action_id in {
         "search_registry_sources_for_original_cue_anchors",
         "refine_low_specificity_recall_cue",
@@ -95,7 +101,10 @@ def _background_should_replace_primary(action: Mapping[str, Any]) -> bool:
 
 
 def _background_should_follow_primary(action: Mapping[str, Any]) -> bool:
-    return str(action.get("route_choice_posture") or "") == "labels_low_specificity"
+    return str(action.get("route_choice_posture") or "") in {
+        "labels_low_specificity",
+        "apw_meta_echo_demoted_original_source_search_first",
+    }
 
 
 def apply_background_recovery(

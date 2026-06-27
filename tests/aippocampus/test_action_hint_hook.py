@@ -11,13 +11,31 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 
-from aippocampus_runtime.hooks import action_hint, action_hint_cache
+from aippocampus_runtime.hooks import action_hint, action_hint_cache, foreground_status
+from aippocampus_runtime.hooks.install_action_hint_projection import action_hint_frontstage_card
 
 
 def source_ref(name: str) -> dict[str, str]:
     return {"source_id": f"clean:{name}", "segment_id": f"msg-{name}"}
 
 class ActionHintHookTests(unittest.TestCase):
+    def test_active_status_points_foreground_agent_to_compact_probe(self) -> None:
+        card = action_hint_frontstage_card(
+            {
+                "installed": True,
+                "cache_status": "with_fresh_records",
+                "cache_record_count": 1,
+                "fresh_record_count": 1,
+            }
+        )
+        status = foreground_status.action_hint_status_contract(card)
+
+        self.assertEqual(status["foreground_action"]["id"], "probe_action_hint_hot_path")
+        self.assertEqual(
+            status["foreground_action"]["command"],
+            "aippocampus hooks action probe --compact-json",
+        )
+
     def test_pre_tool_use_emits_tiny_hint_without_raw_tool_leak(self) -> None:
         cache_report = action_hint_cache.build_action_hint_cache_report(
             learning_guidance=[
@@ -264,21 +282,61 @@ class ActionHintHookTests(unittest.TestCase):
                 env=env,
                 check=False,
             )
+            full_proc = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "aippocampus_runtime.hooks.action_hint",
+                    "probe",
+                    "--cache-jsonl",
+                    str(cache_path),
+                    "--json",
+                    "--detail",
+                    "full",
+                ],
+                text=True,
+                encoding="utf-8",
+                capture_output=True,
+                env=env,
+                check=False,
+            )
 
         payload = json.loads(proc.stdout)
         encoded = json.dumps(payload, ensure_ascii=False)
+        full_payload = json.loads(full_proc.stdout)
+        full_encoded = json.dumps(full_payload, ensure_ascii=False)
         self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(full_proc.returncode, 0, full_proc.stderr)
+        self.assertEqual(payload["detail"], "compact")
+        self.assertEqual(payload["kind"], "aippocampus_action_hint_probe_compact")
         self.assertEqual(payload["decision"], "hint")
         self.assertTrue(payload["useful"])
         self.assertEqual(payload["usefulness_stage"], "useful")
+        self.assertNotIn("features", payload)
+        self.assertNotIn("diagnostics", payload)
+        self.assertNotIn("privacy_boundary", payload)
+        self.assertNotIn("diagnostic_fields_omitted", payload)
+        self.assertNotIn("operator_detail_command", payload)
+        self.assertNotIn("safe_next_actions", payload)
+        self.assertEqual(payload["foreground_action"]["tool_name"], "agent_deepen")
+        self.assertIn("agent deepen", payload["foreground_action"]["command"])
         self.assertEqual(
-            payload["diagnostics"]["source_followthrough_handle_count"],
+            payload["foreground_action"]["arguments"]["recall_selector"],
+            "sel_1234567890abcdef",
+        )
+        self.assertNotIn("source_handle", payload["hint"])
+        self.assertNotIn("local_reopen_token", encoded)
+        self.assertEqual(full_payload["detail"], "full")
+        self.assertEqual(
+            full_payload["diagnostics"]["source_followthrough_handle_count"],
             1,
         )
-        handle = payload["hint"]["source_handles"][0]
+        handle = full_payload["hint"]["source_handles"][0]
         self.assertEqual(handle["tool_name"], "agent_deepen")
         self.assertEqual(handle["arguments"]["recall_selector"], "sel_1234567890abcdef")
-        self.assertNotIn("local_reopen_token", encoded)
+        self.assertIn("features", full_payload)
+        self.assertIn("diagnostics", full_payload)
+        self.assertNotIn("local_reopen_token", full_encoded)
 
     def test_unsupported_event_fails_open(self) -> None:
         report = action_hint.evaluate_action_hint(

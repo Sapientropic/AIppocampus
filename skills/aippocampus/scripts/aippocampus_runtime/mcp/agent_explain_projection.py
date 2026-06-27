@@ -54,20 +54,18 @@ def _deepen_action(
                 "claim_boundary": "no_claim_before_reopen",
             }
         else:
+            command = f"aippocampus agent deepen --request {request_index} --last-recall --json"
             return {
                 "id": "deepen_selected_route",
                 "tool_name": "agent_deepen",
-                "arguments": arguments,
-                "command_template": (
-                    "aippocampus agent deepen --request {request_index} "
-                    "--recall-selector {recall_selector} --json"
+                "arguments": {**arguments, "last_recall": True},
+                "command": command,
+                "label": "Deepen selected route from last recall",
+                "why": (
+                    "Open the route via the same-machine last-recall cache because "
+                    "no explicit recall_selector was provided."
                 ),
-                "requires": ["request_index", "recall_selector"],
-                "template_only": True,
-                "last_recall_fallback_command": (
-                    f"aippocampus agent deepen --request {request_index} --last-recall --json"
-                ),
-                "last_recall_fallback_boundary": (
+                "last_recall_boundary": (
                     "--last-recall reads a mutable same-machine cache; use only when "
                     "the recall_selector emitted by the same recall is unavailable."
                 ),

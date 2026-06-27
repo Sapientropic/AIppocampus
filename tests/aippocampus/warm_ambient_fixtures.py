@@ -143,16 +143,26 @@ def assert_stale_queue_foreground_contract(case: Any, payload: dict[str, Any]) -
     from aippocampus_runtime.warm_ambient.status_card import compact_warm_status_card
 
     case.assertNotIn("agent_next_action", payload)
-    case.assertEqual(payload["foreground_action"]["id"], "inspect_provider_status")
-    case.assertEqual(payload["foreground_action"]["command"], "aippocampus doctor provider --json")
+    case.assertEqual(payload["foreground_action"]["id"], "continue_with_ordinary_recall")
+    case.assertEqual(payload["foreground_action"]["command_template"], 'aippocampus agent recall "{cue}" --json')
     case.assertNotIn(payload["foreground_action"], payload.get("safe_next_actions", []))
     action_ids = [action["id"] for action in payload["safe_next_actions"]]
     case.assertIn("recheck_warm_status", action_ids)
     case.assertNotIn("inspect_provider_status", action_ids)
-    case.assertIn("plan_warm_repair", action_ids)
+    case.assertNotIn("plan_warm_repair", action_ids)
+    case.assertNotIn("aippocampus doctor provider --json", json.dumps(payload, ensure_ascii=False))
+    case.assertIn("probe_warm_worker_once", action_ids)
     case.assertIn("snooze_optional_warm_ambient", action_ids)
     case.assertIn("retire_stale_warm_queue_after_review", action_ids)
-    case.assertIn("continue_with_ordinary_recall", action_ids)
+    case.assertNotIn("continue_with_ordinary_recall", action_ids)
+    probe_action = next(
+        action for action in payload["safe_next_actions"] if action["id"] == "probe_warm_worker_once"
+    )
+    case.assertEqual(
+        probe_action["command_template"],
+        'aippocampus warm --prompt "{cue}" --no-write --wait-all --json',
+    )
+    case.assertEqual(probe_action["requires"], ["cue"])
     snooze_action = next(
         action for action in payload["safe_next_actions"] if action["id"] == "snooze_optional_warm_ambient"
     )
@@ -178,12 +188,6 @@ def assert_stale_queue_foreground_contract(case: Any, payload: dict[str, Any]) -
             for action in payload["safe_next_actions"]
         )
     )
-    recall_action = next(
-        action for action in payload["safe_next_actions"] if action["id"] == "continue_with_ordinary_recall"
-    )
-    case.assertNotIn("command", recall_action)
-    case.assertEqual(recall_action["command_template"], 'aippocampus agent recall "{cue}" --json')
-    case.assertEqual(recall_action["requires"], ["cue"])
     encoded = json.dumps(payload, ensure_ascii=False)
     case.assertNotIn("set the provider key or leave warm ambient off", encoded)
 
@@ -193,12 +197,13 @@ def assert_stale_queue_foreground_contract(case: Any, payload: dict[str, Any]) -
     case.assertEqual(card["status"], "blocked_stale_queue")
     case.assertTrue(card["ordinary_recall_usable"])
     case.assertTrue(card["warm_not_blocking_recall"])
-    case.assertEqual(card["foreground_action"]["id"], "inspect_provider_status")
+    case.assertEqual(card["foreground_action"]["id"], "continue_with_ordinary_recall")
     case.assertLessEqual(len(card["safe_next_actions"]), 3)
     compact_encoded = json.dumps(card, ensure_ascii=False)
     case.assertNotIn("action_code", compact_encoded)
-    case.assertNotIn("snooze_optional_warm_ambient", compact_encoded)
-    case.assertNotIn("retire_stale_warm_queue_after_review", compact_encoded)
+    case.assertIn("probe_warm_worker_once", compact_encoded)
+    case.assertIn("snooze_optional_warm_ambient", compact_encoded)
+    case.assertIn("retire_stale_warm_queue_after_review", compact_encoded)
     case.assertNotIn("AIPPOCAMPUS_WARM_RECALL_BACKGROUND", compact_encoded)
 
 def write_registry(root: Path, entries: list[dict[str, Any]]) -> Path:

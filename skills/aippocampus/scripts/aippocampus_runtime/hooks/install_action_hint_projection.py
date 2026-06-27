@@ -32,7 +32,7 @@ def action_hint_frontstage_card(
     elif not active:
         first_command = "aippocampus hooks action refresh-cache --write --json"
     else:
-        first_command = "aippocampus hooks action probe --json"
+        first_command = "aippocampus hooks action probe --compact-json"
     next_steps = [{"label": "check", "command": "aippocampus hooks action status --json"}]
     if not installed:
         next_steps.append({"label": "review_guidance", "command": first_command})
@@ -135,7 +135,7 @@ def public_install_result(result: Mapping[str, Any], *, path: Path) -> dict[str,
             foreground_shell_action(
                 action_id="probe_action_hint_hot_path",
                 label="Probe action-hint hot path",
-                command="aippocampus hooks action probe --json",
+                command="aippocampus hooks action probe --compact-json",
                 why=(
                     "A fresh cache is installed; run a live PreToolUse-shaped probe "
                     "before calling action-time hints useful."

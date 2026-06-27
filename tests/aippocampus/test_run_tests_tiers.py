@@ -675,19 +675,25 @@ class RunTestsTierTests(unittest.TestCase):
         self.assertEqual(command[-3:], ["--profile", "public-fast", "--json"])
 
     def test_tempdir_preflight_uses_fallback_when_default_temp_is_unusable(self) -> None:
-        calls: list[Path | None] = []
+        calls: list[Path] = []
 
-        def fake_probe(path: Path | None) -> None:
+        def fake_probe(path: Path) -> None:
             calls.append(path)
-            if path is None:
+            if path.name == "default-temp":
                 raise OSError("delete denied")
 
         with tempfile.TemporaryDirectory() as tmp:
+            default_temp = Path(tmp) / "default-temp"
             fallback = Path(tmp) / "runner-temp"
             fallback_identity = fallback.resolve()
             previous_tempdir = getattr(run_tests.tempfile, "tempdir", None)
             with (
                 mock.patch.object(run_tests, "_probe_tempdir", side_effect=fake_probe),
+                mock.patch.object(
+                    run_tests,
+                    "_tempdir_parent_candidates",
+                    return_value=[("env:TEMP", default_temp)],
+                ),
                 mock.patch.object(run_tests, "FALLBACK_TEST_TMPDIR", fallback),
                 mock.patch.dict(os.environ, {}, clear=False),
             ):
@@ -698,9 +704,40 @@ class RunTestsTierTests(unittest.TestCase):
                     run_tests.tempfile.tempdir = previous_tempdir
 
             self.assertEqual(selected, fallback_identity)
-            self.assertEqual(calls, [None, fallback_identity])
+            self.assertEqual(calls, [default_temp, fallback_identity])
             for name in run_tests.TEMP_ENV_NAMES:
                 self.assertEqual(selected_env[name], str(fallback_identity))
+
+    def test_tempdir_preflight_never_uses_implicit_cwd_probe_when_candidates_fail(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            fake_repo_root = Path(tmp) / "repo"
+            fake_repo_root.mkdir()
+            leaked = fake_repo_root / "cwd-probe-leak"
+            default_temp = Path(tmp) / "default-temp"
+            fallback = Path(tmp) / "fallback-temp"
+            previous_tempdir = getattr(run_tests.tempfile, "tempdir", None)
+
+            def fake_tempdir(*, prefix: str, dir: str | None = None) -> object:
+                if dir is None:
+                    leaked.write_text("leaked", encoding="utf-8")
+                raise OSError("temp denied")
+
+            with (
+                mock.patch.object(run_tests.tempfile, "TemporaryDirectory", side_effect=fake_tempdir),
+                mock.patch.object(
+                    run_tests,
+                    "_tempdir_parent_candidates",
+                    return_value=[("env:TEMP", default_temp)],
+                ),
+                mock.patch.object(run_tests, "FALLBACK_TEST_TMPDIR", fallback),
+            ):
+                try:
+                    with self.assertRaises(RuntimeError):
+                        run_tests.ensure_usable_tempdir()
+                finally:
+                    run_tests.tempfile.tempdir = previous_tempdir
+
+            self.assertFalse(leaked.exists())
 
     def test_slow_module_overrides_match_real_test_modules(self) -> None:
         discovered = set(run_tests.discover_modules())

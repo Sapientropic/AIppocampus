@@ -13,9 +13,24 @@ from aippocampus_runtime.recall import (
 )
 from tests.aippocampus.frontstage_assertions import assert_compact_frontstage_payload
 
+RECALL_COMPACT_PROTOCOL_KEYS = {
+    "apw_recovery_state",
+    "foreground_action_contract",
+    "kind",
+    "mode",
+    "schema_version",
+    "surface",
+}
+
 
 def assert_command_args(test: unittest.TestCase, command: str, expected: list[str]) -> None:
     test.assertEqual(shlex.split(command), expected)
+
+
+def assert_no_recall_protocol_envelope(test: unittest.TestCase, payload: dict) -> None:
+    leaked = sorted(RECALL_COMPACT_PROTOCOL_KEYS.intersection(payload))
+    test.assertEqual(leaked, [], f"compact recall leaked protocol envelope keys: {leaked}")
+
 
 class AgentRecallCompactProjectionTests(unittest.TestCase):
     def _background_recovery_fixture(self) -> dict:
@@ -43,14 +58,23 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
             },
             "foreground_action": {
                 "id": "reopen_background_finding_source_route",
-                "label": "Reopen this finding's source route",
+                "label": "Open this finding's source window",
                 "command": (
-                    "aippocampus agent recall 'recall 不够自然 辛苦去捞 "
-                    "wm_recall_natural sf_recall_natural' --json --detail compact"
+                    "aippocampus search --open-source --thread-key session:recall-natural "
+                    "--message-id msg-recall-natural --line 284 --json"
                 ),
+                "tool_name": "search_memory",
+                "arguments": {
+                    "query": "recall 不够自然 辛苦去捞",
+                    "scope": "all_registered_sources",
+                    "open_source": True,
+                    "thread_key": "session:recall-natural",
+                    "message_id": "msg-recall-natural",
+                    "line": 284,
+                },
                 "mutation_risk": "read_only",
-                "claim_boundary": "no_claim_before_reopen",
-                "why": "Use this finding id and source-finding ids as a narrow compact recall cue; then execute the emitted agent_deepen action before factual claims.",
+                "claim_boundary": "source_reopen_required_before_claim",
+                "why": "Open the clean-source handle tied to this reviewed background finding before using the scent.",
             },
         }
 
@@ -87,6 +111,7 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
 
         self.assertNotIn("operator_detail_command", safe)
         self.assertNotIn("operator_detail_command_template", safe)
+        assert_no_recall_protocol_envelope(self, safe)
         self.assertEqual(safe["claim_boundary"], "route_selection_ok_after_source_reopen")
         self.assertNotIn("old decision or handoff cue", json.dumps(safe, ensure_ascii=False))
 
@@ -106,6 +131,7 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
         self.assertNotIn("operator_detail_command", template_only)
         self.assertNotIn("operator_detail_command_template", template_only)
         self.assertNotIn("operator_detail_requires", template_only)
+        assert_no_recall_protocol_envelope(self, template_only)
         self.assertEqual(template_only["claim_boundary"], "route_selection_ok_after_source_reopen")
         self.assertEqual(executable_command_violations(template_only), [])
 
@@ -162,7 +188,7 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
             }
         )
 
-        self.assertNotIn("foreground_action_contract", public)
+        assert_no_recall_protocol_envelope(self, public)
         self.assertNotIn("agent_next_action", public)
         self.assertNotIn(public["foreground_action"], public.get("safe_next_actions", []))
         action = public["foreground_action"]
@@ -562,7 +588,7 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
         self.assertIn("--apw-fallback", secondary["command"])
         self.assertIn("before broad manual search", secondary["why"])
         self.assertNotIn("opt_in_required", public)
-        self.assertEqual(public["apw_recovery_state"], "available_requires_explicit_opt_in")
+        assert_no_recall_protocol_envelope(self, public)
         self.assertNotIn("apw_recovery", public)
         self.assertNotIn("associative_path_policy", public)
         self.assertNotIn("associative_path_fallback", public)

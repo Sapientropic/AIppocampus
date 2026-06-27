@@ -25,15 +25,21 @@ def public_payload(arguments: dict[str, Any], payload: Any) -> Any:
     projected = strip_foreground_action_legacy_aliases(projected)
     if (
         isinstance(projected, dict)
-        and projected.get("kind") == "aippocampus_background_findings_card"
         and str(projected.get("detail") or "").casefold() == "compact"
         and projected.get("surface_class") != "foreground_recovery_card"
+        and (
+            projected.get("kind") == "aippocampus_background_findings_card"
+            or (
+                isinstance(projected.get("routes"), list)
+                and isinstance(projected.get("foreground_action"), dict)
+                and "claim_boundary" in projected
+            )
+        )
     ):
-        # Background compact is a light scent card. The shared legacy-alias
-        # sanitizer helpfully adds the contract marker for most recovery cards,
-        # but here that marker becomes frontstage protocol noise and was called
-        # out in #2752. Detail/full and error recovery still keep the normal
-        # contract envelope.
+        # Background and recall compact are light foreground cards. The shared
+        # legacy-alias sanitizer adds the contract marker for most recovery
+        # cards, but here that marker becomes frontstage protocol noise. Full,
+        # detail, and error recovery keep the normal contract envelope.
         projected.pop("foreground_action_contract", None)
     return projected
 

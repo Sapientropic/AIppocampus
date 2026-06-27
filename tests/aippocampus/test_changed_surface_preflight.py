@@ -6,6 +6,7 @@ from unittest import mock
 from tests.aippocampus.import_path_helpers import import_tool_root_module
 
 preflight = import_tool_root_module("changed_surface_preflight")
+test_plan_commands = import_tool_root_module("test_plan_commands")
 
 
 class ChangedSurfacePreflightTests(unittest.TestCase):
@@ -123,6 +124,69 @@ class ChangedSurfacePreflightTests(unittest.TestCase):
 
         self.assertEqual(report["status"], "pass")
         self.assertEqual(report["commands"][0]["stdout"], "full diagnostic payload")
+
+    def test_tempdir_failure_does_not_create_changed_surface(self) -> None:
+        expected_command = preflight.test_plan.py_script(
+            "tools/aippocampus/run_tests.py",
+            "--tier quick",
+        )
+
+        def fake_command(command: str) -> preflight.CommandResult:
+            failed = command == expected_command
+            return preflight.CommandResult(
+                command=command,
+                scope="unknown",
+                status="fail" if failed else "pass",
+                returncode=2 if failed else 0,
+                elapsed_ms=1,
+                stdout="",
+                stderr="No usable temporary directory for the test runner.",
+            )
+
+        with (
+            mock.patch.object(preflight.test_plan, "collect_changed_files", return_value=[]),
+            mock.patch.object(preflight.test_plan, "_debt_report_is_red", return_value=False),
+            mock.patch.object(preflight, "run_shell_command", side_effect=fake_command),
+        ):
+            report = preflight.run_preflight(
+                changed_files=[],
+                base="origin/main",
+            )
+
+        self.assertFalse(report["ok"])
+        self.assertEqual(report["changed_file_count"], 0)
+        self.assertEqual(report["changed_files"], [])
+        self.assertEqual(report["first_failure"]["command"], expected_command)
+
+    def test_default_preflight_uses_current_interpreter_when_python_alias_is_absent(self) -> None:
+        seen: list[str] = []
+
+        def fake_command(command: str) -> preflight.CommandResult:
+            seen.append(command)
+            return preflight.CommandResult(
+                command=command,
+                scope="unknown",
+                status="pass",
+                returncode=0,
+                elapsed_ms=1,
+                stdout="",
+                stderr="",
+            )
+
+        with (
+            mock.patch.object(test_plan_commands.shutil, "which", return_value=None),
+            mock.patch.object(preflight.test_plan, "collect_changed_files", return_value=[]),
+            mock.patch.object(preflight.test_plan, "_debt_report_is_red", return_value=False),
+            mock.patch.object(preflight, "run_shell_command", side_effect=fake_command),
+        ):
+            expected = test_plan_commands.py_script("tools/aippocampus/run_tests.py", "--tier quick")
+            report = preflight.run_preflight(changed_files=[], base="origin/main")
+
+        self.assertTrue(report["ok"])
+        self.assertEqual(seen, [expected])
+        self.assertFalse(expected.startswith("python "))
+        self.assertFalse(report["detail_command"].startswith("python "))
+        self.assertFalse(report["planner_detail_command"].startswith("python "))
 
     def test_detail_commands_open_full_operator_views(self) -> None:
         def fake_command(command: str) -> preflight.CommandResult:

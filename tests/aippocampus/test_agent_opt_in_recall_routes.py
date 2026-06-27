@@ -275,7 +275,10 @@ class AgentOptInRecallRoutesTests(unittest.TestCase):
 
         encoded = json.dumps(public, ensure_ascii=False)
         action = public["foreground_action"]
-        self.assertEqual(public["surface"], "agent_cli_public_compact")
+        self.assertNotIn("kind", public)
+        self.assertNotIn("schema_version", public)
+        self.assertNotIn("mode", public)
+        self.assertNotIn("surface", public)
         self.assertEqual(action["tool_name"], "agent_deepen")
         self.assertEqual(action["arguments"]["request_index"], 1)
         self.assertNotIn("last_recall", action["arguments"])
@@ -358,14 +361,18 @@ class AgentOptInRecallRoutesTests(unittest.TestCase):
             payload["foreground_action"]["id"],
             "reopen_background_finding_source_route",
         )
-        self.assertIn("dreamfinding_continuity", payload["foreground_action"]["command"])
+        self.assertEqual(payload["foreground_action"]["tool_name"], "search_memory")
+        self.assertIn("search --open-source", payload["foreground_action"]["command"])
+        self.assertEqual(
+            payload["foreground_action"]["arguments"]["thread_key"],
+            "session:a",
+        )
         self.assertNotIn("target", payload["foreground_action"])
         self.assertNotIn(
             "materialize_action_hint_from_finding",
             {action["id"] for action in finding["next_actions"]},
         )
-        self.assertNotIn("session:a", encoded)
-        self.assertNotIn("msg-a", encoded)
+        self.assertNotIn("dreamfinding_continuity", payload["foreground_action"]["command"])
         self.assertNotIn(str(working_memory), encoded)
 
     def test_public_recall_no_routes_returns_recovery_card_without_deepen_placeholder(self) -> None:

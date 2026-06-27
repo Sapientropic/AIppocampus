@@ -1331,28 +1331,6 @@ def _issue_metadata_from_args(args: argparse.Namespace, body: str) -> Any:
     return metadata
 
 
-def compact_audit_report(report: Mapping[str, Any], *, detail_command: str | None) -> dict[str, Any]:
-    findings = list(report.get("findings") or [])
-    return {
-        "kind": "aippocampus_closeout_audit_compact",
-        "schema_version": report.get("schema_version"),
-        "ok": report.get("ok"),
-        "status": "pass" if report.get("ok") else "fail",
-        "closing_issues": report.get("closing_issues") or [],
-        "blocker_count": len(findings),
-        "blockers": [
-            {
-                "kind": item.get("kind"),
-                "severity": item.get("severity"),
-                "message": item.get("message"),
-                "closing_issues": item.get("closing_issues"),
-            }
-            for item in findings
-        ],
-        "detail_command": detail_command,
-    }
-
-
 def _detail_command_from_args(args: argparse.Namespace) -> str | None:
     parts = ["python", "tools/aippocampus/github/closeout_audit.py", "--json", "--detail", "full"]
     if args.body_file:
@@ -1418,15 +1396,21 @@ def main(argv: list[str] | None = None) -> int:
         )
     else:
         body = _body_from_args(args)
-        report = audit_pr_body(
-            body,
-            issue_metadata=_issue_metadata_from_args(args, body),
-        )
+        if args.body_env and not str(body or "").strip():
+            report = closeout_audit_followthrough.missing_body_env_report(
+                str(args.body_env),
+                schema_version=SCHEMA_VERSION,
+            )
+        else:
+            report = audit_pr_body(
+                body,
+                issue_metadata=_issue_metadata_from_args(args, body),
+            )
     if args.json_output or not args.github_annotations:
         if args.closed_issues_file or args.closed_window_start or args.closed_window_end or args.detail == "full":
             payload = report
         else:
-            payload = compact_audit_report(
+            payload = closeout_audit_followthrough.compact_audit_report(
                 report,
                 detail_command=_detail_command_from_args(args),
             )

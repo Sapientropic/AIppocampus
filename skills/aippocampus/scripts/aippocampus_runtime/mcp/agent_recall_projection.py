@@ -13,6 +13,7 @@ from aippocampus_runtime.contracts import (
     normalize_foreground_action,
     shell_quote,
 )
+from aippocampus_runtime.mcp import agent_recall_apw_meta_echo as apw_meta_echo_projection
 from aippocampus_runtime.mcp import (
     agent_recall_background_recovery as background_recovery_projection,
 )
@@ -538,6 +539,15 @@ def _apply_associative_path_recovery(
                 associative_path_fallback = None
                 associative_path_policy = None
     else:
+        foreground_action, safe_next_actions = (
+            apw_meta_echo_projection.maybe_promote_original_anchor_search(
+                associative_path_fallback=associative_path_fallback,
+                foreground_action=foreground_action,
+                safe_next_actions=safe_next_actions,
+                recovery_cue=context.recovery_cue,
+                source_open_primary_action=_source_open_primary_action,
+            )
+        )
         associative_policy_action = recovery_projection.associative_path_policy_recovery_action(
             associative_path_policy,
             recovery_cue=context.recovery_cue,
@@ -553,7 +563,7 @@ def _apply_associative_path_recovery(
         associative_path_fallback=associative_path_fallback,
         associative_path_policy=associative_path_policy,
         apw_recovery=apw_recovery,
-    )
+)
 
 
 def _prefer_apw_recovery_over_low_confidence_routes(

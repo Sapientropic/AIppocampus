@@ -14,6 +14,9 @@ from aippocampus_runtime.contracts import canonical_foreground_action_fields
 from aippocampus_runtime.core import compact_text
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 from aippocampus_runtime.update import status_actions as update_actions
+from aippocampus_runtime.update.agent_status_deferred_projection import (
+    deferred_ambient_field_projection,
+)
 from aippocampus_runtime.update.agent_status_summary_core import (
     TRUE_FOREGROUND_TOOL_FAILURE_STATUSES,
     _agent_callable_readiness_state,
@@ -422,6 +425,9 @@ def build_ambient_recall_status(
     hooks_deferred = state.hook_status in {"not_checked", "deferred"} and any(
         item.get("id") == "hooks_status" for item in deferred_components
     )
+    provider_deferred = state.provider_status in {"not_checked", "deferred"} and any(
+        item.get("id") == "llm_child_process" for item in deferred_components
+    )
     if hooks_deferred and "hooks:deferred" not in issue_codes:
         issue_codes.append("hooks:deferred")
     active_useful = bool(
@@ -481,16 +487,21 @@ def build_ambient_recall_status(
         "stage": ambient_stage,
         "stage_values": ["installed", "callable", "active", "useful"],
         "useful_signal_present": active_useful,
-        "prompt_hook_installed": state.prompt_installed,
-        "lifecycle_hook_installed": state.lifecycle_installed,
-        "action_hints_installed": state.action_hints_installed,
-        "action_hints_stage": action_hints_stage,
-        "action_hints_useful": state.action_hints_useful_signal,
-        "hot_path_active": state.action_hints_hot_path_active,
+        **deferred_ambient_field_projection(
+            state,
+            action_hints_stage=action_hints_stage,
+            hooks_deferred=hooks_deferred,
+            provider_deferred=provider_deferred,
+            provider_installed=provider_installed,
+        ),
         "latency_risk": {
-            "status": state.prompt_latency_status or "not_checked",
-            "freshness_status": state.prompt_latency_freshness_status or "not_checked",
-            "historical_status": state.prompt_latency_historical_status or "not_checked",
+            "status": "deferred" if hooks_deferred else state.prompt_latency_status or "not_checked",
+            "freshness_status": "deferred"
+            if hooks_deferred
+            else state.prompt_latency_freshness_status or "not_checked",
+            "historical_status": "deferred"
+            if hooks_deferred
+            else state.prompt_latency_historical_status or "not_checked",
             "foreground_latency_red_line_violation_count": state.foreground_latency_red_lines,
             "near_timeout_event_count": state.prompt_near_timeout_count,
             "historical_foreground_latency_red_line_violation_count": (
@@ -508,11 +519,6 @@ def build_ambient_recall_status(
             "ordinary_recall_usable": bool(
                 state.warm_ambient_status.get("ordinary_recall_usable", True)
             ),
-        },
-        "provider": {
-            "status": state.provider_status or "not_checked",
-            "degraded": bool(state.provider_degraded and provider_installed),
-            "values_redacted": True,
         },
         "issue_codes": issue_codes,
         "next_action": next_action,

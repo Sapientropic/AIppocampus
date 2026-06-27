@@ -27,6 +27,7 @@ LOW_MARGIN_OWNER_ISSUES = {
     "tools/aippocampus/docs/debt_report.py": "#2678",
     "tools/aippocampus/recall_integration_readiness.py": "#2611",
     "tools/aippocampus/test_plan.py": "#2687",
+    "tools/aippocampus/test_tier_manifest.py": "#2691",
 }
 
 

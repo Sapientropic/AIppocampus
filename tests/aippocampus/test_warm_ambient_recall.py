@@ -634,9 +634,9 @@ class WarmAmbientRecallTests(unittest.TestCase):
 
         self.assertFalse(payload["ok"])
         self.assertEqual(payload["status"], "blocked")
-        self.assertEqual(payload["action_code"], "provider_or_worker_unavailable_optional")
+        self.assertEqual(payload["action_code"], "stale_queue_worker_unavailable_optional")
         self.assertTrue(payload["ordinary_recall_usable"])
-        self.assertEqual(payload["next_command"], "aippocampus doctor provider --json")
+        self.assertEqual(payload["next_command"], "aippocampus warm status --json")
         self.assertEqual(payload["foreground_action_contract"], "foreground-action-v2")
         assert_stale_queue_foreground_contract(self, payload)
 
@@ -657,10 +657,13 @@ class WarmAmbientRecallTests(unittest.TestCase):
         self.assertEqual(payload["kind"], "aippocampus_warm_ambient_status")
         self.assertEqual(payload["status"], "blocked")
         self.assertIn("job_activity", payload)
-        self.assertEqual(payload["action_code"], "provider_or_worker_unavailable_optional")
+        self.assertEqual(payload["action_code"], "stale_queue_worker_unavailable_optional")
         action_ids = [action["id"] for action in payload["safe_next_actions"]]
+        self.assertIn("probe_warm_worker_once", action_ids)
         self.assertIn("snooze_optional_warm_ambient", action_ids)
         self.assertIn("retire_stale_warm_queue_after_review", action_ids)
+        self.assertNotIn("inspect_provider_status", action_ids)
+        self.assertNotIn("aippocampus doctor provider --json", raw_output)
         self.assertNotIn(str(self.root), raw_output)
 
     def test_scheduler_env_opt_out_still_disables_default_warming(self) -> None:

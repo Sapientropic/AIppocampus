@@ -7,6 +7,22 @@ from typing import Any
 from aippocampus_runtime.contracts import canonical_foreground_action_fields
 from aippocampus_runtime.privacy import redact_private_paths
 
+STALE_SIGNATURE_TYPEERROR_MARKERS = (
+    "got an unexpected keyword argument",
+    "missing 1 required positional argument",
+    "missing 1 keyword-only argument",
+    "takes 0 positional arguments but",
+    "takes 1 positional argument but",
+    "positional arguments but",
+)
+
+
+def looks_like_stale_runtime_signature_mismatch(exc: BaseException) -> bool:
+    if not isinstance(exc, TypeError):
+        return False
+    message = str(exc)
+    return any(marker in message for marker in STALE_SIGNATURE_TYPEERROR_MARKERS)
+
 
 def foreground_mcp_runtime_recovery_payload(
     tool_name: str,

@@ -139,6 +139,20 @@ def _apply_with_consent_action() -> dict[str, Any]:
     }
 
 
+def _storage_gc_audit_action(command: str = STORAGE_GC_BOUNDED_AUDIT_COMMAND) -> dict[str, Any]:
+    return {
+        "id": "storage_gc_audit",
+        "label": "Audit storage cleanup",
+        "kind": "shell_command",
+        "command": command,
+        "mutates": False,
+        "mutation_risk": "read_only",
+        "claim_boundary": "storage_pressure_not_memory_evidence",
+        "why": "Audit generated-cache pressure before any storage cleanup apply.",
+        "reason": "audit generated-cache pressure before any storage cleanup apply",
+    }
+
+
 def _continue_without_maintenance_action(best: dict) -> dict[str, Any]:
     return {
         "id": "continue_without_maintenance",
@@ -198,19 +212,7 @@ def maintenance_safe_next_actions(best: dict, *, read_only: bool) -> list[dict[s
             }
         )
     if best.get("id") == "storage_gc_rebuildable_cache" and best.get("command"):
-        actions.append(
-            {
-                "id": "storage_gc_audit",
-                "label": "Audit storage cleanup",
-                "kind": "shell_command",
-                "command": str(best["command"]),
-                "mutates": False,
-                "mutation_risk": "read_only",
-                "claim_boundary": "storage_pressure_not_memory_evidence",
-                "why": "Audit generated-cache pressure before any storage cleanup apply.",
-                "reason": "audit generated-cache pressure before any storage cleanup apply",
-            }
-        )
+        actions.append(_storage_gc_audit_action(str(best["command"])))
     seen: set[str] = set()
     unique: list[dict[str, Any]] = []
     for action in actions:
@@ -219,6 +221,29 @@ def maintenance_safe_next_actions(best: dict, *, read_only: bool) -> list[dict[s
             seen.add(action_id)
             unique.append(action)
     return unique
+
+
+def append_storage_review_action(
+    actions: list[dict[str, Any]],
+    recommended: list[dict],
+) -> list[dict[str, Any]]:
+    if not any(
+        isinstance(item, dict) and item.get("id") == "storage_gc_rebuildable_cache"
+        for item in recommended
+    ):
+        return actions
+    command = next(
+        (
+            public_action_command(str(item.get("id") or ""))
+            for item in recommended
+            if isinstance(item, dict) and item.get("id") == "storage_gc_rebuildable_cache"
+        ),
+        STORAGE_GC_BOUNDED_AUDIT_COMMAND,
+    )
+    next_actions = list(actions)
+    if not any(action.get("id") == "storage_gc_audit" for action in next_actions):
+        next_actions.append(_storage_gc_audit_action(command or STORAGE_GC_BOUNDED_AUDIT_COMMAND))
+    return next_actions
 
 
 def maintenance_foreground_action(best: dict, *, read_only: bool) -> dict[str, Any]:
@@ -417,7 +442,10 @@ def plan_payload(
     maintenance_ok = command_ok and health_maintenance_ok(health)
     best = best_next_action(recommended)
     agent_action = maintenance_foreground_action(best, read_only=True)
-    safe_actions = maintenance_safe_next_actions(best, read_only=True)
+    safe_actions = append_storage_review_action(
+        maintenance_safe_next_actions(best, read_only=True),
+        recommended,
+    )
     payload = {
         "kind": (
             "aippocampus_maintenance_summary"

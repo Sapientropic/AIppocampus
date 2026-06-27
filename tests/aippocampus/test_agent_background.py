@@ -24,6 +24,13 @@ def write_background_working_memory(path: Path) -> None:
                 "activation_cues": ["action-time learning", "repeated coding mistakes"],
                 "trigger_terms": ["action", "action-time learning", "repeated coding mistakes"],
                 "source_finding_ids": ["finding_action_learning"],
+                "source_refs": [
+                    {
+                        "thread_key": "session:background-action",
+                        "message_id": "msg-background-action",
+                        "line": 42,
+                    }
+                ],
                 "confidence": 0.72,
                 "project_label": "AIppocampus",
                 "review_state": "agent_adjudicated",
@@ -87,6 +94,63 @@ def write_generic_output_working_memory(path: Path) -> None:
     )
 
 
+def write_direction_only_recall_working_memory(path: Path) -> None:
+    path.write_text(
+        json.dumps(
+            {
+                "kind": "aippocampus_working_memory",
+                "status": "active",
+                "route": "confirm_when_relevant",
+                "candidate_type": "preference_review",
+                "candidate_key": "wm_recall_natural",
+                "title": "Preference review",
+                "summary": "Recall should feel natural instead of making the agent work hard to dig.",
+                "activation_cues": ["recall 不够自然", "辛苦去捞"],
+                "trigger_terms": ["recall 不够自然", "辛苦去捞"],
+                "source_finding_ids": ["sf_recall_natural"],
+                "source_refs": [
+                    {
+                        "thread_key": "session:recall-natural",
+                        "message_id": "msg-recall-natural",
+                        "line": 284,
+                    }
+                ],
+                "confidence": 0.86,
+                "project_label": "AIppocampus",
+                "review_state": "agent_adjudicated",
+                "route_reason": "personal preference may drift, so confirm only when relevant",
+            },
+            ensure_ascii=False,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+
+def write_sourceless_recall_working_memory(path: Path) -> None:
+    path.write_text(
+        json.dumps(
+            {
+                "kind": "aippocampus_working_memory",
+                "status": "active",
+                "route": "use_with_source",
+                "candidate_type": "project_memory",
+                "candidate_key": "wm_sourceless_recall",
+                "title": "Recall route hint",
+                "summary": "A reviewed row without a source ref must not bounce through recall ids.",
+                "activation_cues": ["recall route hint"],
+                "trigger_terms": ["recall route hint"],
+                "source_finding_ids": ["sf_sourceless_recall"],
+                "confidence": 0.82,
+                "project_label": "AIppocampus",
+            },
+            ensure_ascii=False,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+
 class AgentBackgroundTests(unittest.TestCase):
     def tool_payload(self, response: dict) -> dict:
         result = response["result"]
@@ -123,7 +187,7 @@ class AgentBackgroundTests(unittest.TestCase):
         self.assertNotIn("next_actions", finding)
         self.assertEqual(payload["foreground_action"]["id"], "reopen_background_finding_source_route")
         self.assertEqual(payload["foreground_action"]["mutation_risk"], "read_only")
-        self.assertEqual(finding["source_ref_count"], 0)
+        self.assertEqual(finding["source_ref_count"], 1)
         self.assertNotIn("use_boundary", finding)
         self.assertNotIn("durable_low_authority_feedback_write", encoded)
         self.assertNotIn("materialize_action_hint_from_finding", encoded)
@@ -190,9 +254,16 @@ class AgentBackgroundTests(unittest.TestCase):
             actions["reopen_background_finding_source_route"]["target"]["source_finding_ids"],
             ["finding_action_learning"],
         )
-        self.assertIn("finding_action_learning", actions["reopen_background_finding_source_route"]["command"])
-        self.assertIn("--detail compact", actions["reopen_background_finding_source_route"]["command"])
-        self.assertIn("agent recall", actions["reopen_background_finding_source_route"]["command"])
+        self.assertIn("search --open-source", actions["reopen_background_finding_source_route"]["command"])
+        self.assertIn("session:background-action", actions["reopen_background_finding_source_route"]["command"])
+        self.assertEqual(
+            actions["reopen_background_finding_source_route"]["tool_name"],
+            "search_memory",
+        )
+        self.assertEqual(
+            actions["reopen_background_finding_source_route"]["arguments"]["open_source"],
+            True,
+        )
         self.assertEqual(
             actions["mark_background_finding_helpful"]["target"]["finding_id"],
             "wm_action_time_learning",
@@ -213,6 +284,51 @@ class AgentBackgroundTests(unittest.TestCase):
             actions["materialize_action_hint_from_finding"]["mutation_risk"],
             "explicit_local_cache_write",
         )
+
+    def test_agent_background_compact_action_does_not_recurse_into_background(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            working_memory = Path(tmp) / "working_memory.jsonl"
+            write_direction_only_recall_working_memory(working_memory)
+
+            payload = background_findings.background_findings_card(
+                "recall 不够自然 辛苦去捞",
+                working_memory_path=working_memory,
+            )
+
+        action = payload["foreground_action"]
+        command = action["command"]
+        self.assertEqual(payload["status"], "ok")
+        self.assertEqual(action["id"], "search_sources_for_background_cue")
+        self.assertIn("search --all", command)
+        self.assertEqual(action["tool_name"], "search_memory")
+        self.assertEqual(action["arguments"]["query"], "recall 不够自然 辛苦去捞")
+        self.assertNotIn("agent background", command)
+        self.assertNotIn("agent recall", command)
+        self.assertNotIn("wm_recall_natural", command)
+        self.assertNotIn("sf_recall_natural", command)
+        self.assertNotIn("target", action)
+
+    def test_agent_background_without_source_ref_searches_cue_not_background_ids(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            working_memory = Path(tmp) / "working_memory.jsonl"
+            write_sourceless_recall_working_memory(working_memory)
+
+            payload = background_findings.background_findings_card(
+                "recall route hint",
+                working_memory_path=working_memory,
+            )
+
+        action = payload["foreground_action"]
+        command = action["command"]
+        self.assertEqual(payload["status"], "ok")
+        self.assertEqual(action["id"], "search_sources_for_background_cue")
+        self.assertEqual(action["tool_name"], "search_memory")
+        self.assertIn("search --all", command)
+        self.assertNotIn("agent background", command)
+        self.assertNotIn("agent recall", command)
+        self.assertNotIn("wm_sourceless_recall", command)
+        self.assertNotIn("sf_sourceless_recall", command)
+        self.assertNotIn("target", action)
 
     def test_background_recovery_does_not_reappend_existing_finding_ids(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

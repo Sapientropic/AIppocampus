@@ -707,7 +707,6 @@ def public_recall_projection(payload: Mapping[str, Any], *, query: str | None = 
     source["query"] = query if query is not None else source.get("query")
     source.update(handle_boundary_fields())
     projected = compact_agent_recall_payload(source)
-    projected["surface"] = "agent_cli_public_compact"
     projected["routes"] = _public_compact_route_receipts(projected.get("routes"))
     projected.pop("policy_boundary", None)
     cache_available = bool(source.get("last_recall_cache_available"))
@@ -743,9 +742,9 @@ def public_recall_projection(payload: Mapping[str, Any], *, query: str | None = 
         )
         return "--last-recall" in command_text or "--recall-selector" in command_text
 
-    advertises_same_machine_recall = action_depends_on_same_machine_recall(
-        action_map
-    ) or action_depends_on_same_machine_recall(canonical_action)
+    advertises_same_machine_recall = action_depends_on_same_machine_recall(action_map)
+    if not action_map:
+        advertises_same_machine_recall = action_depends_on_same_machine_recall(canonical_action)
     if not cache_available and advertises_same_machine_recall:
         recovery_cue = str(
             redact_sensitive_values(redact_private_paths(str(source.get("query") or "").strip()))

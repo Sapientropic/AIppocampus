@@ -748,6 +748,65 @@ class AippocampusMaintenanceTests(unittest.TestCase):
         )
         self.assertNotIn("operator_detail", payload)
 
+    def test_storage_pressure_remains_bounded_action_when_refresh_is_primary(self) -> None:
+        def fake_probe(cwd: Path) -> tuple[int, dict | None, str]:
+            return (
+                0,
+                {
+                    "ok": True,
+                    "product_readiness": {
+                        "ready": True,
+                        "ordinary_first_recall_usable": True,
+                        "maintenance_recommended": True,
+                        "storage_pressure_cleanup_recommended": True,
+                        "status": "ready_with_storage_pressure",
+                    },
+                    "recommended_actions": [
+                        {
+                            "id": "build_index",
+                            "severity": "warning",
+                            "reason": "index stale",
+                        },
+                        {
+                            "id": "storage_gc_rebuildable_cache",
+                            "severity": "warning",
+                            "reason": "generated cache pressure",
+                        },
+                    ],
+                },
+                "",
+            )
+
+        with (
+            mock.patch.object(maintenance, "read_only_health_probe", side_effect=fake_probe),
+            mock.patch.object(
+                maintenance,
+                "run_json_checked",
+                side_effect=AssertionError("read-only status must not run full health subprocess"),
+            ),
+            mock.patch("sys.stdout", new=StringIO()) as stdout,
+        ):
+            code = maintenance.main(["plan", "--cwd", ".", "--summary-json"])
+
+        payload = json.loads(stdout.getvalue())
+
+        self.assertEqual(code, 0)
+        self.assertEqual(payload["foreground_action"]["id"], "review_maintenance_plan")
+        action_ids = [action["id"] for action in payload["safe_next_actions"]]
+        self.assertIn("storage_gc_audit", action_ids)
+        storage_action = next(
+            action for action in payload["safe_next_actions"] if action["id"] == "storage_gc_audit"
+        )
+        self.assertFalse(storage_action["mutates"])
+        self.assertEqual(
+            storage_action["command"],
+            "aippocampus storage gc --dry-run --json --top 1 --cwd .",
+        )
+        self.assertIn(
+            "storage_gc_rebuildable_cache",
+            [action["id"] for action in payload["remaining_recommended_actions"]],
+        )
+
     def test_status_surfaces_interrupted_write_recovery_without_cleanup(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

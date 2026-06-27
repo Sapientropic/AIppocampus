@@ -35,6 +35,14 @@ INSTRUCTION_SURFACE_CLASSIFIED_FILES = {
             "detail/operator/tests, not default MCP payload expansion"
         ),
     },
+    "skills/aippocampus/scripts/aippocampus_runtime/mcp/agent_recall_apw_meta_echo.py": {
+        "classification": "apw_meta_echo_compact_action_owner",
+        "owner": "#2775/#2651",
+        "why": (
+            "owns compact recall action selection when APW finds a memory-product "
+            "quote echo; proof stays in recall/search/open follow-through and tests"
+        ),
+    },
     "skills/aippocampus/scripts/aippocampus_runtime/mcp/agent_recall_result_assembly.py": {
         "classification": "compact_projection_result_owner",
         "owner": "#2679/#2636/#2651",
@@ -114,6 +122,24 @@ INSTRUCTION_SURFACE_CLASSIFIED_FILES = {
         "why": (
             "owns sanitized MCP runtime provenance for full/detail profiles; "
             "compact projection must keep this diagnostic family stripped"
+        ),
+    },
+    "skills/aippocampus/scripts/aippocampus_runtime/mcp/runtime_recovery.py": {
+        "classification": "mcp_runtime_recovery_card_owner",
+        "owner": "#2765/#2651",
+        "why": (
+            "owns stale foreground-MCP runtime recovery cards; compact output may "
+            "name reload/CLI fallback actions, but source proof and runtime "
+            "diagnostics must stay in follow-through or detail surfaces"
+        ),
+    },
+    "skills/aippocampus/scripts/aippocampus_runtime/mcp/server.py": {
+        "classification": "mcp_server_dispatch_boundary_owner",
+        "owner": "#2765/#2651",
+        "why": (
+            "owns MCP request dispatch and error-boundary routing; user-facing "
+            "tool failures must delegate compact/detail shaping to focused "
+            "projection or recovery helpers"
         ),
     },
     "skills/aippocampus/scripts/aippocampus_runtime/mcp/continuity_routes.py": {
@@ -316,6 +342,14 @@ INSTRUCTION_SURFACE_CLASSIFIED_FILES = {
         "why": (
             "owns continuity-domain foreground cue quality and suppression labels; "
             "broad route words may stay diagnostic but must not become recall commands"
+        ),
+    },
+    "skills/aippocampus/scripts/aippocampus_runtime/recall/clean_source_apw_candidates.py": {
+        "classification": "clean_source_apw_candidate_filter_owner",
+        "owner": "#2775/#2543/#2651",
+        "why": (
+            "owns current clean-source APW candidate filtering, including product-meta "
+            "quote echo demotion; foreground proof belongs in source-open follow-through"
         ),
     },
     "skills/aippocampus/scripts/aippocampus_runtime/recall/continuity_domain_producer.py": {
@@ -723,6 +757,15 @@ INSTRUCTION_SURFACE_CLASSIFIED_FILES = {
         "why": (
             "owns PR-body and issue-closeout fixture text for the closeout audit; "
             "these strings are test inputs, not runtime foreground instructions"
+        ),
+    },
+    "tests/aippocampus/test_run_tests_tiers.py": {
+        "classification": "test_runner_contract_owner",
+        "owner": "#2764/#2544/#2691/#2651",
+        "why": (
+            "owns test-runner operator diagnostics, tier-budget wording, shard "
+            "errors, and tempdir preflight fixtures; strings are CLI/test "
+            "contracts, not hidden agent instructions"
         ),
     },
     "tests/aippocampus/test_agent_recall_compact_projection.py": {

@@ -10,13 +10,15 @@ from typing import Any
 
 from aippocampus_runtime.cli.human_io import exit_code_for_payload
 from aippocampus_runtime.mcp.mutation_boundary import UNSUPPORTED_MUTATION_TOOLS
-from aippocampus_runtime.mcp.public_projection import public_payload
-from aippocampus_runtime.mcp.runtime_recovery import foreground_mcp_runtime_recovery_payload
+from aippocampus_runtime.mcp.result_profile import render_profiled_result
+from aippocampus_runtime.mcp.runtime_recovery import (
+    foreground_mcp_runtime_recovery_payload,
+    looks_like_stale_runtime_signature_mismatch,
+)
 from aippocampus_runtime.mcp.tool_catalog import TOOLS
 from aippocampus_runtime.mcp.tool_handlers import (
     TOOL_CALLS,
     MCPArgumentError,
-    text_result,
     tool_error,
 )
 from aippocampus_runtime.mcp.tool_readiness import (
@@ -131,11 +133,19 @@ def handle_request(request: dict[str, Any]) -> dict[str, Any] | None:
                 "agent_background",
                 "agent_deepen",
                 "agent_explain",
-            } and isinstance(exc, (ImportError, AttributeError, RuntimeError)):
+            } and (
+                isinstance(exc, (ImportError, AttributeError, RuntimeError))
+                or looks_like_stale_runtime_signature_mismatch(exc)
+            ):
                 payload = foreground_mcp_runtime_recovery_payload(name, exc)
                 return jsonrpc_result(
                     request_id,
-                    text_result(public_payload(arguments, payload), is_error=True),
+                    render_profiled_result(
+                        arguments,
+                        payload,
+                        is_error=True,
+                        full_output_boundary="foreground_mcp_runtime_recovery",
+                    ),
                 )
             return jsonrpc_result(
                 request_id,
@@ -161,13 +171,13 @@ def handle_payload(payload: Any) -> list[dict[str, Any]]:
 
 def serve_stdio() -> int:
     seen_request = False
-    for line in sys.stdin:
-        line = line.strip()
-        if not line:
+    for raw_message in sys.stdin:
+        raw_message = raw_message.strip()
+        if not raw_message:
             continue
         seen_request = True
         try:
-            payload = json.loads(line)
+            payload = json.loads(raw_message)
             responses = handle_payload(payload)
         except json.JSONDecodeError as exc:
             responses = [jsonrpc_error(None, -32700, f"Parse error: {exc}")]

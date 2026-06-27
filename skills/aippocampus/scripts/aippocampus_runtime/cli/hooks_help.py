@@ -92,7 +92,7 @@ def print_hooks_help(kind: str | None = None, *, file: TextIO | None = None) -> 
         print("Before/after:", file=target)
         print("  aippocampus hooks action status --json", file=target)
         print("  aippocampus hooks action refresh-cache --write --json", file=target)
-        print("  aippocampus hooks action probe --json", file=target)
+        print("  aippocampus hooks action probe --compact-json", file=target)
         print("  aippocampus hooks action install --json", file=target)
         print("  aippocampus hooks action uninstall --json", file=target)
         return
@@ -133,7 +133,7 @@ def print_hooks_help(kind: str | None = None, *, file: TextIO | None = None) -> 
         print("Common:", file=target)
         print("  aippocampus hooks action status --json", file=target)
         print("  aippocampus hooks action refresh-cache --write --json", file=target)
-        print("  aippocampus hooks action probe --json", file=target)
+        print("  aippocampus hooks action probe --compact-json", file=target)
         print("  aippocampus hooks action install --json", file=target)
         print("  aippocampus hooks action uninstall --json", file=target)
         return
@@ -150,7 +150,7 @@ def print_hooks_help(kind: str | None = None, *, file: TextIO | None = None) -> 
         print("Common:", file=target)
         print("  aippocampus hooks action refresh-cache --json", file=target)
         print("  aippocampus hooks action refresh-cache --write --json", file=target)
-        print("  aippocampus hooks action probe --json", file=target)
+        print("  aippocampus hooks action probe --compact-json", file=target)
         return
     if kind == "claude-code":
         print(

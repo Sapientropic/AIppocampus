@@ -340,18 +340,23 @@ class StorageGovernanceTests(unittest.TestCase):
         self.assertEqual(payload["pressure_interpretation"], "pressure_present")
         self.assertEqual(payload["foreground_action_contract"], "foreground-action-v2")
         self.assertNotIn(payload["foreground_action"], payload["safe_next_actions"])
+        self.assertEqual(payload["foreground_action"]["id"], "bounded_storage_audit")
+        self.assertEqual(
+            payload["foreground_action"]["command"],
+            "aippocampus storage gc --dry-run --json --top 1 --cwd .",
+        )
         action_ids = [action["id"] for action in payload["safe_next_actions"]]
-        self.assertEqual(action_ids[:2], ["bounded_storage_audit", "apply_rebuildable_after_audit"])
+        self.assertEqual(action_ids[:2], ["apply_rebuildable_after_audit", "stop_without_cleanup"])
         self.assertEqual(payload["foreground_action"]["mutation_risk"], "read_only")
         self.assertEqual(
-            payload["safe_next_actions"][1]["mutation_risk"],
+            payload["safe_next_actions"][0]["mutation_risk"],
             "explicit_local_delete_of_rebuildable_cache",
         )
-        self.assertTrue(payload["safe_next_actions"][1]["requires_prior_audit"])
-        self.assertIn("deterministic_checks", payload["safe_next_actions"][1])
-        self.assertIn("rollback_or_rebuild_boundary", payload["safe_next_actions"][1])
-        self.assertTrue(payload["foreground_action"]["continue_without_command"])
-        self.assertNotIn("command", payload["foreground_action"])
+        self.assertTrue(payload["safe_next_actions"][0]["requires_prior_audit"])
+        self.assertIn("deterministic_checks", payload["safe_next_actions"][0])
+        self.assertIn("rollback_or_rebuild_boundary", payload["safe_next_actions"][0])
+        self.assertTrue(payload["safe_next_actions"][1]["continue_without_command"])
+        self.assertNotIn("command", payload["safe_next_actions"][1])
         self.assertTrue(payload["safe_next_action"]["continue_without_command"])
         self.assertEqual(
             payload["safe_next_action"]["instruction"],
@@ -419,8 +424,15 @@ class StorageGovernanceTests(unittest.TestCase):
         self.assertEqual(payload["pressure_interpretation"], "pressure_present")
         self.assertGreater(payload["metrics"]["reclaimable_rebuildable_bytes"], 0)
         self.assertEqual(payload["foreground_action_contract"], "foreground-action-v2")
-        self.assertEqual(payload["foreground_action"]["id"], "stop_without_cleanup")
-        self.assertEqual(payload["safe_next_actions"][0]["id"], "bounded_storage_audit")
+        self.assertEqual(payload["foreground_action"]["id"], "bounded_storage_audit")
+        self.assertEqual(
+            payload["foreground_action"]["command"],
+            "aippocampus storage gc --dry-run --json --top 1 --cwd .",
+        )
+        self.assertIn(
+            "stop_without_cleanup",
+            [action["id"] for action in payload["safe_next_actions"]],
+        )
         self.assertNotIn(
             "apply_rebuildable_after_audit",
             [action["id"] for action in payload["safe_next_actions"]],

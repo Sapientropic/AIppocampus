@@ -24,6 +24,30 @@ def _safe_int(value: Any) -> int:
         return 0
 
 
+def _compact_warm_choice(action: Mapping[str, Any]) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "id": action.get("id"),
+        "label": action.get("label"),
+        "mutation_risk": action.get("mutation_risk"),
+        "claim_boundary": action.get("claim_boundary"),
+        "why": action.get("why"),
+    }
+    if action.get("command"):
+        payload["command"] = action.get("command")
+    if action.get("command_template"):
+        payload["command_template"] = action.get("command_template")
+        payload["template_only"] = True
+    if action.get("requires"):
+        payload["requires"] = action.get("requires")
+    if action.get("manual_only"):
+        payload["manual_only"] = True
+    if action.get("continue_without_command"):
+        payload["continue_without_command"] = True
+    if action.get("manual_instruction"):
+        payload["manual_instruction"] = action.get("manual_instruction")
+    return {key: value for key, value in payload.items() if value not in (None, "", [])}
+
+
 def compact_warm_status_card(payload: Mapping[str, Any]) -> dict[str, Any]:
     """Project warm status into the default foreground card.
 
@@ -47,12 +71,22 @@ def compact_warm_status_card(payload: Mapping[str, Any]) -> dict[str, Any]:
             "why": "Inspect optional warm ambient status.",
         }
     safe_next_actions: list[Mapping[str, Any]] = []
+    allowed_blocked_actions = {
+        "probe_warm_worker_once",
+        "snooze_optional_warm_ambient",
+        "retire_stale_warm_queue_after_review",
+    }
+    allowed_default_actions = {
+        "recheck_warm_status",
+        "continue_with_ordinary_recall",
+    }
     for action_value in payload.get("safe_next_actions") or []:
         action = _mapping(action_value)
         action_id = str(action.get("id") or "")
-        if action_id in {"recheck_warm_status", "plan_warm_repair", "continue_with_ordinary_recall"}:
-            safe_next_actions.append(dict(action))
-        if len(safe_next_actions) >= 2:
+        allowed_actions = allowed_blocked_actions if blocked_stale else allowed_default_actions
+        if action_id in allowed_actions:
+            safe_next_actions.append(_compact_warm_choice(action))
+        if len(safe_next_actions) >= (3 if blocked_stale else 2):
             break
     detail_action: Mapping[str, Any] = {
         "id": "open_warm_status_detail",
@@ -63,7 +97,11 @@ def compact_warm_status_card(payload: Mapping[str, Any]) -> dict[str, Any]:
     }
     action_fields = canonical_foreground_action_fields(
         foreground_action,
-        safe_next_actions=[foreground_action, *safe_next_actions, detail_action][:4],
+        safe_next_actions=(
+            [foreground_action, *safe_next_actions]
+            if blocked_stale
+            else [foreground_action, *safe_next_actions, detail_action][:4]
+        ),
     )
     warm_ambient_state = str(payload.get("warm_ambient_state") or "callable")
     warm_ambient_recently_useful = bool(payload.get("warm_ambient_recently_useful"))
@@ -98,7 +136,7 @@ def compact_warm_status_card(payload: Mapping[str, Any]) -> dict[str, Any]:
             "primary": foreground_action.get("label") or "Check warm status",
             "primary_command": primary_command,
             "reason": (
-                "Warm ambient has a blocked stale queue; inspect provider status before more optional warming."
+                "Warm ambient has a blocked stale queue; choose ordinary recall, snooze, retire, or probe the optional worker."
                 if blocked_stale
                 else "Warm ambient recently produced useful cache output; ordinary recall can still reopen sources."
                 if warm_ambient_recently_useful
