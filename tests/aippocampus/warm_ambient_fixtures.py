@@ -152,7 +152,7 @@ def assert_stale_queue_foreground_contract(case: Any, payload: dict[str, Any]) -
     case.assertNotIn("plan_warm_repair", action_ids)
     case.assertNotIn("aippocampus doctor provider --json", json.dumps(payload, ensure_ascii=False))
     case.assertIn("probe_warm_worker_once", action_ids)
-    case.assertIn("snooze_optional_warm_ambient", action_ids)
+    case.assertNotIn("snooze_optional_warm_ambient", action_ids)
     case.assertIn("retire_stale_warm_queue_after_review", action_ids)
     case.assertNotIn("continue_with_ordinary_recall", action_ids)
     probe_action = next(
@@ -163,15 +163,6 @@ def assert_stale_queue_foreground_contract(case: Any, payload: dict[str, Any]) -
         'aippocampus warm --prompt "{cue}" --no-write --wait-all --json',
     )
     case.assertEqual(probe_action["requires"], ["cue"])
-    snooze_action = next(
-        action for action in payload["safe_next_actions"] if action["id"] == "snooze_optional_warm_ambient"
-    )
-    case.assertNotIn("command", snooze_action)
-    case.assertEqual(snooze_action["command_template"], "aippocampus warm status --json")
-    case.assertEqual(snooze_action["env"], {"AIPPOCAMPUS_WARM_RECALL_BACKGROUND": "0"})
-    case.assertTrue(snooze_action["shell_agnostic_env"])
-    case.assertIn("host environment", snooze_action["env_instruction"])
-    case.assertTrue(snooze_action["template_only"])
     retire_action = next(
         action
         for action in payload["safe_next_actions"]
@@ -198,12 +189,13 @@ def assert_stale_queue_foreground_contract(case: Any, payload: dict[str, Any]) -
     case.assertTrue(card["ordinary_recall_usable"])
     case.assertTrue(card["warm_not_blocking_recall"])
     case.assertEqual(card["foreground_action"]["id"], "continue_with_ordinary_recall")
-    case.assertLessEqual(len(card["safe_next_actions"]), 3)
+    case.assertLessEqual(len(card["safe_next_actions"]), 1)
+    case.assertEqual(card["manage_command"], "aippocampus warm status --detail full --json")
     compact_encoded = json.dumps(card, ensure_ascii=False)
     case.assertNotIn("action_code", compact_encoded)
     case.assertIn("probe_warm_worker_once", compact_encoded)
-    case.assertIn("snooze_optional_warm_ambient", compact_encoded)
-    case.assertIn("retire_stale_warm_queue_after_review", compact_encoded)
+    case.assertNotIn("snooze_optional_warm_ambient", compact_encoded)
+    case.assertNotIn("retire_stale_warm_queue_after_review", compact_encoded)
     case.assertNotIn("AIPPOCAMPUS_WARM_RECALL_BACKGROUND", compact_encoded)
 
 def write_registry(root: Path, entries: list[dict[str, Any]]) -> Path:

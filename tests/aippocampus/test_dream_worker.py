@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+# aippocampus-instruction-surface: dream worker test contract; source-boundary strings are fixtures for hypothesis/privacy behavior.
 import json
 import unittest
 
@@ -463,7 +464,7 @@ class DreamWorkerTests(unittest.TestCase):
         self.assertIn("journey_bridge_missing_falsification_cues", failures)
         self.assertEqual(payload["dream_working_memory_rows"], [])
 
-    def test_sensitive_journey_bridge_explanation_requires_human_review(self) -> None:
+    def test_profile_like_journey_bridge_explanation_routes_privately(self) -> None:
         def fake_model_call(messages: list[dict[str, str]], call_config: ChatClientConfig) -> dict[str, object]:
             return {
                 "choices": [
@@ -515,13 +516,18 @@ class DreamWorkerTests(unittest.TestCase):
 
         finding = payload["findings"][0]
 
-        self.assertEqual(payload["status"], "candidate_parked")
-        self.assertTrue(finding["human_review_required"])
-        self.assertIn(
+        self.assertEqual(payload["status"], "candidate_emitted")
+        self.assertFalse(finding["human_review_required"])
+        self.assertNotIn(
             "sensitive_or_profile_journey_bridge_requires_human_review",
             finding["worker_validation"]["failed_checks"],
         )
-        self.assertEqual(payload["dream_working_memory_rows"], [])
+        self.assertEqual(finding["privacy_posture"]["privacy_action"], "private_route")
+        self.assertEqual(len(payload["dream_working_memory_rows"]), 1)
+        self.assertEqual(
+            payload["dream_working_memory_rows"][0]["sensitive_use_gate"]["state"],
+            "private_route",
+        )
 
     def test_prospective_model_worker_emits_hypothesis_not_prediction(self) -> None:
         def fake_model_call(messages: list[dict[str, str]], call_config: ChatClientConfig) -> dict[str, object]:
@@ -650,7 +656,7 @@ class DreamWorkerTests(unittest.TestCase):
         self.assertEqual(row["foreground_use"]["draft_artifact_action"], "optional_probe")
         self.assertEqual(row["truth_boundary"], "adjudicated_dream_hypothesis_not_fact")
 
-    def test_constructive_draft_parks_unsupported_factual_or_sensitive_artifact(self) -> None:
+    def test_constructive_draft_parks_unsupported_artifact_without_profile_hard_block(self) -> None:
         def fake_model_call(messages: list[dict[str, str]], call_config: ChatClientConfig) -> dict[str, object]:
             return {
                 "choices": [
@@ -705,7 +711,7 @@ class DreamWorkerTests(unittest.TestCase):
         failures = payload["findings"][0]["worker_validation"]["failed_checks"]
         self.assertIn("constructive_artifact_missing_source_refs", failures)
         self.assertIn("constructive_artifact_missing_counter_evidence", failures)
-        self.assertIn("sensitive_or_profile_artifact_requires_human_review", failures)
+        self.assertNotIn("sensitive_or_profile_artifact_requires_human_review", failures)
         self.assertEqual(payload["dream_working_memory_rows"], [])
 
     def test_prospective_worker_emits_bounded_invitation_with_trigger_and_expiry(self) -> None:
@@ -1065,7 +1071,7 @@ class DreamWorkerTests(unittest.TestCase):
         self.assertEqual(row["foreground_use"]["single_thread_probe_action"], "optional_probe")
         self.assertTrue(row["source_authority"]["requires_source_reopen_before_claim"])
 
-    def test_active_imagination_parks_unsourced_single_source_claimless_and_sensitive_outputs(self) -> None:
+    def test_active_imagination_parks_structural_failures_but_routes_profile_like_output(self) -> None:
         def fake_model_call(messages: list[dict[str, str]], call_config: ChatClientConfig) -> dict[str, object]:
             return {
                 "choices": [
@@ -1108,11 +1114,12 @@ class DreamWorkerTests(unittest.TestCase):
                                             "summary": "The user's personality means they secretly prefer this path.",
                                             "why_this_is_not_fact": "Sensitive interpretations need explicit review.",
                                             "counter_evidence": ["no explicit user-facing confirmation"],
+                                            "activation_cues": ["personality route interpretation"],
                                             "confidence": 0.58,
                                             "source_ref_ids": ["sr0", "sr1"],
                                             "bridge_claims": [
                                                 {
-                                                    "claim": "Even source-backed sensitive claims must stay parked.",
+                                                    "claim": "Source-backed profile-like claims stay private and tentative.",
                                                     "source_ref_ids": ["sr0", "sr1"],
                                                 }
                                             ],
@@ -1134,8 +1141,9 @@ class DreamWorkerTests(unittest.TestCase):
             max_samples=4,
         )
 
-        self.assertEqual(payload["status"], "candidate_parked")
-        self.assertEqual(payload["counts"]["parked"], 4)
+        self.assertEqual(payload["status"], "candidate_emitted")
+        self.assertEqual(payload["counts"]["accepted"], 1)
+        self.assertEqual(payload["counts"]["parked"], 3)
         failed = {
             failure
             for finding in payload["adjudicated_findings"]
@@ -1149,7 +1157,14 @@ class DreamWorkerTests(unittest.TestCase):
         }
         self.assertIn("insufficient_independent_source_anchors", worker_failures)
         self.assertIn("bridge_claims_missing_source_refs", worker_failures)
-        self.assertIn("sensitive_or_profile_claim_requires_human_review", worker_failures)
+        self.assertNotIn("sensitive_or_profile_claim_requires_human_review", worker_failures)
+        accepted = [
+            finding
+            for finding in payload["adjudicated_findings"]
+            if finding["adjudication_result"]["status"] == "accepted"
+        ]
+        self.assertEqual(accepted[0]["privacy_posture"]["privacy_action"], "private_route")
+        self.assertFalse(accepted[0]["human_review_required"])
 
     def test_malformed_unsourced_and_overconfident_model_outputs_are_parked_or_rejected(self) -> None:
         def fake_model_call(messages: list[dict[str, str]], call_config: ChatClientConfig) -> dict[str, object]:

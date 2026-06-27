@@ -61,30 +61,13 @@ def import_recovery_payload() -> dict[str, Any]:
         "status": "choose_action",
         "surface_class": "foreground_chooser_card",
         "decision": "preview conversation import first, or explicitly choose a write path",
-        "choices": {
-            "bundle_import": {
-                "label": "private AIppocampus bundle import",
-                "command_template": 'aippocampus import "{bundle_zip}" --dest "{destination_folder}"',
-                "template_only": True,
-                "requires": ["bundle_zip", "destination_folder"],
-                "boundary": "imports an explicit local AIppocampus bundle; paths stay redacted by default",
-            },
-            "conversation_import": {
-                "label": "generic conversation transcript import",
-                "preview_command_template": (
-                    'aippocampus import conversation --format generic-jsonl --input "{input_path}" --dry-run --json'
-                ),
-                "write_command_template": (
-                    'aippocampus import conversation --format generic-jsonl --input "{input_path}"'
-                ),
-                "requires": ["input_path"],
-                "boundary": "preview first; the input transcript stays local operator material",
-            },
-        },
+        "choices": [*safe_actions, *write_actions],
         "write_actions": write_actions,
         **canonical_foreground_action_fields(
             safe_actions[0],
             safe_next_actions=safe_actions,
+            max_safe_next_actions=1,
+            safe_next_read_only_only=True,
         ),
         "safety": {
             "no_write_happened": True,
@@ -141,34 +124,47 @@ def plugin_chooser_payload() -> dict[str, Any]:
 
 
 def hooks_chooser_payload() -> dict[str, Any]:
-    return foreground_chooser_card(
-        kind="aippocampus_hooks_chooser",
-        decision="choose a hook family before checking, installing, or rolling back",
-        choices=[
-            foreground_shell_action(
-                action_id="check_prompt_hook",
-                label="Check prompt hook",
-                command="aippocampus hooks prompt status --last --json",
-                why="Prompt hooks are the Codex UserPromptSubmit recall affordance, not the whole hook family.",
-                mutation_risk="read_only",
-                claim_boundary="host_setup_not_memory_evidence",
-            ),
-            foreground_shell_action(
-                action_id="check_lifecycle_hooks",
-                label="Check lifecycle hooks",
-                command="aippocampus hooks lifecycle status --json",
-                why="Lifecycle hooks cover bounded start/stop/compact maintenance.",
-                mutation_risk="read_only",
-                claim_boundary="host_setup_not_memory_evidence",
-            ),
+    primary = foreground_shell_action(
+        action_id="check_prompt_hook_readiness",
+        label="Check prompt hook readiness",
+        command="aippocampus hooks prompt status --last --json",
+        why=(
+            "Prompt hook status is the smallest useful readiness probe for whether "
+            "foreground recall can run from UserPromptSubmit."
+        ),
+        mutation_risk="read_only",
+        claim_boundary="host_setup_not_memory_evidence",
+    )
+    lifecycle = foreground_shell_action(
+        action_id="check_lifecycle_hook_readiness",
+        label="Check lifecycle hook readiness",
+        command="aippocampus hooks lifecycle status --json",
+        why="Use after prompt readiness when start/stop/compact maintenance is the question.",
+        mutation_risk="read_only",
+        claim_boundary="host_setup_not_memory_evidence",
+    )
+    return {
+        "kind": "aippocampus_hooks_readiness",
+        "ok": True,
+        "status": "aggregate_probe_available",
+        "surface_class": "foreground_chooser_card",
+        "decision": "check aggregate hook readiness before choosing a hook family",
+        "hook_readiness_contract": "hooks-readiness-v1",
+        "aggregate_state": "callable_probe_available",
+        "ambient_state": "callable",
+        "families": ["prompt", "lifecycle", "action", "claude_code"],
+        **canonical_foreground_action_fields(
+            primary,
+            safe_next_actions=[primary, lifecycle],
+            max_safe_next_actions=1,
+            safe_next_read_only_only=True,
+        ),
+        "detail_actions": [
             foreground_shell_action(
                 action_id="check_action_hints",
                 label="Check action-time hints",
                 command="aippocampus hooks action status --json",
-                why=(
-                    "Action-time hints are recommended trusted-Codex setup, "
-                    "but remain fail-open navigation guidance."
-                ),
+                why="Action hints are host-specific guidance; inspect after aggregate readiness.",
                 mutation_risk="read_only",
                 claim_boundary="host_setup_not_memory_evidence",
             ),
@@ -176,12 +172,63 @@ def hooks_chooser_payload() -> dict[str, Any]:
                 action_id="check_claude_code_hooks",
                 label="Check Claude Code hook helper",
                 command="aippocampus hooks claude-code status --json",
-                why="Claude Code has a host-specific status/dry-run helper rather than Codex hook installation.",
+                why="Claude Code has a host-specific dry-run/status helper.",
                 mutation_risk="read_only",
                 claim_boundary="host_setup_not_memory_evidence",
             ),
         ],
+        "write_boundary": {
+            "written": False,
+            "no_write_happened": True,
+            "explicit_write_required": True,
+        },
+    }
+
+
+def plugin_status_payload() -> dict[str, Any]:
+    primary = foreground_shell_action(
+        action_id="check_mcp_tool_callability",
+        label="Check MCP tool callability",
+        command="aippocampus mcp status --json",
+        why=(
+            "This is the shortest read-only probe for whether the installed "
+            "AIppocampus plugin can expose callable MCP tools."
+        ),
+        mutation_risk="read_only",
+        claim_boundary="host_status_not_memory_evidence",
     )
+    return {
+        "kind": "aippocampus_plugin_status_card",
+        "ok": True,
+        "status": "callability_probe_available",
+        "surface_class": "foreground_readiness_card",
+        "decision": "check MCP callability; install or refresh only after a failed probe",
+        "plugin_status_contract": "plugin-callability-v1",
+        "status_scope": "local_cli_and_mcp_probe",
+        "plugin_installed": "unknown_without_host_probe",
+        "skill_available": True,
+        "mcp_tools_visible": "check_with_foreground_action",
+        "mcp_tools_callable": "check_with_foreground_action",
+        "callability": {
+            "installed": "unknown_without_host_probe",
+            "cli_callable": True,
+            "mcp_tools_visible": "check_with_foreground_action",
+            "mcp_tools_callable": "check_with_foreground_action",
+        },
+        **canonical_foreground_action_fields(
+            primary,
+            safe_next_actions=[],
+            max_safe_next_actions=1,
+            safe_next_read_only_only=True,
+        ),
+        "manage_command": "aippocampus plugin install --codex --verify --json",
+        "operator_detail_command": "aippocampus plugin status --operator-json",
+        "write_boundary": {
+            "written": False,
+            "no_write_happened": True,
+            "explicit_write_required": True,
+        },
+    }
 
 
 def sync_chooser_payload() -> dict[str, Any]:

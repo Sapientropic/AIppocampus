@@ -18,6 +18,9 @@ from typing import Any
 
 from aippocampus_runtime.core import now_utc
 
+QUARANTINE_CLEANUP_LIMIT = 16
+QUARANTINE_CLEANUP_MIN_AGE_SECONDS = 1.0
+
 
 class OwnerCheckedLeaseBusyError(RuntimeError):
     """Raised when a local lease stays active past the caller's wait budget."""
@@ -59,6 +62,7 @@ class OwnerCheckedFileLease:
         self.stale_age_seconds: float | None = None
         self.acquire_diagnostic: dict[str, Any] = {}
         self.release_diagnostic: dict[str, Any] = {}
+        self.quarantine_cleanup_count = 0
 
     def _open_new_generation(self) -> int:
         return os.open(str(self.path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
@@ -86,10 +90,61 @@ class OwnerCheckedFileLease:
             "age_seconds": max(0.0, time.time() - stat.st_mtime),
         }
 
-    def _quarantine_stale_snapshot(self, snapshot: dict[str, Any]) -> None:
-        quarantine = self.path.with_name(
-            f".{self.path.name}.{self.owner_token}.stale"
+    def _quarantine_path(self) -> Path:
+        return self.path.with_name(f".{self.path.name}.{self.owner_token}.stale")
+
+    def _is_this_lock_quarantine_path(self, candidate: Path) -> bool:
+        name = candidate.name
+        quarantine_prefixes = {
+            f".{self.path.name}.",
+            f"{self.path.name}.",
+        }
+        return (
+            candidate.parent == self.path.parent
+            and any(name.startswith(prefix) for prefix in quarantine_prefixes)
+            and name.endswith(".stale")
+            and name != self.path.name
         )
+
+    def _cleanup_abandoned_quarantine_files(self) -> None:
+        removed = 0
+        now = time.time()
+        try:
+            candidates = sorted(self.path.parent.iterdir(), key=lambda item: item.name)
+        except OSError:
+            return
+        for candidate in candidates:
+            if removed >= QUARANTINE_CLEANUP_LIMIT:
+                break
+            if not self._is_this_lock_quarantine_path(candidate):
+                continue
+            try:
+                stat = candidate.stat()
+            except OSError:
+                continue
+            if not candidate.is_file():
+                continue
+            # Stale recovery first renames the active lock into a quarantine
+            # file, verifies the owner snapshot, then unlinks it. Deleting very
+            # fresh quarantine files here would race that verification path, so
+            # acquire only cleans abandoned files from earlier crashed writers.
+            if max(0.0, now - stat.st_mtime) < QUARANTINE_CLEANUP_MIN_AGE_SECONDS:
+                continue
+            try:
+                candidate.unlink()
+            except FileNotFoundError:
+                continue
+            except OSError:
+                continue
+            removed += 1
+        if removed:
+            self.quarantine_cleanup_count += removed
+            self.acquire_diagnostic["quarantine_files_removed"] = (
+                self.acquire_diagnostic.get("quarantine_files_removed", 0) + removed
+            )
+
+    def _quarantine_stale_snapshot(self, snapshot: dict[str, Any]) -> None:
+        quarantine = self._quarantine_path()
         try:
             self.path.replace(quarantine)
         except FileNotFoundError:
@@ -142,11 +197,14 @@ class OwnerCheckedFileLease:
         if self.recovered_stale_lock:
             payload["stale_age_seconds"] = int(self.stale_age_seconds or 0)
             payload["stale_threshold_seconds"] = int(self.stale_after_seconds)
+        if self.quarantine_cleanup_count:
+            payload["quarantine_files_removed"] = self.quarantine_cleanup_count
         payload.update(self.payload_extra)
         return payload
 
     def __enter__(self) -> "OwnerCheckedFileLease":
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        self._cleanup_abandoned_quarantine_files()
         deadline = time.monotonic() + max(0.0, self.wait_timeout_seconds)
         while True:
             try:
@@ -171,13 +229,15 @@ class OwnerCheckedFileLease:
                 if age > self.stale_after_seconds:
                     self.recovered_stale_lock = True
                     self.stale_age_seconds = age
-                    self.acquire_diagnostic = {
-                        "recovered_stale_lock": True,
-                        "stale_age_seconds": round(age, 3),
-                        "stale_threshold_seconds": self.stale_after_seconds,
-                        "stale_owner_token": snapshot["payload"].get("owner_token"),
-                        "stale_pid": snapshot["payload"].get("pid"),
-                    }
+                    self.acquire_diagnostic.update(
+                        {
+                            "recovered_stale_lock": True,
+                            "stale_age_seconds": round(age, 3),
+                            "stale_threshold_seconds": self.stale_after_seconds,
+                            "stale_owner_token": snapshot["payload"].get("owner_token"),
+                            "stale_pid": snapshot["payload"].get("pid"),
+                        }
+                    )
                     self._quarantine_stale_snapshot(snapshot)
                     continue
                 if time.monotonic() < deadline:

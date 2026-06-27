@@ -24,9 +24,9 @@ from aippocampus_runtime.mcp import agent_recall_repo_projection as repo_project
 from aippocampus_runtime.mcp import agent_recall_result_assembly as result_assembly
 from aippocampus_runtime.mcp import agent_recall_route_projection as route_projection
 from aippocampus_runtime.mcp import agent_recall_semantic_recovery as semantic_recovery_projection
+from aippocampus_runtime.mcp import current_source_route_policy
 from aippocampus_runtime.mcp.contracts import MCPCompactResponseContract
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
-from aippocampus_runtime.recall import associative_path_foreground_gate as apw_gate
 from aippocampus_runtime.recall.query_profile import classify_query_profile
 
 
@@ -307,6 +307,8 @@ def _projection_context(payload: Mapping[str, Any]) -> RecallProjectionContext:
             memory_packets,
         )
     )
+    if current_source_route_policy.primary_current_source_reopenable(memory_packets):
+        labels_low_specificity = False
     cache_available = bool(payload.get("last_recall_cache_available"))
     recall_selector = str(payload.get("recall_selector_id") or "").strip() if cache_available else ""
     current_source_anchor_probe = payload.get("current_source_anchor_probe")
@@ -327,7 +329,6 @@ def _projection_context(payload: Mapping[str, Any]) -> RecallProjectionContext:
         current_source_anchor_matched=int(current_source_anchor_probe.get("match_count") or 0) > 0,
         current_source_anchor_query=str(current_source_anchor_probe.get("anchor_query") or "").strip(),
     )
-
 
 def _select_initial_foreground_action(
     payload: Mapping[str, Any],
@@ -517,12 +518,14 @@ def _apply_associative_path_recovery(
         ordinary_recovery_action = core.strip_empty(
             normalize_foreground_action(foreground_action)
         )
-        ordinary_action_id = str(
-            ordinary_recovery_action.get("id") or ordinary_recovery_action.get("action_id") or ""
+        ordinary_action_id = str(ordinary_recovery_action.get("id") or ordinary_recovery_action.get("action_id") or "")
+        apw_primary = current_source_route_policy.apw_allows_primary_for_current_foreground(
+            should_replace=recovery_projection.apw_should_replace_foreground_action(foreground_action),
+            associative_path_policy=associative_path_policy,
+            raw_associative_path_fallback=raw_associative_path_fallback,
+            foreground_action=ordinary_recovery_action,
+            recall_payload=payload,
         )
-        apw_primary = recovery_projection.apw_should_replace_foreground_action(
-            foreground_action
-        ) and apw_gate.card_allows_primary_source_action(raw_associative_path_fallback)
         if apw_primary:
             if ordinary_recovery_action:
                 safe_next_actions = [ordinary_recovery_action, *safe_next_actions]
@@ -533,10 +536,8 @@ def _apply_associative_path_recovery(
                 if ordinary_action_id:
                     associative_path_fallback["ordinary_recovery_action_id"] = ordinary_action_id
             else:
-                # APW is a foreground recovery surface, not a parallel route
-                # chooser. When ordinary recall already has a safe primary
-                # deepen action, keep the APW trail in detail/diagnostics so
-                # compact recall stays small and does not imply ranking influence.
+                # APW is a foreground recovery surface, not a parallel route chooser.
+                # Keep it in detail when ordinary recall has a safe primary.
                 associative_path_fallback = None
                 associative_path_policy = None
     else:
@@ -642,7 +643,7 @@ def _apply_fallback_promotions(
         ) = discussion_projection.maybe_promote_discussion_atlas_action(
             payload=payload,
             foreground_action=foreground_action,
-            safe_next_actions=safe_next_actions,
+            followup_actions=safe_next_actions,
             status=context.status,
             labels_low_specificity=context.labels_low_specificity,
             recovery_cue=context.recovery_cue,

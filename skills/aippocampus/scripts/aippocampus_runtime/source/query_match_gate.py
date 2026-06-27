@@ -31,6 +31,9 @@ _LOW_SIGNAL_TERMS = {
     "that",
     "the",
     "thread",
+    "里的",
+    "继续",
+    "记忆",
 }
 
 

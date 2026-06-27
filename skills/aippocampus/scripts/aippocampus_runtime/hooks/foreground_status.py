@@ -13,6 +13,7 @@ from typing import Any
 from aippocampus_runtime.contracts import (
     FOREGROUND_ACTION_CONTRACT_VERSION,
     canonical_foreground_action_fields,
+    foreground_action_is_read_only,
     foreground_shell_action,
     foreground_template_action,
 )
@@ -116,10 +117,18 @@ def _hook_card(
     }
 
 
-def contract_fields(card: Mapping[str, Any]) -> dict[str, Any]:
+def contract_fields(
+    card: Mapping[str, Any],
+    *,
+    safe_next_read_only_only: bool = True,
+) -> dict[str, Any]:
     primary = dict(card.get("primary") or {})
     safe_actions = [dict(action) for action in card.get("safe_next_actions") or []]
-    action_fields = canonical_foreground_action_fields(primary, safe_next_actions=safe_actions)
+    action_fields = canonical_foreground_action_fields(
+        primary,
+        safe_next_actions=safe_actions,
+        safe_next_read_only_only=safe_next_read_only_only,
+    )
     card_fields = {
         key: value
         for key, value in dict(card).items()
@@ -190,7 +199,7 @@ def hook_install_closeout_contract(
         },
     )
     card["kind"] = "aippocampus_hook_install_closeout_foreground_action"
-    fields = contract_fields(card)
+    fields = contract_fields(card, safe_next_read_only_only=False)
     fields["privacy_boundary"] = dict(card["privacy_boundary"])
     return fields
 
@@ -321,12 +330,6 @@ def prompt_status_contract(
                 command="aippocampus hooks prompt status --last --json",
             ),
             *([latency_repair_action] if latency_repair_action else []),
-            _write_action(
-                action_id="rollback_prompt_hook",
-                label="Rollback prompt hook",
-                command="aippocampus hooks prompt uninstall --json",
-                why="Explicit rollback removes AIppocampus prompt hook wiring.",
-            ),
         ],
         extra={
             "command_count": int(command_count),
@@ -355,6 +358,7 @@ def prompt_status_contract(
             if isinstance(last_summary, Mapping)
             else "",
             "last_prompt_hook_useful_signal_count": useful_last_count,
+            "manage_command": "aippocampus hooks prompt uninstall --json",
         },
     )
     return contract_fields(card)
@@ -411,18 +415,13 @@ def lifecycle_status_contract(
                 label="Check lifecycle hook status",
                 command="aippocampus hooks lifecycle status --json",
             ),
-            _write_action(
-                action_id="rollback_lifecycle_hooks",
-                label="Rollback lifecycle hooks",
-                command="aippocampus hooks lifecycle uninstall --json",
-                why="Explicit rollback removes AIppocampus lifecycle hook wiring.",
-            ),
         ],
         extra={
             "installed_events": list(installed_events),
             "missing_events": list(missing_events),
             "provider_key_bridge_installed": bool(provider_key_bridge_installed),
             "windows_hidden_launch_status": windows_hidden_launch_status,
+            "manage_command": "aippocampus hooks lifecycle uninstall --json",
         },
     )
     return contract_fields(card)
@@ -517,19 +516,31 @@ def action_hint_status_contract(frontstage_card: Mapping[str, Any]) -> dict[str,
         (action for action in mapped_steps if action.get("id") == "review_action_hint_guidance"),
         None,
     )
-    if isinstance(install_action, dict) and isinstance(refresh_action, dict):
+    if (
+        isinstance(install_action, dict)
+        and isinstance(refresh_action, dict)
+        and foreground_action_is_read_only(refresh_action)
+    ):
         install_action["follow_up_action"] = {
             key: refresh_action[key]
             for key in ("id", "label", "command", "mutation_risk", "claim_boundary")
             if key in refresh_action
         }
-    if isinstance(review_action, dict) and isinstance(install_action, dict):
+    if (
+        isinstance(review_action, dict)
+        and isinstance(install_action, dict)
+        and foreground_action_is_read_only(install_action)
+    ):
         review_action["follow_up_action"] = {
             key: install_action[key]
             for key in ("id", "label", "command", "mutation_risk", "claim_boundary")
             if key in install_action
         }
-    elif isinstance(review_action, dict) and isinstance(refresh_action, dict):
+    elif (
+        isinstance(review_action, dict)
+        and isinstance(refresh_action, dict)
+        and foreground_action_is_read_only(refresh_action)
+    ):
         review_action["follow_up_action"] = {
             key: refresh_action[key]
             for key in ("id", "label", "command", "mutation_risk", "claim_boundary")
@@ -596,13 +607,14 @@ def action_hint_status_contract(frontstage_card: Mapping[str, Any]) -> dict[str,
                 command="aippocampus hooks action status --json",
             ),
         )
+    compact_steps = [action for action in mapped_steps if foreground_action_is_read_only(action)]
     card = _hook_card(
         surface="action_hint_hook_status",
         title="Action-time hints",
         status=status,
         installed=installed,
         primary=primary,
-        safe_actions=[primary, *mapped_steps],
+        safe_actions=[primary, *compact_steps],
         extra={
             "stage": str(frontstage_card.get("stage") or status),
             "stage_values": ["installed", "callable", "active", "useful"],
@@ -610,6 +622,11 @@ def action_hint_status_contract(frontstage_card: Mapping[str, Any]) -> dict[str,
             "cache_status": str(frontstage_card.get("cache_status") or status),
             "cache_path_label": str(frontstage_card.get("cache_path_label") or ""),
             "cache_scope": str(frontstage_card.get("cache_scope") or ""),
+            "manage_command": (
+                "aippocampus hooks action uninstall --json"
+                if installed
+                else "aippocampus hooks action install --json"
+            ),
         },
     )
     card["claim_boundary"] = claim_boundary

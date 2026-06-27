@@ -59,6 +59,8 @@ def collect_evidence(
                 "search_noise": hit.get("search_noise"),
                 "noise_reason": hit.get("noise_reason"),
                 "snippet": hit.get("snippet"),
+                "public_authority_tier": "source_evidence",
+                "delivery_source_posture": "bounded_source_evidence",
             }
             pool.append((_evidence_hit_quality(item), candidate_index, hit_index, item))
 

@@ -13,6 +13,10 @@ from pathlib import Path
 
 try:
     from tools.aippocampus.docs import guard_pressure
+    from tools.aippocampus.docs.changed_file_args import (
+        add_changed_file_arguments,
+        collect_changed_file_arguments,
+    )
     from tools.aippocampus.docs.debt_report_projection import (
         compact_changed_surface_report,
         compact_debt_report,
@@ -43,6 +47,7 @@ try:
     )
 except ModuleNotFoundError:
     import guard_pressure
+    from changed_file_args import add_changed_file_arguments, collect_changed_file_arguments
     from debt_report_projection import (
         compact_changed_surface_report,
         compact_debt_report,
@@ -1154,16 +1159,7 @@ def main() -> int:
         action="store_true",
         help="With --refresh-register-counts, write the refreshed counts to disk.",
     )
-    parser.add_argument(
-        "--changed-file",
-        action="append",
-        default=[],
-        help=(
-            "Mark a repo-relative file as part of the changed surface. Repeat to "
-            "make helper, broad-exception, compact-field, and giant-function debt "
-            "acceptance-bearing for touched files only."
-        ),
-    )
+    add_changed_file_arguments(parser)
     parser.add_argument(
         "--detail",
         choices=("compact", "full"),
@@ -1195,8 +1191,10 @@ def main() -> int:
 
     report_detail = "full" if args.detail == "full" else "summary"
 
+    changed_files = collect_changed_file_arguments(args)
+
     if args.changed_surface_only:
-        changed_surface = changed_surface_debt(list(args.changed_file or []))
+        changed_surface = changed_surface_debt(changed_files)
         result = {
             "ok": changed_surface["status"] == "pass",
             "kind": "aippocampus_changed_surface_debt_gate",
@@ -1208,7 +1206,7 @@ def main() -> int:
                 if args.detail == "full"
                 else compact_changed_surface_report(
                     result,
-                    changed_files=list(args.changed_file or []),
+                    changed_files=changed_files,
                 )
             )
             print(json.dumps(payload, ensure_ascii=False, indent=2))
@@ -1235,12 +1233,12 @@ def main() -> int:
             )
         return 0 if report["ok"] else 1
 
-    report = build_report(changed_files=list(args.changed_file or []), detail=report_detail)
+    report = build_report(changed_files=changed_files, detail=report_detail)
     if args.json_output:
         payload = (
             report
             if args.detail == "full"
-            else compact_debt_report(report, changed_files=list(args.changed_file or []))
+            else compact_debt_report(report, changed_files=changed_files)
         )
         print(json.dumps(payload, ensure_ascii=False, indent=2))
     else:

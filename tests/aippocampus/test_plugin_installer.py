@@ -507,10 +507,18 @@ class PluginInstallerTests(unittest.TestCase):
             self.assertEqual(summary["tool_count"], 8)
             self.assertGreaterEqual(summary["nonfatal_host_warning_count"], 1)
             self.assertFalse(summary["aippocampus_action_required"])
-            self.assertIn("review trusted Codex action hints", summary["next_action"])
+            self.assertIn("fresh MCP launch", summary["next_action"])
+            self.assertTrue(
+                summary["current_thread_mcp_boundary"]["already_open_thread_may_need_reload"]
+            )
+            self.assertIn("already-open", summary["claim_boundary"])
             trusted_commands = {
                 action["command"] for action in summary["trusted_codex_next_actions"]
             }
+            self.assertIn(
+                "aippocampus update status --foreground-tools-visible --agent-json",
+                trusted_commands,
+            )
             self.assertIn("aippocampus hooks action status --json", trusted_commands)
             self.assertIn("aippocampus hooks action install --json", trusted_commands)
             self.assertIn("agent_recall", summary["host_probe"]["key_tools_present"])

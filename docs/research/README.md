@@ -1,5 +1,9 @@
 # Research Notes
 
+Audience: researcher / product strategist / maintainer looking for idea context.
+Read this when: exploring intuition layers, future product bets, or why a concept exists before it becomes runtime contract.
+Skip to: `docs/roadmap.md` for committed direction; `docs/evidence/current-claims.md` for proven claims; `docs/archive/research/` for historical reports.
+
 Role: speculative and product-facing research index.
 Status: research map, not runtime contract.
 Folder pressure owner: docs/research/README.md.

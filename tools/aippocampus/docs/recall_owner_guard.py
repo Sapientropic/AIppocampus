@@ -1,7 +1,14 @@
-"""Docs-health guard for recall runtime owner classification."""
+"""Docs-health guard for recall runtime owner classification.
+
+The owner map is an inventory for existing flat recall modules, not permission
+to add another top-level file. The guard therefore treats the legacy flat-file
+inventory as sealed: new runtime code should live under an owner subpackage, and
+the rare flat exception must carry owner/removal/default-import metadata.
+"""
 
 from __future__ import annotations
 
+import hashlib
 import re
 from pathlib import Path
 
@@ -30,6 +37,12 @@ REQUIRED_FEEDBACK_PACKAGE_TERMS = {
     "No flat compatibility wrappers",
 }
 FLAT_PY_RE = re.compile(r"`(?P<name>[A-Za-z_][A-Za-z0-9_]*\.py)`")
+LEGACY_COUNT_RE = re.compile(r"^\s*-\s*sealed_count:\s*(?P<count>\d+)\s*$", re.M)
+LEGACY_SHA_RE = re.compile(r"^\s*-\s*sealed_sha256:\s*(?P<sha>[0-9a-f]{64})\s*$", re.M)
+CURRENT_FLAT_HEADING_RE = re.compile(r"^Current flat files:\s*$")
+MARKDOWN_HEADING_RE = re.compile(r"^#{2,6}\s+")
+EXCEPTION_ROW_RE = re.compile(r"^\|\s*`(?P<file>[A-Za-z_][A-Za-z0-9_]*\.py)`\s*\|(?P<rest>.*)\|\s*$")
+EXCEPTION_KINDS = {"entrypoint", "temporary_compatibility_wrapper"}
 
 
 def _flat_recall_modules(repo_root: Path) -> set[str]:
@@ -47,6 +60,89 @@ def _documented_flat_modules(text: str) -> set[str]:
     return {match.group("name") for match in FLAT_PY_RE.finditer(text)}
 
 
+def _legacy_flat_modules(text: str) -> set[str]:
+    """Return names from the sealed legacy `Current flat files` inventory.
+
+    Only these sections are part of the historical flat-module baseline. Names
+    in the explicit exception table are intentionally excluded so a rare wrapper
+    can be reviewed without mutating the sealed legacy hash.
+    """
+
+    modules: set[str] = set()
+    in_current_flat_files = False
+    for line in text.splitlines():
+        if CURRENT_FLAT_HEADING_RE.match(line):
+            in_current_flat_files = True
+            continue
+        if in_current_flat_files and MARKDOWN_HEADING_RE.match(line):
+            in_current_flat_files = False
+        if not in_current_flat_files:
+            continue
+        match = FLAT_PY_RE.search(line)
+        if match:
+            modules.add(match.group("name"))
+    return modules
+
+
+def _flat_inventory_hash(modules: set[str]) -> str:
+    payload = "\n".join(sorted(modules)).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def _sealed_inventory(text: str) -> tuple[int | None, str | None]:
+    count_match = LEGACY_COUNT_RE.search(text)
+    sha_match = LEGACY_SHA_RE.search(text)
+    count = int(count_match.group("count")) if count_match else None
+    sha = sha_match.group("sha") if sha_match else None
+    return count, sha
+
+
+def _flat_exceptions(text: str) -> tuple[set[str], list[str]]:
+    """Parse the explicit exception table for new flat recall files."""
+
+    exceptions: set[str] = set()
+    issues: list[str] = []
+    for line in text.splitlines():
+        match = EXCEPTION_ROW_RE.match(line)
+        if not match:
+            continue
+        name = match.group("file")
+        if name.lower() == "file.py":
+            continue
+        cells = [cell.strip() for cell in match.group("rest").split("|")]
+        if len(cells) < 4:
+            issues.append(
+                f"flat recall exception missing owner/removal/default-import metadata: {name}"
+            )
+            continue
+        kind, owner, removal, default_import = cells[:4]
+        if set(kind) <= {"-", ":"}:
+            continue
+        missing_fields = [
+            label
+            for label, value in (
+                ("kind", kind),
+                ("owner", owner),
+                ("removal condition", removal),
+                ("default import guidance", default_import),
+            )
+            if not value or value in {"-", "n/a", "N/A"}
+        ]
+        if kind not in EXCEPTION_KINDS:
+            issues.append(
+                f"flat recall exception has unsupported kind for {name}: {kind}"
+            )
+            continue
+        if missing_fields:
+            issues.append(
+                "flat recall exception missing "
+                f"{', '.join(missing_fields)} metadata: {name}"
+            )
+            continue
+        exceptions.add(name)
+    return exceptions, issues
+
+
 def recall_owner_map_issues(repo_root: Path) -> list[str]:
     issues: list[str] = []
     owner_map = repo_root / OWNER_MAP
@@ -61,9 +157,28 @@ def recall_owner_map_issues(repo_root: Path) -> list[str]:
         if term not in text:
             issues.append(f"recall owner map missing feedback boundary term: {term}")
 
+    legacy_modules = _legacy_flat_modules(text)
+    sealed_count, sealed_sha = _sealed_inventory(text)
+    if sealed_count is None or sealed_sha is None:
+        issues.append(
+            "recall owner map missing sealed legacy flat inventory count/hash"
+        )
+    else:
+        actual_count = len(legacy_modules)
+        actual_sha = _flat_inventory_hash(legacy_modules)
+        if actual_count != sealed_count or actual_sha != sealed_sha:
+            issues.append(
+                "recall owner map legacy flat inventory changed; "
+                "new recall files must use owner subpackages or explicit flat exception metadata"
+            )
+
+    flat_exceptions, exception_issues = _flat_exceptions(text)
+    issues.extend(exception_issues)
+
     flat_modules = _flat_recall_modules(repo_root)
     documented = _documented_flat_modules(text)
-    missing = sorted(flat_modules - documented)
+    allowed_flat_modules = legacy_modules | flat_exceptions
+    missing = sorted(flat_modules - allowed_flat_modules)
     stale = sorted(
         name
         for name in documented - flat_modules
@@ -71,7 +186,12 @@ def recall_owner_map_issues(repo_root: Path) -> list[str]:
     )
     for name in missing:
         issues.append(
-            f"flat recall module missing owner classification in {OWNER_MAP}: {name}"
+            "new flat recall module rejected by default; use an owner subpackage "
+            f"or add explicit entrypoint/wrapper metadata in {OWNER_MAP}: {name}"
+        )
+    for name in sorted(flat_exceptions - flat_modules):
+        issues.append(
+            f"recall owner map lists missing flat exception file: {name}"
         )
     for name in stale:
         issues.append(

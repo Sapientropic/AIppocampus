@@ -17,25 +17,23 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+from agent_slop_baseline import (
+    BaselineEntry,
+    baseline_lifecycle_summary,
+    load_baseline_entries,
+)
+from agent_slop_baseline import (
+    load_baseline as load_baseline,
+)
 from agent_slop_compact_fields import compact_field_violations
-from agent_slop_guard_rules import OWNER_LAYER_CONTRACTS, RULES
+from agent_slop_guard_rules import OWNER_LAYER_CONTRACTS, RULES, RuleConfig
 from agent_slop_projection import compact_report
+from docs.changed_file_args import add_changed_file_arguments, collect_changed_file_arguments
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_BASELINE = REPO_ROOT / "tools" / "aippocampus" / "agent_slop_guard_baseline.json"
+HAZARD_CARD_DOC = REPO_ROOT / "docs" / "architecture" / "ops" / "agent-domain-hazards.md"
 SCHEMA_VERSION = 1
-HOT_PATH_PREFIXES = (
-    "skills/aippocampus/scripts/aippocampus_runtime/source/",
-    "skills/aippocampus/scripts/aippocampus_runtime/recall/",
-    "skills/aippocampus/scripts/aippocampus_runtime/mcp/",
-    "skills/aippocampus/scripts/aippocampus_runtime/hooks/",
-    "skills/aippocampus/scripts/aippocampus_runtime/update/",
-    "skills/aippocampus/scripts/aippocampus_runtime/subconscious/",
-)
-PERFORMANCE_HOT_PATH_PREFIXES = (
-    "skills/aippocampus/scripts/aippocampus_runtime/navigation/",
-    *HOT_PATH_PREFIXES,
-)
 DEFAULT_SCAN_ROOTS = (
     "skills/aippocampus/scripts/aippocampus_runtime",
     "tests/aippocampus",
@@ -45,132 +43,10 @@ EXCLUDED_IMPLICIT_SCAN_PREFIXES = (
     "tests/aippocampus/agent_slop_guard_fixtures/",
 )
 RUNTIME_PREFIX = "skills/aippocampus/scripts/aippocampus_runtime/"
-SOURCE_IO_OWNER_PATHS = {
-    "skills/aippocampus/scripts/aippocampus_runtime/source/io_kernel.py",
-    "skills/aippocampus/scripts/aippocampus_runtime/io_integrity.py",
-    "skills/aippocampus/scripts/aippocampus_runtime/question/source_refs.py",
-    "skills/aippocampus/scripts/aippocampus_runtime/dream/source_refs.py",
-}
-REGISTRY_WRITER_OWNER_PATHS = {
-    "skills/aippocampus/scripts/aippocampus_runtime/registry/store.py",
-    "skills/aippocampus/scripts/aippocampus_runtime/registry/api.py",
-}
-REGISTRY_MUTATION_PREFIXES = (
-    "skills/aippocampus/scripts/aippocampus_runtime/registry/",
-    "skills/aippocampus/scripts/aippocampus_runtime/sync/",
-    "skills/aippocampus/scripts/aippocampus_runtime/update/",
-)
-# These modules are the documented local-lock owners. Other runtime callers
-# should import an owner helper instead of copying os.O_EXCL lock loops.
-LOCAL_LOCK_OWNER_PATHS = {
-    "skills/aippocampus/scripts/aippocampus_runtime/artifacts/publish.py",
-    "skills/aippocampus/scripts/aippocampus_runtime/artifacts/generation_pins.py",
-    "skills/aippocampus/scripts/aippocampus_runtime/dream/local_lock.py",
-    "skills/aippocampus/scripts/aippocampus_runtime/local_file_lock.py",
-    "skills/aippocampus/scripts/aippocampus_runtime/recall/active_recall_lock.py",
-    "skills/aippocampus/scripts/aippocampus_runtime/registry/store.py",
-}
-SOURCE_REF_HELPER_NAMES = {
-    "source_ref_key",
-    "source_ref_key_set",
-    "clean_source_ref",
-    "clean_source_refs",
-    "normalize_source_refs",
-    "merge_source_refs",
-    "source_ref_fingerprint",
-    "source_ref_digest",
-}
-COMPAT_METADATA_TOKENS = ("owner", "removal", "default", "exposure")
-FIELD_ONLY_TEST_PATH_TOKENS = (
-    "apw",
-    "deepen",
-    "foreground",
-    "mcp",
-    "open",
-    "recall",
-    "source_open",
-    "source_reopen",
-)
-FIELD_ONLY_ASSERT_KEYS = {
-    "recall_selector",
-    "recall_selector_available",
-    "recall_selector_id",
-    "route_count",
-    "selector",
-    "source_backed",
-    "source_ref_count",
-}
-COMPACT_DEBUG_KEYS = {
-    "cache",
-    "debug",
-    "feedback_controls",
-    "operator_detail_command",
-    "operator_detail_command_template",
-    "policy_matrix",
-    "runtime_provenance",
-    "selector_inventory",
-}
-FOLLOW_THROUGH_TOKENS = {
-    "agent_deepen",
-    "agent_open",
-    "assert_cli_recall_deepens_to_source",
-    "assert_deepen_opened_expected_source",
-    "assert_mcp_recall_deepens_to_source",
-    "opened_anchor_hits",
-    "source_anchor_gate",
-    "source_window",
-    "target_source_matched",
-    "window_terms",
-}
-DIAGNOSTIC_TOKENS = (
-    "error",
-    "error_code",
-    "error_type",
-    "warning",
-    "diagnostic",
-    "degraded",
-    "status",
-    "reason",
-    "fallback",
-    "failed",
-    "skipped",
-    "loss",
-)
-BROAD_EXCEPTION_BOUNDARY_MARKER = "aippocampus-debt-ok: broad-exception-boundary"
-ATOMIC_WRITE_BOUNDARY_MARKER = "aippocampus-agent-slop-ok: directory-replace-boundary"
-PERFORMANCE_UNBOUNDED_TOKENS = (
-    "candidate",
-    "candidates",
-    "edge",
-    "edges",
-    "message",
-    "messages",
-    "raw_stats",
-    "registry",
-    "related_terms",
-    "rows",
-    "source_refs",
-    "term_refs",
-    "terms",
-    "thread",
-    "threads",
-)
-PERFORMANCE_BOUNDED_TOKENS = (
-    "budget",
-    "bounded",
-    "diagnostic",
-    "limit",
-    "preview",
-    "report",
-    "sample",
-    "top",
-)
-PERFORMANCE_DB_CALLS = {
-    "execute",
-    "executemany",
-    "upsert_concept",
-    "upsert_edge",
-}
+
+
+def _config(rule_id: str) -> RuleConfig:
+    return RULES[rule_id].config
 
 def repo_relative(path: Path | str, *, repo_root: Path = REPO_ROOT) -> str:
     value = Path(path)
@@ -238,7 +114,7 @@ def _handler_is_silent_or_empty(handler: ast.ExceptHandler) -> bool:
 
 def _handler_has_diagnostic_boundary(handler: ast.ExceptHandler) -> bool:
     body_text = " ".join(ast.dump(stmt, include_attributes=False).casefold() for stmt in handler.body)
-    return any(token in body_text for token in DIAGNOSTIC_TOKENS)
+    return any(token in body_text for token in _config("hot_path_silent_fallback").diagnostic_tokens)
 
 
 def _constant_strings(node: ast.AST) -> list[str]:
@@ -263,7 +139,7 @@ def _is_runtime_path(path: str) -> bool:
     return path.startswith(RUNTIME_PREFIX)
 
 
-def _is_owner_path(path: str, owners: set[str] = SOURCE_IO_OWNER_PATHS) -> bool:
+def _is_owner_path(path: str, owners: frozenset[str]) -> bool:
     return path in owners
 
 
@@ -283,7 +159,7 @@ def _window_text(lines: list[str], line_no: int, *, radius: int = 5) -> str:
 
 
 def _is_performance_hot_path(path: str) -> bool:
-    return path.startswith(PERFORMANCE_HOT_PATH_PREFIXES)
+    return path.startswith(_config("performance_hot_path_nested_loop").performance_hot_path_prefixes)
 
 
 def _loop_text(node: ast.For) -> str:
@@ -296,12 +172,18 @@ def _node_text(node: ast.AST) -> str:
 
 def _mentions_unbounded_product_collection(text: str) -> bool:
     lowered = text.casefold()
-    return any(token in lowered for token in PERFORMANCE_UNBOUNDED_TOKENS)
+    return any(
+        token in lowered
+        for token in _config("performance_hot_path_nested_loop").performance_unbounded_tokens
+    )
 
 
 def _mentions_bounded_context(text: str) -> bool:
     lowered = text.casefold()
-    return any(token in lowered for token in PERFORMANCE_BOUNDED_TOKENS)
+    return any(
+        token in lowered
+        for token in _config("performance_hot_path_nested_loop").performance_bounded_tokens
+    )
 
 
 def _constant_int(node: ast.AST) -> int | None:
@@ -429,7 +311,7 @@ def _silent_fallback_findings(
     baseline: Mapping[str, str],
     changed_files: set[str],
 ) -> list[dict[str, Any]]:
-    if not path.startswith(HOT_PATH_PREFIXES):
+    if not path.startswith(_config("hot_path_silent_fallback").hot_path_prefixes):
         return []
     lines = text.splitlines()
     findings: list[dict[str, Any]] = []
@@ -444,7 +326,7 @@ def _silent_fallback_findings(
         if _handler_has_diagnostic_boundary(node):
             continue
         line_no = int(getattr(node, "lineno", 0) or 0)
-        if BROAD_EXCEPTION_BOUNDARY_MARKER in _window_text(lines, line_no):
+        if _config("hot_path_silent_fallback").broad_exception_boundary_marker in _window_text(lines, line_no):
             continue
         findings.append(
             _finding(
@@ -466,7 +348,7 @@ def _source_jsonl_owner_bypass_findings(
     baseline: Mapping[str, str],
     changed_files: set[str],
 ) -> list[dict[str, Any]]:
-    if not _is_runtime_path(path) or _is_owner_path(path):
+    if not _is_runtime_path(path) or _is_owner_path(path, _config("source_jsonl_owner_bypass").owner_paths):
         return []
     findings: list[dict[str, Any]] = []
     for node in ast.walk(tree):
@@ -509,7 +391,7 @@ def _atomic_write_owner_bypass_findings(
     baseline: Mapping[str, str],
     changed_files: set[str],
 ) -> list[dict[str, Any]]:
-    if not _is_runtime_path(path) or _is_owner_path(path):
+    if not _is_runtime_path(path) or _is_owner_path(path, _config("atomic_write_owner_bypass").owner_paths):
         return []
     lines = text.splitlines()
     findings: list[dict[str, Any]] = []
@@ -531,7 +413,7 @@ def _atomic_write_owner_bypass_findings(
             continue
         if isinstance(node.func, ast.Attribute) and node.func.attr in {"replace", "rename"}:
             if len(node.args) == 1 and _node_mentions_tmp(node.func.value):
-                if ATOMIC_WRITE_BOUNDARY_MARKER in _window_text(
+                if _config("atomic_write_owner_bypass").atomic_write_boundary_marker in _window_text(
                     lines,
                     int(getattr(node, "lineno", 0) or 0),
                 ):
@@ -569,13 +451,14 @@ def _source_ref_helper_duplicate_findings(
     baseline: Mapping[str, str],
     changed_files: set[str],
 ) -> list[dict[str, Any]]:
-    if not _is_runtime_path(path) or _is_owner_path(path):
+    config = _config("source_ref_helper_duplicate")
+    if not _is_runtime_path(path) or _is_owner_path(path, config.owner_paths):
         return []
     findings: list[dict[str, Any]] = []
     for node in ast.walk(tree):
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
-        if node.name not in SOURCE_REF_HELPER_NAMES:
+        if node.name not in config.source_ref_helper_names:
             continue
         findings.append(
             _finding(
@@ -597,9 +480,10 @@ def _registry_writer_owner_bypass_findings(
     baseline: Mapping[str, str],
     changed_files: set[str],
 ) -> list[dict[str, Any]]:
-    if not _is_runtime_path(path) or path in REGISTRY_WRITER_OWNER_PATHS:
+    config = _config("registry_writer_owner_bypass")
+    if not _is_runtime_path(path) or path in config.owner_paths:
         return []
-    if not path.startswith(REGISTRY_MUTATION_PREFIXES):
+    if not path.startswith(config.registry_mutation_prefixes):
         return []
     findings: list[dict[str, Any]] = []
     for node in ast.walk(tree):
@@ -640,7 +524,7 @@ def _local_lock_owner_bypass_findings(
     baseline: Mapping[str, str],
     changed_files: set[str],
 ) -> list[dict[str, Any]]:
-    if not _is_runtime_path(path) or path in LOCAL_LOCK_OWNER_PATHS:
+    if not _is_runtime_path(path) or path in _config("local_lock_owner_bypass").owner_paths:
         return []
     findings: list[dict[str, Any]] = []
     for node in ast.walk(tree):
@@ -810,7 +694,10 @@ def _performance_db_work_findings(
                 continue
             qname = _qualified_call_name(child.func)
             call = _call_name(child.func)
-            if call not in PERFORMANCE_DB_CALLS and not qname.endswith(".execute"):
+            if (
+                call not in _config("performance_hot_path_repeated_db_work").performance_db_calls
+                and not qname.endswith(".execute")
+            ):
                 continue
             # A local resolver/cache wrapper is the accepted #2706 shape; the
             # red light is for direct DB/upsert work in the product loop.
@@ -858,7 +745,10 @@ def _compat_field_metadata_missing_findings(
                     continue
                 line_no = int(getattr(key, "lineno", getattr(node, "lineno", 0)) or 0)
                 window = _window_text(lines, line_no)
-                if all(token in window for token in COMPAT_METADATA_TOKENS):
+                if all(
+                    token in window
+                    for token in _config("compat_field_metadata_missing").compatibility_metadata_tokens
+                ):
                     continue
                 findings.append(
                     _finding(
@@ -888,7 +778,7 @@ def _assert_call_key_literals(node: ast.Call) -> set[str]:
 
 def _function_has_followthrough(node: ast.AST) -> bool:
     body_text = " ".join([_node_name_text(node), *(_constant_strings(node))]).casefold()
-    return any(token in body_text for token in FOLLOW_THROUGH_TOKENS)
+    return any(token in body_text for token in _config("field_only_followthrough_test").follow_through_tokens)
 
 
 def _test_scope_is_followthrough_sensitive(path: str, name: str) -> bool:
@@ -897,7 +787,7 @@ def _test_scope_is_followthrough_sensitive(path: str, name: str) -> bool:
     if path == "tests/aippocampus/product_probe_helpers.py":
         return False
     text = f"{path}/{name}".casefold()
-    return any(token in text for token in FIELD_ONLY_TEST_PATH_TOKENS)
+    return any(token in text for token in _config("field_only_followthrough_test").field_only_test_path_tokens)
 
 
 def _field_only_test_findings(
@@ -921,7 +811,9 @@ def _field_only_test_findings(
             keys = _assert_call_key_literals(child)
             if not keys:
                 continue
-            matched = (keys & FIELD_ONLY_ASSERT_KEYS) | (keys & COMPACT_DEBUG_KEYS)
+            field_config = _config("field_only_followthrough_test")
+            debug_config = _config("compact_debug_field_test")
+            matched = (keys & field_config.field_only_assert_keys) | (keys & debug_config.compact_debug_keys)
             if matched and first_key_line == int(getattr(node, "lineno", 0) or 0):
                 first_key_line = int(getattr(child, "lineno", first_key_line) or first_key_line)
             asserted_keys.update(matched)
@@ -929,7 +821,7 @@ def _field_only_test_findings(
             continue
         has_followthrough = _function_has_followthrough(node)
         compact_context = "compact" in f"{path}/{node.name}".casefold()
-        debug_keys = asserted_keys & COMPACT_DEBUG_KEYS
+        debug_keys = asserted_keys & _config("compact_debug_field_test").compact_debug_keys
         if debug_keys and compact_context:
             findings.append(
                 _finding(
@@ -942,7 +834,7 @@ def _field_only_test_findings(
                 )
             )
             continue
-        field_keys = asserted_keys & FIELD_ONLY_ASSERT_KEYS
+        field_keys = asserted_keys & _config("field_only_followthrough_test").field_only_assert_keys
         if field_keys and not has_followthrough:
             findings.append(
                 _finding(
@@ -1172,29 +1064,44 @@ def scan_files(
     return sorted(findings, key=lambda item: (str(item["file"]), int(item["line"]), str(item["rule_id"])))
 
 
-def load_baseline(path: Path | None) -> dict[str, str]:
-    if path is None or not path.is_file():
-        return {}
-    data = json.loads(path.read_text(encoding="utf-8"))
-    if isinstance(data, list):
-        rows = data
-    elif isinstance(data, dict):
-        rows = data.get("findings") or data.get("baseline") or []
-    else:
-        rows = []
-    baseline: dict[str, str] = {}
-    for row in rows:
-        if not isinstance(row, Mapping):
-            continue
-        # Some AST-derived fingerprints include multiline SQL or trailing
-        # expression whitespace. Preserve the exact string or the baseline turns
-        # into permanent noise whenever those findings are present.
-        raw_fingerprint = row.get("fingerprint")
-        fingerprint = "" if raw_fingerprint is None else str(raw_fingerprint)
-        if not fingerprint.strip():
-            continue
-        baseline[fingerprint] = str(row.get("owner_issue") or row.get("owner") or "historical_baseline")
-    return baseline
+def hazard_ids_from_doc(path: Path = HAZARD_CARD_DOC) -> set[str]:
+    if not path.is_file():
+        return set()
+    ids: set[str] = set()
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if line.casefold().startswith("hazard id:"):
+            hazard_id = line.split(":", 1)[1].strip().strip("`")
+            if hazard_id:
+                ids.add(hazard_id)
+    return ids
+
+
+def hazard_card_coverage(path: Path = HAZARD_CARD_DOC) -> dict[str, Any]:
+    known_ids = hazard_ids_from_doc(path)
+    card_map: dict[str, list[str]] = {}
+    tooling_only: list[str] = []
+    unmapped: list[str] = []
+    missing_hazard_ids: set[str] = set()
+    for rule in RULES.values():
+        if rule.hazard_id:
+            card_map.setdefault(rule.hazard_id, []).append(rule.rule_id)
+            if rule.hazard_id not in known_ids:
+                missing_hazard_ids.add(rule.hazard_id)
+        elif rule.tooling_only:
+            tooling_only.append(rule.rule_id)
+        else:
+            unmapped.append(rule.rule_id)
+    return {
+        "doc": repo_relative(path),
+        "cards": [
+            {"hazard_id": hazard_id, "rule_ids": sorted(rule_ids)}
+            for hazard_id, rule_ids in sorted(card_map.items())
+        ],
+        "tooling_only_rule_ids": sorted(tooling_only),
+        "unmapped_rule_ids": sorted(unmapped),
+        "missing_hazard_ids": sorted(missing_hazard_ids),
+        "unguarded_hazard_ids": sorted(known_ids - set(card_map)),
+    }
 
 
 def run_fixture_root(
@@ -1239,6 +1146,8 @@ def build_report(
     paths: Sequence[Path],
     changed_files: set[str],
     baseline: Mapping[str, str],
+    baseline_entries: Mapping[str, BaselineEntry] | None = None,
+    baseline_last_seen_scope: str = "scanned_paths_only",
     fixture_root: Path | None = None,
 ) -> dict[str, Any]:
     findings = scan_files(paths, baseline=baseline, changed_files=changed_files)
@@ -1249,6 +1158,10 @@ def build_report(
     fixture_results = run_fixture_root(fixture_root, baseline=baseline) if fixture_root else []
     fixture_failed = [item for item in fixture_results if item.get("passed") is not True]
     baselined = [item for item in findings if item["baseline_status"] == "baselined"]
+    lifecycle_entries = baseline_entries or {
+        fingerprint: BaselineEntry(fingerprint=fingerprint, owner_issue=owner_issue)
+        for fingerprint, owner_issue in baseline.items()
+    }
     return {
         "kind": "aippocampus_agent_slop_guard",
         "schema_version": SCHEMA_VERSION,
@@ -1258,6 +1171,7 @@ def build_report(
         "rule_count": len(RULES),
         "rules": [rule.as_dict() for rule in RULES.values()],
         "owner_layer_contracts": list(OWNER_LAYER_CONTRACTS),
+        "hazard_card_coverage": hazard_card_coverage(),
         "scanned_file_count": len(paths),
         "finding_count": len(findings),
         "baselined_finding_count": len(baselined),
@@ -1266,6 +1180,11 @@ def build_report(
         "findings": findings,
         "fixture_results": fixture_results,
         "fixture_failure_count": len(fixture_failed),
+        "baseline_lifecycle": baseline_lifecycle_summary(
+            lifecycle_entries,
+            current_fingerprints={str(item["fingerprint"]) for item in findings},
+            last_seen_scope=baseline_last_seen_scope,
+        ),
         "baseline_policy": (
             "Historical debt may be baselined to owner issues; changed-surface "
             "unbaselined findings are visible by default and become hard only "
@@ -1291,9 +1210,10 @@ def _paths_from_args(args: argparse.Namespace) -> tuple[list[Path], set[str], st
     if args.all:
         paths = _scan_roots()
         return paths, {repo_relative(path) for path in paths}, "all"
-    if args.fixture_root and not args.changed_file:
+    explicit_changed_files = collect_changed_file_arguments(args)
+    if args.fixture_root and not explicit_changed_files:
         return [], set(), "fixtures"
-    changed_files = [item.replace("\\", "/") for item in (args.changed_file or [])]
+    changed_files = [item.replace("\\", "/") for item in explicit_changed_files]
     if not changed_files:
         changed_files = _git_changed_files()
     paths = [(REPO_ROOT / path) for path in changed_files]
@@ -1310,7 +1230,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Compact is failure-first; full includes rule catalogs and owner contracts.",
     )
     parser.add_argument("--all", action="store_true", help="Scan default repo Python roots instead of changed files.")
-    parser.add_argument("--changed-file", action="append", help="Repo-relative changed file to scan.")
+    add_changed_file_arguments(parser)
     parser.add_argument(
         "--baseline",
         type=Path,
@@ -1331,6 +1251,8 @@ def _detail_command(args: argparse.Namespace) -> str:
         parts.append("--all")
     for path in args.changed_file or []:
         parts.extend(["--changed-file", path])
+    for path in getattr(args, "changed_file_list", None) or []:
+        parts.extend(["--changed-file-list", str(path)])
     if args.fixture_root:
         parts.extend(["--fixture-root", str(args.fixture_root)])
     if args.fail_on_violations:
@@ -1342,11 +1264,15 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     paths, changed_files, mode = _paths_from_args(args)
-    baseline = load_baseline(args.baseline or DEFAULT_BASELINE)
+    baseline_path = args.baseline or DEFAULT_BASELINE
+    baseline_entries = load_baseline_entries(baseline_path)
+    baseline = {fingerprint: entry.owner_issue for fingerprint, entry in baseline_entries.items()}
     report = build_report(
         paths=paths,
         changed_files=changed_files,
         baseline=baseline,
+        baseline_entries=baseline_entries,
+        baseline_last_seen_scope="all_scan" if mode == "all" else "scanned_paths_only",
         fixture_root=args.fixture_root,
     )
     report["mode"] = mode

@@ -8,6 +8,7 @@ import unittest
 from pathlib import Path
 
 from aippocampus_runtime.dream import input_pack
+from aippocampus_runtime.dream import lifecycle as dream_lifecycle
 from aippocampus_runtime.dream import queue as dream_queue
 
 
@@ -88,6 +89,9 @@ def ready_pack(*rows: dict[str, object]) -> dict[str, object]:
     return input_pack.build_dream_input_pack(rows or [question_link_row()])
 
 class DreamQueueTests(unittest.TestCase):
+    def test_queue_reads_canonical_adjudicated_review_states(self) -> None:
+        self.assertIs(dream_queue.ADJUDICATED_STATES, dream_lifecycle.ADJUDICATED_REVIEW_STATES)
+
     def test_ready_pack_enqueues_bounded_detached_items(self) -> None:
         pack = ready_pack(question_link_row())
 

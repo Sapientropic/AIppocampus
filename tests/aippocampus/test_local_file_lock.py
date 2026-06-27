@@ -95,6 +95,56 @@ class OwnerCheckedFileLeaseTests(unittest.TestCase):
 
             self.assertFalse(lock_path.exists())
 
+    def test_acquire_removes_abandoned_quarantine_for_same_lock(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            lock_path = Path(tmp) / ".writer.lock"
+            quarantine = lock_path.with_name(f".{lock_path.name}.old_owner.stale")
+            quarantine.write_text(
+                json.dumps({"owner_token": "old-owner", "pid": 999999}),
+                encoding="utf-8",
+            )
+            old_time = time.time() - 30
+            os.utime(quarantine, (old_time, old_time))
+
+            with OwnerCheckedFileLease(
+                lock_path,
+                lock_kind="unit_test_writer",
+                stale_after_seconds=60,
+            ) as lease:
+                payload = json.loads(lock_path.read_text(encoding="utf-8"))
+                self.assertEqual(payload["quarantine_files_removed"], 1)
+                self.assertEqual(lease.acquire_diagnostic["quarantine_files_removed"], 1)
+
+            self.assertFalse(quarantine.exists())
+            self.assertFalse(lock_path.exists())
+
+    def test_quarantine_cleanup_preserves_unrelated_fresh_and_active_lock_files(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            lock_path = Path(tmp) / ".writer.lock"
+            lock_path.write_text(
+                json.dumps({"owner_token": "active-owner", "pid": 123}),
+                encoding="utf-8",
+            )
+            unrelated = Path(tmp) / ".other.lock.old_owner.stale"
+            unrelated.write_text("{}", encoding="utf-8")
+            fresh_quarantine = lock_path.with_name(".writer.lock.fresh_owner.stale")
+            fresh_quarantine.write_text("{}", encoding="utf-8")
+            old_time = time.time() - 30
+            os.utime(unrelated, (old_time, old_time))
+
+            with self.assertRaises(OwnerCheckedLeaseBusyError):
+                with OwnerCheckedFileLease(
+                    lock_path,
+                    lock_kind="unit_test_writer",
+                    stale_after_seconds=60,
+                    wait_timeout_seconds=0.0,
+                ):
+                    self.fail("active lock should stay active")
+
+            self.assertTrue(lock_path.exists())
+            self.assertTrue(unrelated.exists())
+            self.assertTrue(fresh_quarantine.exists())
+
     def test_active_lock_reports_busy_without_recovery(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             lock_path = Path(tmp) / ".writer.lock"

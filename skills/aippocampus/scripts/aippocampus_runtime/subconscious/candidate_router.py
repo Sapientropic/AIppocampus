@@ -42,7 +42,7 @@ from aippocampus_runtime.source.io_kernel import (
     write_json_atomic,
     write_jsonl_dict_rows,
 )
-from aippocampus_runtime.subconscious import match_terms
+from aippocampus_runtime.subconscious import match_terms, working_memory_delivery
 from aippocampus_runtime.subconscious.candidate_router_dream import (
     DREAM_HYPOTHESIS_TYPE,
     dream_hypothesis_block_reason,
@@ -587,7 +587,10 @@ def match_working_memory(
             continue
         if row.get("candidate_type") == DREAM_HYPOTHESIS_TYPE:
             block_reason = dream_hypothesis_block_reason(row)
-            if block_reason:
+            if block_reason and block_reason not in {
+                "dream_hypothesis_expired",
+                "trust_horizon_review_due",
+            }:
                 continue
         route_bonus = {USE_SILENTLY: 0.5, USE_WITH_SOURCE: 1.5, CONFIRM_WHEN_RELEVANT: 1.0}.get(
             str(row.get("route")), 0.0
@@ -598,16 +601,27 @@ def match_working_memory(
         copy = dict(row)
         copy["matched_terms"], copy["distinctive_match_count"] = unique_preserve(matched, limit=8), len(matched)
         copy["generic_only_match"], copy["match_strength"], copy["score"] = False, "distinctive", round(score, 3)
+        delivery = working_memory_delivery.annotate_delivery(copy, prompt=prompt)
         if copy.get("candidate_type") == DREAM_HYPOTHESIS_TYPE:
+            delivery_use = working_memory_delivery.dream_hypothesis_use(copy, delivery)
+            if delivery_use:
+                copy["dream_hypothesis_use"] = delivery_use
+                matches.append(copy)
+                continue
             special_use = dream_constructive.prospective_invitation_match_use(copy) or journey_bridges.journey_bridge_match_use(copy)
             if special_use:
-                copy["dream_hypothesis_use"] = special_use
+                copy["dream_hypothesis_use"] = working_memory_delivery.with_delivery_fields(
+                    special_use,
+                    delivery,
+                )
                 matches.append(copy)
                 continue
             copy["dream_hypothesis_use"] = {
                 "action": "use_quietly",
                 "reason": "matched_working_memory_terms",
                 "truth_boundary": copy.get("truth_boundary"),
+                "delivery_source_posture": delivery["delivery_source_posture"],
+                "public_authority_tier": delivery["public_authority_tier"],
                 "strong_claim_requires_source_reopen": bool(
                     (copy.get("foreground_use") or {}).get("strong_claim_requires_source_reopen")
                 ),

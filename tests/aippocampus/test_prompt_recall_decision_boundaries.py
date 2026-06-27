@@ -15,6 +15,7 @@ SCRIPTS = ROOT / "scripts"
 from aippocampus_runtime.recall import (
     prompt_context_render,
     prompt_cues,
+    prompt_recall_result_tiers,
     prompt_route_blocks,
 )
 from aippocampus_runtime.recall import prompt_recall_decision as decision
@@ -244,7 +245,9 @@ class PromptRecallDecisionBoundaryTests(unittest.TestCase):
                 }
                 for item in result.get("evidence") or []
             ],
-            "semantic_bridge_diagnostic": result.get("semantic_bridge_diagnostic"),
+            "semantic_bridge_diagnostic": (
+                prompt_recall_result_tiers.result_semantic_bridge_diagnostic(result)
+            ),
         }
 
     def test_context_helper_resolves_explicit_paths_and_loads_inputs(self) -> None:
@@ -648,7 +651,7 @@ class PromptRecallDecisionBoundaryTests(unittest.TestCase):
                     "confidence": "medium",
                     "candidate_threads": [],
                     "evidence": [],
-                    "semantic_bridge_diagnostic": "semantic_evidence_without_source_bridge",
+                    "semantic_bridge_diagnostic": None,
                 },
             },
         )
@@ -682,7 +685,7 @@ class PromptRecallDecisionBoundaryTests(unittest.TestCase):
         diagnostic = self._result_tiers_module().result_route_delivery_diagnostic(result)
         self.assertEqual(result["decision"], "scent")
         self.assertEqual(
-            result.get("semantic_bridge_diagnostic"),
+            self._result_tiers_module().result_semantic_bridge_diagnostic(result),
             "semantic_evidence_without_source_bridge",
         )
         self.assertEqual(diagnostic["foreground_profile"], "ambient_hot_path")
@@ -700,11 +703,13 @@ class PromptRecallDecisionBoundaryTests(unittest.TestCase):
             registry_path=self.registry_path,
             use_semantic_gate=False,
             search_budget=0,
+            detail="detail",
         )
 
-        channels = result["recall_channels"]
+        channels = self._result_tiers_module().result_recall_channels(result)
 
         self.assertEqual(result["decision"], "scent")
+        self.assertNotIn("recall_channels", result)
         self.assertEqual(channels["fast"]["status"], "hit")
         self.assertEqual(channels["fast"]["candidate_count"], 1)
         self.assertEqual(channels["fast"]["candidates"][0]["channel"], "fast")
@@ -728,11 +733,13 @@ class PromptRecallDecisionBoundaryTests(unittest.TestCase):
             registry_path=self.registry_path,
             semantic_gate_fn=semantic_timeout,
             search_budget=0,
+            detail="detail",
         )
 
-        channels = result["recall_channels"]
+        channels = self._result_tiers_module().result_recall_channels(result)
 
         self.assertEqual(result["decision"], "scent")
+        self.assertNotIn("recall_channels", result)
         self.assertEqual(channels["fast"]["status"], "hit")
         self.assertEqual(channels["deep"]["status"], "timeout")
         self.assertIn("semantic_gate_timeout", channels["deep"]["reason_codes"])
@@ -756,11 +763,13 @@ class PromptRecallDecisionBoundaryTests(unittest.TestCase):
             registry_path=self.registry_path,
             semantic_gate_fn=semantic_source_free_evidence,
             search_budget=0,
+            detail="detail",
         )
 
-        channels = result["recall_channels"]
+        channels = self._result_tiers_module().result_recall_channels(result)
 
         self.assertEqual(result["decision"], "scent")
+        self.assertNotIn("recall_channels", result)
         self.assertEqual(result["evidence"], [])
         self.assertEqual(channels["fast"]["status"], "hit")
         self.assertEqual(channels["deep"]["status"], "hit")
@@ -798,7 +807,8 @@ class PromptRecallDecisionBoundaryTests(unittest.TestCase):
         self.assertEqual(result["decision"], "scent")
         self.assertEqual(result["evidence"], [])
         self.assertTrue(result["semantic_source_reopen_route"])
-        self.assertIsNone(result["semantic_bridge_diagnostic"])
+        self.assertNotIn("semantic_bridge_diagnostic", result)
+        self.assertIsNone(self._result_tiers_module().result_semantic_bridge_diagnostic(result))
         self.assertEqual(packet["support_level"], "source_required")
         self.assertEqual(packet["action_grammar"], "reopenable_route")
         self.assertEqual(packet["reopen_plan"]["status"], "ready")

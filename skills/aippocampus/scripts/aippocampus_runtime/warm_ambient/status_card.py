@@ -73,8 +73,6 @@ def compact_warm_status_card(payload: Mapping[str, Any]) -> dict[str, Any]:
     safe_next_actions: list[Mapping[str, Any]] = []
     allowed_blocked_actions = {
         "probe_warm_worker_once",
-        "snooze_optional_warm_ambient",
-        "retire_stale_warm_queue_after_review",
     }
     allowed_default_actions = {
         "recheck_warm_status",
@@ -86,7 +84,7 @@ def compact_warm_status_card(payload: Mapping[str, Any]) -> dict[str, Any]:
         allowed_actions = allowed_blocked_actions if blocked_stale else allowed_default_actions
         if action_id in allowed_actions:
             safe_next_actions.append(_compact_warm_choice(action))
-        if len(safe_next_actions) >= (3 if blocked_stale else 2):
+        if len(safe_next_actions) >= (1 if blocked_stale else 2):
             break
     detail_action: Mapping[str, Any] = {
         "id": "open_warm_status_detail",
@@ -136,7 +134,7 @@ def compact_warm_status_card(payload: Mapping[str, Any]) -> dict[str, Any]:
             "primary": foreground_action.get("label") or "Check warm status",
             "primary_command": primary_command,
             "reason": (
-                "Warm ambient has a blocked stale queue; choose ordinary recall, snooze, retire, or probe the optional worker."
+                "Warm ambient has a blocked stale queue, but ordinary recall remains usable; use detail only for optional queue management."
                 if blocked_stale
                 else "Warm ambient recently produced useful cache output; ordinary recall can still reopen sources."
                 if warm_ambient_recently_useful
@@ -144,6 +142,7 @@ def compact_warm_status_card(payload: Mapping[str, Any]) -> dict[str, Any]:
             ),
         },
         **action_fields,
+        "manage_command": WARM_STATUS_DETAIL_COMMAND if blocked_stale else None,
         "operator_json_available": {
             "detail_full_command": WARM_STATUS_DETAIL_COMMAND,
             "operator_json_command": WARM_STATUS_OPERATOR_COMMAND,

@@ -16,6 +16,7 @@ from aippocampus_runtime.contracts import (
     canonical_foreground_action_fields,
     foreground_shell_action,
     foreground_template_action,
+    shell_quote,
 )
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 from aippocampus_runtime.public_output import emit_public_text
@@ -28,6 +29,16 @@ JSON_REQUEST_FLAGS = {
     "--operator-json",
     "--public-json",
     "--summary-json",
+}
+SEARCH_VALUE_FLAGS = {
+    "--cwd",
+    "--clean-source-dir",
+    "--registry-dir",
+    "--max",
+    "--max-elapsed-ms",
+    "--search-budget",
+    "--detail",
+    "--snippet-chars",
 }
 
 
@@ -104,6 +115,56 @@ def script_recovery_action(script_name: str, args: list[str]) -> dict[str, Any]:
     )
 
 
+def _search_query_arg(args: list[str]) -> str:
+    skip_next = False
+    for arg in args:
+        if skip_next:
+            skip_next = False
+            continue
+        if arg in SEARCH_VALUE_FLAGS:
+            skip_next = True
+            continue
+        if arg.startswith("-"):
+            continue
+        return arg
+    return ""
+
+
+def _search_exception_actions(args: list[str]) -> list[dict[str, Any]]:
+    primary = foreground_shell_action(
+        action_id="audit_registry_sources",
+        label="Audit registry sources",
+        command="aippocampus registry audit --json",
+        why=(
+            "Registry-wide source search did not complete; audit registration "
+            "before treating the miss as meaningful."
+        ),
+        mutation_risk="read_only",
+        claim_boundary="registry_search_error_not_absence_of_memory",
+    )
+    query = _search_query_arg(args)
+    if query:
+        fallback = foreground_shell_action(
+            action_id="fallback_current_thread_search",
+            label="Fallback to current-thread search",
+            command=f"aippocampus search {shell_quote(query)} --json",
+            why="Current-thread search can still be useful when registry-wide search is blocked.",
+            mutation_risk="read_only",
+            claim_boundary="fallback_search_requires_source_open",
+        )
+    else:
+        fallback = foreground_template_action(
+            action_id="fallback_current_thread_search",
+            label="Fallback to current-thread search",
+            command_template='aippocampus search "{cue}" --json',
+            requires=["cue"],
+            why="Current-thread search can still be useful when registry-wide search is blocked.",
+            mutation_risk="read_only",
+            claim_boundary="fallback_search_requires_source_open",
+        )
+    return [primary, fallback]
+
+
 def _system_exit_message(stderr_text: str) -> str:
     lines = [line.strip() for line in str(stderr_text or "").splitlines() if line.strip()]
     for line in reversed(lines):
@@ -119,7 +180,12 @@ def module_exception_payload(
     *,
     stderr_text: str = "",
 ) -> dict[str, Any]:
-    action = script_recovery_action(script_name, args)
+    search_actions = (
+        _search_exception_actions(args)
+        if script_name == "search_clean_source.py" and "--all" in args
+        else []
+    )
+    action = search_actions[0] if search_actions else script_recovery_action(script_name, args)
     payload = (
         {
             "ok": False,
@@ -135,17 +201,32 @@ def module_exception_payload(
     payload.update(
         {
             "kind": "aippocampus_cli_recovery_error",
-            "status": "error",
+            "status": "source_search_blocked" if search_actions else "error",
             "surface": "cli_facade",
             "entrypoint": Path(script_name).stem,
-            **canonical_foreground_action_fields(action),
+            **canonical_foreground_action_fields(
+                action,
+                safe_next_actions=search_actions,
+                max_safe_next_actions=1,
+                safe_next_read_only_only=True,
+            ),
             "recovery_boundary": {
                 "raw_traceback_suppressed": True,
                 "local_paths_redacted": True,
                 "recovery_guidance_is_not_source_evidence": True,
+                **(
+                    {
+                        "registry_wide_search_did_not_run": True,
+                        "search_error_is_not_absence_of_memory": True,
+                    }
+                    if search_actions
+                    else {}
+                ),
             },
         }
     )
+    if search_actions:
+        payload["blocker"] = "registered source index could not be read; registry-wide search did not run"
     return redact_sensitive_values(redact_private_paths(payload))
 
 

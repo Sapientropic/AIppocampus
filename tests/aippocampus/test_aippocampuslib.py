@@ -703,6 +703,8 @@ class AippocampusLibTests(unittest.TestCase):
 
             self.assertEqual([message["text"] for message in messages], ["visible user text", "visible assistant text"])
             self.assertNotIn("private", json.dumps(messages, ensure_ascii=False))
+            self.assertNotIn("cwd", messages[0]["provider_metadata"])
+            self.assertNotIn("cwd", messages[1]["provider_metadata"])
             self.assertEqual(messages[1]["phase"], "final_answer")
             self.assertEqual(messages[1]["source_ref"], "claude-code:session:claude-session#L2")
             self.assertEqual(turns[0]["final_line"], 2)

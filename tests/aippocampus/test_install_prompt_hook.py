@@ -237,7 +237,9 @@ class InstallAmbientRecallHookTests(unittest.TestCase):
         self.assertEqual(installed["foreground_action"]["mutation_risk"], "read_only")
         installed_action_ids = [action["id"] for action in installed["safe_next_actions"]]
         self.assertIn("try_first_recall_after_prompt_hook", installed_action_ids)
-        self.assertIn("rollback_prompt_hook", installed_action_ids)
+        self.assertNotIn("rollback_prompt_hook", installed_action_ids)
+        self.assertEqual(installed["manage_command"], "aippocampus hooks prompt uninstall --json")
+        self.assertTrue(all(action["mutation_risk"] == "read_only" for action in installed["safe_next_actions"]))
 
         self.hooks_json.write_text(
             json.dumps(
@@ -414,9 +416,9 @@ class InstallAmbientRecallHookTests(unittest.TestCase):
         self.assertEqual(result["prompt_hook_latency_risk_status"], "near_host_timeout_risk")
         self.assertGreaterEqual(result["foreground_latency_red_line_violation_count"], 1)
         action_ids = [action["id"] for action in result["safe_next_actions"]]
-        self.assertIn("refresh_prompt_hook_safe_budget", action_ids)
-        repair_action = next(action for action in result["safe_next_actions"] if action["id"] == "refresh_prompt_hook_safe_budget")
-        self.assertIn("aippocampus hooks prompt install --json", repair_action["command"])
+        self.assertNotIn("refresh_prompt_hook_safe_budget", action_ids)
+        self.assertTrue(all(action["mutation_risk"] == "read_only" for action in result["safe_next_actions"]))
+        self.assertEqual(result["manage_command"], "aippocampus hooks prompt uninstall --json")
         self.assertNotIn(str(self.codex_home), encoded)
 
         operator = installer.status(

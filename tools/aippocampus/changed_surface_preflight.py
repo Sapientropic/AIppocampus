@@ -5,6 +5,7 @@ import json
 import re
 import shlex
 import subprocess
+import tempfile
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -56,6 +57,10 @@ DEFAULT_PREFLIGHT_LIGHT_FOCUSED_SCOPES = {
 }
 DEFAULT_PREFLIGHT_MAX_FOCUSED_UNITTEST_MODULES = 2
 UNITTEST_MODULE_RE = re.compile(r"-m\s+unittest\s+(?P<modules>.+?)\s+-v\b")
+CHANGED_FILE_ARG_RE = re.compile(
+    r"\s+--changed-file\s+(?P<path>\"[^\"]+\"|'[^']+'|[^\s]+)"
+)
+WINDOWS_COMMAND_SOFT_LIMIT = 7000
 
 
 @dataclass(frozen=True)
@@ -290,21 +295,61 @@ def duplicate_run_budget(planned: Sequence[Mapping[str, Any]]) -> dict[str, Any]
     }
 
 
-def run_shell_command(command: str) -> CommandResult:
-    started = time.perf_counter()
-    proc = subprocess.run(
-        command,
-        cwd=REPO_ROOT,
-        shell=True,
-        text=True,
+def _unquote_changed_path(value: str) -> str:
+    text = value.strip()
+    if len(text) >= 2 and text[0] == text[-1] and text[0] in {"'", '"'}:
+        return text[1:-1]
+    return text
+
+
+def _manifest_command_for_long_changed_surface(command: str) -> tuple[str, Path | None]:
+    if (
+        len(command) < WINDOWS_COMMAND_SOFT_LIMIT
+        or "tools/aippocampus/docs/debt_report.py" not in command
+        or "--changed-file " not in command
+    ):
+        return command, None
+    changed_files = [
+        _unquote_changed_path(match.group("path"))
+        for match in CHANGED_FILE_ARG_RE.finditer(command)
+    ]
+    if len(changed_files) < 20:
+        return command, None
+    tmp = tempfile.NamedTemporaryFile(
+        "w",
         encoding="utf-8",
-        errors="replace",
-        capture_output=True,
-        check=False,
+        newline="\n",
+        delete=False,
+        prefix="aippo-changed-surface-",
+        suffix=".txt",
     )
+    with tmp:
+        tmp.write("\n".join(changed_files))
+        tmp.write("\n")
+    shortened = CHANGED_FILE_ARG_RE.sub("", command)
+    return f"{shortened} --changed-file-list {shell_arg(tmp.name)}", Path(tmp.name)
+
+
+def run_shell_command(command: str) -> CommandResult:
+    run_command, manifest_path = _manifest_command_for_long_changed_surface(command)
+    started = time.perf_counter()
+    try:
+        proc = subprocess.run(
+            run_command,
+            cwd=REPO_ROOT,
+            shell=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            check=False,
+        )
+    finally:
+        if manifest_path is not None:
+            manifest_path.unlink(missing_ok=True)
     elapsed_ms = int((time.perf_counter() - started) * 1000)
     return CommandResult(
-        command=command,
+        command=run_command,
         scope="unknown",
         status="pass" if proc.returncode == 0 else "fail",
         returncode=int(proc.returncode),
@@ -453,6 +498,7 @@ def run_preflight(
     selected_mode = "pre-push" if mode == "prepush" else mode
     if selected_mode not in {DEFAULT_MODE, *FULL_MODES}:
         selected_mode = DEFAULT_MODE
+    caller_supplied_changed_files = bool(changed_files)
     normalized_changed = (
         list(changed_files)
         if changed_files
@@ -461,6 +507,7 @@ def run_preflight(
     plan = test_plan.build_test_plan(
         list(normalized_changed),
         local_executable=local_executable,
+        diff_check_base=base if not caller_supplied_changed_files else None,
     )
     planned = ordered_plan_commands(plan)
     runnable = [item for item in planned if _command_runs_in_mode(item, mode=selected_mode)]

@@ -206,7 +206,22 @@ def public_search_result(
     include_paths: bool = False,
     metadata_only: bool = False,
     query_text: str | None = None,
+    detail: str = "full",
 ) -> dict[str, Any]:
+    original_matches = [item for item in result.get("matches") or [] if isinstance(item, dict)]
+    annotate_current_search_reopen_commands(
+        original_matches,
+        source_path=result.get("source"),
+        include_paths=include_paths,
+    )
+    if detail == "compact":
+        return _compact_public_search_result(
+            result,
+            original_matches=original_matches,
+            include_paths=include_paths,
+            metadata_only=metadata_only,
+            query_text=query_text,
+        )
     public = dict(result) if include_paths else redact_sensitive_values(redact_private_paths(result))
     if query_text is not None:
         public["query_text"] = (
@@ -214,12 +229,6 @@ def public_search_result(
             if include_paths
             else str(redact_sensitive_values(redact_private_paths(str(query_text))))
         )
-    original_matches = [item for item in result.get("matches") or [] if isinstance(item, dict)]
-    annotate_current_search_reopen_commands(
-        original_matches,
-        source_path=result.get("source"),
-        include_paths=include_paths,
-    )
     public_matches = [
         dict(item) if include_paths else redact_sensitive_values(redact_private_paths(dict(item)))
         for item in original_matches
@@ -309,6 +318,147 @@ def public_search_result(
     if isinstance(foreground_action, Mapping):
         public.update(canonical_foreground_action_fields(foreground_action))
     return public if include_paths else redact_sensitive_values(redact_private_paths(public))
+
+
+def _compact_match(
+    match: Mapping[str, Any],
+    *,
+    index: int,
+    metadata_only: bool,
+    include_paths: bool,
+) -> dict[str, Any]:
+    timestamp = str(match.get("timestamp") or "")
+    snippet = ""
+    if not match.get("search_noise"):
+        snippet = compact_text(str(match.get("snippet") or ""), DEFAULT_PUBLIC_SNIPPET_CHARS)
+    source_line = match.get("source_line") or match.get("line")
+    source_label = (
+        f"clean source line {source_line}" if metadata_only and source_line else source_label_for_match(dict(match))
+    )
+    item: dict[str, Any] = {
+        "match_index": index,
+        "source_label": source_label,
+        "role": match.get("role"),
+        "phase": match.get("phase") or "",
+        "date": timestamp[:10] if timestamp else None,
+        "line": source_line,
+        "snippet": snippet,
+        "snippet_omitted": not bool(snippet),
+    }
+    if include_paths and match.get("reopen_command"):
+        item["reopen_command"] = match.get("reopen_command")
+    elif not metadata_only and match.get("reopen_command"):
+        item["reopen_command"] = match.get("reopen_command")
+    if metadata_only:
+        item["source_refs_omitted"] = True
+    if match.get("search_noise"):
+        item["search_noise"] = True
+        item["noise_reason"] = match.get("noise_reason")
+    if match.get("artifact_demoted"):
+        item["artifact_demoted"] = True
+    # `snippet: ""` is deliberate when callers choose `--snippet-chars 0`.
+    # Keep it paired with `snippet_omitted` so downstream agents can distinguish
+    # "snippet intentionally withheld" from "match payload malformed".
+    return {
+        key: value
+        for key, value in item.items()
+        if key == "snippet" or value not in (None, "", [])
+    }
+
+
+def _compact_public_search_result(
+    result: dict[str, Any],
+    *,
+    original_matches: list[dict[str, Any]],
+    include_paths: bool,
+    metadata_only: bool,
+    query_text: str | None,
+) -> dict[str, Any]:
+    query = str(query_text or "").strip()
+    if not query:
+        query = " ".join(str(term) for term in result.get("query_terms") or []).strip()
+    authority = search_foreground_authority(
+        matches=original_matches,
+        query_terms=[str(term) for term in result.get("query_terms") or []],
+        metadata_only=metadata_only,
+        query_text=query,
+    )
+    suppressed_count = int(result.get("suppressed_low_coverage_match_count") or 0)
+    status = str(authority.get("status") or "ok")
+    ok = bool(authority.get("ok"))
+    if not original_matches and suppressed_count:
+        status = "no_phrase_like_matches"
+        ok = False
+    payload: dict[str, Any] = {
+        "kind": "aippocampus_search_result",
+        "detail": "compact",
+        "ok": ok,
+        "status": status,
+        "query_text": redact_sensitive_values(redact_private_paths(query)),
+        "search_scope": result.get("search_scope"),
+        "scope_description": result.get("scope_description"),
+        "match_count": len(original_matches),
+        "matches": [
+            _compact_match(
+                match,
+                index=index,
+                metadata_only=metadata_only,
+                include_paths=include_paths,
+            )
+            for index, match in enumerate(original_matches, start=1)
+        ],
+        "claim_boundary": authority.get("claim_permission")
+        or "source_reopen_required_before_claims",
+        "source_reopen_boundary": (
+            "reopen_selected_match_before_exact_or_sensitive_claims"
+            if original_matches
+            else "search_miss_is_not_absence_of_memory"
+        ),
+        "foreground_action": authority.get("foreground_action") or {},
+    }
+    capped_public_snippets_emitted = any(
+        bool(match.get("snippet")) and not match.get("snippet_omitted")
+        for match in payload.get("matches") or []
+        if isinstance(match, dict)
+    )
+    if metadata_only:
+        payload["output_boundary"] = "public_metadata_with_capped_source_snippets_no_reopen_refs"
+        payload["privacy"] = {
+            "paths_included": include_paths,
+            "path_redaction": "none" if include_paths else LOCAL_PATH_REDACTION,
+            "metadata_only": True,
+            "capped_source_snippets_emitted": capped_public_snippets_emitted,
+            "raw_source_snippets_emitted": False,
+            "local_reopen_refs_emitted": False,
+        }
+    if suppressed_count:
+        payload["suppressed_low_coverage_match_count"] = suppressed_count
+    if not original_matches:
+        payload["decision"] = "no_source_backed_snippet_found"
+        payload["recovery_guidance"] = (
+            "Refine the current-thread cue, run registry-wide search, or use "
+            "`agent recall` for vague continuity cues."
+        )
+        payload["fallback_command_template"] = 'aippocampus agent recall "{cue}" --json'
+        payload["detail_command_template"] = 'aippocampus search "{exact_phrase}" --json --detail full'
+        payload["searched_scope"] = payload.get("scope_description")
+    if include_paths:
+        payload["source"] = result.get("source")
+    elif metadata_only:
+        payload["source"] = LOCAL_PATH_REDACTION
+        payload["source_omitted"] = True
+    if not original_matches and suppressed_count:
+        payload["suppression_boundary"] = "phrase_like_low_coverage_suppressed"
+    foreground_action = payload.get("foreground_action")
+    if isinstance(foreground_action, Mapping):
+        payload.update(
+            canonical_foreground_action_fields(
+                foreground_action,
+                max_safe_next_actions=1,
+                safe_next_read_only_only=True,
+            )
+        )
+    return payload if include_paths else redact_sensitive_values(redact_private_paths(payload))
 
 
 def search_recovery_payload() -> dict[str, Any]:

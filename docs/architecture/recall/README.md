@@ -1,5 +1,9 @@
 # Recall Architecture
 
+Audience: runtime maintainer / agent-facing UX reviewer.
+Read this when: changing recall ranking, compact foreground output, hooks, MCP/CLI recall, or source deepen/open behavior.
+Skip to: `docs/start-here.md` for first-use orientation; `docs/architecture/source/` for source truth; `owner-map.md` for runtime file ownership.
+
 Role: recall and foreground-memory contract index.
 Status: current architecture layer.
 

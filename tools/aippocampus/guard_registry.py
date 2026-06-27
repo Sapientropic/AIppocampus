@@ -187,7 +187,7 @@ SCOPE_GATE_DEFAULTS: dict[str, dict[str, Any]] = {
 }
 
 COMMAND_GUARD_PATTERNS: tuple[tuple[re.Pattern[str], dict[str, Any]], ...] = (
-    (re.compile(r"^git diff --check$"), {"guard_id": "git-diff-check"}),
+    (re.compile(r"^git diff --check(?:\s+.+\.\.HEAD)?$"), {"guard_id": "git-diff-check"}),
     (re.compile(r"^ruff check\b"), {"guard_id": "static-ruff"}),
     (re.compile(r"^mypy$"), {"guard_id": "static-mypy"}),
     (

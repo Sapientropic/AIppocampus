@@ -1,5 +1,9 @@
 # Dream Evidence
 
+Audience: Dream feature maintainer / evidence reviewer.
+Read this when: checking dated Dream/subconscious candidate evidence or whether a Dream-related claim has public-safe support.
+Skip to: `../current-claims.md` for current claim status; `../../research/dream-task-design.md` for design intent; `../../architecture/runtime/cognitive-runtime-architecture.md` for runtime boundaries.
+
 This folder keeps dated Dream evidence reports and companion JSON artifacts.
 Use [`../current-claims.md`](../current-claims.md) for the current claim
 snapshot before treating any dated report as current.

@@ -19,6 +19,7 @@ LOW_MARGIN_OWNER_ISSUES = {
     "skills/aippocampus/scripts/aippocampus_runtime/update/plugin_installer.py": "#2197",
     "skills/aippocampus/scripts/aippocampus_runtime/dream/input_pack.py": "#2548",
     "skills/aippocampus/scripts/aippocampus_runtime/hooks/install_action_hint.py": "#2548",
+    "skills/aippocampus/scripts/aippocampus_runtime/hooks/foreground_status.py": "#2611",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/continuity_domains.py": "#2548",
     "skills/aippocampus/scripts/aippocampus_runtime/coding/episode_arc_private_adjudication.py": "#2548",
     "skills/aippocampus/scripts/aippocampus_runtime/contracts.py": "#2548",

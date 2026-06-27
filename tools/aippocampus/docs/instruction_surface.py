@@ -198,6 +198,14 @@ INSTRUCTION_SURFACE_CLASSIFIED_FILES = {
             "claim must be backed by handler tests and compact/detail projection"
         ),
     },
+    "skills/aippocampus/scripts/aippocampus_runtime/mcp/tool_readiness.py": {
+        "classification": "mcp_tool_readiness_projection_owner",
+        "owner": "#2685/#2686/#2651",
+        "why": (
+            "owns MCP tool-readiness compact actions and CLI fallbacks; tool visibility "
+            "is not source evidence and compact output must stay action-sized"
+        ),
+    },
     "skills/aippocampus/scripts/aippocampus_runtime/recall/agent_continuity.py": {
         "classification": "runtime_prompt_and_route_owner",
         "owner": "#2636/#2651",
@@ -879,6 +887,14 @@ INSTRUCTION_SURFACE_CLASSIFIED_FILES = {
         "why": (
             "owns clean-source search/source-open follow-through fixtures; "
             "source-like strings are test evidence, not hidden agent instructions"
+        ),
+    },
+    "tests/aippocampus/test_relationship_origin_recall.py": {
+        "classification": "relationship_origin_recall_test_contract_owner",
+        "owner": "#2636/#2651",
+        "why": (
+            "owns relationship-origin CLI/MCP source-follow-through fixtures; "
+            "origin cue strings are test contracts, not runtime instructions"
         ),
     },
     "tests/aippocampus/test_semantic_trigger_router.py": {

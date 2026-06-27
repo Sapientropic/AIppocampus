@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 from aippocampus_runtime.recall.ambient_cards import (
     bounded_evidence_context_from_source_reopen,
@@ -15,6 +15,27 @@ from aippocampus_runtime.source.search import iter_clean_messages
 
 MAX_AUTOMATIC_SOURCE_REOPEN_CARDS = 2
 SOURCE_BACKED_VISIBILITIES = {"source_backed_recall_card", "deep_archival_recall"}
+CardKey = tuple[str, str]
+
+
+def _card_match_key(card: dict[str, Any]) -> CardKey:
+    return (str(card.get("route") or ""), str(card.get("theme") or ""))
+
+
+def _source_refs_for_card(
+    card: dict[str, Any],
+    *,
+    private_source_refs_by_card_key: Mapping[CardKey, list[dict[str, Any]]] | None = None,
+) -> list[dict[str, Any]]:
+    refs = [ref for ref in card.get("source_refs") or [] if isinstance(ref, dict)]
+    if refs:
+        return refs
+    private_refs = (
+        private_source_refs_by_card_key.get(_card_match_key(card), [])
+        if private_source_refs_by_card_key
+        else []
+    )
+    return [ref for ref in private_refs if isinstance(ref, dict)]
 
 
 def _message_matches_ref(message: dict[str, Any], ref: dict[str, Any]) -> bool:
@@ -32,8 +53,12 @@ def _message_matches_ref(message: dict[str, Any], ref: dict[str, Any]) -> bool:
     return bool(ref_line is not None and str(ref_line) == str(message_line))
 
 
-def _reopen_reason_for_card(card: dict[str, Any]) -> str:
-    if not [ref for ref in card.get("source_refs") or [] if isinstance(ref, dict)]:
+def _reopen_reason_for_card(
+    card: dict[str, Any],
+    *,
+    source_refs: list[dict[str, Any]] | None = None,
+) -> str:
+    if not source_refs:
         return ""
     if card.get("candidate_type") == "dream_hypothesis":
         return ""
@@ -91,9 +116,10 @@ def _reopen_card_source_payload(
     card: dict[str, Any],
     *,
     threads_by_key: dict[str, dict[str, Any]],
+    source_refs: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     errors: list[dict[str, Any]] = []
-    for ref in [item for item in card.get("source_refs") or [] if isinstance(item, dict)]:
+    for ref in source_refs or _source_refs_for_card(card):
         thread_key = str(ref.get("thread_key") or "")
         entry = threads_by_key.get(thread_key)
         if not entry:
@@ -169,6 +195,7 @@ def promote_reopenable_ambient_cards(
     *,
     registry_path: Path,
     max_cards: int = MAX_AUTOMATIC_SOURCE_REOPEN_CARDS,
+    private_source_refs_by_card_key: Mapping[CardKey, list[dict[str, Any]]] | None = None,
 ) -> None:
     """Promote eligible ambient cards only after deterministic clean-source reopen.
 
@@ -180,7 +207,15 @@ def promote_reopenable_ambient_cards(
     """
 
     cards = [card for card in ambient.get("cards") or [] if isinstance(card, dict)]
-    eligible = [(card, reason) for card in cards if (reason := _reopen_reason_for_card(card))]
+    eligible: list[tuple[dict[str, Any], str, list[dict[str, Any]]]] = []
+    for card in cards:
+        refs = _source_refs_for_card(
+            card,
+            private_source_refs_by_card_key=private_source_refs_by_card_key,
+        )
+        reason = _reopen_reason_for_card(card, source_refs=refs)
+        if reason:
+            eligible.append((card, reason, refs))
     if not eligible:
         return
     diagnostics: dict[str, Any] = {
@@ -202,9 +237,13 @@ def promote_reopenable_ambient_cards(
         ambient["source_reopen"] = diagnostics
         return
 
-    for card, reason in eligible[: max(0, max_cards)]:
+    for card, reason, source_refs in eligible[: max(0, max_cards)]:
         diagnostics["attempted_count"] += 1
-        payload = _reopen_card_source_payload(card, threads_by_key=threads_by_key)
+        payload = _reopen_card_source_payload(
+            card,
+            threads_by_key=threads_by_key,
+            source_refs=source_refs,
+        )
         evidence_context = bounded_evidence_context_from_source_reopen(payload, max_cards=1)
         if evidence_context.get("source_reopen_success"):
             diagnostics["success_count"] += 1

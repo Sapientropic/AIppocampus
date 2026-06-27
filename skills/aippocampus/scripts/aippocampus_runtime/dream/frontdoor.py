@@ -1,4 +1,8 @@
-"""Read-only foreground Dream status commands."""
+"""Dream - background inference candidates, status only.
+
+Reports whether reviewed Dream/subconscious background candidates exist. It
+does not run workers and Dream-only material is navigation until source reopen.
+"""
 
 from __future__ import annotations
 
@@ -128,7 +132,10 @@ def dream_status_payload(
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="aippocampus dream", description=__doc__)
     sub = parser.add_subparsers(dest="command")
-    status_parser = sub.add_parser("status", help="Read Dream output status without running workers.")
+    status_parser = sub.add_parser(
+        "status",
+        help="Read background inference candidate status without running workers.",
+    )
     status_parser.add_argument("--registry-dir", type=Path)
     status_parser.add_argument("--queue-jsonl", type=Path)
     status_parser.add_argument("--findings-jsonl", type=Path)

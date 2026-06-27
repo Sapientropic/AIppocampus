@@ -48,9 +48,10 @@ class AippocampusStartCliTests(unittest.TestCase):
         self.assertFalse(payload["first_recall_readiness"]["cold_start_expected"])
         self.assertEqual(payload["performance_expectation"]["mode"], "steady_state")
         self.assertFalse(payload["state_summary"]["clean_source"]["path_serialized"])
-        action_ids = [action["id"] for action in payload["safe_next_actions"]]
-        self.assertIn("choose_export_for_next_thread", action_ids)
-        self.assertIn("choose_sync_for_next_device", action_ids)
+        self.assertEqual(payload["safe_next_actions"], [])
+        self.assertIn("deepen_after_recall", payload["detail_actions_available"])
+        self.assertIn("export_after_recall", payload["detail_actions_available"])
+        self.assertIn("sync_after_recall", payload["detail_actions_available"])
 
     def test_start_json_accepts_cue_and_returns_executable_recall(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -192,8 +193,9 @@ class AippocampusStartCliTests(unittest.TestCase):
         self.assertEqual(payload["foreground_action"]["mutation_risk"], "writes_local_clean_source")
         action_ids = [action["id"] for action in payload["safe_next_actions"]]
         self.assertNotIn("register_codex_source", action_ids)
-        self.assertIn("register_claude_code_source", action_ids)
-        self.assertIn("import_generic_jsonl_source", action_ids)
+        write_action_ids = [action["id"] for action in payload["write_actions"]]
+        self.assertIn("register_claude_code_source", write_action_ids)
+        self.assertIn("import_generic_jsonl_source", write_action_ids)
         self.assertIn("inspect_onboarding_status", action_ids)
         self.assertIn("review_claude_code_hooks", action_ids)
 
@@ -234,9 +236,11 @@ class AippocampusStartCliTests(unittest.TestCase):
             payload["foreground_action"]["command"],
             "aippocampus onboard --provider claude-code --cwd . --json",
         )
-        action_ids = [action["id"] for action in payload["safe_next_actions"]]
         self.assertEqual(payload["foreground_action"]["id"], "register_claude_code_source")
-        self.assertIn("register_codex_source", action_ids)
+        self.assertIn(
+            "register_codex_source",
+            [action["id"] for action in payload["write_actions"]],
+        )
 
     def test_bare_aippocampus_in_new_workspace_shows_start_card_not_help_wall(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -298,7 +302,10 @@ class AippocampusStartCliTests(unittest.TestCase):
         self.assertNotIn("--clean-source-dir", exact_fallback["command_template"])
         self.assertIn("configured local source", exact_fallback["why"])
         self.assertIn("public_safe_demo_search", exact_fallback["why"])
-        self.assertIn("verify_codex_plugin_secondary", action_ids)
+        self.assertIn(
+            "verify_codex_plugin_secondary",
+            [action["id"] for action in payload["write_actions"]],
+        )
         self.assertNotEqual(payload["safe_next_actions"][0]["mutation_risk"], "writes_local_plugin_cache")
 
     def test_start_json_distinguishes_stale_source_from_first_recall_blocker(self) -> None:
@@ -320,12 +327,9 @@ class AippocampusStartCliTests(unittest.TestCase):
         self.assertTrue(payload["first_recall_readiness"]["blocks_exact_latest_claims"])
         self.assertTrue(payload["blocks_exact_latest_claims"])
         action_ids = [action["id"] for action in payload["safe_next_actions"]]
-        self.assertIn("review_maintenance_plan_before_exact_latest", action_ids)
-        self.assertIn("apply_maintenance_after_consent", action_ids)
-        self.assertLess(
-            action_ids.index("review_maintenance_plan_before_exact_latest"),
-            action_ids.index("deepen_selected_route"),
-        )
+        self.assertEqual(action_ids, ["review_maintenance_plan_before_exact_latest"])
+        self.assertNotIn("write_actions", payload)
+        self.assertEqual(payload["manage_command"], "aippocampus maintenance plan --summary-json")
 
     def test_start_uses_health_freshness_gap_when_manifest_is_not_stale(self) -> None:
         from aippocampus_runtime.cli import start as start_cli
@@ -367,11 +371,9 @@ class AippocampusStartCliTests(unittest.TestCase):
         self.assertTrue(source["latest_source_may_be_missing"])
         self.assertEqual(source["freshness_scope"], "workspace_health_summary")
         action_ids = [action["id"] for action in payload["safe_next_actions"]]
-        self.assertIn("review_maintenance_plan_before_exact_latest", action_ids)
-        self.assertLess(
-            action_ids.index("review_maintenance_plan_before_exact_latest"),
-            action_ids.index("deepen_selected_route"),
-        )
+        self.assertEqual(action_ids, ["review_maintenance_plan_before_exact_latest"])
+        self.assertNotIn("write_actions", payload)
+        self.assertEqual(payload["manage_command"], "aippocampus maintenance plan --summary-json")
 
 if __name__ == "__main__":
     unittest.main()

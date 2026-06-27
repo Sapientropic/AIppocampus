@@ -19,6 +19,25 @@ KEY_AGENT_NATIVE_TOOLS = (
     "agent_explain",
 )
 
+FOREGROUND_PARAMETER_TOOLS = (
+    "agent_recall",
+    "agent_deepen",
+    "search_memory",
+    "memory_health",
+)
+
+WORKFLOW_GUIDE_TOOLS = (
+    "agent_recall",
+    "agent_deepen",
+    "search_memory",
+    "get_turn_context",
+    "agent_explain",
+    "recall_diagnostic",
+    "memory_health",
+    "recall_context",
+    "recall_deepen",
+)
+
 
 def visible_tool_names() -> list[str]:
     return sorted(str(tool.get("name") or "") for tool in TOOLS if tool.get("name"))
@@ -29,9 +48,60 @@ def tool_names_summary() -> dict[str, Any]:
     return {"ok": True, "tool_count": len(names), "tool_names": names}
 
 
+def _tools_by_name() -> dict[str, dict[str, Any]]:
+    return {str(tool.get("name") or ""): tool for tool in TOOLS if tool.get("name")}
+
+
+def _aippocampus_metadata(tool: dict[str, Any]) -> dict[str, Any]:
+    metadata = tool.get("metadata")
+    if not isinstance(metadata, dict):
+        return {}
+    aippocampus = metadata.get("aippocampus")
+    return aippocampus if isinstance(aippocampus, dict) else {}
+
+
+def _foreground_parameter_guide(tools_by_name: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    guide: dict[str, Any] = {}
+    for tool_name in FOREGROUND_PARAMETER_TOOLS:
+        metadata = _aippocampus_metadata(tools_by_name.get(tool_name, {}))
+        tiers = metadata.get("parameter_tiers")
+        if not isinstance(tiers, dict):
+            continue
+        guide[tool_name] = {
+            "required": list(tiers.get("required") or []),
+            "common": list(tiers.get("common") or []),
+        }
+    return guide
+
+
+def _workflow_guide(tools_by_name: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    guide: dict[str, Any] = {}
+    for tool_name in WORKFLOW_GUIDE_TOOLS:
+        metadata = _aippocampus_metadata(tools_by_name.get(tool_name, {}))
+        if not metadata:
+            continue
+        guide[tool_name] = {
+            "workflow": metadata.get("workflow"),
+            "posture": metadata.get("posture"),
+            "claim_boundary": metadata.get("claim_boundary"),
+            "requires_prior": list(metadata.get("requires_prior") or []),
+            "enables_next": list(metadata.get("enables_next") or []),
+        }
+        if metadata.get("legacy"):
+            guide[tool_name]["legacy"] = True
+        if metadata.get("foreground_recommended") is not None:
+            guide[tool_name]["foreground_recommended"] = bool(
+                metadata.get("foreground_recommended")
+            )
+    return guide
+
+
 def _tool_use_guide() -> dict[str, Any]:
+    tools_by_name = _tools_by_name()
     return {
         "primary_consumer_field": "foreground_action",
+        "foreground_parameters": _foreground_parameter_guide(tools_by_name),
+        "workflow": _workflow_guide(tools_by_name),
         "when_to_use": {
             "agent_recall": "Use first when the agent has a task cue, old correction, issue title, or handoff phrase.",
             "agent_deepen": "Use after recall surfaces a numbered route that may support a claim or decision.",

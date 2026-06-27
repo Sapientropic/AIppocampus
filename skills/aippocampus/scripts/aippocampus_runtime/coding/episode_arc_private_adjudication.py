@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Aggregate private-history Episode/Arc adjudication for #663.
+"""Episode-arcs - sequence/arc continuity readout for #663.
+
+Aggregate private-history Episode/Arc adjudication for #663.
 
 The runner reads local registry clean-source messages/events and reports only
 counts, buckets, and claim boundaries. It never serializes source text, source

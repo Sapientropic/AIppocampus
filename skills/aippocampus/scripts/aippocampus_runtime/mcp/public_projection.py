@@ -12,6 +12,7 @@ from aippocampus_runtime import core
 from aippocampus_runtime.contracts import (
     canonical_foreground_action_fields,
     command_value_needs_input,
+    foreground_action_is_read_only,
     foreground_readiness_card,
     strip_foreground_action_legacy_aliases,
 )
@@ -437,6 +438,8 @@ def compact_health_payload(payload: dict[str, Any]) -> dict[str, Any]:
         isinstance(readiness, dict)
         and readiness.get("storage_pressure_cleanup_recommended")
     ) or bool(storage_pressure.get("pressure"))
+    if storage_cleanup_action and "storage_gc_rebuildable_cache" not in recommended_action_ids:
+        recommended_action_ids = [*recommended_action_ids[:4], "storage_gc_rebuildable_cache"]
     storage_unassessed = bool(
         storage_pressure.get("status") == "deferred"
         or (
@@ -476,6 +479,19 @@ def compact_health_payload(payload: dict[str, Any]) -> dict[str, Any]:
             "confounds_detected": True if host_confounds.get("confounds_detected") else None,
             "available": host_confounds.get("available") if host_confounds.get("available") else None,
             "artifact_scope": host_confounds.get("artifact_scope") if host_confounds else None,
+        }
+    )
+    observatory_obj = payload.get("cognitive_observatory")
+    observatory = (
+        cast(dict[str, Any], observatory_obj) if isinstance(observatory_obj, dict) else {}
+    )
+    observatory_summary = core.strip_empty(
+        {
+            "state": observatory.get("state"),
+            "status": observatory.get("status"),
+            "usefulness_counts": observatory.get("usefulness_counts"),
+            "summary_command": observatory.get("summary_command"),
+            "claim_boundary": observatory.get("claim_boundary"),
         }
     )
     # This card is the default foreground JSON surface. Keep only decision fields
@@ -565,6 +581,7 @@ def compact_health_payload(payload: dict[str, Any]) -> dict[str, Any]:
         **first_recall_fields,
         "readiness_card": readiness_card,
         "maintenance_summary": maintenance_summary,
+        "cognitive_observatory": observatory_summary or None,
         "operator_detail_command": "aippocampus health --detail full --json --operator-timeout-ms 5000",
     }
     followup_actions = _health_followup_actions(
@@ -582,8 +599,16 @@ def compact_health_payload(payload: dict[str, Any]) -> dict[str, Any]:
             ),
             *followup_actions,
         ],
+        safe_next_read_only_only=True,
     )
     card.update(foreground_fields)
+    write_actions = [
+        action
+        for action in followup_actions
+        if isinstance(action, dict) and not foreground_action_is_read_only(action)
+    ]
+    if write_actions:
+        card["manage_command"] = "aippocampus maintenance plan --summary-json"
     return core.strip_empty(card)
 
 

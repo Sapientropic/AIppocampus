@@ -84,7 +84,7 @@ def _write_fixture(clean_source_dir: Path) -> None:
             ordinal=2,
             turn_index=1,
             text=(
-                "Field continuity magic moment book 345 evidence is source-backed. "
+                "Old field continuity magic moment book 345 thing evidence is source-backed. "
                 "Reopen this clean-source turn before making the claim."
             ),
         ),
@@ -104,7 +104,10 @@ def _write_fixture(clean_source_dir: Path) -> None:
             line=13,
             ordinal=4,
             turn_index=3,
-            text="中文模糊线索：外置海马体首次召回需要候选路线，而不是要求用户记住原句。",
+            text=(
+                "中文模糊线索：还记得外置海马体第一次召回那个路线，"
+                "首次召回需要候选路线，而不是要求用户记住原句。"
+            ),
         ),
         _message(
             message_id="msg_ru_final",

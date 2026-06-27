@@ -11,6 +11,13 @@ from collections.abc import Mapping
 from typing import Any
 
 
+def _gate_targets_source(gate: Any) -> bool:
+    if not isinstance(gate, Mapping):
+        return False
+    status = str(gate.get("status") or "")
+    return status in {"pass", "passed"} and bool(gate.get("target_source_matched"))
+
+
 def card_allows_primary_source_action(card: Mapping[str, Any] | None) -> bool:
     """Return whether an APW card can safely become the foreground action."""
 
@@ -24,4 +31,11 @@ def card_allows_primary_source_action(card: Mapping[str, Any] | None) -> bool:
     return str(gate.get("status") or "") != "blocked" and gate.get("target_source_matched") is not False
 
 
-__all__ = ["card_allows_primary_source_action"]
+def recall_payload_has_target_source_followthrough(payload: Mapping[str, Any]) -> bool:
+    return _gate_targets_source(payload.get("source_anchor_gate"))
+
+
+__all__ = [
+    "card_allows_primary_source_action",
+    "recall_payload_has_target_source_followthrough",
+]

@@ -68,6 +68,10 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertLess(start.index("agent deepen"), start.index("search"))
         self.assertNotIn("aippocampus health", start)
         self.assertIn("Recovery/readiness:", proc.stdout)
+        self.assertIn("Intent gradients:", proc.stdout)
+        self.assertIn("pulse -> one-line readiness", proc.stdout)
+        self.assertIn("agent recall -> fuzzy continuity route finding", proc.stdout)
+        self.assertIn("do-not-use-here -> current-scope exclusion", proc.stdout)
         self.assertLess(proc.stdout.index("agent deepen"), proc.stdout.index("Recovery/readiness:"))
         self.assertLess(proc.stdout.index("search"), proc.stdout.index("doctor provider"))
         self.assertIn("health", proc.stdout)
@@ -915,8 +919,11 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertIn("usage: aippocampus continuity-domain report", continuity.stdout)
         self.assertIn("usage: aippocampus work-guard", work_guard.stdout)
         self.assertIn("usage: aippocampus telepathy create", telepathy.stdout)
+        self.assertIn("local handoff coordination", telepathy.stdout.casefold())
         self.assertIn("usage: aippocampus observatory", observatory.stdout)
+        self.assertIn("route-readiness dashboard", observatory.stdout.casefold())
         self.assertIn("usage: aippocampus episode-arcs", episode_arcs.stdout)
+        self.assertIn("sequence/arc continuity readout", episode_arcs.stdout.casefold())
         self.assertIn("aippocampus onboard --provider codex --status --json", onboard.stdout)
         self.assertIn("aippocampus onboard --status --operator-json", onboard.stdout)
         self.assertIn("--dry-run --json", onboard.stdout)
@@ -924,6 +931,23 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertEqual(provider_key.returncode, 0)
         self.assertIn("usage: aippocampus onboard provider-key", provider_key.stdout)
         self.assertIn("--apply", provider_key.stdout)
+
+    def test_metaphor_commands_have_engineering_subtitles_without_aliases(self) -> None:
+        top = self.run_cli("--help")
+        dream = self.run_cli("dream", "--help")
+        do_not_use = self.run_cli("do-not-use-here", "--help")
+
+        self.assertEqual(top.returncode, 0, top.stderr)
+        self.assertIn("Route-suppression / bad-route feedback card", top.stdout)
+        self.assertIn("Local handoff coordination cards", top.stdout)
+        self.assertIn("Background inference candidates, status only", top.stdout)
+
+        self.assertEqual(dream.returncode, 0, dream.stderr)
+        self.assertIn("background inference candidates", dream.stdout.casefold())
+        self.assertNotIn("alias", dream.stdout.casefold())
+
+        self.assertEqual(do_not_use.returncode, 0, do_not_use.stderr)
+        self.assertIn("route-suppression / bad-route feedback", do_not_use.stdout.casefold())
 
     def test_mcp_list_tools_accepts_json_alias(self) -> None:
         proc = self.run_cli("mcp", "list-tools", "--json")
@@ -1014,8 +1038,16 @@ class AippocampusCliTests(unittest.TestCase):
 
         self.assertEqual(plugin_json.returncode, 0, plugin_json.stderr)
         plugin_payload = parse_cli_json(self, plugin_json)
-        self.assertEqual(plugin_payload["kind"], "aippocampus_update_status_agent_json")
-        self.assertIn("setup_card", plugin_payload)
+        self.assertEqual(plugin_payload["kind"], "aippocampus_plugin_status_card")
+        self.assertEqual(plugin_payload["plugin_status_contract"], "plugin-callability-v1")
+        self.assertEqual(plugin_payload["foreground_action"]["id"], "check_mcp_tool_callability")
+        self.assertEqual(plugin_payload["foreground_action"]["mutation_risk"], "read_only")
+        self.assertEqual(plugin_payload["safe_next_actions"], [])
+        self.assertEqual(plugin_payload["manage_command"], "aippocampus plugin install --codex --verify --json")
+        self.assertEqual(plugin_payload["operator_detail_command"], "aippocampus plugin status --operator-json")
+        self.assertNotIn("setup_card", plugin_payload)
+        self.assertNotIn("ambient_recall", plugin_payload)
+        self.assertNotIn("write_actions", plugin_payload)
         self.assertNotIn("surfaces", plugin_payload)
 
         self.assertEqual(operator_json.returncode, 0, operator_json.stderr)
@@ -1744,9 +1776,15 @@ class AippocampusCliTests(unittest.TestCase):
         no_match_payload = parse_cli_json(self, no_match)
         self.assertEqual(no_match_payload["match_count"], 0)
         self.assertEqual(no_match_payload["decision"], "no_source_backed_snippet_found")
-        self.assertIn("agent recall", " ".join(no_match_payload["recovery_actions"]))
-        self.assertFalse(
-            no_match_payload["source_boundary"]["source_backed_claim_allowed"]
+        self.assertEqual(
+            no_match_payload["fallback_command_template"],
+            'aippocampus agent recall "{cue}" --json',
+        )
+        self.assertNotIn("recovery_actions", no_match_payload)
+        self.assertEqual(no_match_payload["claim_boundary"], "no_claim_before_source_match")
+        self.assertEqual(
+            no_match_payload["source_reopen_boundary"],
+            "search_miss_is_not_absence_of_memory",
         )
 
     def test_warm_status_json_is_bounded_and_path_redacted(self) -> None:

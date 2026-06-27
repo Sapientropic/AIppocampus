@@ -35,6 +35,19 @@ class ChangedSurfaceTestPlanTests(unittest.TestCase):
             ],
         )
 
+    def test_base_range_diff_check_is_planned_before_dirty_worktree_check(self) -> None:
+        with mock.patch.object(test_plan, "_debt_report_is_red", return_value=False):
+            payload = test_plan.build_test_plan(
+                ["docs/guides/install-guide.md"],
+                diff_check_base="HEAD~1",
+            )
+        commands = [command["command"] for command in payload["commands"]]
+
+        self.assertEqual(commands[0], "git diff --check HEAD~1..HEAD")
+        self.assertEqual(commands[1], test_plan.GIT_DIFF_CHECK_COMMAND)
+        self.assertEqual(payload["commands"][0]["guard_id"], "git-diff-check")
+        self.assertIn("HEAD~1..HEAD", payload["commands"][0]["reason"])
+
     def test_architecture_debt_tracked_change_recommends_headroom_preflight(self) -> None:
         payload = test_plan.build_test_plan(
             ["skills/aippocampus/scripts/aippocampus_runtime/cli/facade.py"]

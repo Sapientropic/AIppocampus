@@ -17,7 +17,11 @@ from aippocampus_runtime.artifacts.publish import (
     segment_generation_diagnostics,
 )
 from aippocampus_runtime.cli.errors import cli_exit_code_for_error_code
-from aippocampus_runtime.command_policy import current_python_command, quote_posix_double
+from aippocampus_runtime.command_policy import (
+    current_python_command,
+    quote_posix_arg,
+    quote_powershell_arg,
+)
 from aippocampus_runtime.core import (
     file_sha256,
     parse_anchor_file,
@@ -29,6 +33,7 @@ from aippocampus_runtime.health_actions import action, dependency_ordered_action
 from aippocampus_runtime.health_background_cognition import background_cognition_health
 from aippocampus_runtime.health_freshness import rollout_visibility_stats
 from aippocampus_runtime.health_host_state import codex_host_state_confounds
+from aippocampus_runtime.health_observatory import cognitive_observatory_readiness_summary
 from aippocampus_runtime.health_recall_availability import (
     build_product_readiness,
     operator_detail_placeholder,
@@ -41,10 +46,16 @@ from aippocampus_runtime.health_stages import (
     evaluate_index_state,
     resolve_health_inputs,
 )
+from aippocampus_runtime.health_storage_pressure import (
+    STORAGE_GC_BOUNDED_DETAIL_COMMAND,
+    STORAGE_GC_FULL_DETAIL_COMMAND,
+    deferred_storage_pressure_report,
+    generation_cache_pressure_report,
+    registry_cache_pressure_report,
+)
 from aippocampus_runtime.health_trajectory import attach_health_trajectory
 from aippocampus_runtime.mcp.public_projection import compact_health_payload
 from aippocampus_runtime.ops import log_retention
-from aippocampus_runtime.ops.storage_governance_contract import human_bytes
 from aippocampus_runtime.privacy import (
     LOCAL_PATH_REDACTION,
     redact_private_paths,
@@ -55,12 +66,7 @@ from aippocampus_runtime.source.io_kernel import load_json_dict
 from aippocampus_runtime.source.source_intake_health import clean_source_health_summaries
 
 DEFAULT_JOBS_OUTPUT_NAME = "subconscious_jobs.jsonl"
-STORAGE_PRESSURE_RECLAIMABLE_BYTES = 512 * 1024 * 1024
-STORAGE_PRESSURE_AMPLIFICATION_RATIO = 10.0
-STORAGE_PRESSURE_CANDIDATE_COUNT = 100
 HEALTH_GENERATION_GC_CANDIDATE_LIMIT = 12
-STORAGE_GC_BOUNDED_DETAIL_COMMAND = "aippocampus storage gc --dry-run --json --top 1 --cwd ."
-STORAGE_GC_FULL_DETAIL_COMMAND = "aippocampus storage gc --dry-run --json --full --cwd ."
 DEFAULT_OPERATOR_DIAGNOSTIC_TIMEOUT_MS = 5000
 EXPENSIVE_OPERATOR_DIAGNOSTIC_TIMEOUT_MS = 30000
 DEFAULT_SLOW_HEALTH_SECTION_MS = 250
@@ -200,12 +206,12 @@ def recommended_script_command(script_name: str, cwd: str | Path) -> str:
         return (
             '$env:PYTHONPATH="$env:CODEX_HOME\\skills\\aippocampus\\scripts"; '
             f"{current_python_command()} -m {module} "
-            f'--cwd "{windows_cwd}"'
+            f"--cwd {quote_powershell_arg(windows_cwd)}"
         )
     return (
         'PYTHONPATH="$CODEX_HOME/skills/aippocampus/scripts" '
         f"{current_python_command()} -m {module} "
-        f"--cwd {quote_posix_double(cwd)}"
+        f"--cwd {quote_posix_arg(cwd)}"
     )
 
 
@@ -213,8 +219,8 @@ def recommended_facade_command(action_id: str, cwd: str | Path) -> str:
     del action_id
     if os.name == "nt":
         windows_cwd = str(PureWindowsPath(str(cwd)))
-        return f'aippocampus maintenance --cwd "{windows_cwd}"'
-    return f"aippocampus maintenance --cwd {quote_posix_double(cwd)}"
+        return f"aippocampus maintenance --cwd {quote_powershell_arg(windows_cwd)}"
+    return f"aippocampus maintenance --cwd {quote_posix_arg(cwd)}"
 
 
 def health_action(action_id: str, severity: str, reason: str, script_name: str, cwd: Path) -> dict[str, Any]:
@@ -256,156 +262,6 @@ def load_question_stats(
 
 def default_question_jobs_path(registry_path: Path) -> Path:
     return registry_path.resolve().parent / DEFAULT_JOBS_OUTPUT_NAME
-
-
-def registry_cache_pressure_report(cwd: Path, registry_dir: Path) -> dict[str, Any]:
-    """Return a bounded generated-cache pressure card for foreground health.
-
-    This deliberately reuses storage governance instead of inventing a second
-    scanner. The report is about rebuildable generated cache only; source
-    history, clean source, raw rollouts, and provenance stay protected.
-    """
-
-    try:
-        from aippocampus_runtime.ops import storage_governance  # noqa: PLC0415
-        from aippocampus_runtime.ops.storage_governance_contract import (  # noqa: PLC0415
-            CLASS_REBUILDABLE,
-        )
-
-        plan = storage_governance.build_plan(
-            cwd,
-            registry_dir=registry_dir,
-            class_filter=CLASS_REBUILDABLE,
-            include_paths=False,
-            top=3,
-            fanout_budget=16,
-        )
-    except Exception as exc:
-        return {
-            "available": False,
-            "status": "unavailable",
-            "reason": "storage_governance_unavailable",
-            "error_type": type(exc).__name__,
-            "source_history_protected": True,
-            "foreground_blocking": False,
-        }
-    metrics = dict(plan.get("metrics") or {})
-    reclaimable = safe_int(metrics.get("reclaimable_rebuildable_bytes"))
-    amplification = float(metrics.get("generated_index_amplification_ratio") or 0.0)
-    candidate_count = safe_int(metrics.get("eviction_candidate_count"))
-    reasons: list[str] = []
-    if reclaimable >= STORAGE_PRESSURE_RECLAIMABLE_BYTES:
-        reasons.append("reclaimable_rebuildable_cache_bytes_high")
-    if amplification >= STORAGE_PRESSURE_AMPLIFICATION_RATIO:
-        reasons.append("generated_index_amplification_ratio_high")
-    if candidate_count >= STORAGE_PRESSURE_CANDIDATE_COUNT:
-        reasons.append("rebuildable_eviction_candidate_count_high")
-    status = "pressure" if reasons else "ok"
-    return {
-        "available": True,
-        "status": status,
-        "pressure": bool(reasons),
-        "reasons": reasons,
-        "metrics": {
-            "reclaimable_rebuildable_bytes": reclaimable,
-            "reclaimable_rebuildable_human": metrics.get("reclaimable_rebuildable_human"),
-            "protected_source_bytes": safe_int(metrics.get("protected_source_bytes")),
-            "protected_source_human": metrics.get("protected_source_human"),
-            "generated_index_amplification_ratio": amplification,
-            "eviction_candidate_count": candidate_count,
-        },
-        "dry_run_command": "aippocampus storage gc --dry-run --json --top 1 --cwd .",
-        "summary_command": "aippocampus storage gc --dry-run --summary-json --cwd .",
-        "repair_command": "aippocampus storage gc --apply --class rebuildable --include-active --summary-json --cwd .",
-        "source_history_protected": True,
-        "foreground_blocking": False,
-        "privacy_boundary": {
-            "paths_included": False,
-            "raw_rollout_bodies_read": False,
-            "clean_source_bodies_read": False,
-            "rebuildable_cache_only": True,
-        },
-    }
-
-
-def generation_cache_pressure_report(
-    index_generations: Mapping[str, Any],
-    segment_generations: Mapping[str, Any],
-) -> dict[str, Any]:
-    """Summarize already-loaded old generation pressure without a registry scan."""
-
-    index_bytes = safe_int(index_generations.get("generation_gc_candidate_bytes"))
-    segment_bytes = safe_int(segment_generations.get("generation_gc_candidate_bytes"))
-    index_count = safe_int(index_generations.get("generation_gc_candidate_count"))
-    segment_count = safe_int(segment_generations.get("generation_gc_candidate_count"))
-    reclaimable = index_bytes + segment_bytes
-    candidate_count = index_count + segment_count
-    reasons: list[str] = []
-    if reclaimable >= STORAGE_PRESSURE_RECLAIMABLE_BYTES:
-        reasons.append("loaded_generation_gc_candidate_bytes_high")
-    if candidate_count >= STORAGE_PRESSURE_CANDIDATE_COUNT:
-        reasons.append("loaded_generation_gc_candidate_count_high")
-    status = "pressure" if reasons else "ok"
-    return {
-        "available": True,
-        "status": status,
-        "pressure": bool(reasons),
-        "reasons": reasons,
-        "scope": "current_thread_generation_diagnostics",
-        "metrics": {
-            "reclaimable_rebuildable_bytes": reclaimable,
-            "reclaimable_rebuildable_human": human_bytes(reclaimable),
-            "index_generation_gc_candidate_bytes": index_bytes,
-            "segment_generation_gc_candidate_bytes": segment_bytes,
-            "eviction_candidate_count": candidate_count,
-            "index_generation_gc_candidate_count": index_count,
-            "segment_generation_gc_candidate_count": segment_count,
-            "generated_index_amplification_ratio": 0.0,
-        },
-        "dry_run_command": STORAGE_GC_BOUNDED_DETAIL_COMMAND,
-        "summary_command": "aippocampus storage gc --dry-run --summary-json --cwd .",
-        "repair_command": "aippocampus storage gc --apply --class rebuildable --include-active --summary-json --cwd .",
-        "source_history_protected": True,
-        "foreground_blocking": False,
-        "privacy_boundary": {
-            "paths_included": False,
-            "raw_rollout_bodies_read": False,
-            "clean_source_bodies_read": False,
-            "rebuildable_cache_only": True,
-        },
-        "claim_boundary": (
-            "Current-thread old generation candidates are rebuildable-cache "
-            "pressure only; review storage GC before any apply."
-        ),
-    }
-
-
-def deferred_storage_pressure_report() -> dict[str, Any]:
-    return {
-        "available": False,
-        "status": "deferred",
-        "partial": True,
-        "pressure": None,
-        "reason": "expensive_storage_pressure_diagnostic_requires_opt_in",
-        "next_operator_action": (
-            "aippocampus health --detail full --json "
-            f"--include-expensive-diagnostics --operator-timeout-ms {EXPENSIVE_OPERATOR_DIAGNOSTIC_TIMEOUT_MS}"
-        ),
-        "summary_command": "aippocampus storage gc --dry-run --summary-json --cwd .",
-        "source_history_protected": True,
-        "foreground_blocking": False,
-        "privacy_boundary": {
-            "paths_included": False,
-            "raw_rollout_bodies_read": False,
-            "clean_source_bodies_read": False,
-            "rebuildable_cache_only": True,
-        },
-        "claim_boundary": (
-            "Storage pressure was not assessed in the bounded full-detail pass; "
-            "use next_operator_action for the explicit expensive diagnostic."
-        ),
-    }
-
 
 
 def health_report(cwd: str | Path | None = None, **overrides: Any) -> dict[str, Any]:
@@ -745,13 +601,22 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
         segment_generations,
     )
     if options.include_operator_diagnostics and options.include_expensive_diagnostics:
-        storage_pressure = registry_cache_pressure_report(cwd, registry_path.resolve().parent)
+        storage_pressure = registry_cache_pressure_report(
+            cwd,
+            registry_path.resolve().parent,
+            max_elapsed_ms=options.operator_timeout_ms,
+        )
     elif cheap_storage_pressure.get("pressure"):
         storage_pressure = cheap_storage_pressure
     elif options.include_operator_diagnostics:
         storage_pressure = deferred_storage_pressure_report()
     else:
-        storage_pressure = operator_detail_placeholder(pressure=True)
+        # Default compact health is a foreground card, not an operator audit. It
+        # must not run an expensive registry-wide storage scan, but it also must
+        # not make "storage was not checked" look like "storage is clean". Keep a
+        # bounded no-write summary route in the default payload so health/pulse
+        # can route the agent toward review without dumping candidates up front.
+        storage_pressure = deferred_storage_pressure_report()
     record_health_section(
         section_timings,
         name="storage_pressure",
@@ -780,6 +645,7 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
             )
         )
     actions = dependency_ordered_actions(actions)
+    observatory_readiness = cognitive_observatory_readiness_summary()
     logs = log_retention.add_health_action(actions, registry_path.resolve().parent, max_bytes=options.max_log_bytes)
     actions = dependency_ordered_actions(actions)
     section_started_at = perf_counter()
@@ -849,10 +715,7 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
         or freshness_action_recommended
     )
     storage_pressure_cleanup_recommended = (
-        None
-        if storage_pressure.get("pressure") is None
-        and storage_pressure.get("status") == "deferred"
-        else bool(storage_pressure.get("pressure"))
+        None if storage_pressure.get("pressure") is None else bool(storage_pressure.get("pressure"))
     )
     product_readiness = build_product_readiness(
         actions=actions,
@@ -1024,6 +887,7 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
         },
         "question_stats": question_stats,
         "background_cognition": background_cognition,
+        "cognitive_observatory": observatory_readiness,
         "storage_pressure": storage_pressure,
         "host_state_confounds": host_state_confounds,
         "logs": logs,

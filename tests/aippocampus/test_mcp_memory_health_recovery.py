@@ -308,8 +308,9 @@ class McpMemoryHealthRecoveryTests(unittest.TestCase):
         self.assertNotIn("agent_next_action", payload)
         self.assertIn("safe_next_actions", payload)
         self.assertIn("onboard --provider auto --status --json", payload["foreground_action"]["command"])
+        actions_by_id = {item["id"]: item for item in payload["safe_next_actions"]}
         self.assertEqual(
-            payload["safe_next_actions"][2]["command_template"],
+            actions_by_id["search_exact_phrase"]["command_template"],
             'aippocampus search "{exact_phrase}" --json',
         )
         self.assertEqual(executable_command_violations(payload), [])

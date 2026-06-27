@@ -14,22 +14,16 @@ from aippocampus_runtime.cli import facade
 from aippocampus_runtime.coding import (
     episode_arc_private_adjudication as private_arcs,
 )
+from aippocampus_runtime.source.io_kernel import write_jsonl_dict_rows
 
 PRIVATE_SENTINEL = "PRIVATE_EPISODE_ARC_TEXT_MUST_NOT_SURFACE"
-
-def write_jsonl(path: Path, rows: list[dict[str, object]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        "\n".join(json.dumps(row, ensure_ascii=False) for row in rows) + "\n",
-        encoding="utf-8",
-    )
 
 def registry_entry(root: Path, thread_key: str, *, rows: list[dict[str, object]], events: list[dict[str, object]]) -> dict[str, object]:
     slug = thread_key.replace(":", "-")
     messages_path = root / slug / "clean-source" / "messages.jsonl"
     events_path = root / slug / "clean-source" / "events.jsonl"
-    write_jsonl(messages_path, rows)
-    write_jsonl(events_path, events)
+    write_jsonl_dict_rows(messages_path, rows)
+    write_jsonl_dict_rows(events_path, events)
     return {
         "thread_key": thread_key,
         "workspace_name": "fixture-workspace",
@@ -258,11 +252,7 @@ class EpisodeArcPrivateAdjudicationTests(unittest.TestCase):
         self.assertEqual(summary_payload["complete_arc_count"], 1)
         self.assertEqual(summary_payload["gappy_arc_count"], 0)
         self.assertEqual(summary_payload["current_validity_counts"].get("needs_reopen"), 1)
-        self.assertEqual(
-            summary_payload["safe_next_actions"][0]["command"],
-            "aippocampus episode-arcs --json --detail full --top 5",
-        )
-        self.assertEqual(summary_payload["safe_next_actions"][0]["id"], "current_owner_route")
+        self.assertEqual(summary_payload["safe_next_actions"], [])
         self.assertEqual(summary_payload["what_to_do"], "retrieve_actionable_arc_handles")
         self.assertFalse(summary_payload["no_op"])
         self.assertEqual(

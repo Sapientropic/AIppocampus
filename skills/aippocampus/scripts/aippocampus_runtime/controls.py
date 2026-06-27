@@ -522,6 +522,7 @@ def build_parser(prog: str = "aippocampus pause") -> argparse.ArgumentParser:
         usage=f"{prog} [target] [options]",
         description=(
             "Personal control card for pause, forget, and do-not-use-here. "
+            "do-not-use-here is route-suppression / bad-route feedback. "
             "Controls tune or plan foreground behavior; they do not rewrite source truth."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,

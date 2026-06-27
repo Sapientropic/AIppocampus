@@ -147,7 +147,9 @@ class InstallMemoryMaintenanceHookTests(unittest.TestCase):
         self.assertEqual(installed["foreground_action"]["mutation_risk"], "read_only")
         installed_action_ids = [action["id"] for action in installed["safe_next_actions"]]
         self.assertIn("check_lifecycle_hook_status", installed_action_ids)
-        self.assertIn("rollback_lifecycle_hooks", installed_action_ids)
+        self.assertNotIn("rollback_lifecycle_hooks", installed_action_ids)
+        self.assertEqual(installed["manage_command"], "aippocampus hooks lifecycle uninstall --json")
+        self.assertTrue(all(action["mutation_risk"] == "read_only" for action in installed["safe_next_actions"]))
 
         data = self.read_hooks()
         data["hooks"].pop("PostCompact", None)

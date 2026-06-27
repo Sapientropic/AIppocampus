@@ -16,6 +16,7 @@ test helper, or verification tool and leave only a pointer here.
 
 ```text
 surface:
+hazard id:
 hazard:
 why agents miss it:
 forbidden shortcuts:
@@ -30,6 +31,8 @@ owner:
 
 surface: `navigation/association*`, `navigation/concept_graph*`,
 `cognitive_map`, theme extraction, phrase mining.
+
+hazard id: `mined-navigation-terms`
 
 hazard: mined labels can look structured while flooding recall with fragments,
 substring variants, one-window co-occurrence, or graph expansion that does not
@@ -75,6 +78,8 @@ owner: navigation data-quality guard / issue track #2695.
 surface: `agent recall`, MCP recall/deepen, APW source routes, source-open
 foreground actions, compact foreground projection, repo familiarity fallback.
 
+hazard id: `foreground-recall-follow-through`
+
 hazard: payloads can be schema-valid, safe, and full of boundary fields while
 still failing the user because the emitted route does not open the right source
 or sends the agent into unrelated repo familiarity.
@@ -118,6 +123,8 @@ owner: foreground recall / MCP verification steward.
 
 surface: JSONL intake, clean-source extraction, registry and sync publish,
 locks, stale selectors, compatibility aliases, storage cleanup.
+
+hazard id: `source-state-durability`
 
 hazard: the happy path can pass while corrupt lines, stale locks, orphaned
 generations, platform path behavior, or compatibility aliases silently change

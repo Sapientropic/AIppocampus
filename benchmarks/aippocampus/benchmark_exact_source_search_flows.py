@@ -22,6 +22,7 @@ from aippocampus_runtime.source.registry_search import (
 )
 
 SCHEMA_VERSION = 1
+SEARCH_MISS_NOT_ABSENCE = "search_miss_is_not_absence_of_memory"
 
 
 def _write_messages(clean_dir: Path, rows: list[dict[str, Any]]) -> None:
@@ -161,6 +162,19 @@ def _setup_fixture(root: Path) -> tuple[Path, Path]:
     return current_clean, cache_path
 
 
+def _search_miss_not_absence_boundary(payload: dict[str, Any]) -> bool:
+    source_boundary = payload.get("source_boundary")
+    if (
+        isinstance(source_boundary, dict)
+        and source_boundary.get("search_miss_is_not_absence_of_memory") is True
+    ):
+        return True
+    return (
+        payload.get("source_reopen_boundary") == SEARCH_MISS_NOT_ABSENCE
+        or payload.get("claim_boundary") == SEARCH_MISS_NOT_ABSENCE
+    )
+
+
 def evaluate_exact_source_search_flows() -> dict[str, Any]:
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
@@ -249,7 +263,7 @@ def evaluate_exact_source_search_flows() -> dict[str, Any]:
             {
                 "case_id": "registry_wide_no_match_boundary",
                 "ok": registry_miss.get("status") == "no_matches"
-                and registry_miss.get("source_boundary", {}).get("search_miss_is_not_absence_of_memory") is True,
+                and _search_miss_not_absence_boundary(registry_miss),
                 "scope": registry_miss.get("search_scope"),
                 "reopenable": False,
             },
@@ -267,7 +281,7 @@ def evaluate_exact_source_search_flows() -> dict[str, Any]:
             {
                 "case_id": "last_recall_no_match_boundary",
                 "ok": last_recall_miss.get("status") == "no_matches"
-                and last_recall_miss.get("source_boundary", {}).get("search_miss_is_not_absence_of_memory") is True,
+                and _search_miss_not_absence_boundary(last_recall_miss),
                 "scope": last_recall_miss.get("search_scope"),
                 "reopenable": False,
             },
@@ -290,7 +304,7 @@ def evaluate_exact_source_search_flows() -> dict[str, Any]:
             "search_miss_claims_absence_count": sum(
                 1
                 for payload in (registry_miss, last_recall_miss)
-                if payload.get("source_boundary", {}).get("search_miss_is_not_absence_of_memory") is not True
+                if not _search_miss_not_absence_boundary(payload)
             ),
         }
         ok = all(row["ok"] for row in rows) and all(value == 0 for value in red_lines.values())

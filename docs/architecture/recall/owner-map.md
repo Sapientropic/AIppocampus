@@ -9,9 +9,27 @@ navigability: a new agent should know which owner family a file belongs to
 before editing it. Source truth, privacy, and foreground output contracts still
 live in their existing owner docs; this file only maps the runtime terrain.
 
-Docs health treats the flat module inventory below as the checked-in owner
-classification. Adding a new flat `recall/*.py` file requires updating this
-map or, preferably, placing the file under the owning subpackage.
+Docs health treats the flat module inventory below as a sealed legacy
+classification, not a permission slip for more flat files. New recall runtime
+files must use an owner subpackage by default. A new flat `recall/*.py` file is
+accepted only when it is a true entrypoint or temporary compatibility wrapper
+listed in `Flat File Exceptions` with owner, removal condition, and default
+import guidance.
+
+Legacy flat inventory seal:
+
+- sealed_count: 150
+- sealed_sha256: b498a407a7a73a0a77226ce2fc93743cbb7436b0684aefaabbe3fa959114eacc
+
+Do not update this seal to admit a normal new module; move the file under the
+owning package instead.
+
+## Flat File Exceptions
+
+No new flat exceptions are currently allowed.
+
+| File | Kind | Owner | Removal condition | Default import guidance |
+| --- | --- | --- | --- | --- |
 
 ## Owner Families
 
@@ -54,6 +72,12 @@ Current flat files:
 
 Owner boundary: ambient cards, cache hygiene, signal accumulation, prompt-hook
 affordance, and low-friction fresh-thread nudges.
+
+Current owner package:
+
+- `ambient/__init__.py`
+- `ambient/card_ranking.py`
+- `ambient/ref_counts.py`
 
 Current flat files:
 

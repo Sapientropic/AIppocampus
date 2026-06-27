@@ -563,10 +563,19 @@ class AippocampusMcpServerOpsTests(unittest.TestCase):
         self.assertEqual(payload["surface"], "mcp_search_memory_compact")
         self.assertEqual(payload["source_boundary"]["authority"], "reopenable_route")
         self.assertTrue(payload["source_boundary"]["capped_snippets_are_bounded_receipts"])
-        self.assertEqual(payload["foreground_action"]["id"], "recall_context_from_search")
-        self.assertEqual(payload["foreground_action"]["tool_name"], "recall_context")
-        self.assertEqual(payload["foreground_action"]["arguments"]["intent"], "clean source")
-        self.assertEqual(payload["foreground_action"]["claim_boundary"], "source_reopen_required_before_claim")
+        self.assertEqual(payload["foreground_action"]["id"], "rerun_search_with_local_source_refs")
+        self.assertEqual(payload["foreground_action"]["tool_name"], "search_memory")
+        self.assertEqual(payload["foreground_action"]["arguments"]["query"], "clean source")
+        self.assertEqual(
+            payload["foreground_action"]["arguments"]["scope"],
+            "current_thread_clean_source",
+        )
+        self.assertEqual(payload["foreground_action"]["arguments"]["detail"], "full")
+        self.assertIn("aippocampus search", payload["foreground_action"]["command"])
+        self.assertEqual(
+            payload["foreground_action"]["claim_boundary"],
+            "metadata_only_no_private_reopen_refs",
+        )
         self.assertIsInstance(payload["foreground_action"], dict)
         self.assertIn("foreground_action", payload)
         self.assertNotIn("matches", payload)

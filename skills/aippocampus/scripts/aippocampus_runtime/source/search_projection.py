@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+# aippocampus-instruction-surface: clean-source search projection owner; boundary text stays in projection/detail lanes, not hidden agent instructions.
 from typing import Any
 
+from aippocampus_runtime.contracts import shell_quote
 from aippocampus_runtime.source.artifact_role import match_is_demoted_artifact
 
 
@@ -93,12 +95,17 @@ def search_foreground_authority(
             ],
         }
     if has_matches and metadata_only:
+        local_search_command = (
+            f"aippocampus search {shell_quote(query)} --json --detail full"
+            if query
+            else "aippocampus search \"<distinctive old source cue>\" --json --detail full"
+        )
         return {
             "kind": "aippocampus_search_result",
             "ok": True,
             "status": "ok",
             "entry_state": "explicit_search_invoked",
-            "route_state": "reopenable_route",
+            "route_state": "metadata_only_needs_local_source_refs",
             "usefulness": "useful_for_next_action",
             "useful_target_hit": True,
             "first_match_usefulness": first_hit_profile,
@@ -112,15 +119,21 @@ def search_foreground_authority(
                 "snippets_are_source_open": False,
             },
             "foreground_action": {
-                "action_id": "recall_context_from_search",
-                "label": "Recall context from search match",
-                "tool_name": "recall_context",
-                "arguments": {"intent": query, "max": min(max(len(matches), 1), 5)},
+                "action_id": "rerun_search_with_local_source_refs",
+                "label": "Rerun locally with source refs",
+                "tool_name": "search_memory",
+                "arguments": {
+                    "query": query or "distinctive old source cue",
+                    "scope": "current_thread_clean_source",
+                    "detail": "full",
+                },
+                "command": local_search_command,
+                "cli_equivalent_for_tool_action": True,
                 "mutation_risk": "read_only",
-                "claim_boundary": "source_reopen_required_before_claim",
+                "claim_boundary": "metadata_only_no_private_reopen_refs",
                 "why": (
-                    "Capped search snippet found matching clean-source wording; "
-                    "reopen context before quoting or relying on exact wording."
+                    "Public metadata found a capped receipt but withheld private "
+                    "source refs; rerun locally before quoting or relying on exact wording."
                 ),
             },
             "forbidden_claims": [

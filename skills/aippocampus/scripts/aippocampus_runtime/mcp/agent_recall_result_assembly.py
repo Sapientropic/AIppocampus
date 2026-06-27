@@ -13,7 +13,11 @@ from aippocampus_runtime.contracts import (
 from aippocampus_runtime.mcp import agent_recall_result_projection as result_projection
 from aippocampus_runtime.mcp import agent_recall_route_projection as route_projection
 from aippocampus_runtime.mcp.compact_profile import strip_compact_foreground_debug_fields
-from aippocampus_runtime.mcp.contracts import MCPCompactResponseContract, build_mcp_compact_card
+from aippocampus_runtime.mcp.contracts import (
+    MCPCompactResponseContract,
+    build_mcp_compact_card,
+    without_internal_surface,
+)
 
 # Recall compact is an action card, not a foreground protocol dump. Keep only
 # fields an agent can execute or use to choose the next route; full/detail owns
@@ -87,9 +91,7 @@ def assemble_compact_recall_payload(
     # callers; exposing the protocol label makes agents reconcile meta shape
     # instead of simply following recall -> deepen. Recovery/error cards may
     # still carry a public `surface_class`, but recall cards stay action sized.
-    public_card: dict[str, Any] = dict(compact_card)
-    public_card.pop("surface", None)
-    return public_card
+    return without_internal_surface(compact_card)
 
 
 def _action_id(action: Mapping[str, Any]) -> str:

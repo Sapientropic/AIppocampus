@@ -5,20 +5,26 @@ import sys
 from pathlib import PureWindowsPath
 
 
-def quote_posix_double(value: object) -> str:
+def quote_posix_arg(value: object) -> str:
     text = str(value)
-    escaped = (
-        text.replace("\\", "\\\\").replace('"', '\\"').replace("$", "\\$").replace("`", "\\`")
-    )
-    return f'"{escaped}"'
+    if text == "":
+        return "''"
+    return "'" + text.replace("'", "'\"'\"'") + "'"
+
+
+def quote_powershell_arg(value: object) -> str:
+    text = str(value)
+    if text == "":
+        return "''"
+    return "'" + text.replace("'", "''") + "'"
 
 
 def current_python_command() -> str:
     """Return the active interpreter for foreground copy-paste commands."""
 
     if os.name == "nt":
-        return f'& "{PureWindowsPath(sys.executable)}"'
-    return quote_posix_double(sys.executable)
+        return f"& {quote_powershell_arg(PureWindowsPath(sys.executable))}"
+    return quote_posix_arg(sys.executable)
 
 
 def current_python_module_command(module: str, args: str = "") -> str:

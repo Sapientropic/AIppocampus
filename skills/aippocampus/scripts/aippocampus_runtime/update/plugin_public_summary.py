@@ -1,4 +1,7 @@
-"""Public-safe projection for Codex plugin install/uninstall results."""
+"""Public-safe projection for Codex plugin install/uninstall results.
+
+aippocampus-instruction-surface: plugin install public summary owner; text is runtime output boundary, not hidden agent policy.
+"""
 
 from __future__ import annotations
 
@@ -53,7 +56,10 @@ def _next_action(
     if action_required:
         return "review aippocampus host warnings with --operator-json"
     if agent_callable_status == "host_live_probe_ok":
-        return "reload host app if tools are not visible, then review trusted Codex action hints"
+        return (
+            "host probe passed for a fresh MCP launch; reload already-open Codex "
+            "threads if foreground MCP still fails, then use CLI recall as fallback"
+        )
     return "run aippocampus update status --json"
 
 
@@ -62,10 +68,13 @@ def _trusted_codex_next_actions(*, ok: bool, action_required: bool) -> list[dict
         return []
     return [
         {
-            "id": "check_update_status",
-            "command": "aippocampus update status --json",
+            "id": "check_current_thread_mcp_boundary",
+            "command": "aippocampus update status --foreground-tools-visible --agent-json",
             "mutation_risk": "read_only",
-            "why": "Confirm local package/plugin/MCP readiness after install or reload.",
+            "why": (
+                "Host verification launches a fresh MCP process; an already-open "
+                "Codex thread may still need reload or CLI fallback."
+            ),
         },
         {
             "id": "check_action_time_hints",
@@ -160,11 +169,24 @@ def public_install_summary(result: dict[str, Any]) -> dict[str, Any]:
             "repair_options": list(mcp_preflight.get("repair_options") or [])[:3],
             "resolved_path_emitted": False,
         },
+        "current_thread_mcp_boundary": {
+            "host_probe_refreshes_existing_thread": False,
+            "already_open_thread_may_need_reload": True,
+            "reload_instruction": (
+                "Reload Codex Desktop or restart the MCP transport before trusting "
+                "MCP-first recall in a thread that was open before install."
+            ),
+            "cli_fallback_command_template": 'aippocampus agent recall "{cue}" --json',
+            "status_command": "aippocampus update status --foreground-tools-visible --agent-json",
+        },
         "rollback_command": result.get("rollback_command"),
         "rollback_preview_command": result.get("rollback_preview_command")
         or "aippocampus plugin uninstall --codex --dry-run --json",
         "next_status_command": "aippocampus update status --json",
-        "claim_boundary": "host probe success proves host exposure and key-tool callability when checked, not recall quality or current-thread tool discovery",
+        "claim_boundary": (
+            "host probe success proves a fresh host launch can expose/call key tools; "
+            "it does not prove recall quality or refresh an already-open foreground MCP process"
+        ),
     }
 
 

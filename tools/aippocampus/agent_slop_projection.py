@@ -10,7 +10,7 @@ def compact_report(report: Mapping[str, Any], *, detail_command: str) -> dict[st
     blockers = [
         {
             "rule_id": item.get("rule_id"),
-            "path": item.get("path"),
+            "path": item.get("path") or item.get("file"),
             "line": item.get("line"),
             "owner_issue": item.get("owner_issue"),
             "message": item.get("message") or item.get("description"),

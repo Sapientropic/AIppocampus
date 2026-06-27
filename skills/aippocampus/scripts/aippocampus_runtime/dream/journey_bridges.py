@@ -4,7 +4,8 @@
 Journey bridge hypotheses are deliberately narrower than ordinary amplification:
 they may suggest a route or unblock condition, but they remain Dream probes.
 The guard here keeps the creative part source-carried, falsifiable, and unable
-to harden into a profile/personality claim without human review.
+to harden into a profile/personality fact. Profile-like readings stay private
+route hypotheses; true secret-like output remains blocked.
 """
 
 from __future__ import annotations

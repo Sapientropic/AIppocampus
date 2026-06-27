@@ -343,4 +343,37 @@ def bounded_cli_projection(
         }
     else:
         projection["candidates"] = public_sample
+        primary = {
+            "id": "bounded_storage_audit",
+            "label": "Review bounded storage audit result",
+            "continue_without_command": True,
+            "no_command_needed": True,
+            "mutation_risk": "read_only",
+            "claim_boundary": "operator_diagnostic_not_source_evidence",
+            "why": (
+                "This bounded no-write audit already returned the candidate sample; "
+                "open full detail only if the sample is insufficient."
+            ),
+        }
+        previous_primary = (
+            projection.get("foreground_action")
+            if isinstance(projection.get("foreground_action"), dict)
+            else None
+        )
+        existing_actions = [
+            item
+            for item in projection.get("safe_next_actions") or []
+            if isinstance(item, dict) and item.get("id") != "bounded_storage_audit"
+        ]
+        if (
+            isinstance(previous_primary, dict)
+            and previous_primary.get("id") != "bounded_storage_audit"
+        ):
+            existing_actions.insert(0, previous_primary)
+        projection.update(
+            canonical_foreground_action_fields(
+                primary,
+                safe_next_actions=[primary, *existing_actions],
+            )
+        )
     return projection

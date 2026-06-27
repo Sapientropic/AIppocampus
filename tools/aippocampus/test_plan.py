@@ -133,6 +133,12 @@ def _repo_relative(path: str) -> str:
     return normalized[2:] if normalized.startswith("./") else normalized
 
 
+def git_diff_check_command(*, base: str | None = None) -> str:
+    if not base:
+        return GIT_DIFF_CHECK_COMMAND
+    return f"git diff --check {shell_arg(f'{base}..HEAD')}"
+
+
 def debt_report_args(changed_files: Iterable[str]) -> str:
     scannable_files = {
         _repo_relative(path)
@@ -627,6 +633,7 @@ def build_test_plan(
     changed_files: list[str],
     *,
     local_executable: bool = False,
+    diff_check_base: str | None = None,
 ) -> dict[str, object]:
     normalized_files = [_repo_relative(path) for path in changed_files]
     categories = classify_changed_files(normalized_files)
@@ -666,10 +673,23 @@ def build_test_plan(
 
     if normalized_files:
         categories.add("worktree_hygiene")
+        if diff_check_base:
+            _add_command(
+                commands,
+                PlannedCommand(
+                    command=git_diff_check_command(base=diff_check_base),
+                    reason=(
+                        "Run whitespace/conflict-marker hygiene against the requested "
+                        f"{diff_check_base}..HEAD range before tests so committed-range "
+                        "diff failures do not hide behind a green dirty-worktree check."
+                    ),
+                    scope="worktree",
+                ),
+            )
         _add_command(
             commands,
             PlannedCommand(
-                command=GIT_DIFF_CHECK_COMMAND,
+                command=git_diff_check_command(),
                 reason=(
                     "Run whitespace/conflict-marker hygiene before tests so broken diffs "
                     "are not discovered after functional verification or in CI."
