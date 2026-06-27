@@ -63,6 +63,67 @@ class PromptRecallDecisionBoundaryTests(unittest.TestCase):
         except ModuleNotFoundError:
             self.fail("prompt_recall_projection helper module is missing")
 
+    def _result_tiers_module(self):
+        try:
+            return importlib.import_module("aippocampus_runtime.recall.prompt_recall_result_tiers")
+        except ModuleNotFoundError:
+            self.fail("prompt_recall_result_tiers helper module is missing")
+
+    def test_cheap_casual_skip_default_keeps_diagnostics_out_of_top_level(self) -> None:
+        tiers = self._result_tiers_module()
+
+        result = decision.assess_prompt(
+            "今天天气怎么样",
+            cwd=self.workspace,
+            registry_path=self.registry_path,
+        )
+
+        self.assertEqual(result["decision"], "skip")
+        self.assertEqual(set(result["result_tiers"]), {"decision"})
+        self.assertEqual(
+            result["result_tiers"]["decision"]["foreground_lane"],
+            "stay_silent",
+        )
+        self.assertNotIn("hot_path_funnel", result)
+        self.assertNotIn("route_delivery_diagnostic", result)
+        self.assertNotIn("agent_surface_intent", result)
+        self.assertEqual(tiers.result_route_delivery_diagnostic(result), {})
+        self.assertEqual(tiers.result_hot_path_funnel(result), {})
+
+    def test_cheap_casual_skip_detail_and_trace_project_moved_fields(self) -> None:
+        tiers = self._result_tiers_module()
+
+        detail_result = decision.assess_prompt(
+            "今天天气怎么样",
+            cwd=self.workspace,
+            registry_path=self.registry_path,
+            detail="detail",
+        )
+        trace_result = decision.assess_prompt(
+            "今天天气怎么样",
+            cwd=self.workspace,
+            registry_path=self.registry_path,
+            detail="trace",
+        )
+
+        self.assertEqual(set(detail_result["result_tiers"]), {"decision", "diagnostics"})
+        self.assertIn("route_delivery_diagnostic", detail_result["result_tiers"]["diagnostics"])
+        self.assertIn("agent_surface_intent", detail_result["result_tiers"]["diagnostics"])
+        self.assertNotIn("hot_path_funnel", detail_result)
+        self.assertEqual(tiers.result_hot_path_funnel(detail_result), {})
+
+        self.assertEqual(
+            set(trace_result["result_tiers"]),
+            {"decision", "diagnostics", "trace"},
+        )
+        self.assertNotIn("hot_path_funnel", trace_result)
+        self.assertNotIn("route_delivery_diagnostic", trace_result)
+        self.assertEqual(
+            tiers.result_route_delivery_diagnostic(trace_result)["foreground_lane"],
+            "stay_silent",
+        )
+        self.assertEqual(tiers.result_hot_path_funnel(trace_result)["decision"], "skip")
+
     def test_prompt_cue_catalog_is_split_without_breaking_legacy_imports(self) -> None:
         catalog = importlib.import_module("aippocampus_runtime.recall.prompt_cue_catalog")
 

@@ -69,6 +69,10 @@ outside this background lane.
 - `aippocampus_runtime.subconscious.candidate_router`: deterministic promotion-candidate router for
   soft working memory. It prevents a human review inbox by assigning
   `use_silently`, `use_with_source`, `confirm_when_relevant`, or `park`.
+- `aippocampus_runtime.dream.lifecycle`: public-safe Dream lifecycle projection
+  for status/report surfaces. It normalizes candidate, parked-with-reason,
+  speculative-navigation, adjudicated source-ref, expired, refuted, and ignored
+  states without dumping raw finding text or source handles.
 - `aippocampus_runtime.recall.semantic_trigger_router` plus the
   `aippocampus_runtime.recall.semantic_trigger_router` compatibility command: deterministic router that
   turns source-backed `hook_trigger`/project candidates into

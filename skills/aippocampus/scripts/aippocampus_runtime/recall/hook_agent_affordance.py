@@ -7,6 +7,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from aippocampus_runtime.core import dict_or_empty, list_or_empty
+from aippocampus_runtime.recall.prompt_recall_result_tiers import result_agent_surface_intent
 
 AFFORDANCE_SCHEMA_VERSION = "hook-agent-affordance-v0"
 PRIVACY_BOUNDARY = "no raw source, no local paths, no source refs in hook"
@@ -154,7 +155,7 @@ def _lead_kinds(result: Mapping[str, Any]) -> list[str]:
     ]
     cognitive_map = [item for item in list_or_empty(result.get("cognitive_map")) if isinstance(item, dict)]
     semantic_gate = dict_or_empty(result.get("semantic_gate"))
-    surface_intent = dict_or_empty(result.get("agent_surface_intent"))
+    surface_intent = result_agent_surface_intent(result)
     explicit_surfaces = [str(item) for item in list_or_empty(surface_intent.get("surfaces"))]
     skip_without_explicit_agent_surface = (
         str(result.get("decision") or "") == "skip" and not surface_intent.get("explicit")
@@ -257,7 +258,7 @@ def _lead_count(result: Mapping[str, Any], lead_kinds: list[str]) -> int:
         count = 1
     if result.get("semantic_source_reopen_route") and count == 0:
         count = 1
-    surface_intent = dict_or_empty(result.get("agent_surface_intent"))
+    surface_intent = result_agent_surface_intent(result)
     if surface_intent.get("explicit"):
         count = max(count, len(list_or_empty(surface_intent.get("surfaces"))))
     return min(max(count, len(lead_kinds)), 9)
@@ -337,7 +338,7 @@ def _cli_fallback(action: str) -> str:
 
 def _reason_codes(action: str, lead_kinds: list[str], result: Mapping[str, Any]) -> list[str]:
     codes: list[str] = []
-    surface_intent = dict_or_empty(result.get("agent_surface_intent"))
+    surface_intent = result_agent_surface_intent(result)
     explicit_surfaces = [str(item) for item in list_or_empty(surface_intent.get("surfaces"))]
     if explicit_surfaces:
         codes.append("explicit_agent_native_surface_intent")

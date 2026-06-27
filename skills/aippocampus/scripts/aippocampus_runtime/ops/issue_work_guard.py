@@ -109,7 +109,7 @@ OWNER_REFS: dict[str, dict[str, str]] = {
     },
     "feedback_events": {
         "kind": "runtime_owner",
-        "path": "skills/aippocampus/scripts/aippocampus_runtime/recall/feedback_events.py",
+        "path": "skills/aippocampus/scripts/aippocampus_runtime/recall/feedback/events.py",
     },
     "source_backed_lessons": {
         "kind": "runtime_owner",

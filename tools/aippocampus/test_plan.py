@@ -79,7 +79,7 @@ RECALL_INTEGRATION_READINESS_SURFACES = frozenset(
         "skills/aippocampus/scripts/aippocampus_runtime/mcp/tool_handlers.py",
         "skills/aippocampus/scripts/aippocampus_runtime/mcp/tool_catalog.py",
         "skills/aippocampus/scripts/aippocampus_runtime/recall/hook_agent_affordance.py",
-        "skills/aippocampus/scripts/aippocampus_runtime/recall/feedback_events.py",
+        "skills/aippocampus/scripts/aippocampus_runtime/recall/feedback/events.py",
     }
 )
 NAVIGATION_DATA_QUALITY_SURFACE_PREFIXES = (

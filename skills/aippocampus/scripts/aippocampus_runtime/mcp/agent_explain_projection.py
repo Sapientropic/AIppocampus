@@ -8,6 +8,7 @@ from typing import Any
 from aippocampus_runtime import core
 from aippocampus_runtime.contracts import canonical_foreground_action_fields, shell_quote
 from aippocampus_runtime.mcp.compact_profile import strip_compact_foreground_debug_fields
+from aippocampus_runtime.mcp.contracts import build_mcp_compact_card
 
 
 def _detail_command(
@@ -165,7 +166,10 @@ def compact_agent_explain_payload(
                 "policy_boundary": source.get("policy_boundary"),
             }
         )
-        return strip_compact_foreground_debug_fields(card)
+        return build_mcp_compact_card(
+            strip_compact_foreground_debug_fields(card),
+            surface=surface,
+        )
     reason_codes = core.list_or_empty(explanation.get("reason_codes"))
     primary = _deepen_action(
         request_index,
@@ -205,7 +209,10 @@ def compact_agent_explain_payload(
             "policy_boundary": source.get("policy_boundary"),
         }
     )
-    return strip_compact_foreground_debug_fields(card)
+    return build_mcp_compact_card(
+        strip_compact_foreground_debug_fields(card),
+        surface=surface,
+    )
 
 
 def project_agent_explain_payload(

@@ -21,7 +21,7 @@ from aippocampus_runtime.navigation.associations import (
     source_text_is_noise,
     term_is_noise,
 )
-from aippocampus_runtime.recall import feedback_events
+from aippocampus_runtime.recall.feedback import events as feedback_events
 from aippocampus_runtime.recall.query_policy import split_query_terms
 from aippocampus_runtime.recall.semantic_recall_gate import default_semantic_triggers_path
 from aippocampus_runtime.registry.api import registry_paths, unique_preserve

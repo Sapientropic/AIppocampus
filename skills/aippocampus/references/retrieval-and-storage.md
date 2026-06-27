@@ -355,7 +355,7 @@ part of the default local search path. Semantic triggers, cognitive-map routes,
 and graph neighbors are navigation hints that still require source reopen before
 exact claims.
 
-`aippocampus_runtime.recall.feedback_events` records public-safe recall and
+`aippocampus_runtime.recall.feedback.events` records public-safe recall and
 active-flow feedback rows for later calibration work. It can count outcomes such
 as delivered candidates, source reopen success, ignored candidates, blocked
 routes, and wrong-route drag by blend context, signal family, and route kind.

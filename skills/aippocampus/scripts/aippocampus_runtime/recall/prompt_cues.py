@@ -519,6 +519,7 @@ def looks_like_latin_long_question(prompt: str) -> bool:
 LOW_VALUE_CASUAL_PATTERNS = (
     re.compile(r"(今天天气怎么样|天气怎么样|天气如何|weather\s+(today|tomorrow)|what'?s\s+the\s+weather)", re.IGNORECASE),
     re.compile(r"(最近有什么值得聊的|有什么值得聊|聊点什么|what\s+should\s+we\s+talk\s+about)", re.IGNORECASE),
+    re.compile(r"^(谢谢|谢啦|多谢|thanks|thank\s+you|thx|ok|好的|嗯|嗯嗯)[.!。！\s]*$", re.IGNORECASE),
 )
 
 

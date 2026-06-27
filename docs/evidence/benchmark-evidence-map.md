@@ -671,7 +671,7 @@ instead of deriving priority from this directory map.
 
 ### Route feedback fixture
 
-- **Canonical owner:** `benchmark_corpus/route_feedback/fixture.json`, `aippocampus_runtime.recall.feedback_events`,
+- **Canonical owner:** `benchmark_corpus/route_feedback/fixture.json`, `aippocampus_runtime.recall.feedback.events`,
   and `tests/aippocampus/test_recall_feedback_events.py`
 - **What belongs there:** Public-safe #937/#950 route-feedback contract for source-reopen success, blocked-route
   suppression, wrong-route demotion, blend-context/signal-family grouping, and route activation

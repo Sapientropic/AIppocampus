@@ -38,7 +38,7 @@ def before_commitment_surface_map() -> dict[str, Any]:
             "feedback_outcome_event": "prevented_failure",
         },
         "pre_commit_action_nudge": {
-            "owner_module": "recall.outcome_feedback",
+            "owner_module": "recall.feedback.outcome",
             "allowed_output_modes": ["silent", "tiny_nudge"],
             "max_foreground_budget": "tiny",
             "source_reopen_required": True,

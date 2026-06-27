@@ -12,7 +12,6 @@ from aippocampus_runtime.recall import (
 )
 from aippocampus_runtime.recall import (
     attention_router_policy,
-    feedback_events,
     task_orientation,
 )
 from aippocampus_runtime.recall.agent_continuity import (
@@ -21,6 +20,7 @@ from aippocampus_runtime.recall.agent_continuity import (
 from aippocampus_runtime.recall.agent_continuity_cli_support import (
     normalize_route_limit,
 )
+from aippocampus_runtime.recall.feedback import events as feedback_events
 
 
 def _json_out(payload: Mapping[str, Any]) -> None:

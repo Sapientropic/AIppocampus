@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import unittest
+from io import StringIO
 from pathlib import Path
 from unittest import mock
 
@@ -100,6 +101,65 @@ def write_current_artifacts(root: Path, workspace: Path, rollout: Path) -> dict[
 
 
 class HealthStoragePressureTests(unittest.TestCase):
+    def _agent_json_with_report(self, report: dict[str, object]) -> tuple[int, dict[str, object]]:
+        with (
+            mock.patch("aippocampus_runtime.health.build_health_report", return_value=report),
+            mock.patch("sys.stdout", new=StringIO()) as stdout,
+        ):
+            code = health.main(["--agent-json"])
+        return code, json.loads(stdout.getvalue())
+
+    def test_agent_json_storage_pressure_uses_bounded_summary_as_primary(self) -> None:
+        reports = [
+            (
+                {
+                    "ok": True,
+                    "cwd": "C:/private/work",
+                    "checks": [],
+                    "recommended_actions": [{
+                        "id": "storage_gc_rebuildable_cache",
+                        "severity": "warning",
+                        "reason": "Generated rebuildable cache pressure is high",
+                    }],
+                    "product_readiness": {
+                        "ready": True,
+                        "ordinary_first_recall_usable": True,
+                        "maintenance_recommended": True,
+                        "storage_pressure_cleanup_recommended": True,
+                    },
+                    "privacy": {},
+                },
+                "storage_pressure_known",
+            ),
+            (
+                {
+                    "ok": True,
+                    "cwd": "C:/private/work",
+                    "checks": [],
+                    "recommended_actions": [],
+                    "product_readiness": {
+                        "ready": True,
+                        "ordinary_first_recall_usable": True,
+                        "maintenance_recommended": False,
+                        "storage_pressure_cleanup_recommended": None,
+                    },
+                    "storage_pressure": {"status": "deferred", "pressure": None},
+                    "privacy": {},
+                },
+                "storage_pressure_unassessed",
+            ),
+        ]
+        for report, primary_flag in reports:
+            code, payload = self._agent_json_with_report(report)
+            self.assertEqual(code, 0)
+            self.assertEqual(payload["foreground_action"]["id"], "review_storage_gc_summary")
+            self.assertEqual(
+                payload["foreground_action"]["command"],
+                "aippocampus storage gc --dry-run --summary-json --cwd .",
+            )
+            self.assertTrue(payload["foreground_action"]["primary"][primary_flag])
+        self.assertTrue(payload["maintenance_summary"]["storage"]["assessment"], "unassessed")
+
     def test_health_json_detail_full_bounds_generation_gc_candidates(self) -> None:
         candidates = [
             {
@@ -207,12 +267,12 @@ class HealthStoragePressureTests(unittest.TestCase):
         self.assertTrue(full["product_readiness"]["storage_pressure_cleanup_recommended"])
         self.assertFalse(full["product_readiness"]["maintenance_required_before_recall"])
         compact = health.compact_health_payload(health.public_health_report(full))
-        self.assertEqual(compact["foreground_action"]["id"], "continue_with_nonblocking_maintenance")
-        self.assertEqual(compact["foreground_action"]["when_idle"]["id"], "review_storage_gc_summary")
+        self.assertEqual(compact["foreground_action"]["id"], "review_storage_gc_summary")
         self.assertEqual(
-            compact["foreground_action"]["when_idle"]["command"],
+            compact["foreground_action"]["command"],
             "aippocampus storage gc --dry-run --summary-json --cwd .",
         )
+        self.assertTrue(compact["foreground_action"]["primary"]["ordinary_first_recall_usable"])
 
 
 if __name__ == "__main__":

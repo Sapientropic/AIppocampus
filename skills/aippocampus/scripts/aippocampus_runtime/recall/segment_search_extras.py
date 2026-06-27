@@ -11,7 +11,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from aippocampus_runtime.recall.outcome_feedback import (
+from aippocampus_runtime.recall.feedback.outcome import (
     build_recall_outcome_event,
     write_recall_outcome_event,
 )

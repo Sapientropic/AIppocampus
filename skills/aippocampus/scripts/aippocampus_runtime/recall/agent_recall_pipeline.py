@@ -19,7 +19,6 @@ from aippocampus_runtime.recall import (
     agent_semantic_diagnostics,
     architecture_navigation_affordance,
     attention_router_policy,
-    feedback_events,
     foreground_action_card,
     macro_field_live,
     macro_live_recall,
@@ -52,6 +51,7 @@ from aippocampus_runtime.recall.agent_recall_primitives import (
     _memory_packet_triage_metrics,
     _public_payload,
 )
+from aippocampus_runtime.recall.feedback import events as feedback_events
 from aippocampus_runtime.recall.source_gate_context import (
     attach_source_gate_context_to_deepen_requests,
 )

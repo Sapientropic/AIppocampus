@@ -8,8 +8,8 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
-from aippocampus_runtime.recall import feedback_events
 from aippocampus_runtime.recall.agent_continuity_cli_support import policy_boundary
+from aippocampus_runtime.recall.feedback import events as feedback_events
 
 SCHEMA_VERSION = "agent-continuity-path-v1"
 KIND = "aippocampus_agent_continuity_path"

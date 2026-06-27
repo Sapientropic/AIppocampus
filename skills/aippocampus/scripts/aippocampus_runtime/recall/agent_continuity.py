@@ -48,7 +48,7 @@ from aippocampus_runtime.recall.agent_recall_primitives import (
     _load_macro_projection,
     _public_payload,
 )
-from aippocampus_runtime.recall.feedback_capture import capture_feedback as capture_feedback
+from aippocampus_runtime.recall.feedback.capture import capture_feedback as capture_feedback
 
 MACRO_PACKET_SCHEMA_VERSION = "macro-orientation-agent-packet-v0"
 MACRO_HANDLE_PREFIX = "macro:project:"

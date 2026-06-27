@@ -54,6 +54,41 @@ def maybe_promote_original_anchor_search(
     return registry_fallback, safe_next_actions
 
 
+def promote_original_anchor_search_from_safe_actions(
+    *,
+    source_anchor_gate: Mapping[str, Any] | None,
+    foreground_action: dict[str, Any],
+    safe_next_actions: list[dict[str, Any]],
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """Promote an already-built original-anchor search over weak echo paths."""
+
+    if not isinstance(source_anchor_gate, Mapping) or source_anchor_gate.get("status") != "blocked":
+        return foreground_action, safe_next_actions
+    foreground_id = str(foreground_action.get("id") or foreground_action.get("action_id") or "")
+    if foreground_id == "search_registry_sources_for_original_cue_anchors":
+        return foreground_action, safe_next_actions
+    if foreground_id not in {
+        "deepen_top_route_low_confidence",
+        "open_discussion_atlas_pointer",
+        "reopen_background_finding_source_route",
+    }:
+        return foreground_action, safe_next_actions
+    for index, action in enumerate(safe_next_actions):
+        action_id = str(action.get("id") or action.get("action_id") or "")
+        if action_id != "search_registry_sources_for_original_cue_anchors":
+            continue
+        promoted = dict(action)
+        promoted["route_choice_posture"] = "original_anchor_search_first"
+        promoted["why"] = (
+            str(promoted.get("why") or "").rstrip(".")
+            + "; promoted because the current primary route may be a weak deepen or quote echo."
+        )
+        remaining = [*safe_next_actions[:index], *safe_next_actions[index + 1 :]]
+        ordinary_action = core.strip_empty(normalize_foreground_action(foreground_action))
+        return promoted, [ordinary_action, *remaining] if ordinary_action else remaining
+    return foreground_action, safe_next_actions
+
+
 def _without_action_duplicate(
     actions: list[dict[str, Any]],
     primary: Mapping[str, Any],

@@ -6,8 +6,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from aippocampus_runtime.recall import feedback_events
 from aippocampus_runtime.recall import semantic_trigger_router as router
+from aippocampus_runtime.recall.feedback import events as feedback_events
 
 
 class SemanticTriggerRouterTests(unittest.TestCase):

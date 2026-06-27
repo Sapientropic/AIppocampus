@@ -19,11 +19,11 @@ from aippocampus_runtime.recall import (
     agent_recall_pipeline,
     agent_recall_primitives,
     background_findings,
-    feedback_events,
 )
 from aippocampus_runtime.recall import (
     agent_facade_contract as facade,
 )
+from aippocampus_runtime.recall.feedback import events as feedback_events
 from aippocampus_runtime.registry import api as registry_api
 from tests.aippocampus.product_probe_helpers import (
     SourceOpenExpectation,

@@ -33,7 +33,6 @@ from aippocampus_runtime.recall.prompt_recall_budget import (
     PROBE_MIN_REMAINING_MS,
     budget_allows,
 )
-from aippocampus_runtime.recall.prompt_recall_channels import recall_channel_envelope
 from aippocampus_runtime.recall.prompt_recall_context import build_recall_decision_context
 from aippocampus_runtime.recall.prompt_recall_core import (
     DEFAULT_SEARCH_BUDGET,
@@ -50,10 +49,6 @@ from aippocampus_runtime.recall.prompt_recall_core import (
     should_suppress,
     sort_candidates,
 )
-from aippocampus_runtime.recall.prompt_recall_evidence import (
-    strip_private_fields,
-    strip_semantic_gate,
-)
 from aippocampus_runtime.recall.prompt_recall_hot_path import (
     merge_hot_path_candidates,
 )
@@ -63,8 +58,9 @@ from aippocampus_runtime.recall.prompt_recall_projection import (
 from aippocampus_runtime.recall.prompt_recall_projection import (
     choose_decision_evidence,
 )
-from aippocampus_runtime.recall.prompt_recall_projection import (
-    route_delivery_diagnostic as resolve_route_delivery_diagnostic,
+from aippocampus_runtime.recall.prompt_recall_result_tiers import (
+    build_prompt_result_from_state,
+    cheap_casual_skip_result,
 )
 from aippocampus_runtime.recall.prompt_recall_route_context import (
     candidate_memory_context,
@@ -80,7 +76,6 @@ from aippocampus_runtime.recall.semantic_cue_cache import (
     record_semantic_cue_hits,
 )
 from aippocampus_runtime.registry.api import unique_preserve
-from aippocampus_runtime.subconscious.candidate_router import strip_for_hook
 
 
 def _deep_archival_requested(prompt: str) -> bool:
@@ -346,62 +341,6 @@ def _noise_prompt_result(context: Any, start: float) -> dict[str, Any]:
     }
 
 
-def _cheap_casual_skip_result(prompt: str, start: float) -> dict[str, Any]:
-    elapsed_ms = round((time.perf_counter() - start) * 1000, 2)
-    return {
-        "decision": "skip",
-        "score": 0.0,
-        "confidence": "low",
-        "query_terms": expand_query_terms(prompt)[:8],
-        "cognitive_map": [],
-        "concept_expansions": [],
-        "reasons": ["cheap skip: low-value casual prompt has no memory route intent"],
-        "candidates": [],
-        "evidence": [],
-        "working_memory": [],
-        "semantic_gate": None,
-        "semantic_bridge_diagnostic": None,
-        "semantic_cue_cache": None,
-        "hot_path_funnel": {
-            "decision": "skip",
-            "candidate_count": 0,
-            "source_reopen_promotion_count": 0,
-            "local_only": True,
-            "elapsed_ms": elapsed_ms,
-            "stages": [
-                {
-                    "stage": "cheap_casual_skip",
-                    "status": "skip",
-                    "candidate_count": 0,
-                    "fallback_reason": "low_value_casual_no_memory_route_intent",
-                    "elapsed_ms": elapsed_ms,
-                }
-            ],
-        },
-        "route_delivery_diagnostic": {
-            "foreground_profile": "ambient_hot_path",
-            "foreground_route_profile": "low_value_casual",
-            "foreground_lane": "stay_silent",
-            "generic_prompt_term_count": 0,
-            "specific_prompt_term_count": 0,
-            "foreground_suppression_reasons": ["low_value_casual_no_memory_route_intent"],
-            "decision": "skip",
-            "semantic_reuse_source": "none",
-            "semantic_waited": False,
-            "semantic_partial_failure": False,
-            "cold_semantic_shadowed": False,
-            "background_scheduled": False,
-            "hot_path_candidates_after_merge": 0,
-            "final_candidate_count": 0,
-            "evidence_count": 0,
-            "semantic_source_reopen_route": False,
-            "semantic_source_reopen_candidate_count": 0,
-        },
-        "agent_surface_intent": {},
-        "elapsed_ms": elapsed_ms,
-    }
-
-
 def _policy_update_result(context: Any, start: float, update: dict[str, Any]) -> dict[str, Any]:
     elapsed_ms = round((time.perf_counter() - start) * 1000, 2)
     return {
@@ -544,71 +483,39 @@ def _record_semantic_cue_hits(
         }
 
 
-def _prompt_result(
+def _attach_prompt_ambient_recall(
+    result: dict[str, Any],
     *,
-    decision: str,
-    top_score: float,
-    working_score: float,
-    context: Any,
-    query_terms: list[str],
-    cognitive_map_matches: list[dict[str, Any]],
-    concept_expansions: list[dict[str, Any]],
-    concept_expansion_diagnostic: dict[str, Any],
-    reasons: list[str],
-    candidates: list[dict[str, Any]],
-    evidence: list[dict[str, Any]],
-    search_budget: int,
-    working_memory_matches: list[dict[str, Any]],
-    semantic_result: dict[str, Any] | None,
-    semantic_gate_reuse: dict[str, Any],
-    threshold_policy: dict[str, Any],
-    topic_signal_write: dict[str, Any] | None,
-    semantic_bridge_diagnostic: str | None,
-    semantic_source_reopen_route: bool,
-    semantic_cue_cache: dict[str, Any] | None,
-    hot_path_funnel: dict[str, Any],
-    start: float,
-    deep_archival_requested: bool,
-    route_delivery_state: dict[str, Any],
-    agent_surface_intent: dict[str, Any] | None,
+    prompt: str,
+    thread_id: str | None,
+    workspace: str,
+    registry_path: Path,
+    ambient_cache_path: Path | str | None,
+    ambient_policy_path: Path,
+    topic_epoch: str | None,
+    use_thread_cache: bool,
+    warm_background: bool | None,
+    warm_job_dir: Path | str | None,
+    warm_max_workers: int | None,
+    warm_timeout: float | None,
+    warm_quorum: int | None,
 ) -> dict[str, Any]:
-    return {
-        "decision": decision,
-        "score": round(max(top_score, working_score), 3),
-        "confidence": "high" if decision == "evidence" else "medium" if decision == "scent" else "low",
-        **context.hook_path_fields(),
-        "query_terms": query_terms[:16],
-        "cognitive_map": cognitive_map_matches[:4],
-        "concept_expansions": concept_expansions[:8],
-        "concept_expansion_diagnostic": concept_expansion_diagnostic,
-        "reasons": reasons or ["no ambient recall cue"],
-        "candidates": strip_private_fields(candidates[:3]),
-        "evidence": evidence[:search_budget],
-        "working_memory": strip_for_hook(working_memory_matches[:3]),
-        "ambient_policy": context.ambient_policy_diagnostics,
-        "association_diagnostics": context.association_diagnostics,
-        "dream_delivery_prefilter": context.dream_delivery_prefilter,
-        "semantic_gate": strip_semantic_gate(semantic_result),
-        "semantic_gate_reuse": semantic_gate_reuse,
-        "scent_threshold_policy": threshold_policy,
-        "topic_signal_accumulator": topic_signal_write,
-        "semantic_bridge_diagnostic": semantic_bridge_diagnostic,
-        "semantic_source_reopen_route": semantic_source_reopen_route,
-        "semantic_cue_cache": semantic_cue_cache,
-        "agent_surface_intent": agent_surface_intent or {},
-        "recall_channels": recall_channel_envelope(
-            candidates=candidates,
-            evidence=evidence,
-            semantic_result=semantic_result,
-            concept_expansions=concept_expansions,
-            hot_path_funnel=hot_path_funnel,
-            route_delivery_state=route_delivery_state,
-        ),
-        "hot_path_funnel": hot_path_funnel,
-        "route_delivery_diagnostic": resolve_route_delivery_diagnostic(state=route_delivery_state),
-        "elapsed_ms": round((time.perf_counter() - start) * 1000, 2),
-        "deep_archival_requested": deep_archival_requested,
-    }
+    return attach_ambient_recall(
+        result,
+        prompt=prompt,
+        thread_id=thread_id,
+        workspace=workspace,
+        registry_path=registry_path,
+        ambient_cache_path=ambient_cache_path,
+        ambient_policy_path=ambient_policy_path,
+        topic_epoch=topic_epoch,
+        use_thread_cache=use_thread_cache,
+        warm_background=warm_background,
+        warm_job_dir=warm_job_dir,
+        warm_max_workers=warm_max_workers,
+        warm_timeout=warm_timeout,
+        warm_quorum=warm_quorum,
+    )
 
 
 def assess_prompt(
@@ -631,10 +538,18 @@ def assess_prompt(
     warm_background: bool | None = None, warm_job_dir: Path | str | None = None,
     warm_max_workers: int | None = None, warm_timeout: float | None = None, warm_quorum: int | None = None,
     dream_hypothesis_limit: int | None = None, dream_delivery_prefilter_reason: str | None = None, dream_delivery_task_mode: str | None = None,
+    detail: str | None = None,
 ) -> dict[str, Any]:
     start = time.perf_counter()
     if low_value_casual_prompt(prompt):
-        return _cheap_casual_skip_result(str(prompt or "").strip(), start)
+        elapsed_ms = round((time.perf_counter() - start) * 1000, 2)
+        clean_prompt = str(prompt or "").strip()
+        return cheap_casual_skip_result(
+            clean_prompt,
+            query_terms=expand_query_terms(clean_prompt)[:8],
+            elapsed_ms=elapsed_ms,
+            detail=detail,
+        )
     context = build_recall_decision_context(
         prompt, cwd=cwd, registry_path=registry_path, registry_dir=registry_dir,
         associations_path=associations_path, cognitive_map_path=cognitive_map_path,
@@ -831,36 +746,22 @@ def assess_prompt(
         threshold_policy=threshold_policy,
         reasons=[*threshold_adjustment_reasons, *reasons],
     )
-    result = _prompt_result(
-        decision=decision,
-        top_score=top_score,
-        working_score=working_score,
+    result = build_prompt_result_from_state(
+        state=locals(),
         context=context,
-        query_terms=query_terms,
-        cognitive_map_matches=cognitive_map_matches,
-        concept_expansions=concept_expansions,
-        concept_expansion_diagnostic=concept_expansion_diagnostic,
-        reasons=reasons,
-        candidates=candidates,
-        evidence=evidence,
-        search_budget=search_budget,
-        working_memory_matches=working_memory_matches,
-        semantic_result=semantic_result,
-        semantic_gate_reuse=semantic_gate_reuse,
-        threshold_policy=threshold_policy,
-        topic_signal_write=topic_signal_write,
-        semantic_bridge_diagnostic=semantic_bridge_diagnostic,
-        semantic_source_reopen_route=semantic_source_reopen_route,
-        semantic_cue_cache=semantic_cue_cache,
-        hot_path_funnel=hot_path_funnel,
         start=start,
+        detail=detail,
+        elapsed_ms=round((time.perf_counter() - start) * 1000, 2),
         deep_archival_requested=_deep_archival_requested(prompt),
-        route_delivery_state=locals(),
-        agent_surface_intent=agent_surface_intent,
     )
-    return attach_ambient_recall(
-        result, prompt=prompt, thread_id=thread_id, workspace=str(cwd_path), registry_path=path,
-        ambient_cache_path=ambient_cache_path, ambient_policy_path=context.ambient_policy_path,
+    return _attach_prompt_ambient_recall(
+        result,
+        prompt=prompt,
+        thread_id=thread_id,
+        workspace=str(cwd_path),
+        registry_path=path,
+        ambient_cache_path=ambient_cache_path,
+        ambient_policy_path=context.ambient_policy_path,
         topic_epoch=topic_epoch, use_thread_cache=use_thread_cache,
         warm_background=warm_background, warm_job_dir=warm_job_dir,
         warm_max_workers=warm_max_workers, warm_timeout=warm_timeout,

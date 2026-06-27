@@ -10,8 +10,8 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 from aippocampus_runtime.aippo import skill_bridge, skill_observed_use
 from aippocampus_runtime.recall import (
     agent_continuity,
-    feedback_events,
 )
+from aippocampus_runtime.recall.feedback import events as feedback_events
 
 
 class AIppoSkillBridgeTests(unittest.TestCase):

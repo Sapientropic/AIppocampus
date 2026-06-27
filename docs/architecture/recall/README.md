@@ -16,6 +16,7 @@ recovery flows, use the
 | [continuity-domains.md](continuity-domains.md) | Source-trailed domains, pathlets, macro pointers, and situation glyph boundaries. |
 | [foreground-memory-ux-budget.md](foreground-memory-ux-budget.md) | Foreground memory packet size, review-needed, anti-nag, and no-profile-dump budget. |
 | [memory-evidence-drawer.md](memory-evidence-drawer.md) | Foreground recall explanation packet and source-reopen affordance boundary. |
+| [owner-map.md](owner-map.md) | Recall runtime owner families, current files, and flat-module sprawl guard source. |
 | [question-tracking-subconscious.md](question-tracking-subconscious.md) | Question extraction, tracking, and theme-emergence design. |
 | [source-backed-attention-router.md](source-backed-attention-router.md) | Hard-mask, route-packet, output-level, and claim-permission boundaries. |
 | [source-backed-product-discipline.md](source-backed-product-discipline.md) | Recall-layer audit for source-backed foreground product discipline and Task Orientation Packets. |

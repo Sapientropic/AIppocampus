@@ -544,7 +544,7 @@
       "reason": "historical source IO / atomic writer / source-ref owner-bypass debt"
     },
     {
-      "fingerprint": "source_jsonl_owner_bypass:skills/aippocampus/scripts/aippocampus_runtime/recall/outcome_feedback.py:166:json.loads(line) bypasses source IO kernel loss accounting.",
+      "fingerprint": "source_jsonl_owner_bypass:skills/aippocampus/scripts/aippocampus_runtime/recall/feedback/outcome.py:166:json.loads(line) bypasses source IO kernel loss accounting.",
       "owner_issue": "#2698",
       "reason": "historical source IO / atomic writer / source-ref owner-bypass debt"
     },

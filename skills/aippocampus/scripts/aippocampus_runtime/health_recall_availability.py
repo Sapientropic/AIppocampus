@@ -91,7 +91,7 @@ def build_product_readiness(
     high_severity_action_count: int,
     live_delta_tolerated: bool,
     freshness_degraded: bool,
-    storage_pressure_cleanup_recommended: bool,
+    storage_pressure_cleanup_recommended: bool | None,
     checkpoint_due: bool,
 ) -> dict[str, Any]:
     first_recall_state = first_recall_maintenance_state(
@@ -135,6 +135,7 @@ def build_product_readiness(
         "registry_recall_available": first_recall_state["registry_recall_available"],
         "recall_availability_source": first_recall_state["recall_availability_source"],
         "storage_pressure_cleanup_recommended": storage_pressure_cleanup_recommended,
+        "storage_pressure_assessed": storage_pressure_cleanup_recommended is not None,
         "blocking_action_count": critical_action_count if maintenance_required else 0,
         "high_severity_action_count": high_severity_action_count,
         "advisory_action_count": max(0, len(actions) - critical_action_count),

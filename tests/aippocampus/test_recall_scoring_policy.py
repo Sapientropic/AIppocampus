@@ -13,7 +13,7 @@ from aippocampus_runtime.recall.before_commitment import (
     build_before_commitment_fixture,
 )
 from aippocampus_runtime.recall.candidate_planning import plan_candidates
-from aippocampus_runtime.recall.outcome_feedback import (
+from aippocampus_runtime.recall.feedback.outcome import (
     build_recall_outcome_event,
     recall_outcome_report,
     write_recall_outcome_event,

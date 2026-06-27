@@ -298,10 +298,11 @@ class AgentBackgroundTests(unittest.TestCase):
         action = payload["foreground_action"]
         command = action["command"]
         self.assertEqual(payload["status"], "ok")
-        self.assertEqual(action["id"], "search_sources_for_background_cue")
-        self.assertIn("search --all", command)
+        self.assertEqual(action["id"], "reopen_background_finding_source_route")
+        self.assertIn("search --open-source", command)
         self.assertEqual(action["tool_name"], "search_memory")
         self.assertEqual(action["arguments"]["query"], "recall 不够自然 辛苦去捞")
+        self.assertTrue(action["arguments"]["open_source"])
         self.assertNotIn("agent background", command)
         self.assertNotIn("agent recall", command)
         self.assertNotIn("wm_recall_natural", command)
@@ -360,7 +361,10 @@ class AgentBackgroundTests(unittest.TestCase):
         encoded = json.dumps(payload, ensure_ascii=False)
         actions = payload["findings"][0]["next_actions"]
         self.assertEqual(payload["detail"], "detail")
-        self.assertEqual([action["id"] for action in actions], ["reopen_background_finding_source_route"])
+        self.assertEqual(
+            [action["id"] for action in actions],
+            ["reopen_background_finding_source_route", "search_sources_for_background_cue"],
+        )
         self.assertNotIn("mark_background_finding_helpful", encoded)
         self.assertNotIn("materialize_action_hint_from_finding", encoded)
 

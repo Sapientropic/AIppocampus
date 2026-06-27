@@ -91,6 +91,22 @@ INSTRUCTION_SURFACE_CLASSIFIED_FILES = {
             "fields stay behind detail/operator profiles"
         ),
     },
+    "skills/aippocampus/scripts/aippocampus_runtime/mcp/contracts.py": {
+        "classification": "mcp_compact_contract_boundary_owner",
+        "owner": "#2788/#2795/#2651",
+        "why": (
+            "owns typed MCP compact-card boundary checks; foreground action proof "
+            "must stay in deepen/open follow-through, conformance smoke, or detail"
+        ),
+    },
+    "skills/aippocampus/scripts/aippocampus_runtime/mcp/protocol.py": {
+        "classification": "mcp_protocol_conformance_owner",
+        "owner": "#2795/#2788/#2651",
+        "why": (
+            "owns deterministic MCP stdio protocol/version policy while SDK "
+            "migration remains parked behind parity checks"
+        ),
+    },
     "skills/aippocampus/scripts/aippocampus_runtime/mcp/foreground_recovery.py": {
         "classification": "mcp_foreground_recovery_owner",
         "owner": "#2685/#2651",
@@ -385,6 +401,30 @@ INSTRUCTION_SURFACE_CLASSIFIED_FILES = {
             "additionalContext"
         ),
     },
+    "skills/aippocampus/scripts/aippocampus_runtime/recall/prompt_foreground_budget.py": {
+        "classification": "prompt_foreground_budget_owner",
+        "owner": "#2794/#2632/#2651",
+        "why": (
+            "owns prompt-hook foreground packet width/source-boundary projection; "
+            "sidecar diagnostics remain in detail/operator result tiers"
+        ),
+    },
+    "skills/aippocampus/scripts/aippocampus_runtime/recall/prompt_recall_decision.py": {
+        "classification": "prompt_recall_decision_owner",
+        "owner": "#2794/#2631/#2651",
+        "why": (
+            "owns prompt-recall orchestration and final result assembly; compact "
+            "output should route action without leaking diagnostics"
+        ),
+    },
+    "skills/aippocampus/scripts/aippocampus_runtime/recall/prompt_recall_result_tiers.py": {
+        "classification": "prompt_recall_result_tier_owner",
+        "owner": "#2794/#2651",
+        "why": (
+            "owns compact/detail/trace result-tier envelopes for prompt recall so "
+            "foreground packets stay small without losing operator diagnostics"
+        ),
+    },
     "skills/aippocampus/scripts/aippocampus_runtime/recall/prompt_recall_core.py": {
         "classification": "prompt_recall_policy_owner",
         "owner": "#2629/#2651",
@@ -408,6 +448,15 @@ INSTRUCTION_SURFACE_CLASSIFIED_FILES = {
         "why": (
             "owns prompt-intent and cue-detection strings used before recall "
             "routing; broad product doctrine belongs in canonical docs"
+        ),
+    },
+    "skills/aippocampus/scripts/aippocampus_runtime/recall/semantic_trigger_router.py": {
+        "classification": "semantic_trigger_router_owner",
+        "owner": "#2793/#2651",
+        "why": (
+            "owns reviewed semantic trigger fixture phrases and activation/suppression "
+            "boundary text; triggers are navigation candidates until source-open "
+            "follow-through proves the cue"
         ),
     },
     "skills/aippocampus/scripts/aippocampus_runtime/recall/route_notes.py": {
@@ -464,6 +513,15 @@ INSTRUCTION_SURFACE_CLASSIFIED_FILES = {
         "why": (
             "owns registry search foreground actions for exact identifiers and "
             "useful-target gating; diagnostic hits must not become source-open proof"
+        ),
+    },
+    "skills/aippocampus/scripts/aippocampus_runtime/source/artifact_role.py": {
+        "classification": "registry_search_artifact_role_owner",
+        "owner": "#2775/#2651",
+        "why": (
+            "owns local invariant marker strings for demoting validation, issue, "
+            "and memory-product quote echoes during recall/search ranking; these "
+            "markers are scoring guards, not foreground instructions"
         ),
     },
     "skills/aippocampus/scripts/aippocampus_runtime/source/agent_self_note_cli.py": {
@@ -751,6 +809,14 @@ INSTRUCTION_SURFACE_CLASSIFIED_FILES = {
             "the subprocess runner centralized while compact/detail doctrine stays in tests"
         ),
     },
+    "tests/aippocampus/test_docs_health.py": {
+        "classification": "docs_health_test_contract_owner",
+        "owner": "#672/#1837/#1845/#1846/#1887/#2079/#2087/#2276/#2277/#2791/#2793",
+        "why": (
+            "owns repository docs-health fixture strings and cross-doc guard "
+            "contracts; strings are test inputs, not hidden runtime instructions"
+        ),
+    },
     "tests/aippocampus/test_closeout_audit.py": {
         "classification": "closeout_audit_test_contract_owner",
         "owner": "#2692/#2636/#2651",
@@ -790,6 +856,14 @@ INSTRUCTION_SURFACE_CLASSIFIED_FILES = {
             "strings are operator/status contracts, not foreground policy payloads"
         ),
     },
+    "tests/aippocampus/test_prompt_recall_decision_boundaries.py": {
+        "classification": "prompt_recall_decision_test_contract_owner",
+        "owner": "#2794/#2631/#2651",
+        "why": (
+            "owns prompt-recall compact/detail boundary fixtures and source-route "
+            "examples; wording asserts behavior rather than becoming runtime policy"
+        ),
+    },
     "tests/aippocampus/test_agent_opt_in_recall_routes.py": {
         "classification": "agent_opt_in_recall_route_test_contract_owner",
         "owner": "#2636/#2651",
@@ -805,6 +879,15 @@ INSTRUCTION_SURFACE_CLASSIFIED_FILES = {
         "why": (
             "owns clean-source search/source-open follow-through fixtures; "
             "source-like strings are test evidence, not hidden agent instructions"
+        ),
+    },
+    "tests/aippocampus/test_semantic_trigger_router.py": {
+        "classification": "semantic_trigger_router_test_contract_owner",
+        "owner": "#2793/#2651",
+        "why": (
+            "owns semantic trigger activation/suppression fixture strings as test "
+            "contracts; they verify routing behavior without becoming live prompt "
+            "instructions"
         ),
     },
     "tests/aippocampus/test_task_orientation_packet.py": {

@@ -16,6 +16,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from aippocampus_runtime import core
+from aippocampus_runtime.mcp.contracts import build_mcp_compact_card
 
 COMPACT_DEBUG_FIELD_DENYLIST = frozenset(
     {
@@ -405,7 +406,10 @@ def compact_search_memory_payload(
         action = _compact_action(payload.get("foreground_action"))
         if action:
             source_open_card["foreground_action"] = action
-        return strip_compact_foreground_debug_fields(source_open_card)
+        return build_mcp_compact_card(
+            strip_compact_foreground_debug_fields(source_open_card),
+            surface="mcp_search_memory_compact",
+        )
 
     matches = [item for item in payload.get("matches") or [] if isinstance(item, Mapping)]
     match_count = payload.get("match_count")
@@ -458,7 +462,10 @@ def compact_search_memory_payload(
     hits = [hit for hit in hits if hit]
     if hits:
         card["source_hits"] = hits
-    return strip_compact_foreground_debug_fields(card)
+    return build_mcp_compact_card(
+        strip_compact_foreground_debug_fields(card),
+        surface="mcp_search_memory_compact",
+    )
 
 
 def compact_mcp_structured_content(payload: Any) -> Any:
@@ -542,7 +549,10 @@ def compact_mcp_structured_content(payload: Any) -> Any:
         card["claim_boundary"] = boundary
     if "foreground_action_contract" in payload:
         card["foreground_action_contract"] = payload["foreground_action_contract"]
-    return strip_compact_foreground_debug_fields(card)
+    return build_mcp_compact_card(
+        strip_compact_foreground_debug_fields(card),
+        surface=surface or "mcp_compact",
+    )
 
 
 def compact_mcp_tool_result(payload: Any, *, is_error: bool = False) -> dict[str, Any]:

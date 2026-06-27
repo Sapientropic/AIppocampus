@@ -5,11 +5,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from aippocampus_runtime.recall.associative_path_feedback import (
+from aippocampus_runtime.recall.associative_path_walker import walk_associative_paths
+from aippocampus_runtime.recall.feedback.associative_path import (
     append_followthrough_event,
     build_followthrough_event,
 )
-from aippocampus_runtime.recall.associative_path_walker import walk_associative_paths
 
 
 def source_ref() -> dict[str, object]:

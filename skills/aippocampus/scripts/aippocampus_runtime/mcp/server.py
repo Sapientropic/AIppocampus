@@ -10,6 +10,7 @@ from typing import Any
 
 from aippocampus_runtime.cli.human_io import exit_code_for_payload
 from aippocampus_runtime.mcp.mutation_boundary import UNSUPPORTED_MUTATION_TOOLS
+from aippocampus_runtime.mcp.protocol import initialize_result
 from aippocampus_runtime.mcp.result_profile import render_profiled_result
 from aippocampus_runtime.mcp.runtime_recovery import (
     foreground_mcp_runtime_recovery_payload,
@@ -26,10 +27,6 @@ from aippocampus_runtime.mcp.tool_readiness import (
     tool_readiness_summary,
 )
 
-SERVER_NAME = "aippocampus"
-SERVER_VERSION = "0.1.0"
-DEFAULT_PROTOCOL_VERSION = "2025-11-25"
-
 __all__ = [
     "handle_payload",
     "handle_request",
@@ -43,16 +40,6 @@ def jsonrpc_result(request_id: Any, result: Any) -> dict[str, Any]:
 
 def jsonrpc_error(request_id: Any, code: int, message: str) -> dict[str, Any]:
     return {"jsonrpc": "2.0", "id": request_id, "error": {"code": code, "message": message}}
-
-
-def initialize_result(params: dict[str, Any]) -> dict[str, Any]:
-    protocol = str(params.get("protocolVersion") or DEFAULT_PROTOCOL_VERSION)
-    return {
-        "protocolVersion": protocol,
-        "capabilities": {"tools": {}},
-        "serverInfo": {"name": SERVER_NAME, "version": SERVER_VERSION},
-    }
-
 
 def handle_request(request: dict[str, Any]) -> dict[str, Any] | None:
     request_id = request.get("id")

@@ -102,13 +102,27 @@ def _open_source_arguments(cue: str, ref: Mapping[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in arguments.items() if value not in (None, "", [], {})}
 
 
+def _background_source_search_action(*, cue: str, reason: str) -> dict[str, object]:
+    action = foreground_shell_action(
+        action_id="search_sources_for_background_cue",
+        label="Search sources for this background cue",
+        command=f"aippocampus search --all {shell_quote(cue)} --json",
+        why=reason,
+        mutation_risk="read_only",
+        claim_boundary="background_scent_needs_source_search",
+    )
+    action["tool_name"] = "search_memory"
+    action["arguments"] = {"query": cue, "scope": "all_registered_sources"}
+    return action
+
+
 def _background_source_action(
     row: Mapping[str, Any],
     *,
     cue: str,
 ) -> dict[str, object]:
     source_ref = _first_reopenable_source_ref(row)
-    if route_action_grammar(row) == "reopenable_route" and source_ref is not None:
+    if source_ref is not None:
         command = registry_source_window_command(source_ref)
         if command:
             # Background findings are scent. When the reviewer preserved a
@@ -128,6 +142,11 @@ def _background_source_action(
             )
             action["tool_name"] = "search_memory"
             action["arguments"] = _open_source_arguments(cue, source_ref)
+            action["route_kind"] = (
+                "finding_source_route"
+                if route_action_grammar(row) == "reopenable_route"
+                else "finding_source_provenance"
+            )
             return action
 
     # Direction-only rows may be useful orientation, but their source refs are
@@ -144,25 +163,16 @@ def _background_source_action(
             "search the original cue instead of appending background ids to recall."
         )
     )
-    action = foreground_shell_action(
-        action_id="search_sources_for_background_cue",
-        label="Search sources for this background cue",
-        command=f"aippocampus search --all {shell_quote(cue)} --json",
-        why=why,
-        mutation_risk="read_only",
-        claim_boundary="background_scent_needs_source_search",
-    )
-    action["tool_name"] = "search_memory"
-    action["arguments"] = {"query": cue, "scope": "all_registered_sources"}
-    return action
+    return _background_source_search_action(cue=cue, reason=why)
 
 
 def finding_next_actions(row: Mapping[str, Any], *, cue: str) -> list[dict[str, Any]]:
     target = _action_target(row)
     finding_id = str(target["finding_id"])
     quoted_finding_id = shell_quote(finding_id)
+    primary = _background_source_action(row, cue=cue)
     actions = [
-        _background_source_action(row, cue=cue),
+        primary,
         foreground_shell_action(
             action_id="mark_background_finding_helpful",
             label="Mark this route helpful",
@@ -188,6 +198,21 @@ def finding_next_actions(row: Mapping[str, Any], *, cue: str) -> list[dict[str, 
             claim_boundary="feedback_is_not_source_truth",
         ),
     ]
+    if primary.get("id") == "reopen_background_finding_source_route":
+        # Search remains a fallback when the preserved source opens only the
+        # reviewed finding's provenance. Compact output still leads with the
+        # concrete source-open route so a matched finding is not reduced to a
+        # broad search loop.
+        actions.insert(
+            1,
+            _background_source_search_action(
+                cue=cue,
+                reason=(
+                    "Fallback only: the matched finding has a direct source handle, "
+                    "but the current cue may still need a broader source search."
+                ),
+            ),
+        )
     if _is_action_hint_candidate(row):
         # Cache writes stay explicit and narrow: ordinary Dream/subconscious
         # findings should not refresh action hints unless the reviewed row is

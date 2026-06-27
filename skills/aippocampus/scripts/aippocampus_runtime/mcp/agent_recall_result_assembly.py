@@ -13,6 +13,7 @@ from aippocampus_runtime.contracts import (
 from aippocampus_runtime.mcp import agent_recall_result_projection as result_projection
 from aippocampus_runtime.mcp import agent_recall_route_projection as route_projection
 from aippocampus_runtime.mcp.compact_profile import strip_compact_foreground_debug_fields
+from aippocampus_runtime.mcp.contracts import build_mcp_compact_card
 
 # Recall compact is an action card, not a foreground protocol dump. Keep only
 # fields an agent can execute or use to choose the next route; full/detail owns
@@ -77,7 +78,10 @@ def assemble_compact_recall_payload(
         "claim_boundary": _compact_claim_boundary(can_use_for=can_use_for),
     }
     result.update(action_fields)
-    return strip_compact_foreground_debug_fields(core.strip_empty(result))
+    return build_mcp_compact_card(
+        strip_compact_foreground_debug_fields(core.strip_empty(result)),
+        surface="mcp_agent_recall_compact",
+    )
 
 
 def _action_id(action: Mapping[str, Any]) -> str:
@@ -99,7 +103,9 @@ def _compact_recall_action_fields(
     raw_safe_actions = []
     if isinstance(nested_secondary, Mapping):
         raw_safe_actions.append(nested_secondary)
-    raw_safe_actions.extend(action_fields.get("safe_next_actions", []))
+    safe_action_rows = action_fields.get("safe_next_actions")
+    if isinstance(safe_action_rows, list):
+        raw_safe_actions.extend(item for item in safe_action_rows if isinstance(item, Mapping))
     primary = _compact_recall_action(raw_primary)
     safe_actions = [
         action

@@ -52,6 +52,7 @@ from product_profile_guard import (
 )
 from public_first_touch_guard import public_first_touch_order_issues
 from reader_path_guard import reader_path_issues
+from recall_owner_guard import recall_owner_map_issues
 from source_kernel_guard import source_kernel_contract_issues
 
 from aippocampus_runtime.source.clean_source import SCOPE_LABEL_ORDER, infer_scope_labels
@@ -186,7 +187,7 @@ REQUIRED_RUNTIME_MAP_SCRIPTS = [
     "aippocampus_runtime/source/search.py",
     "aippocampus_runtime/recall/segment_search.py",
     "aippocampus_runtime/recall/score_fusion.py",
-    "aippocampus_runtime/recall/feedback_events.py",
+    "aippocampus_runtime/recall/feedback/events.py",
     "aippocampus_runtime/sync/bundle.py",
     "aippocampus_runtime/sync/object_storage/cli.py",
     "aippocampus_runtime/sync/encrypted/bundle.py",
@@ -1278,6 +1279,7 @@ def check_repo_docs(repo_root: Path) -> tuple[list[str], dict[str, Any]]:
     issues.extend(legacy_alias_inventory_issues(repo_root))
     issues.extend(public_api_contract_issues(repo_root))
     issues.extend(public_first_touch_order_issues(repo_root))
+    issues.extend(recall_owner_map_issues(repo_root))
     issues.extend(product_profile_contract_issues(repo_root))
     issues.extend(public_core_schema_contract_issues(repo_root))
     issues.extend(agent_facing_ux_charter_issues(repo_root))

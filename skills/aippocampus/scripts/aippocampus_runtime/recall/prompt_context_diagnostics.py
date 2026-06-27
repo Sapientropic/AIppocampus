@@ -4,6 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
+from aippocampus_runtime.recall.prompt_recall_result_tiers import (
+    result_route_delivery_diagnostic,
+)
+
 ROUTE_DELIVERY_FOREGROUND_PROFILES = {"ambient_hot_path", "explicit_recall"}
 ROUTE_DELIVERY_REUSE_SOURCES = {
     "none",
@@ -72,8 +76,7 @@ def legacy_candidate_summary_suppressed(result: dict[str, Any]) -> bool:
     brief = ambient.get("brief_precision") if isinstance(ambient, dict) else {}
     if not isinstance(brief, dict):
         brief = {}
-    raw_delivery = result.get("route_delivery_diagnostic")
-    delivery: dict[str, Any] = raw_delivery if isinstance(raw_delivery, dict) else {}
+    delivery = result_route_delivery_diagnostic(result)
     reasons = _reason_set(brief.get("foreground_suppression_reasons")) | _reason_set(
         delivery.get("foreground_suppression_reasons")
     )

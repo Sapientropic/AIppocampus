@@ -7,6 +7,8 @@ from collections import Counter
 from collections.abc import Iterable, Mapping
 from typing import Any
 
+from aippocampus_runtime.dream import lifecycle as dream_lifecycle
+
 RETENTION_LIFECYCLE_ACTIONS: dict[str, dict[str, Any]] = {
     "retain_for_review": {
         "lifecycle_state": "retained_for_review",
@@ -78,6 +80,11 @@ def _reason_buckets(payload: Mapping[str, Any], retention_counts: Mapping[str, i
 def dream_output_status_card(payload: Mapping[str, Any]) -> dict[str, Any]:
     counts = payload.get("counts") or {}
     retention_counts = retention_decision_counts(payload.get("adjudicated_findings") or [])
+    lifecycle_report = payload.get("dream_lifecycle_report")
+    if not isinstance(lifecycle_report, Mapping):
+        lifecycle_report = dream_lifecycle.dream_lifecycle_report(
+            payload.get("adjudicated_findings") or []
+        )
     reason_buckets = _reason_buckets(payload, retention_counts)
     status = "output_available" if int(counts.get("written_working_memory") or 0) else "no_foreground_output"
     if int(counts.get("accepted") or 0) and payload.get("no_write"):
@@ -105,6 +112,8 @@ def dream_output_status_card(payload: Mapping[str, Any]) -> dict[str, Any]:
         },
         "reason_buckets": reason_buckets,
         "retention_decision_counts": retention_counts,
+        "dream_lifecycle_counts": dict(lifecycle_report.get("counts") or {}),
+        "dream_lifecycle_examples": list(lifecycle_report.get("examples") or [])[:3],
         "retention_lifecycle_actions": {
             decision: retention_lifecycle_action(decision)
             for decision in sorted(set(retention_counts) | set(RETENTION_LIFECYCLE_ACTIONS))
