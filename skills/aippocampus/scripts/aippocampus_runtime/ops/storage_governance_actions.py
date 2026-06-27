@@ -78,37 +78,50 @@ def storage_gc_foreground_actions(
     }
 
 
-def storage_gc_summary_actions(*, limit: int, include_apply: bool) -> list[dict[str, Any]]:
+def storage_gc_summary_actions(
+    *,
+    limit: int,
+    include_apply: bool,
+    pressure_present: bool,
+) -> list[dict[str, Any]]:
     """Return compact summary choices without making cleanup feel inevitable.
 
     Summary JSON is a foreground chooser, not an audit report. Keep
-    stop/no-cleanup first because "do nothing" is the safest useful default
-    when the user did not ask for storage work. Bounded audit remains one hop
-    away for operator detail, and apply appears only when existing evidence can
-    be audited and rebuilt.
+    stop/no-cleanup available because "do nothing" is still a safe explicit
+    choice. When computed pressure is present, put the bounded no-write review
+    first so the foreground action does not contradict high reclaimable bytes.
+    Apply appears only when existing evidence can be audited and rebuilt.
     """
 
     top = max(1, int(limit))
-    actions: list[dict[str, Any]] = [
-        {
-            "id": "stop_without_cleanup",
-            "label": "Stop without cleanup",
-            "continue_without_command": True,
-            "no_command_needed": True,
-            "message": "No cleanup is required from this summary; continue without mutating storage.",
-            "mutation_risk": "read_only",
-            "claim_boundary": "storage_pressure_summary_not_memory_quality_evidence",
-            "why": "Storage GC is optional operator work unless the user explicitly chooses audit/apply.",
-        },
-        {
-            "id": "bounded_storage_audit",
-            "label": "Run bounded storage audit",
-            "command": f"aippocampus storage gc --dry-run --json --top {top} --cwd .",
-            "mutation_risk": "read_only",
-            "claim_boundary": "operator_diagnostic_not_source_evidence",
-            "why": "Open a small no-write candidate sample only when cleanup detail is worth inspecting.",
-        },
-    ]
+    stop_action = {
+        "id": "stop_without_cleanup",
+        "label": "Stop without cleanup",
+        "continue_without_command": True,
+        "no_command_needed": True,
+        "message": (
+            "Continue without mutating storage; cleanup remains optional unless "
+            "the user chooses a storage review."
+        )
+        if pressure_present
+        else "No cleanup is required from this summary; continue without mutating storage.",
+        "mutation_risk": "read_only",
+        "claim_boundary": "storage_pressure_summary_not_memory_quality_evidence",
+        "why": "Storage GC is optional operator work unless the user explicitly chooses audit/apply.",
+    }
+    audit_action = {
+        "id": "bounded_storage_audit",
+        "label": "Run bounded storage audit",
+        "command": f"aippocampus storage gc --dry-run --json --top {top} --cwd .",
+        "mutation_risk": "read_only",
+        "claim_boundary": "operator_diagnostic_not_source_evidence",
+        "why": "Open a small no-write candidate sample when reclaimable storage pressure is worth inspecting.",
+    }
+    actions: list[dict[str, Any]] = (
+        [audit_action]
+        if pressure_present
+        else [stop_action, audit_action]
+    )
     if include_apply:
         actions.append(
             {
@@ -131,4 +144,6 @@ def storage_gc_summary_actions(*, limit: int, include_apply: bool) -> list[dict[
                 ),
             }
         )
+    if pressure_present:
+        actions.append(stop_action)
     return actions

@@ -395,7 +395,8 @@ def _status_main(argv: Sequence[str]) -> int:
         print(f"worker: {activity.get('worker_evidence')}")
         print(f"next: {next_label}")
         if isinstance(action, dict):
-            print(f"action: {action.get('command')}")
+            action_command = action.get("command") or action.get("command_template")
+            print(f"action: {action_command or payload.get('next_command')}")
         else:
             print(f"action: {payload.get('next_command')}")
         print("boundary: optional background warming; first recall and search do not wait for it")

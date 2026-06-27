@@ -102,6 +102,22 @@ VALIDATION_REPORT_MARKERS = (
     "验收失败",
     "关闭 issue",
 )
+MEMORY_PRODUCT_META_ECHO_MARKERS = (
+    "关键词检索器",
+    "产品契约",
+    "前台 agent",
+    "source-backed",
+    "source backed",
+    "deepen/open",
+    "ambient/warm/background",
+    "recall 负责",
+    "search 负责",
+    "source truth",
+    "compact",
+    "foreground_action",
+)
+
+
 def _compact(value: Any, limit: int = 120) -> str:
     sanitized, _ = core.sanitize_external_model_text(str(value or ""))
     return core.compact_text(sanitized, limit)
@@ -280,6 +296,36 @@ def _self_referential_validation_reason(
     return ""
 
 
+def _memory_product_meta_echo_reason(
+    message: Mapping[str, Any],
+    text: str,
+    *,
+    query: str,
+    matched_terms: Sequence[str],
+    anchor_terms: Sequence[str],
+) -> str:
+    """Demote product-contract discussions that quote an older user moment."""
+
+    query_text = str(query or "").casefold()
+    query_marker_count = sum(
+        1 for marker in MEMORY_PRODUCT_META_ECHO_MARKERS if marker in query_text
+    )
+    if query_marker_count >= 2 or "产品契约" in query_text or "关键词检索器" in query_text:
+        return ""
+    anchors = {str(term).strip().casefold() for term in anchor_terms if str(term).strip()}
+    cjk_anchors = {term for term in anchors if not term.isascii() and len(term) >= 2}
+    if len(cjk_anchors) < 2:
+        return ""
+    matched = {str(term).strip().casefold() for term in matched_terms if str(term).strip()}
+    if len(matched & cjk_anchors) < min(2, len(cjk_anchors)):
+        return ""
+    haystack = " ".join([str(text or ""), " ".join(_message_metadata_values(message))]).casefold()
+    marker_count = sum(1 for marker in MEMORY_PRODUCT_META_ECHO_MARKERS if marker in haystack)
+    if marker_count < 2:
+        return ""
+    return "memory_product_meta_echo_demoted"
+
+
 def _source_ref_from_current_clean_message(message: Mapping[str, Any]) -> dict[str, Any]:
     # Current clean-source refs deliberately omit thread_key. In the shared
     # deepen path, a thread_key means "look this up in the registry"; omitting it
@@ -322,6 +368,7 @@ def clean_source_candidate_rows(
     control_allowed_count = 0
     task_echo_filtered_count = 0
     self_referential_validation_filtered_count = 0
+    memory_product_meta_echo_filtered_count = 0
     low_actual_anchor_filtered_count = 0
     for ordinal, message in enumerate(messages[: max(0, int(max_scan_rows or 0))], start=1):
         text = str(message.get("text") or "")
@@ -357,6 +404,17 @@ def clean_source_candidate_rows(
         if validation_reason and not explicit_control_query:
             control_reason_counts[validation_reason] += 1
             self_referential_validation_filtered_count += 1
+            continue
+        meta_echo_reason = _memory_product_meta_echo_reason(
+            message,
+            text,
+            query=query,
+            matched_terms=matched_terms,
+            anchor_terms=anchor_terms,
+        )
+        if meta_echo_reason and not explicit_control_query:
+            control_reason_counts[meta_echo_reason] += 1
+            memory_product_meta_echo_filtered_count += 1
             continue
         low_anchor_reason = low_actual_anchor_coverage_reason(
             matched_terms=matched_terms,
@@ -418,6 +476,7 @@ def clean_source_candidate_rows(
         or control_allowed_count
         or task_echo_filtered_count
         or self_referential_validation_filtered_count
+        or memory_product_meta_echo_filtered_count
         or low_actual_anchor_filtered_count
     ):
         component.update(
@@ -436,6 +495,9 @@ def clean_source_candidate_rows(
                 "same_thread_task_echo_filtered_count": task_echo_filtered_count,
                 "self_referential_validation_report_demoted_count": (
                     self_referential_validation_filtered_count
+                ),
+                "memory_product_meta_echo_filtered_count": (
+                    memory_product_meta_echo_filtered_count
                 ),
                 "low_actual_source_anchor_coverage_filtered_count": (
                     low_actual_anchor_filtered_count
@@ -461,4 +523,6 @@ def has_clean_source_candidate_input(
         clean_source_dir=clean_source_dir,
         limit=1,
     )
-    return bool(candidates)
+    return bool(candidates) or int(
+        _component_report.get("memory_product_meta_echo_filtered_count") or 0
+    ) > 0

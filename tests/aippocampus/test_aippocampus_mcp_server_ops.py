@@ -855,6 +855,70 @@ class AippocampusMcpServerOpsTests(unittest.TestCase):
         self.assertEqual(executable_command_violations(payload), [])
         self.assertNotIn(str(self.cwd), encoded)
 
+    def test_agent_recall_signature_mismatch_returns_foreground_runtime_recovery_card(self) -> None:
+        original_handler = mcp.TOOL_CALLS["agent_recall"]
+
+        def stale_signature_handler(arguments: dict[str, object]) -> dict[str, object]:
+            del arguments
+            raise TypeError(
+                "background_findings_card() got an unexpected keyword argument "
+                "'prefer_reopenable'"
+            )
+
+        try:
+            mcp.TOOL_CALLS["agent_recall"] = stale_signature_handler
+            response = mcp.handle_request(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 584,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "agent_recall",
+                        "arguments": {"query": "stale mcp runtime", "cwd": str(self.cwd)},
+                    },
+                }
+            )
+        finally:
+            mcp.TOOL_CALLS["agent_recall"] = original_handler
+
+        self.assertTrue(response["result"].get("isError", False))
+        payload = self.tool_payload(response)
+        encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertEqual(payload["kind"], "aippocampus_foreground_mcp_runtime_recovery")
+        self.assertEqual(payload["status"], "foreground_mcp_runtime_mismatch")
+        self.assertEqual(payload["tool"], "agent_recall")
+        self.assertEqual(payload["error"]["code"], "foreground_mcp_runtime_mismatch")
+        self.assertIn("reload", payload["foreground_action"]["id"])
+        self.assertIn("aippocampus plugin install --codex --verify", encoded)
+        self.assertNotIn(str(self.cwd), encoded)
+
+    def test_agent_recall_non_signature_type_error_stays_tool_failed(self) -> None:
+        original_handler = mcp.TOOL_CALLS["agent_recall"]
+
+        def ordinary_type_error(arguments: dict[str, object]) -> dict[str, object]:
+            del arguments
+            raise TypeError("object of type 'NoneType' has no len()")
+
+        try:
+            mcp.TOOL_CALLS["agent_recall"] = ordinary_type_error
+            response = mcp.handle_request(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 585,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "agent_recall",
+                        "arguments": {"query": "ordinary code bug", "cwd": str(self.cwd)},
+                    },
+                }
+            )
+        finally:
+            mcp.TOOL_CALLS["agent_recall"] = original_handler
+
+        payload = self.tool_payload(response)
+        self.assertEqual(payload["error"]["code"], "tool_failed")
+        self.assertNotEqual(payload["error"]["code"], "foreground_mcp_runtime_mismatch")
+
     def test_stdio_jsonrpc_smoke_exercises_client_entrypoint(self) -> None:
         requests = [
             {

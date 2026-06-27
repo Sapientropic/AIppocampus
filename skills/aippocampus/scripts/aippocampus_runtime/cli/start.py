@@ -87,10 +87,93 @@ def _clean_source_state(cwd: Path, explicit_dir: str | None = None) -> dict[str,
     return {
         "exists": messages.exists() and message_count > 0,
         "stale": stale,
+        "manifest_stale": stale,
         "message_count": message_count,
         "path_label": "thread-clean-source",
         "path_serialized": False,
+        "freshness_scope": (
+            "explicit_clean_source_manifest_only" if explicit_dir else "workspace_health_summary"
+        ),
     }
+
+
+def _workspace_freshness_state(cwd: Path, explicit_dir: str | None = None) -> dict[str, Any]:
+    """Return the small health-derived freshness slice that start can act on.
+
+    `start` is a first-action chooser, not a health detail surface. The recurring
+    failure here is subtler than a stale manifest: clean-source/index artifacts
+    can exist and still miss the newest visible turns. Reuse health's existing
+    product-readiness summary, but only project the behavior-bearing bits needed
+    to decide whether exact latest/current-thread claims need maintenance first.
+    """
+
+    if explicit_dir:
+        return {
+            "assessed": False,
+            "freshness_scope": "explicit_clean_source_manifest_only",
+            "reason": "explicit_clean_source_dir_limits_start_to_manifest",
+        }
+    try:
+        from aippocampus_runtime.health import health_report
+
+        payload = health_report(cwd, include_operator_diagnostics=False)
+    except Exception:
+        return {
+            "assessed": False,
+            "freshness_scope": "workspace_health_summary_unavailable",
+        }
+    readiness = payload.get("product_readiness")
+    readiness = readiness if isinstance(readiness, dict) else {}
+    recommended = payload.get("recommended_actions")
+    rows = [item for item in recommended if isinstance(item, dict)] if isinstance(recommended, list) else []
+    recommended_ids = [str(item.get("id") or "") for item in rows if item.get("id")]
+    freshness_action_ids = {"build_clean_source", "build_index", "build_segments"}
+    workspace_maintenance = bool(
+        readiness.get("workspace_source_maintenance_required")
+        or any(action_id in freshness_action_ids for action_id in recommended_ids)
+    )
+    live_delta_tolerated = bool(readiness.get("live_delta_tolerated"))
+    latest_missing = bool(
+        readiness.get("latest_current_thread_may_be_missing")
+        and (workspace_maintenance or not live_delta_tolerated)
+    )
+    freshness_degraded = bool(
+        workspace_maintenance
+        and (
+            readiness.get("freshness_degraded")
+            or latest_missing
+            or any(action_id in freshness_action_ids for action_id in recommended_ids)
+        )
+    )
+    return {
+        "assessed": True,
+        "freshness_scope": "workspace_health_summary",
+        "freshness_degraded": freshness_degraded,
+        "latest_current_thread_may_be_missing": latest_missing,
+        "workspace_source_maintenance_required": workspace_maintenance,
+        "blocks_exact_latest_claims": bool(freshness_degraded),
+        "recommended_action_ids": recommended_ids[:8],
+        "product_readiness_status": str(readiness.get("status") or ""),
+    }
+
+
+def _apply_workspace_freshness(source: dict[str, Any], freshness: dict[str, Any]) -> dict[str, Any]:
+    source = dict(source)
+    source["freshness_scope"] = freshness.get("freshness_scope") or source.get("freshness_scope")
+    if freshness.get("assessed"):
+        source["workspace_health_freshness_assessed"] = True
+    if freshness.get("freshness_degraded"):
+        source["stale"] = True
+        source["latest_source_may_be_missing"] = bool(
+            freshness.get("latest_current_thread_may_be_missing")
+        )
+        source["workspace_source_maintenance_required"] = bool(
+            freshness.get("workspace_source_maintenance_required")
+        )
+        source["blocks_exact_latest_claims"] = bool(
+            freshness.get("blocks_exact_latest_claims")
+        )
+    return source
 
 
 def _cue_value(cue: str | None) -> str:
@@ -173,6 +256,39 @@ def _carry_actions() -> list[dict[str, Any]]:
             mutation_risk="read_only",
             claim_boundary="transfer_setup_not_expanded_source_truth",
         ),
+    ]
+
+
+def _exact_latest_maintenance_actions() -> list[dict[str, Any]]:
+    return [
+        foreground_shell_action(
+            action_id="review_maintenance_plan_before_exact_latest",
+            label="Review maintenance before exact latest",
+            command="aippocampus maintenance plan --summary-json",
+            why=(
+                "Existing source can support ordinary recall, but stale artifacts should be "
+                "refreshed before exact latest/current-thread claims."
+            ),
+            mutation_risk="read_only",
+            claim_boundary="maintenance_plan_not_source_evidence",
+        ),
+        foreground_shell_action(
+            action_id="apply_maintenance_after_consent",
+            label="Apply maintenance after consent",
+            command="aippocampus maintenance apply --summary-json",
+            why=(
+                "Run only after reviewing the plan and deciding to refresh generated "
+                "source/index artifacts."
+            ),
+            mutation_risk="writes_generated_source_artifacts",
+            claim_boundary="explicit_maintenance_write_not_source_claim",
+        )
+        | {
+            "write_boundary": {
+                "explicit_user_consent_required": True,
+                "no_write_happens_until_command_runs": True,
+            }
+        },
     ]
 
 
@@ -265,18 +381,8 @@ def _source_registration_actions(providers: list[str]) -> list[dict[str, Any]]:
 
 def _start_actions(cwd: Path, state: dict[str, Any], cue: str = "") -> tuple[str, list[dict[str, Any]]]:
     source = state["clean_source"]
-    if source["exists"] and source["stale"]:
-        return "repair_stale_source_before_continuity", [
-            foreground_shell_action(
-                action_id="repair_health_first",
-                label="Repair stale source health",
-                command="aippocampus health --json",
-                why="Stale or degraded source should be repaired before using continuity as evidence.",
-                mutation_risk="read_only",
-                claim_boundary="health_diagnostic_not_source_evidence",
-            )
-        ]
     if source["exists"]:
+        source_stale = bool(source.get("stale"))
         cue_specificity = _cue_specificity(cue) if cue else {}
         recall_action = _recall_cue_action(cue) if cue else _template_action(
             action_id="recall_continuity_cue",
@@ -295,6 +401,7 @@ def _start_actions(cwd: Path, state: dict[str, Any], cue: str = "") -> tuple[str
                 if cue
                 else []
             ),
+            *(_exact_latest_maintenance_actions() if source_stale else []),
             _template_action(
                 action_id="deepen_selected_route",
                 label="Deepen selected route",
@@ -311,12 +418,21 @@ def _start_actions(cwd: Path, state: dict[str, Any], cue: str = "") -> tuple[str
             *_carry_actions(),
         ]
         if cue_specificity.get("status") == "weak_cue_search_fallback_recommended":
-            return "continue_from_existing_source_with_search_fallback", [
+            decision = (
+                "continue_from_existing_source_latest_degraded"
+                if source_stale
+                else "continue_from_existing_source_with_search_fallback"
+            )
+            return decision, [
                 actions[1],
                 recall_action,
                 *actions[2:],
             ]
-        return "continue_from_existing_source", actions
+        return (
+            "continue_from_existing_source_latest_degraded"
+            if source_stale
+            else "continue_from_existing_source"
+        ), actions
     if state["trusted_codex_candidate"]:
         read_only_recall = _recall_cue_action(cue) if cue else _template_action(
             action_id="try_first_recall",
@@ -385,8 +501,10 @@ def build_start_card(
     cue: str | None = None,
 ) -> dict[str, Any]:
     clean_cue = _cue_value(cue)
+    clean_source = _clean_source_state(cwd, clean_source_dir)
+    freshness = _workspace_freshness_state(cwd, clean_source_dir)
     state: dict[str, Any] = {
-        "clean_source": _clean_source_state(cwd, clean_source_dir),
+        "clean_source": _apply_workspace_freshness(clean_source, freshness),
         "trusted_codex_candidate": _trusted_codex_candidate(cwd),
         "provider_registration_candidates": _provider_registration_candidates(cwd),
     }
@@ -436,13 +554,36 @@ def build_start_card(
             ),
             "cue_specific_route_usefulness": cue_specific,
             "warm_or_ambient_degraded_is_optional": True,
+            "source_stale_scope": str(source_state.get("freshness_scope") or "manifest_only"),
+            "manifest_stale": bool(source_state.get("manifest_stale")),
+            "latest_current_thread_may_be_missing": bool(
+                first_recall_readiness.get("latest_current_thread_may_be_missing")
+                or source_state.get("latest_source_may_be_missing")
+            ),
+            "workspace_source_maintenance_required": bool(
+                source_state.get("workspace_source_maintenance_required")
+            ),
+            "blocks_exact_latest_claims": bool(
+                first_recall_readiness.get("blocks_exact_latest_claims")
+                or source_state.get("blocks_exact_latest_claims")
+            ),
+            "maintenance_recommended_before_exact_latest": bool(
+                first_recall_readiness.get("maintenance_recommended_before_exact_latest")
+                or source_state.get("workspace_source_maintenance_required")
+            ),
         }
     )
     card: dict[str, Any] = {
         "kind": "aippocampus_start_card",
         "schema_version": SCHEMA_VERSION,
         "ok": True,
-        "status": "ready" if decision.startswith(("continue", "try_read_only")) else "needs_setup",
+        "status": (
+            "ready_with_freshness_degraded"
+            if decision == "continue_from_existing_source_latest_degraded"
+            else "ready"
+            if decision.startswith(("continue", "try_read_only"))
+            else "needs_setup"
+        ),
         "surface_class": "foreground_chooser_card",
         "decision": decision,
         "cue_supplied": bool(clean_cue),
@@ -450,6 +591,9 @@ def build_start_card(
         **canonical_foreground_action_fields(primary, safe_next_actions=actions),
         "first_recall_readiness": first_recall_readiness,
         "performance_expectation": first_recall_readiness.get("performance_expectation"),
+        "blocks_exact_latest_claims": bool(
+            first_recall_readiness.get("blocks_exact_latest_claims")
+        ),
         "write_boundary": {
             "written": False,
             "no_write_happened": True,

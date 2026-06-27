@@ -151,22 +151,26 @@ def start_first_recall_readiness(
                 ),
             },
         },
-        "repair_stale_source_before_continuity": {
-            "phase": "cold_start_maintenance_required",
-            "status": "needs_source_repair",
-            "ordinary_first_recall_usable": False,
-            "private_source_ready": False,
-            "cold_start_expected": True,
+        "continue_from_existing_source_latest_degraded": {
+            "phase": "steady_state_latest_degraded",
+            "status": "ready_with_freshness_degraded",
+            "ordinary_first_recall_usable": True,
+            "private_source_ready": True,
+            "cold_start_expected": False,
             "progress_signal": "source_exists_but_stale",
+            "freshness_degraded": True,
+            "latest_current_thread_may_be_missing": True,
+            "blocks_exact_latest_claims": True,
+            "maintenance_recommended_before_exact_latest": True,
             "user_expectation": (
-                "Source exists but is stale or degraded; inspect health before using "
-                "continuity as evidence."
+                "Existing source is usable for ordinary recall, but maintenance should run "
+                "before exact latest/current-thread claims."
             ),
             "performance_expectation": {
-                "mode": "cold_start_or_repair",
+                "mode": "steady_state_latest_degraded",
                 "message": (
-                    "The first useful recall may wait on source/index repair; steady-state "
-                    "recall is faster after artifacts are current."
+                    "Recall can use established artifacts; refresh source/index artifacts "
+                    "before relying on latest current-thread details."
                 ),
             },
         },

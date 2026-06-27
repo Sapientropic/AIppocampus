@@ -280,6 +280,7 @@ def bounded_cli_projection(
         summary_actions = storage_gc_summary_actions(
             limit=limit,
             include_apply=apply_candidate_present and pressure_present,
+            pressure_present=pressure_present,
         )
         action_fields = canonical_foreground_action_fields(
             summary_actions[0],

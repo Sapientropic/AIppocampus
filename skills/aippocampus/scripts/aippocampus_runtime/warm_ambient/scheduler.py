@@ -59,7 +59,9 @@ DEFAULT_DETACHED_PREFIX_CACHE_WARMUP_DELAY = (
 DEFAULT_DETACHED_WARM_TIMEOUT = DEFAULT_WARM_DETACHED_JOB_CONFIG.timeout
 DEFAULT_WARM_JOB_STALE_SECONDS = 24 * 60 * 60
 WARM_STATUS_COMMAND = "aippocampus warm status --json"
-WARM_REPAIR_COMMAND = "aippocampus doctor provider --json"
+WARM_WORKER_PROBE_COMMAND_TEMPLATE = (
+    'aippocampus warm --prompt "{cue}" --no-write --wait-all --json'
+)
 TRUTHY = {"1", "true", "yes", "on", "enabled"}
 FALSY = {"0", "false", "no", "off", "disabled"}
 
@@ -326,8 +328,8 @@ def warm_status_payload(
     foreground_action: dict[str, Any]
     safe_next_actions: list[dict[str, Any]]
     if status == "blocked":
-        action_code = "provider_or_worker_unavailable_optional"
-        next_command = WARM_REPAIR_COMMAND
+        action_code = "stale_queue_worker_unavailable_optional"
+        next_command = WARM_STATUS_COMMAND
     elif status == "pending":
         action_code = "wait_or_run_worker_when_ready"
         next_command = WARM_STATUS_COMMAND
@@ -338,14 +340,18 @@ def warm_status_payload(
         action_code = "ordinary_recall_usable_warm_not_useful"
         next_command = WARM_STATUS_COMMAND
     if status == "blocked":
-        foreground_action = {
-            "id": "inspect_provider_status",
-            "label": "Inspect provider status",
-            "command": WARM_REPAIR_COMMAND,
-            "mutation_risk": "read_only",
-            "claim_boundary": "provider_presence_only_no_key_values_emitted",
-            "why": "Warm ambient has stale queued work; check whether the optional worker can see a provider before changing setup.",
-        }
+        foreground_action = foreground_template_action(
+            action_id="continue_with_ordinary_recall",
+            label="Continue with ordinary recall",
+            command_template='aippocampus agent recall "{cue}" --json',
+            requires=["cue"],
+            mutation_risk="read_only",
+            claim_boundary="ordinary_recall_usable_without_warm_ambient",
+            why=(
+                "Warm ambient has a stale optional queue, but ordinary source-backed "
+                "recall remains usable for the concrete cue."
+            ),
+        )
         safe_next_actions = [
             foreground_action,
             {
@@ -357,12 +363,17 @@ def warm_status_payload(
                 "why": "Use this after provider or configuration review to confirm whether the stale queue is still blocked.",
             },
             {
-                "id": "plan_warm_repair",
-                "label": "Plan warm repair",
-                "command": "aippocampus update plan --json",
+                "id": "probe_warm_worker_once",
+                "label": "Probe warm worker once",
+                "command_template": WARM_WORKER_PROBE_COMMAND_TEMPLATE,
+                "requires": ["cue"],
+                "template_only": True,
                 "mutation_risk": "read_only",
-                "claim_boundary": "warm_ambient_optional_not_first_recall_blocker",
-                "why": "Preview local repair steps before changing warm or hook configuration.",
+                "claim_boundary": "warm_probe_not_source_evidence",
+                "why": (
+                    "Use only when you intentionally want to test the optional warm worker; "
+                    "this does not replace ordinary recall/deepen."
+                ),
             },
             {
                 "id": "snooze_optional_warm_ambient",
@@ -395,14 +406,12 @@ def warm_status_payload(
                 "why": "A stale warm queue should not be mistaken for a first-recall blocker or a live worker.",
             },
             {
-                "id": "continue_with_ordinary_recall",
-                "label": "Continue with ordinary recall",
-                "command_template": 'aippocampus agent recall "{cue}" --json',
-                "requires": ["cue"],
-                "template_only": True,
+                "id": "open_warm_status_detail",
+                "label": "Open warm status detail",
+                "command": "aippocampus warm status --detail full --json",
                 "mutation_risk": "read_only",
-                "claim_boundary": "ordinary_recall_usable_without_warm_ambient",
-                "why": "Warm ambient is optional; source-backed search and recall can continue.",
+                "claim_boundary": "operator_detail_not_source_evidence",
+                "why": "Use detail to inspect stale queue counts and worker evidence without starting a provider-doctor loop.",
             },
         ]
     elif status == "pending":

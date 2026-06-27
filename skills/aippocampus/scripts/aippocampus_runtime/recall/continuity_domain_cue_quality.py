@@ -43,6 +43,8 @@ GENERIC_FOREGROUND_CUE_TERMS = {
     "preview",
     "plugin",
     "tool",
+    "tools",
+    "mcp",
     "github",
     "github.com",
     "http",
@@ -63,6 +65,20 @@ GENERIC_FOREGROUND_CUE_TERMS = {
     "pull",
     "repo",
     "repository",
+    "workflow",
+    "log",
+    "logs",
+    "checkin-complete",
+    "check-in",
+    "user-visible",
+    "silent",
+    "codeksei",
+    "python",
+    "f-string",
+    "result",
+    "result-backstage-only",
+    "backstage-only",
+    "backstage",
     "macos",
     "deepseek",
     "openai",
@@ -99,6 +115,8 @@ GENERIC_FOREGROUND_CUE_TERMS = {
     "结果",
     "看法",
     "觉得",
+    "设计",
+    "实测结果",
 }
 
 GENERIC_FOREGROUND_CUE_PHRASES = {
@@ -113,7 +131,30 @@ GENERIC_FOREGROUND_CUE_PHRASES = {
 HOSTNAME_OR_DOMAIN_RE = re.compile(r"(?:[a-z0-9-]+\.)+[a-z]{2,}(?:/[^\s]*)?")
 CLI_FLAG_RE = re.compile(r"-{1,2}[\w][\w.-]*")
 MARKDOWN_LINK_FRAGMENT_RE = re.compile(r"\]\(\s*https?")
+TIMESTAMP_OR_DATE_RE = re.compile(
+    r"\d{4}-\d{2}-\d{2}(?:[tT\s]\d{1,2}(?::\d{2}){0,2})?"
+)
+SHORT_TIME_TOKEN_RE = re.compile(r"[tT]\d{1,2}")
+LOG_KEY_VALUE_RE = re.compile(r"[a-z][a-z0-9_.-]{1,40}=[a-z0-9_.-]{1,80}")
 TERM_STRIP_CHARS = '"`“”‘’.,;:!?，。；：！？()[]{}<>*'
+
+
+def _cue_tokens(text: str) -> list[str]:
+    return [
+        token.strip(TERM_STRIP_CHARS)
+        for token in re.findall(r"[\w\u4e00-\u9fff.-]+", text.replace("_", "-"))
+        if token.strip(TERM_STRIP_CHARS)
+    ]
+
+
+def _is_compound_distinctive_cue(cue: str) -> bool:
+    low = cue.strip(TERM_STRIP_CHARS).casefold()
+    tokens = _cue_tokens(low)
+    non_generic = [token for token in tokens if token not in GENERIC_FOREGROUND_CUE_TERMS]
+    if len(non_generic) >= 2:
+        return True
+    cjk_chars = re.findall(r"[\u4e00-\u9fff]", low)
+    return len(cjk_chars) >= 5 and low not in GENERIC_FOREGROUND_CUE_TERMS
 
 
 def foreground_continuity_domain_cue_quality(cue: str) -> tuple[str, str]:
@@ -132,17 +173,17 @@ def foreground_continuity_domain_cue_quality(cue: str) -> tuple[str, str]:
         return "low_information", "markdown_link_fragment"
     if HOSTNAME_OR_DOMAIN_RE.fullmatch(low):
         return "low_information", "hostname_or_domain"
+    if TIMESTAMP_OR_DATE_RE.fullmatch(low) or SHORT_TIME_TOKEN_RE.fullmatch(low):
+        return "low_information", "timestamp_or_log_time"
+    if LOG_KEY_VALUE_RE.fullmatch(low):
+        return "low_information", "log_key_value"
     if low in GENERIC_FOREGROUND_CUE_PHRASES:
         return "low_information", "generic_tool_word"
     if low.startswith("-") or CLI_FLAG_RE.fullmatch(low):
         return "low_information", "cli_flag_or_option"
     if low.endswith((".md", ".py", ".json", ".jsonl", ".toml", ".yaml", ".yml")) and " " not in low:
         return "low_information", "file_name_only"
-    tokens = [
-        token.strip(TERM_STRIP_CHARS)
-        for token in re.findall(r"[\w\u4e00-\u9fff.-]+", low.replace("_", "-"))
-        if token.strip(TERM_STRIP_CHARS)
-    ]
+    tokens = _cue_tokens(low)
     if tokens and all(token in GENERIC_FOREGROUND_CUE_TERMS for token in tokens):
         return "low_information", "generic_tool_word"
     if low in GENERIC_FOREGROUND_CUE_TERMS:
@@ -166,6 +207,8 @@ def foreground_continuity_domain_candidate_quality(
 
     first_visible = ""
     first_reason = ""
+    low_information_seen = 0
+    first_actionable: tuple[str, str] | None = None
     for raw in [*cues, title]:
         cue = compact_text(str(raw or ""), 80).strip()
         if not cue:
@@ -174,10 +217,20 @@ def foreground_continuity_domain_candidate_quality(
             first_visible = cue
         quality, reason = foreground_continuity_domain_cue_quality(cue)
         if quality == "actionable":
-            return cue, quality, reason
+            if _is_compound_distinctive_cue(cue):
+                return cue, quality, reason
+            first_actionable = first_actionable or (cue, reason)
+            continue
+        low_information_seen += 1
         first_reason = first_reason or reason
+    if first_actionable and low_information_seen < 2:
+        return first_actionable[0], "actionable", first_actionable[1]
     return (
         first_visible or compact_text(str(title or ""), 80),
         "low_information",
-        first_reason or "generic_candidate_without_distinctive_cue",
+        (
+            "generic_dominated_candidate_without_compound_cue"
+            if first_actionable
+            else first_reason or "generic_candidate_without_distinctive_cue"
+        ),
     )

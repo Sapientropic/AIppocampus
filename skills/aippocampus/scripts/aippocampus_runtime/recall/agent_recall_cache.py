@@ -267,6 +267,23 @@ def _public_projection_route_ids(data: Mapping[str, Any]) -> dict[int, str]:
     return route_ids
 
 
+def _is_public_compact_recall_projection(data: Mapping[str, Any]) -> bool:
+    """Return whether a JSON object is a compact recall stdout projection.
+
+    Older compact cards carried `kind/surface` envelope fields. The foreground
+    contract now keeps those in full/detail, so same-machine cache recovery must
+    recognize the product shape itself instead of forcing protocol fields back
+    into compact stdout.
+    """
+
+    return (
+        str(data.get("detail") or "").strip().casefold() == "compact"
+        and isinstance(data.get("foreground_action"), Mapping)
+        and isinstance(data.get("routes"), list)
+        and "claim_boundary" in data
+    )
+
+
 def _handle_sha256_12(handle: Any) -> str:
     if handle is None:
         return ""
@@ -509,8 +526,7 @@ def read_last_recall_cache_result(path: str | Path | None = None) -> CacheReadRe
         return result
     if (
         path is not None
-        and data.get("kind") == "aippocampus_agent_continuity_path"
-        and data.get("surface") == "agent_cli_public_compact"
+        and _is_public_compact_recall_projection(data)
     ):
         default_target = last_recall_cache_path(None)
         if target != default_target and default_target.exists():

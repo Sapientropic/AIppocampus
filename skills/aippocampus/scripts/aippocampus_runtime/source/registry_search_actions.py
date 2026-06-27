@@ -11,6 +11,20 @@ from aippocampus_runtime.contracts import (
 from aippocampus_runtime.source.artifact_role import match_is_demoted_artifact
 
 
+def _open_source_tool_arguments(query: str, match: Mapping[str, Any]) -> dict[str, Any]:
+    route = match.get("source_route")
+    route_map = route if isinstance(route, Mapping) else {}
+    arguments = {
+        "query": query,
+        "scope": "all_registered_sources",
+        "open_source": True,
+        "thread_key": route_map.get("thread_key") or match.get("thread_key"),
+        "message_id": route_map.get("message_id") or match.get("message_id"),
+        "line": route_map.get("line") or match.get("line"),
+    }
+    return {key: value for key, value in arguments.items() if value not in (None, "", [], {})}
+
+
 def registry_search_actions(
     *,
     query: str,
@@ -152,18 +166,21 @@ def registry_search_actions(
                 ),
             ]
         command = str(first_match.get("reopen_command") or "").strip()
-        actions = [
-            foreground_shell_action(
-                action_id="open_registry_search_source_window",
-                label="Open the first registry search source window",
-                command=command,
-                why=(
-                    "Registry search found capped snippets; open the selected "
-                    "bounded source window before quoting or making strong claims."
-                ),
-                mutation_risk="read_only",
-                claim_boundary="source_reopen_required_before_claim",
+        open_action = foreground_shell_action(
+            action_id="open_registry_search_source_window",
+            label="Open the first registry search source window",
+            command=command,
+            why=(
+                "Registry search found capped snippets; open the selected "
+                "bounded source window before quoting or making strong claims."
             ),
+            mutation_risk="read_only",
+            claim_boundary="source_reopen_required_before_claim",
+        )
+        open_action["tool_name"] = "search_memory"
+        open_action["arguments"] = _open_source_tool_arguments(query, first_match)
+        actions = [
+            open_action,
             foreground_template_action(
                 action_id="diagnostic_registry_search_with_paths",
                 label="Rerun registry search with local paths",

@@ -213,6 +213,8 @@ class LearningLoopSecondUserDogfoodTests(unittest.TestCase):
             "cat repro-input.json | aippocampus repro package --stdin --json",
             encoded_template,
         )
+        self.assertIn("-m json.tool repro-input.json", encoded_template)
+        self.assertNotIn("python -m json.tool repro-input.json", encoded_template)
         self.assertNotIn("type repro-input.json |", encoded_template)
 
         recovery = subprocess.run(
@@ -313,6 +315,8 @@ class LearningLoopSecondUserDogfoodTests(unittest.TestCase):
             "cat command-output.json | aippocampus repro package --stdin --json",
             encoded,
         )
+        self.assertIn("-m json.tool command-output.json", encoded)
+        self.assertNotIn("python -m json.tool command-output.json", encoded)
         self.assertNotIn("type command-output.json |", encoded)
         self.assertFalse(payload["privacy_boundary"]["raw_prompt_or_stdout_serialized"])
 

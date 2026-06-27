@@ -190,20 +190,29 @@ class AgentDeepenCompactProjectionTests(unittest.TestCase):
         self.assertNotIn(compact_payload["foreground_action"], compact_payload.get("safe_next_actions", []))
         self.assertEqual(compact_payload["foreground_action"]["tool_name"], "agent_deepen")
         self.assertEqual(compact_payload["foreground_action"]["arguments"]["request_index"], 1)
-        self.assertIn(
-            "--recall-selector {recall_selector}",
-            compact_payload["foreground_action"]["command_template"],
-        )
+        self.assertTrue(compact_payload["foreground_action"]["arguments"]["last_recall"])
         self.assertEqual(
-            compact_payload["foreground_action"]["requires"],
-            ["request_index", "recall_selector"],
+            compact_payload["foreground_action"]["command"],
+            "aippocampus agent deepen --request 1 --last-recall --json",
         )
-        self.assertIn(
-            "agent deepen --request 1 --last-recall --json",
-            compact_payload["foreground_action"]["last_recall_fallback_command"],
+        self.assertNotIn("command_template", compact_payload["foreground_action"])
+        self.assertNotIn("template_only", compact_payload["foreground_action"])
+        action_proc = run_agent_cli(
+            "deepen",
+            "--request",
+            str(compact_payload["foreground_action"]["arguments"]["request_index"]),
+            "--last-recall",
+            "--json",
+            env=env,
         )
-        self.assertNotIn("command", compact_payload["foreground_action"])
-        self.assertNotIn("cli_command", compact_payload["foreground_action"])
+        action_payload = parse_cli_json(
+            self,
+            action_proc,
+            expected_returncode=0,
+            label="agent explain emitted action",
+        )
+        self.assertEqual(action_payload["source_open_posture"], "target_evidence_opened")
+        self.assertIn("primary_source_snippet", action_payload)
         self.assertEqual(
             compact_payload["claim_boundary"],
             "navigation_only_until_source_reopened",
@@ -326,6 +335,32 @@ class AgentDeepenCompactProjectionTests(unittest.TestCase):
         self.assertIn("agent deepen --request 1 --recall-selector", explain_payload["foreground_action"]["command"])
         self.assertNotIn("macro_navigation_diagnostics", explain_payload)
         self.assertNotIn("cannot_claim", explain_encoded)
+
+        last_recall_explain = call_mcp_tool_payload(
+            "agent_explain",
+            {
+                "request_index": 1,
+                "last_recall": True,
+                "cwd": str(self.cwd),
+                "clean_source_dir": str(self.clean),
+            },
+        )
+        last_recall_action = last_recall_explain["foreground_action"]
+        self.assertEqual(last_recall_action["tool_name"], "agent_deepen")
+        self.assertEqual(last_recall_action["arguments"], {"request_index": 1, "last_recall": True})
+        self.assertEqual(
+            last_recall_action["command"],
+            "aippocampus agent deepen --request 1 --last-recall --json",
+        )
+        self.assertNotIn("command_template", last_recall_action)
+        self.assertNotIn("template_only", last_recall_action)
+        last_recall_deepen = call_mcp_tool_payload(
+            "agent_deepen",
+            last_recall_action["arguments"],
+        )
+        self.assertEqual(last_recall_deepen["status"], "ok")
+        self.assertEqual(last_recall_deepen["source_open_posture"], "target_evidence_opened")
+        self.assertIn("primary_source_snippet", last_recall_deepen)
 
         compact_payload = call_mcp_tool_payload("agent_deepen", route_action["arguments"])
         compact_encoded = json.dumps(compact_payload, ensure_ascii=False)

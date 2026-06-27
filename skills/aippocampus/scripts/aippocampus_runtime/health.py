@@ -7,7 +7,6 @@ import argparse
 import importlib
 import json
 import os
-import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path, PureWindowsPath
@@ -18,6 +17,7 @@ from aippocampus_runtime.artifacts.publish import (
     segment_generation_diagnostics,
 )
 from aippocampus_runtime.cli.errors import cli_exit_code_for_error_code
+from aippocampus_runtime.command_policy import current_python_command, quote_posix_double
 from aippocampus_runtime.core import (
     file_sha256,
     parse_anchor_file,
@@ -44,6 +44,7 @@ from aippocampus_runtime.health_stages import (
 from aippocampus_runtime.health_trajectory import attach_health_trajectory
 from aippocampus_runtime.mcp.public_projection import compact_health_payload
 from aippocampus_runtime.ops import log_retention
+from aippocampus_runtime.ops.storage_governance_contract import human_bytes
 from aippocampus_runtime.privacy import (
     LOCAL_PATH_REDACTION,
     redact_private_paths,
@@ -57,6 +58,9 @@ DEFAULT_JOBS_OUTPUT_NAME = "subconscious_jobs.jsonl"
 STORAGE_PRESSURE_RECLAIMABLE_BYTES = 512 * 1024 * 1024
 STORAGE_PRESSURE_AMPLIFICATION_RATIO = 10.0
 STORAGE_PRESSURE_CANDIDATE_COUNT = 100
+HEALTH_GENERATION_GC_CANDIDATE_LIMIT = 12
+STORAGE_GC_BOUNDED_DETAIL_COMMAND = "aippocampus storage gc --dry-run --json --top 1 --cwd ."
+STORAGE_GC_FULL_DETAIL_COMMAND = "aippocampus storage gc --dry-run --json --full --cwd ."
 DEFAULT_OPERATOR_DIAGNOSTIC_TIMEOUT_MS = 5000
 EXPENSIVE_OPERATOR_DIAGNOSTIC_TIMEOUT_MS = 30000
 DEFAULT_SLOW_HEALTH_SECTION_MS = 250
@@ -178,20 +182,6 @@ def aggregate_question_health_stats(payload: Mapping[str, Any]) -> dict[str, Any
 def count_messages(rollout: Path) -> tuple[int, int | None]:
     stats = rollout_visibility_stats(rollout)
     return stats.message_count, stats.last_message_line
-
-
-def quote_posix_double(value: str | Path) -> str:
-    text = str(value)
-    escaped = (
-        text.replace("\\", "\\\\").replace('"', '\\"').replace("$", "\\$").replace("`", "\\`")
-    )
-    return f'"{escaped}"'
-
-
-def current_python_command() -> str:
-    if os.name == "nt":
-        return f'& "{PureWindowsPath(sys.executable)}"'
-    return quote_posix_double(sys.executable)
 
 
 SCRIPT_MODULES = {
@@ -338,6 +328,58 @@ def registry_cache_pressure_report(cwd: Path, registry_dir: Path) -> dict[str, A
     }
 
 
+def generation_cache_pressure_report(
+    index_generations: Mapping[str, Any],
+    segment_generations: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Summarize already-loaded old generation pressure without a registry scan."""
+
+    index_bytes = safe_int(index_generations.get("generation_gc_candidate_bytes"))
+    segment_bytes = safe_int(segment_generations.get("generation_gc_candidate_bytes"))
+    index_count = safe_int(index_generations.get("generation_gc_candidate_count"))
+    segment_count = safe_int(segment_generations.get("generation_gc_candidate_count"))
+    reclaimable = index_bytes + segment_bytes
+    candidate_count = index_count + segment_count
+    reasons: list[str] = []
+    if reclaimable >= STORAGE_PRESSURE_RECLAIMABLE_BYTES:
+        reasons.append("loaded_generation_gc_candidate_bytes_high")
+    if candidate_count >= STORAGE_PRESSURE_CANDIDATE_COUNT:
+        reasons.append("loaded_generation_gc_candidate_count_high")
+    status = "pressure" if reasons else "ok"
+    return {
+        "available": True,
+        "status": status,
+        "pressure": bool(reasons),
+        "reasons": reasons,
+        "scope": "current_thread_generation_diagnostics",
+        "metrics": {
+            "reclaimable_rebuildable_bytes": reclaimable,
+            "reclaimable_rebuildable_human": human_bytes(reclaimable),
+            "index_generation_gc_candidate_bytes": index_bytes,
+            "segment_generation_gc_candidate_bytes": segment_bytes,
+            "eviction_candidate_count": candidate_count,
+            "index_generation_gc_candidate_count": index_count,
+            "segment_generation_gc_candidate_count": segment_count,
+            "generated_index_amplification_ratio": 0.0,
+        },
+        "dry_run_command": STORAGE_GC_BOUNDED_DETAIL_COMMAND,
+        "summary_command": "aippocampus storage gc --dry-run --summary-json --cwd .",
+        "repair_command": "aippocampus storage gc --apply --class rebuildable --include-active --summary-json --cwd .",
+        "source_history_protected": True,
+        "foreground_blocking": False,
+        "privacy_boundary": {
+            "paths_included": False,
+            "raw_rollout_bodies_read": False,
+            "clean_source_bodies_read": False,
+            "rebuildable_cache_only": True,
+        },
+        "claim_boundary": (
+            "Current-thread old generation candidates are rebuildable-cache "
+            "pressure only; review storage GC before any apply."
+        ),
+    }
+
+
 def deferred_storage_pressure_report() -> dict[str, Any]:
     return {
         "available": False,
@@ -373,6 +415,7 @@ def health_report(cwd: str | Path | None = None, **overrides: Any) -> dict[str, 
 
 def public_health_report(payload: dict[str, Any], *, include_paths: bool = False) -> dict[str, Any]:
     public = dict(payload) if include_paths else redact_sensitive_values(redact_private_paths(payload))
+    bound_health_generation_gc_candidates(public)
     if not include_paths:
         _rewrite_redacted_action_commands(public)
     privacy = dict(public.get("privacy") or {})
@@ -384,6 +427,36 @@ def public_health_report(payload: dict[str, Any], *, include_paths: bool = False
     )
     public["privacy"] = privacy
     return public
+
+
+def bound_health_generation_gc_candidates(payload: dict[str, Any]) -> None:
+    """Keep health detail useful without turning it into a storage GC dump.
+
+    Generation rows can number in the hundreds on real registries. Health owns
+    the readiness/counts summary; storage GC owns path-level review and full
+    candidate detail because apply still needs source, pointer, lease, reader
+    pin, and TTL checks there.
+    """
+
+    for section in ("index", "segments"):
+        section_payload = payload.get(section)
+        if not isinstance(section_payload, dict):
+            continue
+        generations = section_payload.get("generations")
+        if not isinstance(generations, dict):
+            continue
+        candidates = generations.get("generation_gc_candidates")
+        if not isinstance(candidates, list):
+            continue
+        total = int(generations.get("generation_gc_candidate_count") or len(candidates))
+        limit = HEALTH_GENERATION_GC_CANDIDATE_LIMIT
+        if len(candidates) > limit:
+            generations["generation_gc_candidates"] = candidates[:limit]
+        generations["generation_gc_candidates_returned"] = min(len(candidates), limit)
+        generations["generation_gc_candidate_detail_deferred"] = len(candidates) > limit
+        generations["bounded_gc_detail_command"] = STORAGE_GC_BOUNDED_DETAIL_COMMAND
+        generations["full_gc_detail_command"] = STORAGE_GC_FULL_DETAIL_COMMAND
+        generations["generation_gc_candidate_total"] = total
 
 
 def _rewrite_redacted_action_commands(payload: dict[str, Any]) -> None:
@@ -667,8 +740,14 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
         )
     record_health_section(section_timings, name="core_readiness", started_at=core_started_at)
     section_started_at = perf_counter()
+    cheap_storage_pressure = generation_cache_pressure_report(
+        index_generations,
+        segment_generations,
+    )
     if options.include_operator_diagnostics and options.include_expensive_diagnostics:
         storage_pressure = registry_cache_pressure_report(cwd, registry_path.resolve().parent)
+    elif cheap_storage_pressure.get("pressure"):
+        storage_pressure = cheap_storage_pressure
     elif options.include_operator_diagnostics:
         storage_pressure = deferred_storage_pressure_report()
     else:
@@ -682,14 +761,19 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
     )
     if storage_pressure.get("pressure"):
         metrics = storage_pressure.get("metrics") or {}
+        amplification = float(metrics.get("generated_index_amplification_ratio") or 0.0)
+        pressure_detail = (
+            f"{metrics.get('generated_index_amplification_ratio')}x clean-source ratio"
+            if amplification > 0
+            else f"{metrics.get('eviction_candidate_count')} old generation candidate(s)"
+        )
         actions.append(
             action(
                 "storage_gc_rebuildable_cache",
                 "warning",
                 (
                     "Generated rebuildable cache pressure is high "
-                    f"({metrics.get('reclaimable_rebuildable_human')}, "
-                    f"{metrics.get('generated_index_amplification_ratio')}x clean-source ratio). "
+                    f"({metrics.get('reclaimable_rebuildable_human')}, {pressure_detail}). "
                     "Run the bounded dry-run audit before applying cleanup."
                 ),
                 storage_pressure["dry_run_command"],

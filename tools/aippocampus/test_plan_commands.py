@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shutil
 import sys
 from pathlib import Path
 
@@ -14,7 +15,14 @@ def local_python_command() -> str:
 
 def python_command(*, local_executable: bool = False) -> str:
     """Return a copy-pasteable Python command."""
-    return local_python_command() if local_executable else PORTABLE_PYTHON_COMMAND
+    if local_executable:
+        return local_python_command()
+    if shutil.which(PORTABLE_PYTHON_COMMAND):
+        return PORTABLE_PYTHON_COMMAND
+    # Some macOS/Homebrew hosts expose only python3. Use the interpreter that
+    # is running the planner so the foreground command stays executable and
+    # keeps the same environment instead of failing as a missing alias.
+    return local_python_command()
 
 
 def py_command(args: str, *, local_executable: bool = False) -> str:

@@ -44,6 +44,15 @@ from aippocampus_runtime.recall.continuity_domains import (
     publish_continuity_domains_snapshot,
 )
 
+PRIVATE_IDENTIFIER_REDACTION = "<private-identifier-redacted>"
+EMAIL_OR_AT_HANDLE_RE = re.compile(r"(?i)^[a-z0-9._%+-]{2,}@[a-z0-9._-]{2,}$")
+CHAT_OR_CONTACT_HANDLE_RE = re.compile(
+    r"(?i)\b[a-z0-9._%+-]{2,}@(im\.)?(wechat|qq|telegram|signal|line|discord|slack)\b"
+)
+DEVICE_OR_HOST_ID_RE = re.compile(
+    r"(?i)\b(?:desktop|laptop|workstation|device|host|iphone|android|mac)[-_]?[a-z0-9]{5,}\b"
+)
+
 
 def _ordinary_recall_path_action() -> dict[str, Any]:
     return {
@@ -467,6 +476,10 @@ def _looks_path_or_identity_cue(cue: str) -> bool:
     if not text:
         return False
     low = text.casefold()
+    if EMAIL_OR_AT_HANDLE_RE.fullmatch(text) or CHAT_OR_CONTACT_HANDLE_RE.search(text):
+        return True
+    if DEVICE_OR_HOST_ID_RE.fullmatch(text):
+        return True
     if any(marker in low for marker in (":\\", ":/", "\\", "/", "长期空间", "long-term-space")):
         return True
     if re.fullmatch(r"[A-Z]{2,4}", text):
@@ -506,8 +519,10 @@ def _producer_candidate_previews(payload: MappingPayload) -> list[MappingPayload
             continue
         refs = event.get("source_refs") or []
         cues, cues_filtered = _foreground_activation_cues(event.get("activation_cues") or [])
-        title = compact_text(str(event.get("title") or "untitled domain"), 96)
-        cue, quality, reason = _best_foreground_cue(cues, title)
+        raw_title = compact_text(str(event.get("title") or "untitled domain"), 96).strip()
+        title_filtered = _looks_path_or_identity_cue(raw_title)
+        title = PRIVATE_IDENTIFIER_REDACTION if title_filtered else raw_title
+        cue, quality, reason = _best_foreground_cue(cues, "" if title_filtered else title)
         preview = {
                 "domain_handle": event.get("domain_id"),
                 "title": title,
@@ -518,7 +533,7 @@ def _producer_candidate_previews(payload: MappingPayload) -> list[MappingPayload
                 "source_ref_count": len(refs) if isinstance(refs, list) else 0,
                 "source_reopen_required_before_claim": True,
             }
-        if cues_filtered:
+        if cues_filtered or title_filtered:
             preview["candidate_detail_deferred"] = ["path_or_identity_cues_filtered"]
             preview["current_uncertainty"] = "some_activation_cues_filtered_for_public_default"
         if reason:

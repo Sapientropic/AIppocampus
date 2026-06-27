@@ -59,18 +59,16 @@ def assemble_compact_recall_payload(
     can_use_for = ["next_action_choice"]
     if not context.labels_low_specificity and not exact_wording_source_search_primary:
         can_use_for.append("route_selection")
+    apw_primary = _action_id(foreground_action) == "deepen_associative_path_fallback"
+    if apw_primary:
+        miss_recovery_card = None
     action_fields = _compact_recall_action_fields(
         foreground_action,
-        safe_next_actions=safe_next_actions,
+        safe_next_actions=[] if apw_primary else safe_next_actions,
     )
     result = {
         "detail": "compact",
-        "kind": payload.get("kind"),
-        "schema_version": payload.get("schema_version"),
-        "mode": payload.get("mode"),
-        "surface": "mcp_agent_recall_compact",
-        "status": context.status,
-        "apw_recovery_state": apw_recovery.get("state") if isinstance(apw_recovery, dict) else None,
+        "status": "ok" if apw_primary and context.status == "no_routes" else context.status,
         "foreground_action": foreground_action,
         "miss_recovery_card": miss_recovery_card,
         "background_recovery_card": background_recovery,
@@ -80,6 +78,10 @@ def assemble_compact_recall_payload(
     }
     result.update(action_fields)
     return strip_compact_foreground_debug_fields(core.strip_empty(result))
+
+
+def _action_id(action: Mapping[str, Any]) -> str:
+    return str(action.get("id") or action.get("action_id") or "")
 
 
 def _compact_recall_action_fields(

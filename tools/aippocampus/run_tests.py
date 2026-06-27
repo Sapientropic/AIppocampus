@@ -717,43 +717,80 @@ def build_tier_report(
     }
 
 
-def _probe_tempdir(parent: Path | None) -> None:
-    if parent is not None:
-        parent.mkdir(parents=True, exist_ok=True)
-        temp_context = tempfile.TemporaryDirectory(prefix=TEMP_PROBE_PREFIX, dir=str(parent))
-    else:
-        temp_context = tempfile.TemporaryDirectory(prefix=TEMP_PROBE_PREFIX)
+def _probe_tempdir(parent: Path) -> None:
+    parent.mkdir(parents=True, exist_ok=True)
+    temp_context = tempfile.TemporaryDirectory(prefix=TEMP_PROBE_PREFIX, dir=str(parent))
     with temp_context as tmp:
         probe = Path(tmp) / "probe.txt"
         probe.write_text("ok", encoding="utf-8")
 
 
+def _tempdir_parent_candidates() -> list[tuple[str, Path]]:
+    candidates: list[tuple[str, Path]] = []
+    seen: set[str] = set()
+
+    def add(label: str, value: str | Path | None) -> None:
+        if value is None or str(value).strip() == "":
+            return
+        path = Path(value).expanduser()
+        key = os.path.normcase(str(path))
+        if key in seen:
+            return
+        seen.add(key)
+        candidates.append((label, path))
+
+    for name in TEMP_ENV_NAMES:
+        add(f"env:{name}", os.environ.get(name))
+    if os.name == "nt":
+        local_app_data = os.environ.get("LOCALAPPDATA")
+        if local_app_data:
+            add("windows:LOCALAPPDATA\\Temp", Path(local_app_data) / "Temp")
+        user_profile = os.environ.get("USERPROFILE")
+        if user_profile:
+            add("windows:USERPROFILE\\AppData\\Local\\Temp", Path(user_profile) / "AppData" / "Local" / "Temp")
+        system_root = os.environ.get("SystemRoot")
+        if system_root:
+            add("windows:SystemRoot\\Temp", Path(system_root) / "Temp")
+    else:
+        for value in ("/tmp", "/var/tmp", "/usr/tmp"):
+            add(f"posix:{value}", value)
+    return candidates
+
+
+def _activate_tempdir(path: Path) -> Path:
+    selected = path.resolve()
+    for name in TEMP_ENV_NAMES:
+        os.environ[name] = str(selected)
+    tempfile.tempdir = str(selected)
+    return selected
+
+
 def ensure_usable_tempdir() -> Path:
-    try:
-        _probe_tempdir(None)
-        # Return the canonical spelling. macOS default temp paths are commonly
-        # exposed as /var/... while the same directory resolves through
-        # /private/var/...; downstream test cache keys should see one identity.
-        return Path(tempfile.gettempdir()).resolve()
-    except OSError as default_error:
-        # Keep the fallback canonical too, otherwise macOS callers can compare
-        # /var and /private/var spellings for the same tested directory.
-        fallback = FALLBACK_TEST_TMPDIR.resolve()
+    default_errors: list[str] = []
+    for label, candidate in _tempdir_parent_candidates():
         try:
-            _probe_tempdir(fallback)
-        except OSError as fallback_error:
-            raise RuntimeError(
-                "No usable temporary directory for the test runner. "
-                f"Default temp failed: {default_error}. "
-                f"Fallback {fallback} failed: {fallback_error}."
-            ) from fallback_error
-        # Keep unittest children on the verified fallback. Without this fail-fast
-        # probe, Python can retry every default candidate per test case and leave
-        # thousands of root-level temp probes when deletion is blocked.
-        for name in TEMP_ENV_NAMES:
-            os.environ[name] = str(fallback)
-        tempfile.tempdir = str(fallback)
-        return fallback
+            _probe_tempdir(candidate)
+        except OSError as exc:
+            default_errors.append(f"{label}={candidate}: {exc}")
+            continue
+        # Keep unittest children on the verified parent. Without this fail-fast
+        # explicit parent, Python can retry implicit candidates and in hostile
+        # hosts may leave random probes in the repository cwd.
+        return _activate_tempdir(candidate)
+
+    # Keep the fallback canonical too, otherwise macOS callers can compare
+    # /var and /private/var spellings for the same tested directory.
+    fallback = FALLBACK_TEST_TMPDIR.resolve()
+    try:
+        _probe_tempdir(fallback)
+    except OSError as fallback_error:
+        default_summary = "; ".join(default_errors) if default_errors else "no explicit candidates"
+        raise RuntimeError(
+            "No usable temporary directory for the test runner. "
+            f"Default temp candidates failed: {default_summary}. "
+            f"Fallback {fallback} failed: {fallback_error}."
+        ) from fallback_error
+    return _activate_tempdir(fallback)
 
 
 def run_modules(modules: list[str], *, verbosity: int) -> bool:

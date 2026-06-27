@@ -1434,6 +1434,8 @@ class SearchCleanSourceTests(unittest.TestCase):
 
         self.assertEqual(code, 1)
         self.assertEqual(payload["foreground_action"]["id"], "open_discussion_atlas_pointer")
+        self.assertIn("discussion_atlas_guard.py", payload["foreground_action"]["command"])
+        self.assertNotIn("python tools/aippocampus/docs/discussion_atlas_guard.py", payload["foreground_action"]["command"])
         self.assertEqual(payload["discussion_atlas_pointer"]["discussion"], 2127)
         self.assertIn("/discussions/2127", json.dumps(payload, ensure_ascii=False))
 

@@ -379,6 +379,177 @@ class ContinuityDomainCliTests(unittest.TestCase):
             self.assertEqual(candidate["foreground_actions"], [])
             self.assertIn("suppression_reason", candidate)
 
+    def test_agent_preview_rejects_issue_2769_generic_log_and_source_cues(self) -> None:
+        payload = {
+            "ok": True,
+            "mode": "dry_run",
+            "metrics": {
+                "scan_partial": False,
+                "low_information_label_suppressed_count": 24122,
+            },
+            "top_domain_labels": [],
+            "candidate_events": [
+                {
+                    "domain_id": "generic-design-route",
+                    "title": "aippocampus",
+                    "domain_type": "recurring_question",
+                    "scale": "meso",
+                    "activation_cues": ["aippocampus", "本身", "感觉", "觉得", "设计"],
+                    "source_refs": [{"message_id": "msg-1"}],
+                },
+                {
+                    "domain_id": "source-backed-result-route",
+                    "title": "结论",
+                    "domain_type": "recurring_question",
+                    "scale": "meso",
+                    "activation_cues": ["结论", "AIppocampus", "实测结果", "source-backed", "---"],
+                    "source_refs": [{"message_id": "msg-2"}],
+                },
+                {
+                    "domain_id": "runtime-language-route",
+                    "title": "MCP",
+                    "domain_type": "recurring_question",
+                    "scale": "meso",
+                    "activation_cues": ["AIppocampus", "fresh-thread", "source-backed", "Python"],
+                    "source_refs": [{"message_id": "msg-3"}],
+                },
+                {
+                    "domain_id": "clean-source-code-token-route",
+                    "title": "clean-source",
+                    "domain_type": "recurring_question",
+                    "scale": "meso",
+                    "activation_cues": ["clean-source", "AIppocampus", "source-backed", "f-string"],
+                    "source_refs": [{"message_id": "msg-4"}],
+                },
+                {
+                    "domain_id": "workflow-log-route",
+                    "title": "checkin-complete",
+                    "domain_type": "recurring_question",
+                    "scale": "meso",
+                    "activation_cues": [
+                        "checkin-complete",
+                        "user-visible",
+                        "check-in",
+                        "SILENT",
+                        "result=backstage_only",
+                    ],
+                    "source_refs": [{"message_id": "msg-5"}],
+                },
+                {
+                    "domain_id": "timestamp-log-route",
+                    "title": "2026-05-26T09:40",
+                    "domain_type": "recurring_question",
+                    "scale": "meso",
+                    "activation_cues": [
+                        "2026-05-26T09:40",
+                        "codex-hindsight-memory",
+                        "锚点",
+                        "--append",
+                        "append",
+                        "T09",
+                    ],
+                    "source_refs": [{"message_id": "msg-6"}],
+                },
+            ],
+        }
+
+        preview = continuity_domain_cli._producer_agent_preview(payload)
+
+        self.assertEqual(preview["foreground_candidate_quality"], "needs_broader_scan")
+        self.assertEqual(preview["foreground_action"]["id"], "needs_broader_scan_or_cue")
+        encoded = json.dumps(preview, ensure_ascii=False)
+        for weak_cue in (
+            "设计",
+            "实测结果",
+            "Python",
+            "f-string",
+            "checkin-complete",
+            "user-visible",
+            "check-in",
+            "SILENT",
+            "result=backstage_only",
+            "2026-05-26T09:40",
+            "T09",
+        ):
+            self.assertNotIn(f"agent recall {weak_cue}", encoded)
+        for candidate in preview["candidate_previews"]:
+            self.assertEqual(candidate["foreground_candidate_quality"], "low_information")
+            self.assertEqual(candidate["foreground_actions"], [])
+
+    def test_agent_preview_rejects_generic_dominated_candidate_with_short_survivor_cue(self) -> None:
+        payload = {
+            "ok": True,
+            "mode": "dry_run",
+            "metrics": {
+                "scan_partial": True,
+                "low_information_label_suppressed_count": 24122,
+            },
+            "top_domain_labels": [],
+            "candidate_events": [
+                {
+                    "domain_id": "generic-dominated-debug-route",
+                    "title": "AIppocampus",
+                    "domain_type": "recurring_question",
+                    "scale": "meso",
+                    "activation_cues": ["AIppocampus", "source-backed", "MCP", "调试"],
+                    "source_refs": [{"message_id": "msg-1"}],
+                }
+            ],
+        }
+
+        preview = continuity_domain_cli._producer_agent_preview(payload)
+        candidate = preview["candidate_previews"][0]
+        encoded = json.dumps(preview, ensure_ascii=False)
+
+        self.assertEqual(preview["foreground_candidate_quality"], "needs_broader_scan")
+        self.assertEqual(preview["foreground_action"]["id"], "needs_broader_scan_or_cue")
+        self.assertEqual(candidate["foreground_candidate_quality"], "low_information")
+        self.assertEqual(candidate["foreground_actions"], [])
+        self.assertEqual(
+            candidate["suppression_reason"],
+            "generic_dominated_candidate_without_compound_cue",
+        )
+        self.assertNotIn("agent recall '调试'", encoded)
+
+    def test_agent_preview_redacts_private_identifiers_from_title_cues_and_commands(self) -> None:
+        private_chat_id = "private-contact-4242@im.wechat"
+        payload = {
+            "ok": True,
+            "mode": "dry_run",
+            "metrics": {
+                "scan_partial": False,
+            },
+            "top_domain_labels": [],
+            "candidate_events": [
+                {
+                    "domain_id": "private-contact-route",
+                    "title": private_chat_id,
+                    "domain_type": "recurring_question",
+                    "scale": "meso",
+                    "activation_cues": [
+                        private_chat_id,
+                        "DESKTOP-A1B2C3D",
+                        "user@workstation",
+                    ],
+                    "source_refs": [{"message_id": "msg-1"}],
+                }
+            ],
+        }
+
+        preview = continuity_domain_cli._producer_agent_preview(payload)
+        encoded = json.dumps(preview, ensure_ascii=False)
+        candidate = preview["candidate_previews"][0]
+
+        self.assertNotIn(private_chat_id, encoded)
+        self.assertNotIn("DESKTOP-A1B2C3D", encoded)
+        self.assertNotIn("user@workstation", encoded)
+        self.assertIn("<private-identifier-redacted>", encoded)
+        self.assertEqual(preview["foreground_candidate_quality"], "needs_broader_scan")
+        self.assertEqual(preview["foreground_action"]["id"], "needs_broader_scan_or_cue")
+        self.assertEqual(candidate["foreground_candidate_quality"], "low_information")
+        self.assertEqual(candidate["foreground_actions"], [])
+        self.assertIn("path_or_identity_cues_filtered", candidate["candidate_detail_deferred"])
+
     def test_agent_preview_skips_low_information_cues_before_using_specific_route_cue(self) -> None:
         payload = {
             "ok": True,

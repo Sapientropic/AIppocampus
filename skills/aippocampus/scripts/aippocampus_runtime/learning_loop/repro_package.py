@@ -8,6 +8,7 @@ import sys
 from collections.abc import Mapping
 from typing import Any
 
+from aippocampus_runtime.command_policy import current_python_module_command
 from aippocampus_runtime.contracts import (
     canonical_foreground_action_fields,
     foreground_shell_action,
@@ -110,7 +111,7 @@ def repro_package_template_payload() -> dict[str, Any]:
     validate_action = foreground_shell_action(
         action_id="validate_repro_input_json",
         label="Validate repro input JSON",
-        command="python -m json.tool repro-input.json",
+        command=current_python_module_command("json.tool", "repro-input.json"),
         why="Check JSON syntax before packaging.",
         mutation_risk="read_only",
         claim_boundary="syntax_check_not_source_evidence",
@@ -215,7 +216,10 @@ def repro_package_recovery_payload(*, malformed_error: str | None = None) -> dic
                             "save the relevant command outcome as the expected input schema",
                             "run `aippocampus repro package --input-json command-output.json --json`",
                         ],
-                        "copyable_validate_command": "python -m json.tool command-output.json",
+                        "copyable_validate_command": current_python_module_command(
+                            "json.tool",
+                            "command-output.json",
+                        ),
                         "copyable_package_command": "aippocampus repro package --input-json command-output.json --json",
                         "mutates": False,
                     },

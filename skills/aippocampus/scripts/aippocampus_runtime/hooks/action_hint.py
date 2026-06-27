@@ -11,6 +11,8 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+# aippocampus-instruction-surface: action-hint hook/probe compact projection and detail diagnostics owner.
+
 SCHEMA_VERSION = 1
 REPORT_KIND = "aippocampus_pre_tool_action_hint_report"
 HINT_KIND = "aippocampus_pre_tool_action_hint"
@@ -430,6 +432,83 @@ def _with_probe_usefulness(report: dict[str, Any]) -> dict[str, Any]:
     return report
 
 
+def _primary_probe_handle(hint: Mapping[str, Any]) -> dict[str, Any] | None:
+    for handle in hint.get("source_handles") or []:
+        if isinstance(handle, Mapping):
+            return dict(handle)
+    return None
+
+
+def compact_probe_report(report: Mapping[str, Any]) -> dict[str, Any]:
+    """Return the foreground probe card without feature extraction diagnostics.
+
+    The status card recommends this probe to foreground agents, so the default
+    JSON must stay action-sized. Full feature vectors, cache accounting, and raw
+    diagnostics remain available through ``--detail full`` for operator review.
+    """
+
+    raw_hint = report.get("hint")
+    hint = raw_hint if isinstance(raw_hint, Mapping) else {}
+    primary_handle = _primary_probe_handle(hint)
+    useful = bool(report.get("useful"))
+    action: dict[str, Any]
+    if primary_handle and primary_handle.get("command"):
+        raw_arguments = primary_handle.get("arguments")
+        arguments = raw_arguments if isinstance(raw_arguments, Mapping) else {}
+        action = {
+            "id": "deepen_probe_source_route",
+            "label": "Deepen probe source route",
+            "command": str(primary_handle.get("command") or ""),
+            "tool_name": str(primary_handle.get("tool_name") or "agent_deepen"),
+            "arguments": dict(arguments),
+            "why": "The probe matched a prepared action-time hint; open its source route before claims.",
+            "mutation_risk": "read_only",
+            "claim_boundary": "no_claim_before_reopen",
+        }
+    else:
+        action = {
+            "id": "inspect_action_hint_status",
+            "label": "Inspect action-hint status",
+            "command": "aippocampus hooks action status --json",
+            "why": "The probe did not produce a follow-through source handle; inspect cache readiness.",
+            "mutation_risk": "read_only",
+            "claim_boundary": "action_hints_are_navigation_not_source_truth",
+        }
+    compact_hint = None
+    if hint:
+        compact_hint = {
+            "hint_id": str(hint.get("hint_id") or ""),
+            "provider_family": str(hint.get("provider_family") or ""),
+            "action_hint_kind": str(hint.get("action_hint_kind") or ""),
+            "message": str(hint.get("message") or ""),
+            "recommended_action": str(hint.get("recommended_action") or ""),
+            "navigation_only": bool(hint.get("navigation_only", True)),
+            "source_reopen_required": bool(hint.get("source_reopen_required", True)),
+            "authority": str(hint.get("authority") or "navigation_only"),
+            "source_ref_count": int(hint.get("source_ref_count") or 0),
+        }
+    return {
+        "schema_version": int(report.get("schema_version") or SCHEMA_VERSION),
+        "kind": "aippocampus_action_hint_probe_compact",
+        "detail": "compact",
+        "ok": bool(report.get("ok", True)),
+        "decision": str(report.get("decision") or ""),
+        "reason": str(report.get("reason") or ""),
+        "useful": useful,
+        "usefulness_stage": str(report.get("usefulness_stage") or ""),
+        "hint": compact_hint,
+        "foreground_action": action,
+        "source_reopen_boundary": (
+            "Probe usefulness means a navigation handle exists; deepen or reopen "
+            "that source before factual claims."
+        ),
+        "claim_boundary": str(
+            report.get("claim_boundary")
+            or "action_hints_are_navigation_not_source_truth"
+        ),
+    }
+
+
 def _silent_report(reason: str, *, diagnostics: Mapping[str, Any] | None = None) -> dict[str, Any]:
     privacy = {
         "raw_tool_args_emitted": False,
@@ -550,6 +629,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("action", choices=["run", "probe"], nargs="?", default="run")
     parser.add_argument("--cache-jsonl", type=Path, help="Prepared action-hint record JSONL.")
     parser.add_argument("--json", action="store_true", dest="json_output")
+    parser.add_argument("--compact-json", action="store_true", dest="compact_json")
+    parser.add_argument("--operator-json", action="store_true", dest="operator_json")
+    parser.add_argument("--detail", choices=["compact", "full"], default="compact")
     args = parser.parse_args(argv)
     try:
         envelope = _read_stdin_json() or (_default_probe_envelope() if args.action == "probe" else {})
@@ -588,8 +670,30 @@ def main(argv: list[str] | None = None) -> int:
                 )
     if args.action == "probe":
         report = _with_probe_usefulness(report)
+    if args.operator_json:
+        args.json_output = True
+        args.detail = "full"
+    if args.compact_json:
+        args.json_output = True
+        args.detail = "compact"
     if args.json_output:
-        print(json.dumps(report, ensure_ascii=False, indent=2))
+        payload: Mapping[str, Any] = (
+            compact_probe_report(report)
+            if args.action == "probe" and args.detail == "compact"
+            else {
+                **report,
+                **(
+                    {
+                        "detail": "full",
+                        "output_boundary": "local_private_diagnostic_full",
+                        "compact_command": "aippocampus hooks action probe --compact-json",
+                    }
+                    if args.action == "probe"
+                    else {}
+                ),
+            }
+        )
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
     elif report.get("hint"):
         print(report["hint"]["message"])
     return 0

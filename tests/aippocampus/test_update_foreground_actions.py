@@ -92,7 +92,14 @@ class UpdateForegroundActionTests(unittest.TestCase):
             {
                 **common,
                 "surfaces": {
-                    **common["surfaces"],
+                    **{
+                        **common["surfaces"],
+                        "llm": {
+                            "status": "deferred",
+                            "operator_detail_available": True,
+                            "deferred_component": "llm_child_process",
+                        },
+                    },
                     "hooks": {
                         "status": "deferred",
                         "operator_detail_available": True,
@@ -113,6 +120,29 @@ class UpdateForegroundActionTests(unittest.TestCase):
         self.assertEqual(deferred["ambient_recall"]["stage"], "installed")
         self.assertIn("hooks:deferred", deferred["ambient_recall"]["issue_codes"])
         self.assertIn("hooks_status", deferred["summary"]["deferred_components"])
+        self.assertIsNone(deferred["ambient_recall"]["prompt_hook_installed"])
+        self.assertIsNone(deferred["ambient_recall"]["lifecycle_hook_installed"])
+        self.assertIsNone(deferred["ambient_recall"]["action_hints_installed"])
+        self.assertEqual(deferred["ambient_recall"]["action_hints_stage"], "deferred")
+        self.assertIsNone(deferred["ambient_recall"]["action_hints_useful"])
+        self.assertIsNone(deferred["ambient_recall"]["hot_path_active"])
+        self.assertEqual(deferred["ambient_recall"]["provider"]["status"], "deferred")
+        self.assertIsNone(deferred["ambient_recall"]["provider"]["degraded"])
+        self.assertEqual(
+            set(deferred["ambient_recall"]["not_checked_fields"]["hooks_status"]),
+            {
+                "prompt_hook_installed",
+                "lifecycle_hook_installed",
+                "action_hints_installed",
+                "action_hints_stage",
+                "action_hints_useful",
+                "hot_path_active",
+            },
+        )
+        self.assertEqual(
+            set(deferred["ambient_recall"]["not_checked_fields"]["provider"]),
+            {"status", "degraded"},
+        )
         self.assertEqual(missing["ambient_recall"]["stage"], "installed")
         self.assertIn("hooks:missing", missing["ambient_recall"]["issue_codes"])
         self.assertNotIn("hooks_status", missing["summary"]["deferred_components"])

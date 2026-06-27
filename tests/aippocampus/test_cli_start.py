@@ -301,7 +301,7 @@ class AippocampusStartCliTests(unittest.TestCase):
         self.assertIn("verify_codex_plugin_secondary", action_ids)
         self.assertNotEqual(payload["safe_next_actions"][0]["mutation_risk"], "writes_local_plugin_cache")
 
-    def test_start_json_routes_stale_source_to_health(self) -> None:
+    def test_start_json_distinguishes_stale_source_from_first_recall_blocker(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             clean = self.write_clean_source(root, stale=True)
@@ -309,13 +309,69 @@ class AippocampusStartCliTests(unittest.TestCase):
 
         self.assertEqual(proc.returncode, 0, proc.stderr)
         payload = json.loads(proc.stdout)
-        self.assertEqual(payload["decision"], "repair_stale_source_before_continuity")
+        self.assertEqual(payload["decision"], "continue_from_existing_source_latest_degraded")
+        self.assertEqual(payload["status"], "ready_with_freshness_degraded")
         self.assertNotIn("agent_next_action", payload)
-        self.assertEqual(payload["foreground_action"]["id"], "repair_health_first")
-        self.assertEqual(payload["first_recall_readiness"]["phase"], "cold_start_maintenance_required")
-        self.assertFalse(payload["first_recall_readiness"]["ordinary_first_recall_usable"])
-        self.assertTrue(payload["first_recall_readiness"]["cold_start_expected"])
+        self.assertEqual(payload["foreground_action"]["id"], "recall_continuity_cue")
+        self.assertEqual(payload["first_recall_readiness"]["phase"], "steady_state_latest_degraded")
+        self.assertTrue(payload["first_recall_readiness"]["ordinary_first_recall_usable"])
+        self.assertFalse(payload["first_recall_readiness"]["cold_start_expected"])
         self.assertEqual(payload["first_recall_readiness"]["progress_signal"], "source_exists_but_stale")
+        self.assertTrue(payload["first_recall_readiness"]["blocks_exact_latest_claims"])
+        self.assertTrue(payload["blocks_exact_latest_claims"])
+        action_ids = [action["id"] for action in payload["safe_next_actions"]]
+        self.assertIn("review_maintenance_plan_before_exact_latest", action_ids)
+        self.assertIn("apply_maintenance_after_consent", action_ids)
+        self.assertLess(
+            action_ids.index("review_maintenance_plan_before_exact_latest"),
+            action_ids.index("deepen_selected_route"),
+        )
+
+    def test_start_uses_health_freshness_gap_when_manifest_is_not_stale(self) -> None:
+        from aippocampus_runtime.cli import start as start_cli
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            clean = self.write_clean_source(root, stale=False)
+            with patch.object(
+                start_cli,
+                "_workspace_freshness_state",
+                return_value={
+                    "assessed": True,
+                    "freshness_scope": "workspace_health_summary",
+                    "freshness_degraded": True,
+                    "latest_current_thread_may_be_missing": True,
+                    "workspace_source_maintenance_required": True,
+                    "blocks_exact_latest_claims": True,
+                    "recommended_action_ids": ["build_clean_source", "build_index"],
+                    "product_readiness_status": "ready_with_freshness_degraded",
+                },
+            ):
+                payload = start_cli.build_start_card(
+                    root,
+                    clean_source_dir=str(clean),
+                )
+
+        self.assertEqual(payload["decision"], "continue_from_existing_source_latest_degraded")
+        self.assertEqual(payload["status"], "ready_with_freshness_degraded")
+        readiness = payload["first_recall_readiness"]
+        self.assertEqual(readiness["phase"], "steady_state_latest_degraded")
+        self.assertTrue(readiness["ordinary_first_recall_usable"])
+        self.assertTrue(readiness["source_stale"])
+        self.assertFalse(readiness["manifest_stale"])
+        self.assertTrue(readiness["latest_current_thread_may_be_missing"])
+        self.assertTrue(readiness["workspace_source_maintenance_required"])
+        self.assertTrue(readiness["blocks_exact_latest_claims"])
+        source = payload["state_summary"]["clean_source"]
+        self.assertFalse(source["manifest_stale"])
+        self.assertTrue(source["latest_source_may_be_missing"])
+        self.assertEqual(source["freshness_scope"], "workspace_health_summary")
+        action_ids = [action["id"] for action in payload["safe_next_actions"]]
+        self.assertIn("review_maintenance_plan_before_exact_latest", action_ids)
+        self.assertLess(
+            action_ids.index("review_maintenance_plan_before_exact_latest"),
+            action_ids.index("deepen_selected_route"),
+        )
 
 if __name__ == "__main__":
     unittest.main()
