@@ -21,7 +21,6 @@ from aippocampus_runtime.public_output import emit_public_text
 from aippocampus_runtime.recall import (
     agent_deepen_requests,
     background_findings,
-    feedback_events,
     task_orientation,
 )
 from aippocampus_runtime.recall import (
@@ -67,6 +66,7 @@ from aippocampus_runtime.recall.agent_continuity_cli_support import (
     write_last_recall_cache,
     write_recall_selector_snapshot,
 )
+from aippocampus_runtime.recall.feedback import events as feedback_events
 
 JsonOut = Callable[[Mapping[str, Any]], None]
 

@@ -6,7 +6,7 @@ from collections.abc import Callable
 from typing import Any
 
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
-from aippocampus_runtime.recall import feedback_events
+from aippocampus_runtime.recall.feedback import events as feedback_events
 
 PARK = "park"
 USE_SILENTLY = "use_silently"

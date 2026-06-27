@@ -23,6 +23,7 @@ class PromptHookSemanticDiagnosticsTests(unittest.TestCase):
                 semantic_gate_fn=fail_if_called,
                 semantic_timeout=5,
                 max_elapsed_ms=20000,
+                detail="detail",
             )
 
         public = hook.public_hook_debug_payload(result)

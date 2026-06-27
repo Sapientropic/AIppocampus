@@ -14,6 +14,7 @@ from aippocampus_runtime.cli import facade as cli_facade
 from aippocampus_runtime.contracts import foreground_action_contract_violations
 from aippocampus_runtime.registry import api as registry
 from aippocampus_runtime.source import search as search
+from aippocampus_runtime.source.artifact_role import artifact_role_profile
 from tests.aippocampus.frontstage_assertions import assert_semantic_human_output
 
 
@@ -190,6 +191,20 @@ class SearchCleanSourceTests(unittest.TestCase):
         self.assertEqual(result["matches"][0]["artifact_role"]["role"], "validation_or_fixture_artifact")
         self.assertFalse(public["useful_target_hit"])
         self.assertEqual(public["first_match_usefulness"]["status"], "demoted_artifact")
+
+    def test_strict_verification_quote_echo_is_demoted_as_memory_product_artifact(self) -> None:
+        profile = artifact_role_profile(
+            text=(
+                "只读严格验收 foreground recall/MCP/source-open 类 issue；"
+                "quote echo case `recall 不够自然 辛苦去捞` 是否打开原始 source "
+                "或明确标 secondary/echo。输出 PASS/PARTIAL/FAIL。"
+            ),
+            query_text="不够自然 辛苦去捞",
+        )
+
+        self.assertTrue(profile["demote"])
+        self.assertEqual(profile["role"], "memory_product_meta_echo")
+        self.assertEqual(profile["reason"], "memory_product_meta_echo")
 
     def test_goal_context_control_block_is_demoted_below_real_source(self) -> None:
         with (self.source / "messages.jsonl").open("a", encoding="utf-8", newline="\n") as f:

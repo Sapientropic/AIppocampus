@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 
 from aippocampus_runtime.dream import working_memory_publication
-from aippocampus_runtime.recall import feedback_events
+from aippocampus_runtime.recall.feedback import events as feedback_events
 from aippocampus_runtime.subconscious import candidate_router as router
 from tests.aippocampus.continuity_domain_fixtures import write_jsonl
 

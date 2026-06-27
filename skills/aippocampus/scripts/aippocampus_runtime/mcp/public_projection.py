@@ -290,6 +290,29 @@ def _storage_summary_projection(
     return {"command": summary}
 
 
+def _storage_review_action(
+    *,
+    storage_cleanup_action: dict[str, Any] | None,
+    storage_pressure: dict[str, Any],
+    pressure_known: bool,
+) -> dict[str, Any]:
+    summary = _storage_summary_projection(storage_cleanup_action, storage_pressure)
+    return {
+        "id": "review_storage_gc_summary",
+        "label": "Review storage pressure summary",
+        "mutation_risk": "read_only",
+        "claim_boundary": "storage_pressure_summary_not_memory_quality_evidence",
+        "why": (
+            "Storage pressure is present; run this no-write summary before cache pressure grows."
+            if pressure_known
+            else (
+                "Storage pressure was not assessed; run this no-write summary before assuming it is clean."
+            )
+        ),
+        **summary,
+    }
+
+
 def _maintenance_plan_action(*, reason: str) -> dict[str, Any]:
     return {
         "id": "review_maintenance_plan",
@@ -414,6 +437,13 @@ def compact_health_payload(payload: dict[str, Any]) -> dict[str, Any]:
         isinstance(readiness, dict)
         and readiness.get("storage_pressure_cleanup_recommended")
     ) or bool(storage_pressure.get("pressure"))
+    storage_unassessed = bool(
+        storage_pressure.get("status") == "deferred"
+        or (
+            storage_pressure.get("summary_command")
+            and storage_pressure.get("pressure") is None
+        )
+    )
     freshness_summary = core.strip_empty(
         {
             "degraded": True if freshness_degraded else None,
@@ -435,7 +465,10 @@ def compact_health_payload(payload: dict[str, Any]) -> dict[str, Any]:
         {
             "cleanup_recommended": True if storage_cleanup_recommended else None,
             "pressure": storage_pressure.get("pressure") if storage_pressure.get("pressure") else None,
-            "bounded_audit_available": True if storage_cleanup_recommended else None,
+            "assessment": "unassessed" if storage_unassessed and not storage_cleanup_recommended else None,
+            "bounded_audit_available": True
+            if storage_cleanup_recommended or storage_unassessed
+            else None,
         }
     )
     host_state_summary = core.strip_empty(
@@ -464,18 +497,32 @@ def compact_health_payload(payload: dict[str, Any]) -> dict[str, Any]:
             "host_state_confounds_detected": True if host_state_summary else None,
         }
     )
-    if ordinary_usable and all_recommended:
-        primary_action: dict[str, Any] = {
+    storage_review = (
+        _storage_review_action(
+            storage_cleanup_action=storage_cleanup_action,
+            storage_pressure=storage_pressure,
+            pressure_known=storage_cleanup_recommended,
+        )
+        if storage_cleanup_recommended or storage_unassessed
+        else None
+    )
+    if ordinary_usable and storage_review:
+        primary_action = {
+            **storage_review,
+            "primary": {
+                "ordinary_first_recall_usable": True,
+                "storage_pressure_known": storage_cleanup_recommended,
+                "storage_pressure_unassessed": storage_unassessed
+                and not storage_cleanup_recommended,
+            },
+        }
+    elif ordinary_usable and all_recommended:
+        primary_action = {
             "id": "continue_with_nonblocking_maintenance",
             "label": "Continue recall", "why": "Recall is usable; maintenance is advisory.",
             "mutation_risk": "read_only", "claim_boundary": "health_not_source", "continue_without_command": True,
             "primary": {"ordinary_first_recall_usable": True},
         }
-        if storage_cleanup_action:
-            primary_action["when_idle"] = _storage_summary_projection(
-                storage_cleanup_action,
-                storage_pressure,
-            ) | {"id": "review_storage_gc_summary", "mutation_risk": "read_only"}
     else:
         primary_action = (
             promotable_blocking[0]
@@ -526,7 +573,15 @@ def compact_health_payload(payload: dict[str, Any]) -> dict[str, Any]:
     )
     foreground_fields = canonical_foreground_action_fields(
         foreground_action,
-        safe_next_actions=[foreground_action, *followup_actions],
+        safe_next_actions=[
+            foreground_action,
+            *(
+                [storage_review]
+                if storage_review and storage_review != foreground_action
+                else []
+            ),
+            *followup_actions,
+        ],
     )
     card.update(foreground_fields)
     return core.strip_empty(card)

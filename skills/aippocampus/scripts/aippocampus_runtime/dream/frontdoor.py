@@ -11,6 +11,7 @@ from aippocampus_runtime.contracts import (
     canonical_foreground_action_fields,
     foreground_template_action,
 )
+from aippocampus_runtime.dream import lifecycle as dream_lifecycle
 from aippocampus_runtime.dream import sleep_cycle
 from aippocampus_runtime.dream import status as dream_status
 from aippocampus_runtime.registry.store import registry_root
@@ -64,6 +65,9 @@ def dream_status_payload(
         if _retention_decision(row) == "drop_low_pressure"
         or _row_status(row) in {"rejected", "model_output_rejected", "dropped"}
     )
+    lifecycle_report = dream_lifecycle.dream_lifecycle_report(
+        [*finding_rows, *working_rows],
+    )
     payload: dict[str, Any] = {
         "kind": (
             "aippocampus_subconscious_status"
@@ -96,6 +100,7 @@ def dream_status_payload(
             "writes_performed": False,
             "working_memory_projection_requires_explicit_write_command": True,
         },
+        "dream_lifecycle_report": lifecycle_report,
         "privacy_boundary": {
             "raw_candidate_text_emitted": False,
             "local_paths_emitted": False,
@@ -143,6 +148,17 @@ def _top_reason_bucket_lines(card: dict[str, Any], *, limit: int = 3) -> list[st
     return [f"{name}={count}" for name, count in ordered[:limit] if count > 0]
 
 
+def _top_lifecycle_count_lines(report: dict[str, Any], *, limit: int = 4) -> list[str]:
+    counts = report.get("counts")
+    if not isinstance(counts, dict):
+        return []
+    ordered = sorted(
+        ((str(name), int(count or 0)) for name, count in counts.items()),
+        key=lambda item: (-item[1], item[0]),
+    )
+    return [f"{name}={count}" for name, count in ordered[:limit] if count > 0]
+
+
 def main(argv: list[str] | None = None) -> int:
     raw_args = list(argv or [])
     lane = "dream"
@@ -175,6 +191,13 @@ def main(argv: list[str] | None = None) -> int:
         reason_lines = _top_reason_bucket_lines(card)
         if reason_lines:
             print("why_no_output: " + ", ".join(reason_lines))
+        lifecycle_lines = _top_lifecycle_count_lines(payload.get("dream_lifecycle_report") or {})
+        if lifecycle_lines:
+            print("lifecycle: " + ", ".join(lifecycle_lines))
+        examples = (payload.get("dream_lifecycle_report") or {}).get("examples") or []
+        for example in examples[:2]:
+            if isinstance(example, dict):
+                print(f"example: {example.get('example_safe_summary')}")
         print(f"primary_next_action: {card.get('primary_next_action')}")
         print('template: aippocampus agent background "{task_cue}" --json')
     return 0

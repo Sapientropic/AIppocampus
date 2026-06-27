@@ -679,6 +679,7 @@ def _apply_fallback_promotions(
         background_recovery=background_recovery,
     )
 
+
 def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
     """Project agent_recall into one foreground action plus compact route receipts.
 
@@ -722,12 +723,19 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> dict[str, Any]:
         foreground_action=apw_state.foreground_action,
         safe_next_actions=apw_state.safe_next_actions,
     )
+    foreground_action, safe_next_actions = (
+        apw_meta_echo_projection.promote_original_anchor_search_from_safe_actions(
+            source_anchor_gate=payload.get("source_anchor_gate"),
+            foreground_action=fallback_state.foreground_action,
+            safe_next_actions=fallback_state.safe_next_actions,
+        )
+    )
     return result_assembly.assemble_compact_recall_payload(
         payload,
         context,
         route_projection_result=route_projection_result,
-        foreground_action=fallback_state.foreground_action,
-        safe_next_actions=fallback_state.safe_next_actions,
+        foreground_action=foreground_action,
+        safe_next_actions=safe_next_actions,
         miss_recovery_card=selection.miss_recovery_card,
         weak_route_recovery_card=apw_state.weak_route_recovery_card,
         apw_recovery=apw_state.apw_recovery,

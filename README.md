@@ -20,21 +20,40 @@ with honest continuity instead of pretending there was never a break.
 
 > Source is the ground. Summaries are weather.
 
-First useful continuity move after AIppocampus is visible to an agent:
+## First Use Path
+
+The first useful path is deliberately narrow:
+
+1. Install or probe the CLI.
+2. Run one fuzzy recall for an old decision, handoff, preference, or thread cue.
+3. Deepen that route before making claims or quoting source.
+4. Use exact search only when the user remembers wording.
+
+Install or probe:
+
+```sh
+uvx aippocampus --help
+aippocampus start --json
+```
+
+First recall, for a fuzzy continuity cue:
 
 ```sh
 aippocampus agent recall "old decision or handoff cue" --json
+```
+
+First deepen/source-open, using the selector from that recall:
+
+```sh
 aippocampus agent deepen --request 1 --recall-selector <emitted-selector> --json
 ```
 
-That turns an old cue into a route the agent can deepen before making claims.
-Use the `recall_selector` emitted by that recall; `--last-recall` is a mutable
-same-machine fallback, not the taught path.
-From a public source checkout, an exact-search demo can still show the source
-substrate without touching private history:
+Daily rule: if the user remembers exact wording, search source; if they
+remember a situation, decision, preference, old correction, or handoff, use
+recall first and deepen before claims.
 
 ```sh
-aippocampus search "without pretending it has innate memory" --clean-source-dir ./examples/public-memory-bundle/clean-source --json
+aippocampus search "a distinctive old phrase" --json
 ```
 
 In ordinary use, AIppocampus should feel less like a control panel than a
@@ -47,79 +66,18 @@ bare ground every time a thread, device, model, or project changes.
 
 The origin essay is [未干的地图](docs/未干的地图.md). English readers can start with
 [The Unfinished Map](docs/the-unfinished-map.md).
-For role-based documentation paths, use
-[Start Here](docs/start-here.md).
-
-## Quick Start
-
-First run should end in one useful decision card, then one source-backed recall
-route. The fuller guided version is
-[First Recall Decision Card](docs/guides/first-recall-decision-card.md); role
-paths live in [Start Here](docs/start-here.md).
-
-If `aippocampus` already exists from a source checkout or editable install,
-start here:
-
-```sh
-aippocampus start --json
-aippocampus agent recall "old decision or handoff cue" --json
-aippocampus agent deepen --request 1 --recall-selector <emitted-selector> --json
-```
-
-`start` is the foreground chooser. If it says source is missing or stale, stay
-read-only until the user agrees to register local history:
-
-```sh
-aippocampus onboard --provider auto --status --json
-aippocampus onboard --provider codex --dry-run --json
-```
-
-After consent, choose the provider path from
-[Start Here](docs/start-here.md) rather than copying a setup matrix out of the
-README. Codex, Claude Code, generic JSONL import, plugin install, hooks,
-export, and sync each have different consent and host boundaries.
-
-If the command does not exist yet, use the no-clone probe first:
-
-```sh
-uvx aippocampus --help
-uvx aippocampus onboard --provider auto --status --json
-```
-
-That proves the package is reachable without registering private history. If a
-public no-private-data demo is all you need, use the bundled clean source:
-
-```sh
-aippocampus search "without pretending it has innate memory" --clean-source-dir ./examples/public-memory-bundle/clean-source --json
-```
-
-Exact search is the proof lane when the user remembers wording; agent
-recall/deepen is the continuity lane when the user has a cue. For the short
-public walkthrough, use
-[10-Minute Public Path](docs/guides/ten-minute-public-path.md). For the felt
-product shape after the first route, read
-[Magic Moments, Claim-Bounded](docs/evidence/magic-moments.md). For the current
-proof map, use the [Can-Claim Ladder](docs/evidence/can-claim-ladder.md). For a
-compact origin and current-value trail, use the
+For role-based setup, provider choices, and maintainer paths, use
+[Start Here](docs/start-here.md). For a longer first-use walkthrough, use the
+[First Recall Decision Card](docs/guides/first-recall-decision-card.md) or the
+[10-Minute Public Path](docs/guides/ten-minute-public-path.md). Evidence and
+claim boundaries live after the first route in
+[Magic Moments, Claim-Bounded](docs/evidence/magic-moments.md), the
+[Can-Claim Ladder](docs/evidence/can-claim-ladder.md), and the
 [Public Provenance And Current Value Ledger](docs/evidence/public-provenance-ledger.md).
 
 After a useful deepen, `aippocampus export --json` and
-`aippocampus sync --json` are the carry-forward checks for the next thread,
-device, or project.
-
-Good first queries are an exact phrase, a project cue, or a time cue such as
-`recent` / `last month`. Exact hits are source-backed snippets. Project/time
-cues are candidate navigation until AIppocampus shows a source-backed snippet.
-Do not publish or commit raw rollouts, registry exports, `.aippocampus/` output,
-API keys, cookies, or sync bundles while following the quick path.
-
-When you are choosing an integration surface, see the
-[Ecosystem Integration Matrix](docs/guides/ecosystem-integration-matrix.md).
-When you are deciding whether a feature belongs in the low-friction personal
-path or in governed/high-risk opt-in behavior, use
-[Product Profiles](docs/architecture/host/product-profiles.md).
-Repository checks for maintainers live in
-[Operator And Maintainer Paths](#operator-and-maintainer-paths).
+`aippocampus sync --json` are carry-forward checks for the next thread, device,
+or project. They are not prerequisites for first recall.
 
 ## AIppocampus For Coding Agents
 
@@ -134,39 +92,29 @@ whether to recommend AIppocampus as an agent-memory tool. It includes the
 3-5 minute demo path, evidence drawer, and "recommend / do not recommend"
 boundary without duplicating the public API or readiness docs.
 
-## Agent One-Command Probe
+## Agent Probe
 
 When an AI agent needs to verify the public CLI without cloning or writing local
-memory artifacts, use the PyPI package, then prefer a first recall route over a
-diagnostic tour:
+memory artifacts, use the PyPI package and stay read-only:
 
 ```sh
 uvx aippocampus --help
-uvx aippocampus agent recall "old decision or handoff cue" --json
-uvx aippocampus agent deepen --request 1 --recall-selector <emitted-selector> --json
-uvx aippocampus search "a distinctive old phrase"
-```
-
-Use exact search as a fallback when the user remembers wording or the recall
-route is blocked.
-
-For a read-only local onboarding/status check:
-
-```sh
 uvx aippocampus onboard --provider auto --status --json
 ```
 
-This is a read-only provider matrix, not consent to ingest every detected
-provider. Only after the user explicitly agrees to register local history,
-route to [Start Here](docs/start-here.md) or the
+This is a provider matrix, not consent to ingest every detected provider. Only
+after the user explicitly agrees to register local history, route to
+[Start Here](docs/start-here.md) or the
 [First Recall Decision Card](docs/guides/first-recall-decision-card.md) for the
 right provider-specific write path.
 
-For human-facing demos, omit `--format json` so onboarding and search show the
-first-recall next steps. Agents should read [docs/agent-context.md](docs/agent-context.md) and
-[llms.txt](llms.txt) before recommending or comparing AIppocampus. Use the
-[first recall decision card](docs/guides/first-recall-decision-card.md) when the
-goal is one useful source-backed moment before broader setup. Use the
+```sh
+uvx aippocampus search "without pretending it has innate memory" --clean-source-dir ./examples/public-memory-bundle/clean-source --json
+```
+
+That exact-search demo uses bundled public clean source and does not touch
+private history. Agents should read [docs/agent-context.md](docs/agent-context.md)
+and [llms.txt](llms.txt) before recommending or comparing AIppocampus. Use the
 GitHub `uvx --from git+...` form only when intentionally testing an unreleased
 main-branch snapshot.
 

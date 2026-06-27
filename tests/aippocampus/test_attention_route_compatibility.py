@@ -8,7 +8,7 @@ from aippocampus_runtime.navigation import (
     attention_route_projection,
     route_compatibility_diagnostics,
 )
-from aippocampus_runtime.recall import feedback_events
+from aippocampus_runtime.recall.feedback import events as feedback_events
 
 
 def _route(route_id: str, *, semantic_score: float, source_id: str) -> dict[str, object]:

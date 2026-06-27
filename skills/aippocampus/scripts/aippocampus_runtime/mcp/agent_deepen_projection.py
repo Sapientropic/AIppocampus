@@ -8,6 +8,7 @@ from typing import Any
 from aippocampus_runtime import core
 from aippocampus_runtime.contracts import canonical_foreground_action_fields, shell_quote
 from aippocampus_runtime.mcp.compact_profile import strip_compact_foreground_debug_fields
+from aippocampus_runtime.mcp.contracts import build_mcp_compact_card
 from aippocampus_runtime.privacy import (
     SENSITIVE_ASSIGNMENT_RE,
     SENSITIVE_VALUE_REDACTION,
@@ -191,21 +192,24 @@ def compact_agent_deepen_payload(
             if primary_action
             else {}
         )
-        return core.strip_empty(
-            {
-                "detail": "compact",
-                "kind": source.get("kind"),
-                "schema_version": source.get("schema_version"),
-                "mode": source.get("mode"),
-                "surface": surface,
-                "surface_class": source.get("surface_class"),
-                "status": source.get("status"),
-                "ok": False,
-                "error": error,
-                **foreground_fields,
-                "follow_up_action": follow_up_action,
-                "claim_boundary": source.get("claim_boundary"),
-            }
+        return build_mcp_compact_card(
+            core.strip_empty(
+                {
+                    "detail": "compact",
+                    "kind": source.get("kind"),
+                    "schema_version": source.get("schema_version"),
+                    "mode": source.get("mode"),
+                    "surface": surface,
+                    "surface_class": source.get("surface_class"),
+                    "status": source.get("status"),
+                    "ok": False,
+                    "error": error,
+                    **foreground_fields,
+                    "follow_up_action": follow_up_action,
+                    "claim_boundary": source.get("claim_boundary"),
+                }
+            ),
+            surface=surface,
         )
     if source.get("status") != "ok" or source.get("surface") != "recall":
         return source
@@ -248,6 +252,7 @@ def compact_agent_deepen_payload(
             "label": "Treat opened source as diagnostic",
             "mutation_risk": "read_only",
             "claim_boundary": "opened_source_not_target_evidence",
+            "continue_without_command": True,
             "why": (
                 "Source opened, but recall did not accept it as the target evidence route; "
                 "use search or another deepen route before making source-backed claims."
@@ -259,6 +264,7 @@ def compact_agent_deepen_payload(
             "label": "Use the opened source window",
             "mutation_risk": "read_only",
             "claim_boundary": "source_open_within_returned_window",
+            "continue_without_command": True,
             "why": "Source has been reopened; use only the returned window unless you deepen or request full detail.",
         }
     foreground_fields = canonical_foreground_action_fields(
@@ -314,4 +320,7 @@ def compact_agent_deepen_payload(
             **foreground_fields,
         }
     )
-    return strip_compact_foreground_debug_fields(compact)
+    return build_mcp_compact_card(
+        strip_compact_foreground_debug_fields(compact),
+        surface=surface,
+    )

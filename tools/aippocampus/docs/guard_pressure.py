@@ -12,6 +12,7 @@ LOW_MARGIN_OWNER_ISSUES = {
     "skills/aippocampus/scripts/aippocampus_runtime/recall/agent_continuity_cli.py": "#2676",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/associative_path_fallback.py": "#2678",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/prompt_recall_decision.py": "#2631",
+    "skills/aippocampus/scripts/aippocampus_runtime/recall/prompt_foreground_budget.py": "#2794",
     "skills/aippocampus/scripts/aippocampus_runtime/source/registry_search_pipeline.py": "#2635",
     "skills/aippocampus/scripts/aippocampus_runtime/subconscious/candidate_router.py": "#2678",
     "skills/aippocampus/scripts/aippocampus_runtime/subconscious/jobs.py": "#2631",

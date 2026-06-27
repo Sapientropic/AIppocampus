@@ -18,6 +18,7 @@ from typing import Any
 
 from aippocampus_runtime.core import compact_text, now_utc, sanitize_external_model_payload
 from aippocampus_runtime.dream import journey_bridges
+from aippocampus_runtime.dream import lifecycle as dream_lifecycle
 from aippocampus_runtime.dream.constructive_outputs import (
     normalized_constructive_artifact,
     normalized_prospective_invitation,
@@ -419,6 +420,9 @@ def finding_from_candidate(
     if artifact_review_required or bridge_review_required:
         finding["human_review_required"] = True
     finding.update({key: value for key, value in stance_fields.items() if value})
+    lifecycle_record = dream_lifecycle.dream_lifecycle_record(finding)
+    finding["dream_lifecycle"] = lifecycle_record
+    finding["lifecycle_state"] = lifecycle_record["state"]
     return {key: value for key, value in finding.items() if value is not None}, None
 
 

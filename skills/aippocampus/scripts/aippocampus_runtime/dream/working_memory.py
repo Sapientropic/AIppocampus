@@ -18,7 +18,14 @@ from datetime import datetime, timezone
 from typing import Any
 
 from aippocampus_runtime.core import compact_text, now_utc
-from aippocampus_runtime.dream import journey_bridges, probe_authority, trust_horizon_recovery
+from aippocampus_runtime.dream import (
+    journey_bridges,
+    probe_authority,
+    trust_horizon_recovery,
+)
+from aippocampus_runtime.dream import (
+    lifecycle as dream_lifecycle,
+)
 from aippocampus_runtime.dream.constructive_outputs import (
     clean_constructive_artifact,
     clean_prospective_invitation,
@@ -28,6 +35,7 @@ from aippocampus_runtime.dream.constructive_outputs import (
 )
 from aippocampus_runtime.dream.risk_terms import dream_text_hard_risk
 from aippocampus_runtime.source.io_kernel import (
+    merge_source_refs,
     parse_utc,
     safe_float,
     source_ref_key,
@@ -127,33 +135,29 @@ def normalize_now(now: str | datetime | None) -> datetime:
     return parsed or datetime.now(timezone.utc)
 
 
-def normalize_source_refs(value: object) -> tuple[dict[str, Any], ...]:
+def clean_dream_source_refs(value: object) -> tuple[dict[str, Any], ...]:
     if isinstance(value, Mapping):
-        raw_items: Iterable[object] = [value]
+        raw_items = [value]
     elif isinstance(value, (list, tuple)):
-        raw_items = value
+        raw_items = list(value)
     else:
         raw_items = []
 
-    refs: list[dict[str, Any]] = []
-    seen: set[tuple[str, str, str, str]] = set()
-    for item in raw_items:
-        if not isinstance(item, Mapping):
-            continue
-        ref = dict(item)
-        key = source_ref_key(ref)
-        if not any(key) or key in seen:
-            continue
-        seen.add(key)
-        refs.append({k: v for k, v in ref.items() if is_present(v)})
-    return tuple(refs)
+    return tuple(
+        merge_source_refs(
+            [],
+            raw_items,
+            limit=max(1, len(raw_items)),
+            require_anchor=False,
+        )
+    )
 
 
 def bridge_claims_have_source_refs(finding: Mapping[str, Any]) -> bool:
     claims = [item for item in finding.get("bridge_claims") or [] if isinstance(item, Mapping)]
     if not claims:
         return False
-    return all(normalize_source_refs(claim.get("source_refs")) for claim in claims)
+    return all(clean_dream_source_refs(claim.get("source_refs")) for claim in claims)
 
 
 def audit_failed(finding: Mapping[str, Any]) -> bool:
@@ -173,15 +177,15 @@ def source_pack_is_ready(source_pack: Mapping[str, Any]) -> bool:
         "failed",
     }:
         return False
-    return bool(normalize_source_refs(source_pack.get("source_refs")))
+    return bool(clean_dream_source_refs(source_pack.get("source_refs")))
 
 
 def source_pack_overlaps_finding(
     finding: Mapping[str, Any],
     source_pack: Mapping[str, Any],
 ) -> bool:
-    finding_keys = source_ref_key_set(normalize_source_refs(finding.get("source_refs")))
-    pack_keys = source_ref_key_set(normalize_source_refs(source_pack.get("source_refs")))
+    finding_keys = source_ref_key_set(clean_dream_source_refs(finding.get("source_refs")))
+    pack_keys = source_ref_key_set(clean_dream_source_refs(source_pack.get("source_refs")))
     return bool(finding_keys and pack_keys and finding_keys & pack_keys)
 
 
@@ -305,7 +309,7 @@ def adjudicated_dream_is_eligible(finding: Mapping[str, Any]) -> bool:
         return False
     if str(finding.get("review_state") or "") not in ADJUDICATED_REVIEW_STATES:
         return False
-    refs = normalize_source_refs(finding.get("source_refs"))
+    refs = clean_dream_source_refs(finding.get("source_refs"))
     if not refs:
         return False
     if audit_failed(finding):
@@ -335,7 +339,7 @@ def background_adjudicate_dream_finding(
     result = dict(finding)
     checks = {
         "dream_finding_kind": finding.get("finding_kind") == DREAM_FINDING_KIND,
-        "source_refs_present": bool(normalize_source_refs(finding.get("source_refs"))),
+        "source_refs_present": bool(clean_dream_source_refs(finding.get("source_refs"))),
         "source_ref_audit": not audit_failed(finding),
         "bridge_claims_source_refs": bridge_claims_have_source_refs(finding),
         "confidence_floor": safe_float(finding.get("confidence"), 0.62) >= confidence_floor,
@@ -354,12 +358,27 @@ def background_adjudicate_dream_finding(
     if failed:
         result["review_state"] = "needs_review"
         result["human_review_required"] = bool(result.get("human_review_required") or False)
+        lifecycle_record = dream_lifecycle.dream_lifecycle_record(
+            {
+                **result,
+                "adjudication_result": {
+                    "status": "parked",
+                    "passed_checks": passed,
+                    "failed_checks": failed,
+                    "policy": "background_source_guard_v1",
+                },
+            }
+        )
         result["adjudication_result"] = {
             "status": "parked",
             "passed_checks": passed,
             "failed_checks": failed,
             "policy": "background_source_guard_v1",
+            "readable_reason": lifecycle_record["readable_reason"],
+            "next_review_or_cleanup": lifecycle_record["next_review_or_cleanup"],
         }
+        result["dream_lifecycle"] = lifecycle_record
+        result["lifecycle_state"] = lifecycle_record["state"]
         return result
 
     requested_uses = [
@@ -381,6 +400,8 @@ def background_adjudicate_dream_finding(
         "failed_checks": [],
         "policy": "background_source_guard_v1",
     }
+    result["dream_lifecycle"] = dream_lifecycle.dream_lifecycle_record(result)
+    result["lifecycle_state"] = result["dream_lifecycle"]["state"]
     return result
 
 
@@ -413,7 +434,7 @@ def adjudicated_dream_findings_to_working_memory(
             break
         if not adjudicated_dream_is_eligible(finding):
             continue
-        raw_refs = normalize_source_refs(finding.get("source_refs"))
+        raw_refs = clean_dream_source_refs(finding.get("source_refs"))
         refs = clean_working_memory_refs(raw_refs)
         if not refs:
             continue
@@ -521,6 +542,8 @@ def adjudicated_dream_findings_to_working_memory(
                 "source_candidate_batch_id": finding.get("batch_id"),
                 "source_candidate_created_at": finding.get("created_at"),
                 "review_state": finding.get("review_state"),
+                "lifecycle_state": "adjudicated_source_ref_hypothesis",
+                "dream_lifecycle": dream_lifecycle.dream_lifecycle_record(finding),
                 "adjudication_source": finding.get("adjudication_source")
                 or "background_dream_adjudication",
                 "dream_function": finding.get("dream_function"),

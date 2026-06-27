@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from aippocampus_runtime.recall import feedback_events
+from aippocampus_runtime.recall.feedback import events as feedback_events
 from tests.aippocampus.prompt_hook_fixtures import (
     AmbientRecallHookCase,
     hook,

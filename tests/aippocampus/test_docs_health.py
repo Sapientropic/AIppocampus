@@ -102,20 +102,27 @@ class DocsHealthTests(unittest.TestCase):
         readme_flat = " ".join(readme.split())
 
         recall_command = 'aippocampus agent recall "old decision or handoff cue" --json'
-        codex_write = "aippocampus onboard --provider codex --cwd . --json"
-        claude_write = "aippocampus onboard --provider claude-code --cwd . --json"
-        self.assertLess(readme.index(recall_command), readme.index("## Quick Start"))
+        deepen_command = (
+            "aippocampus agent deepen --request 1 "
+            "--recall-selector <emitted-selector> --json"
+        )
+        self.assertIn("## First Use Path", readme)
+        self.assertEqual(readme.count(recall_command), 1)
+        self.assertEqual(readme.count(deepen_command), 1)
+        self.assertLess(readme.index("uvx aippocampus --help"), readme.index(recall_command))
+        self.assertLess(readme.index(recall_command), readme.index(deepen_command))
+        self.assertLess(readme.index(deepen_command), readme.index('aippocampus search "a distinctive old phrase" --json'))
         self.assertLess(start_here.index("## First Recall"), start_here.index("## See And Add To Memory"))
-        self.assertLess(start_here.index(recall_command), start_here.index("aippocampus vault sync --json"))
-        self.assertNotIn(codex_write, readme_flat)
-        self.assertNotIn(claude_write, readme_flat)
+        self.assertIn("README First Use Path", start_here)
+        self.assertNotIn(recall_command, start_here)
+        self.assertNotIn(deepen_command, start_here)
+        self.assertNotIn("aippocampus onboard --provider codex --cwd . --json", readme_flat)
+        self.assertNotIn("aippocampus onboard --provider claude-code --cwd . --json", readme_flat)
         self.assertIn("First Recall Decision Card", readme)
-        self.assertIn(codex_write, start_here_flat)
-        self.assertIn(claude_write, start_here_flat)
+        self.assertIn("agent-mediated Codex plugin path", start_here_flat)
+        self.assertIn("Claude Code MCP setup", start_here_flat)
         self.assertIn("aippocampus export --json", readme)
         self.assertIn("aippocampus sync --json", start_here)
-        self.assertLess(start_here_flat.index(recall_command), start_here_flat.index(codex_write))
-        self.assertLess(start_here_flat.index(recall_command), start_here_flat.index(claude_write))
 
         repo_issues = docs_health.foreground_continuity_doc_issues(REPO_ROOT)
         self.assertEqual([], repo_issues)

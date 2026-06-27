@@ -104,6 +104,218 @@ def import_recovery_payload() -> dict[str, Any]:
     }
 
 
+def plugin_chooser_payload() -> dict[str, Any]:
+    return foreground_chooser_card(
+        kind="aippocampus_plugin_chooser",
+        decision="check plugin status before choosing any install or rollback write",
+        choices=[
+            foreground_shell_action(
+                action_id="check_codex_plugin_status",
+                label="Check Codex plugin status",
+                command="aippocampus plugin status --json",
+                why="Read current freshness/callability without changing local plugin files.",
+                mutation_risk="read_only",
+                claim_boundary="host_status_not_memory_evidence",
+            ),
+            foreground_shell_action(
+                action_id="install_or_refresh_codex_plugin",
+                label="Install or refresh Codex plugin",
+                command="aippocampus plugin install --codex --verify --json",
+                why=(
+                    "Run only after the status check or an explicit setup request; "
+                    "it refreshes local Codex plugin files."
+                ),
+                mutation_risk="explicit_local_plugin_write",
+                claim_boundary="host_setup_not_memory_evidence",
+            ),
+            foreground_shell_action(
+                action_id="preview_codex_plugin_uninstall",
+                label="Preview explicit rollback",
+                command="aippocampus plugin uninstall --codex --dry-run --json",
+                why="Rollback stays preview-first and should not be confused with setup.",
+                mutation_risk="read_only_preview_of_delete",
+                claim_boundary="host_setup_not_memory_evidence",
+            ),
+        ],
+    )
+
+
+def hooks_chooser_payload() -> dict[str, Any]:
+    return foreground_chooser_card(
+        kind="aippocampus_hooks_chooser",
+        decision="choose a hook family before checking, installing, or rolling back",
+        choices=[
+            foreground_shell_action(
+                action_id="check_prompt_hook",
+                label="Check prompt hook",
+                command="aippocampus hooks prompt status --last --json",
+                why="Prompt hooks are the Codex UserPromptSubmit recall affordance, not the whole hook family.",
+                mutation_risk="read_only",
+                claim_boundary="host_setup_not_memory_evidence",
+            ),
+            foreground_shell_action(
+                action_id="check_lifecycle_hooks",
+                label="Check lifecycle hooks",
+                command="aippocampus hooks lifecycle status --json",
+                why="Lifecycle hooks cover bounded start/stop/compact maintenance.",
+                mutation_risk="read_only",
+                claim_boundary="host_setup_not_memory_evidence",
+            ),
+            foreground_shell_action(
+                action_id="check_action_hints",
+                label="Check action-time hints",
+                command="aippocampus hooks action status --json",
+                why=(
+                    "Action-time hints are recommended trusted-Codex setup, "
+                    "but remain fail-open navigation guidance."
+                ),
+                mutation_risk="read_only",
+                claim_boundary="host_setup_not_memory_evidence",
+            ),
+            foreground_shell_action(
+                action_id="check_claude_code_hooks",
+                label="Check Claude Code hook helper",
+                command="aippocampus hooks claude-code status --json",
+                why="Claude Code has a host-specific status/dry-run helper rather than Codex hook installation.",
+                mutation_risk="read_only",
+                claim_boundary="host_setup_not_memory_evidence",
+            ),
+        ],
+    )
+
+
+def sync_chooser_payload() -> dict[str, Any]:
+    return foreground_chooser_card(
+        kind="aippocampus_sync_chooser",
+        decision="choose a read-only sync status before push or pull",
+        choices=[
+            foreground_shell_action(
+                action_id="check_sync_status",
+                label="Check local sync status",
+                command="aippocampus sync status --json",
+                why="Parent sync commands should not imply push/pull or object-store writes.",
+                mutation_risk="read_only",
+                claim_boundary="operator_diagnostic_not_source_evidence",
+            ),
+            foreground_shell_action(
+                action_id="check_object_sync_status",
+                label="Check object sync status",
+                command="aippocampus object-sync status --json",
+                why="Use this when an object-storage backend is involved.",
+                mutation_risk="read_only",
+                claim_boundary="operator_diagnostic_not_source_evidence",
+            ),
+        ],
+    )
+
+
+def doctor_chooser_payload() -> dict[str, Any]:
+    return foreground_chooser_card(
+        kind="aippocampus_doctor_chooser",
+        status="needs_subcommand",
+        decision="choose the local diagnostic question",
+        choices=[
+            foreground_shell_action(
+                action_id="preflight",
+                label="Check host prerequisites",
+                command="aippocampus doctor preflight --json",
+                why="Use first on a new or brittle host before install, sync, hooks, or recall setup.",
+                mutation_risk="read_only",
+                claim_boundary="host_setup_not_memory_evidence",
+            ),
+            foreground_shell_action(
+                action_id="provider",
+                label="Check optional provider visibility",
+                command="aippocampus doctor provider --json",
+                why="Use when model/provider key visibility or semantic-worker availability is the question.",
+                mutation_risk="read_only",
+                claim_boundary="operator_diagnostic_not_source_evidence",
+            ),
+            foreground_shell_action(
+                action_id="spend",
+                label="Review spend/yield diagnostics",
+                command="aippocampus doctor spend --json",
+                why="Use when local model spend, yield, or blocked warm work needs review.",
+                mutation_risk="read_only",
+                claim_boundary="operator_diagnostic_not_source_evidence",
+            ),
+            foreground_shell_action(
+                action_id="config",
+                label="Audit registered configuration",
+                command="aippocampus doctor config --compact-json",
+                why="Use when checking configured AIPPOCAMPUS_* knobs without printing values.",
+                mutation_risk="read_only",
+                claim_boundary="operator_diagnostic_not_source_evidence",
+            ),
+        ],
+    )
+
+
+def smoke_chooser_payload() -> dict[str, Any]:
+    return foreground_chooser_card(
+        kind="aippocampus_smoke_chooser",
+        status="needs_subcommand",
+        decision="choose a bounded smoke runner",
+        choices=[
+            foreground_template_action(
+                action_id="recall_funnel",
+                label="Run progressive recall funnel smoke",
+                command_template='aippocampus smoke recall-funnel "{cue}" --json',
+                requires=["cue"],
+                why=(
+                    "Use for a bounded diagnostic of recall_context -> deepen and "
+                    "ordinary agent recall -> deepen usefulness."
+                ),
+                mutation_risk="read_only",
+                claim_boundary="smoke_diagnostic_not_source_evidence",
+            ),
+            foreground_template_action(
+                action_id="ordinary_agent_recall",
+                label="Use ordinary continuity path",
+                command_template='aippocampus agent recall "{cue}" --json',
+                requires=["cue"],
+                why="Use for normal foreground continuity work instead of a smoke diagnostic.",
+                mutation_risk="read_only",
+                claim_boundary="no_claim_before_reopen",
+            ),
+        ],
+    )
+
+
+def logs_chooser_payload() -> dict[str, Any]:
+    return foreground_chooser_card(
+        kind="aippocampus_logs_chooser",
+        status="needs_subcommand",
+        decision="inspect log status before rotating local audit artifacts",
+        choices=[
+            foreground_shell_action(
+                action_id="status",
+                label="Inspect log retention status",
+                command="aippocampus logs status --json",
+                why="Read-only status never prints log contents.",
+                mutation_risk="read_only",
+                claim_boundary="operator_diagnostic_not_source_evidence",
+            ),
+            foreground_shell_action(
+                action_id="rotate_dry_run",
+                label="Preview bounded rotation",
+                command="aippocampus logs rotate --plan --json",
+                why="Use before any write to see which known artifacts would rotate.",
+                mutation_risk="read_only",
+                claim_boundary="operator_diagnostic_not_source_evidence",
+            ),
+            foreground_shell_action(
+                action_id="rotate_apply",
+                label="Apply bounded rotation explicitly",
+                command="aippocampus logs rotate --apply --json",
+                why="Write mode is explicit and should only follow a reviewed plan.",
+                mutation_risk="explicit_local_log_write",
+                claim_boundary="operator_diagnostic_not_source_evidence",
+            ),
+        ],
+    )
+
+
 def storage_chooser_payload() -> dict[str, Any]:
     return foreground_chooser_card(
         kind="aippocampus_storage_chooser",

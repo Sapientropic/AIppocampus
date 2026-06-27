@@ -6,7 +6,7 @@ from typing import Any
 
 from aippocampus_runtime.recall.agent_continuity_cli_support import feedback_lane_resolution
 from aippocampus_runtime.recall.ambient_policy import anti_nag_tokens_from_card
-from aippocampus_runtime.recall.feedback_events import load_feedback_calibration_report
+from aippocampus_runtime.recall.feedback.events import load_feedback_calibration_report
 
 NEGATIVE_FEEDBACK_SIGNALS = {
     "blocked",

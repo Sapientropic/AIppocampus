@@ -7,6 +7,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
@@ -262,51 +263,24 @@ class ActionHintHookTests(unittest.TestCase):
         )
         for record in cache_report["records"]:
             record["expires_at_unix"] = 9999999999
-        with tempfile.TemporaryDirectory() as tmp:
-            cache_path = Path(tmp) / "action-hints.jsonl"
-            action_hint_cache.write_action_hint_cache(cache_path, cache_report)
-            env = {**os.environ, "PYTHONPATH": str(SCRIPTS)}
-            proc = subprocess.run(
-                [
-                    sys.executable,
-                    "-m",
-                    "aippocampus_runtime.hooks.action_hint",
-                    "probe",
-                    "--cache-jsonl",
-                    str(cache_path),
-                    "--json",
-                ],
-                text=True,
-                encoding="utf-8",
-                capture_output=True,
-                env=env,
-                check=False,
-            )
-            full_proc = subprocess.run(
-                [
-                    sys.executable,
-                    "-m",
-                    "aippocampus_runtime.hooks.action_hint",
-                    "probe",
-                    "--cache-jsonl",
-                    str(cache_path),
-                    "--json",
-                    "--detail",
-                    "full",
-                ],
-                text=True,
-                encoding="utf-8",
-                capture_output=True,
-                env=env,
-                check=False,
-            )
-
-        payload = json.loads(proc.stdout)
+        report = action_hint.evaluate_action_hint(
+            action_hint._default_probe_envelope(),
+            cache_report,
+            now_unix=1001,
+        )
+        with mock.patch(
+            "aippocampus_runtime.hooks.recent_recall_routes.probe_recent_recall_handle_followthrough",
+            return_value={
+                "status": "passed",
+                "reason": "opened_source_anchor_coverage",
+                "opened_anchor_hits": 2,
+                "target_source_matched": True,
+            },
+        ):
+            full_payload = action_hint._with_probe_usefulness(dict(report))
+        payload = action_hint.compact_probe_report(full_payload)
         encoded = json.dumps(payload, ensure_ascii=False)
-        full_payload = json.loads(full_proc.stdout)
         full_encoded = json.dumps(full_payload, ensure_ascii=False)
-        self.assertEqual(proc.returncode, 0, proc.stderr)
-        self.assertEqual(full_proc.returncode, 0, full_proc.stderr)
         self.assertEqual(payload["detail"], "compact")
         self.assertEqual(payload["kind"], "aippocampus_action_hint_probe_compact")
         self.assertEqual(payload["decision"], "hint")
@@ -326,17 +300,34 @@ class ActionHintHookTests(unittest.TestCase):
         )
         self.assertNotIn("source_handle", payload["hint"])
         self.assertNotIn("local_reopen_token", encoded)
-        self.assertEqual(full_payload["detail"], "full")
         self.assertEqual(
             full_payload["diagnostics"]["source_followthrough_handle_count"],
             1,
         )
+        self.assertEqual(
+            full_payload["diagnostics"]["source_followthrough_probe"]["status"],
+            "passed",
+        )
         handle = full_payload["hint"]["source_handles"][0]
         self.assertEqual(handle["tool_name"], "agent_deepen")
         self.assertEqual(handle["arguments"]["recall_selector"], "sel_1234567890abcdef")
+        self.assertEqual(handle["query"], "黏菌 联想回忆 探索算法")
         self.assertIn("features", full_payload)
         self.assertIn("diagnostics", full_payload)
         self.assertNotIn("local_reopen_token", full_encoded)
+
+        with mock.patch(
+            "aippocampus_runtime.hooks.recent_recall_routes.probe_recent_recall_handle_followthrough",
+            return_value={"status": "blocked", "reason": "stale_recall_handle"},
+        ):
+            stale_payload = action_hint.compact_probe_report(
+                action_hint._with_probe_usefulness(dict(report))
+            )
+        self.assertFalse(stale_payload["useful"])
+        self.assertEqual(stale_payload["usefulness_stage"], "active")
+        self.assertEqual(stale_payload["reason"], "stale_recall_handle")
+        self.assertEqual(stale_payload["foreground_action"]["id"], "refresh_probe_source_route")
+        self.assertNotIn("agent deepen", stale_payload["foreground_action"]["command"])
 
     def test_unsupported_event_fails_open(self) -> None:
         report = action_hint.evaluate_action_hint(

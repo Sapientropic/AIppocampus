@@ -5,102 +5,39 @@ through architecture, benchmarks, planning notes, and research memos.
 
 ## First Recall
 
-Goal: install or probe AIppocampus and see one source-backed recall moment.
+Goal: choose the right owner doc for the first source-backed recall moment
+without turning this page into another quickstart.
 
-Choose one ordinary branch first. Each branch below only shows commands that
-make sense under that branch's assumptions.
-Use `aippocampus start --json` to read `first_recall_readiness`: steady-state
-means source exists and ordinary recall/deepen can begin; cold-start/setup means
-preview, registration, or maintenance must happen before private recall is
-honestly ready.
+Use the root [README First Use Path](../README.md#first-use-path) for the one
+install/probe -> recall -> deepen/source-open -> daily-use loop. Come back here
+only when you need a role-specific branch:
 
-- Codex agent/local setup:
-
-  ```sh
-  aippocampus start --json
-  aippocampus agent recall "old decision or handoff cue" --json
-  aippocampus agent deepen --request 1 --recall-selector <emitted-selector> --json
-  ```
-
-  If `start` reports no clean source, stay read-only first:
-  `aippocampus onboard --provider auto --status --json` and
-  `aippocampus onboard --provider codex --dry-run --json`. Register Codex
-  source with `aippocampus onboard --provider codex --cwd . --json` only after
-  explicit consent. `plugin install --codex` is Codex host integration, not the
-  first recall step.
-
-  After that first route works, offer trusted hook/action-hint setup with
-  rollback visible, then use `aippocampus export --json` and
-  `aippocampus sync --json` as carry-forward checks. Use
-  `aippocampus update status --json` only when the plugin or hooks feel
-  installed but not visible to the foreground agent.
-
+- Codex local setup:
+  [agent-mediated Codex plugin path](guides/install-guide.md#agent-mediated-codex-plugin-path)
+  and [first recall install path](guides/install-guide.md#first-recall-path).
+  Register Codex source only after explicit consent; plugin install is host
+  integration, not the first recall itself.
 - Claude Code local setup:
-
-  ```sh
-  aippocampus start --json
-  aippocampus agent recall "old decision or handoff cue" --json
-  aippocampus agent deepen --request 1 --recall-selector <emitted-selector> --json
-  ```
-
-  If source is missing, check `aippocampus onboard --provider auto --status
-  --json` and preview `aippocampus onboard --provider claude-code --dry-run
-  --json` before writing. Register Claude Code source with `aippocampus onboard
-  --provider claude-code --cwd . --json` only after explicit consent.
-
-  Install scoped Claude Code hooks only after reviewing status or dry-run:
-  `aippocampus hooks claude-code dry-run --json`, then
-  `aippocampus hooks claude-code install --json`.
-
-- No-clone or read-only probe:
-
-  ```sh
-  uvx aippocampus --help
-  uvx aippocampus onboard --provider auto --status --json
-  ```
-
+  [Claude Code MCP setup](guides/setup/claude-code-mcp.md) and the
+  [Install Guide](guides/install-guide.md). Preview provider status before
+  writing source and install hooks only after reviewing the dry run.
+- No-clone or public-safe probe:
+  [10-Minute Public Path](guides/ten-minute-public-path.md) and
+  [Demo Scenarios](guides/demo-scenarios.md#first-useful-recall-demo).
 - Existing source memory:
+  use the README loop, then [Public API](guides/public-api.md) only when a tool
+  needs stable CLI, MCP, JSON, SDK, or Python import contracts.
 
-  ```sh
-  aippocampus start --json
-  aippocampus agent recall "old decision or handoff cue" --json
-  aippocampus agent deepen --request 1 --recall-selector <emitted-selector> --json
-  ```
-
-  Use `aippocampus search "a distinctive old phrase"` when the user remembers
-  exact wording or the recall route is blocked. After the first useful route,
-  `aippocampus export --json` and `aippocampus sync --json` are carry-forward
-  checks, not prerequisites for recall.
-
-Use the recall output as a route. Deepen/reopen source before exact wording,
-public claims, sensitive facts, stale disputes, or high-risk action.
-Prefer the `recall_selector` emitted by that recall; `--last-recall` is a
-same-machine compatibility fallback for old clients.
-Use `aippocampus health` and `aippocampus onboard --provider auto --status` as
-read-only recovery cards when no source is registered or the first route is
-blocked.
-When source is missing, follow the explicit write action surfaced by
-`aippocampus start --json` or the matching provider command above; do not loop
-on status output as if it registered memory.
-
-For the longer version, use the
-[agent-mediated Codex plugin path](guides/install-guide.md#agent-mediated-codex-plugin-path),
-the [10-minute public path](guides/ten-minute-public-path.md), or the
-[first recall install path](guides/install-guide.md#first-recall-path) with the
-[first recall decision card](guides/first-recall-decision-card.md).
-For a public-safe walkthrough that shows the first useful recall moment before
-operator scenarios, use
-[Demo Scenarios](guides/demo-scenarios.md#first-useful-recall-demo).
+After the first useful route, `aippocampus export --json` and
+`aippocampus sync --json` are carry-forward checks, not prerequisites for
+recall. Use [Product Profiles](architecture/host/product-profiles.md) before
+promoting sync, governed/high-risk behavior, or unreviewed background work into
+the ordinary path.
 
 Read [Magic Moments, Claim-Bounded](evidence/magic-moments.md) for why the
-first source-backed moment should feel worth the setup. Use
-[Product Profiles](architecture/host/product-profiles.md) before promoting
-sync, governed/high-risk behavior, or unreviewed background work into the
-ordinary path. Reviewed foreground background cards may support ordinary
-continuity after setup, but remain navigation until source is reopened.
-
-You do not need benchmark ledgers, Dream design, cognitive maps, or release
-evidence before the first recall moment.
+first source-backed moment should feel worth the setup. You do not need
+benchmark ledgers, Dream design, cognitive maps, or release evidence before
+the first recall moment.
 
 ## See And Add To Memory
 

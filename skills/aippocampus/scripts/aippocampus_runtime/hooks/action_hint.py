@@ -11,6 +11,8 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.hooks import recent_recall_routes
+
 # aippocampus-instruction-surface: action-hint hook/probe compact projection and detail diagnostics owner.
 
 SCHEMA_VERSION = 1
@@ -313,6 +315,7 @@ def build_hint(record: Mapping[str, Any]) -> dict[str, Any]:
                 "reopen_required",
                 "request_index",
                 "recall_selector",
+                "query",
                 "tool_name",
                 "arguments",
                 "command",
@@ -414,17 +417,31 @@ def _with_probe_usefulness(report: dict[str, Any]) -> dict[str, Any]:
     source_handles = [
         handle for handle in hint.get("source_handles") or [] if isinstance(handle, Mapping)
     ]
+    primary_handle = source_handles[0] if source_handles else {}
+    followthrough = (
+        recent_recall_routes.probe_recent_recall_handle_followthrough(primary_handle)
+        if primary_handle
+        else {"status": "blocked", "reason": "no_source_handle"}
+    )
     useful = bool(
         report.get("decision") == "hint"
         and hint.get("source_reopen_required")
         and source_handles
+        and followthrough.get("status") in {"passed", "not_applicable"}
     )
     diagnostics = report.setdefault("diagnostics", {})
     if isinstance(diagnostics, dict):
         diagnostics["probe"] = True
         diagnostics["source_followthrough_handle_count"] = len(source_handles)
+        diagnostics["source_followthrough_probe"] = {
+            key: value
+            for key, value in followthrough.items()
+            if value not in (None, "", [], {})
+        }
     report["usefulness_stage"] = "useful" if useful else "active" if source_handles else "callable"
     report["useful"] = useful
+    if not useful and source_handles:
+        report["reason"] = str(followthrough.get("reason") or report.get("reason") or "")
     report["claim_boundary"] = (
         "probe verifies hook hint selection and follow-through handle presence; "
         "agent_deepen or recall_deepen must still open source before claims"
@@ -452,7 +469,7 @@ def compact_probe_report(report: Mapping[str, Any]) -> dict[str, Any]:
     primary_handle = _primary_probe_handle(hint)
     useful = bool(report.get("useful"))
     action: dict[str, Any]
-    if primary_handle and primary_handle.get("command"):
+    if useful and primary_handle and primary_handle.get("command"):
         raw_arguments = primary_handle.get("arguments")
         arguments = raw_arguments if isinstance(raw_arguments, Mapping) else {}
         action = {
@@ -466,11 +483,20 @@ def compact_probe_report(report: Mapping[str, Any]) -> dict[str, Any]:
             "claim_boundary": "no_claim_before_reopen",
         }
     else:
+        refresh_query = str((primary_handle or {}).get("query") or "").strip()
+        refresh_command = (
+            f"aippocampus agent recall {json.dumps(refresh_query, ensure_ascii=False)} --json"
+            if refresh_query
+            else "aippocampus hooks action refresh-cache --write --json"
+        )
         action = {
-            "id": "inspect_action_hint_status",
-            "label": "Inspect action-hint status",
-            "command": "aippocampus hooks action status --json",
-            "why": "The probe did not produce a follow-through source handle; inspect cache readiness.",
+            "id": "refresh_probe_source_route",
+            "label": "Refresh probe source route",
+            "command": refresh_command,
+            "why": (
+                "The probe did not validate a live source route; refresh recall/source "
+                "routing before treating action-time hints as useful."
+            ),
             "mutation_risk": "read_only",
             "claim_boundary": "action_hints_are_navigation_not_source_truth",
         }

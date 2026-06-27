@@ -6,7 +6,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
-from aippocampus_runtime.recall import feedback_events as feedback
+from aippocampus_runtime.recall.feedback import events as feedback
 
 
 class RecallFeedbackEventTests(unittest.TestCase):

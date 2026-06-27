@@ -848,7 +848,12 @@ def build_health_report(options: HealthOptions) -> dict[str, Any]:
         freshness["latest_visible_gap"]
         or freshness_action_recommended
     )
-    storage_pressure_cleanup_recommended = bool(storage_pressure.get("pressure"))
+    storage_pressure_cleanup_recommended = (
+        None
+        if storage_pressure.get("pressure") is None
+        and storage_pressure.get("status") == "deferred"
+        else bool(storage_pressure.get("pressure"))
+    )
     product_readiness = build_product_readiness(
         actions=actions,
         registry_recall=registry_recall,

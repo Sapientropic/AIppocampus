@@ -385,6 +385,7 @@ def records_from_recent_recall_routes(
             "deepen_route_id": str(row.get("deepen_route_id") or route_id),
             "request_index": request_index,
             "recall_selector": selector,
+            "query": str(row.get("query") or "").strip()[:240],
             "tool_name": "agent_deepen",
             "arguments": {
                 "request_index": request_index,

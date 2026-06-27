@@ -128,6 +128,57 @@ def _recent_recall_anchor_probe(
     }
 
 
+def probe_recent_recall_handle_followthrough(handle: Mapping[str, Any]) -> dict[str, Any]:
+    """Validate selector handles in explicit probe mode, never in the hot hook."""
+
+    selector = str(handle.get("recall_selector") or "").strip()
+    try:
+        request_index = int(handle.get("request_index") or 0)
+    except (TypeError, ValueError):
+        request_index = 0
+    if not selector or request_index <= 0:
+        return {"status": "not_applicable", "reason": "handle_is_not_recall_selector_route"}
+    query = str(handle.get("query") or "").strip()
+    if not query:
+        return {"status": "blocked", "reason": "missing_validation_query"}
+    try:
+        recall_cache = importlib.import_module("aippocampus_runtime.recall.agent_recall_cache")
+        candidates = recall_cache.recall_selector_cache_candidates(selector)
+    except Exception as exc:  # pragma: no cover - local runtime import guard
+        return {"status": "blocked", "reason": "selector_validation_unavailable", "error": type(exc).__name__}
+
+    saw_path = False
+    last_probe: Mapping[str, Any] = {}
+    for candidate in candidates:
+        try:
+            if not candidate.exists():
+                continue
+        except OSError:
+            continue
+        saw_path = True
+        probe = _recent_recall_anchor_probe(
+            selector_path=candidate,
+            request_index=request_index,
+            query=query,
+        )
+        last_probe = probe if isinstance(probe, Mapping) else {}
+        if last_probe.get("status") == "passed":
+            return {
+                "status": "passed",
+                "reason": str(last_probe.get("reason") or "source_anchor_probe_passed"),
+                "opened_anchor_hits": last_probe.get("opened_anchor_hits"),
+                "target_source_matched": last_probe.get("target_source_matched"),
+            }
+    if not saw_path:
+        return {"status": "blocked", "reason": "stale_recall_handle"}
+    return {
+        "status": "blocked",
+        "reason": str(last_probe.get("reason") or "source_reopen_failed"),
+        "opened_anchor_hits": last_probe.get("opened_anchor_hits"),
+        "target_source_matched": last_probe.get("target_source_matched"),
+    }
+
+
 def load_default_recent_recall_routes(
     *,
     now_unix: float,

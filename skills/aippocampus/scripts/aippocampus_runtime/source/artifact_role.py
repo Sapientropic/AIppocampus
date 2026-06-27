@@ -44,6 +44,11 @@ VALIDATION_ARTIFACT_MARKERS = (
     "control only",
     "validation report",
     "regression probe",
+    "strict verification",
+    "strict acceptance",
+    "strict post-close validation",
+    "quote echo case",
+    "PASS/PARTIAL/FAIL",
     "issue summary",
     "issue-batch",
     "implementation summary",
@@ -55,8 +60,25 @@ VALIDATION_ARTIFACT_MARKERS = (
     "接线",
     "验收没通过",
     "验收失败",
+    "验收",
     "关闭 issue",
     "验证报告",
+)
+MEMORY_PRODUCT_META_ECHO_MARKERS = (
+    "关键词检索器",
+    "产品契约",
+    "前台 agent",
+    "source-backed",
+    "source backed",
+    "deepen/open",
+    "ambient/warm/background",
+    "recall 负责",
+    "search 负责",
+    "source truth",
+    "compact",
+    "foreground_action",
+    "quote echo",
+    "secondary/echo",
 )
 
 ARTIFACT_INTENT_MARKERS = (
@@ -120,6 +142,9 @@ def artifact_role_profile(
         )
     )
     hits = _marker_hits(haystack, VALIDATION_ARTIFACT_MARKERS)
+    meta_echo_hits = _marker_hits(haystack, MEMORY_PRODUCT_META_ECHO_MARKERS)
+    if len(meta_echo_hits) >= 2:
+        hits = [*hits, *[hit for hit in meta_echo_hits if hit not in hits]]
     explicit_artifact_query = query_requests_artifact_role(query_text)
     demote = bool(hits) and not explicit_artifact_query
     control_hits = [
@@ -143,6 +168,8 @@ def artifact_role_profile(
     role = (
         "control_or_goal_context_artifact"
         if control_hits
+        else "memory_product_meta_echo"
+        if len(meta_echo_hits) >= 2
         else "validation_or_fixture_artifact"
         if hits
         else "topic_candidate"
@@ -153,7 +180,13 @@ def artifact_role_profile(
             "role": role,
             "demote": demote,
             "topic_bearing": not demote,
-            "reason": "artifact_marker_match" if hits else "",
+            "reason": (
+                "memory_product_meta_echo"
+                if len(meta_echo_hits) >= 2
+                else "artifact_marker_match"
+                if hits
+                else ""
+            ),
             "matched_markers": hits[:6],
             "query_explicitly_requests_artifact": explicit_artifact_query,
         }.items()

@@ -31,6 +31,11 @@ from aippocampus_runtime.recall.prompt_foreground_budget import (
     weak_scent_suppressed_by_anti_nag,
 )
 from aippocampus_runtime.recall.prompt_recall_hot_path_debug import hot_path_debug_summary
+from aippocampus_runtime.recall.prompt_recall_result_tiers import (
+    result_agent_surface_intent,
+    result_hot_path_funnel,
+    result_route_delivery_diagnostic,
+)
 from aippocampus_runtime.recall.semantic_gate_response import (
     public_count,
     public_error_buckets,
@@ -257,10 +262,12 @@ def public_hook_debug_payload(result: dict[str, Any]) -> dict[str, Any]:
                 raw_semantic_gate.get("partial_failure_reasons")
             ),
         }
-    hot_path = hot_path_debug_summary(result.get("hot_path_funnel"))
+    raw_hot_path = result_hot_path_funnel(result)
+    hot_path = hot_path_debug_summary(raw_hot_path if raw_hot_path else None)
     if hot_path is not None:
         payload["hot_path_funnel"] = hot_path
-    route_delivery = route_delivery_debug_summary(result.get("route_delivery_diagnostic"))
+    raw_route_delivery = result_route_delivery_diagnostic(result)
+    route_delivery = route_delivery_debug_summary(raw_route_delivery if raw_route_delivery else None)
     if route_delivery is not None:
         payload["route_delivery_diagnostic"] = route_delivery
     if isinstance(result.get("degraded_warnings"), list):
@@ -409,7 +416,7 @@ def _evidence_suppressed_by_anti_nag(result: dict[str, Any]) -> bool:
 
 
 def _explicit_architecture_navigation(result: dict[str, Any]) -> bool:
-    intent = result.get("agent_surface_intent")
+    intent = result_agent_surface_intent(result)
     if not isinstance(intent, dict) or not intent.get("explicit"):
         return False
     return "architecture_navigation" in [str(item) for item in intent.get("surfaces") or []]

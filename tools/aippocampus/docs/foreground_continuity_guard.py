@@ -71,10 +71,15 @@ def foreground_continuity_doc_issues(repo_root: Path) -> list[str]:
             issues.append(f"missing recall-first public doc: {rel_path}")
             continue
         text = path.read_text(encoding="utf-8")
-        if RECALL_FIRST_COMMAND not in text:
+        if rel_path == "README.md" and RECALL_FIRST_COMMAND not in text:
             issues.append(f"{rel_path} missing packaged recall-first command")
             continue
-        recall_idx = text.index(RECALL_FIRST_COMMAND)
+        if rel_path == "docs/start-here.md":
+            if "README First Use Path" not in text:
+                issues.append("docs/start-here.md missing README first-use route pointer")
+            recall_idx = text.find("## First Recall")
+        else:
+            recall_idx = text.index(RECALL_FIRST_COMMAND)
         for marker in ("aippocampus vault sync --json", "aippocampus self-note append"):
             marker_idx = text.find(marker)
             if marker_idx >= 0 and marker_idx < recall_idx:

@@ -229,55 +229,6 @@ class AippocampusHealthTests(unittest.TestCase):
         self.assertNotIn("storage_pressure", payload)
         self.assertTrue(payload["maintenance_summary"]["storage"]["pressure"])
 
-    def test_agent_json_storage_pressure_is_visible_but_not_primary_when_ready(self) -> None:
-        with (
-            mock.patch(
-                "aippocampus_runtime.health.build_health_report",
-                return_value={
-                    "ok": True,
-                    "cwd": "C:/private/work",
-                    "checks": [],
-                    "recommended_actions": [
-                        {
-                            "id": "storage_gc_rebuildable_cache",
-                            "severity": "warning",
-                            "reason": "Generated rebuildable cache pressure is high",
-                            "facade_command": "aippocampus storage gc --dry-run --json --top 1 --cwd .",
-                        }
-                    ],
-                    "product_readiness": {
-                        "ready": True,
-                        "ordinary_first_recall_usable": True,
-                        "maintenance_recommended": True,
-                        "storage_pressure_cleanup_recommended": True,
-                        "status": "ready_with_storage_pressure",
-                    },
-                    "privacy": {},
-                },
-            ),
-            mock.patch("sys.stdout", new=StringIO()) as stdout,
-        ):
-            code = health.main(["--agent-json"])
-
-        payload = json.loads(stdout.getvalue())
-
-        self.assertEqual(code, 0)
-        self.assertEqual(payload["foreground_action"]["id"], "continue_with_nonblocking_maintenance")
-        self.assertEqual(payload["foreground_action"]["when_idle"]["id"], "review_storage_gc_summary")
-        self.assertEqual(
-            payload["foreground_action"]["when_idle"]["command"],
-            "aippocampus storage gc --dry-run --summary-json --cwd .",
-        )
-        self.assertEqual(
-            payload["maintenance_summary"]["storage"]["bounded_audit_available"],
-            True,
-        )
-        self.assertEqual(
-            payload["maintenance_summary"]["recommended_action_ids"][0],
-            "storage_gc_rebuildable_cache",
-        )
-        self.assertNotIn("storage_pressure", payload)
-
     def test_agent_json_freshness_degraded_keeps_executable_latest_guidance(self) -> None:
         with (
             mock.patch(
@@ -405,8 +356,9 @@ class AippocampusHealthTests(unittest.TestCase):
         action_ids = [action["id"] for action in payload["safe_next_actions"]]
         self.assertIn("review_maintenance_plan", action_ids)
         self.assertIn("apply_after_user_consent", action_ids)
+        self.assertEqual(payload["foreground_action"]["id"], "review_storage_gc_summary")
         self.assertEqual(
-            payload["foreground_action"]["when_idle"]["command"],
+            payload["foreground_action"]["command"],
             "aippocampus storage gc --dry-run --summary-json --cwd .",
         )
         self.assertEqual(
