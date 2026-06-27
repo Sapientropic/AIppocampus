@@ -12,6 +12,7 @@ from unittest import mock
 from aippocampus_runtime import core
 from aippocampus_runtime.contracts import executable_command_violations
 from aippocampus_runtime.mcp import server as mcp
+from aippocampus_runtime.mcp import sync_tool_handlers
 from aippocampus_runtime.mcp import tool_handlers as mcp_handlers
 from aippocampus_runtime.ops import telepathy_handoff_store
 from aippocampus_runtime.sync import bundle as sync_bundle
@@ -157,7 +158,7 @@ class AippocampusMcpServerOpsTests(unittest.TestCase):
 
     def test_sync_status_can_report_http_object_store_backend(self) -> None:
         with mock.patch.object(
-            mcp_handlers.sync_object_storage,
+            sync_tool_handlers.sync_object_storage,
             "status_object_storage_bundle",
             return_value={"ok": True, "backend": "http_object_store", "manifest_exists": True},
         ) as status:

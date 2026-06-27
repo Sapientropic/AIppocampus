@@ -13,7 +13,7 @@ from aippocampus_runtime.contracts import (
 from aippocampus_runtime.mcp import agent_recall_result_projection as result_projection
 from aippocampus_runtime.mcp import agent_recall_route_projection as route_projection
 from aippocampus_runtime.mcp.compact_profile import strip_compact_foreground_debug_fields
-from aippocampus_runtime.mcp.contracts import build_mcp_compact_card
+from aippocampus_runtime.mcp.contracts import MCPCompactResponseContract, build_mcp_compact_card
 
 # Recall compact is an action card, not a foreground protocol dump. Keep only
 # fields an agent can execute or use to choose the next route; full/detail owns
@@ -49,7 +49,7 @@ def assemble_compact_recall_payload(
     repo_familiarity_fallback: dict[str, Any] | None,
     background_recovery: dict[str, Any] | None,
     exact_wording_source_search_primary: bool,
-) -> dict[str, Any]:
+) -> MCPCompactResponseContract:
     route_receipts = route_projection_result.route_receipts
     if context.labels_low_specificity and context.memory_packets:
         weak_route_recovery_card = result_projection.low_specificity_route_guidance_card(
@@ -78,10 +78,18 @@ def assemble_compact_recall_payload(
         "claim_boundary": _compact_claim_boundary(can_use_for=can_use_for),
     }
     result.update(action_fields)
-    return build_mcp_compact_card(
+    compact_card = build_mcp_compact_card(
         strip_compact_foreground_debug_fields(core.strip_empty(result)),
         surface="mcp_agent_recall_compact",
     )
+    # `surface` is an internal routing hint. Recall compact is the flagship
+    # foreground card and is consumed directly by CLI, MCP, and public JSON
+    # callers; exposing the protocol label makes agents reconcile meta shape
+    # instead of simply following recall -> deepen. Recovery/error cards may
+    # still carry a public `surface_class`, but recall cards stay action sized.
+    public_card: dict[str, Any] = dict(compact_card)
+    public_card.pop("surface", None)
+    return public_card
 
 
 def _action_id(action: Mapping[str, Any]) -> str:

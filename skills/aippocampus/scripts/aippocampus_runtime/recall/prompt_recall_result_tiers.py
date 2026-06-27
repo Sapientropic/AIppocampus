@@ -116,6 +116,25 @@ def result_route_delivery_diagnostic(result: Mapping[str, Any]) -> dict[str, Any
     return _dict_or_empty(result.get("route_delivery_diagnostic"))
 
 
+def update_result_route_delivery_diagnostic(
+    result: dict[str, Any],
+    patch: Mapping[str, Any],
+) -> None:
+    """Patch the opt-in diagnostics tier without recreating top-level debug fields."""
+
+    tiers = result.get("result_tiers")
+    if not isinstance(tiers, dict):
+        return
+    diagnostics = tiers.get("diagnostics")
+    if not isinstance(diagnostics, dict):
+        return
+    route = diagnostics.get("route_delivery_diagnostic")
+    if not isinstance(route, dict):
+        route = {}
+        diagnostics["route_delivery_diagnostic"] = route
+    route.update(dict(patch))
+
+
 def result_hot_path_funnel(result: Mapping[str, Any]) -> dict[str, Any]:
     trace = _tier(result, "trace")
     hot_path = _dict_or_empty(trace.get("hot_path_funnel"))
@@ -248,7 +267,6 @@ def build_prompt_result_from_state(
         "semantic_bridge_diagnostic": state["semantic_bridge_diagnostic"],
         "semantic_source_reopen_route": state["semantic_source_reopen_route"],
         "semantic_cue_cache": state["semantic_cue_cache"],
-        "agent_surface_intent": agent_surface_intent,
         "recall_channels": recall_channel_envelope(
             candidates=candidates,
             evidence=evidence,
@@ -257,8 +275,6 @@ def build_prompt_result_from_state(
             hot_path_funnel=hot_path_funnel,
             route_delivery_state=state,
         ),
-        "hot_path_funnel": hot_path_funnel,
-        "route_delivery_diagnostic": route_delivery_diagnostic,
         "elapsed_ms": elapsed_ms,
         "deep_archival_requested": deep_archival_requested,
     }
@@ -274,4 +290,5 @@ __all__ = [
     "result_agent_surface_intent",
     "result_hot_path_funnel",
     "result_route_delivery_diagnostic",
+    "update_result_route_delivery_diagnostic",
 ]

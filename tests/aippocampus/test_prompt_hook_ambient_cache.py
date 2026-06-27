@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 from aippocampus_runtime.recall.feedback import events as feedback_events
+from aippocampus_runtime.recall.prompt_recall_result_tiers import (
+    result_route_delivery_diagnostic,
+)
 from tests.aippocampus.prompt_hook_fixtures import (
     AmbientRecallHookCase,
     hook,
@@ -49,6 +52,7 @@ class PromptHookAmbientCacheTests(AmbientRecallHookCase):
                 topic_epoch="epoch-test",
                 warm_background=True,
                 search_budget=0,
+                detail="detail",
             )
 
         self.assertEqual(result["decision"], "scent")
@@ -61,7 +65,8 @@ class PromptHookAmbientCacheTests(AmbientRecallHookCase):
         self.assertFalse(scheduled[0]["wait_all_foreground"])
         self.assertEqual(result["ambient_recall"]["warm_background"]["status"], "queued")
         self.assertEqual(result["ambient_recall"]["warm_background"]["job_id"], "job-test")
-        self.assertTrue(result["route_delivery_diagnostic"]["background_scheduled"])
+        diagnostic = result_route_delivery_diagnostic(result)
+        self.assertTrue(diagnostic["background_scheduled"])
 
     def test_prompt_hook_creates_navigation_only_active_recall_lock(self) -> None:
         cache_path = self.root / "ambient-cache-lock.json"

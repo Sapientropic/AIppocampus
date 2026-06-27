@@ -124,6 +124,46 @@ class PromptRecallDecisionBoundaryTests(unittest.TestCase):
         )
         self.assertEqual(tiers.result_hot_path_funnel(trace_result)["decision"], "skip")
 
+    def test_default_prompt_result_keeps_route_and_trace_out_of_top_level(self) -> None:
+        tiers = self._result_tiers_module()
+
+        compact_result = decision.assess_prompt(
+            "还记得 NeonMemory 吗？",
+            cwd=self.workspace,
+            registry_path=self.registry_path,
+            use_semantic_gate=False,
+            search_budget=0,
+        )
+        trace_result = decision.assess_prompt(
+            "还记得 NeonMemory 吗？",
+            cwd=self.workspace,
+            registry_path=self.registry_path,
+            use_semantic_gate=False,
+            search_budget=0,
+            detail="trace",
+        )
+
+        self.assertEqual(compact_result["decision"], "scent")
+        self.assertNotIn("hot_path_funnel", compact_result)
+        self.assertNotIn("route_delivery_diagnostic", compact_result)
+        self.assertNotIn("agent_surface_intent", compact_result)
+        self.assertEqual(set(compact_result["result_tiers"]), {"decision"})
+        self.assertEqual(tiers.result_route_delivery_diagnostic(compact_result), {})
+        self.assertEqual(tiers.result_hot_path_funnel(compact_result), {})
+
+        self.assertNotIn("hot_path_funnel", trace_result)
+        self.assertNotIn("route_delivery_diagnostic", trace_result)
+        self.assertNotIn("agent_surface_intent", trace_result)
+        self.assertEqual(
+            set(trace_result["result_tiers"]),
+            {"decision", "diagnostics", "trace"},
+        )
+        self.assertEqual(
+            tiers.result_route_delivery_diagnostic(trace_result)["foreground_profile"],
+            "ambient_hot_path",
+        )
+        self.assertIn("decision", tiers.result_hot_path_funnel(trace_result))
+
     def test_prompt_cue_catalog_is_split_without_breaking_legacy_imports(self) -> None:
         catalog = importlib.import_module("aippocampus_runtime.recall.prompt_cue_catalog")
 
@@ -636,9 +676,10 @@ class PromptRecallDecisionBoundaryTests(unittest.TestCase):
             registry_path=self.registry_path,
             semantic_gate_fn=cached_semantic_evidence_without_local_bridge,
             search_budget=1,
+            detail="detail",
         )
 
-        diagnostic = result.get("route_delivery_diagnostic")
+        diagnostic = self._result_tiers_module().result_route_delivery_diagnostic(result)
         self.assertEqual(result["decision"], "scent")
         self.assertEqual(
             result.get("semantic_bridge_diagnostic"),
@@ -747,10 +788,11 @@ class PromptRecallDecisionBoundaryTests(unittest.TestCase):
             semantic_gate_fn=semantic_evidence_with_local_route,
             search_budget=0,
             max_elapsed_ms=4300,
+            detail="detail",
         )
 
         packet = result["ambient_recall"]["fresh_thread_packet"]
-        diagnostic = result["route_delivery_diagnostic"]
+        diagnostic = self._result_tiers_module().result_route_delivery_diagnostic(result)
         context = prompt_context_render.context_for_hook(result)
 
         self.assertEqual(result["decision"], "scent")

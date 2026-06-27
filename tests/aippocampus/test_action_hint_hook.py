@@ -328,6 +328,26 @@ class ActionHintHookTests(unittest.TestCase):
         self.assertEqual(stale_payload["reason"], "stale_recall_handle")
         self.assertEqual(stale_payload["foreground_action"]["id"], "refresh_probe_source_route")
         self.assertNotIn("agent deepen", stale_payload["foreground_action"]["command"])
+        self.assertEqual(stale_payload["foreground_action"]["mutation_risk"], "read_only")
+
+    def test_compact_probe_labels_cache_refresh_as_explicit_write(self) -> None:
+        payload = action_hint.compact_probe_report(
+            {
+                "schema_version": 1,
+                "ok": True,
+                "decision": "silent",
+                "reason": "cache_not_ready",
+                "hint": None,
+                "useful": False,
+                "usefulness_stage": "callable",
+            }
+        )
+
+        action = payload["foreground_action"]
+        self.assertEqual(action["id"], "refresh_probe_source_route")
+        self.assertIn("refresh-cache --write", action["command"])
+        self.assertEqual(action["mutation_risk"], "explicit_local_cache_write")
+        self.assertFalse(payload["useful"])
 
     def test_unsupported_event_fails_open(self) -> None:
         report = action_hint.evaluate_action_hint(
