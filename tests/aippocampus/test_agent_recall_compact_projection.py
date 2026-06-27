@@ -213,7 +213,9 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
         self.assertNotIn("tighter_cue_template", refine_action)
         self.assertEqual(search_action["tool_name"], "search_memory")
         self.assertEqual(search_action["arguments"]["scope"], "all_registered_sources")
+        self.assertEqual(search_action["arguments"]["max_elapsed_ms"], 5000)
         self.assertIn("aippocampus search --all", search_action["command"])
+        self.assertIn("--max-elapsed-ms 5000", search_action["command"])
         self.assertIn("fallback only", search_action["why"])
         self.assertNotIn("route_count", public)
         self.assertNotIn("displayed_route_count", public)
@@ -453,7 +455,10 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
                 {
                     "id": "search_registry_sources_for_original_cue_anchors",
                     "tool_name": "search_memory",
-                    "command": "aippocampus search --all 'recall 不够自然 辛苦去捞' --json",
+                    "command": (
+                        "aippocampus search --all 'recall 不够自然 辛苦去捞' "
+                        "--json --max-elapsed-ms 5000"
+                    ),
                 },
             ],
             "background_recovery_card": {
@@ -692,7 +697,15 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
         assert_command_args(
             self,
             action["command"],
-            ["aippocampus", "search", "--all", "开发者真实水平 小号", "--json"],
+            [
+                "aippocampus",
+                "search",
+                "--all",
+                "开发者真实水平 小号",
+                "--json",
+                "--max-elapsed-ms",
+                "5000",
+            ],
         )
         self.assertEqual(action["claim_boundary"], "source_reopen_required_before_quote")
         self.assertEqual(public["claim_boundary"], "next_action_only_reopen_before_claims")
@@ -809,7 +822,9 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
         source_search = safe_by_id["search_registry_sources_for_original_cue_anchors"]
         self.assertEqual(source_search["tool_name"], "search_memory")
         self.assertEqual(source_search["arguments"]["scope"], "all_registered_sources")
+        self.assertEqual(source_search["arguments"]["max_elapsed_ms"], 5000)
         self.assertIn("aippocampus search --all", source_search["command"])
+        self.assertIn("--max-elapsed-ms 5000", source_search["command"])
         self.assertIn("fallback only", source_search["why"])
         self.assertNotIn("weak_route_recovery_card", public)
         self.assertNotIn("route_availability_summary", public)
@@ -1323,7 +1338,15 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
         assert_command_args(
             self,
             no_route["foreground_action"]["command"],
-            ["aippocampus", "search", "--all", "unlikely-no-match-token-xyz-12345", "--json"],
+            [
+                "aippocampus",
+                "search",
+                "--all",
+                "unlikely-no-match-token-xyz-12345",
+                "--json",
+                "--max-elapsed-ms",
+                "5000",
+            ],
         )
         self.assertNotIn("foreground_action_contract", weak_route)
         self.assertNotIn("agent_next_action", weak_route)
@@ -1332,7 +1355,15 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
         assert_command_args(
             self,
             weak_route["foreground_action"]["command"],
-            ["aippocampus", "search", "--all", "broad direction", "--json"],
+            [
+                "aippocampus",
+                "search",
+                "--all",
+                "broad direction",
+                "--json",
+                "--max-elapsed-ms",
+                "5000",
+            ],
         )
         self.assertEqual(executable_command_violations(no_route), [])
         self.assertEqual(executable_command_violations(weak_route), [])

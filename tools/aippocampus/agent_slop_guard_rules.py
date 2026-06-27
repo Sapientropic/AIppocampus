@@ -10,21 +10,175 @@ from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
+class RuleConfig:
+    hot_path_prefixes: tuple[str, ...] = ()
+    performance_hot_path_prefixes: tuple[str, ...] = ()
+    owner_paths: frozenset[str] = frozenset()
+    registry_mutation_prefixes: tuple[str, ...] = ()
+    source_ref_helper_names: frozenset[str] = frozenset()
+    compatibility_metadata_tokens: tuple[str, ...] = ()
+    field_only_test_path_tokens: tuple[str, ...] = ()
+    field_only_assert_keys: frozenset[str] = frozenset()
+    compact_debug_keys: frozenset[str] = frozenset()
+    follow_through_tokens: frozenset[str] = frozenset()
+    diagnostic_tokens: tuple[str, ...] = ()
+    broad_exception_boundary_marker: str = ""
+    atomic_write_boundary_marker: str = ""
+    performance_unbounded_tokens: tuple[str, ...] = ()
+    performance_bounded_tokens: tuple[str, ...] = ()
+    performance_db_calls: frozenset[str] = frozenset()
+
+
+HOT_PATH_PREFIXES = (
+    "skills/aippocampus/scripts/aippocampus_runtime/source/",
+    "skills/aippocampus/scripts/aippocampus_runtime/recall/",
+    "skills/aippocampus/scripts/aippocampus_runtime/mcp/",
+    "skills/aippocampus/scripts/aippocampus_runtime/hooks/",
+    "skills/aippocampus/scripts/aippocampus_runtime/update/",
+    "skills/aippocampus/scripts/aippocampus_runtime/subconscious/",
+)
+
+PERFORMANCE_HOT_PATH_PREFIXES = (
+    "skills/aippocampus/scripts/aippocampus_runtime/navigation/",
+    *HOT_PATH_PREFIXES,
+)
+
+SOURCE_IO_OWNER_PATHS = frozenset(
+    {
+        "skills/aippocampus/scripts/aippocampus_runtime/source/io_kernel.py",
+        "skills/aippocampus/scripts/aippocampus_runtime/io_integrity.py",
+        "skills/aippocampus/scripts/aippocampus_runtime/question/source_refs.py",
+        "skills/aippocampus/scripts/aippocampus_runtime/dream/source_refs.py",
+    }
+)
+
+REGISTRY_WRITER_OWNER_PATHS = frozenset(
+    {
+        "skills/aippocampus/scripts/aippocampus_runtime/registry/store.py",
+        "skills/aippocampus/scripts/aippocampus_runtime/registry/api.py",
+    }
+)
+
+LOCAL_LOCK_OWNER_PATHS = frozenset(
+    {
+        "skills/aippocampus/scripts/aippocampus_runtime/artifacts/publish.py",
+        "skills/aippocampus/scripts/aippocampus_runtime/artifacts/generation_pins.py",
+        "skills/aippocampus/scripts/aippocampus_runtime/dream/local_lock.py",
+        "skills/aippocampus/scripts/aippocampus_runtime/local_file_lock.py",
+        "skills/aippocampus/scripts/aippocampus_runtime/recall/active_recall_lock.py",
+        "skills/aippocampus/scripts/aippocampus_runtime/registry/store.py",
+    }
+)
+
+SOURCE_REF_HELPER_NAMES = frozenset(
+    {
+        "source_ref_key",
+        "source_ref_key_set",
+        "clean_source_ref",
+        "clean_source_refs",
+        "normalize_source_refs",
+        "merge_source_refs",
+        "source_ref_fingerprint",
+        "source_ref_digest",
+    }
+)
+
+FIELD_ONLY_ASSERT_KEYS = frozenset(
+    {
+        "recall_selector",
+        "recall_selector_available",
+        "recall_selector_id",
+        "route_count",
+        "selector",
+        "source_backed",
+        "source_ref_count",
+    }
+)
+
+COMPACT_DEBUG_KEYS = frozenset(
+    {
+        "cache",
+        "debug",
+        "feedback_controls",
+        "operator_detail_command",
+        "operator_detail_command_template",
+        "policy_matrix",
+        "runtime_provenance",
+        "selector_inventory",
+    }
+)
+
+FOLLOW_THROUGH_TOKENS = frozenset(
+    {
+        "agent_deepen",
+        "agent_open",
+        "assert_cli_recall_deepens_to_source",
+        "assert_deepen_opened_expected_source",
+        "assert_mcp_recall_deepens_to_source",
+        "opened_anchor_hits",
+        "source_anchor_gate",
+        "source_window",
+        "target_source_matched",
+        "window_terms",
+    }
+)
+
+PERFORMANCE_DB_CALLS = frozenset({"execute", "executemany", "upsert_concept", "upsert_edge"})
+
+PERFORMANCE_UNBOUNDED_TOKENS = (
+    "candidate",
+    "candidates",
+    "edge",
+    "edges",
+    "message",
+    "messages",
+    "raw_stats",
+    "registry",
+    "related_terms",
+    "rows",
+    "source_refs",
+    "term_refs",
+    "terms",
+    "thread",
+    "threads",
+)
+
+PERFORMANCE_BOUNDED_TOKENS = (
+    "budget",
+    "bounded",
+    "diagnostic",
+    "limit",
+    "preview",
+    "report",
+    "sample",
+    "top",
+)
+
+
+@dataclass(frozen=True)
 class Rule:
     rule_id: str
     severity: str
     owner_hint: str
     owner_issue: str
     description: str
+    hazard_id: str | None = None
+    tooling_only: bool = False
+    config: RuleConfig = RuleConfig()
 
-    def as_dict(self) -> dict[str, str]:
-        return {
+    def as_dict(self) -> dict[str, object]:
+        payload: dict[str, object] = {
             "rule_id": self.rule_id,
             "severity": self.severity,
             "owner_hint": self.owner_hint,
             "owner_issue": self.owner_issue,
             "description": self.description,
         }
+        if self.hazard_id:
+            payload["hazard_id"] = self.hazard_id
+        if self.tooling_only:
+            payload["tooling_only"] = True
+        return payload
 
 
 RULES: dict[str, Rule] = {
@@ -37,6 +191,7 @@ RULES: dict[str, Rule] = {
         ),
         owner_issue="#2696",
         description="MCP/CLI compact path appears to bypass compact/detail projection.",
+        hazard_id="foreground-recall-follow-through",
     ),
     "hot_path_silent_fallback": Rule(
         rule_id="hot_path_silent_fallback",
@@ -47,6 +202,25 @@ RULES: dict[str, Rule] = {
         ),
         owner_issue="#2697",
         description="Hot-path broad exception hides failure by continuing or returning empty state.",
+        hazard_id="source-state-durability",
+        config=RuleConfig(
+            hot_path_prefixes=HOT_PATH_PREFIXES,
+            diagnostic_tokens=(
+                "error",
+                "error_code",
+                "error_type",
+                "warning",
+                "diagnostic",
+                "degraded",
+                "status",
+                "reason",
+                "fallback",
+                "failed",
+                "skipped",
+                "loss",
+            ),
+            broad_exception_boundary_marker="aippocampus-debt-ok: broad-exception-boundary",
+        ),
     ),
     "source_jsonl_owner_bypass": Rule(
         rule_id="source_jsonl_owner_bypass",
@@ -57,6 +231,8 @@ RULES: dict[str, Rule] = {
         ),
         owner_issue="#2698",
         description="Source-backed JSONL appears to be parsed line-by-line outside the IO kernel.",
+        hazard_id="source-state-durability",
+        config=RuleConfig(owner_paths=SOURCE_IO_OWNER_PATHS),
     ),
     "atomic_write_owner_bypass": Rule(
         rule_id="atomic_write_owner_bypass",
@@ -67,6 +243,11 @@ RULES: dict[str, Rule] = {
         ),
         owner_issue="#2698",
         description="Runtime writer appears to bypass shared atomic write helpers.",
+        hazard_id="source-state-durability",
+        config=RuleConfig(
+            owner_paths=SOURCE_IO_OWNER_PATHS,
+            atomic_write_boundary_marker="aippocampus-agent-slop-ok: directory-replace-boundary",
+        ),
     ),
     "source_ref_helper_duplicate": Rule(
         rule_id="source_ref_helper_duplicate",
@@ -77,6 +258,11 @@ RULES: dict[str, Rule] = {
         ),
         owner_issue="#2698",
         description="Local source-ref key/normalization helper duplicates the source-ref owner.",
+        hazard_id="source-state-durability",
+        config=RuleConfig(
+            owner_paths=SOURCE_IO_OWNER_PATHS,
+            source_ref_helper_names=SOURCE_REF_HELPER_NAMES,
+        ),
     ),
     "registry_writer_owner_bypass": Rule(
         rule_id="registry_writer_owner_bypass",
@@ -88,6 +274,15 @@ RULES: dict[str, Rule] = {
         ),
         owner_issue="#2682",
         description="Registry mutation appears to bypass the registry writer owner.",
+        hazard_id="source-state-durability",
+        config=RuleConfig(
+            owner_paths=REGISTRY_WRITER_OWNER_PATHS,
+            registry_mutation_prefixes=(
+                "skills/aippocampus/scripts/aippocampus_runtime/registry/",
+                "skills/aippocampus/scripts/aippocampus_runtime/sync/",
+                "skills/aippocampus/scripts/aippocampus_runtime/update/",
+            ),
+        ),
     ),
     "local_lock_owner_bypass": Rule(
         rule_id="local_lock_owner_bypass",
@@ -98,6 +293,8 @@ RULES: dict[str, Rule] = {
         ),
         owner_issue="#2681",
         description="Runtime code appears to copy a local lock implementation outside a lock owner.",
+        hazard_id="source-state-durability",
+        config=RuleConfig(owner_paths=LOCAL_LOCK_OWNER_PATHS),
     ),
     "compat_field_metadata_missing": Rule(
         rule_id="compat_field_metadata_missing",
@@ -108,6 +305,8 @@ RULES: dict[str, Rule] = {
         ),
         owner_issue="#2699",
         description="Compatibility/legacy field is missing owner/removal/default exposure metadata.",
+        hazard_id="source-state-durability",
+        config=RuleConfig(compatibility_metadata_tokens=("owner", "removal", "default", "exposure")),
     ),
     "field_only_followthrough_test": Rule(
         rule_id="field_only_followthrough_test",
@@ -118,6 +317,22 @@ RULES: dict[str, Rule] = {
         ),
         owner_issue="#2699",
         description="Recall/MCP/APW/source-open test appears to assert payload fields without follow-through.",
+        hazard_id="foreground-recall-follow-through",
+        config=RuleConfig(
+            field_only_test_path_tokens=(
+                "apw",
+                "deepen",
+                "foreground",
+                "mcp",
+                "open",
+                "recall",
+                "source_open",
+                "source_reopen",
+            ),
+            field_only_assert_keys=FIELD_ONLY_ASSERT_KEYS,
+            compact_debug_keys=COMPACT_DEBUG_KEYS,
+            follow_through_tokens=FOLLOW_THROUGH_TOKENS,
+        ),
     ),
     "compact_debug_field_test": Rule(
         rule_id="compact_debug_field_test",
@@ -128,6 +343,22 @@ RULES: dict[str, Rule] = {
         ),
         owner_issue="#2699",
         description="Compact foreground test appears to require debug/operator fields.",
+        hazard_id="foreground-recall-follow-through",
+        config=RuleConfig(
+            field_only_test_path_tokens=(
+                "apw",
+                "deepen",
+                "foreground",
+                "mcp",
+                "open",
+                "recall",
+                "source_open",
+                "source_reopen",
+            ),
+            field_only_assert_keys=FIELD_ONLY_ASSERT_KEYS,
+            compact_debug_keys=COMPACT_DEBUG_KEYS,
+            follow_through_tokens=FOLLOW_THROUGH_TOKENS,
+        ),
     ),
     "public_compact_field_unclassified": Rule(
         rule_id="public_compact_field_unclassified",
@@ -139,6 +370,7 @@ RULES: dict[str, Rule] = {
         ),
         owner_issue="#2782",
         description="Compact foreground return payload exposes an unclassified top-level field.",
+        hazard_id="foreground-recall-follow-through",
     ),
     "public_compact_field_misplaced": Rule(
         rule_id="public_compact_field_misplaced",
@@ -149,6 +381,7 @@ RULES: dict[str, Rule] = {
         ),
         owner_issue="#2782",
         description="Compact foreground return payload exposes a field classified as non-compact.",
+        hazard_id="foreground-recall-follow-through",
     ),
     "performance_hot_path_nested_loop": Rule(
         rule_id="performance_hot_path_nested_loop",
@@ -159,6 +392,12 @@ RULES: dict[str, Rule] = {
         ),
         owner_issue="#2707",
         description="Hot path contains nested loops over unbounded product collections.",
+        hazard_id="mined-navigation-terms",
+        config=RuleConfig(
+            performance_hot_path_prefixes=PERFORMANCE_HOT_PATH_PREFIXES,
+            performance_unbounded_tokens=PERFORMANCE_UNBOUNDED_TOKENS,
+            performance_bounded_tokens=PERFORMANCE_BOUNDED_TOKENS,
+        ),
     ),
     "performance_hot_path_loop_materialization": Rule(
         rule_id="performance_hot_path_loop_materialization",
@@ -169,6 +408,12 @@ RULES: dict[str, Rule] = {
         ),
         owner_issue="#2707",
         description="Hot path materializes an unbounded collection inside a loop.",
+        hazard_id="mined-navigation-terms",
+        config=RuleConfig(
+            performance_hot_path_prefixes=PERFORMANCE_HOT_PATH_PREFIXES,
+            performance_unbounded_tokens=PERFORMANCE_UNBOUNDED_TOKENS,
+            performance_bounded_tokens=PERFORMANCE_BOUNDED_TOKENS,
+        ),
     ),
     "performance_hot_path_repeated_db_work": Rule(
         rule_id="performance_hot_path_repeated_db_work",
@@ -179,6 +424,13 @@ RULES: dict[str, Rule] = {
         ),
         owner_issue="#2707",
         description="Hot path performs DB lookup/upsert work inside an unbounded loop.",
+        hazard_id="mined-navigation-terms",
+        config=RuleConfig(
+            performance_hot_path_prefixes=PERFORMANCE_HOT_PATH_PREFIXES,
+            performance_unbounded_tokens=PERFORMANCE_UNBOUNDED_TOKENS,
+            performance_bounded_tokens=PERFORMANCE_BOUNDED_TOKENS,
+            performance_db_calls=PERFORMANCE_DB_CALLS,
+        ),
     ),
 }
 

@@ -1,5 +1,9 @@
 # Evidence Index
 
+Audience: claim reviewer / release operator / public-readiness maintainer.
+Read this when: checking what AIppocampus can honestly claim today, or reopening dated evidence behind a public statement.
+Skip to: `docs/start-here.md` for orientation; `docs/evidence/current-claims.md` for present-tense claims; `docs/roadmap.md` for product direction.
+
 This folder keeps AIppocampus claims source-reopenable without making ordinary
 readers walk through every dated report first. Start here to choose the right
 evidence lane.

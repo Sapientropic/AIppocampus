@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import sys
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import Any, TextIO
 
 from aippocampus_runtime.contracts import (
@@ -43,7 +43,7 @@ def _template_action(
     why: str,
     mutation_risk: str = "read_only",
     claim_boundary: str = "source_reopen_required_before_claims",
-    requires: str | None = None,
+    requires: str | Sequence[str] | None = None,
     operator_only: bool | None = None,
 ) -> dict[str, Any]:
     action: dict[str, Any] = {
@@ -56,7 +56,10 @@ def _template_action(
         "why": why,
     }
     if requires:
-        action["requires"] = requires
+        if isinstance(requires, str):
+            action["requires"] = [requires]
+        else:
+            action["requires"] = [str(item) for item in requires if str(item).strip()]
     if operator_only is not None:
         action["operator_only"] = operator_only
     return action
@@ -71,8 +74,8 @@ def agent_chooser_payload() -> dict[str, Any]:
             _template_action(
                 action_id="recall",
                 label="Recall old context from a cue",
-                command_template='aippocampus agent recall "<continuity cue>" --json',
-                requires="continuity cue",
+                command_template='aippocampus agent recall "{continuity_cue}" --json',
+                requires="continuity_cue",
                 why="Use recall for fuzzy old context, unfinished work, corrections, or handoffs.",
                 claim_boundary="no_claim_before_reopen",
             ),
@@ -87,8 +90,8 @@ def agent_chooser_payload() -> dict[str, Any]:
             _template_action(
                 action_id="background",
                 label="Review background findings",
-                command_template='aippocampus agent background "<task cue>" --json',
-                requires="task cue",
+                command_template='aippocampus agent background "{task_cue}" --json',
+                requires="task_cue",
                 why=(
                     "Use for reviewed Dream/subconscious findings relevant to this task; "
                     "they are navigation only until source is reopened."
@@ -102,7 +105,7 @@ def agent_chooser_payload() -> dict[str, Any]:
                     "aippocampus agent deepen --request {request_index} "
                     "--recall-selector {recall_selector} --json"
                 ),
-                requires="request_index and recall_selector from prior recall result",
+                requires=["request_index", "recall_selector"],
                 why=(
                     "Use after recall chooses a route; prefer the emitted recall_selector. "
                     "--last-recall is a mutable-cache compatibility fallback."
@@ -112,14 +115,20 @@ def agent_chooser_payload() -> dict[str, Any]:
             _template_action(
                 action_id="feedback",
                 label="Record scoped route feedback",
-                command_template="aippocampus agent feedback <route_id> --outcome source_reopen_success --json",
-                requires="route id and outcome",
+                command_template="aippocampus agent feedback {route_id} --outcome {feedback_outcome} --json",
+                requires=["route_id", "feedback_outcome"],
                 why="Feedback is a low-authority control lane; it is not source evidence.",
                 mutation_risk="explicit_feedback_write",
                 claim_boundary="feedback_is_not_source_truth",
             ),
         ],
     )
+    payload["command_gradient"] = {
+        "agent_recall": "fuzzy continuity route finding from an old cue",
+        "agent_deepen": "open the selected recall route before claims",
+        "search": "exact/source wording when the phrase is known",
+        "agent_background": "reviewed Dream/subconscious navigation, not evidence",
+    }
     return payload
 
 
@@ -131,16 +140,16 @@ def memory_chooser_payload() -> dict[str, Any]:
             _template_action(
                 action_id="agent_recall",
                 label="Recall fuzzy continuity",
-                command_template='aippocampus agent recall "<continuity cue>" --json',
-                requires="continuity cue",
+                command_template='aippocampus agent recall "{continuity_cue}" --json',
+                requires="continuity_cue",
                 why="Use for old decisions, unfinished work, style preferences, corrections, or handoffs.",
                 claim_boundary="no_claim_before_reopen",
             ),
             _template_action(
                 action_id="search_exact_phrase",
                 label="Search exact clean-source wording",
-                command_template='aippocampus search "<distinctive exact phrase>" --json',
-                requires="exact phrase",
+                command_template='aippocampus search "{exact_phrase}" --json',
+                requires="exact_phrase",
                 why="Use when the user or agent remembers wording and needs a source route.",
                 claim_boundary="search_result_requires_source_boundary",
             ),
@@ -162,8 +171,22 @@ def memory_chooser_payload() -> dict[str, Any]:
             ),
         ],
     )
+    payload["command_gradient"] = {
+        "agent_recall": "fuzzy continuity route finding from old decisions, corrections, or handoffs",
+        "search": "exact/source wording search when a distinctive phrase is known",
+        "latest_reply": "latest final closeout, useful for immediate continuation",
+        "onboard_status": "source registration/status when no source route appears available",
+    }
+    payload["intent_gradient"] = payload["command_gradient"]
     return payload
 
+
+CONTROL_GRADIENT = {
+    "pause": "temporary or route-scoped quieting",
+    "do_not_use_here": "current-scope exclusion for a bad route",
+    "forget": "stronger explicit target workflow; no surprise deletion from the chooser",
+    "why_not_recall": "diagnose why a route stayed silent",
+}
 
 
 def privacy_chooser_payload() -> dict[str, Any]:
@@ -205,6 +228,17 @@ def privacy_chooser_payload() -> dict[str, Any]:
             ),
         ],
     )
+    payload["control_gradient"] = CONTROL_GRADIENT
+    payload["default_posture"] = {
+        "same_user_conversation_source": "allow_with_boundary",
+        "ordinary_memory_route": "private_route",
+        "external_projection": "blocked_without_explicit_export",
+        "secret_or_credential_material": "hard_block",
+        "boundary": (
+            "Privacy controls narrow or stop specific reuse; they should not make "
+            "ordinary local source-backed continuity feel unavailable by default."
+        ),
+    }
     return payload
 
 
@@ -240,8 +274,8 @@ def controls_chooser_payload() -> dict[str, Any]:
             _template_action(
                 action_id="why_not_recall",
                 label="Explain why recall stayed silent",
-                command_template='aippocampus why-not-recall "<continuity cue>" --json',
-                requires="continuity cue",
+                command_template='aippocampus why-not-recall "{continuity_cue}" --json',
+                requires="continuity_cue",
                 why="Use when the question is why a route did not surface.",
                 mutation_risk="read_only",
                 claim_boundary="diagnostic_not_source_evidence",
@@ -249,13 +283,15 @@ def controls_chooser_payload() -> dict[str, Any]:
             _template_action(
                 action_id="find_control_target",
                 label="Find a route id first",
-                command_template='aippocampus agent recall "<route to quiet>" --json',
+                command_template='aippocampus agent recall "{route_to_quiet}" --json',
+                requires="route_to_quiet",
                 why="Use this if you do not yet have the concrete route id.",
                 mutation_risk="read_only",
                 claim_boundary="no_claim_before_reopen",
             ),
         ],
     )
+    payload["control_gradient"] = CONTROL_GRADIENT
     return payload
 
 
@@ -276,7 +312,7 @@ def warm_chooser_payload() -> dict[str, Any]:
             _template_action(
                 action_id="run_with_prompt",
                 label="Run optional warm job with a prompt",
-                command_template='aippocampus warm --prompt "<cue>" --json',
+                command_template='aippocampus warm --prompt "{cue}" --json',
                 requires="cue",
                 why="Warm runs are operator paths and should not be started by the bare parent command.",
                 mutation_risk="operator_model_job",
@@ -294,12 +330,11 @@ def warm_chooser_payload() -> dict[str, Any]:
             _template_action(
                 action_id="ordinary_recall",
                 label="Use ordinary source-backed recall",
-                command_template='aippocampus agent recall "<continuity cue>" --json',
-                requires="continuity cue",
+                command_template='aippocampus agent recall "{continuity_cue}" --json',
+                requires="continuity_cue",
                 why="Warm ambient is optional; ordinary recall remains the primary continuity path.",
                 claim_boundary="no_claim_before_reopen",
             ),
         ],
     )
     return payload
-

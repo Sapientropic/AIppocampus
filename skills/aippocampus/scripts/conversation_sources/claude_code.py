@@ -76,7 +76,7 @@ def read_claude_session_meta(path: Path, *, max_lines: int = 400) -> dict[str, A
                     break
                 try:
                     item = json.loads(line)
-                except Exception:
+                except json.JSONDecodeError:
                     continue
                 if not isinstance(item, dict):
                     continue
@@ -95,7 +95,7 @@ def transcript_contains_cwd(path: Path, target: str) -> bool:
             for line in f:
                 try:
                     item = json.loads(line)
-                except Exception:
+                except json.JSONDecodeError:
                     continue
                 cwd = item.get("cwd") if isinstance(item, dict) else None
                 if cwd and _norm_path(cwd) == target:
@@ -241,7 +241,12 @@ class ClaudeCodeConversationProvider:
                     provider_turn_id=item.get("parentUuid") or item.get("uuid"),
                     metadata={
                         key: item[key]
-                        for key in ("uuid", "parentUuid", "cwd")
+                        # Per-message clean source is a visible-text route, not
+                        # a local workspace locator. Keep cwd in session/source
+                        # metadata for locate_current(), but do not repeat local
+                        # paths on every message row or macOS /private/var leaks
+                        # into public-safe clean-source assertions.
+                        for key in ("uuid", "parentUuid")
                         if item.get(key) is not None
                     },
                 )

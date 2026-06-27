@@ -35,6 +35,15 @@ def add_registry_search_arguments(parser: Any) -> None:
         help="Registry search budget for --all; deep is a local diagnostic mode.",
     )
     parser.add_argument(
+        "--max-elapsed-ms",
+        type=int,
+        default=5000,
+        help=(
+            "Wall-clock budget for --all foreground search. Use 0 for an "
+            "explicit unbounded local diagnostic run."
+        ),
+    )
+    parser.add_argument(
         "--hit",
         type=int,
         help="Reopen a numbered registry-wide search hit from the same-machine last search cache.",
@@ -91,6 +100,7 @@ def run_registry_search_cli(args: Any, render_human_search_result: Any) -> int:
         search_budget=args.search_budget,
         record_last_search=True,
         cwd=getattr(args, "cwd", None),
+        max_elapsed_ms=args.max_elapsed_ms,
     )
     if args.json_output:
         print(json.dumps(result, ensure_ascii=False, indent=2))

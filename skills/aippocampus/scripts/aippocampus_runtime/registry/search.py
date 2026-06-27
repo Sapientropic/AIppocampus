@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
+from time import perf_counter
 
 from aippocampus_runtime.core import compact_text
 from aippocampus_runtime.source.rollout import is_injected_instruction_text
@@ -119,6 +120,7 @@ def deep_search_entry_result(
     max_hits: int = 3,
     *,
     search_budget: RegistrySearchBudget | None = None,
+    deadline: float | None = None,
 ) -> dict:
     budget = search_budget or REGISTRY_SEARCH_DEFAULT_BUDGET
     paths = entry.get("paths") or {}
@@ -148,7 +150,20 @@ def deep_search_entry_result(
             )
             if warning:
                 warnings.append(warning)
-            for message in messages:
+            budget_exhausted = False
+            for index, message in enumerate(messages):
+                if deadline is not None and index % 64 == 0 and perf_counter() >= deadline:
+                    budget_exhausted = True
+                    warnings.append(
+                        {
+                            "stage": "clean_source",
+                            "code": "foreground_search_time_budget_exhausted",
+                            "message": "Stopped scanning this clean source at the foreground time budget.",
+                            "messages_scanned": index,
+                            "message_count": len(messages),
+                        }
+                    )
+                    break
                 semantic_scope_labels = semantic_labels_for_message(message, semantic_sidecar)
                 if semantic_scope_labels:
                     message = dict(message)
@@ -200,6 +215,14 @@ def deep_search_entry_result(
                     "score": max(rank_score for rank_score, *_ in clean_hits[:max_hits]) * 0.08,
                     "hits": compact_hits,
                     "warnings": warnings,
+                    "budget_exhausted": budget_exhausted,
+                }
+            if budget_exhausted:
+                return {
+                    "score": 0.0,
+                    "hits": [],
+                    "warnings": warnings,
+                    "budget_exhausted": True,
                 }
         except Exception as exc:
             warnings.append(_search_warning("clean_source", clean_messages, exc))
@@ -210,6 +233,15 @@ def deep_search_entry_result(
     sqlite_path = Path(sqlite_value)
     if not sqlite_path.exists():
         return {"score": 0.0, "hits": [], "warnings": warnings}
+    if deadline is not None and perf_counter() >= deadline:
+        warnings.append(
+            {
+                "stage": "sqlite",
+                "code": "foreground_search_time_budget_exhausted",
+                "message": "Skipped SQLite search at the foreground time budget.",
+            }
+        )
+        return {"score": 0.0, "hits": [], "warnings": warnings, "budget_exhausted": True}
     # Registry search is imported by low-level registry glue. Keep retrieval as
     # a use-site dependency so search policy can evolve without an import-time
     # cycle between catalog bookkeeping and heavier recall execution.

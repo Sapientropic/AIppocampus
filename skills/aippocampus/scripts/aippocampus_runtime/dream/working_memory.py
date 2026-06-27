@@ -33,7 +33,7 @@ from aippocampus_runtime.dream.constructive_outputs import (
     prospective_invitation_delivery_plan,
     prospective_invitation_silent_plan,
 )
-from aippocampus_runtime.dream.risk_terms import dream_text_hard_risk
+from aippocampus_runtime.dream.risk_terms import dream_privacy_posture
 from aippocampus_runtime.source.io_kernel import (
     merge_source_refs,
     parse_utc,
@@ -46,19 +46,13 @@ from aippocampus_runtime.subconscious.candidate_router import (
     ask_policy_for,
     trigger_terms_for,
 )
+from aippocampus_runtime.warm_ambient.privacy_policy import PRIVACY_HARD_BLOCK_ACTIONS
 
 SCHEMA_VERSION = 1
 DREAM_FINDING_KIND = "dream_synthesized"
 WORKING_MEMORY_KIND = "aippocampus_working_memory"
 DREAM_HYPOTHESIS_TYPE = "dream_hypothesis"
-ADJUDICATED_REVIEW_STATES = {
-    "accepted",
-    "approved",
-    "reviewed",
-    "agent_adjudicated",
-    "auto_adjudicated",
-    "source_adjudicated",
-}
+ADJUDICATED_REVIEW_STATES = dream_lifecycle.ADJUDICATED_REVIEW_STATES
 ADJUDICATED_DREAM_DOWNSTREAM_USES = {
     "working_memory",
     "ambient_recall_card",
@@ -190,7 +184,22 @@ def source_pack_overlaps_finding(
 
 
 def sensitive_dream_hypothesis(finding: Mapping[str, Any]) -> bool:
-    return dream_text_hard_risk(
+    return bool(dream_privacy_posture_for_finding(finding).get("hard_block"))
+
+
+def dream_privacy_posture_for_finding(finding: Mapping[str, Any]) -> dict[str, Any]:
+    existing = finding.get("privacy_posture")
+    if isinstance(existing, Mapping) and existing.get("privacy_action"):
+        return {
+            "privacy_action": str(existing.get("privacy_action") or "allow"),
+            "privacy_reason_codes": list(existing.get("privacy_reason_codes") or []),
+            "hard_block": bool(existing.get("hard_block")),
+            "raw_external_projection_allowed": False,
+            "source_boundary": str(
+                existing.get("source_boundary") or "ordinary_same_user_continuity"
+            ),
+        }
+    return dream_privacy_posture(
         finding.get("title"),
         finding.get("summary"),
         finding.get("recommendation"),
@@ -198,7 +207,26 @@ def sensitive_dream_hypothesis(finding: Mapping[str, Any]) -> bool:
         finding.get("constructive_artifact"),
         finding.get("prospective_invitation"),
         finding.get("journey_bridge_hypothesis"),
+        cross_domain_sensitive_reuse=bool(finding.get("cross_domain_sensitive_reuse")),
+        raw_external_projection=bool(finding.get("raw_external_projection")),
+        disabled_scope=bool(finding.get("user_disabled_scope")),
+        high_risk_answer_support=bool(finding.get("high_risk_answer_support")),
     )
+
+
+def dream_sensitive_use_gate(privacy_posture: Mapping[str, Any]) -> dict[str, Any]:
+    action = str(privacy_posture.get("privacy_action") or "allow")
+    hard_block = action in PRIVACY_HARD_BLOCK_ACTIONS or bool(privacy_posture.get("hard_block"))
+    state = "blocked" if hard_block else ("allowed" if action == "allow" else action)
+    return {
+        "state": state,
+        "privacy_action": action,
+        "privacy_reason_codes": list(privacy_posture.get("privacy_reason_codes") or []),
+        "source_boundary": privacy_posture.get("source_boundary"),
+        "human_or_user_intervention_required_for_direct_assertion": action
+        in {"private_route", "downgrade", "purpose_check", "hard_block", "external_projection_block"},
+        "formal_memory_promotion_allowed": False,
+    }
 
 
 def project_label_from_refs(refs: Iterable[Mapping[str, Any]]) -> str | None:
@@ -318,6 +346,8 @@ def adjudicated_dream_is_eligible(finding: Mapping[str, Any]) -> bool:
         return False
     if not journey_bridges.journey_bridge_present_is_valid(finding.get("journey_bridge_hypothesis")):
         return False
+    if bool(dream_privacy_posture_for_finding(finding).get("hard_block")):
+        return False
     return True
 
 
@@ -337,13 +367,14 @@ def background_adjudicate_dream_finding(
     """
 
     result = dict(finding)
+    privacy_posture = dream_privacy_posture_for_finding(finding)
     checks = {
         "dream_finding_kind": finding.get("finding_kind") == DREAM_FINDING_KIND,
         "source_refs_present": bool(clean_dream_source_refs(finding.get("source_refs"))),
         "source_ref_audit": not audit_failed(finding),
         "bridge_claims_source_refs": bridge_claims_have_source_refs(finding),
         "confidence_floor": safe_float(finding.get("confidence"), 0.62) >= confidence_floor,
-        "sensitive_use_gate": not sensitive_dream_hypothesis(finding),
+        "sensitive_use_gate": not bool(privacy_posture.get("hard_block")),
     }
     if source_pack is not None:
         checks["source_pack_ready"] = source_pack_is_ready(source_pack)
@@ -355,9 +386,13 @@ def background_adjudicate_dream_finding(
     result["foreground_eligible"] = False
     result["formal_memory_eligible"] = False
     result["clean_source_mutation"] = False
+    result["privacy_posture"] = privacy_posture
+    result["sensitive_use_gate"] = dream_sensitive_use_gate(privacy_posture)
     if failed:
         result["review_state"] = "needs_review"
-        result["human_review_required"] = bool(result.get("human_review_required") or False)
+        result["human_review_required"] = bool(
+            result.get("human_review_required") or privacy_posture.get("hard_block")
+        )
         lifecycle_record = dream_lifecycle.dream_lifecycle_record(
             {
                 **result,
@@ -465,6 +500,7 @@ def adjudicated_dream_findings_to_working_memory(
         prospective_invitation = clean_prospective_invitation(finding.get("prospective_invitation"))
         journey_bridge = journey_bridges.clean_journey_bridge_from_finding(finding)
         authority = probe_authority.authority_from_finding(finding)
+        privacy_posture = dream_privacy_posture_for_finding(finding)
         candidate = {
             "candidate_type": DREAM_HYPOTHESIS_TYPE,
             "title": title,
@@ -557,11 +593,8 @@ def adjudicated_dream_findings_to_working_memory(
                 "source_authority": dict(authority)
                 if authority
                 else {"state": "cross_thread_or_standard_probe", "not_foreground_truth": True},
-                "sensitive_use_gate": {
-                    "state": "blocked" if sensitive_dream_hypothesis(finding) else "allowed",
-                    "human_or_user_intervention_required_for_direct_assertion": True,
-                    "formal_memory_promotion_allowed": False,
-                },
+                "privacy_posture": privacy_posture,
+                "sensitive_use_gate": dream_sensitive_use_gate(privacy_posture),
                 "human_review_required": bool(finding.get("human_review_required") or False),
                 "formal_memory_eligible": False,
                 "clean_source_mutation": False,
@@ -576,32 +609,19 @@ def adjudicated_dream_findings_to_working_memory(
 
 
 def trust_horizon_map(row: Mapping[str, Any]) -> Mapping[str, Any]:
-    horizon = row.get("trust_horizon") or {}
-    return horizon if isinstance(horizon, Mapping) else {}
+    return dream_lifecycle.trust_horizon_map(row)
 
 
 def trust_horizon_timestamps(row: Mapping[str, Any], key: str) -> list[datetime]:
-    horizon = trust_horizon_map(row)
-    timestamps: list[datetime] = []
-    for value in (row.get(key), horizon.get(key)):
-        parsed = parse_utc(str(value or ""))
-        if parsed:
-            timestamps.append(parsed)
-    return timestamps
+    return dream_lifecycle.trust_horizon_timestamps(row, key)
 
 
 def dream_hypothesis_expired(row: Mapping[str, Any], *, now: str | datetime | None = None) -> bool:
-    now_dt = normalize_now(now)
-    return any(expires_at <= now_dt for expires_at in trust_horizon_timestamps(row, "expires_at"))
+    return dream_lifecycle.dream_hypothesis_expired(row, now=now)
 
 
 def trust_horizon_status(row: Mapping[str, Any], *, now: str | datetime | None = None) -> str:
-    now_dt = normalize_now(now)
-    if any(expires_at <= now_dt for expires_at in trust_horizon_timestamps(row, "expires_at")):
-        return "expired"
-    if any(review_after <= now_dt for review_after in trust_horizon_timestamps(row, "review_after")):
-        return "review_due"
-    return "valid"
+    return dream_lifecycle.trust_horizon_status(row, now=now)
 
 
 def plan_dream_hypothesis_use(

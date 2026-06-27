@@ -198,8 +198,9 @@ class RegistrySourceSearchUsefulnessTests(unittest.TestCase):
             *,
             max_hits: int,
             search_budget: object = None,
+            deadline: object = None,
         ) -> dict:
-            del entry, terms, max_hits, search_budget
+            del entry, terms, max_hits, search_budget, deadline
             return {
                 "hits": [
                     {
@@ -230,7 +231,9 @@ class RegistrySourceSearchUsefulnessTests(unittest.TestCase):
         self.assertEqual(result["match_count"], 0)
         self.assertEqual(result["suppressed_low_coverage_match_count"], 1)
         self.assertNotIn("first_match_usefulness", result)
-        self.assertEqual(result["source_boundary"]["authority"], "direction_only")
+        self.assertEqual(result["claim_boundary"], "search_miss_is_not_absence_of_memory")
+        self.assertEqual(result["source_reopen_boundary"], "search_miss_is_not_absence_of_memory")
+        self.assertEqual(result["suppression_boundary"], "low_coverage_matches_suppressed")
         self.assertEqual(
             result["foreground_action"]["id"],
             "broaden_registry_search_for_query_anchors",
@@ -247,8 +250,9 @@ class RegistrySourceSearchUsefulnessTests(unittest.TestCase):
             *,
             max_hits: int,
             search_budget: object = None,
+            deadline: object = None,
         ) -> dict:
-            del entry, terms, max_hits, search_budget
+            del entry, terms, max_hits, search_budget, deadline
             return {
                 "hits": [
                     {
@@ -291,8 +295,9 @@ class RegistrySourceSearchUsefulnessTests(unittest.TestCase):
             *,
             max_hits: int,
             search_budget: object = None,
+            deadline: object = None,
         ) -> dict:
-            del entry, terms, max_hits, search_budget
+            del entry, terms, max_hits, search_budget, deadline
             return {
                 "hits": [
                     {
@@ -326,7 +331,9 @@ class RegistrySourceSearchUsefulnessTests(unittest.TestCase):
             result["foreground_action"]["id"],
             "broaden_registry_search_for_query_anchors",
         )
-        self.assertEqual(result["source_boundary"]["authority"], "direction_only")
+        self.assertEqual(result["claim_boundary"], "search_miss_is_not_absence_of_memory")
+        self.assertEqual(result["source_reopen_boundary"], "search_miss_is_not_absence_of_memory")
+        self.assertEqual(result["suppression_boundary"], "low_coverage_matches_suppressed")
 
     def test_sqlite_line_only_hit_does_not_emit_source_open_action(self) -> None:
         def fake_deep_search_entry_result(
@@ -335,8 +342,9 @@ class RegistrySourceSearchUsefulnessTests(unittest.TestCase):
             *,
             max_hits: int,
             search_budget: object = None,
+            deadline: object = None,
         ) -> dict:
-            del entry, terms, max_hits, search_budget
+            del entry, terms, max_hits, search_budget, deadline
             return {
                 "hits": [
                     {
@@ -374,7 +382,8 @@ class RegistrySourceSearchUsefulnessTests(unittest.TestCase):
             result["foreground_action"]["id"],
             "broaden_registry_search_for_reopenable_source",
         )
-        self.assertEqual(result["source_boundary"]["authority"], "direction_only")
+        self.assertEqual(result["claim_boundary"], "search_miss_is_not_absence_of_memory")
+        self.assertEqual(result["source_reopen_boundary"], "search_miss_is_not_absence_of_memory")
 
     def test_partial_sqlite_hit_loses_to_reopenable_exact_clean_source(self) -> None:
         partial_clean = self.root / "partial-clean"
@@ -434,8 +443,9 @@ class RegistrySourceSearchUsefulnessTests(unittest.TestCase):
             *,
             max_hits: int,
             search_budget: object = None,
+            deadline: object = None,
         ) -> dict:
-            del terms, max_hits, search_budget
+            del terms, max_hits, search_budget, deadline
             path = str(((entry.get("paths") or {}).get("clean_source_messages_jsonl") or ""))
             if "partial-clean" in path:
                 return {
@@ -490,6 +500,138 @@ class RegistrySourceSearchUsefulnessTests(unittest.TestCase):
         self.assertEqual(reopened["source_boundary"]["authority"], "source_open")
         self.assertIn("开发者真实水平", opened)
         self.assertIn("小号", opened)
+
+    def test_foreground_search_budget_returns_partial_with_precise_reopen(self) -> None:
+        exact_clean = self.root / "exact-clean"
+        slow_clean = self.root / "slow-clean"
+        unsearched_clean = self.root / "unsearched-clean"
+        exact_clean.mkdir()
+        slow_clean.mkdir()
+        unsearched_clean.mkdir()
+        exact_text = "scarlet walnut source anchor survives bounded registry search"
+        (exact_clean / "messages.jsonl").write_text(
+            json.dumps(
+                {
+                    "id": "msg_exact",
+                    "message_id": "msg_exact",
+                    "source_line": 17,
+                    "role": "user",
+                    "text": exact_text,
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (slow_clean / "messages.jsonl").write_text("", encoding="utf-8")
+        (unsearched_clean / "messages.jsonl").write_text("", encoding="utf-8")
+        (self.root / "threads.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "threads": [
+                        {
+                            "thread_key": "session:exact",
+                            "title": "exact source",
+                            "paths": {
+                                "clean_source_messages_jsonl": str(
+                                    exact_clean / "messages.jsonl"
+                                )
+                            },
+                        },
+                        {
+                            "thread_key": "session:slow",
+                            "title": "slow source",
+                            "paths": {
+                                "clean_source_messages_jsonl": str(
+                                    slow_clean / "messages.jsonl"
+                                )
+                            },
+                        },
+                        {
+                            "thread_key": "session:unsearched",
+                            "title": "unsearched source",
+                            "paths": {
+                                "clean_source_messages_jsonl": str(
+                                    unsearched_clean / "messages.jsonl"
+                                )
+                            },
+                        },
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        def fake_deep_search_entry_result(
+            entry: dict,
+            terms: list[str],
+            *,
+            max_hits: int,
+            search_budget: object = None,
+            deadline: object = None,
+        ) -> dict:
+            del terms, max_hits, search_budget, deadline
+            thread_key = str(entry.get("thread_key") or "")
+            if thread_key == "session:exact":
+                return {
+                    "hits": [
+                        {
+                            "source": "clean_source",
+                            "message_id": "msg_exact",
+                            "line": 17,
+                            "role": "user",
+                            "score": 20.0,
+                            "snippet": exact_text,
+                        }
+                    ]
+                }
+            return {
+                "hits": [],
+                "budget_exhausted": True,
+                "warnings": [
+                    {
+                        "stage": "registry_search",
+                        "code": "foreground_search_time_budget_exhausted",
+                    }
+                ],
+            }
+
+        with patch.object(
+            registry_search,
+            "deep_search_entry_result",
+            side_effect=fake_deep_search_entry_result,
+        ):
+            result = source_registry_search.search_registry_sources(
+                ["scarlet walnut source anchor"],
+                registry_dir=self.root,
+                cwd=self.root,
+                record_last_search=True,
+                max_elapsed_ms=5000,
+            )
+
+        self.assertTrue(result["ok"])
+        self.assertTrue(result["partial"])
+        self.assertEqual(result["degraded_reason"], "foreground_search_time_budget_exhausted")
+        self.assertEqual(result["max_elapsed_ms"], 5000)
+        self.assertGreaterEqual(result["elapsed_ms"], 0)
+        self.assertEqual(result["unsearched_entry_count"], 1)
+        self.assertEqual(result["claim_boundary"], "source_reopen_required_before_claim")
+        self.assertEqual(result["source_reopen_boundary"], "reopen_selected_registry_hit_before_claim")
+        self.assertEqual(result["foreground_action"]["id"], "open_registry_search_source_window")
+        self.assertIn("--open-source", result["foreground_action"]["command"])
+        self.assertIn("--thread-key session:exact", result["foreground_action"]["command"])
+        self.assertIn("--message-id msg_exact", result["foreground_action"]["command"])
+        self.assertEqual(result["next_precise_reopen_command"], result["foreground_action"]["command"])
+
+        reopened = source_registry_search.open_registry_source_window(
+            registry_dir=self.root,
+            hit_index=1,
+            use_last_search=True,
+        )
+        self.assertTrue(reopened["ok"])
+        self.assertIn("scarlet walnut", json.dumps(reopened["source_window"], ensure_ascii=False))
 
     def test_deep_search_ranks_exact_hit_after_public_snippet_cutoff_first(self) -> None:
         exact_clean = self.root / "exact-clean"

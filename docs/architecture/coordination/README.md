@@ -1,5 +1,9 @@
 # Coordination Architecture
 
+Audience: coordination / handoff / topology maintainer.
+Read this when: changing Telepathy handoff cards, Episode/Arc sequence readouts, action-time nudges, or Macro/Yi navigation interfaces.
+Skip to: `docs/start-here.md` for first-use orientation; `../recall/README.md` for recall foreground contracts; `../../evidence/current-claims.md` for claim status.
+
 Role: coordination, topology, and cross-layer packet index.
 Status: current architecture layer.
 

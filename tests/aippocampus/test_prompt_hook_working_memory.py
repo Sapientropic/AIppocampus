@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from aippocampus_runtime.recall import prompt_recall_result_tiers
 from tests.aippocampus.prompt_hook_fixtures import (
     AmbientRecallHookCase,
     concept_graph,
@@ -67,9 +68,14 @@ class PromptHookWorkingMemoryTests(AmbientRecallHookCase):
 
         self.assertEqual(result["decision"], "scent")
         self.assertTrue(result["working_memory"])
+        self.assertNotIn("source_refs", result["working_memory"][0])
+        self.assertEqual(result["working_memory"][0]["public_authority_tier"], "adjudicated_hypothesis")
+        self.assertEqual(result["working_memory"][0]["delivery_source_posture"], "direction_only")
+        self.assertEqual(result["working_memory"][0]["source_ref_count"], 1)
         context = hook.context_for_hook(result)
         self.assertIn("Soft working memory", context)
         self.assertIn("Ask the user only if", context)
+        self.assertIn("adjudicated_hypothesis; direction_only", context)
 
     def test_same_thread_continuation_can_lower_scent_threshold_for_weak_route(self) -> None:
         registry_path = self.root / "threshold-registry" / "threads.json"
@@ -294,6 +300,15 @@ class PromptHookWorkingMemoryTests(AmbientRecallHookCase):
         self.assertIn("Dream hypothesis, not source fact", context)
         self.assertIn("reopen source", context)
         self.assertIn("Use quietly", context)
+        self.assertNotIn("source_refs", result["working_memory"][0])
+        self.assertEqual(
+            result["working_memory"][0]["public_authority_tier"],
+            "adjudicated_hypothesis",
+        )
+        self.assertEqual(
+            result["working_memory"][0]["delivery_source_posture"],
+            "adjudicated_hypothesis_route",
+        )
 
     def test_working_memory_question_scent_obeys_cap_and_stop_tracking(self) -> None:
         registry_path = self.root / "question-working-registry" / "threads.json"
@@ -464,13 +479,17 @@ class PromptHookWorkingMemoryTests(AmbientRecallHookCase):
             associations_path=associations,
             concept_graph_path=concept_graph_path,
             search_budget=0,
+            detail="detail",
         )
 
         self.assertEqual(without_graph["decision"], "skip")
         self.assertEqual(with_graph["decision"], "scent")
         self.assertEqual(with_graph["candidates"][0]["thread_key"], "session:runtime-memory")
         self.assertIn("Go runtime", with_graph["query_terms"])
-        self.assertEqual(with_graph["concept_expansion_diagnostic"]["state"], "used")
+        self.assertEqual(
+            prompt_recall_result_tiers.result_concept_expansion_diagnostic(with_graph)["state"],
+            "used",
+        )
         self.assertIn("concept graph expansion", " ".join(with_graph["reasons"]))
 
     def test_concept_graph_expansion_abstains_when_it_does_not_lift_recall(self) -> None:
@@ -513,12 +532,16 @@ class PromptHookWorkingMemoryTests(AmbientRecallHookCase):
             associations_path=associations,
             concept_graph_path=concept_graph_path,
             search_budget=0,
+            detail="detail",
         )
 
         self.assertEqual(result["decision"], "skip")
         self.assertEqual(result["concept_expansions"], [])
         self.assertNotIn("Go runtime", result["query_terms"])
-        self.assertEqual(result["concept_expansion_diagnostic"]["state"], "no_useful_expansion")
+        self.assertEqual(
+            prompt_recall_result_tiers.result_concept_expansion_diagnostic(result)["state"],
+            "no_useful_expansion",
+        )
         self.assertNotIn("concept graph expansion", " ".join(result["reasons"]))
 
     def test_concept_graph_expansion_abstains_on_broad_infrastructure_drift(self) -> None:
@@ -572,17 +595,18 @@ class PromptHookWorkingMemoryTests(AmbientRecallHookCase):
             associations_path=associations,
             concept_graph_path=concept_graph_path,
             search_budget=0,
+            detail="detail",
         )
 
         self.assertEqual(result["decision"], "skip")
         self.assertEqual(result["concept_expansions"], [])
         self.assertNotIn("runtime", [term.casefold() for term in result["query_terms"]])
         self.assertIn(
-            result["concept_expansion_diagnostic"]["state"],
+            prompt_recall_result_tiers.result_concept_expansion_diagnostic(result)["state"],
             {"rejected_noisy_expansion", "no_useful_expansion"},
         )
         self.assertNotEqual(
-            result["concept_expansion_diagnostic"].get("reason"),
+            prompt_recall_result_tiers.result_concept_expansion_diagnostic(result).get("reason"),
             "expansion_produced_registry_candidates",
         )
         self.assertNotIn("concept graph expansion", " ".join(result["reasons"]))
@@ -648,6 +672,11 @@ class PromptHookWorkingMemoryTests(AmbientRecallHookCase):
             result["ambient_recall"]["cards"][0]["authority_state"],
             "bounded_evidence_ready",
         )
+        self.assertEqual(
+            result["ambient_recall"]["cards"][0]["public_authority_tier"],
+            "source_evidence",
+        )
+        self.assertEqual(result["evidence"][0]["public_authority_tier"], "source_evidence")
         ambient_summary = hook.ambient_debug_summary(result)
         self.assertEqual(ambient_summary["source_reopen_required_count"], 0)
         self.assertEqual(ambient_summary["authority_counts"]["bounded_evidence_ready"], 1)

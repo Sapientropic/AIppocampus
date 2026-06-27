@@ -4,6 +4,7 @@ import json
 import unittest
 from typing import Any
 
+from aippocampus_runtime.dream import lifecycle as dream_lifecycle
 from aippocampus_runtime.dream import working_memory as wm
 from aippocampus_runtime.dream import working_memory_compaction as compaction
 from aippocampus_runtime.ops.activation_authority_audit import (
@@ -93,6 +94,18 @@ class DreamWorkingMemoryCompactionTests(unittest.TestCase):
         self.assertNotIn("source_refs", compacted)
         self.assertNotIn("trust_horizon", compacted)
         self.assertNotIn("candidate_key", compacted)
+        self.assertEqual(
+            dream_lifecycle.dream_lifecycle_state(compacted),
+            "payload_compacted",
+        )
+        self.assertEqual(
+            dream_lifecycle.public_authority_tier(compacted),
+            "diagnostic_only",
+        )
+        self.assertEqual(
+            dream_lifecycle.working_memory_delivery_posture(compacted)["delivery_source_posture"],
+            "diagnostic_only",
+        )
 
         serialized_report = json.dumps(report, ensure_ascii=False)
         self.assertNotIn("Continuity source-ref bridge", serialized_report)

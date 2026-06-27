@@ -148,6 +148,21 @@ def build_mcp_compact_card(
     return card.payload
 
 
+def without_internal_surface(payload: MCPCompactResponseContract) -> MCPCompactResponseContract:
+    """Remove MCP's internal routing surface without widening the compact type.
+
+    Some flagship foreground cards, notably agent recall, are consumed directly
+    by CLI/MCP/public JSON callers. The internal `surface` label is useful while
+    validating the card, but exposing it in the default card turns the foreground
+    into a protocol-debug surface. Keep this as a typed boundary helper instead
+    of letting call sites re-cast raw dictionaries.
+    """
+
+    public_payload: dict[str, Any] = dict(payload)
+    public_payload.pop("surface", None)
+    return cast(MCPCompactResponseContract, public_payload)
+
+
 def foreground_action_contract(action: Mapping[str, Any]) -> ForegroundActionContract:
     """Normalize an action into the compact public foreground contract."""
 

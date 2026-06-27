@@ -1,5 +1,9 @@
 # Yi Macro Runtime Interfaces
 
+Audience: Macro/Yi runtime maintainer / reviewer.
+Read this when: deciding what each Yi, hexagram, topology, or macro primitive may do in runtime packets.
+Skip to: `README.md` for the coordination index; `../recall/agent-native-recall-facade.md` for agent-facing recall/deepen contracts; `../../research/` for speculative framing.
+
 Role: current contract
 
 Status: canonical #1272 audit table for Yi / macro-orientation primitives as

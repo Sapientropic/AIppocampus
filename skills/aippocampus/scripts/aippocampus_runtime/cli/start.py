@@ -11,6 +11,7 @@ from typing import Any
 from aippocampus_runtime import core
 from aippocampus_runtime.contracts import (
     canonical_foreground_action_fields,
+    foreground_action_is_read_only,
     foreground_shell_action,
     shell_quote,
 )
@@ -402,20 +403,6 @@ def _start_actions(cwd: Path, state: dict[str, Any], cue: str = "") -> tuple[str
                 else []
             ),
             *(_exact_latest_maintenance_actions() if source_stale else []),
-            _template_action(
-                action_id="deepen_selected_route",
-                label="Deepen selected route",
-                command_template=(
-                    "aippocampus agent deepen --request {request_index} "
-                    "--recall-selector {recall_selector} --json"
-                ),
-                requires=["request_index", "recall_selector"],
-                why=(
-                    "Use after a recall card exposes a request-index route and recall_selector; "
-                    "--last-recall is only a mutable-cache compatibility fallback."
-                ),
-            ),
-            *_carry_actions(),
         ]
         if cue_specificity.get("status") == "weak_cue_search_fallback_recommended":
             decision = (
@@ -509,19 +496,20 @@ def build_start_card(
         "provider_registration_candidates": _provider_registration_candidates(cwd),
     }
     decision, actions = _start_actions(cwd, state, clean_cue)
-    actions.append(
-        _template_action(
-            action_id="exact_search_fallback",
-            label="Exact phrase fallback",
-            command_template='aippocampus search "{exact_phrase}" --json',
-            requires=["exact_phrase"],
-            why=(
-                "Use only for exact known wording against the configured local source; "
-                "use public_safe_demo_search for the packaged public demo fixture."
-            ),
-            claim_boundary="exact_search_result_requires_source_scope",
+    if not state["clean_source"].get("exists"):
+        actions.append(
+            _template_action(
+                action_id="exact_search_fallback",
+                label="Exact phrase fallback",
+                command_template='aippocampus search "{exact_phrase}" --json',
+                requires=["exact_phrase"],
+                why=(
+                    "Use only for exact known wording against the configured local source; "
+                    "use public_safe_demo_search for the packaged public demo fixture."
+                ),
+                claim_boundary="exact_search_result_requires_source_scope",
+            )
         )
-    )
     primary = actions[0]
     source_state = state["clean_source"]
     first_recall_readiness = start_first_recall_readiness(
@@ -573,6 +561,25 @@ def build_start_card(
             ),
         }
     )
+    write_actions = [
+        action
+        for action in actions
+        if isinstance(action, dict) and not foreground_action_is_read_only(action)
+    ]
+    action_fields = canonical_foreground_action_fields(
+        primary,
+        safe_next_actions=actions,
+        safe_next_read_only_only=True,
+    )
+    detail_actions: dict[str, Any] = {
+        "deepen_after_recall": (
+            "aippocampus agent deepen --request {request_index} "
+            "--recall-selector {recall_selector} --json"
+        ),
+        "export_after_recall": "aippocampus export --json",
+        "sync_after_recall": "aippocampus sync --json",
+    }
+    hide_maintenance_write_actions = bool(source_state.get("exists")) and bool(write_actions)
     card: dict[str, Any] = {
         "kind": "aippocampus_start_card",
         "schema_version": SCHEMA_VERSION,
@@ -588,7 +595,7 @@ def build_start_card(
         "decision": decision,
         "cue_supplied": bool(clean_cue),
         **({"cue": clean_cue} if clean_cue else {}),
-        **canonical_foreground_action_fields(primary, safe_next_actions=actions),
+        **action_fields,
         "first_recall_readiness": first_recall_readiness,
         "performance_expectation": first_recall_readiness.get("performance_expectation"),
         "blocks_exact_latest_claims": bool(
@@ -599,6 +606,13 @@ def build_start_card(
             "no_write_happened": True,
             "explicit_write_required": True,
         },
+        "detail_actions_available": detail_actions,
+        **(
+            {"manage_command": "aippocampus maintenance plan --summary-json"}
+            if hide_maintenance_write_actions
+            else {}
+        ),
+        **({"write_actions": write_actions} if write_actions and not hide_maintenance_write_actions else {}),
         "claim_boundary": "start chooses a route; source-backed claims still require recall/deepen source reopen",
         "state_summary": state,
     }
@@ -607,6 +621,8 @@ def build_start_card(
             "cwd_checked": "current_working_directory",
             "clean_source_path_redacted": True,
             "plugin_manifest_checked": True,
+            "carry_actions": _carry_actions(),
+            "write_actions": write_actions,
         }
     return card
 
@@ -629,6 +645,11 @@ def render_text(card: dict[str, Any]) -> str:
     ]
     if readiness_status:
         lines.append(f"first recall: {readiness_status}")
+    if card.get("status") == "ready_with_freshness_degraded":
+        lines.append(
+            "ordinary recall: usable now; exact/latest claims need maintenance review first."
+        )
+        lines.append("maintenance: aippocampus maintenance plan --summary-json")
     if action.get("command_template"):
         requires = action.get("requires") or []
         if requires:

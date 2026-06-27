@@ -53,6 +53,34 @@ class DreamWorkingMemoryTests(unittest.TestCase):
         self.assertIn("not source fact", preview)
         self.assertIn("reopen source", preview)
 
+    def test_public_authority_and_delivery_posture_for_dream_rows(self) -> None:
+        row = wm.adjudicated_dream_findings_to_working_memory([adjudicated_finding()])[0]
+
+        live = wm.dream_lifecycle.working_memory_delivery_posture(
+            row,
+            prompt="continuity source refs",
+            now="2026-05-30T00:00:00Z",
+        )
+        missing = wm.dream_lifecycle.working_memory_delivery_posture(
+            {**row, "source_refs": []},
+            prompt="continuity source refs",
+            now="2026-05-30T00:00:00Z",
+        )
+        exact = wm.dream_lifecycle.working_memory_delivery_posture(
+            row,
+            prompt="请找 continuity source refs 的原话和证据",
+            now="2026-05-30T00:00:00Z",
+        )
+
+        self.assertEqual(live["public_authority_tier"], "adjudicated_hypothesis")
+        self.assertEqual(live["delivery_source_posture"], "adjudicated_hypothesis_route")
+        self.assertEqual(live["delivery_next_action"], "use_as_route_reopen_before_claim")
+        self.assertFalse(live["raw_source_refs_emitted"])
+        self.assertEqual(missing["delivery_source_posture"], "unresolved_source")
+        self.assertEqual(missing["public_authority_tier"], "diagnostic_only")
+        self.assertEqual(exact["delivery_source_posture"], "needs_reopen_check")
+        self.assertEqual(exact["delivery_next_action"], "reopen_source_before_use")
+
     def test_dream_hypothesis_stays_silent_when_source_visible_or_annoying_or_expired(self) -> None:
         row = wm.adjudicated_dream_findings_to_working_memory(
             [adjudicated_finding(expires_at="2026-05-01T00:00:00Z")]
@@ -275,6 +303,18 @@ class DreamWorkingMemoryTests(unittest.TestCase):
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["sensitive_use_gate"]["state"], "allowed")
 
+    def test_sensitive_gate_ignores_chinese_profile_boundary_copy(self) -> None:
+        adjudicated = wm.background_adjudicate_dream_finding(
+            adjudicated_finding(
+                summary="这只是 Dream 合成的路线候选，不是用户画像事实，也不是人格结论。"
+            )
+        )
+        rows = wm.adjudicated_dream_findings_to_working_memory([adjudicated])
+
+        self.assertEqual(adjudicated["adjudication_result"]["status"], "accepted")
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["sensitive_use_gate"]["state"], "allowed")
+
     def test_preference_relationship_and_high_confidence_are_not_sensitive_by_themselves(self) -> None:
         continuity = adjudicated_finding(
             title="Preference and relationship continuity",
@@ -456,17 +496,60 @@ class DreamWorkingMemoryTests(unittest.TestCase):
         self.assertEqual(expired["reason"], "dream_hypothesis_expired_requires_source_reopen")
         self.assertEqual(expired["invitation_diagnostic"], "delivery_gate_blocked")
 
-    def test_profile_or_secret_dream_hypothesis_is_parked_before_working_memory_projection(self) -> None:
-        sensitive = adjudicated_finding(
+    def test_profile_like_dream_hypothesis_becomes_private_route_not_silent_park(self) -> None:
+        profile_like = adjudicated_finding(
             title="Durable personality diagnosis",
             summary="The user's personality means they secretly prefer this route.",
             confidence=0.72,
         )
 
-        adjudicated = wm.background_adjudicate_dream_finding(sensitive)
+        adjudicated = wm.background_adjudicate_dream_finding(profile_like)
+        rows = wm.adjudicated_dream_findings_to_working_memory([adjudicated])
+
+        self.assertEqual(adjudicated["adjudication_result"]["status"], "accepted")
+        self.assertNotIn("sensitive_use_gate", adjudicated["adjudication_result"]["failed_checks"])
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["sensitive_use_gate"]["state"], "private_route")
+        self.assertEqual(rows[0]["sensitive_use_gate"]["privacy_action"], "private_route")
+        self.assertIn("profile_like_interpretation", rows[0]["sensitive_use_gate"]["privacy_reason_codes"])
+
+        plan = wm.plan_dream_hypothesis_use(
+            rows[0],
+            prompt="personality route",
+            now="2026-05-30T00:00:00Z",
+        )
+        self.assertEqual(plan["action"], "use_quietly")
+
+    def test_cross_domain_sensitive_reuse_uses_purpose_check_not_hard_block(self) -> None:
+        cross_domain = adjudicated_finding(
+            title="Durable personality diagnosis",
+            summary="The user's personality means they secretly prefer this route.",
+            confidence=0.72,
+            cross_domain_sensitive_reuse=True,
+        )
+
+        adjudicated = wm.background_adjudicate_dream_finding(cross_domain)
+        rows = wm.adjudicated_dream_findings_to_working_memory([adjudicated])
+
+        self.assertEqual(adjudicated["adjudication_result"]["status"], "accepted")
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["sensitive_use_gate"]["state"], "purpose_check")
+        self.assertEqual(rows[0]["sensitive_use_gate"]["privacy_action"], "purpose_check")
+        self.assertIn("cross_domain_sensitive_use", rows[0]["sensitive_use_gate"]["privacy_reason_codes"])
+
+    def test_secret_like_dream_hypothesis_still_hard_blocks_projection(self) -> None:
+        secret_like = adjudicated_finding(
+            title="Credential leakage route",
+            summary="The source appears to include a bearer token and private key.",
+            confidence=0.72,
+        )
+
+        adjudicated = wm.background_adjudicate_dream_finding(secret_like)
 
         self.assertEqual(adjudicated["adjudication_result"]["status"], "parked")
         self.assertIn("sensitive_use_gate", adjudicated["adjudication_result"]["failed_checks"])
+        self.assertEqual(adjudicated["sensitive_use_gate"]["state"], "blocked")
+        self.assertEqual(adjudicated["sensitive_use_gate"]["privacy_action"], "hard_block")
         self.assertEqual(wm.adjudicated_dream_findings_to_working_memory([adjudicated]), [])
 
 if __name__ == "__main__":

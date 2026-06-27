@@ -660,7 +660,7 @@ class WarmAmbientRecallTests(unittest.TestCase):
         self.assertEqual(payload["action_code"], "stale_queue_worker_unavailable_optional")
         action_ids = [action["id"] for action in payload["safe_next_actions"]]
         self.assertIn("probe_warm_worker_once", action_ids)
-        self.assertIn("snooze_optional_warm_ambient", action_ids)
+        self.assertNotIn("snooze_optional_warm_ambient", action_ids)
         self.assertIn("retire_stale_warm_queue_after_review", action_ids)
         self.assertNotIn("inspect_provider_status", action_ids)
         self.assertNotIn("aippocampus doctor provider --json", raw_output)

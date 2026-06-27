@@ -24,12 +24,28 @@ VALID_PRIVACY_ACTIONS = {
 }
 PRIVACY_HARD_BLOCK_ACTIONS = {"external_projection_block", "hard_block"}
 PRIVACY_ROUTE_ACTIONS = {"private_route", "downgrade", "purpose_check"}
+PRIVACY_ACTION_CONTRACT = {
+    "allow": "ordinary same-user continuity can be used within source boundaries",
+    "private_route": "keep a useful local route handle, but do not expose raw/private source",
+    "downgrade": "treat as hypothesis or direction-only material until source is reopened",
+    "purpose_check": "ask/review before real cross-domain sensitive reuse",
+    "external_projection_block": "do not project raw private material outside the local boundary",
+    "hard_block": "do not use or route secret-like, disabled-scope, or high-risk answer-support material",
+}
 PRIVACY_ROUTE_ACTION_PRIORITY = {
     "purpose_check": 3,
     "private_route": 2,
     "downgrade": 1,
     "allow": 0,
 }
+
+
+def privacy_action_is_hard_block(value: Any) -> bool:
+    return normalize_privacy_action(value) in PRIVACY_HARD_BLOCK_ACTIONS
+
+
+def privacy_action_routes_privately(value: Any) -> bool:
+    return normalize_privacy_action(value) in PRIVACY_ROUTE_ACTIONS
 
 
 def clean_privacy_reason_codes(values: Any) -> list[str]:

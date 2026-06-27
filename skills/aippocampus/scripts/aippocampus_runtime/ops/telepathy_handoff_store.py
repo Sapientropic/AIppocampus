@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Opt-in local Telepathy handoff workflow over public-safe coordination cards."""
+"""Telepathy - local handoff coordination over public-safe cards.
+
+Creates, lists, reads, and releases opt-in coordination cards so another agent
+can continue scoped work without pretending there is shared private memory.
+"""
 
 from __future__ import annotations
 
@@ -843,7 +847,11 @@ def _print_payload(payload: Mapping[str, Any], *, json_output: bool) -> None:
 
 
 def _preset_help() -> str:
-    lines = ["Preset examples:"]
+    lines = [
+        "Telepathy - local handoff coordination cards.",
+        "",
+        "Preset examples:",
+    ]
     for name, preset in HANDOFF_PRESETS.items():
         lines.append(f"  {name}: {preset['label']}")
     lines.append(

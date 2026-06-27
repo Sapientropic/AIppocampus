@@ -5,6 +5,7 @@ import re
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+from aippocampus_runtime.foreground_action_lint import compact_foreground_action_violations
 from aippocampus_runtime.mcp.compact_profile import COMPACT_DEBUG_FIELD_DENYLIST
 
 PathComponent = str | int
@@ -169,6 +170,8 @@ def assert_compact_frontstage_payload(
     *,
     max_top_level_diagnostics: int = 1,
     max_safe_actions: int = 5,
+    allow_write_safe_actions: bool = False,
+    current_status_command: str | None = None,
 ) -> None:
     """Assert default foreground JSON stays useful rather than audit-shaped."""
 
@@ -180,6 +183,15 @@ def assert_compact_frontstage_payload(
     test.assertNotIn("agent_next_action", payload)
     safe_actions = payload.get("safe_next_actions") or []
     test.assertLessEqual(len(safe_actions), max_safe_actions)
+    test.assertEqual(
+        compact_foreground_action_violations(
+            payload,
+            max_safe_actions=max_safe_actions,
+            allow_write_safe_actions=allow_write_safe_actions,
+            current_status_command=current_status_command,
+        ),
+        [],
+    )
     leaked_keys = COMPACT_DIAGNOSTIC_TOP_LEVEL_KEYS.intersection(payload)
     test.assertLessEqual(
         len(leaked_keys),

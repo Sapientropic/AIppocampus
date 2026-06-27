@@ -14,6 +14,39 @@ Core rule:
 > High-risk governance should be opt-in or enterprise-profile behavior, not
 > baseline ceremony.
 
+## Privacy Posture Contract
+
+Use this contract before adding sensitive/profile gates to recall, Dream,
+working memory, subconscious workers, or host projections:
+
+| Action class | Runtime action | Personal-default meaning | Examples |
+| --- | --- | --- | --- |
+| `allow_with_boundary` | `allow` or `private_route` | Ordinary same-user conversation source may shape local continuity as a bounded route. Reopen source before public, exact, stale, disputed, or strong profile-like claims. | user-directed preferences, relationship continuity, project/life context, recurring themes, Dream hypotheses marked as not source facts |
+| `degrade_or_review` | `downgrade` or `private_route` | Keep useful navigation but lower authority to hypothesis/review/source-reopen route. Do not publish a profile fact. | possible implicit profile, sensitive-domain pattern, weak source coverage, stale/conflicting source |
+| `purpose_check` | `purpose_check` | Use only when real cross-domain sensitive reuse, regulated/team use, or an explicit governed deployment needs purpose review before reuse. | reusing relationship context for medical/legal/therapy-like advice, team/governed access decisions |
+| `block` | `hard_block` or `external_projection_block` | Suppress use/projection and keep the reason in detail/operator output. Hard blocks stay narrow. | secrets/credentials, raw private export, non-consensual broad scan, user-disabled scope, unsafe external projection, explicit high-risk answer support |
+
+`personal_default` must not inherit `enterprise_governed` friction by default.
+Same-user conversation source defaults to `allow_with_boundary` / `private_route`,
+not `purpose_check`. `purpose_check` is for actual cross-domain sensitive reuse;
+`hard_block` is for true secret-like, disabled-scope, raw-private, unsafe
+external-projection, or high-risk answer-support cases.
+
+Compact/default foreground output should translate this into the smallest useful
+state or route. Detail/operator views may explain the privacy action, reason
+codes, and reopen/review boundary. Do not solve privacy drift by adding a wall
+of foreground caveats or silently parking useful personal continuity.
+
+Public anchors:
+
+- [#679](https://github.com/Sapientropic/AIppocampus/issues/679) is the
+  purpose-bound memory-access anchor for governed/explicit opt-in paths, not
+  baseline personal recall.
+- [#703](https://github.com/Sapientropic/AIppocampus/issues/703) anchors the
+  worker-first situation/glyph boundary: ordinary conversation source is usable
+  for same-user recall; deterministic rails keep worker outputs private,
+  source-reopenable, and non-factual until source is reopened.
+
 ## Profile Tags
 
 Use these tags when planning issues, docs, feature flags, CLI output, MCP tools,

@@ -90,7 +90,8 @@ class InstallActionHintHookTests(unittest.TestCase):
         ]
         self.assertTrue(any("refresh-cache" in command for command in commands))
         self.assertTrue(any("--write --json" in command for command in commands))
-        self.assertTrue(any("uninstall" in command for command in commands))
+        self.assertFalse(any("uninstall" in command for command in commands))
+        self.assertEqual(result["manage_command"], "aippocampus hooks action uninstall --json")
         self.assertNotIn(str(self.codex_home), encoded)
         self.assertNotIn(str(SCRIPTS.resolve()), encoded)
 
@@ -100,22 +101,9 @@ class InstallActionHintHookTests(unittest.TestCase):
         self.assertFalse(result["installed"])
         self.assertEqual(result["foreground_action"]["id"], "review_action_hint_guidance")
         action_ids = [action["id"] for action in result["safe_next_actions"]]
-        self.assertEqual(
-            action_ids[:3],
-            [
-                "check_action_hint_status",
-                "install_action_hint_hook",
-                "refresh_action_hint_cache",
-            ],
-        )
-        self.assertEqual(
-            result["foreground_action"]["follow_up_action"]["id"],
-            "install_action_hint_hook",
-        )
-        self.assertEqual(
-            result["safe_next_actions"][1]["follow_up_action"]["id"],
-            "refresh_action_hint_cache",
-        )
+        self.assertEqual(action_ids, ["check_action_hint_status"])
+        self.assertNotIn("follow_up_action", result["foreground_action"])
+        self.assertEqual(result["manage_command"], "aippocampus hooks action install --json")
         self.assertNotIn(
             "refresh-cache --write",
             result["foreground_action"].get("command", ""),
@@ -177,7 +165,8 @@ class InstallActionHintHookTests(unittest.TestCase):
         self.assertEqual(result["foreground_action"]["mutation_risk"], "explicit_local_cache_write")
         self.assertNotIn("refresh_action_hint_cache", action_ids)
         self.assertIn("check_action_hint_status", action_ids)
-        self.assertIn("rollback_action_hint_hook", action_ids)
+        self.assertNotIn("rollback_action_hint_hook", action_ids)
+        self.assertEqual(result["manage_command"], "aippocampus hooks action uninstall --json")
         self.assertEqual(
             result["foreground_action"]["mutation_risk"],
             "explicit_local_cache_write",
@@ -191,7 +180,7 @@ class InstallActionHintHookTests(unittest.TestCase):
             ),
         }
         self.assertIn("aippocampus hooks action refresh-cache --write --json", action_commands)
-        self.assertIn("aippocampus hooks action uninstall --json", action_commands)
+        self.assertNotIn("aippocampus hooks action uninstall --json", action_commands)
 
     def test_status_distinguishes_missing_empty_expired_and_malformed_cache(self) -> None:
         missing = self.codex_home / "missing-action-hints.jsonl"
@@ -253,10 +242,11 @@ class InstallActionHintHookTests(unittest.TestCase):
             "check_action_hint_status",
             [action["id"] for action in result["safe_next_actions"]],
         )
-        self.assertIn(
+        self.assertNotIn(
             "rollback_action_hint_hook",
             [action["id"] for action in result["safe_next_actions"]],
         )
+        self.assertEqual(result["manage_command"], "aippocampus hooks action uninstall --json")
 
     def test_unsupported_host_status_does_not_pretend_installation(self) -> None:
         result = installer.status(self.hooks_json, host="claude-code", include_private_paths=True)

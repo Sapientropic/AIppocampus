@@ -5,6 +5,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from datetime import date, timedelta
 from pathlib import Path
 
 from tests.aippocampus.import_path_helpers import import_tool_root_module
@@ -169,6 +170,36 @@ def clean_source_ref(ref):
                 self.assertTrue(set(contract["rule_ids"]) <= known_rules)
                 self.assertTrue(contract["owner"])
                 self.assertTrue(contract["why"])
+
+    def test_rule_catalog_owns_rule_config_and_hazard_mapping(self) -> None:
+        rules = agent_slop_guard.RULES
+
+        self.assertIn(
+            "skills/aippocampus/scripts/aippocampus_runtime/source/",
+            rules["hot_path_silent_fallback"].config.hot_path_prefixes,
+        )
+        self.assertIn(
+            "source_ref_key",
+            rules["source_ref_helper_duplicate"].config.source_ref_helper_names,
+        )
+        self.assertIn(
+            "source-state-durability",
+            {rules["source_jsonl_owner_bypass"].hazard_id, rules["local_lock_owner_bypass"].hazard_id},
+        )
+        for rule in rules.values():
+            with self.subTest(rule=rule.rule_id):
+                self.assertTrue(rule.hazard_id or rule.tooling_only)
+
+    def test_hazard_card_coverage_references_existing_doc_ids(self) -> None:
+        report = agent_slop_guard.build_report(paths=[], changed_files=set(), baseline={})
+        coverage = report["hazard_card_coverage"]
+
+        self.assertEqual(coverage["missing_hazard_ids"], [])
+        self.assertEqual(coverage["unmapped_rule_ids"], [])
+        by_card = {item["hazard_id"]: item["rule_ids"] for item in coverage["cards"]}
+        self.assertIn("compact_projector_bypass", by_card["foreground-recall-follow-through"])
+        self.assertIn("source_jsonl_owner_bypass", by_card["source-state-durability"])
+        self.assertIn("performance_hot_path_nested_loop", by_card["mined-navigation-terms"])
 
     def test_registry_writer_owner_bypass_rule_catches_load_save_copy(self) -> None:
         bad = """
@@ -455,6 +486,60 @@ def load(rows):
 
         self.assertEqual(baseline[fingerprint], "#2707")
 
+    def test_baseline_lifecycle_reports_missing_expired_closed_and_last_seen(self) -> None:
+        text = """
+def load(rows):
+    try:
+        return [row.strip() for row in rows]
+    except Exception:
+        return []
+"""
+        hot_path = "skills/aippocampus/scripts/aippocampus_runtime/recall/retrieval.py"
+        finding = agent_slop_guard.analyze_text(text, path=hot_path, changed_files={hot_path})[0]
+        expired = (date.today() - timedelta(days=1)).isoformat()
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            baseline_path = Path(temp_dir) / "baseline.json"
+            baseline_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 2,
+                        "baseline": [
+                            {
+                                "fingerprint": finding["fingerprint"],
+                                "owner_issue": "#2697",
+                                "reason": "historical hot-path debt",
+                                "accepted_source": "#2835 lifecycle test",
+                                "accepted_date": "2026-06-01",
+                                "review_after": expired,
+                                "review_condition": "remove when owner path is touched",
+                                "owner_issue_state": "closed",
+                            },
+                            {
+                                "fingerprint": "source_jsonl_owner_bypass:gone.py:1:stale",
+                                "owner_issue": "#2698",
+                                "reason": "legacy row before lifecycle metadata",
+                            },
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            _ = agent_slop_guard.load_baseline(baseline_path)
+            summary = agent_slop_guard.baseline_lifecycle_summary(
+                agent_slop_guard.load_baseline_entries(baseline_path),
+                current_fingerprints={finding["fingerprint"]},
+            )
+
+        self.assertEqual(summary["total_entry_count"], 2)
+        self.assertEqual(summary["missing_lifecycle_metadata_count"], 1)
+        self.assertEqual(summary["expired_entry_count"], 1)
+        self.assertEqual(summary["review_due_entry_count"], 1)
+        self.assertEqual(summary["closed_owner_entry_count"], 1)
+        self.assertEqual(summary["last_seen_entry_count"], 1)
+        self.assertEqual(summary["stale_entry_count"], 1)
+
     def test_fixture_root_contract_has_bad_and_allowed_examples(self) -> None:
         results = agent_slop_guard.run_fixture_root(FIXTURES, baseline={})
         by_fixture = {item["fixture"]: item for item in results}
@@ -553,6 +638,7 @@ def load(rows):
         self.assertNotIn("rules", payload)
         self.assertNotIn("owner_layer_contracts", payload)
         self.assertEqual(payload["blockers"][0]["rule_id"], "compact_projector_bypass")
+        self.assertEqual(payload["blockers"][0]["path"], bad_file)
         self.assertEqual(hard.returncode, 1)
         hard_payload = json.loads(hard.stdout)
         self.assertFalse(hard_payload["ok"])
@@ -560,6 +646,36 @@ def load(rows):
         self.assertEqual(hard_payload["gate_status"], "failed")
         self.assertEqual(hard_payload["status"], "fail")
         self.assertEqual(hard_payload["blockers"][0]["rule_id"], "compact_projector_bypass")
+
+    def test_cli_changed_file_manifest_matches_repeated_changed_file(self) -> None:
+        bad_file = (
+            "tests/aippocampus/agent_slop_guard_fixtures/bad/"
+            "mcp/projector_bypass.py"
+        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            manifest = Path(temp_dir) / "changed-files.txt"
+            manifest.write_text(f"{bad_file}\n", encoding="utf-8")
+
+            proc = subprocess.run(
+                [
+                    sys.executable,
+                    str(GUARD),
+                    "--json",
+                    "--fail-on-violations",
+                    "--changed-file-list",
+                    str(manifest),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                encoding="utf-8",
+                capture_output=True,
+                check=False,
+            )
+
+        self.assertEqual(proc.returncode, 1)
+        payload = json.loads(proc.stdout)
+        self.assertEqual(payload["blockers"][0]["path"], bad_file)
+        self.assertEqual(payload["blockers"][0]["rule_id"], "compact_projector_bypass")
 
     def test_cli_fixture_self_check_fails_if_expected_bad_or_allowed_contract_breaks(self) -> None:
         proc = subprocess.run(

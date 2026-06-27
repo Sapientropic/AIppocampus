@@ -25,7 +25,7 @@ from aippocampus_runtime.dream.constructive_outputs import (
 )
 from aippocampus_runtime.dream.macro_guidance import dream_worker_strategy_from_perturbation
 from aippocampus_runtime.dream.probe_authority import active_imagination_probe_boundary
-from aippocampus_runtime.dream.risk_terms import dream_text_hard_risk
+from aippocampus_runtime.dream.risk_terms import dream_privacy_posture, dream_text_hard_risk
 from aippocampus_runtime.dream.source_refs import (
     bridge_claims_from_candidate,
     resolve_refs,
@@ -286,7 +286,14 @@ def finding_from_candidate(
     if dream_function == "active_imagination":
         why_not_fact = compact_text(str(candidate.get("why_this_is_not_fact") or ""), 360)
         counter_evidence = string_list(candidate.get("counter_evidence"), limit=6)
-        sensitive_risk = has_active_imagination_sensitive_risk(candidate_kind, title, summary, why_not_fact, " ".join(counter_evidence))
+        privacy_posture = dream_privacy_posture(
+            candidate_kind,
+            title,
+            summary,
+            why_not_fact,
+            " ".join(counter_evidence),
+        )
+        sensitive_risk = bool(privacy_posture.get("hard_block"))
         source_authority = active_imagination_probe_boundary({
             "dream_function": "active_imagination",
             "title": title,
@@ -346,6 +353,16 @@ def finding_from_candidate(
     bridge_result = journey_bridges.normalized_bridge(candidate, dream_function, by_id, resolve_refs)
     journey_bridge, bridge_failures, bridge_review_required = bridge_result
     failures.extend(bridge_failures)
+    finding_privacy_posture = dream_privacy_posture(
+        candidate_kind,
+        title,
+        summary,
+        activation_cues,
+        prospective_fields,
+        constructive_artifact,
+        prospective_invitation,
+        journey_bridge,
+    )
 
     source_ref_audit_status = "model_candidate_source_ref_validated" if not failures else "failed"
     pack_id = str(pack.get("pack_id") or "")
@@ -391,6 +408,7 @@ def finding_from_candidate(
             "failed_checks": failures,
             "max_model_confidence": MAX_MODEL_CONFIDENCE,
         },
+        "privacy_posture": finding_privacy_posture,
     }
     if prospective_fields:
         # Prospective dreams are scoped possibilities, never predictions. The

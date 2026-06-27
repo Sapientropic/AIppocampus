@@ -520,7 +520,7 @@ class MemoryCandidateRouterTests(unittest.TestCase):
         self.assertTrue(diagnostic["writer_in_progress"])
         self.assertIn("writer_in_progress", diagnostic["diagnostics"])
 
-    def test_dream_hypothesis_match_skips_invalid_trust_horizon_rows(self) -> None:
+    def test_dream_hypothesis_match_marks_trust_horizon_rows_reopen_required(self) -> None:
         dream_row = {
             "kind": "aippocampus_working_memory",
             "status": "active",
@@ -557,7 +557,49 @@ class MemoryCandidateRouterTests(unittest.TestCase):
             [nested_expired, review_due],
         )
 
-        self.assertEqual(matched, [])
+        self.assertEqual(len(matched), 2)
+        self.assertEqual(
+            {item["delivery_source_posture"] for item in matched},
+            {"needs_reopen_check"},
+        )
+        self.assertTrue(
+            all(item["dream_hypothesis_use"]["action"] == "reopen_source" for item in matched)
+        )
+        self.assertIn(
+            "trust_horizon_review_due",
+            {item["delivery_posture_reason"] for item in matched},
+        )
+
+    def test_dream_hypothesis_match_with_missing_refs_is_not_silently_usable(self) -> None:
+        dream_row = {
+            "kind": "aippocampus_working_memory",
+            "status": "active",
+            "route": router.USE_WITH_SOURCE,
+            "candidate_type": "dream_hypothesis",
+            "title": "Continuity dream bridge",
+            "summary": "A dream hypothesis about continuity and source refs.",
+            "recommendation": "Use quietly; reopen source before strong claims.",
+            "confidence": 0.66,
+            "trigger_terms": ["continuity", "source refs"],
+            "source_refs": [],
+            "truth_boundary": "adjudicated_dream_hypothesis_not_fact",
+            "review_state": "agent_adjudicated",
+            "foreground_use": {
+                "default_action": "quiet_substrate",
+                "strong_claim_requires_source_reopen": True,
+            },
+            "sensitive_use_gate": {"state": "allowed"},
+        }
+
+        matched = router.match_working_memory(
+            "continuity source refs 这条线索还在吗？",
+            [dream_row],
+        )
+
+        self.assertEqual(len(matched), 1)
+        self.assertEqual(matched[0]["public_authority_tier"], "diagnostic_only")
+        self.assertEqual(matched[0]["delivery_source_posture"], "unresolved_source")
+        self.assertEqual(matched[0]["dream_hypothesis_use"]["action"], "reopen_source")
 
     def test_prospective_invitation_match_carries_optional_question_policy(self) -> None:
         dream_row = {
@@ -656,6 +698,10 @@ class MemoryCandidateRouterTests(unittest.TestCase):
         self.assertIn("rollback", use["unblock_condition"])
         self.assertIn("journey_bridge_hypothesis", hook_rows[0])
         self.assertEqual(hook_rows[0]["journey_bridge_hypothesis"]["status"], "dream_bridge_not_source_fact")
+        self.assertNotIn("source_refs", hook_rows[0])
+        self.assertEqual(hook_rows[0]["source_ref_count"], 1)
+        self.assertEqual(hook_rows[0]["public_authority_tier"], "adjudicated_hypothesis")
+        self.assertEqual(hook_rows[0]["delivery_source_posture"], "adjudicated_hypothesis_route")
 
 if __name__ == "__main__":
     unittest.main()

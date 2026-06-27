@@ -211,6 +211,8 @@ def canonical_foreground_action_fields(
     foreground_action: Mapping[str, object],
     *,
     safe_next_actions: Sequence[Mapping[str, object]] | None = None,
+    max_safe_next_actions: int | None = None,
+    safe_next_read_only_only: bool = False,
 ) -> dict[str, object]:
     """Return the shared foreground action field set for compact cards.
 
@@ -225,19 +227,69 @@ def canonical_foreground_action_fields(
     """
 
     primary = normalize_foreground_action(foreground_action)
+    primary_keys = _foreground_action_semantic_keys(primary)
+    seen_alternate_keys: set[tuple[str, str]] = set()
     alternates = []
     for action in (safe_next_actions or []):
         if not action:
             continue
         normalized = normalize_foreground_action(action)
-        if normalized != primary and normalized not in alternates:
+        if safe_next_read_only_only and not foreground_action_is_read_only(normalized):
+            continue
+        semantic_keys = _foreground_action_semantic_keys(normalized)
+        if normalized == primary or semantic_keys.intersection(primary_keys):
+            continue
+        if semantic_keys.intersection(seen_alternate_keys):
+            continue
+        if normalized not in alternates:
             alternates.append(normalized)
+            seen_alternate_keys.update(semantic_keys)
+        if max_safe_next_actions is not None and len(alternates) >= max_safe_next_actions:
+            break
     payload: dict[str, object] = {
         "foreground_action_contract": FOREGROUND_ACTION_CONTRACT_VERSION,
         "foreground_action": primary,
         "safe_next_actions": alternates,
     }
     return payload
+
+
+def foreground_action_is_read_only(action: Mapping[str, object]) -> bool:
+    """Return whether an action is safe for default compact foreground menus.
+
+    Compact foreground surfaces are the path a later agent will most likely
+    execute without further deliberation. Keep write-capable operations out of
+    `safe_next_actions` unless a call site deliberately exposes a consented
+    write section. This helper is intentionally vocabulary-based so new
+    mutation risks do not become implicitly safe just because they are novel.
+    """
+
+    mutation_risk = str(action.get("mutation_risk") or "").strip()
+    return mutation_risk in {
+        "read_only",
+        "read_only_preview",
+        "read_only_preview_of_delete",
+    }
+
+
+def _normalized_action_command(value: object) -> str:
+    return " ".join(str(value or "").split()).casefold()
+
+
+def _foreground_action_semantic_keys(action: Mapping[str, object]) -> set[tuple[str, str]]:
+    keys: set[tuple[str, str]] = set()
+    action_id = str(action.get("id") or "").strip().casefold()
+    if action_id:
+        keys.add(("id", action_id))
+    command = _normalized_action_command(action.get("command"))
+    if command:
+        keys.add(("command", command))
+        keys.add(("action_text", command))
+    command_template = _normalized_action_command(action.get("command_template"))
+    if command_template:
+        keys.add(("command_template", command_template))
+        keys.add(("action_text", command_template))
+    return keys
 
 
 def strip_foreground_action_legacy_aliases(value: object) -> object:
@@ -348,6 +400,8 @@ def foreground_action_contract_violations(payload: Mapping[str, object]) -> list
         )
         return violations
     foreground_dict = dict(foreground)
+    primary_keys = _foreground_action_semantic_keys(foreground)
+    seen_safe_keys: dict[tuple[str, str], int] = {}
     violations.extend(_foreground_action_shape_violations(foreground, field="foreground_action"))
     violations.extend(_command_template_marker_violations(foreground, field="foreground_action"))
     if isinstance(agent_next, Mapping):
@@ -368,9 +422,26 @@ def foreground_action_contract_violations(payload: Mapping[str, object]) -> list
                         "reason": "primary_action_must_not_be_repeated_in_safe_next_actions",
                     }
                 )
-            violations.extend(
-                _command_template_marker_violations(action, field=f"safe_next_actions.{index}")
-            )
+            action_keys = _foreground_action_semantic_keys(action)
+            if action_keys.intersection(primary_keys):
+                violations.append(
+                    {
+                        "field": f"safe_next_actions.{index}",
+                        "reason": "primary_action_semantically_repeated_in_safe_next_actions",
+                    }
+                )
+            for action_key in action_keys:
+                first_index = seen_safe_keys.get(action_key)
+                if first_index is not None:
+                    violations.append(
+                        {
+                            "field": f"safe_next_actions.{index}",
+                            "reason": "duplicate_safe_next_action_semantic_key",
+                        }
+                    )
+                    break
+                seen_safe_keys[action_key] = index
+            violations.extend(_command_template_marker_violations(action, field=f"safe_next_actions.{index}"))
         if any(not isinstance(action, Mapping) for action in safe_actions):
             violations.append(
                 {
@@ -403,6 +474,31 @@ def _command_template_marker_violations(
             {
                 "field": f"{field}.template_only",
                 "reason": "command_template_requires_template_only_true",
+            }
+        )
+    requires = action.get("requires")
+    if isinstance(requires, str):
+        violations.append(
+            {
+                "field": f"{field}.requires",
+                "reason": "requires_must_be_list",
+            }
+        )
+    elif isinstance(requires, Sequence) and not isinstance(requires, (str, bytes)):
+        for index, item in enumerate(requires):
+            if not isinstance(item, str) or not item.strip():
+                violations.append(
+                    {
+                        "field": f"{field}.requires.{index}",
+                        "reason": "requires_items_must_be_nonempty_strings",
+                    }
+                )
+    template = action.get("command_template")
+    if isinstance(template, str) and ("<" in template or ">" in template):
+        violations.append(
+            {
+                "field": f"{field}.command_template",
+                "reason": "command_template_must_use_brace_placeholders",
             }
         )
     nested = action.get("secondary_action")
@@ -534,7 +630,12 @@ def foreground_chooser_card(
 ) -> dict[str, object]:
     primary = choices[0] if choices else {}
     action_fields = (
-        canonical_foreground_action_fields(primary, safe_next_actions=choices)
+        canonical_foreground_action_fields(
+            primary,
+            safe_next_actions=choices,
+            max_safe_next_actions=2,
+            safe_next_read_only_only=True,
+        )
         if primary
         else {
             "foreground_action_contract": FOREGROUND_ACTION_CONTRACT_VERSION,

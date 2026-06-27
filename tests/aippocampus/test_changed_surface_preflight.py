@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+# aippocampus-instruction-surface: changed-surface preflight test contract; diagnostic strings are fixtures for compact/detail gates.
 import unittest
 from unittest import mock
 
@@ -69,6 +70,41 @@ class ChangedSurfacePreflightTests(unittest.TestCase):
         self.assertEqual(report["ran_command_count"], 1)
         self.assertEqual(report["first_failure"]["command"], preflight.test_plan.GIT_DIFF_CHECK_COMMAND)
         self.assertFalse(any("unittest" in command for command in seen))
+
+    def test_base_range_diff_check_failure_is_first_blocker(self) -> None:
+        seen: list[str] = []
+        range_command = "git diff --check HEAD~1..HEAD"
+
+        def fake_command(command: str) -> preflight.CommandResult:
+            seen.append(command)
+            failed = command == range_command
+            return preflight.CommandResult(
+                command=command,
+                scope="unknown",
+                status="fail" if failed else "pass",
+                returncode=1 if failed else 0,
+                elapsed_ms=1,
+                stdout="foreground_choosers.py:305: new blank line at EOF" if failed else "",
+                stderr="",
+            )
+
+        with (
+            mock.patch.object(
+                preflight.test_plan,
+                "collect_changed_files",
+                return_value=["docs/guides/install-guide.md"],
+            ),
+            mock.patch.object(preflight.test_plan, "_debt_report_is_red", return_value=False),
+            mock.patch.object(preflight, "run_shell_command", side_effect=fake_command),
+        ):
+            report = preflight.run_preflight(changed_files=[], base="HEAD~1")
+
+        self.assertFalse(report["ok"])
+        self.assertEqual(report["ran_command_count"], 1)
+        self.assertEqual(report["first_failure"]["command"], range_command)
+        self.assertEqual(report["first_failure"]["guard_id"], "git-diff-check")
+        self.assertIn("foreground_choosers.py:305", report["first_failure"]["stdout_tail"])
+        self.assertEqual(seen, [range_command])
 
     def test_preflight_runs_slop_guard_before_focused_tests(self) -> None:
         seen: list[str] = []

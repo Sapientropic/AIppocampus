@@ -6,6 +6,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.ops.route_readiness import safe_source_refs
 from aippocampus_runtime.recall.active_recall_lock import (
     DEFAULT_LOCK_NAME,
     start_or_update_recall_lock,
@@ -23,7 +24,10 @@ from aippocampus_runtime.recall.ambient_cache import (
     topic_epoch_from_terms,
     write_thread_cache,
 )
-from aippocampus_runtime.recall.ambient_cards import ambient_recall_from_decision
+from aippocampus_runtime.recall.ambient_cards import (
+    ambient_recall_from_decision,
+    working_memory_card_match_key,
+)
 from aippocampus_runtime.recall.ambient_policy import (
     append_policy_events,
     filter_ambient_cards,
@@ -57,6 +61,20 @@ __all__ = [
     "record_prompt_topic_signal",
     "warm_prompt_trace",
 ]
+
+
+def _private_working_memory_source_refs_by_card_key(
+    rows: list[dict[str, Any]] | None,
+) -> dict[tuple[str, str], list[dict[str, Any]]]:
+    mapping: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for row in rows or []:
+        if not isinstance(row, dict):
+            continue
+        refs = safe_source_refs(row.get("source_refs"))
+        if refs:
+            mapping[working_memory_card_match_key(row)] = refs[:3]
+    return mapping
+
 
 def _ambient_cache_file(
     *,
@@ -193,11 +211,24 @@ def attach_ambient_recall(
     warm_max_workers: int | None,
     warm_timeout: float | None,
     warm_quorum: int | None,
+    private_working_memory_rows: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """aippocampus-stage-map: load thread cache -> render ambient card -> apply filters/locks -> schedule warm background."""
 
+    transient_private_rows = result.pop("_private_working_memory_rows_for_ambient_reopen", None)
+    private_working_memory_rows = (
+        private_working_memory_rows if private_working_memory_rows is not None else transient_private_rows
+    )
+    private_source_refs_by_card_key = _private_working_memory_source_refs_by_card_key(
+        private_working_memory_rows
+    )
     if not use_thread_cache or not thread_id:
         result["ambient_recall"] = ambient_recall_from_decision(result, prompt=prompt)
+        promote_reopenable_ambient_cards(
+            result["ambient_recall"],
+            registry_path=registry_path,
+            private_source_refs_by_card_key=private_source_refs_by_card_key,
+        )
         return result
     epoch = topic_epoch or topic_epoch_from_terms(
         [str(term) for term in result.get("query_terms") or []]
@@ -318,7 +349,11 @@ def attach_ambient_recall(
                     ]
                 )
             )[:64]
-        promote_reopenable_ambient_cards(result["ambient_recall"], registry_path=registry_path)
+        promote_reopenable_ambient_cards(
+            result["ambient_recall"],
+            registry_path=registry_path,
+            private_source_refs_by_card_key=private_source_refs_by_card_key,
+        )
         active_lock: dict[str, Any] | None = None
         try:
             active_lock = _attach_active_recall_lock(
