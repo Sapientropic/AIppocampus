@@ -155,7 +155,7 @@ class ChangedSurfacePreflightTests(unittest.TestCase):
 
         self.assertFalse(report["ok"])
         self.assertEqual(report["changed_file_count"], 0)
-        self.assertEqual(report["changed_files"], [])
+        self.assertNotIn("affected_files", report)
         self.assertEqual(report["first_failure"]["command"], expected_command)
 
     def test_default_preflight_uses_current_interpreter_when_python_alias_is_absent(self) -> None:
@@ -186,7 +186,8 @@ class ChangedSurfacePreflightTests(unittest.TestCase):
         self.assertEqual(seen, [expected])
         self.assertFalse(expected.startswith("python "))
         self.assertFalse(report["detail_command"].startswith("python "))
-        self.assertFalse(report["planner_detail_command"].startswith("python "))
+        self.assertFalse(report["closeout_command"].startswith("python "))
+        self.assertNotIn("planner_detail_command", report)
 
     def test_detail_commands_open_full_operator_views(self) -> None:
         def fake_command(command: str) -> preflight.CommandResult:
@@ -208,12 +209,71 @@ class ChangedSurfacePreflightTests(unittest.TestCase):
                 changed_files=["tools/aippocampus/changed_surface_preflight.py"],
                 base="origin/main",
                 local_executable=True,
+                detail="full",
             )
 
         self.assertIn("--detail full", report["detail_command"])
         self.assertIn("--local-executable", report["detail_command"])
         self.assertIn("--detail full", report["planner_detail_command"])
         self.assertIn("--local-executable", report["planner_detail_command"])
+
+    def test_ordered_plan_commands_preserve_gate_metadata(self) -> None:
+        plan = {
+            "commands": [
+                {
+                    "command": "python tools/aippocampus/run_tests.py --tier pr",
+                    "scope": "pre-push",
+                    "reason": "closeout",
+                    "gate_class": "hard",
+                    "verification_owner": "local_closeout",
+                    "guard_id": "tier-pr",
+                    "cost_budget": "medium",
+                    "ci_owned": False,
+                }
+            ]
+        }
+
+        ordered = preflight.ordered_plan_commands(plan)
+
+        self.assertEqual(ordered[0]["guard_id"], "tier-pr")
+        self.assertEqual(ordered[0]["gate_class"], "hard")
+        self.assertEqual(ordered[0]["verification_owner"], "local_closeout")
+
+    def test_preflight_results_and_skips_include_gate_metadata(self) -> None:
+        def fake_command(command: str) -> preflight.CommandResult:
+            return preflight.CommandResult(
+                command=command,
+                scope="unknown",
+                status="pass",
+                returncode=0,
+                elapsed_ms=1,
+                stdout="",
+                stderr="",
+            )
+
+        with (
+            mock.patch.object(preflight.test_plan, "_debt_report_is_red", return_value=False),
+            mock.patch.object(preflight, "run_shell_command", side_effect=fake_command),
+        ):
+            report = preflight.run_preflight(
+                changed_files=[
+                    "skills/aippocampus/scripts/aippocampus_runtime/recall/associative_path_fallback.py"
+                ],
+                base="origin/main",
+                detail="full",
+            )
+
+        self.assertEqual(report["guard_id"], "changed-surface-preflight")
+        self.assertIn("verification_cost", report)
+        self.assertIn("duplicate_run_budget", report)
+        self.assertTrue(report["commands"])
+        self.assertIn("gate_class", report["commands"][0])
+        self.assertIn("guard_id", report["commands"][0])
+        skipped_pr = next(
+            row for row in report["skipped_by_mode"] if "run_tests.py --tier pr" in row["command"]
+        )
+        self.assertEqual(skipped_pr["guard_id"], "tier-pr")
+        self.assertEqual(skipped_pr["verification_owner"], "local_closeout")
 
     def test_default_preflight_skips_explicit_pr_tier(self) -> None:
         seen: list[str] = []
@@ -239,6 +299,7 @@ class ChangedSurfacePreflightTests(unittest.TestCase):
                     "skills/aippocampus/scripts/aippocampus_runtime/recall/associative_path_fallback.py"
                 ],
                 base="origin/main",
+                detail="full",
             )
 
         self.assertEqual(report["mode"], "preflight")
@@ -248,6 +309,41 @@ class ChangedSurfacePreflightTests(unittest.TestCase):
         )
         self.assertFalse(any("run_tests.py --tier pr" in command for command in seen))
         self.assertIn("--mode closeout", report["closeout_command"])
+
+    def test_duplicate_run_budget_rejects_quick_stacked_before_pr(self) -> None:
+        planned = [
+            {
+                "command": "python tools/aippocampus/run_tests.py --tier quick",
+                "scope": "sanity",
+            },
+            {
+                "command": "python tools/aippocampus/run_tests.py --tier pr",
+                "scope": "pre-push",
+            },
+        ]
+
+        budget = preflight.duplicate_run_budget(planned)
+
+        self.assertEqual(budget["status"], "fail")
+        self.assertEqual(budget["hard_finding_count"], 1)
+        self.assertEqual(budget["findings"][0]["kind"], "quick_before_pr_duplicate")
+
+    def test_duplicate_focused_modules_are_advisory_with_owner_reason(self) -> None:
+        planned = [
+            {
+                "command": "python -m unittest tests.aippocampus.test_agent_background -v",
+                "scope": "focused:broad-runtime",
+            },
+            {
+                "command": "python -m unittest tests.aippocampus.test_agent_background -v",
+                "scope": "focused:recall",
+            },
+        ]
+
+        duplicates = preflight.duplicate_test_modules(planned)
+
+        self.assertEqual(duplicates[0]["severity"], "advisory")
+        self.assertEqual(duplicates[0]["owner_reason"], "multi-owner focused slice")
 
     def test_default_preflight_skips_slow_focused_proof_slices(self) -> None:
         seen: list[str] = []
@@ -280,6 +376,7 @@ class ChangedSurfacePreflightTests(unittest.TestCase):
                     "tests/aippocampus/test_changed_surface_preflight.py",
                 ],
                 base="origin/main",
+                detail="full",
             )
 
         skipped_scopes = {row["scope"] for row in report["skipped_by_mode"]}
@@ -421,6 +518,7 @@ class ChangedSurfacePreflightTests(unittest.TestCase):
                     "skills/aippocampus/scripts/aippocampus_runtime/mcp/agent_recall_projection.py"
                 ],
                 base="origin/main",
+                detail="full",
             )
 
         duplicate_modules = {
@@ -436,6 +534,91 @@ class ChangedSurfacePreflightTests(unittest.TestCase):
             ]["command_count"],
             2,
         )
+
+    def test_compact_preflight_pass_is_action_sized(self) -> None:
+        def fake_command(command: str) -> preflight.CommandResult:
+            return preflight.CommandResult(
+                command=command,
+                scope="unknown",
+                status="pass",
+                returncode=0,
+                elapsed_ms=1,
+                stdout="full diagnostic payload",
+                stderr="",
+            )
+
+        with (
+            mock.patch.object(preflight.test_plan, "_debt_report_is_red", return_value=False),
+            mock.patch.object(preflight, "run_shell_command", side_effect=fake_command),
+        ):
+            report = preflight.run_preflight(
+                changed_files=["tools/aippocampus/changed_surface_preflight.py"],
+                base="origin/main",
+            )
+
+        budget = report["compact_output_budget"]["max_top_level_keys"]
+        self.assertLessEqual(len(report), budget)
+        self.assertTrue(report["ok"])
+        self.assertNotIn("commands", report)
+        self.assertNotIn("skipped_by_mode", report)
+        self.assertIn("--detail full", report["detail_command"])
+
+    def test_compact_preflight_fail_keeps_first_blocker_not_full_internals(self) -> None:
+        def fake_command(command: str) -> preflight.CommandResult:
+            failed = command == preflight.test_plan.CI_RUFF_COMMAND
+            return preflight.CommandResult(
+                command=command,
+                scope="unknown",
+                status="fail" if failed else "pass",
+                returncode=1 if failed else 0,
+                elapsed_ms=1,
+                stdout="long diagnostic payload",
+                stderr="ruff failure" if failed else "",
+            )
+
+        with (
+            mock.patch.object(preflight.test_plan, "_debt_report_is_red", return_value=False),
+            mock.patch.object(preflight, "run_shell_command", side_effect=fake_command),
+        ):
+            report = preflight.run_preflight(
+                changed_files=["tools/aippocampus/test_plan.py"],
+                base="origin/main",
+            )
+
+        self.assertFalse(report["ok"])
+        self.assertEqual(report["first_failure"]["guard_id"], "static-ruff")
+        self.assertEqual(report["first_failure"]["stderr_tail"], "ruff failure")
+        self.assertNotIn("phase_plan", report)
+        self.assertNotIn("duplicate_test_modules", report)
+
+    def test_compact_preflight_warning_summarizes_duplicate_budget(self) -> None:
+        def fake_command(command: str) -> preflight.CommandResult:
+            return preflight.CommandResult(
+                command=command,
+                scope="unknown",
+                status="pass",
+                returncode=0,
+                elapsed_ms=1,
+                stdout="",
+                stderr="",
+            )
+
+        with (
+            mock.patch.object(preflight.test_plan, "_debt_report_is_red", return_value=False),
+            mock.patch.object(preflight, "run_shell_command", side_effect=fake_command),
+        ):
+            report = preflight.run_preflight(
+                changed_files=[
+                    "skills/aippocampus/scripts/aippocampus_runtime/mcp/agent_recall_projection.py"
+                ],
+                base="origin/main",
+            )
+
+        budget = report["duplicate_run_budget"]
+        self.assertEqual(budget["status"], "pass")
+        self.assertGreater(budget["advisory_finding_count"], 0)
+        self.assertIn("first_finding", budget)
+        self.assertNotIn("findings", budget)
 
 
 if __name__ == "__main__":

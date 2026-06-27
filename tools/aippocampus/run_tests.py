@@ -835,6 +835,12 @@ def build_timings_report(
     shard: tuple[int, int] | None,
 ) -> dict[str, object]:
     elapsed_seconds = round(sum(row["duration_seconds"] for row in rows), 6)
+    budget = timing_budget_for_tier(selected_tier, elapsed_seconds=elapsed_seconds)
+    top_slow_rows = sorted(
+        rows,
+        key=lambda row: float(row["duration_seconds"]),
+        reverse=True,
+    )[:3]
     return {
         "kind": "aippocampus_test_module_timings",
         "schema_version": TIMINGS_SCHEMA_VERSION,
@@ -846,7 +852,29 @@ def build_timings_report(
         "test_count": sum(row["test_count"] for row in rows),
         "failed_module_count": sum(1 for row in rows if not row["ok"]),
         "elapsed_seconds": elapsed_seconds,
-        "budget": timing_budget_for_tier(selected_tier, elapsed_seconds=elapsed_seconds),
+        "budget": budget,
+        "compact_summary": {
+            "status": (
+                "advisory_over_target"
+                if isinstance(budget, dict)
+                and budget.get("elapsed_seconds_status") == "over_target"
+                else "pass"
+            ),
+            "elapsed_seconds": elapsed_seconds,
+            "top_slow_modules": [
+                {
+                    "module": row["module"],
+                    "duration_seconds": row["duration_seconds"],
+                    "test_count": row["test_count"],
+                    "ok": row["ok"],
+                }
+                for row in top_slow_rows
+            ],
+            "policy": (
+                "Timing drift is advisory by default; use it to split slow modules "
+                "or investigate structural regressions, not to make broad lanes local rituals."
+            ),
+        },
         "shard": {"index": shard[0], "total": shard[1]} if shard else None,
         "modules": rows,
     }

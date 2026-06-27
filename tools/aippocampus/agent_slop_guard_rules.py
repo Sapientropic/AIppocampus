@@ -129,6 +129,27 @@ RULES: dict[str, Rule] = {
         owner_issue="#2699",
         description="Compact foreground test appears to require debug/operator fields.",
     ),
+    "public_compact_field_unclassified": Rule(
+        rule_id="public_compact_field_unclassified",
+        severity="warning",
+        owner_hint=(
+            "Classify new top-level compact fields in guard_registry.py as compact "
+            "contract, detail diagnostic, trace/operator-only, or internal-only before "
+            "exposing them on CLI/MCP compact foreground surfaces."
+        ),
+        owner_issue="#2782",
+        description="Compact foreground return payload exposes an unclassified top-level field.",
+    ),
+    "public_compact_field_misplaced": Rule(
+        rule_id="public_compact_field_misplaced",
+        severity="warning",
+        owner_hint=(
+            "Move detail/trace/internal fields behind full/detail/operator output or "
+            "translate them into a compact state/action/source boundary."
+        ),
+        owner_issue="#2782",
+        description="Compact foreground return payload exposes a field classified as non-compact.",
+    ),
     "performance_hot_path_nested_loop": Rule(
         rule_id="performance_hot_path_nested_loop",
         severity="warning",
@@ -189,7 +210,12 @@ OWNER_LAYER_CONTRACTS: tuple[dict[str, object], ...] = (
     },
     {
         "contract_id": "followthrough_test_owner",
-        "rule_ids": ("field_only_followthrough_test", "compact_debug_field_test"),
+        "rule_ids": (
+            "field_only_followthrough_test",
+            "compact_debug_field_test",
+            "public_compact_field_unclassified",
+            "public_compact_field_misplaced",
+        ),
         "owner": "tests.aippocampus.product_probe_helpers / frontstage assertions",
         "why": "Recall/MCP/APW tests prove source follow-through and compact UX, not field presence.",
     },

@@ -297,6 +297,52 @@ class RecallTests(unittest.TestCase):
         self.assertEqual(bad_findings[0]["owner_issue"], "#2699")
         self.assertEqual(allowed_findings, [])
 
+    def test_public_compact_field_classification_allows_contract_fields(self) -> None:
+        text = """
+def compact_card():
+    return {
+        "kind": "demo",
+        "status": "pass",
+        "gate_class": "hard",
+        "detail_command": "python tool.py --detail full",
+    }
+"""
+        path = "tools/aippocampus/test_plan_projection.py"
+
+        findings = agent_slop_guard.analyze_text(text, path=path, changed_files={path})
+
+        self.assertEqual(findings, [])
+
+    def test_public_compact_field_classification_blocks_detail_fields(self) -> None:
+        text = """
+def compact_card():
+    return {
+        "kind": "demo",
+        "status": "pass",
+        "runtime_provenance": {"selector": "debug"},
+    }
+"""
+        path = "tools/aippocampus/test_plan_projection.py"
+
+        findings = agent_slop_guard.analyze_text(text, path=path, changed_files={path})
+
+        self.assertEqual([item["rule_id"] for item in findings], ["public_compact_field_misplaced"])
+        self.assertEqual(findings[0]["owner_issue"], "#2782")
+
+    def test_public_compact_field_classification_ignores_internal_helpers(self) -> None:
+        text = """
+def internal_helper():
+    return {
+        "runtime_provenance": {"selector": "debug"},
+        "unclassified_internal": True,
+    }
+"""
+        path = "tools/aippocampus/test_plan_projection.py"
+
+        findings = agent_slop_guard.analyze_text(text, path=path, changed_files={path})
+
+        self.assertEqual(findings, [])
+
     def test_performance_rules_catch_unbounded_nested_loop_materialization_and_db_work(self) -> None:
         bad = """
 def mine(candidates, raw_stats, con):

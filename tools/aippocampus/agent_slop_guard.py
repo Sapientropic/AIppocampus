@@ -17,7 +17,9 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+from agent_slop_compact_fields import compact_field_violations
 from agent_slop_guard_rules import OWNER_LAYER_CONTRACTS, RULES
+from agent_slop_projection import compact_report
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_BASELINE = REPO_ROOT / "tools" / "aippocampus" / "agent_slop_guard_baseline.json"
@@ -955,6 +957,26 @@ def _field_only_test_findings(
     return findings
 
 
+def _public_compact_field_findings(
+    tree: ast.AST,
+    *,
+    path: str,
+    baseline: Mapping[str, str],
+    changed_files: set[str],
+) -> list[dict[str, Any]]:
+    return [
+        _finding(
+            rule_id=str(item["rule_id"]),
+            path=path,
+            line=int(item["line"]),
+            message=str(item["message"]),
+            baseline=baseline,
+            changed_files=changed_files,
+        )
+        for item in compact_field_violations(tree, path=path)
+    ]
+
+
 def analyze_text(
     text: str,
     *,
@@ -1071,6 +1093,14 @@ def analyze_text(
     )
     findings.extend(
         _field_only_test_findings(
+            tree,
+            path=path,
+            baseline=baseline_map,
+            changed_files=changed,
+        )
+    )
+    findings.extend(
+        _public_compact_field_findings(
             tree,
             path=path,
             baseline=baseline_map,
@@ -1255,41 +1285,6 @@ def apply_hard_gate_semantics(report: dict[str, Any], *, fail_on_violations: boo
         report["gate_status"] = "failed"
         report["advisory"] = False
         report["failure_reason"] = "changed_surface_unbaselined_findings"
-
-
-def compact_report(report: Mapping[str, Any], *, detail_command: str) -> dict[str, Any]:
-    findings = list(report.get("findings") or [])
-    blockers = [
-        {
-            "rule_id": item.get("rule_id"),
-            "path": item.get("path"),
-            "line": item.get("line"),
-            "owner_issue": item.get("owner_issue"),
-            "message": item.get("message") or item.get("description"),
-        }
-        for item in findings
-        if item.get("baseline_status") != "baselined"
-        and item.get("changed_surface") is True
-    ]
-    return {
-        "kind": report.get("kind"),
-        "schema_version": report.get("schema_version"),
-        "ok": report.get("ok"),
-        "status": "pass" if report.get("ok") else "fail",
-        "gate_status": report.get("gate_status"),
-        "advisory": report.get("advisory"),
-        "mode": report.get("mode"),
-        "scanned_file_count": report.get("scanned_file_count"),
-        "finding_count": report.get("finding_count"),
-        "changed_surface_unbaselined_count": report.get("changed_surface_unbaselined_count"),
-        "fixture_failure_count": report.get("fixture_failure_count"),
-        "blockers": blockers,
-        "detail_command": detail_command,
-        "policy": (
-            "Compact output omits rule catalogs and owner-layer contracts. "
-            "Use the detail command for full diagnostics."
-        ),
-    }
 
 
 def _paths_from_args(args: argparse.Namespace) -> tuple[list[Path], set[str], str]:

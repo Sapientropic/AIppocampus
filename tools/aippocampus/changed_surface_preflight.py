@@ -11,6 +11,12 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 import test_plan
+from guard_registry import (
+    COMMAND_METADATA_KEYS,
+    compact_output_budget_for_guard,
+    decorate_command,
+    phase_for_scope,
+)
 from test_plan_commands import py_script, shell_arg
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -61,8 +67,10 @@ class CommandResult:
     elapsed_ms: int
     stdout: str
     stderr: str
+    metadata: Mapping[str, Any] | None = None
 
     def compact(self) -> dict[str, Any]:
+        metadata = dict(self.metadata or {})
         row: dict[str, Any] = {
             "command": self.command,
             "scope": self.scope,
@@ -70,6 +78,9 @@ class CommandResult:
             "returncode": self.returncode,
             "elapsed_ms": self.elapsed_ms,
         }
+        for key in COMMAND_METADATA_KEYS:
+            if key in metadata:
+                row[key] = metadata[key]
         if self.status != "pass":
             row["stdout_tail"] = _tail(self.stdout)
             row["stderr_tail"] = _tail(self.stderr)
@@ -96,13 +107,9 @@ def _scope_rank(scope: str) -> int:
     return SCOPE_PRIORITY.get(base, 70)
 
 
-def ordered_plan_commands(plan: Mapping[str, Any]) -> list[dict[str, str]]:
+def ordered_plan_commands(plan: Mapping[str, Any]) -> list[dict[str, Any]]:
     commands = [
-        {
-            "command": str(item.get("command") or ""),
-            "scope": str(item.get("scope") or "unknown"),
-            "reason": str(item.get("reason") or ""),
-        }
+        decorate_command(item)
         for item in list(plan.get("commands") or [])
         if item.get("command")
     ]
@@ -120,25 +127,10 @@ def _scope_base(scope: str) -> str:
 
 
 def _phase_for_scope(scope: str) -> str:
-    base = _scope_base(scope)
-    if base in {"worktree", "static"}:
-        return "fail_fast"
-    if base in {
-        "architecture-debt",
-        "changed-surface-debt",
-        "changed-surface-advisory",
-    }:
-        return "red_light"
-    if base in {"pre-push", "surface"}:
-        return "closeout"
-    if base == "diagnostic":
-        return "diagnostic"
-    if base == "sanity":
-        return "sanity"
-    return "focused"
+    return phase_for_scope(scope)
 
 
-def _command_runs_in_mode(item: Mapping[str, str], *, mode: str) -> bool:
+def _command_runs_in_mode(item: Mapping[str, Any], *, mode: str) -> bool:
     if mode in FULL_MODES:
         return True
     scope = str(item.get("scope") or "")
@@ -153,7 +145,7 @@ def _command_runs_in_mode(item: Mapping[str, str], *, mode: str) -> bool:
 
 
 def _phase_plan(
-    planned: Sequence[Mapping[str, str]],
+    planned: Sequence[Mapping[str, Any]],
     *,
     mode: str,
 ) -> list[dict[str, Any]]:
@@ -167,6 +159,7 @@ def _phase_plan(
                 "command_count": 0,
                 "default_run_count": 0,
                 "closeout_only_count": 0,
+                "gate_classes": [],
                 "scopes": [],
             },
         )
@@ -174,6 +167,9 @@ def _phase_plan(
         scope = str(item.get("scope") or "unknown")
         if scope not in bucket["scopes"]:
             bucket["scopes"].append(scope)
+        gate_class = str(item.get("gate_class") or "hard")
+        if gate_class not in bucket["gate_classes"]:
+            bucket["gate_classes"].append(gate_class)
         if _command_runs_in_mode(item, mode=DEFAULT_MODE):
             bucket["default_run_count"] += 1
         else:
@@ -203,7 +199,7 @@ def _unittest_modules(command: str) -> list[str]:
     return [token for token in tokens if token.startswith("tests.")]
 
 
-def duplicate_test_modules(planned: Sequence[Mapping[str, str]]) -> list[dict[str, Any]]:
+def duplicate_test_modules(planned: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
     owners: dict[str, list[dict[str, str]]] = {}
     for item in planned:
         command = str(item.get("command") or "")
@@ -212,6 +208,8 @@ def duplicate_test_modules(planned: Sequence[Mapping[str, str]]) -> list[dict[st
                 {
                     "scope": str(item.get("scope") or "unknown"),
                     "command": command,
+                    "guard_id": str(item.get("guard_id") or ""),
+                    "gate_class": str(item.get("gate_class") or ""),
                 }
             )
     duplicates = []
@@ -223,6 +221,8 @@ def duplicate_test_modules(planned: Sequence[Mapping[str, str]]) -> list[dict[st
                 "module": module,
                 "command_count": len(rows),
                 "scopes": sorted({row["scope"] for row in rows}),
+                "severity": "advisory",
+                "owner_reason": "multi-owner focused slice",
                 "reason": (
                     "module appears in multiple focused slices because it spans "
                     "more than one changed owner surface; run once per closeout "
@@ -231,6 +231,63 @@ def duplicate_test_modules(planned: Sequence[Mapping[str, str]]) -> list[dict[st
             }
         )
     return duplicates
+
+
+def duplicate_run_findings(planned: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    findings: list[dict[str, Any]] = []
+    by_command: dict[str, list[Mapping[str, Any]]] = {}
+    for item in planned:
+        command = str(item.get("command") or "")
+        if not command:
+            continue
+        by_command.setdefault(command, []).append(item)
+    for command, rows in sorted(by_command.items()):
+        if len(rows) > 1:
+            findings.append(
+                {
+                    "kind": "exact_duplicate_command",
+                    "severity": "hard",
+                    "command": command,
+                    "command_count": len(rows),
+                    "reason": "The same command is scheduled more than once without an owner reason.",
+                }
+            )
+    commands_text = "\n".join(str(item.get("command") or "") for item in planned)
+    if "--tier quick" in commands_text and "--tier pr" in commands_text:
+        findings.append(
+            {
+                "kind": "quick_before_pr_duplicate",
+                "severity": "hard",
+                "reason": "`pr` includes `quick`; do not require quick immediately before pr.",
+            }
+        )
+    for duplicate in duplicate_test_modules(planned):
+        findings.append(
+            {
+                "kind": "duplicate_focused_module",
+                "severity": duplicate["severity"],
+                "module": duplicate["module"],
+                "command_count": duplicate["command_count"],
+                "owner_reason": duplicate["owner_reason"],
+                "reason": duplicate["reason"],
+            }
+        )
+    return findings
+
+
+def duplicate_run_budget(planned: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    findings = duplicate_run_findings(planned)
+    hard_findings = [item for item in findings if item.get("severity") == "hard"]
+    return {
+        "status": "fail" if hard_findings else "pass",
+        "hard_finding_count": len(hard_findings),
+        "advisory_finding_count": len(findings) - len(hard_findings),
+        "findings": findings[:3],
+        "policy": (
+            "Hard only for exact duplicate commands or quick stacked before pr; "
+            "multi-owner focused modules are advisory when an owner reason is present."
+        ),
+    }
 
 
 def run_shell_command(command: str) -> CommandResult:
@@ -254,7 +311,135 @@ def run_shell_command(command: str) -> CommandResult:
         elapsed_ms=elapsed_ms,
         stdout=proc.stdout or "",
         stderr=proc.stderr or "",
+        metadata=None,
     )
+
+
+def _metadata_from_plan_item(item: Mapping[str, Any]) -> dict[str, Any]:
+    return {key: item[key] for key in COMMAND_METADATA_KEYS if key in item}
+
+
+def _compact_skipped_command(item: Mapping[str, Any]) -> dict[str, Any]:
+    row = {
+        "command": item["command"],
+        "scope": item["scope"],
+    }
+    for key in ("gate_class", "verification_owner", "guard_id", "cost_budget", "ci_owned"):
+        if key in item:
+            row[key] = item[key]
+    return row
+
+
+def _compact_duplicate_run_budget(report: Mapping[str, Any]) -> dict[str, Any]:
+    row = {
+        "status": report.get("status"),
+        "hard_finding_count": report.get("hard_finding_count", 0),
+        "advisory_finding_count": report.get("advisory_finding_count", 0),
+    }
+    findings = report.get("findings")
+    if isinstance(findings, list) and findings:
+        first = findings[0]
+        if isinstance(first, Mapping):
+            row["first_finding"] = {
+                key: first[key]
+                for key in (
+                    "kind",
+                    "severity",
+                    "module",
+                    "command_count",
+                    "owner_reason",
+                    "reason",
+                )
+                if key in first
+            }
+    return row
+
+
+def _verification_cost(
+    *,
+    mode: str,
+    planned: Sequence[Mapping[str, Any]],
+    results: Sequence[CommandResult],
+    skipped_by_mode: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    elapsed_ms = sum(result.elapsed_ms for result in results)
+    target_ms = 120_000 if mode == DEFAULT_MODE else 600_000
+    slow_threshold_ms = 30_000 if mode == DEFAULT_MODE else 90_000
+    slow = [
+        {
+            "command": result.command,
+            "scope": result.scope,
+            "elapsed_ms": result.elapsed_ms,
+            "guard_id": (result.metadata or {}).get("guard_id"),
+        }
+        for result in sorted(results, key=lambda item: item.elapsed_ms, reverse=True)
+        if result.elapsed_ms >= slow_threshold_ms
+    ][:3]
+    planned_counts: dict[str, int] = {}
+    for item in planned:
+        budget = str(item.get("cost_budget") or "unknown")
+        planned_counts[budget] = planned_counts.get(budget, 0) + 1
+    return {
+        "status": "over_target" if elapsed_ms > target_ms else "within_target",
+        "mode": mode,
+        "elapsed_ms": elapsed_ms,
+        "target_ms": target_ms,
+        "slow_command_count": len(slow),
+        "top_slow_commands": slow,
+        "planned_cost_budgets": planned_counts,
+        "ci_owned_skipped_count": sum(1 for item in skipped_by_mode if item.get("ci_owned")),
+        "policy": (
+            "Default preflight is a fast early red-light gate; closeout/pre-push may "
+            "run slower focused proof. CI-owned broad/benchmark/platform lanes are "
+            "not default local rituals."
+        ),
+    }
+
+
+def _compact_verification_cost(report: Mapping[str, Any]) -> dict[str, Any]:
+    row = {
+        "status": report.get("status"),
+        "elapsed_ms": report.get("elapsed_ms"),
+        "target_ms": report.get("target_ms"),
+        "slow_command_count": report.get("slow_command_count", 0),
+        "ci_owned_skipped_count": report.get("ci_owned_skipped_count", 0),
+    }
+    slow = report.get("top_slow_commands")
+    if isinstance(slow, list) and slow:
+        row["first_slow_command"] = slow[0]
+    return row
+
+
+def _compact_preflight_report(report: Mapping[str, Any]) -> dict[str, Any]:
+    compact = {
+        "kind": report.get("kind"),
+        "schema_version": report.get("schema_version"),
+        "ok": report.get("ok"),
+        "status": report.get("status"),
+        "gate_class": report.get("gate_class"),
+        "verification_owner": report.get("verification_owner"),
+        "guard_id": report.get("guard_id"),
+        "owner_doc": report.get("owner_doc"),
+        "mode": report.get("mode"),
+        "changed_file_count": report.get("changed_file_count"),
+        "affected_files": list(report.get("changed_files") or [])[:3],
+        "planned_command_count": report.get("planned_command_count"),
+        "mode_runnable_command_count": report.get("mode_runnable_command_count"),
+        "ran_command_count": report.get("ran_command_count"),
+        "skipped_command_count": report.get("skipped_command_count"),
+        "skipped_by_mode_count": report.get("skipped_by_mode_count"),
+        "first_failure": report.get("first_failure"),
+        "duplicate_run_budget": _compact_duplicate_run_budget(
+            report.get("duplicate_run_budget") or {}
+        ),
+        "verification_cost": _compact_verification_cost(
+            report.get("verification_cost") or {}
+        ),
+        "compact_output_budget": report.get("compact_output_budget"),
+        "detail_command": report.get("detail_command"),
+        "closeout_command": report.get("closeout_command"),
+    }
+    return {key: value for key, value in compact.items() if value not in (None, [])}
 
 
 def run_preflight(
@@ -293,6 +478,7 @@ def run_preflight(
             elapsed_ms=result.elapsed_ms,
             stdout=result.stdout,
             stderr=result.stderr,
+            metadata=_metadata_from_plan_item(item),
         )
         results.append(result)
         if result.returncode != 0:
@@ -302,11 +488,16 @@ def run_preflight(
     skipped_after_failure = runnable[len(results) :]
     ok = first_failure is None
     row = CommandResult.full if detail == "full" else CommandResult.compact
-    return {
+    guard_id = "changed-surface-preflight"
+    report = {
         "kind": "aippocampus_changed_surface_preflight",
         "schema_version": SCHEMA_VERSION,
         "ok": ok,
         "status": "pass" if ok else "fail",
+        "gate_class": "hard",
+        "verification_owner": "local_fail_fast" if selected_mode == DEFAULT_MODE else "local_closeout",
+        "guard_id": guard_id,
+        "owner_doc": "docs/architecture/ops/guard-lifecycle-registry.md",
         "mode": selected_mode,
         "changed_file_count": len(normalized_changed),
         "changed_files": list(normalized_changed),
@@ -318,15 +509,17 @@ def run_preflight(
         "skipped_after_failure_count": len(skipped_after_failure),
         "first_failure": row(first_failure) if first_failure else None,
         "commands": [row(item) for item in results],
-        "skipped_commands": [
-            {"command": item["command"], "scope": item["scope"]}
-            for item in [*skipped_after_failure, *skipped_by_mode][:5]
-        ],
+        "skipped_commands": [_compact_skipped_command(item) for item in [*skipped_after_failure, *skipped_by_mode][:5]],
         "skipped_by_mode": [
             {
                 "command": item["command"],
                 "scope": item["scope"],
-                "phase": _phase_for_scope(item["scope"]),
+                "phase": _phase_for_scope(str(item["scope"])),
+                "gate_class": item.get("gate_class"),
+                "verification_owner": item.get("verification_owner"),
+                "guard_id": item.get("guard_id"),
+                "cost_budget": item.get("cost_budget"),
+                "ci_owned": item.get("ci_owned"),
                 "reason": (
                     "closeout/pre-push proof is explicit; default preflight stays "
                     "fail-fast, red-light, and light focused only."
@@ -336,6 +529,14 @@ def run_preflight(
         ],
         "phase_plan": _phase_plan(planned, mode=selected_mode),
         "duplicate_test_modules": duplicate_test_modules(planned),
+        "duplicate_run_budget": duplicate_run_budget(planned),
+        "verification_cost": _verification_cost(
+            mode=selected_mode,
+            planned=planned,
+            results=results,
+            skipped_by_mode=skipped_by_mode,
+        ),
+        "compact_output_budget": compact_output_budget_for_guard(guard_id),
         "detail_command": _detail_command(
             normalized_changed,
             base=base,
@@ -355,6 +556,7 @@ def run_preflight(
         ),
         "plan_categories": plan.get("categories") or [],
     }
+    return _compact_preflight_report(report) if detail == "compact" else report
 
 
 def _changed_file_args(changed_files: Sequence[str]) -> list[str]:
@@ -465,6 +667,7 @@ def _print_text(report: Mapping[str, Any]) -> None:
     failure = report.get("first_failure")
     if isinstance(failure, Mapping):
         print("First blocker:")
+        print(f"  gate: {failure.get('gate_class')} ({failure.get('guard_id')})")
         print(f"  scope: {failure.get('scope')}")
         print(f"  command: {failure.get('command')}")
         if failure.get("stderr_tail"):
@@ -478,6 +681,13 @@ def _print_text(report: Mapping[str, Any]) -> None:
     if report.get("skipped_by_mode_count"):
         print(f"Closeout-only skipped: {report.get('skipped_by_mode_count')}")
         print(f"Closeout: {report.get('closeout_command')}")
+    cost = report.get("verification_cost")
+    if isinstance(cost, Mapping):
+        print(
+            "Verification cost: "
+            f"{cost.get('status')} {cost.get('elapsed_ms')}ms/"
+            f"{cost.get('target_ms')}ms"
+        )
     print(f"Detail: {report.get('detail_command')}")
 
 
