@@ -64,6 +64,7 @@ navigation anchors, even though their detailed inventories live in local indexes
 | Benchmark map | [`evidence/benchmark-evidence-map.md`](evidence/benchmark-evidence-map.md) |
 | Proof-slice maturity | [`evidence/readiness/proof-slice-maturity.md`](evidence/readiness/proof-slice-maturity.md) |
 | Source-backed kernel contract | [`architecture/architecture-overview.md#source-backed-kernel-contract`](architecture/architecture-overview.md#source-backed-kernel-contract) |
+| Foreground product discipline | [`architecture/recall/source-backed-product-discipline.md`](architecture/recall/source-backed-product-discipline.md) |
 | Product profile boundary | [`architecture/host/product-profiles.md`](architecture/host/product-profiles.md) |
 | Legacy alias inventory | [`architecture/ops/legacy-alias-inventory.md`](architecture/ops/legacy-alias-inventory.md) |
 | Path identity | [`architecture/source/path-identity.md`](architecture/source/path-identity.md) |

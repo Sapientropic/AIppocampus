@@ -696,26 +696,6 @@ def _handle_digest(value: Any) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:12]
 
 
-def _recall_context_foreground_action(route: dict[str, Any], index: int) -> dict[str, Any]:
-    reopen_obj = route.get("source_reopen_path")
-    reopen = cast(dict[str, Any], reopen_obj) if isinstance(reopen_obj, dict) else {}
-    arguments_obj = reopen.get("arguments")
-    arguments = cast(dict[str, Any], arguments_obj) if isinstance(arguments_obj, dict) else {}
-    if arguments:
-        return {
-            "action_id": "recall_deepen_selected_route",
-            "tool_name": "recall_deepen",
-            "arguments": dict(arguments),
-            "claim_boundary": "source_reopen_required_before_strong_claim",
-        }
-    return {
-        "action_id": "recall_deepen_requires_full_detail",
-        "tool_name": "recall_deepen",
-        "arguments": {"request_index": index, "detail": "full"},
-        "claim_boundary": "source_reopen_required_before_strong_claim",
-    }
-
-
 def _agent_recall_redirect_action() -> dict[str, Any]:
     return {
         "id": "use_agent_recall_for_foreground_continuity",
@@ -747,19 +727,12 @@ def compact_recall_context_payload(payload: dict[str, Any]) -> dict[str, Any]:
                         str(route.get("route_label") or route.get("title") or "memory route"),
                         120,
                     ),
-                    "summary": core.compact_text(str(route.get("summary") or ""), 180),
                     "evidence_level": route.get("evidence_level"),
-                    "claim_boundary": "source_reopen_required_before_claim",
-                    "action": _recall_context_foreground_action(route, index),
+                    "claim_boundary": "legacy_detail_only_rerun_full_or_agent_recall",
                 }
             )
         )
     redirect_action = _agent_recall_redirect_action()
-    route_actions = [
-        route["action"]
-        for route in compact_routes
-        if isinstance(route, dict) and isinstance(route.get("action"), dict)
-    ]
     result = {
         "detail": "compact",
         "kind": payload.get("kind"),
@@ -777,13 +750,13 @@ def compact_recall_context_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "legacy_tool_state": "legacy_detail_only",
         "routes": compact_routes,
         "claim_boundary": _compact_claim_boundary(
-            can_use_for=["legacy_route_receipts", "next_action_choice"],
+            can_use_for=["legacy_route_receipts"],
             must_reopen_for=["source_backed_claims", "exact_wording", "sensitive_or_stale_facts"],
             detail_command='recall_context with {"detail":"full"}',
         ),
         **canonical_foreground_action_fields(
             redirect_action,
-            safe_next_actions=route_actions,
+            safe_next_actions=[],
         ),
         "warnings": payload.get("warnings"),
     }

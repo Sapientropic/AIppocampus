@@ -85,13 +85,18 @@ SOURCE_REF_HELPER_NAMES = frozenset(
 
 FIELD_ONLY_ASSERT_KEYS = frozenset(
     {
-        "recall_selector",
-        "recall_selector_available",
-        "recall_selector_id",
-        "route_count",
-        "selector",
+        "actionability",
+        "evidence_level",
+        "foreground_action",
+        "foreground_action_card",
+        "foreground_action_contract",
+        "low_confidence_reopenable",
+        "opened_anchor_hits",
+        "reopenable",
         "source_backed",
-        "source_ref_count",
+        "source_anchor_gate",
+        "source_open_posture",
+        "target_source_matched",
     }
 )
 
@@ -110,15 +115,16 @@ COMPACT_DEBUG_KEYS = frozenset(
 
 FOLLOW_THROUGH_TOKENS = frozenset(
     {
-        "agent_deepen",
-        "agent_open",
+        "agent deepen",
+        "agent deepen --request",
         "assert_cli_recall_deepens_to_source",
         "assert_deepen_opened_expected_source",
         "assert_mcp_recall_deepens_to_source",
-        "opened_anchor_hits",
-        "source_anchor_gate",
+        "mcp_protocol_conformance",
+        "opened source anchor hits",
+        "product_probe_helpers",
+        "source_open_posture=target_evidence_opened",
         "source_window",
-        "target_source_matched",
         "window_terms",
     }
 )

@@ -9,7 +9,7 @@ from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_v
 
 KIND = "aippocampus_learning_frontdoor"
 SCHEMA_VERSION = 1
-LEARNING_OPERATOR_DETAIL_COMMAND = "aippocampus learning guidance --operator-json"
+LEARNING_OPERATOR_DETAIL_COMMAND = "aippocampus learning guidance --operator-json --json"
 
 
 def public_payload(payload: Any) -> Any:

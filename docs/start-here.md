@@ -79,13 +79,17 @@ Goal: change runtime, search, hook, sync, registry, or storage behavior.
 
 1. Start with [Architecture Index](architecture/README.md) to find the current
    contract or implementation map.
-2. If the work crosses Macro/Yi, Dream, local/global compatibility,
+2. If the work changes recall, orient, MCP compact, hook foreground output, or
+   foreground actions, read
+   [Source-Backed Product Discipline](architecture/recall/source-backed-product-discipline.md)
+   before adding fields, warnings, or diagnostics to the default surface.
+3. If the work crosses Macro/Yi, Dream, local/global compatibility,
    familiarity cards, avatar illumination, or active recall, use
    [Source-Shape Runtime Spine](architecture/source-shape-runtime-spine.md)
    before reading individual design memos.
-3. Use [Runtime Script Map](architecture/runtime-script-map.md) before changing
+4. Use [Runtime Script Map](architecture/runtime-script-map.md) before changing
    high-risk runtime entrypoints.
-4. Use the relevant skill reference under `skills/aippocampus/references/`
+5. Use the relevant skill reference under `skills/aippocampus/references/`
    when the behavior is part of the installable agent-facing runtime.
 
 Planning docs are handoff context, not the final contract. Evidence docs show

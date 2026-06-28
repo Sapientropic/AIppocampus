@@ -15,7 +15,6 @@ from aippocampus_runtime.mcp.recall_navigation import (
 )
 from aippocampus_runtime.navigation import attention_route_projection
 from aippocampus_runtime.recall import (
-    agent_deepen_requests,
     agent_semantic_diagnostics,
     architecture_navigation_affordance,
     attention_router_policy,
@@ -29,9 +28,6 @@ from aippocampus_runtime.recall import (
 from aippocampus_runtime.recall import associative_path_fallback as apw_fallback
 from aippocampus_runtime.recall import (
     repo_familiarity_fallback as repo_familiarity_recovery,
-)
-from aippocampus_runtime.recall import (
-    source_anchor_gate as recall_source_anchor_gate,
 )
 from aippocampus_runtime.recall.agent_continuity_cli_support import (
     handle_boundary_fields,
@@ -57,6 +53,7 @@ from aippocampus_runtime.recall.feedback import events as feedback_events
 from aippocampus_runtime.recall.source_gate_context import (
     attach_source_gate_context_to_deepen_requests,
 )
+from aippocampus_runtime.recall.source_open import source_anchor_gate_routing
 from aippocampus_runtime.source.discussion_atlas_pointer import discussion_atlas_pointer_for_query
 from aippocampus_runtime.source.io_kernel import load_json_dict
 
@@ -329,11 +326,12 @@ def _build_recall_packets(
 ) -> RecallPacketStage:
     router_policy = attention_router_policy.resolve_policy(attention_router)
     feedback_calibration = feedback_events.load_feedback_calibration_report(feedback_path)
+    baseline_routes = [dict(route) for route in routes.routes]
     ranked_routes, attention_navigation = (
         attention_route_projection.maybe_rerank_routes_with_attention_router(
             enabled=bool(router_policy["enabled"]),
             query=inputs.query,
-            routes=routes.routes,
+            routes=baseline_routes,
             max_routes=inputs.effective_limit,
             project=inputs.project,
             feedback_calibration=feedback_calibration,
@@ -345,22 +343,32 @@ def _build_recall_packets(
         macro_navigation=routes.macro_navigation,
         attention_navigation=attention_navigation,
     )
-    memory_packets = [_memory_packet_for_route(route) for route in ranked_routes]
-    deepen_requests = [
-        agent_deepen_requests.deepen_request_for_route(route, memory_packet, request_index=index)
-        for index, (route, memory_packet) in enumerate(
-            zip(ranked_routes, memory_packets, strict=True),
-            start=1,
+    memory_packets, deepen_requests, source_anchor_gate = (
+        source_anchor_gate_routing.apply_source_anchor_gate_for_routes(
+            query=inputs.query,
+            routes=ranked_routes,
+            clean_source_dir=inputs.source_dir,
+            registry_dir=inputs.registry_path,
+            memory_packet_for_route=_memory_packet_for_route,
         )
-        if route.get("handle") and memory_packet.get("output_mode") == "reopenable_route"
-    ]
-    source_anchor_gate = recall_source_anchor_gate.apply_top_route_source_anchor_gate(
+    )
+    (
+        ranked_routes,
+        memory_packets,
+        deepen_requests,
+        source_anchor_gate,
+        attention_navigation,
+    ) = source_anchor_gate_routing.rollback_attention_router_blocked_promotion(
         query=inputs.query,
-        routes=ranked_routes,
-        deepen_requests=deepen_requests,
+        baseline_routes=baseline_routes,
+        ranked_routes=ranked_routes,
+        attention_navigation=attention_navigation,
         memory_packets=memory_packets,
+        deepen_requests=deepen_requests,
+        source_anchor_gate=source_anchor_gate,
         clean_source_dir=inputs.source_dir,
         registry_dir=inputs.registry_path,
+        memory_packet_for_route=_memory_packet_for_route,
     )
     attach_source_gate_context_to_deepen_requests(
         source_anchor_gate=source_anchor_gate,
@@ -462,9 +470,17 @@ def _select_recall_action(
     )
     if repo_action_card:
         action_card = repo_action_card
+    canonical_action = action_card.get("canonical_action") if isinstance(action_card, dict) else {}
+    if not isinstance(canonical_action, Mapping):
+        canonical_action = {}
+    canonical_tool = str(canonical_action.get("tool_name") or "")
+    canonical_action_id = str(canonical_action.get("action_id") or "")
+    canonical_command = str(canonical_action.get("cli_command") or "") or None
     suggested_next_command = (
         repo_suggested_next_command
         if repo_suggested_next_command
+        else canonical_command
+        if canonical_tool == "search_memory" or canonical_action_id == "register_source_before_recall"
         else packets.deepen_requests[0].get("copy_paste_command")
         if packets.deepen_requests
         else None
@@ -472,6 +488,10 @@ def _select_recall_action(
     suggested_next = (
         "open_repo_familiarity_source"
         if repo_action_card
+        else "search_memory"
+        if canonical_tool == "search_memory"
+        else "onboard_source"
+        if canonical_action_id == "register_source_before_recall"
         else "agent deepen"
         if packets.deepen_requests
         else "search_memory"

@@ -219,6 +219,14 @@ def apw_should_replace_foreground_action(action: Mapping[str, Any]) -> bool:
     route_posture = str(action.get("route_choice_posture") or "")
     if route_posture == "labels_low_specificity":
         return True
+    # `inspect_low_confidence_route` is already an admission that the ordinary
+    # route needs source-anchor recovery before it can guide the foreground
+    # agent. If APW has a gated current-source candidate, prefer that direct
+    # reopen path instead of asking the agent to inspect the known-weak sibling
+    # first. A target-matched ordinary route is still protected by
+    # `apw_allows_primary_for_current_foreground`.
+    if action_id in {"inspect_low_confidence_route", "deepen_top_route_low_confidence"}:
+        return True
     if action_id.startswith("recover_"):
         return True
     return action_id in {

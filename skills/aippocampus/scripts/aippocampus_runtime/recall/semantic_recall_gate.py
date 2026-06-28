@@ -41,6 +41,12 @@ from aippocampus_runtime.model.routing import (
     route_service_name,
 )
 from aippocampus_runtime.recall.query_policy import split_query_terms
+from aippocampus_runtime.recall.semantic.confidence_policy import (
+    EVIDENCE_DOWNGRADE_CONFIDENCE,
+    MEMORY_CUE_CONFIDENCE,
+    SOURCE_REOPEN_CONFIDENCE,
+    meets_source_reopen_confidence,
+)
 from aippocampus_runtime.recall.semantic_cue_cache import (
     default_semantic_cues_path,
     semantic_cue_triggers,
@@ -557,7 +563,8 @@ def all_trigger_rows(
         for term, row in scored:
             if not isinstance(row, dict):
                 continue
-            if row.get("status") == "verified" or float(row.get("confidence") or 0.0) >= 0.82:
+            confidence = float(row.get("confidence") or 0.0)
+            if row.get("status") == "verified" or meets_source_reopen_confidence(confidence):
                 trigger = trigger_from_association(str(term), row)
                 if trigger.get("source_refs") and _trigger_alias_allowed(str(term)):
                     rows.append(trigger)
@@ -694,13 +701,13 @@ def merge_workers(workers: list[dict[str, Any]], errors: list[str]) -> dict[str,
             "capped semantic evidence by high anti-personalization risk from "
             f"{risk_worker or 'worker'}"
         )
-    if risk == "high" and decision == "scent" and confidence < 0.82:
+    if risk == "high" and decision == "scent" and confidence < SOURCE_REOPEN_CONFIDENCE:
         decision = "background_only"
         reasons.append("downgraded by high anti-personalization risk")
-    if decision == "evidence" and confidence < 0.6:
+    if decision == "evidence" and confidence < EVIDENCE_DOWNGRADE_CONFIDENCE:
         decision = "scent"
         reasons.append("downgraded low-confidence evidence request")
-    if decision == "scent" and confidence < 0.35:
+    if decision == "scent" and confidence < MEMORY_CUE_CONFIDENCE:
         decision = "background_only"
         reasons.append("downgraded low-confidence scent")
     return {

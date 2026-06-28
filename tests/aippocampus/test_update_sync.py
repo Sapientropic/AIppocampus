@@ -1506,12 +1506,17 @@ class UpdateSyncTests(unittest.TestCase):
                 payload = json.loads(stdout.getvalue())
                 self.assertEqual(code, 0, payload)
                 self.assertIn("skill", payload["summary"]["dirty_worktree_guards"])
-                self.assertEqual(
-                    payload["operator_detail_command"],
-                    "aippocampus update status --operator-json",
-                )
+                self.assertNotIn("operator_detail_command", payload)
                 self.assertNotIn("foreground_status_cards", payload)
                 self.assertNotIn("next_actions", payload)
+                self.assertTrue(payload["operator_detail_available"])
+                self.assertFalse(
+                    any(
+                        action.get("surface") == "operator_detail"
+                        for action in payload.get("safe_next_actions", [])
+                    ),
+                    payload.get("safe_next_actions"),
+                )
 
     def test_apply_allows_clean_git_source_worktree(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, provider_env():

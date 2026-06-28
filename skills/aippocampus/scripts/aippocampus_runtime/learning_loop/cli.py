@@ -8,7 +8,7 @@ import os
 import sys
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 from aippocampus_runtime.contracts import (
     canonical_foreground_action_fields,
@@ -199,7 +199,12 @@ def _compact_semantic_lifecycle(
     return compact, operator_detail
 
 
-def _current_guidance_rows(lifecycle: Mapping[str, Any], *, limit: int = 3) -> list[dict[str, Any]]:
+def _current_guidance_rows(
+    lifecycle: Mapping[str, Any],
+    *,
+    limit: int = 3,
+    include_actions: bool = False,
+) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     candidates = lifecycle.get("candidate_actions")
     if not isinstance(candidates, list):
@@ -217,10 +222,10 @@ def _current_guidance_rows(lifecycle: Mapping[str, Any], *, limit: int = 3) -> l
             "outcome_status": raw.get("outcome_status"),
             "claim_boundary": raw.get("claim_boundary") or "learning_guidance_not_source_truth",
         }
-        if isinstance(review_action, Mapping):
+        if include_actions and isinstance(review_action, Mapping):
             row["review_action"] = dict(review_action)
         materialization_action = raw.get("materialization_action")
-        if isinstance(materialization_action, Mapping):
+        if include_actions and isinstance(materialization_action, Mapping):
             row["materialization_action"] = dict(materialization_action)
         rows.append(row)
         if len(rows) >= limit:
@@ -240,6 +245,19 @@ def _review_current_guidance_action(current_guidance: list[dict[str, Any]]) -> d
         "or writing any action-time cache."
     )
     return action
+
+
+def _learning_compact_lanes(
+    lanes: Mapping[str, Any],
+    *,
+    include_operator_detail: bool,
+) -> dict[str, Any]:
+    out = dict(lanes)
+    if include_operator_detail:
+        return out
+    out.pop("operator_diagnostics", None)
+    out["operator_detail_available"] = True
+    return out
 
 
 def discover_history_payload(*, cwd: Path) -> dict[str, Any]:
@@ -395,11 +413,22 @@ def status_payload(
     )
     compact_lifecycle, operator_detail = _compact_semantic_lifecycle(semantic_lifecycle)
     requested_guidance_id = str(guidance_id or "").strip()
+    current_guidance_for_actions = _current_guidance_rows(
+        compact_lifecycle,
+        limit=5 if requested_guidance_id else 3 if include_operator_detail else 1,
+        include_actions=True,
+    )
     current_guidance = _current_guidance_rows(
         compact_lifecycle,
         limit=5 if requested_guidance_id else 3 if include_operator_detail else 1,
+        include_actions=include_operator_detail,
     )
     if requested_guidance_id:
+        current_guidance_for_actions = [
+            row
+            for row in current_guidance_for_actions
+            if str(row.get("guidance_id") or "") == requested_guidance_id
+        ]
         current_guidance = [
             row for row in current_guidance if str(row.get("guidance_id") or "") == requested_guidance_id
         ]
@@ -424,7 +453,7 @@ def status_payload(
             claim_boundary="learning_guidance_not_source_truth",
         )
         if prepared_count
-        else (_review_current_guidance_action(current_guidance) or _learning_discovery_action())
+        else (_review_current_guidance_action(current_guidance_for_actions) or _learning_discovery_action())
     )
     followup_actions = (
         _unique_actions(primary_action, *_learning_setup_actions())
@@ -439,7 +468,6 @@ def status_payload(
         primary_action,
         followup_actions,
     )
-    next_actions = cast(list[dict[str, object]], action_fields["safe_next_actions"])
     payload: dict[str, Any] = {
         "kind": KIND,
         "schema_version": SCHEMA_VERSION,
@@ -456,11 +484,13 @@ def status_payload(
             )
         ),
         **action_fields,
-        "next_actions": next_actions,
         "current_guidance": current_guidance,
         "summary_metrics": summary_metrics,
         "summary": summary_metrics,
-        "lanes": lanes,
+        "lanes": _learning_compact_lanes(
+            lanes,
+            include_operator_detail=include_operator_detail,
+        ),
         "current_guidance_summary": {
             "selected_count": len(current_guidance),
             "available_action_time_guidance_count": semantic_count,
@@ -474,6 +504,7 @@ def status_payload(
             **operator_detail,
             "learning_frontdoor_actions": frontdoor_operator_detail,
         }
+        payload["foreground_action_menu"] = frontdoor_operator_detail
         payload["semantic_loop"] = {
             "stage": (semantic_report.get("stage_report") or {}).get("stage"),
             "stage_counts": {
@@ -575,6 +606,7 @@ def guidance_payload(
         operator_detail = dict(payload.get("operator_detail") or {})
         operator_detail["learning_frontdoor_actions"] = frontdoor_operator_detail
         payload["operator_detail"] = operator_detail
+        payload["foreground_action_menu"] = frontdoor_operator_detail
     if not include_operator_detail:
         payload.pop("semantic_guidance_lifecycle", None)
         payload.pop("operator_detail", None)

@@ -12,8 +12,10 @@ from __future__ import annotations
 import argparse
 import ast
 import json
+import re
 import subprocess
 from collections.abc import Mapping, Sequence
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -43,6 +45,7 @@ EXCLUDED_IMPLICIT_SCAN_PREFIXES = (
     "tests/aippocampus/agent_slop_guard_fixtures/",
 )
 RUNTIME_PREFIX = "skills/aippocampus/scripts/aippocampus_runtime/"
+DIFF_HUNK_RE = re.compile(r"@@ -\d+(?:,\d+)? \+(?P<start>\d+)(?:,(?P<count>\d+))? @@")
 
 
 def _config(rule_id: str) -> RuleConfig:
@@ -156,6 +159,60 @@ def _window_text(lines: list[str], line_no: int, *, radius: int = 5) -> str:
     start = max(0, line_no - radius - 1)
     end = min(len(lines), line_no + radius)
     return "\n".join(lines[start:end]).casefold()
+
+
+def _diff_changed_lines(diff_text: str) -> set[int]:
+    changed: set[int] = set()
+    for match in DIFF_HUNK_RE.finditer(diff_text):
+        start = int(match.group("start"))
+        count = int(match.group("count") or "1")
+        if count <= 0:
+            continue
+        changed.update(range(start, start + count))
+    return changed
+
+
+@lru_cache(maxsize=256)
+def _git_changed_lines(path: str) -> frozenset[int] | None:
+    absolute = REPO_ROOT / path
+    if not absolute.exists():
+        return None
+    tracked = subprocess.run(
+        ["git", "ls-files", "--error-unmatch", path],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if tracked.returncode != 0:
+        return frozenset(range(1, len(absolute.read_text(encoding="utf-8").splitlines()) + 1))
+    changed: set[int] = set()
+    for diff_args in (
+        ["diff", "--unified=0", "origin/main...HEAD", "--", path],
+        ["diff", "--unified=0", "--cached", "--", path],
+        ["diff", "--unified=0", "--", path],
+    ):
+        proc = subprocess.run(
+            ["git", *diff_args],
+            cwd=REPO_ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        if proc.returncode == 0 and proc.stdout:
+            changed.update(_diff_changed_lines(proc.stdout))
+    return frozenset(changed)
+
+
+def _line_touched_by_changed_surface(path: str, line: int, changed_files: set[str]) -> bool:
+    if not changed_files:
+        return True
+    if path not in changed_files:
+        return False
+    changed_lines = _git_changed_lines(path)
+    if changed_lines is None:
+        return True
+    return int(line) in changed_lines
 
 
 def _is_performance_hot_path(path: str) -> bool:
@@ -796,6 +853,7 @@ def _field_only_test_findings(
     path: str,
     baseline: Mapping[str, str],
     changed_files: set[str],
+    changed_line_filter: bool,
 ) -> list[dict[str, Any]]:
     findings: list[dict[str, Any]] = []
     for node in ast.walk(tree):
@@ -836,6 +894,10 @@ def _field_only_test_findings(
             continue
         field_keys = asserted_keys & _config("field_only_followthrough_test").field_only_assert_keys
         if field_keys and not has_followthrough:
+            if changed_line_filter and not _line_touched_by_changed_surface(
+                path, first_key_line, changed_files
+            ):
+                continue
             findings.append(
                 _finding(
                     rule_id="field_only_followthrough_test",
@@ -875,6 +937,7 @@ def analyze_text(
     path: str,
     baseline: Mapping[str, str] | None = None,
     changed_files: set[str] | None = None,
+    changed_line_filter: bool = False,
 ) -> list[dict[str, Any]]:
     baseline_map = baseline or {}
     changed = changed_files or set()
@@ -989,6 +1052,7 @@ def analyze_text(
             path=path,
             baseline=baseline_map,
             changed_files=changed,
+            changed_line_filter=changed_line_filter,
         )
     )
     findings.extend(
@@ -1059,6 +1123,7 @@ def scan_files(
                 path=rel_path,
                 baseline=baseline,
                 changed_files=changed_files,
+                changed_line_filter=True,
             )
         )
     return sorted(findings, key=lambda item: (str(item["file"]), int(item["line"]), str(item["rule_id"])))

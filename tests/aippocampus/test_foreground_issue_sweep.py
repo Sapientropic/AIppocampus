@@ -237,8 +237,9 @@ class ForegroundIssueSweepTests(unittest.TestCase):
         self.assertEqual(payload["foreground_action"]["surface"], "agent_callable")
         self.assertIn("--foreground-tools-visible --agent-json", payload["foreground_action"]["command"])
         self.assertNotIn("--foreground-key-tools-callable", payload["foreground_action"]["command"])
-        self.assertTrue(
-            any(action.get("surface") == "operator_detail" for action in payload["safe_next_actions"])
+        self.assertFalse(
+            any(action.get("surface") == "operator_detail" for action in payload["safe_next_actions"]),
+            payload["safe_next_actions"],
         )
 
     def test_agent_json_status_prioritizes_measured_ambient_blockers_over_tool_review(self) -> None:

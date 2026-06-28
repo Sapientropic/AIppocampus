@@ -113,6 +113,91 @@ def missing_body_env_report(body_env: str, *, schema_version: int) -> dict[str, 
     }
 
 
+def pr_body_from_gh(pr_number: str, *, repo: str | None) -> tuple[str, str | None]:
+    clean_pr = str(pr_number or "").strip().lstrip("#")
+    if not clean_pr:
+        return "", "missing_pr_number"
+    clean_repo = str(repo or "").strip() or infer_github_repo_from_origin()
+    if not clean_repo:
+        return "", "missing_github_repo_for_pr_body"
+    try:
+        completed = subprocess.run(
+            [
+                "gh",
+                "pr",
+                "view",
+                clean_pr,
+                "--repo",
+                clean_repo,
+                "--json",
+                "body",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=20,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return "", f"gh_pr_view_failed:{exc}"
+    if completed.returncode != 0:
+        return "", (completed.stderr or completed.stdout or "gh pr view failed").strip()
+    try:
+        payload = json.loads(completed.stdout or "{}")
+    except json.JSONDecodeError as exc:
+        return "", f"gh_pr_view_json_error:{exc}"
+    if not isinstance(payload, Mapping):
+        return "", "gh_pr_view_body_not_object"
+    body = str(payload.get("body") or "")
+    if not body.strip():
+        return "", "gh_pr_view_body_empty"
+    return body, None
+
+
+def missing_pr_body_report(
+    pr_number: str,
+    *,
+    github_repo: str | None,
+    schema_version: int,
+    error: str,
+) -> dict[str, Any]:
+    clean_pr = str(pr_number or "").strip().lstrip("#")
+    repo = str(github_repo or "").strip() or infer_github_repo_from_origin()
+    next_command = (
+        f"python tools/aippocampus/github/closeout_audit.py --pr {clean_pr or '<number>'} --json"
+        + (f" --github-repo {repo}" if repo else " --github-repo <owner/repo>")
+    )
+    detail_command = next_command + " --detail full"
+    return {
+        "kind": "aippocampus_closeout_audit",
+        "schema_version": schema_version,
+        "ok": False,
+        "status": "not_audited",
+        "closing_issues": [],
+        "closeout_class": "not_audited",
+        "high_risk_families": [],
+        "evidence_shape": {},
+        "performance_evidence_shape": {},
+        "findings": [
+            {
+                "kind": "pr_body_audit_not_run",
+                "severity": "blocker",
+                "message": "PR closeout audit has not been run on the actual PR body.",
+                "closing_issues": [],
+                "recovery": {
+                    "reason": error,
+                    "next_command": next_command,
+                    "detail_command": detail_command,
+                },
+            }
+        ],
+        "policy": {
+            "actual_pr_body_required": True,
+            "heuristic_only": True,
+        },
+    }
+
+
 def compact_audit_report(report: Mapping[str, Any], *, detail_command: str | None) -> dict[str, Any]:
     findings = list(report.get("findings") or [])
     status = str(report.get("status") or "").strip()

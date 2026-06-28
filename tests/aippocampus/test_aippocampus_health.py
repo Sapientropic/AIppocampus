@@ -16,6 +16,11 @@ from aippocampus_runtime.warm_ambient.hook_seen_threads import (
     record_hook_seen_thread,
 )
 from tests.aippocampus.health_fixtures import health_workspace
+from tests.aippocampus.health_report_fixtures import (
+    write_current_artifacts,
+    write_latest_turn_gap_artifacts,
+    write_rollout,
+)
 
 
 class TtyStringIO(StringIO):
@@ -497,157 +502,11 @@ class AippocampusHealthTests(unittest.TestCase):
         self.assertIn("blocks_exact_latest_claims: yes", text)
         self.assertIn("inspect: aippocampus maintenance plan --summary-json", text)
 
-    def write_rollout(
-        self,
-        path: Path,
-        cwd: Path,
-        *,
-        session_id: str = "health-session",
-        include_second_turn: bool = False,
-    ) -> None:
-        rows = [
-            {
-                "type": "session_meta",
-                "payload": {
-                    "id": session_id,
-                    "timestamp": "2026-06-05T00:00:00Z",
-                    "cwd": str(cwd),
-                },
-            },
-            {
-                "type": "event_msg",
-                "timestamp": "2026-06-05T00:00:01Z",
-                "payload": {
-                    "type": "user_message",
-                    "message": "first source-backed freshness question",
-                },
-            },
-            {
-                "type": "event_msg",
-                "timestamp": "2026-06-05T00:00:02Z",
-                "payload": {
-                    "type": "agent_message",
-                    "phase": "commentary",
-                    "message": "checking local source",
-                },
-            },
-            {
-                "type": "event_msg",
-                "timestamp": "2026-06-05T00:00:03Z",
-                "payload": {
-                    "type": "agent_message",
-                    "phase": "final_answer",
-                    "message": "first final source-backed answer",
-                },
-            },
-        ]
-        if include_second_turn:
-            rows.extend(
-                [
-                    {
-                        "type": "event_msg",
-                        "timestamp": "2026-06-05T00:01:01Z",
-                        "payload": {
-                            "type": "user_message",
-                            "message": "latest source-backed freshness marker",
-                        },
-                    },
-                    {
-                        "type": "event_msg",
-                        "timestamp": "2026-06-05T00:01:02Z",
-                        "payload": {
-                            "type": "agent_message",
-                            "phase": "final_answer",
-                            "message": "latest final answer must be searchable",
-                        },
-                    },
-                ]
-            )
-        path.write_text(
-            "\n".join(json.dumps(row, ensure_ascii=False) for row in rows) + "\n",
-            encoding="utf-8",
-        )
-
-    def write_current_artifacts(
-        self,
-        root: Path,
-        workspace: Path,
-        rollout: Path,
-        *,
-        index_created_at: str = "2026-06-01T00:00:00Z",
-        clean_created_at: str = "2026-06-01T00:00:00Z",
-        rag_enabled: bool = True,
-        clean_schema: int = 2,
-        clean_upgrade_contract: bool = True,
-    ) -> dict[str, Path]:
-        anchors = workspace / "thread-anchors.md"
-        anchors.write_text("# Anchors\n", encoding="utf-8")
-        visibility = health.rollout_visibility_stats(rollout)
-        current_message_count, last_line = health.count_messages(rollout)
-        index_dir = root / "index"
-        index_dir.mkdir()
-        manifest = {
-            "created_at": index_created_at,
-            "message_count": current_message_count,
-            "source_rollout_size": rollout.stat().st_size,
-            "last_message_line": last_line,
-            "anchor_sha256": health.file_sha256(anchors),
-        }
-        if rag_enabled:
-            manifest["rag"] = {"enabled": True, "chunk_count": 1}
-        (index_dir / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
-        (index_dir / "messages.jsonl").write_text("{}\n", encoding="utf-8")
-        (index_dir / "source_index.sqlite").write_bytes(b"index")
-        clean = root / "clean-source"
-        clean.mkdir()
-        clean_manifest = {
-            "created_at": clean_created_at,
-            "schema_version": clean_schema,
-            "source_rollout_size": rollout.stat().st_size,
-            "message_count": visibility.expected_clean_source_message_count,
-            "turn_count": visibility.expected_clean_source_turn_count,
-            "source_texture_count": 1,
-            "source_texture_policy": {
-                "boundary": "source texture rows are rebuildable interpretation inputs, not source truth.",
-            },
-        }
-        if clean_upgrade_contract:
-            clean_manifest["upgrade_contract"] = {"source_backed": True}
-        (clean / "manifest.json").write_text(json.dumps(clean_manifest), encoding="utf-8")
-        (clean / "messages.jsonl").write_text("{}\n", encoding="utf-8")
-        (clean / "turns.jsonl").write_text("{}\n", encoding="utf-8")
-        (clean / "source-texture.jsonl").write_text(
-            json.dumps(
-                {
-                    "texture_id": "tex_1",
-                    "signal_kind": "self_correction_signal",
-                    "truth_boundary": "texture_signal_not_source_fact",
-                },
-                ensure_ascii=False,
-            )
-            + "\n",
-            encoding="utf-8",
-        )
-        graphify = root / "graphify-corpus"
-        graphify.mkdir()
-        (graphify / "corpus_manifest.json").write_text(
-            json.dumps({"source_index_manifest_sha256": health.file_sha256(index_dir / "manifest.json")}),
-            encoding="utf-8",
-        )
-        return {
-            "anchors": anchors,
-            "index_dir": index_dir,
-            "clean_source_dir": clean,
-            "graphify_corpus": graphify,
-            "segments_dir": root / "segments",
-            "checkpoint_state": root / "checkpoint_state.json",
-        }
-
     def test_health_no_flag_tty_is_human_and_explicit_json_stays_json(self) -> None:
         with health_workspace() as (_root, workspace):
             rollout = workspace / "rollout.jsonl"
-            self.write_rollout(rollout, workspace)
-            paths = self.write_current_artifacts(_root, workspace, rollout)
+            write_rollout(rollout, workspace)
+            paths = write_current_artifacts(_root, workspace, rollout)
             args = [
                 "--cwd",
                 str(workspace),
@@ -686,227 +545,9 @@ class AippocampusHealthTests(unittest.TestCase):
         self.assertEqual(payload["kind"], "aippocampus_health_card")
         self.assertIn("foreground_action", payload)
 
-    def write_latest_turn_gap_artifacts(
-        self,
-        root: Path,
-        workspace: Path,
-    ) -> tuple[Path, dict[str, Path]]:
-        rollout = workspace / "rollout.jsonl"
-        self.write_rollout(rollout, workspace, include_second_turn=False)
-        current_size = rollout.stat().st_size
-        rollout.write_text(
-            rollout.read_text(encoding="utf-8")
-            + "\n".join(
-                json.dumps(row, ensure_ascii=False)
-                for row in [
-                    {
-                        "type": "event_msg",
-                        "timestamp": "2026-06-05T00:01:01Z",
-                        "payload": {
-                            "type": "user_message",
-                            "message": "latest source-backed freshness marker",
-                        },
-                    },
-                    {
-                        "type": "event_msg",
-                        "timestamp": "2026-06-05T00:01:02Z",
-                        "payload": {
-                            "type": "agent_message",
-                            "phase": "final_answer",
-                            "message": "latest final answer must be searchable",
-                        },
-                    },
-                ]
-            )
-            + "\n",
-            encoding="utf-8",
-        )
-        anchors = workspace / "thread-anchors.md"
-        anchors.write_text("# Anchors\n", encoding="utf-8")
-        index_dir = root / "index"
-        index_dir.mkdir()
-        (index_dir / "manifest.json").write_text(
-            json.dumps(
-                {
-                    "created_at": "2026-06-05T00:00:03Z",
-                    "message_count": 3,
-                    "source_rollout_size": current_size,
-                    "last_message_line": 4,
-                    "anchor_sha256": health.file_sha256(anchors),
-                    "rag": {"enabled": True},
-                }
-            ),
-            encoding="utf-8",
-        )
-        (index_dir / "messages.jsonl").write_text("{}\n", encoding="utf-8")
-        (index_dir / "source_index.sqlite").write_bytes(b"index")
-        clean = root / "clean-source"
-        clean.mkdir()
-        (clean / "manifest.json").write_text(
-            json.dumps(
-                {
-                    "schema_version": 2,
-                    "upgrade_contract": {"source_backed": True},
-                    "source_rollout_size": current_size,
-                    "message_count": 2,
-                    "turn_count": 1,
-                }
-            ),
-            encoding="utf-8",
-        )
-        (clean / "messages.jsonl").write_text("{}\n", encoding="utf-8")
-        (clean / "turns.jsonl").write_text("{}\n", encoding="utf-8")
-        return rollout, {
-            "anchors": anchors,
-            "index_dir": index_dir,
-            "clean_source_dir": clean,
-            "graphify_corpus": root / "graphify-corpus",
-            "segments_dir": root / "segments",
-            "checkpoint_state": root / "checkpoint_state.json",
-        }
-
-    def test_registry_cache_pressure_report_uses_storage_governance_metrics(self) -> None:
-        with mock.patch(
-            "aippocampus_runtime.ops.storage_governance.build_plan",
-            return_value={
-                "metrics": {
-                    "reclaimable_rebuildable_bytes": 2 * 1024 * 1024 * 1024,
-                    "reclaimable_rebuildable_human": "2.0 GB",
-                    "protected_source_bytes": 128 * 1024 * 1024,
-                    "protected_source_human": "128.0 MB",
-                    "generated_index_amplification_ratio": 16.0,
-                    "eviction_candidate_count": 140,
-                }
-            },
-        ) as build_plan:
-            report = health.registry_cache_pressure_report(
-                Path("workspace"),
-                Path("registry"),
-            )
-
-        build_plan.assert_called_once()
-        self.assertTrue(report["available"])
-        self.assertTrue(report["pressure"])
-        self.assertEqual(report["status"], "pressure")
-        self.assertIn("reclaimable_rebuildable_cache_bytes_high", report["reasons"])
-        self.assertEqual(
-            report["dry_run_command"],
-            "aippocampus storage gc --dry-run --json --top 1 --cwd .",
-        )
-        self.assertEqual(
-            report["summary_command"],
-            "aippocampus storage gc --dry-run --summary-json --cwd .",
-        )
-        self.assertEqual(
-            report["repair_command"],
-            "aippocampus storage gc --apply --class rebuildable --include-active --summary-json --cwd .",
-        )
-        self.assertTrue(report["source_history_protected"])
-        self.assertFalse(report["privacy_boundary"]["paths_included"])
-
-    def test_health_surfaces_generated_cache_pressure_as_safe_repair_action(self) -> None:
-        with health_workspace() as (root, workspace):
-            rollout = workspace / "rollout.jsonl"
-            self.write_rollout(rollout, workspace)
-            paths = self.write_current_artifacts(root, workspace, rollout)
-            registry_dir = root / "registry"
-            registry_dir.mkdir()
-            (registry_dir / "threads.json").write_text('{"threads":[]}', encoding="utf-8")
-
-            pressure = {
-                "available": True,
-                "status": "pressure",
-                "pressure": True,
-                "reasons": ["reclaimable_rebuildable_cache_bytes_high"],
-                "metrics": {
-                    "reclaimable_rebuildable_human": "2.0 GB",
-                    "generated_index_amplification_ratio": 16.0,
-                },
-                "dry_run_command": "aippocampus storage gc --dry-run --json --top 1 --cwd .",
-                "summary_command": "aippocampus storage gc --dry-run --summary-json --cwd .",
-                "repair_command": "aippocampus storage gc --apply --class rebuildable --include-active --summary-json --cwd .",
-                "source_history_protected": True,
-                "foreground_blocking": False,
-            }
-            with (
-                mock.patch.object(health_stages, "locate_rollout", return_value=rollout),
-                mock.patch.object(
-                    health,
-                    "registry_cache_pressure_report",
-                    return_value=pressure,
-                ),
-            ):
-                payload = health.build_health_report(
-                    health.HealthOptions(
-                        cwd=workspace,
-                        registry_dir=registry_dir,
-                        include_operator_diagnostics=True,
-                        include_expensive_diagnostics=True,
-                        **paths,
-                    )
-                )
-
-        action_ids = [item["id"] for item in payload["recommended_actions"]]
-        self.assertIn("storage_gc_rebuildable_cache", action_ids)
-        action = next(
-            item
-            for item in payload["recommended_actions"]
-            if item["id"] == "storage_gc_rebuildable_cache"
-        )
-        self.assertEqual(action["severity"], "warning")
-        self.assertEqual(
-            action["command"],
-            "aippocampus storage gc --dry-run --json --top 1 --cwd .",
-        )
-        self.assertEqual(payload["storage_pressure"], pressure)
-        self.assertTrue(payload["ok"])
-        self.assertTrue(payload["product_readiness"]["ordinary_first_recall_usable"])
-        self.assertFalse(payload["product_readiness"]["maintenance_required_before_recall"])
-        self.assertTrue(payload["product_readiness"]["storage_pressure_cleanup_recommended"])
-
-    def test_health_reports_codex_host_state_confounds_without_paths_or_ids(self) -> None:
-        with health_workspace() as (root, workspace):
-            rollout = workspace / "rollout.jsonl"
-            self.write_rollout(rollout, workspace)
-            paths = self.write_current_artifacts(root, workspace, rollout)
-            registry_dir = root / "registry"
-            registry_dir.mkdir()
-            (registry_dir / "threads.json").write_text('{"threads":[]}', encoding="utf-8")
-            codex = root / "codex-home"
-            (codex / "logs").mkdir(parents=True)
-            (codex / "sessions" / "private-session-id").mkdir(parents=True)
-            (codex / "logs" / "state.sqlite").write_bytes(b"x" * 128)
-            (codex / "logs" / "state.sqlite-wal").write_bytes(b"y" * 64)
-            (codex / "sessions" / "private-session-id" / "rollout.jsonl").write_bytes(b"z" * 256)
-            (codex / "threads.json").write_text(
-                '{"threads":[{"id":"private-thread-id"}]}',
-                encoding="utf-8",
-            )
-
-            with (
-                mock.patch.object(health_stages, "codex_home", return_value=codex),
-                mock.patch.object(health_stages, "locate_rollout", return_value=rollout),
-            ):
-                payload = health.build_health_report(
-                    health.HealthOptions(cwd=workspace, registry_dir=registry_dir, include_operator_diagnostics=True, **paths)
-                )
-
-        confounds = payload["host_state_confounds"]
-        encoded = json.dumps(confounds, ensure_ascii=False)
-
-        self.assertTrue(confounds["available"])
-        self.assertEqual(confounds["artifact_scope"], "codex_host_state_not_aippocampus_registry")
-        self.assertGreater(confounds["logs_db_wal"]["total_bytes"], 0)
-        self.assertGreater(confounds["session_store"]["total_bytes"], 0)
-        self.assertTrue(confounds["thread_list"]["available"])
-        self.assertFalse(confounds["privacy_boundary"]["paths_included"])
-        self.assertNotIn(str(root), encoded)
-        self.assertNotIn("private-session-id", encoded)
-        self.assertNotIn("private-thread-id", encoded)
-
     def test_health_keeps_small_latest_turn_gap_advisory_before_bulk_stale_threshold(self) -> None:
         with health_workspace() as (root, workspace):
-            rollout, paths = self.write_latest_turn_gap_artifacts(root, workspace)
+            rollout, paths = write_latest_turn_gap_artifacts(root, workspace)
 
             with mock.patch.object(health_stages, "locate_rollout", return_value=rollout):
                 payload = health.build_health_report(
@@ -932,7 +573,7 @@ class AippocampusHealthTests(unittest.TestCase):
 
     def test_health_recommends_source_maintenance_at_bulk_stale_threshold(self) -> None:
         with health_workspace() as (root, workspace):
-            rollout, paths = self.write_latest_turn_gap_artifacts(root, workspace)
+            rollout, paths = write_latest_turn_gap_artifacts(root, workspace)
 
             with mock.patch.object(health_stages, "locate_rollout", return_value=rollout):
                 payload = health.build_health_report(
@@ -965,8 +606,8 @@ class AippocampusHealthTests(unittest.TestCase):
     def test_health_treats_one_live_message_delta_as_product_ready(self) -> None:
         with health_workspace() as (root, workspace):
             rollout = workspace / "rollout.jsonl"
-            self.write_rollout(rollout, workspace)
-            paths = self.write_current_artifacts(root, workspace, rollout)
+            write_rollout(rollout, workspace)
+            paths = write_current_artifacts(root, workspace, rollout)
             rollout.write_text(
                 rollout.read_text(encoding="utf-8")
                 + json.dumps(
@@ -1001,8 +642,8 @@ class AippocampusHealthTests(unittest.TestCase):
             workspace = root / "workspace"
             workspace.mkdir()
             rollout = workspace / "rollout.jsonl"
-            self.write_rollout(rollout, workspace)
-            paths = self.write_current_artifacts(root, workspace, rollout)
+            write_rollout(rollout, workspace)
+            paths = write_current_artifacts(root, workspace, rollout)
             args = [
                 "--cwd",
                 str(workspace),
@@ -1059,8 +700,8 @@ class AippocampusHealthTests(unittest.TestCase):
             workspace = root / "workspace"
             workspace.mkdir()
             rollout = workspace / "rollout.jsonl"
-            self.write_rollout(rollout, workspace)
-            paths = self.write_current_artifacts(root, workspace, rollout)
+            write_rollout(rollout, workspace)
+            paths = write_current_artifacts(root, workspace, rollout)
 
             with mock.patch.object(health_stages, "locate_rollout", return_value=rollout):
                 payload = health.build_health_report(health.HealthOptions(cwd=workspace, **paths))
@@ -1084,8 +725,8 @@ class AippocampusHealthTests(unittest.TestCase):
             workspace = root / "workspace"
             workspace.mkdir()
             rollout = workspace / "rollout.jsonl"
-            self.write_rollout(rollout, workspace)
-            paths = self.write_current_artifacts(
+            write_rollout(rollout, workspace)
+            paths = write_current_artifacts(
                 root,
                 workspace,
                 rollout,
@@ -1109,8 +750,8 @@ class AippocampusHealthTests(unittest.TestCase):
             workspace = root / "workspace"
             workspace.mkdir()
             rollout = workspace / "rollout.jsonl"
-            self.write_rollout(rollout, workspace)
-            paths = self.write_current_artifacts(
+            write_rollout(rollout, workspace)
+            paths = write_current_artifacts(
                 root,
                 workspace,
                 rollout,
@@ -1140,8 +781,8 @@ class AippocampusHealthTests(unittest.TestCase):
             workspace = root / "workspace"
             workspace.mkdir()
             rollout = workspace / "rollout.jsonl"
-            self.write_rollout(rollout, workspace)
-            paths = self.write_current_artifacts(root, workspace, rollout)
+            write_rollout(rollout, workspace)
+            paths = write_current_artifacts(root, workspace, rollout)
 
             with mock.patch.object(health_stages, "locate_rollout", return_value=rollout):
                 payload = health.build_health_report(health.HealthOptions(cwd=workspace, **paths))
@@ -1161,8 +802,8 @@ class AippocampusHealthTests(unittest.TestCase):
             workspace = root / "workspace"
             workspace.mkdir()
             rollout = workspace / "rollout.jsonl"
-            self.write_rollout(rollout, workspace)
-            paths = self.write_current_artifacts(root, workspace, rollout)
+            write_rollout(rollout, workspace)
+            paths = write_current_artifacts(root, workspace, rollout)
             clean = paths["clean_source_dir"]
             manifest_path = clean / "manifest.json"
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -1207,7 +848,7 @@ class AippocampusHealthTests(unittest.TestCase):
             workspace = root / "workspace"
             workspace.mkdir()
             rollout = workspace / "rollout.jsonl"
-            self.write_rollout(rollout, workspace)
+            write_rollout(rollout, workspace)
             anchors = workspace / "thread-anchors.md"
             anchors.write_text("# Anchors\n", encoding="utf-8")
             registry_dir = root / "registry"

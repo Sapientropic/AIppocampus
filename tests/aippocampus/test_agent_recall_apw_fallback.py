@@ -21,6 +21,7 @@ from aippocampus_runtime.recall import (
 )
 from aippocampus_runtime.recall.apw_anchor_coverage import source_anchor_gate
 from aippocampus_runtime.recall.associative_path_inputs import build_associative_path_diagnostic
+from aippocampus_runtime.recall.foreground import route_quality
 from aippocampus_runtime.source.registry_search import search_registry_sources
 
 
@@ -89,6 +90,68 @@ class AgentRecallApwFallbackTests(unittest.TestCase):
         self.assertEqual(gate["anchor_count"], 1)
         self.assertEqual(gate["opened_anchor_hits"], 1)
         self.assertEqual(gate["meaningful_anchor_hits"], 1)
+
+    def test_apw_source_anchor_gate_rejects_one_meaningful_hit_plus_workflow_words(
+        self,
+    ) -> None:
+        """Companion coverage: opened source anchor hits are exercised by source_window APW tests."""
+        gate = source_anchor_gate(
+            matched_terms=["实现", "agent", "issue", "CI"],
+            anchor_terms=[
+                "不断开",
+                "issue",
+                "实现",
+                "窄修",
+                "CI",
+                "越跑越胖",
+            ],
+        )
+
+        self.assertEqual(gate["status"], "blocked")
+        self.assertEqual(gate["reason"], "low_meaningful_anchor_coverage")
+        self.assertEqual(gate["meaningful_anchor_hits"], 1)
+        self.assertEqual(gate["required_meaningful_anchor_hits"], 2)
+        self.assertFalse(gate["target_source_matched"])
+
+    def test_short_technical_route_anchors_are_meaningful_without_meta_regression(self) -> None:
+        technical_terms = ["rust", "data", "node", "edge", "graph", "queue", "cache", "batch", "macro"]
+        weak_terms = ["ci", "pr", "ux", "mcp", "apw", "why", "too", "route", "label"]
+
+        self.assertEqual(route_quality.meaningful_terms(technical_terms), technical_terms[:8])
+        self.assertTrue(all(not route_quality.is_low_signal_anchor(term) for term in technical_terms))
+        self.assertTrue(all(route_quality.is_low_signal_anchor(term) for term in weak_terms))
+
+    def test_route_label_repair_can_use_short_technical_anchor(self) -> None:
+        label = route_quality.repaired_public_label(
+            {
+                "route_label": "route",
+                "route_terms": ["graph", "cache", "route"],
+            },
+            "route",
+        )
+
+        self.assertEqual(label, "Cue: graph / cache")
+
+    def test_route_anchor_quality_guard_default_sample_is_low_noise(self) -> None:
+        guard = subprocess.run(
+            [
+                sys.executable,
+                str(REPO_ROOT / "tools" / "aippocampus" / "route_anchor_quality_guard.py"),
+                "--json",
+            ],
+            cwd=REPO_ROOT,
+            text=True,
+            encoding="utf-8",
+            capture_output=True,
+            check=False,
+        )
+
+        self.assertEqual(guard.returncode, 0, guard.stderr)
+        payload = json.loads(guard.stdout)
+        self.assertTrue(payload["ok"], payload)
+        self.assertIn("rust", payload["short_meaningful_allowlist"])
+        self.assertEqual(payload["unresolved_short_ascii_count"], 0)
+        self.assertTrue(payload["privacy_boundary"]["terms_redacted_before_output"])
 
     def _write_jsonl(self, name: str, rows: list[dict[str, object]]) -> None:
         path = self.root / ".aippocampus" / name

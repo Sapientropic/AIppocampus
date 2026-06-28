@@ -25,6 +25,8 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 RUNTIME_SOURCE_ROOT = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 RUNTIME_SOURCE_PREFIX = "skills/aippocampus/scripts/"
 TARGET_TEST_MODULE = "tests.aippocampus.test_local_file_lock"
+RECALL_COMPACT_TEST_MODULE = "tests.aippocampus.test_agent_recall_compact_projection"
+RECALL_ROUTE_ACTIONABILITY_TEST_MODULE = "tests.aippocampus.test_agent_recall_route_actionability"
 SCHEMA_VERSION = 1
 
 
@@ -62,6 +64,31 @@ MUTANTS: tuple[MutantSpec, ...] = (
         rationale=(
             "The lock tests must fail if active leases are recovered early or stale "
             "leases stay busy."
+        ),
+    ),
+    MutantSpec(
+        mutant_id="mcp_agent_recall_drops_recall_selector_from_deepen_arguments",
+        issue="#2903",
+        target="skills/aippocampus/scripts/aippocampus_runtime/mcp/agent_recall_projection.py",
+        old='    arguments["recall_selector"] = clean_selector\n',
+        new='    arguments.pop("recall_selector", None)\n',
+        expected_test_module=RECALL_COMPACT_TEST_MODULE,
+        rationale=(
+            "MCP compact recall tests must fail if the emitted agent_deepen "
+            "action falls back to mutable last-recall state instead of the "
+            "recall selector."
+        ),
+    ),
+    MutantSpec(
+        mutant_id="cli_recall_blocked_source_anchor_route_marked_reopenable",
+        issue="#2903",
+        target="skills/aippocampus/scripts/aippocampus_runtime/mcp/agent_recall_route_projection.py",
+        old='    if str(gate_map.get("status") or "").strip() == "blocked":\n        return False\n',
+        new='    if str(gate_map.get("status") or "").strip() == "blocked":\n        return True\n',
+        expected_test_module=RECALL_ROUTE_ACTIONABILITY_TEST_MODULE,
+        rationale=(
+            "CLI/public recall projection tests must fail if a blocked "
+            "source-anchor gate still produces a reopenable/deepen action."
         ),
     ),
 )
@@ -180,8 +207,8 @@ def build_report(
             "working_tree_mutation": False,
             "default_gate": False,
         },
-        "target_set": "local_file_lock_owner_identity",
-        "test_command": f"{sys.executable} -m unittest {TARGET_TEST_MODULE} -v",
+        "target_set": "local_file_lock_and_recall_source_open_invariants",
+        "test_command": "per-mutant expected_test_module",
         "mutant_count": len(rows),
         "killed_count": killed_count,
         "survived_count": len(survived),

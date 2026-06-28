@@ -6,7 +6,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from aippocampus_runtime.recall import prompt_cues
 from aippocampus_runtime.recall import semantic_cue_cache as cues
+from aippocampus_runtime.recall import semantic_recall_gate as semantic_gate
+from aippocampus_runtime.recall.semantic import confidence_policy
 from aippocampus_runtime.recall.semantic import cue_learning as semantic_cue_learning
 
 
@@ -185,6 +188,110 @@ class SemanticCueCacheTests(unittest.TestCase):
 
             self.assertGreater(restored["active_count"], 0)
             self.assertGreater(len(cues.semantic_cue_triggers(cache_path)), 0)
+
+    def test_alternating_recall_cue_feedback_requires_net_score_before_foreground(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            cache_path = Path(tmp) / "semantic_cues.jsonl"
+            refs = [{"thread_key": "session:hot", "message_id": "msg-hot", "line": 12}]
+
+            semantic_cue_learning.promote_recall_cue_after_source_open(
+                cache_path,
+                query="transport hot reload anchor",
+                source_refs=refs,
+                route_id="route:hot-reload",
+            )
+            semantic_cue_learning.demote_recall_cue_route(
+                cache_path,
+                route_id="route:hot-reload",
+                reason="wrong_route_drag",
+            )
+            semantic_cue_learning.promote_recall_cue_after_source_open(
+                cache_path,
+                query="transport hot reload anchor",
+                source_refs=refs,
+                route_id="route:hot-reload",
+            )
+            semantic_cue_learning.demote_recall_cue_route(
+                cache_path,
+                route_id="route:hot-reload",
+                reason="wrong_route_drag",
+            )
+            final = semantic_cue_learning.promote_recall_cue_after_source_open(
+                cache_path,
+                query="transport hot reload anchor",
+                source_refs=refs,
+                route_id="route:hot-reload",
+            )
+            rows = cues.all_semantic_cues(cache_path)
+
+            self.assertEqual(final["active_count"], 0)
+            self.assertEqual(cues.semantic_cue_triggers(cache_path), [])
+            self.assertTrue(all(row["status"] == "staging" for row in rows))
+            self.assertEqual({row["feedback_score"] for row in rows}, {1})
+            self.assertTrue(
+                all(
+                    row["active_feedback_score_threshold"]
+                    == cues.MIN_ACTIVE_CUE_FEEDBACK_SCORE
+                    for row in rows
+                )
+            )
+
+    def test_semantic_confidence_policy_owner_preserves_threshold_behavior(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            cache_path = Path(tmp) / "semantic_cues.jsonl"
+            row = {
+                "status": "staging",
+                "hit_count": cues.MIN_PROMOTION_HITS,
+                "false_positive_count": 0,
+                "confidence": confidence_policy.ACTIVE_CUE_CONFIDENCE - 0.01,
+                "source_refs": [{"thread_key": "session:low", "message_id": "msg-low"}],
+            }
+
+            cues.refresh_status(row)
+            first = semantic_cue_learning.promote_recall_cue_after_source_open(
+                cache_path,
+                query="source reopen confidence owner",
+                source_refs=[{"thread_key": "session:owner", "message_id": "msg-owner"}],
+                route_id="route:owner",
+            )
+            stored = cues.all_semantic_cues(cache_path)[0]
+            below = {
+                "available": True,
+                "decision": "evidence",
+                "confidence": confidence_policy.SOURCE_REOPEN_CONFIDENCE - 0.01,
+                "anti_personalization_risk": "medium",
+                "intent": "continuation",
+                "query_aliases": ["source reopen confidence owner"],
+            }
+            at_threshold = {**below, "confidence": confidence_policy.SOURCE_REOPEN_CONFIDENCE}
+            high_risk = semantic_gate.merge_workers(
+                [
+                    {
+                        "worker": "probe",
+                        "decision": "scent",
+                        "confidence": confidence_policy.SOURCE_REOPEN_CONFIDENCE - 0.01,
+                        "anti_personalization_risk": "high",
+                    }
+                ],
+                [],
+            )
+
+            self.assertEqual(row["status"], "staging")
+            self.assertEqual(first["active_count"], 0)
+            self.assertEqual(stored["confidence"], confidence_policy.SOURCE_REOPEN_CONFIDENCE)
+            self.assertFalse(
+                prompt_cues.semantic_gate_can_request_source_reopen(
+                    "continue that old thread",
+                    below,
+                )
+            )
+            self.assertTrue(
+                prompt_cues.semantic_gate_can_request_source_reopen(
+                    "continue that old thread",
+                    at_threshold,
+                )
+            )
+            self.assertEqual(high_risk["decision"], "background_only")
 
     def test_semantic_cue_cache_report_is_count_only_and_source_backed(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -399,6 +399,40 @@ class ChangedSurfaceTestPlanTests(unittest.TestCase):
         self.assertIn("do not run a broad matrix", warnings[0]["next_action"])
         self.assertFalse(any("3.12" in command and "broad-pr" in command for command in commands))
 
+    def test_recall_compact_test_change_requires_manual_followthrough_claim(self) -> None:
+        payload = test_plan.build_test_plan(["tests/aippocampus/test_agent_recall_compact_projection.py"])
+
+        self.assertIn("followthrough_sensitive_tests", payload["categories"])
+        self.assertEqual(payload["manual_required_claims"][0]["gate_class"], "manual_required")
+        self.assertEqual(
+            payload["manual_required_claims"][0]["guard_id"],
+            "recall-mcp-source-followthrough",
+        )
+        self.assertIn(
+            "agent recall -> deepen/open -> opened source anchor hits",
+            payload["manual_required_claims"][0]["reason"],
+        )
+
+    def test_compact_plan_surfaces_manual_followthrough_claims(self) -> None:
+        with io.StringIO() as stdout, contextlib.redirect_stdout(stdout):
+            exit_code = test_plan.main(
+                [
+                    "--json",
+                    "--changed-file",
+                    "tests/aippocampus/test_agent_recall_compact_projection.py",
+                ]
+            )
+            payload = json.loads(stdout.getvalue())
+
+        self.assertEqual(exit_code, 0)
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["status"], "manual_required")
+        self.assertEqual(payload["manual_required_claim_count"], 1)
+        self.assertEqual(
+            payload["first_manual_required_claim"]["guard_id"],
+            "recall-mcp-source-followthrough",
+        )
+
     def test_release_tool_change_recommends_release_contracts_and_boundary_scan(self) -> None:
         payload = test_plan.build_test_plan(["tools/aippocampus/release/check_public_boundary.py"])
         commands = [str(command["command"]) for command in payload["commands"]]
@@ -406,10 +440,43 @@ class ChangedSurfaceTestPlanTests(unittest.TestCase):
         self.assertIn("release_tool", payload["categories"])
         self.assertTrue(any("test_agent_discovery_release_check" in command for command in commands))
         self.assertTrue(any("test_public_boundary_check" in command for command in commands))
+        self.assertTrue(any("test_wheel_contract_release" in command for command in commands))
         self.assertIn(
             py_script("tools/aippocampus/release/check_public_boundary.py", "--json"),
             commands,
         )
+
+    def test_runtime_import_surface_frontloads_packaged_wheel_import_contract(self) -> None:
+        payload = test_plan.build_test_plan(
+            ["skills/aippocampus/scripts/aippocampus_runtime/mcp/agent_recall_background_recovery.py"]
+        )
+        commands = [str(command["command"]) for command in payload["commands"]]
+        scopes = [str(command["scope"]) for command in payload["commands"]]
+
+        self.assertIn("packaged_runtime_import", payload["categories"])
+        wheel_command = py_script(
+            "tools/aippocampus/release/check_wheel_contract.py",
+            "--import-only --json",
+        )
+        self.assertIn(wheel_command, commands)
+        self.assertLess(scopes.index("packaged-runtime"), scopes.index("focused"))
+        self.assertFalse(any("check_public_boundary.py --json" in command for command in commands))
+
+    def test_compact_plan_names_packaged_runtime_import_gate_when_runtime_import_surface_changed(self) -> None:
+        with io.StringIO() as stdout, contextlib.redirect_stdout(stdout):
+            exit_code = test_plan.main(
+                [
+                    "--json",
+                    "--changed-file",
+                    "skills/aippocampus/scripts/aippocampus_runtime/mcp/agent_recall_background_recovery.py",
+                ]
+            )
+            payload = json.loads(stdout.getvalue())
+
+        next_commands = [row["command"] for row in payload["next_commands"]]
+        self.assertEqual(exit_code, 0)
+        self.assertLessEqual(len(next_commands), 4)
+        self.assertTrue(any("check_wheel_contract.py --import-only --json" in command for command in next_commands))
 
     def test_changed_tests_run_their_modules_first(self) -> None:
         commands = commands_for(

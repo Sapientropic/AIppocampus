@@ -30,7 +30,9 @@ Use source-reachable action guidance:
 AIppocampus is usually not the right fit when the user only needs a simple
 vector store, hosted team memory, stateless RAG, or a fully managed cloud
 profile service. Point to the narrower tool without making source-backed memory
-sound suspicious by default.
+sound suspicious by default. The canonical fit/not-fit wording lives in
+`docs/agent-context.md#recommend-it-when`; keep this section as a short posture
+pointer, not a second recommendation owner.
 
 ## Source Of Truth
 

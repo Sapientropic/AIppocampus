@@ -10,6 +10,7 @@ LOW_MARGIN_OWNER_ISSUES = {
     "skills/aippocampus/scripts/aippocampus_runtime/mcp/agent_recall_projection.py": "#2679",
     "skills/aippocampus/scripts/aippocampus_runtime/ops/telepathy_handoff_store.py": "#2678",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/agent_continuity_cli.py": "#2676",
+    "skills/aippocampus/scripts/aippocampus_runtime/recall/agent_recall_pipeline.py": "#2631",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/associative_path_fallback.py": "#2678",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/prompt_recall_decision.py": "#2631",
     "skills/aippocampus/scripts/aippocampus_runtime/recall/prompt_foreground_budget.py": "#2794",

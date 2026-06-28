@@ -8,9 +8,16 @@ from pathlib import Path
 from aippocampus_runtime.navigation import concept_graph as graph
 from aippocampus_runtime.navigation import concept_graph_contributions as contributions
 from aippocampus_runtime.navigation import data_quality_guard as navigation_guard
+from aippocampus_runtime.navigation import trace_graph_ingress
 
 
 class NavigationDataQualityGuardTests(unittest.TestCase):
+    def test_trace_graph_ingress_owner_is_contribution_reexport(self) -> None:
+        self.assertIs(
+            contributions.trace_derived_graph_contribution_candidates,
+            trace_graph_ingress.trace_derived_graph_contribution_candidates,
+        )
+
     def test_association_quality_report_is_privacy_safe_and_av_bucketed(self) -> None:
         raw_fragment = "仍按新流程保持手动触发"
         associations = {
@@ -226,6 +233,13 @@ class NavigationDataQualityGuardTests(unittest.TestCase):
             },
             {
                 "kind": "aippocampus_semantic_cue",
+                "cue_id": "sc_missing_admission",
+                "cue": "missing admission cue",
+                "status": "active",
+                "source_refs": [{"thread_key": "session:cue", "message_id": "msg-missing", "line": 6}],
+            },
+            {
+                "kind": "aippocampus_semantic_cue",
                 "cue_id": "sc_suppressed",
                 "cue": "wrong transport alias",
                 "status": "suppressed_hard_negative",
@@ -243,10 +257,19 @@ class NavigationDataQualityGuardTests(unittest.TestCase):
         self.assertEqual(by_id["sc_active"]["edge_type"], "cue_alias_for_route")
         self.assertEqual(by_id["sc_active"]["status"], "verified")
         self.assertTrue(by_id["sc_active"]["active_graph_edge"])
+        self.assertEqual(by_id["sc_missing_admission"]["admission_level"], "operator_only")
+        self.assertTrue(by_id["sc_missing_admission"]["missing_trace_admission"])
+        self.assertEqual(
+            by_id["sc_missing_admission"]["lifecycle_reason"],
+            "missing_trace_admission_metadata",
+        )
+        self.assertEqual(by_id["sc_missing_admission"]["status"], "staging")
+        self.assertFalse(by_id["sc_missing_admission"]["active_graph_edge"])
         self.assertEqual(by_id["sc_suppressed"]["edge_type"], "cue_alias_for_route")
         self.assertEqual(by_id["sc_suppressed"]["status"], "parked")
         self.assertFalse(by_id["sc_suppressed"]["active_graph_edge"])
         self.assertNotIn("transport hot reload", encoded)
+        self.assertNotIn("missing admission cue", encoded)
         self.assertNotIn("wrong transport alias", encoded)
 
 

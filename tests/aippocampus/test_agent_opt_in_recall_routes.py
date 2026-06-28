@@ -1320,12 +1320,15 @@ class AgentOptInRecallRoutesTests(unittest.TestCase):
 
         self.assertEqual(report["source_anchor_gate"]["status"], "blocked")
         self.assertEqual(report["foreground_action_card"]["decision"], "recover_low_confidence_route")
-        self.assertEqual(report["foreground_action_card"]["next_action"], "deepen")
-        self.assertEqual(report["foreground_action_card"]["canonical_action"]["action_id"], "inspect_low_confidence_route")
-        self.assertEqual(report["suggested_next"], "agent deepen")
+        self.assertEqual(report["foreground_action_card"]["next_action"], "search_memory")
+        self.assertEqual(
+            report["foreground_action_card"]["canonical_action"]["action_id"],
+            "search_registry_sources_for_original_cue_anchors",
+        )
+        self.assertEqual(report["suggested_next"], "search_memory")
         self.assertIn("low_source_anchor_coverage", report["memory_packets"][0]["risk_flags"])
-        fallback = report["foreground_action_card"]["safe_next_actions"][1]
-        self.assertEqual(fallback["action_id"], "search_registry_sources_for_original_cue_anchors")
+        fallback = report["foreground_action_card"]["safe_next_actions"][0]
+        self.assertEqual(fallback["action_id"], "inspect_low_confidence_route")
         self.assertTrue(already_opened_report["memory_packets"][0]["already_opened"])
         self.assertEqual(
             already_opened_report["foreground_action_card"]["decision"],

@@ -136,6 +136,44 @@ class ChangedSurfacePreflightTests(unittest.TestCase):
         focused_commands = [command for command in seen if "unittest" in command]
         self.assertEqual(focused_commands, [])
 
+    def test_packaged_runtime_import_failure_stops_before_focused_tests(self) -> None:
+        seen: list[str] = []
+
+        def fake_command(command: str) -> preflight.CommandResult:
+            seen.append(command)
+            failed = "check_wheel_contract.py --import-only --json" in command
+            return preflight.CommandResult(
+                command=command,
+                scope="unknown",
+                status="fail" if failed else "pass",
+                returncode=1 if failed else 0,
+                elapsed_ms=1,
+                stdout=(
+                    '{"status":"fail","first_failure":{"id":"public_import_matrix",'
+                    '"message":"No module named aippocampus_runtime.recall.foreground"}}'
+                    if failed
+                    else ""
+                ),
+                stderr="",
+            )
+
+        with (
+            mock.patch.object(preflight.test_plan, "_debt_report_is_red", return_value=False),
+            mock.patch.object(preflight, "run_shell_command", side_effect=fake_command),
+        ):
+            report = preflight.run_preflight(
+                changed_files=[
+                    "skills/aippocampus/scripts/aippocampus_runtime/recall/agent_recall_background_recovery.py"
+                ],
+                base="origin/main",
+            )
+
+        self.assertFalse(report["ok"])
+        self.assertIn("check_wheel_contract.py --import-only --json", report["first_failure"]["command"])
+        self.assertIn("No module named", report["first_failure"]["stdout_tail"])
+        self.assertFalse(any("test_aippocampus_mcp_server_recall" in command for command in seen))
+        self.assertFalse(any("run_tests.py --tier pr" in command for command in seen))
+
     def test_detail_full_preserves_command_stdout_for_diagnostics(self) -> None:
         def fake_command(command: str) -> preflight.CommandResult:
             return preflight.CommandResult(
@@ -252,6 +290,59 @@ class ChangedSurfacePreflightTests(unittest.TestCase):
         self.assertIn("--local-executable", report["detail_command"])
         self.assertIn("--detail full", report["planner_detail_command"])
         self.assertIn("--local-executable", report["planner_detail_command"])
+
+    def test_preflight_reports_manual_required_pending_after_runnable_gates_pass(self) -> None:
+        def fake_command(command: str) -> preflight.CommandResult:
+            return preflight.CommandResult(
+                command=command,
+                scope="unknown",
+                status="pass",
+                returncode=0,
+                elapsed_ms=1,
+                stdout="",
+                stderr="",
+            )
+
+        plan = {
+            "categories": ["mcp"],
+            "commands": [
+                {
+                    "command": "python -m unittest tests.aippocampus.test_aippocampus_mcp_server_recall -v",
+                    "scope": "focused",
+                    "gate_class": "hard",
+                    "verification_owner": "focused_tests",
+                    "guard_id": "mcp-recall-focused",
+                }
+            ],
+            "manual_required_claims": [
+                {
+                    "gate_class": "manual_required",
+                    "verification_owner": "product_dogfood",
+                    "guard_id": "recall-mcp-source-followthrough",
+                    "reason": "agent recall -> deepen/open -> opened source anchor hits",
+                }
+            ],
+        }
+        with (
+            mock.patch.object(preflight.test_plan, "build_test_plan", return_value=plan),
+            mock.patch.object(preflight, "run_shell_command", side_effect=fake_command),
+        ):
+            report = preflight.run_preflight(
+                changed_files=[
+                    "skills/aippocampus/scripts/aippocampus_runtime/mcp/agent_recall_projection.py"
+                ],
+                base="origin/main",
+            )
+
+        self.assertFalse(report["ok"])
+        self.assertEqual(report["status"], "manual_required_pending")
+        self.assertEqual(report["runnable_gates_status"], "pass")
+        self.assertIsNone(report.get("first_failure"))
+        self.assertEqual(report["manual_required_claim_count"], 1)
+        self.assertEqual(
+            report["first_manual_required_claim"]["guard_id"],
+            "recall-mcp-source-followthrough",
+        )
 
     def test_ordered_plan_commands_preserve_gate_metadata(self) -> None:
         plan = {

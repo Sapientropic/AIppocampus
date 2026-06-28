@@ -57,6 +57,7 @@ class RecallFeedbackEventTests(unittest.TestCase):
                 route_kind="pathlet",
                 signal="source_reopen_success",
                 source_id="source:helpful",
+                source_ref={"thread_key": "thread-helpful", "message_id": "msg-helpful"},
                 weight_delta=0.4,
             ),
             feedback.active_flow_event(
@@ -64,6 +65,7 @@ class RecallFeedbackEventTests(unittest.TestCase):
                 route_kind="pathlet",
                 signal="user_confirmed",
                 source_id="source:helpful",
+                source_ref={"thread_key": "thread-helpful", "message_id": "msg-helpful"},
                 weight_delta=0.2,
             ),
             feedback.active_flow_event(
@@ -127,6 +129,7 @@ class RecallFeedbackEventTests(unittest.TestCase):
             route_kind="pathlet",
             signal="source_reopen_success",
             source_id="source:good",
+            source_ref={"thread_key": "thread-good", "message_id": "msg-good"},
         )
         negative = feedback.active_flow_event(
             route_id="route:bad",
@@ -218,6 +221,42 @@ class RecallFeedbackEventTests(unittest.TestCase):
             "overridden_by_positive_source_open",
         )
 
+    def test_suppression_lifecycle_uses_cumulative_score_for_foreground_eligibility(self) -> None:
+        events = [
+            feedback.active_flow_event(
+                route_id="route:reflap",
+                route_kind="active_path",
+                signal="wrong_route_drag",
+                source_id="source:reflap",
+            )
+            for _ in range(5)
+        ]
+        events.append(
+            feedback.active_flow_event(
+                route_id="route:reflap",
+                route_kind="active_path",
+                signal="source_reopen_success",
+                source_id="source:reflap",
+            )
+        )
+
+        lifecycle = feedback.suppression_lifecycle_report(events, detail="operator")
+        activation = feedback.active_flow_activation_report(events)
+        lifecycle_route = lifecycle["routes"][0]
+        activation_route = activation["routes"][0]
+
+        self.assertEqual(lifecycle_route["status"], "overridden_by_positive_source_open")
+        self.assertEqual(lifecycle_route["activation_score"], -4.0)
+        self.assertFalse(lifecycle_route["foreground_eligible"])
+        self.assertFalse(activation_route["foreground_eligible"])
+        self.assertEqual(
+            lifecycle_route["foreground_eligible"],
+            activation_route["foreground_eligible"],
+        )
+        self.assertIn("wrong_route_drag_demoted", lifecycle_route["reason_codes"])
+        self.assertIn("source_reopen_success_promoted", lifecycle_route["reason_codes"])
+        self.assertEqual(lifecycle["foreground_ineligible_count"], 1)
+
     def test_public_route_feedback_fixture_file_is_replayable(self) -> None:
         fixture_path = REPO_ROOT / "benchmark_corpus" / "route_feedback" / "fixture.json"
         payload = json.loads(fixture_path.read_text(encoding="utf-8"))
@@ -260,6 +299,64 @@ class RecallFeedbackEventTests(unittest.TestCase):
                 source_id="source:test",
             )
         self.assertEqual(context.exception.field, "route_kind")
+
+    def test_exact_stale_signal_and_custom_weight_calibration_are_preserved(self) -> None:
+        stale = feedback.active_flow_event(
+            route_id="route:stale",
+            route_kind="active_path",
+            signal="stale",
+        )
+        expired = feedback.active_flow_event(
+            route_id="route:expired",
+            route_kind="active_path",
+            signal="expired",
+        )
+        custom_weight_events = [
+            feedback.active_flow_event(
+                route_id="route:custom-weight",
+                route_kind="active_path",
+                signal="source_reopen_success",
+                source_ref={"thread_key": "thread-custom", "message_id": f"msg-{index}"},
+                weight_delta=-0.2,
+            )
+            for index in range(2)
+        ]
+
+        activation = feedback.active_flow_activation_report(custom_weight_events)
+        calibration = feedback.recall_feedback_calibration_report(custom_weight_events)
+
+        self.assertEqual(stale["signal"], "stale")
+        self.assertEqual(stale["weight_delta"], -0.35)
+        self.assertEqual(expired["signal"], "expired")
+        self.assertEqual(expired["weight_delta"], -0.4)
+        self.assertEqual(activation["routes"][0]["activation_score"], -0.4)
+        self.assertFalse(activation["routes"][0]["foreground_eligible"])
+        self.assertEqual(calibration["deltas"][0]["route_weight_delta"], -0.2)
+        self.assertFalse(calibration["deltas"][0]["foreground_eligible"])
+
+    def test_active_flow_source_refs_are_preserved_for_training_admission(self) -> None:
+        sourced = feedback.active_flow_event(
+            route_id="route:sourced",
+            route_kind="pathlet",
+            signal="source_reopen_success",
+            source_ref={"thread_key": "thread-sourced", "message_id": "msg-sourced"},
+        )
+        unsourced = feedback.active_flow_event(
+            route_id="route:unsourced",
+            route_kind="pathlet",
+            signal="source_reopen_success",
+            source_id="source:unsourced",
+        )
+
+        sourced_signal, unsourced_signal = feedback.feedback_training_signal_rows(
+            [sourced, unsourced]
+        )
+
+        self.assertEqual(sourced["source_ref_count"], 1)
+        self.assertEqual(sourced_signal["source_ref_count"], 1)
+        self.assertEqual(sourced_signal["training_role"], "positive_demo")
+        self.assertEqual(unsourced_signal["source_ref_count"], 0)
+        self.assertEqual(unsourced_signal["training_role"], "none")
 
     def test_alias_and_context_feedback_events_are_navigation_only_and_public_safe(self) -> None:
         alias_event = feedback.alias_merge_event(

@@ -228,11 +228,12 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertEqual(status_payload["lanes"]["prepared_guidance"]["status"], "not_found")
         self.assertEqual(status_payload["lanes"]["sanitized_replay"]["status"], "available_on_request")
         self.assertIn("effectiveness_ledger", status_payload["lanes"])
-        self.assertEqual(status_payload["lanes"]["operator_diagnostics"]["status"], "operator_only")
+        self.assertNotIn("operator_diagnostics", status_payload["lanes"])
+        self.assertTrue(status_payload["lanes"]["operator_detail_available"])
         self.assertEqual(status_payload["foreground_action"]["id"], "review_semantic_guidance_candidate")
         self.assertEqual(status_payload["foreground_action_contract"], "foreground-action-v2")
         self.assertNotIn(status_payload["foreground_action"], status_payload["safe_next_actions"])
-        self.assertEqual(status_payload["next_actions"], status_payload["safe_next_actions"])
+        self.assertNotIn("next_actions", status_payload)
         self.assertLessEqual(len(status_payload["safe_next_actions"]), 1)
         self.assertTrue(status_payload["more_actions_available_in_detail"])
         assert_compact_frontstage_payload(self, status_payload)
@@ -258,33 +259,35 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertEqual(len(status_payload["current_guidance"]), 1)
         self.assertEqual(status_payload["current_guidance_summary"]["selected_count"], 1)
         self.assertIn("guidance is navigation", status_payload["current_guidance_summary"]["boundary"])
-        self.assertEqual(
-            status_payload["current_guidance"][0]["review_action"]["id"],
-            "review_semantic_guidance_candidate",
-        )
-        review_command = status_payload["current_guidance"][0]["review_action"]["command"]
+        self.assertNotIn("review_action", status_payload["current_guidance"][0])
+        self.assertNotIn("materialization_action", status_payload["current_guidance"][0])
+        review_command = status_payload["foreground_action"]["command"]
         guidance_id = status_payload["current_guidance"][0]["guidance_id"]
         self.assertIn("--guidance-id", review_command)
         self.assertIn(str(guidance_id), review_command)
         self.assertNotEqual(review_command, "aippocampus learning guidance --json")
-        materialization_action = status_payload["current_guidance"][0]["materialization_action"]
-        self.assertEqual(materialization_action["target"]["guidance_id"], guidance_id)
-        self.assertEqual(materialization_action["mutation_risk"], "read_only")
-        self.assertEqual(materialization_action["blocked_until"], "reviewed_guidance_has_prepared_row")
         self.assertNotIn("semantic_guidance_lifecycle", status_payload)
         self.assertNotIn("operator_detail", status_payload)
         self.assertEqual(
             status_payload["operator_detail_command"],
-            "aippocampus learning guidance --operator-json",
+            "aippocampus learning guidance --operator-json --json",
         )
         self.assertEqual(learning_status_operator.returncode, 0, learning_status_operator.stderr)
         status_operator_payload = parse_cli_json(self, learning_status_operator)
+        self.assertIn("operator_diagnostics", status_operator_payload["lanes"])
+        self.assertIn("review_action", status_operator_payload["current_guidance"][0])
+        self.assertIn("materialization_action", status_operator_payload["current_guidance"][0])
         self.assertNotIn(
             "guidance_lifecycle_ledger",
             status_operator_payload["semantic_guidance_lifecycle"],
         )
         self.assertIn("guidance_lifecycle_ledger", status_operator_payload["operator_detail"])
         self.assertIn("learning_frontdoor_actions", status_operator_payload["operator_detail"])
+        self.assertIn("foreground_action_menu", status_operator_payload)
+        self.assertEqual(
+            status_operator_payload["foreground_action_menu"]["profile"],
+            "learning_frontdoor_action_menu",
+        )
         self.assertGreater(
             len(status_operator_payload["operator_detail"]["learning_frontdoor_actions"]["safe_next_actions"]),
             len(status_payload["safe_next_actions"]),
@@ -341,6 +344,7 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertEqual(guidance_payload["mode"], "guidance")
         self.assertNotIn("cannot_claim", guidance_payload)
         self.assertNotIn("cannot_claim", guidance_payload["boundary_detail"])
+        self.assertNotIn("next_actions", guidance_payload)
         self.assertLessEqual(len(guidance_payload["safe_next_actions"]), 1)
         self.assertTrue(guidance_payload["more_actions_available_in_detail"])
         assert_compact_frontstage_payload(self, guidance_payload)
@@ -364,7 +368,7 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertNotIn("lifecycle", guidance_payload["semantic_guidance"])
         self.assertEqual(
             guidance_payload["semantic_guidance"]["operator_detail_command"],
-            "aippocampus learning guidance --operator-json",
+            "aippocampus learning guidance --operator-json --json",
         )
         self.assertEqual(
             learning_guidance_operator.returncode,
@@ -375,6 +379,11 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertIn("cannot_claim", guidance_operator_payload["boundary_detail"])
         self.assertIn("semantic_loop", guidance_operator_payload)
         self.assertIn("learning_frontdoor_actions", guidance_operator_payload["operator_detail"])
+        self.assertIn("foreground_action_menu", guidance_operator_payload)
+        self.assertEqual(
+            guidance_operator_payload["foreground_action_menu"]["profile"],
+            "learning_frontdoor_action_menu",
+        )
         self.assertGreater(
             len(guidance_operator_payload["operator_detail"]["learning_frontdoor_actions"]["safe_next_actions"]),
             len(guidance_payload["safe_next_actions"]),
@@ -422,7 +431,7 @@ class AippocampusCliTests(unittest.TestCase):
             "produce or provide sanitized learning findings before expecting action-time hints",
         )
         foreground_commands = " ".join(
-            str(action.get("command", "")) for action in status_payload["next_actions"]
+            str(action.get("command", "")) for action in status_payload["safe_next_actions"]
         )
         self.assertNotIn("benchmark_learning_loop_public_companion", foreground_commands)
 

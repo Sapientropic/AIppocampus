@@ -95,6 +95,7 @@ an architecture decision, not a routine way to make a test pass.
 - `aippocampus_runtime/ops/storage_governance_contract.py`
 - `aippocampus_runtime/ops/storage_governance_projection.py`
 - `aippocampus_runtime/ops/successor_evidence.py`
+- `aippocampus_runtime/ops/successor_issue_state.py`
 - `aippocampus_runtime/ops/telepathy_coordination_packet.py`
 - `aippocampus_runtime/ops/telepathy_handoff_store.py`
 - `aippocampus_runtime/ops/topology_anchor_policy.py`

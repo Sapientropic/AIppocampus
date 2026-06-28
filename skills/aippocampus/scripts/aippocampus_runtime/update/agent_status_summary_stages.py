@@ -266,14 +266,9 @@ def collect_update_actions(
                 status_code=str(state.agent.get("status") or ""),
             )
         )
-    if deferred_components:
-        actions.append(
-            _compact_update_action(
-                surface="operator_detail",
-                reason="full operator readiness sweep deferred",
-                command=OPERATOR_STATUS_COMMAND,
-            )
-        )
+    # Deferred slow probes are an operator-detail affordance, not a foreground
+    # next action. Keeping them out of safe_next_actions prevents agents from
+    # replacing the useful setup step with another diagnostics sweep.
     if state.action_hints_installed and not state.action_hints_useful_signal and not state.foreground_partial:
         actions.append(
             _compact_update_action(
@@ -614,7 +609,7 @@ def build_compact_status_payload(
             safe_next_actions=actions[:5] or [primary_action],
         ),
         "claim_boundary": "Setup status is operational guidance, not memory evidence; reopen source before claims.",
-        "operator_detail_command": OPERATOR_STATUS_COMMAND,
+        "operator_detail_available": True,
     }
     return redact_sensitive_values(redact_private_paths(public))
 

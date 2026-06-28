@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from aippocampus_runtime.ops import successor_evidence
+from aippocampus_runtime.ops import successor_evidence, successor_issue_state
 from aippocampus_runtime.ops.successor_evidence import (
     SUCCESSOR_ISSUE_STATE_MANIFEST,
     SUCCESSOR_ISSUES,
@@ -141,10 +141,7 @@ class SuccessorEvidenceTests(unittest.TestCase):
                 raise subprocess.CalledProcessError(1, command, output="transient")
             return json.dumps(issue_rows)
 
-        with patch(
-            "aippocampus_runtime.ops.successor_evidence.subprocess.check_output",
-            side_effect=fake_check_output,
-        ):
+        with patch.object(successor_issue_state.subprocess, "check_output", side_effect=fake_check_output):
             state = load_github_successor_issue_state(limit=1)
 
         self.assertEqual(state[1981]["parent"], 1918)
@@ -179,10 +176,7 @@ class SuccessorEvidenceTests(unittest.TestCase):
                 )
             raise AssertionError(f"unexpected command: {command}")
 
-        with patch(
-            "aippocampus_runtime.ops.successor_evidence.subprocess.check_output",
-            side_effect=fake_check_output,
-        ):
+        with patch.object(successor_issue_state.subprocess, "check_output", side_effect=fake_check_output):
             state = load_github_successor_issue_state(limit=1)
 
         for number in (2043, 2044, 2045):

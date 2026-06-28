@@ -142,7 +142,11 @@ class RouteNoteRecallPathTests(unittest.TestCase):
 
     def test_mcp_recall_deepens_joined_route_note_source_anchor(self) -> None:
         raw_commentary = self._write_route_note_fixture(
-            final_text="Joined final anchor RN-42 confirms the route-note source window."
+            final_text=(
+                "Joined final anchor RN-42 confirms the previous agent decided "
+                "to check old source before changing source_texture, then kept "
+                "source_texture as the sidecar."
+            )
         )
         cache_path = self.cwd / "route-note-last-recall.json"
         recall_payload = call_mcp_tool_payload(

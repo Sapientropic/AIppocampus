@@ -105,8 +105,67 @@ def _is_associative_path_route(packet: Mapping[str, Any]) -> bool:
     )
 
 
-def _route_is_callable(packet: Mapping[str, Any], *, cache_available: bool) -> bool:
+def _route_source_anchor_gate_blocks_reopen(packet: Mapping[str, Any]) -> bool:
+    gate = packet.get("source_anchor_gate")
+    gate_map = gate if isinstance(gate, Mapping) else {}
+    if str(gate_map.get("status") or "").strip() == "blocked":
+        return True
+    if gate_map.get("target_source_matched") is False:
+        return True
+    if packet.get("recommended_evidence_route") is False:
+        return True
+    return False
+
+
+def request_reopenability_by_index_from_requests(raw_requests: Any) -> dict[int, bool]:
+    result: dict[int, bool] = {}
+    if not isinstance(raw_requests, list):
+        return result
+    for raw in raw_requests:
+        if not isinstance(raw, Mapping):
+            continue
+        try:
+            index = int(raw.get("request_index") or 0)
+        except (TypeError, ValueError):
+            index = 0
+        if index <= 0:
+            continue
+        result[index] = _request_can_open_source(raw)
+    return result
+
+
+def _request_can_open_source(request: Mapping[str, Any]) -> bool:
+    gate = request.get("source_anchor_gate")
+    gate_map = gate if isinstance(gate, Mapping) else {}
+    if str(gate_map.get("status") or "").strip() == "blocked":
+        return False
+    if gate_map.get("target_source_matched") is False:
+        return False
+    if request.get("recommended_evidence_route") is False:
+        return False
+    if request.get("target_source_matched") is False:
+        return False
+    if request.get("local_reopen_token") or request.get("handle") or request.get("callable_handle"):
+        return True
+    try:
+        selected_source_ref_count = int(request.get("selected_source_ref_count") or 0)
+    except (TypeError, ValueError):
+        selected_source_ref_count = 0
+    return selected_source_ref_count > 0
+
+
+def _route_is_callable(
+    packet: Mapping[str, Any],
+    *,
+    cache_available: bool,
+    request_index: int,
+    request_reopenability_by_index: Mapping[int, bool] | None = None,
+) -> bool:
     if not cache_available:
+        return False
+    if request_reopenability_by_index is not None and request_index in request_reopenability_by_index:
+        return bool(request_reopenability_by_index[request_index])
+    if _route_source_anchor_gate_blocks_reopen(packet):
         return False
     if str(packet.get("output_mode") or "") == "reopenable_route":
         return True
@@ -128,6 +187,8 @@ def project_route_receipts(
     labels_low_specificity: bool,
     cache_available: bool,
     recall_selector: str,
+    deepen_requests: Any = None,
+    request_reopenability_by_index: Mapping[int, bool] | None = None,
 ) -> RouteReceiptProjection:
     """Render compact route choices without carrying raw handles or proof.
 
@@ -140,10 +201,17 @@ def project_route_receipts(
         memory_packets,
         labels_low_specificity=labels_low_specificity,
     )
+    if request_reopenability_by_index is None:
+        request_reopenability_by_index = request_reopenability_by_index_from_requests(deepen_requests)
     route_receipts: list[dict[str, Any]] = []
     for index, packet in displayed_packets:
         already_opened = bool(packet.get("already_opened"))
-        route_is_callable = _route_is_callable(packet, cache_available=cache_available)
+        route_is_callable = _route_is_callable(
+            packet,
+            cache_available=cache_available,
+            request_index=index,
+            request_reopenability_by_index=request_reopenability_by_index,
+        )
         low_confidence_route = labels_low_specificity or _is_associative_path_route(packet)
         actionability = (
             "low_confidence_reopenable"

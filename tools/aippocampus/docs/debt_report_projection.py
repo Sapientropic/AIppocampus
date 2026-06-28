@@ -39,6 +39,21 @@ def _first_warning(warnings: Sequence[Mapping[str, Any]]) -> dict[str, Any] | No
     }
 
 
+def _queue_warning(report: Mapping[str, Any]) -> dict[str, Any] | None:
+    queues = report.get("actionable_debt_queues")
+    if not isinstance(queues, Mapping):
+        return None
+    top = queues.get("top_queue")
+    if not isinstance(top, Mapping):
+        return None
+    return {
+        "code": str(top.get("queue_id") or "actionable_debt_queue"),
+        "message": str(top.get("next_action") or "Review the top actionable debt queue."),
+        "count": int(top.get("count") or 0),
+        "sample_paths": list(top.get("sample_paths") or [])[:5],
+    }
+
+
 def _changed_surface_summary(changed_files: Sequence[str]) -> dict[str, Any]:
     summary: dict[str, Any] = {"changed_file_count": len(changed_files)}
     affected = list(changed_files)[:3]
@@ -110,6 +125,7 @@ def compact_debt_report(
     changed_files: Sequence[str],
 ) -> dict[str, Any]:
     warnings = list(report.get("warnings") or [])
+    top_queue = _queue_warning(report)
     return {
         "kind": "aippocampus_debt_report_compact",
         "ok": report.get("ok"),
@@ -117,7 +133,8 @@ def compact_debt_report(
         "changed_surface": _changed_surface_summary(changed_files),
         "blockers": warnings if not report.get("ok") else [],
         "warning_count": len(warnings),
-        "first_warning": _first_warning(warnings),
+        "first_warning": top_queue or _first_warning(warnings),
+        "top_actionable_queue": top_queue,
         "refresh_command": _warning_refresh_command(warnings),
         "detail_command": _detail_command(mode="full", changed_files=changed_files),
     }

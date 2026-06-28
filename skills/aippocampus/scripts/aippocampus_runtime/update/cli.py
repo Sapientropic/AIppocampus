@@ -23,10 +23,8 @@ from aippocampus_runtime.source.io_kernel import load_json_dict
 from aippocampus_runtime.update import status_actions as update_actions
 from aippocampus_runtime.update import status_foreground
 from aippocampus_runtime.update.agent_callable import (
-    command_availability,
     default_host_probe_report_path,
     load_json_file,
-    mcp_command_repair_options,
     status_agent_callable,
 )
 from aippocampus_runtime.update.agent_status_summary import (
@@ -36,6 +34,7 @@ from aippocampus_runtime.update.agent_status_summary import (
 from aippocampus_runtime.update.capability_ladder import build_capability_ladder
 from aippocampus_runtime.update.host_conformance import build_host_conformance_status
 from aippocampus_runtime.update.llm_status import status_llm
+from aippocampus_runtime.update.mcp_readiness import status_mcp
 from aippocampus_runtime.update.operator_output import (
     emit_operator_json,
     emit_update_recovery,
@@ -95,8 +94,6 @@ PROVIDER_KEY_BRIDGE_MARKERS = (
     "aippocampus_provider_bridge_hook.py",
     "aippocampus_runtime.hooks.provider_bridge",
 )
-OLD_MCP_SCRIPT_NAMES = ("aippocampus_mcp_server.py",)
-CURRENT_MCP_MARKERS = ("aippocampus_runtime.mcp.server", "aippocampus mcp")
 RESOLVED_INSTALLED_CACHE_AUTO_STATUSES = {"unique", "unique_version_match"}
 
 
@@ -462,80 +459,6 @@ def status_cli(repo_root: Path) -> dict[str, Any]:
         "recommended_actions": recommended_actions,
         "safety_notes": [
             "CLI refresh is reported as a package install command; update does not run pip implicitly"
-        ],
-    }
-
-
-def status_mcp(repo_root: Path, mcp_config: Path | None = None) -> dict[str, Any]:
-    path = mcp_config or repo_root / "plugins" / "aippocampus" / ".mcp.json"
-    if not path.exists():
-        return {
-            "surface": "mcp",
-            "status": "missing",
-            "source_path": str(path),
-            "target_path": str(path),
-            "stale_flat_script": False,
-            "manual_review_needed": True,
-            "safety_notes": ["MCP config is inspected read-only; apply does not rewrite host configs"],
-        }
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except Exception as exc:
-        return {
-            "surface": "mcp",
-            "status": "invalid",
-            "source_path": str(path),
-            "target_path": str(path),
-            "error": str(exc),
-            "manual_review_needed": True,
-            "safety_notes": ["MCP config parse failed; no mutation attempted"],
-        }
-    server = ((data.get("mcpServers") or {}).get("aippocampus") or {}) if isinstance(data, dict) else {}
-    serialized = json.dumps(server, ensure_ascii=False)
-    command = str(server.get("command") or "")
-    args = [str(item) for item in server.get("args") or []]
-    stale = any(name in serialized for name in OLD_MCP_SCRIPT_NAMES)
-    current = any(marker in serialized for marker in CURRENT_MCP_MARKERS) or (
-        command == "aippocampus" and args[:1] == ["mcp"]
-    )
-    if stale:
-        status = "stale"
-    elif current:
-        status = "current"
-    else:
-        status = "detect_only"
-    availability = command_availability(command)
-    repair_options = mcp_command_repair_options(command)
-    return {
-        "surface": "mcp",
-        "status": status,
-        "package_artifact_current": status == "current",
-        "source_path": str(path),
-        "target_path": str(path),
-        "stale_flat_script": stale,
-        "current_module_entrypoint": current,
-        "manual_review_needed": status != "current",
-        "server_command_present": bool(server),
-        "mcp_command": command or None,
-        "mcp_args": args,
-        "mcp_command_resolves": availability["resolves"],
-        "mcp_command_resolved_path": availability["resolved_path"],
-        "mcp_command_uses_ambiguous_python": Path(command).name.casefold()
-        in {"python", "python.exe"},
-        "mcp_command_uses_console_script": command == "aippocampus",
-        "python_available": availability["python_available"],
-        "python3_available": availability["python3_available"],
-        "aippocampus_console_script_available": availability["console_script_available"],
-        "mcp_command_repair_options": repair_options if not availability["resolves"] else [],
-        "recommended_actions": [
-            "put the aippocampus console script on PATH, or register one of mcp_command_repair_options in the host"
-        ]
-        if not availability["resolves"]
-        else [],
-        "portable_module_command": f"{Path(sys.executable).name} -m aippocampus_runtime.mcp.server",
-        "safety_notes": [
-            "MCP package artifacts are not the same as foreground host tool visibility",
-            "MCP host/user config is preserved; update reports stale commands instead of rewriting it",
         ],
     }
 
