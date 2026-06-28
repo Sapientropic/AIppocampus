@@ -320,7 +320,9 @@ def _compact_action_fields(actions: list[dict[str, Any]]) -> dict[str, Any]:
         compact_action = dict(action)
         compact_action.pop("claim_boundary", None)
         alternates.append(compact_action)
-    fields["safe_next_actions"] = alternates
+    # The compact packet should point the agent at the first useful recovery
+    # step; full detail carries the route/deepen menu for operators.
+    fields["safe_next_actions"] = alternates[:1]
     return fields
 
 

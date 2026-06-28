@@ -117,6 +117,8 @@ def _compact_recall_action_fields(
     if isinstance(safe_action_rows, list):
         raw_safe_actions.extend(item for item in safe_action_rows if isinstance(item, Mapping))
     primary = _compact_recall_action(raw_primary)
+    # Compact recall is a next-step card, not a recovery menu. Keep only the
+    # strongest alternate here; detail/full output owns the wider recovery set.
     safe_actions = [
         action
         for action in (
@@ -124,7 +126,7 @@ def _compact_recall_action_fields(
             for item in raw_safe_actions
         )
         if action and action != primary
-    ]
+    ][:1]
     result: dict[str, Any] = {"foreground_action": primary}
     if safe_actions:
         result["safe_next_actions"] = safe_actions

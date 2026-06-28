@@ -198,8 +198,8 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
         self.assertEqual(action["arguments"]["request_index"], 1)
         self.assertNotIn("secondary_action", action)
         safe_by_id = {item["id"]: item for item in public["safe_next_actions"]}
+        self.assertEqual(set(safe_by_id), {"refine_low_specificity_recall_cue"})
         refine_action = safe_by_id["refine_low_specificity_recall_cue"]
-        search_action = safe_by_id["search_registry_sources_for_original_cue_anchors"]
         self.assertEqual(refine_action["id"], "refine_low_specificity_recall_cue")
         self.assertNotIn("previous_low_specificity_cue", refine_action)
         self.assertNotIn("previous_cue_role", refine_action)
@@ -211,12 +211,6 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
             'aippocampus agent recall "{tighter_cue}" --json',
         )
         self.assertNotIn("tighter_cue_template", refine_action)
-        self.assertEqual(search_action["tool_name"], "search_memory")
-        self.assertEqual(search_action["arguments"]["scope"], "all_registered_sources")
-        self.assertEqual(search_action["arguments"]["max_elapsed_ms"], 5000)
-        self.assertIn("aippocampus search --all", search_action["command"])
-        self.assertIn("--max-elapsed-ms 5000", search_action["command"])
-        self.assertIn("fallback only", search_action["why"])
         self.assertNotIn("route_count", public)
         self.assertNotIn("displayed_route_count", public)
         self.assertNotIn("omitted_route_count", public)
@@ -330,12 +324,7 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
 
         self.assertEqual(public["foreground_action"]["id"], "deepen_top_route_low_confidence")
         safe_ids = [action["id"] for action in public["safe_next_actions"]]
-        self.assertIn("reopen_background_finding_source_route", safe_ids)
-        self.assertIn("search_registry_sources_for_original_cue_anchors", safe_ids)
-        self.assertLess(
-            safe_ids.index("reopen_background_finding_source_route"),
-            safe_ids.index("search_registry_sources_for_original_cue_anchors"),
-        )
+        self.assertEqual(safe_ids, ["reopen_background_finding_source_route"])
         self.assertEqual(public["background_recovery_card"]["primary_action"], "reopen_background_finding_source_route")
         encoded = json.dumps(public, ensure_ascii=False)
         self.assertNotIn("use_boundary", encoded)
@@ -421,8 +410,7 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
         self.assertEqual(action["claim_boundary"], "semantic_navigation_only_until_source_reopen")
         self.assertIn("source-shaped semantic candidate", action["why"])
         safe_ids = [item["id"] for item in public["safe_next_actions"]]
-        self.assertIn("deepen_top_route_low_confidence", safe_ids)
-        self.assertIn("search_registry_sources_for_original_cue_anchors", safe_ids)
+        self.assertEqual(safe_ids, ["deepen_top_route_low_confidence"])
         self.assertNotEqual(public["foreground_action"]["id"], "search_registry_sources_for_original_cue_anchors")
         encoded = json.dumps(public, ensure_ascii=False, sort_keys=True)
         self.assertNotIn("semantic_gate_diagnostics", encoded)
@@ -601,7 +589,7 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
         self.assertNotIn("source_refs", encoded)
         self.assertNotIn("deepen_associative_path_fallback", encoded)
         safe_ids = {item["id"] for item in public["safe_next_actions"]}
-        self.assertIn("search_registry_sources_for_original_cue_anchors", safe_ids)
+        self.assertEqual(safe_ids, {"run_apw_opt_in_recovery"})
         self.assertEqual(executable_command_violations(public), [])
         assert_compact_frontstage_payload(self, public, max_top_level_diagnostics=2)
 
@@ -816,16 +804,10 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
         self.assertEqual(action["arguments"]["request_index"], 1)
         self.assertIn("low-confidence recall route", action["why"])
         safe_by_id = {item["id"]: item for item in public["safe_next_actions"]}
+        self.assertEqual(set(safe_by_id), {"refine_low_specificity_recall_cue"})
         refine_action = safe_by_id["refine_low_specificity_recall_cue"]
         self.assertEqual(refine_action["requires"], ["tighter_cue"])
         self.assertNotIn("previous_low_specificity_cue", refine_action)
-        source_search = safe_by_id["search_registry_sources_for_original_cue_anchors"]
-        self.assertEqual(source_search["tool_name"], "search_memory")
-        self.assertEqual(source_search["arguments"]["scope"], "all_registered_sources")
-        self.assertEqual(source_search["arguments"]["max_elapsed_ms"], 5000)
-        self.assertIn("aippocampus search --all", source_search["command"])
-        self.assertIn("--max-elapsed-ms 5000", source_search["command"])
-        self.assertIn("fallback only", source_search["why"])
         self.assertNotIn("weak_route_recovery_card", public)
         self.assertNotIn("route_availability_summary", public)
         assert_compact_frontstage_payload(self, public, max_top_level_diagnostics=1)
@@ -977,11 +959,8 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
         self.assertEqual(action["id"], "deepen_top_route_low_confidence")
         self.assertEqual(action["tool_name"], "agent_deepen")
         safe_by_id = {item["id"]: item for item in public["safe_next_actions"]}
+        self.assertEqual(set(safe_by_id), {"refine_low_specificity_recall_cue"})
         self.assertEqual(safe_by_id["refine_low_specificity_recall_cue"]["id"], "refine_low_specificity_recall_cue")
-        self.assertEqual(
-            safe_by_id["search_registry_sources_for_original_cue_anchors"]["tool_name"],
-            "search_memory",
-        )
         self.assertIn("low-confidence recall route", action["why"])
         self.assertEqual(len(public["routes"]), 1)
         self.assertNotIn("route_choice_posture", public["routes"][0])
@@ -1076,8 +1055,7 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
             "deepen_top_route_low_confidence",
         )
         safe_ids = {item["id"] for item in public["safe_next_actions"]}
-        self.assertIn("search_registry_sources_for_original_cue_anchors", safe_ids)
-        self.assertIn("deepen_top_route_low_confidence", safe_ids)
+        self.assertEqual(safe_ids, {"deepen_top_route_low_confidence"})
         encoded = json.dumps(public, ensure_ascii=False)
         self.assertNotIn("C:\\", encoded)
         self.assertNotIn("source_refs", encoded)
@@ -1155,7 +1133,7 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
         self.assertEqual(action["tool_name"], "agent_deepen")
         self.assertNotIn("repo_familiarity_fallback", public)
         safe_ids = {item["id"] for item in public["safe_next_actions"]}
-        self.assertIn("search_registry_sources_for_original_cue_anchors", safe_ids)
+        self.assertEqual(safe_ids, {"refine_low_specificity_recall_cue"})
 
     def test_current_source_anchor_probe_blocks_repo_familiarity_primary(
         self,
