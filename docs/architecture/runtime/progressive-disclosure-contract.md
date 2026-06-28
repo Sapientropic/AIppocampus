@@ -26,6 +26,9 @@ Budget rules:
 - Compact `safe_next_actions` should be empty or one real alternative by
   default. Chooser cards may allow more only when the surface is explicitly a
   chooser and each action is distinct.
+- Foreground action budget metadata belongs in lint/detail/operator output.
+  Default compact may say `more_actions_available_in_detail` only when actions
+  were actually hidden or degraded by the compact budget.
 - Compact output may expose at most one top-level detail affordance such as
   `operator_detail_command`, unless the surface has a named allowlist in
   `tests/aippocampus/frontstage_assertions.py`.

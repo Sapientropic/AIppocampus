@@ -34,7 +34,10 @@ from aippocampus_runtime.contracts import (
     public_envelope,
     shell_quote,
 )
-from aippocampus_runtime.foreground_action_lint import compact_foreground_action_violations
+from aippocampus_runtime.foreground_action_lint import (
+    compact_foreground_action_budget_report,
+    compact_foreground_action_violations,
+)
 from aippocampus_runtime.mcp.public_projection import compact_health_payload
 from aippocampus_runtime.registry import store as registry_store
 
@@ -237,6 +240,76 @@ class RuntimeContractsAndConfigRegistryTests(unittest.TestCase):
         self.assertIn("compact_safe_next_actions_exceeds_budget", reasons)
         self.assertIn("write_capable_action_not_allowed_in_default_compact", reasons)
         self.assertIn("manual_safe_action_needs_command_or_continue_marker", reasons)
+
+    def test_compact_foreground_action_budget_report_is_detail_metadata(self) -> None:
+        payload = {
+            "foreground_action_contract": "foreground-action-v2",
+            "foreground_action": {
+                "id": "review_recall_route",
+                "command": "aippocampus agent deepen --request 1 --recall-selector sel --json",
+                "mutation_risk": "read_only",
+                "claim_boundary": "no_claim_before_reopen",
+            },
+            "safe_next_actions": [
+                {
+                    "id": "refine_cue",
+                    "command_template": 'aippocampus agent recall "{tighter_cue}" --json',
+                    "requires": ["tighter_cue"],
+                    "template_only": True,
+                    "mutation_risk": "read_only",
+                    "claim_boundary": "no_claim_before_reopen",
+                }
+            ],
+        }
+
+        report = compact_foreground_action_budget_report(payload)
+
+        self.assertEqual(report["budget_reason"], "compact_safe_next_actions_budget")
+        self.assertEqual(report["max_safe_actions"], 1)
+        self.assertEqual(report["safe_action_count"], 1)
+        self.assertEqual(report["visible_safe_action_count"], 1)
+        self.assertEqual(report["hidden_safe_action_count"], 0)
+        self.assertFalse(report["budget_limited"])
+        self.assertFalse(report["more_actions_available_in_detail"])
+        self.assertNotIn("action_budget", payload)
+
+    def test_compact_foreground_action_budget_report_exposes_truncation(self) -> None:
+        payload = {
+            "foreground_action_contract": "foreground-action-v2",
+            "foreground_action": {
+                "id": "review_recall_route",
+                "command": "aippocampus agent deepen --request 1 --recall-selector sel --json",
+                "mutation_risk": "read_only",
+                "claim_boundary": "no_claim_before_reopen",
+            },
+            "safe_next_actions": [
+                {
+                    "id": "refine_cue",
+                    "command_template": 'aippocampus agent recall "{tighter_cue}" --json',
+                    "requires": ["tighter_cue"],
+                    "template_only": True,
+                    "mutation_risk": "read_only",
+                    "claim_boundary": "no_claim_before_reopen",
+                },
+                {
+                    "id": "search_exact_phrase",
+                    "command_template": 'aippocampus search "{exact_phrase}" --json',
+                    "requires": ["exact_phrase"],
+                    "template_only": True,
+                    "mutation_risk": "read_only",
+                    "claim_boundary": "search_result_requires_source_boundary",
+                },
+            ],
+        }
+
+        report = compact_foreground_action_budget_report(payload, max_safe_actions=1)
+
+        self.assertEqual(report["max_safe_actions"], 1)
+        self.assertEqual(report["safe_action_count"], 2)
+        self.assertEqual(report["visible_safe_action_count"], 1)
+        self.assertEqual(report["hidden_safe_action_count"], 1)
+        self.assertTrue(report["budget_limited"])
+        self.assertTrue(report["more_actions_available_in_detail"])
 
     def test_compact_foreground_action_lint_rejects_write_primary_action(self) -> None:
         payload = {

@@ -34,6 +34,9 @@ _RECALL_COMPACT_ACTION_KEYS = frozenset(
         "template_only",
         "mutation_risk",
         "claim_boundary",
+        "actionability",
+        "route_index",
+        "primary_route_relation",
         "why",
         "continue_without_command",
     }
@@ -54,7 +57,15 @@ def assemble_compact_recall_payload(
     background_recovery: dict[str, Any] | None,
     exact_wording_source_search_primary: bool,
 ) -> MCPCompactResponseContract:
-    route_receipts = route_projection_result.route_receipts
+    route_receipts = _annotate_route_action_priority(
+        route_projection_result.route_receipts,
+        foreground_action=foreground_action,
+        context=context,
+    )
+    foreground_action = _annotate_foreground_route_relation(
+        foreground_action,
+        route_receipts=route_receipts,
+    )
     if context.labels_low_specificity and context.memory_packets:
         weak_route_recovery_card = result_projection.low_specificity_route_guidance_card(
             base_card=weak_route_recovery_card,
@@ -119,17 +130,17 @@ def _compact_recall_action_fields(
     primary = _compact_recall_action(raw_primary)
     # Compact recall is a next-step card, not a recovery menu. Keep only the
     # strongest alternate here; detail/full output owns the wider recovery set.
-    safe_actions = [
-        action
-        for action in (
-            _compact_recall_action(item)
-            for item in raw_safe_actions
-        )
-        if action and action != primary
-    ][:1]
+    candidate_safe_actions: list[dict[str, Any]] = []
+    for action in (_compact_recall_action(item) for item in raw_safe_actions):
+        if not action or action == primary or action in candidate_safe_actions:
+            continue
+        candidate_safe_actions.append(action)
+    safe_actions = candidate_safe_actions[:1]
     result: dict[str, Any] = {"foreground_action": primary}
     if safe_actions:
         result["safe_next_actions"] = safe_actions
+    if len(candidate_safe_actions) > len(safe_actions):
+        result["more_actions_available_in_detail"] = True
     return result
 
 
@@ -148,3 +159,89 @@ def _compact_claim_boundary(*, can_use_for: list[str]) -> str:
     if "route_selection" in can_use_for:
         return "route_selection_ok_after_source_reopen"
     return "next_action_only_reopen_before_claims"
+
+
+def _action_request_index(action: Mapping[str, Any]) -> int | None:
+    arguments = action.get("arguments")
+    if not isinstance(arguments, Mapping):
+        return None
+    try:
+        index = int(arguments.get("request_index") or 0)
+    except (TypeError, ValueError):
+        return None
+    return index if index > 0 else None
+
+
+def _route_index(route: Mapping[str, Any]) -> int | None:
+    try:
+        index = int(route.get("index") or 0)
+    except (TypeError, ValueError):
+        return None
+    return index if index > 0 else None
+
+
+def _route_has_action(route: Mapping[str, Any]) -> bool:
+    return isinstance(route.get("action"), Mapping)
+
+
+def _annotate_route_action_priority(
+    routes: list[dict[str, Any]],
+    *,
+    foreground_action: Mapping[str, Any],
+    context: Any,
+) -> list[dict[str, Any]]:
+    primary_route_index = (
+        _action_request_index(foreground_action)
+        if str(foreground_action.get("tool_name") or "") == "agent_deepen"
+        else None
+    )
+    low_specificity = bool(getattr(context, "labels_low_specificity", False))
+    annotated: list[dict[str, Any]] = []
+    for route in routes:
+        row = dict(route)
+        row_index = _route_index(row)
+        has_action = _route_has_action(row)
+        if primary_route_index is not None and row_index == primary_route_index:
+            row["action_priority"] = "primary"
+            row["primary_action_relation"] = "foreground_action_deepens_this_route"
+            row["actionability"] = (
+                "low_confidence_reopenable" if low_specificity else "reopenable"
+            ) if has_action else "preview_only"
+        elif primary_route_index is None:
+            row["action_priority"] = "secondary_preview"
+            row["actionability"] = (
+                "low_confidence_reopenable"
+                if has_action and low_specificity
+                else "reopenable"
+                if has_action
+                else "preview_only"
+            )
+        else:
+            row["action_priority"] = "secondary_candidate" if has_action else "secondary_preview"
+            row["actionability"] = (
+                str(row.get("actionability") or "")
+                or ("reopenable" if has_action else "preview_only")
+            )
+        annotated.append(row)
+    return annotated
+
+
+def _annotate_foreground_route_relation(
+    foreground_action: Mapping[str, Any],
+    *,
+    route_receipts: list[dict[str, Any]],
+) -> dict[str, Any]:
+    route_index = _action_request_index(foreground_action)
+    if route_index is None:
+        return dict(foreground_action)
+    for route in route_receipts:
+        if _route_index(route) != route_index or route.get("action_priority") != "primary":
+            continue
+        action = dict(foreground_action)
+        action.setdefault("route_index", route_index)
+        action.setdefault("primary_route_relation", "foreground_action_deepens_this_route")
+        actionability = route.get("actionability")
+        if isinstance(actionability, str) and actionability:
+            action.setdefault("actionability", actionability)
+        return action
+    return dict(foreground_action)

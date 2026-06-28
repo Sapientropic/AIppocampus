@@ -41,6 +41,8 @@ class ForegroundActionContract(TypedDict, total=False):
     template_only: NotRequired[bool]
     requires: NotRequired[list[str]]
     actionability: NotRequired[str]
+    route_index: NotRequired[int]
+    primary_route_relation: NotRequired[str]
     non_actionable: NotRequired[bool]
     continue_without_command: NotRequired[bool]
     no_op: NotRequired[bool]
@@ -198,6 +200,12 @@ def foreground_action_contract(action: Mapping[str, Any]) -> ForegroundActionCon
     actionability = normalized.get("actionability")
     if isinstance(actionability, str) and actionability:
         typed["actionability"] = actionability
+    route_index = normalized.get("route_index")
+    if isinstance(route_index, int):
+        typed["route_index"] = route_index
+    relation = normalized.get("primary_route_relation")
+    if isinstance(relation, str) and relation:
+        typed["primary_route_relation"] = relation
     secondary = normalized.get("secondary_action")
     if isinstance(secondary, Mapping):
         typed["secondary_action"] = foreground_action_contract(secondary)
