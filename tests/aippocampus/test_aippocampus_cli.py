@@ -49,9 +49,11 @@ class AippocampusCliTests(unittest.TestCase):
 
         self.assertEqual(proc.returncode, 0)
         self.assertIn("Start here:", proc.stdout)
+        self.assertIn("aippocampus pulse --json", proc.stdout)
         self.assertIn("aippocampus start --json", proc.stdout)
         self.assertIn('aippocampus agent recall "old cue"', proc.stdout)
         self.assertIn('aippocampus search "exact phrase"', proc.stdout)
+        self.assertIn("aippocampus maintenance plan --summary-json", proc.stdout)
         self.assertIn(
             "aippocampus agent deepen --request 1 --recall-selector <emitted-selector> --json",
             proc.stdout,
@@ -63,13 +65,16 @@ class AippocampusCliTests(unittest.TestCase):
         start = proc.stdout[
             proc.stdout.index("Start here:") : proc.stdout.index("Recovery/readiness:")
         ]
+        self.assertLess(start.index("pulse --json"), start.index("start --json"))
         self.assertLess(start.index("start --json"), start.index("agent recall"))
         self.assertLess(start.index("agent recall"), start.index("agent deepen"))
         self.assertLess(start.index("agent deepen"), start.index("search"))
+        self.assertLess(start.index("search"), start.index("maintenance plan"))
         self.assertNotIn("aippocampus health", start)
         self.assertIn("Recovery/readiness:", proc.stdout)
         self.assertIn("Intent gradients:", proc.stdout)
         self.assertIn("pulse -> one-line readiness", proc.stdout)
+        self.assertIn("status/start -> summary/current posture", proc.stdout)
         self.assertIn("agent recall -> fuzzy continuity route finding", proc.stdout)
         self.assertIn("do-not-use-here -> current-scope exclusion", proc.stdout)
         self.assertLess(proc.stdout.index("agent deepen"), proc.stdout.index("Recovery/readiness:"))
@@ -87,6 +92,11 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertIn("continuity-domain", proc.stdout)
         self.assertIn("work-guard", proc.stdout)
         self.assertIn("update status", proc.stdout)
+        self.assertIn("Route-readiness dashboard for source/route health", proc.stdout)
+        self.assertIn("Conversation sequence and continuity-arc read model", proc.stdout)
+        self.assertIn("Navigation-sidecar boundary card for source route choice", proc.stdout)
+        self.assertIn("Local handoff coordination records for agent continuity", proc.stdout)
+        self.assertIn("dream status        Background inference candidates, status only", proc.stdout)
 
     def test_personal_control_and_learning_frontdoors_are_executable(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -939,7 +949,7 @@ class AippocampusCliTests(unittest.TestCase):
 
         self.assertEqual(top.returncode, 0, top.stderr)
         self.assertIn("Route-suppression / bad-route feedback card", top.stdout)
-        self.assertIn("Local handoff coordination cards", top.stdout)
+        self.assertIn("Local handoff coordination records for agent continuity", top.stdout)
         self.assertIn("Background inference candidates, status only", top.stdout)
 
         self.assertEqual(dream.returncode, 0, dream.stderr)

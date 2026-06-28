@@ -169,7 +169,7 @@ def assert_compact_frontstage_payload(
     payload: Mapping[str, Any],
     *,
     max_top_level_diagnostics: int = 1,
-    max_safe_actions: int = 5,
+    max_safe_actions: int = 1,
     allow_write_safe_actions: bool = False,
     current_status_command: str | None = None,
 ) -> None:

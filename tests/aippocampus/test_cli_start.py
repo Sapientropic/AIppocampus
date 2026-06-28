@@ -46,8 +46,17 @@ class AippocampusStartCliTests(unittest.TestCase):
         self.assertEqual(payload["first_recall_readiness"]["phase"], "steady_state_available")
         self.assertTrue(payload["first_recall_readiness"]["ordinary_first_recall_usable"])
         self.assertFalse(payload["first_recall_readiness"]["cold_start_expected"])
+        self.assertLessEqual(len(payload["first_recall_readiness"]), 12)
+        self.assertTrue(
+            {
+                "source_artifacts_present",
+                "manifest_stale",
+                "workspace_source_maintenance_required",
+                "cue_specific_route_usefulness",
+            }.isdisjoint(payload["first_recall_readiness"])
+        )
         self.assertEqual(payload["performance_expectation"]["mode"], "steady_state")
-        self.assertFalse(payload["state_summary"]["clean_source"]["path_serialized"])
+        self.assertNotIn("state_summary", payload)
         self.assertEqual(payload["safe_next_actions"], [])
         self.assertIn("deepen_after_recall", payload["detail_actions_available"])
         self.assertIn("export_after_recall", payload["detail_actions_available"])
@@ -66,22 +75,38 @@ class AippocampusStartCliTests(unittest.TestCase):
                 "--clean-source-dir",
                 str(clean),
             )
+            full_proc = self.run_cli(
+                "start",
+                "agent-native recall opt-in",
+                "--json",
+                "--detail",
+                "full",
+                "--cwd",
+                str(root),
+                "--clean-source-dir",
+                str(clean),
+            )
 
         self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(full_proc.returncode, 0, full_proc.stderr)
         payload = json.loads(proc.stdout)
+        full_payload = json.loads(full_proc.stdout)
         self.assertTrue(payload["cue_supplied"])
         self.assertEqual(payload["foreground_action"]["id"], "recall_supplied_cue")
         self.assertIn("agent-native recall opt-in", payload["foreground_action"]["command"])
         self.assertNotIn("command_template", payload["foreground_action"])
         readiness = payload["first_recall_readiness"]
+        self.assertNotIn("ordinary_first_recall_usable_scope", readiness)
+        self.assertNotIn("cue_specific_route_usefulness", readiness)
+        diagnostic = full_payload["operator_detail"]["first_recall_readiness_diagnostic"]
         self.assertEqual(
-            readiness["ordinary_first_recall_usable_scope"],
+            diagnostic["ordinary_first_recall_usable_scope"],
             "cue_action_callable_not_previewed",
         )
-        self.assertTrue(readiness["source_artifacts_present"])
-        self.assertTrue(readiness["exact_source_search_available"])
-        self.assertTrue(readiness["compact_agent_recall_action_callable"])
-        self.assertFalse(readiness["cue_specific_route_usefulness"]["usefulness_verified_for_cue"])
+        self.assertTrue(diagnostic["source_artifacts_present"])
+        self.assertTrue(diagnostic["exact_source_search_available"])
+        self.assertTrue(diagnostic["compact_agent_recall_action_callable"])
+        self.assertFalse(diagnostic["cue_specific_route_usefulness"]["usefulness_verified_for_cue"])
 
     def test_start_json_routes_weak_cue_to_search_fallback(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -97,14 +122,29 @@ class AippocampusStartCliTests(unittest.TestCase):
                 "--clean-source-dir",
                 str(clean),
             )
+            full_proc = self.run_cli(
+                "start",
+                "--cue",
+                "recall",
+                "--json",
+                "--detail",
+                "full",
+                "--cwd",
+                str(root),
+                "--clean-source-dir",
+                str(clean),
+            )
 
         self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(full_proc.returncode, 0, full_proc.stderr)
         payload = json.loads(proc.stdout)
+        full_payload = json.loads(full_proc.stdout)
         self.assertEqual(payload["decision"], "continue_from_existing_source_with_search_fallback")
         self.assertEqual(payload["foreground_action"]["id"], "search_current_source_for_supplied_cue")
         self.assertIn("aippocampus search", payload["foreground_action"]["command"])
+        self.assertNotIn("cue_specific_route_usefulness", payload["first_recall_readiness"])
         self.assertEqual(
-            payload["first_recall_readiness"]["cue_specific_route_usefulness"]["status"],
+            full_payload["operator_detail"]["first_recall_readiness_diagnostic"]["cue_specific_route_usefulness"]["status"],
             "weak_cue_search_fallback_recommended",
         )
         action_ids = [action["id"] for action in payload["safe_next_actions"]]
@@ -391,6 +431,8 @@ class AippocampusStartCliTests(unittest.TestCase):
         self.assertFalse(payload["first_recall_readiness"]["cold_start_expected"])
         self.assertEqual(payload["first_recall_readiness"]["progress_signal"], "source_exists_but_stale")
         self.assertTrue(payload["first_recall_readiness"]["blocks_exact_latest_claims"])
+        self.assertNotIn("manifest_stale", payload["first_recall_readiness"])
+        self.assertNotIn("workspace_source_maintenance_required", payload["first_recall_readiness"])
         self.assertTrue(payload["blocks_exact_latest_claims"])
         action_ids = [action["id"] for action in payload["safe_next_actions"]]
         self.assertEqual(action_ids, ["review_maintenance_plan_before_exact_latest"])
@@ -421,6 +463,11 @@ class AippocampusStartCliTests(unittest.TestCase):
                     root,
                     clean_source_dir=str(clean),
                 )
+                full_payload = start_cli.build_start_card(
+                    root,
+                    clean_source_dir=str(clean),
+                    detail="full",
+                )
 
         self.assertEqual(payload["decision"], "continue_from_existing_source_latest_degraded")
         self.assertEqual(payload["status"], "ready_with_freshness_degraded")
@@ -428,11 +475,14 @@ class AippocampusStartCliTests(unittest.TestCase):
         self.assertEqual(readiness["phase"], "steady_state_latest_degraded")
         self.assertTrue(readiness["ordinary_first_recall_usable"])
         self.assertTrue(readiness["source_stale"])
-        self.assertFalse(readiness["manifest_stale"])
+        self.assertNotIn("manifest_stale", readiness)
         self.assertTrue(readiness["latest_current_thread_may_be_missing"])
-        self.assertTrue(readiness["workspace_source_maintenance_required"])
+        self.assertNotIn("workspace_source_maintenance_required", readiness)
         self.assertTrue(readiness["blocks_exact_latest_claims"])
-        source = payload["state_summary"]["clean_source"]
+        diagnostic = full_payload["operator_detail"]["first_recall_readiness_diagnostic"]
+        self.assertFalse(diagnostic["manifest_stale"])
+        self.assertTrue(diagnostic["workspace_source_maintenance_required"])
+        source = full_payload["operator_detail"]["state_summary"]["clean_source"]
         self.assertFalse(source["manifest_stale"])
         self.assertTrue(source["latest_source_may_be_missing"])
         self.assertEqual(source["freshness_scope"], "workspace_health_summary")

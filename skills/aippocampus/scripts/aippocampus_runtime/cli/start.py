@@ -21,7 +21,11 @@ from aippocampus_runtime.contracts import (
     foreground_shell_action,
     shell_quote,
 )
-from aippocampus_runtime.first_recall_readiness import start_first_recall_readiness
+from aippocampus_runtime.first_recall_readiness import (
+    compact_start_first_recall_readiness,
+    start_first_recall_readiness,
+    start_first_recall_readiness_diagnostic,
+)
 from aippocampus_runtime.onboarding.facade import provider_status_report
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 from aippocampus_runtime.public_output import emit_public_json, emit_public_text
@@ -522,54 +526,25 @@ def build_start_card(
         )
     primary = actions[0]
     source_state = state["clean_source"]
-    first_recall_readiness = start_first_recall_readiness(
-        decision=decision,
-        source_exists=bool(source_state.get("exists")),
-        source_stale=bool(source_state.get("stale")),
-        action_id=str(primary.get("id") or ""),
-    )
     cue_specific = _cue_specificity(clean_cue) if clean_cue else {
         "status": "not_checked_no_cue_supplied",
         "bounded_recall_preview_run": False,
         "usefulness_verified_for_cue": False,
     }
-    first_recall_readiness.update(
-        {
-            "ordinary_first_recall_usable_scope": (
-                "cue_action_callable_not_previewed"
-                if clean_cue
-                else "artifact_level_not_cue_specific"
-            ),
-            "source_artifacts_present": bool(source_state.get("exists")),
-            "exact_source_search_available": bool(source_state.get("exists")),
-            "compact_agent_recall_action_callable": bool(
-                clean_cue
-                and any(
-                    action.get("id") in {"recall_supplied_cue", "try_first_recall"}
-                    and str(action.get("command") or "").startswith("aippocampus ")
-                    for action in actions
-                )
-            ),
-            "cue_specific_route_usefulness": cue_specific,
-            "warm_or_ambient_degraded_is_optional": True,
-            "source_stale_scope": str(source_state.get("freshness_scope") or "manifest_only"),
-            "manifest_stale": bool(source_state.get("manifest_stale")),
-            "latest_current_thread_may_be_missing": bool(
-                first_recall_readiness.get("latest_current_thread_may_be_missing")
-                or source_state.get("latest_source_may_be_missing")
-            ),
-            "workspace_source_maintenance_required": bool(
-                source_state.get("workspace_source_maintenance_required")
-            ),
-            "blocks_exact_latest_claims": bool(
-                first_recall_readiness.get("blocks_exact_latest_claims")
-                or source_state.get("blocks_exact_latest_claims")
-            ),
-            "maintenance_recommended_before_exact_latest": bool(
-                first_recall_readiness.get("maintenance_recommended_before_exact_latest")
-                or source_state.get("workspace_source_maintenance_required")
-            ),
-        }
+    full_first_recall_readiness = start_first_recall_readiness_diagnostic(
+        start_first_recall_readiness(
+            decision=decision,
+            source_exists=bool(source_state.get("exists")),
+            source_stale=bool(source_state.get("stale")),
+            action_id=str(primary.get("id") or ""),
+        ),
+        source_state=source_state,
+        cue_specific=cue_specific,
+        cue_supplied=bool(clean_cue),
+        actions=actions,
+    )
+    compact_first_recall_readiness = compact_start_first_recall_readiness(
+        full_first_recall_readiness
     )
     write_actions = [
         action
@@ -606,10 +581,10 @@ def build_start_card(
         "cue_supplied": bool(clean_cue),
         **({"cue": clean_cue} if clean_cue else {}),
         **action_fields,
-        "first_recall_readiness": first_recall_readiness,
-        "performance_expectation": first_recall_readiness.get("performance_expectation"),
+        "first_recall_readiness": compact_first_recall_readiness,
+        "performance_expectation": full_first_recall_readiness.get("performance_expectation"),
         "blocks_exact_latest_claims": bool(
-            first_recall_readiness.get("blocks_exact_latest_claims")
+            full_first_recall_readiness.get("blocks_exact_latest_claims")
         ),
         "write_boundary": {
             "written": False,
@@ -625,13 +600,14 @@ def build_start_card(
         ),
         **({"write_actions": write_actions} if write_actions and not hide_maintenance_write_actions else {}),
         "claim_boundary": "start chooses a route; source-backed claims still require recall/deepen source reopen",
-        "state_summary": state,
     }
     if detail == "full":
         card["operator_detail"] = {
             "cwd_checked": "current_working_directory",
             "clean_source_path_redacted": True,
             "plugin_manifest_checked": True,
+            "state_summary": state,
+            "first_recall_readiness_diagnostic": full_first_recall_readiness,
             "carry_actions": _carry_actions(),
             "write_actions": write_actions,
         }

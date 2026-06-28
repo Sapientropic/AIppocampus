@@ -75,7 +75,9 @@ MCP_ACTION_KEYS = frozenset(
         "command_template",
         "followup_arguments_template",
         "last_recall_fallback_command_template",
+        "primary_route_relation",
         "requires",
+        "route_index",
         "template_only",
         "continue_without_command",
     }
@@ -88,6 +90,9 @@ MCP_ROUTE_KEYS = frozenset(
         "why_this_route",
         "source_boundary",
         "claim_boundary",
+        "actionability",
+        "action_priority",
+        "primary_action_relation",
         "action",
     }
 )

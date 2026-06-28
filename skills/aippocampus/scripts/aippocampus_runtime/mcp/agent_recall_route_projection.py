@@ -119,6 +119,13 @@ def project_route_receipts(
             cache_available
             and str(packet.get("output_mode") or "") == "reopenable_route"
         )
+        actionability = (
+            "low_confidence_reopenable"
+            if route_is_callable and labels_low_specificity
+            else "reopenable"
+            if route_is_callable
+            else "preview_only"
+        )
         route_receipts.append(
             core.strip_empty(
                 {
@@ -132,6 +139,7 @@ def project_route_receipts(
                     ),
                     "already_opened": already_opened or None,
                     "source_boundary": "reopen_required_before_claim",
+                    "actionability": actionability,
                     "action": route_deepen_action(
                         index,
                         recall_selector=recall_selector,

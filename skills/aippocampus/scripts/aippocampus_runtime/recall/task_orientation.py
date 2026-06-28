@@ -21,6 +21,7 @@ from aippocampus_runtime.contracts import (
     foreground_template_action,
     shell_quote,
 )
+from aippocampus_runtime.foreground_action_lint import compact_foreground_action_budget_report
 from aippocampus_runtime.ops.issue_work_guard import build_issue_active_pull_packet
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 from aippocampus_runtime.recall.active_path_packet import build_active_path_packet
@@ -320,7 +321,11 @@ def _compact_action_fields(actions: list[dict[str, Any]]) -> dict[str, Any]:
         compact_action = dict(action)
         compact_action.pop("claim_boundary", None)
         alternates.append(compact_action)
-    fields["safe_next_actions"] = alternates
+    # The compact packet should point the agent at the first useful recovery
+    # step; full detail carries the route/deepen menu for operators.
+    if len(alternates) > 1:
+        fields["more_actions_available_in_detail"] = True
+    fields["safe_next_actions"] = alternates[:1]
     return fields
 
 
@@ -405,6 +410,10 @@ def build_task_orientation_packet(
     detail_level = str(detail or "compact").strip().casefold()
     full_detail = detail_level in {"full", "detail", "operator"}
     full_action_fields = canonical_foreground_action_fields(actions[0], safe_next_actions=actions)
+    foreground_action_budget = compact_foreground_action_budget_report(
+        full_action_fields,
+        max_safe_actions=1,
+    )
     compact_action_fields = _compact_action_fields(actions)
     base_packet: dict[str, Any] = {
         "kind": KIND,
@@ -430,6 +439,7 @@ def build_task_orientation_packet(
         packet: dict[str, Any] = {
             **base_packet,
             **full_action_fields,
+            "foreground_action_budget": foreground_action_budget,
             "operator_detail_command": (
                 "aippocampus agent orient "
                 f"{shell_quote(clean_task)} --json --detail full"

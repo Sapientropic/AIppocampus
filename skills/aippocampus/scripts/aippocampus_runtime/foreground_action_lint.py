@@ -88,3 +88,36 @@ def compact_foreground_action_violations(
                 }
             )
     return violations
+
+
+def compact_foreground_action_budget_report(
+    payload: Mapping[str, object],
+    *,
+    max_safe_actions: int = 1,
+    budget_reason: str = "compact_safe_next_actions_budget",
+) -> dict[str, object]:
+    """Return audit/detail metadata for compact action budgets.
+
+    Keep this report out of ordinary compact payloads. Foreground cards only
+    need a behavior signal such as ``more_actions_available_in_detail`` when
+    actions were actually hidden; reviewers and operator/detail surfaces can use
+    this report to see the configured budget and observed action count.
+    """
+
+    safe_actions = payload.get("safe_next_actions")
+    if isinstance(safe_actions, Sequence) and not isinstance(safe_actions, str):
+        safe_action_count = len(safe_actions)
+    else:
+        safe_action_count = 0
+    hidden_count = max(0, safe_action_count - max_safe_actions)
+    return {
+        "budget_reason": budget_reason,
+        "max_safe_actions": max_safe_actions,
+        "safe_action_count": safe_action_count,
+        "visible_safe_action_count": min(safe_action_count, max_safe_actions),
+        "hidden_safe_action_count": hidden_count,
+        "budget_limited": hidden_count > 0,
+        "more_actions_available_in_detail": bool(
+            hidden_count > 0 or payload.get("more_actions_available_in_detail")
+        ),
+    }

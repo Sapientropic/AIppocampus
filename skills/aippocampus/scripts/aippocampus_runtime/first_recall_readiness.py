@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any, Mapping
 
 EXPECTATIONS = {
@@ -99,6 +100,104 @@ def maintenance_impact_readiness_fields(
     if expectation:
         fields["first_recall_expectation"] = expectation
     return fields
+
+
+def compact_start_first_recall_readiness(readiness: Mapping[str, Any]) -> dict[str, Any]:
+    """Project start readiness as a foreground summary, not a diagnostic ledger.
+
+    The start card is the CLI front door. It should tell the next agent whether
+    ordinary recall is usable and what the first action is, while full/operator
+    detail keeps source artifact inventories, cue-specific probes, and freshness
+    diagnostics. Keep this helper small so future readiness fields do not leak
+    into compact output by default.
+    """
+
+    always_keys = (
+        "phase",
+        "status",
+        "next_action_id",
+        "ordinary_first_recall_usable",
+        "private_source_ready",
+        "cold_start_expected",
+        "progress_signal",
+        "user_expectation",
+        "claim_boundary",
+    )
+    result = {
+        key: readiness[key]
+        for key in always_keys
+        if key in readiness and readiness[key] not in (None, "", [], {})
+    }
+    optional_when_present = (
+        "read_only_probe_available",
+        "public_demo_available",
+        "freshness_degraded",
+        "source_stale",
+        "latest_current_thread_may_be_missing",
+        "blocks_exact_latest_claims",
+        "maintenance_recommended_before_exact_latest",
+    )
+    for key in optional_when_present:
+        value = readiness.get(key)
+        if value:
+            result[key] = value
+    if not result.get("ordinary_first_recall_usable") and "requires_user_consent_for_writes" in readiness:
+        result["requires_user_consent_for_writes"] = bool(
+            readiness.get("requires_user_consent_for_writes")
+        )
+    return result
+
+
+def start_first_recall_readiness_diagnostic(
+    readiness: Mapping[str, Any],
+    *,
+    source_state: Mapping[str, Any],
+    cue_specific: Mapping[str, Any],
+    cue_supplied: bool,
+    actions: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    """Attach full start-readiness diagnostics for operator/detail output."""
+
+    result = dict(readiness)
+    result.update(
+        {
+            "ordinary_first_recall_usable_scope": (
+                "cue_action_callable_not_previewed"
+                if cue_supplied
+                else "artifact_level_not_cue_specific"
+            ),
+            "source_artifacts_present": bool(source_state.get("exists")),
+            "exact_source_search_available": bool(source_state.get("exists")),
+            "compact_agent_recall_action_callable": bool(
+                cue_supplied
+                and any(
+                    action.get("id") in {"recall_supplied_cue", "try_first_recall"}
+                    and str(action.get("command") or "").startswith("aippocampus ")
+                    for action in actions
+                )
+            ),
+            "cue_specific_route_usefulness": dict(cue_specific),
+            "warm_or_ambient_degraded_is_optional": True,
+            "source_stale_scope": str(source_state.get("freshness_scope") or "manifest_only"),
+            "manifest_stale": bool(source_state.get("manifest_stale")),
+            "latest_current_thread_may_be_missing": bool(
+                result.get("latest_current_thread_may_be_missing")
+                or source_state.get("latest_source_may_be_missing")
+            ),
+            "workspace_source_maintenance_required": bool(
+                source_state.get("workspace_source_maintenance_required")
+            ),
+            "blocks_exact_latest_claims": bool(
+                result.get("blocks_exact_latest_claims")
+                or source_state.get("blocks_exact_latest_claims")
+            ),
+            "maintenance_recommended_before_exact_latest": bool(
+                result.get("maintenance_recommended_before_exact_latest")
+                or source_state.get("workspace_source_maintenance_required")
+            ),
+        }
+    )
+    return result
 
 
 def start_first_recall_readiness(
