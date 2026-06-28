@@ -11,13 +11,10 @@ from aippocampus_runtime.contracts import (
     canonical_foreground_action_fields,
     foreground_shell_action,
 )
+from aippocampus_runtime.ops.doctors.common import as_dict
 
 SCHEMA_VERSION = 1
 MIN_PYTHON_VERSION = (3, 12)
-
-
-def _as_dict(value: Any) -> dict[str, Any]:
-    return value if isinstance(value, dict) else {}
 
 
 def _tool_status(command: str) -> dict[str, Any]:
@@ -48,29 +45,29 @@ def _registry_writable_status(registry_dir: str | Path | None = None) -> dict[st
 
 
 def _preflight_blocker(checks: dict[str, Any]) -> dict[str, Any] | None:
-    if not _as_dict(checks.get("python")).get("ok"):
+    if not as_dict(checks.get("python")).get("ok"):
         return {
             "id": "python_version",
             "message": "Python 3.12 or newer is required before running AIppocampus.",
             "fix_command": "py -3.12 --version",
             "manual_instruction": "Install Python 3.12+ and rerun the same command with that interpreter.",
         }
-    if not _as_dict(checks.get("console_script")).get("available"):
+    if not as_dict(checks.get("console_script")).get("available"):
         return {
             "id": "aippocampus_console_script",
             "message": "The aippocampus console script is not resolvable from this host process.",
             "fix_command": "python -m pip install -e .",
             "fallback_command": "python -m aippocampus_runtime.cli.facade doctor preflight --json",
         }
-    if not _as_dict(checks.get("registry_dir")).get("writable"):
+    if not as_dict(checks.get("registry_dir")).get("writable"):
         return {
             "id": "registry_dir_writable",
             "message": "The AIppocampus registry location is not writable or its parent cannot be probed.",
             "fix_command": "aippocampus doctor preflight --json",
             "manual_instruction": "Choose a writable AIPPOCAMPUS_REGISTRY_DIR or repair permissions, then rerun preflight.",
         }
-    age = _as_dict(checks.get("age"))
-    age_keygen = _as_dict(checks.get("age_keygen"))
+    age = as_dict(checks.get("age"))
+    age_keygen = as_dict(checks.get("age_keygen"))
     if not age.get("available") or not age_keygen.get("available"):
         return {
             "id": "age_encryption_tools",
@@ -79,7 +76,7 @@ def _preflight_blocker(checks: dict[str, Any]) -> dict[str, Any] | None:
             "external_check_command": "age --version",
             "manual_instruction": "Install age/age-keygen for your OS, then rerun preflight.",
         }
-    if not _as_dict(checks.get("host_cli")).get("available"):
+    if not as_dict(checks.get("host_cli")).get("available"):
         return {
             "id": "host_cli",
             "message": "Neither codex nor claude CLI is resolvable from this host process.",

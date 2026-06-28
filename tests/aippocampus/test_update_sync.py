@@ -1070,12 +1070,13 @@ class UpdateSyncTests(unittest.TestCase):
         )
         self.assertEqual(
             action_hint_next["command"],
-            "aippocampus hooks action refresh-cache --write --json",
+            "aippocampus hooks action probe --compact-json",
         )
         self.assertEqual(
             action_hint_next["mutation_risk"],
-            "explicit_local_cache_write",
+            "low_risk_local_cache_write",
         )
+        self.assertNotIn("refresh-cache --write", raw)
         self.assertNotIn("action_hints", payload)
         self.assertNotIn("foreground_status_cards", payload)
         self.assertNotIn("next_actions", payload)
@@ -1912,6 +1913,9 @@ class UpdateSyncTests(unittest.TestCase):
 
             self.assertEqual(code, 0, payload)
             self.assertTrue((scenario.plugin_output / ".mcp.json").exists())
+            self.assertTrue(
+                (scenario.plugin_output / ".aippocampus-runtime-generation.json").exists()
+            )
             self.assertTrue(
                 (scenario.plugin_output / "skills" / "aippocampus" / "SKILL.md").exists()
             )

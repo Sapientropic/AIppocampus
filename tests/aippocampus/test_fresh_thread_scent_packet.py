@@ -50,6 +50,8 @@ class FreshThreadScentPacketTests(unittest.TestCase):
                 "candidate_refs",
                 "candidate_ref_count",
                 "reopenable_ref_count",
+                "source_ref_count",
+                "public_authority_tier",
                 "advisory_action",
                 "suggested_action",
                 "action_grammar",
@@ -60,6 +62,7 @@ class FreshThreadScentPacketTests(unittest.TestCase):
             },
         )
         self.assertEqual(packet["action_grammar"], "direction_only")
+        self.assertEqual(packet["public_authority_tier"], "ambient_hint")
         self.assertEqual(packet["trust_contract"]["action_grammar"], "direction_only")
         self.assertEqual(
             packet["candidate_refs"],
@@ -67,6 +70,7 @@ class FreshThreadScentPacketTests(unittest.TestCase):
         )
         self.assertEqual(packet["candidate_ref_count"], 1)
         self.assertEqual(packet["reopenable_ref_count"], 1)
+        self.assertEqual(packet["source_ref_count"], 1)
         self.assertTrue(packet["source_boundary"]["navigation_only_until_source_reopened"])
         self.assertTrue(packet["source_boundary"]["advisory_action_is_not_final_agent_action"])
         self.assertTrue(packet["source_boundary"]["final_action_owned_by_fresh_thread_action_policy"])

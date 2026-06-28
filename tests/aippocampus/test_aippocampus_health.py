@@ -18,6 +18,11 @@ from aippocampus_runtime.warm_ambient.hook_seen_threads import (
 from tests.aippocampus.health_fixtures import health_workspace
 
 
+class TtyStringIO(StringIO):
+    def isatty(self) -> bool:
+        return True
+
+
 class AippocampusHealthTests(unittest.TestCase):
     def test_agent_json_health_is_compact_and_path_redacted(self) -> None:
         private_path = "C:/private/aippocampus/clean-source/messages.jsonl"
@@ -276,16 +281,12 @@ class AippocampusHealthTests(unittest.TestCase):
         self.assertTrue(payload["readiness_card"]["blocks_exact_latest"])
         action_ids = [action["id"] for action in payload["safe_next_actions"]]
         self.assertIn("review_maintenance_plan", action_ids)
-        self.assertIn("apply_after_user_consent", action_ids)
+        self.assertNotIn("write_actions", payload)
+        self.assertEqual(payload["manage_command"], "aippocampus maintenance plan --summary-json")
         review_action = next(
             action for action in payload["safe_next_actions"] if action["id"] == "review_maintenance_plan"
         )
-        apply_action = next(
-            action for action in payload["safe_next_actions"] if action["id"] == "apply_after_user_consent"
-        )
         self.assertEqual(review_action["command"], "aippocampus maintenance plan --summary-json")
-        self.assertEqual(apply_action["command"], "aippocampus maintenance apply --summary-json")
-        self.assertTrue(apply_action["write_boundary"]["explicit_user_consent_required"])
         self.assertTrue(payload["foreground_action"]["primary"]["ordinary_first_recall_usable"])
         self.assertTrue(payload["blocks_exact_latest_claims"])
         self.assertNotIn("freshness", payload)
@@ -355,7 +356,8 @@ class AippocampusHealthTests(unittest.TestCase):
         self.assertTrue(payload["blocks_exact_latest_claims"])
         action_ids = [action["id"] for action in payload["safe_next_actions"]]
         self.assertIn("review_maintenance_plan", action_ids)
-        self.assertIn("apply_after_user_consent", action_ids)
+        self.assertNotIn("write_actions", payload)
+        self.assertEqual(payload["manage_command"], "aippocampus maintenance plan --summary-json")
         self.assertEqual(payload["foreground_action"]["id"], "review_storage_gc_summary")
         self.assertEqual(
             payload["foreground_action"]["command"],
@@ -640,6 +642,49 @@ class AippocampusHealthTests(unittest.TestCase):
             "segments_dir": root / "segments",
             "checkpoint_state": root / "checkpoint_state.json",
         }
+
+    def test_health_no_flag_tty_is_human_and_explicit_json_stays_json(self) -> None:
+        with health_workspace() as (_root, workspace):
+            rollout = workspace / "rollout.jsonl"
+            self.write_rollout(rollout, workspace)
+            paths = self.write_current_artifacts(_root, workspace, rollout)
+            args = [
+                "--cwd",
+                str(workspace),
+                "--index-dir",
+                str(paths["index_dir"]),
+                "--anchors",
+                str(paths["anchors"]),
+                "--graphify-corpus",
+                str(paths["graphify_corpus"]),
+                "--segments-dir",
+                str(paths["segments_dir"]),
+                "--checkpoint-state",
+                str(paths["checkpoint_state"]),
+                "--clean-source-dir",
+                str(paths["clean_source_dir"]),
+            ]
+
+            with (
+                mock.patch.object(health_stages, "locate_rollout", return_value=rollout),
+                mock.patch("sys.stdout", new=TtyStringIO()) as stdout,
+            ):
+                text_code = health.main(args)
+            text = stdout.getvalue()
+
+            with (
+                mock.patch.object(health_stages, "locate_rollout", return_value=rollout),
+                mock.patch("sys.stdout", new=TtyStringIO()) as json_stdout,
+            ):
+                json_code = health.main([*args, "--json"])
+            payload = json.loads(json_stdout.getvalue())
+
+        self.assertEqual(text_code, 0)
+        self.assertIn("AIppocampus health", text)
+        self.assertNotIn('"kind"', text)
+        self.assertEqual(json_code, 0)
+        self.assertEqual(payload["kind"], "aippocampus_health_card")
+        self.assertIn("foreground_action", payload)
 
     def write_latest_turn_gap_artifacts(
         self,
@@ -1207,8 +1252,8 @@ class AippocampusHealthTests(unittest.TestCase):
         self.assertEqual(
             command,
             'PYTHONPATH="$CODEX_HOME/skills/aippocampus/scripts" '
-            f'{health.quote_posix_double(sys.executable)} '
-            '-m aippocampus_runtime.recall.index_builder --cwd "/tmp/work space"',
+            f"{health.quote_posix_arg(sys.executable)} "
+            "-m aippocampus_runtime.recall.index_builder --cwd '/tmp/work space'",
         )
 
     def test_recommended_script_command_keeps_powershell_shape_on_windows(self) -> None:
@@ -1219,8 +1264,8 @@ class AippocampusHealthTests(unittest.TestCase):
         self.assertEqual(
             command,
             '$env:PYTHONPATH="$env:CODEX_HOME\\skills\\aippocampus\\scripts"; '
-            f'& "{health.PureWindowsPath(sys.executable)}" '
-            f'-m aippocampus_runtime.recall.index_builder --cwd "{expected_cwd}"',
+            f"& '{health.PureWindowsPath(sys.executable)}' "
+            f"-m aippocampus_runtime.recall.index_builder --cwd '{expected_cwd}'",
         )
 
     def test_health_action_keeps_operator_command_and_adds_facade_command(self) -> None:
@@ -1237,7 +1282,7 @@ class AippocampusHealthTests(unittest.TestCase):
         self.assertIn("-m aippocampus_runtime.recall.index_builder", item["command"])
         self.assertEqual(
             item["facade_command"],
-            'aippocampus maintenance --cwd "/tmp/work space"',
+            "aippocampus maintenance --cwd '/tmp/work space'",
         )
 
     def test_question_stats_are_fail_open_diagnostics(self) -> None:

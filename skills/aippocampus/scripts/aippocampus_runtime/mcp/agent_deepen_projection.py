@@ -8,7 +8,7 @@ from typing import Any
 from aippocampus_runtime import core
 from aippocampus_runtime.contracts import canonical_foreground_action_fields, shell_quote
 from aippocampus_runtime.mcp.compact_profile import strip_compact_foreground_debug_fields
-from aippocampus_runtime.mcp.contracts import build_mcp_compact_card
+from aippocampus_runtime.mcp.contracts import MCPCompactResponseContract, build_mcp_compact_card
 from aippocampus_runtime.privacy import (
     SENSITIVE_ASSIGNMENT_RE,
     SENSITIVE_VALUE_REDACTION,
@@ -157,7 +157,7 @@ def compact_agent_deepen_payload(
     last_recall: bool = False,
     recall_selector: str = "",
     surface: str = "agent_deepen_compact",
-) -> dict[str, Any]:
+) -> dict[str, Any] | MCPCompactResponseContract:
     """Return a compact source-court card with one capped opened-source snippet.
 
     The full payload remains the source-open/operator view. Compact output is a

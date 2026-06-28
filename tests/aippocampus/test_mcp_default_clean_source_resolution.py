@@ -173,10 +173,13 @@ class McpDefaultCleanSourceResolutionTests(unittest.TestCase):
             ),
         ):
             payload = start_cli.build_start_card(self.cwd)
+            detail_payload = start_cli.build_start_card(self.cwd, detail="full")
 
         self.assertEqual(payload["decision"], "continue_from_existing_source")
-        self.assertTrue(payload["state_summary"]["clean_source"]["exists"])
-        self.assertFalse(payload["state_summary"]["clean_source"]["stale"])
+        self.assertNotIn("state_summary", payload)
+        state_summary = detail_payload["operator_detail"]["state_summary"]
+        self.assertTrue(state_summary["clean_source"]["exists"])
+        self.assertFalse(state_summary["clean_source"]["stale"])
 
     def test_health_default_resolution_uses_shared_fresher_registry_clean_source(self) -> None:
         threads = self.cwd / "registry" / "threads"

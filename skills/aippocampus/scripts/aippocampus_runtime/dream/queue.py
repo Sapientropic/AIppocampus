@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.core import now_utc
+from aippocampus_runtime.dream.lifecycle import ADJUDICATED_REVIEW_STATES
 from aippocampus_runtime.dream.macro_guidance import priority_with_macro_momentum
 from aippocampus_runtime.source.io_kernel import load_jsonl_dict_rows, parse_utc
 
@@ -27,14 +28,7 @@ READY_STATUS = "ready_for_dream_worker"
 CACHE_CONTRACT = "deepseek_prefix_v1"
 EXECUTION_MODE = "detached_background"
 PROMPT_ORDER = ["stable_dream_worker_contract", "source_pack_payload", "variable_run_directive"]
-ADJUDICATED_STATES = {
-    "accepted",
-    "approved",
-    "reviewed",
-    "agent_adjudicated",
-    "auto_adjudicated",
-    "source_adjudicated",
-}
+ADJUDICATED_STATES = ADJUDICATED_REVIEW_STATES
 PREVIOUS_DEDUP_STATUSES = {"queued", "running", "completed", "accepted", "parked"}
 FUNCTION_ORDER = {
     "compensatory": 0,

@@ -21,7 +21,7 @@ from io import StringIO
 from pathlib import Path
 from typing import Any
 
-from aippocampus_runtime.ops.provider_credentials import dotenv_values
+from aippocampus_runtime.ops.doctors.provider_credentials import dotenv_values
 from aippocampus_runtime.source.io_kernel import load_json_dict
 
 LIFECYCLE_EVENTS = {"SessionStart", "Stop", "PreCompact", "PostCompact"}

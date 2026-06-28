@@ -10,6 +10,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 
 from aippocampus_runtime.hooks import prompt as hook
+from aippocampus_runtime.recall.prompt_recall_result_tiers import result_hot_path_funnel
 from tests.aippocampus.redaction_fixtures import fake_test_windows_path
 
 
@@ -89,6 +90,7 @@ class QueryPatternRoutesPromptHookTests(unittest.TestCase):
             registry_path=self.registry,
             use_semantic_gate=False,
             search_budget=0,
+            detail="trace",
         )
         public = hook.public_hook_debug_payload(result)
         encoded_public = json.dumps(public, ensure_ascii=False, sort_keys=True)
@@ -100,8 +102,9 @@ class QueryPatternRoutesPromptHookTests(unittest.TestCase):
         self.assertIsNone(result["semantic_gate"])
         self.assertIn("query pattern routes", " ".join(result["reasons"]))
         self.assertEqual(result["candidates"][0]["thread_key"], "session:test-old")
+        hot_path = result_hot_path_funnel(result)
         self.assertEqual(
-            result["hot_path_funnel"]["query_pattern_routes"]["diagnostics"][
+            hot_path["query_pattern_routes"]["diagnostics"][
                 "live_llm_call_count"
             ],
             0,

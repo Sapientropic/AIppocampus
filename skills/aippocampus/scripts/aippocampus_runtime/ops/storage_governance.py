@@ -671,6 +671,15 @@ High-risk/private flags:
     if not args.dry_run and not args.apply:
         if args.summary_json:
             args.dry_run = True
+        elif (
+            not args.json_output
+            and not args.summary_json
+            and getattr(sys.stdout, "isatty", lambda: False)()
+        ):
+            # The human no-flag path should be useful on an interactive
+            # terminal, but the piped/no-flag path stays a clear command hint
+            # so scripts do not silently receive a different machine contract.
+            args.dry_run = True
         else:
             gc_parser.print_help(sys.stderr)
             return exit_code_for_payload(

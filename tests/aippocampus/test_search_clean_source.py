@@ -457,7 +457,7 @@ class SearchCleanSourceTests(unittest.TestCase):
         output = stdout.getvalue()
         self.assertEqual(code, 1)
         self.assertIn("No source-backed snippet found", output)
-        self.assertIn("current resolved thread clean-source directory only", output)
+        self.assertIn("current resolved thread clean-source directory plus joined route-note navigation", output)
         self.assertIn("Next:", output)
         assert_semantic_human_output(self, output, max_lines=8)
         self.assertNotIn("Possible routes, not yet evidence", output)
@@ -798,13 +798,13 @@ class SearchCleanSourceTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertEqual(include_code, 0)
         self.assertNotIn(str(self.cwd), json.dumps(public_payload, ensure_ascii=False))
-        self.assertEqual(public_payload["source"], search.LOCAL_PATH_REDACTION)
-        self.assertFalse(public_payload["privacy"]["paths_included"])
+        self.assertNotIn("source", public_payload)
+        self.assertEqual(public_payload["detail"], "compact")
         self.assertEqual(
             private_payload["source"],
             str(self.source / "messages.jsonl"),
         )
-        self.assertTrue(private_payload["privacy"]["paths_included"])
+        self.assertEqual(private_payload["detail"], "compact")
 
     def test_successful_cli_json_includes_foreground_authority_envelope(self) -> None:
         stdout = io.StringIO()
@@ -826,11 +826,12 @@ class SearchCleanSourceTests(unittest.TestCase):
         self.assertTrue(payload["ok"])
         self.assertEqual(payload["status"], "ok")
         self.assertEqual(payload["kind"], "aippocampus_search_result")
-        self.assertEqual(payload["entry_state"], "explicit_search_invoked")
-        self.assertEqual(payload["route_state"], "source_refs_available")
-        self.assertEqual(payload["claim_permission"], "bounded_search_receipt_requires_reopen")
-        self.assertEqual(payload["source_boundary"]["authority"], "bounded_evidence")
-        self.assertTrue(payload["source_boundary"]["source_reopen_required_before_claim"])
+        self.assertEqual(payload["detail"], "compact")
+        self.assertEqual(payload["claim_boundary"], "bounded_search_receipt_requires_reopen")
+        self.assertEqual(
+            payload["source_reopen_boundary"],
+            "reopen_selected_match_before_exact_or_sensitive_claims",
+        )
         self.assertEqual(payload["foreground_action_contract"], "foreground-action-v2")
         self.assertNotIn("agent_next_action", payload)
         self.assertNotIn(payload["foreground_action"], payload.get("safe_next_actions", []))
@@ -847,7 +848,8 @@ class SearchCleanSourceTests(unittest.TestCase):
             payload["matches"][0]["reopen_command"],
             payload["foreground_action"]["command"],
         )
-        self.assertIn("source_window_command", payload["matches"][0])
+        self.assertNotIn("query_match_profile", json.dumps(payload, ensure_ascii=False))
+        self.assertNotIn("jsonl_loss", payload)
         self.assertEqual(payload["foreground_action"]["claim_boundary"], "source_reopen_required_before_claim")
         self.assertEqual(foreground_action_contract_violations(payload), [])
         self.assertIn("matches", payload)
@@ -918,19 +920,24 @@ class SearchCleanSourceTests(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertFalse(payload["ok"])
         self.assertEqual(payload["status"], "no_matches")
-        self.assertEqual(payload["claim_permission"], "no_claim_before_source_match")
-        self.assertEqual(payload["source_boundary"]["authority"], "direction_only")
+        self.assertEqual(payload["claim_boundary"], "no_claim_before_source_match")
+        self.assertEqual(
+            payload["source_reopen_boundary"],
+            "search_miss_is_not_absence_of_memory",
+        )
         self.assertEqual(payload["foreground_action_contract"], "foreground-action-v2")
         self.assertNotIn("agent_next_action", payload)
         self.assertNotIn(payload["foreground_action"], payload.get("safe_next_actions", []))
         self.assertEqual(payload["foreground_action"]["id"], "refine_or_recall")
         self.assertNotIn("action_id", payload["foreground_action"])
         self.assertEqual(payload["foreground_action"]["tool_name"], "agent_recall")
+        self.assertNotIn("source_boundary", payload)
+        self.assertNotIn("recovery_actions", payload)
+        self.assertEqual(payload["fallback_command_template"], 'aippocampus agent recall "{cue}" --json')
         self.assertEqual(foreground_action_contract_violations(payload), [])
-        self.assertIn("current resolved thread clean-source directory only", payload["searched_scope"])
         self.assertIn(
-            'aippocampus search --all "distinctive exact phrase" --json',
-            payload["recovery_actions"],
+            "current resolved thread clean-source directory plus joined route-note navigation",
+            payload["scope_description"],
         )
 
     def test_empty_query_json_is_needs_input_not_no_match(self) -> None:
@@ -1140,7 +1147,7 @@ class SearchCleanSourceTests(unittest.TestCase):
         encoded = json.dumps(payload, ensure_ascii=False)
         self.assertNotIn(str(self.cwd), encoded)
         self.assertEqual(payload["registry"], search.LOCAL_PATH_REDACTION)
-        self.assertFalse(payload["privacy"]["paths_included"])
+        self.assertNotIn("privacy", payload)
         self.assertEqual(payload["foreground_action_contract"], "foreground-action-v2")
         self.assertNotIn("agent_next_action", payload)
         self.assertNotIn(payload["foreground_action"], payload.get("safe_next_actions", []))
@@ -1150,7 +1157,7 @@ class SearchCleanSourceTests(unittest.TestCase):
         self.assertNotIn("score", payload["matches"][0])
         self.assertNotIn("query_match_profile", payload["matches"][0])
         self.assertNotIn("query_match_gate", payload)
-        self.assertIn("diagnostic_detail_command", payload)
+        self.assertIn("detail_command", payload)
         self.assertIn("--open-source", payload["matches"][0]["reopen_command"])
         self.assertEqual(
             payload["matches"][0]["reopen_command"],
@@ -1781,7 +1788,11 @@ class SearchCleanSourceTests(unittest.TestCase):
         self.assertEqual(payload["suppressed_low_coverage_match_count"], 2)
         self.assertNotIn("suppressed_low_coverage_matches", payload)
         self.assertNotIn("query_match_gate", payload)
-        self.assertTrue(payload["source_boundary"]["phrase_like_low_coverage_suppressed"])
+        self.assertNotIn("source_boundary", payload)
+        self.assertNotIn("privacy", payload)
+        self.assertNotIn("diagnostic_fields_omitted", payload)
+        self.assertNotIn("diagnostic_detail_command", payload)
+        self.assertEqual(payload["suppression_boundary"], "phrase_like_low_coverage_suppressed")
         self.assertEqual(payload["foreground_action_contract"], "foreground-action-v2")
         self.assertNotIn("agent_next_action", payload)
 
@@ -1848,6 +1859,7 @@ class SearchCleanSourceTests(unittest.TestCase):
         self.assertEqual(payload["match_count"], 0)
         self.assertEqual(payload["suppressed_low_coverage_match_count"], 1)
         self.assertTrue(payload["source_boundary"]["phrase_like_low_coverage_suppressed"])
+        self.assertEqual(payload["suppression_boundary"], "phrase_like_low_coverage_suppressed")
 
     def test_search_all_phrase_like_present_query_ranks_exact_source_first(self) -> None:
         exact_clean = self.cwd / "exact-thread" / "clean-source"

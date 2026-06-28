@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
+
+from aippocampus_runtime.source.io_kernel import load_jsonl_dict_rows
 
 
 def read_observed_event_log(event_log_path: Path | None) -> dict[str, Any]:
@@ -25,34 +26,26 @@ def read_observed_event_log(event_log_path: Path | None) -> dict[str, Any]:
             "unsupported_row_count": 0,
         }
     seen: set[str] = set()
-    malformed_line_count = 0
-    unsupported_row_count = 0
-    try:
-        with event_log_path.open("r", encoding="utf-8") as handle:
-            for line in handle:
-                try:
-                    item = json.loads(line)
-                except json.JSONDecodeError:
-                    malformed_line_count += 1
-                    continue
-                if not isinstance(item, dict):
-                    unsupported_row_count += 1
-                    continue
-                event_name = str(item.get("hook_event_name") or item.get("event") or "")
-                if event_name:
-                    seen.add(event_name)
-                else:
-                    unsupported_row_count += 1
-    except OSError as exc:
+    result = load_jsonl_dict_rows(event_log_path)
+    loss = result.loss
+    malformed_line_count = int(loss.get("invalid_json_line_count") or 0)
+    unsupported_row_count = int(loss.get("non_object_line_count") or 0)
+    if int(loss.get("unreadable_file_count") or 0):
         return {
             "status": "unavailable",
             "events": [],
             "event_count": 0,
             "malformed_line_count": malformed_line_count,
             "unsupported_row_count": unsupported_row_count,
-            "error_code": type(exc).__name__,
-            "error_message": str(exc),
+            "error_code": "unreadable_jsonl_file",
+            "error_message": "event log could not be read",
         }
+    for item in result.rows:
+        event_name = str(item.get("hook_event_name") or item.get("event") or "")
+        if event_name:
+            seen.add(event_name)
+        else:
+            unsupported_row_count += 1
     return {
         "status": "loaded_with_loss"
         if malformed_line_count or unsupported_row_count

@@ -6,6 +6,11 @@ import unittest
 from pathlib import Path
 
 from aippocampus_runtime.source.registry_search import search_registry_sources
+from aippocampus_runtime.source.relationship_origin import RELATIONSHIP_ORIGIN_ROUTE_TOPIC
+from aippocampus_runtime.source.route_topics import (
+    route_topic_for_clean_hit,
+    route_topic_low_coverage_acceptance,
+)
 from tests.aippocampus.product_probe_helpers import (
     SourceOpenExpectation,
     assert_cli_recall_deepens_to_source,
@@ -405,6 +410,50 @@ class RelationshipOriginRecallTests(unittest.TestCase):
                 window_terms=("机械飞升", "机仆"),
             ),
         )
+
+    def test_route_topics_match_non_ascii_origin_cues(self) -> None:
+        topic = route_topic_for_clean_hit(
+            {
+                "role": "user",
+                "phase": "decision",
+                "snippet": "后来我们把未干的地图、小海马体、机械飞升放在同一条连续性线上。",
+                "scope_labels": [],
+                "semantic_scope_labels": [],
+            },
+            intent="生命还能变成什么",
+        )
+
+        self.assertEqual(topic["route_topic"], RELATIONSHIP_ORIGIN_ROUTE_TOPIC)
+        self.assertEqual(topic["label_granularity"], "topic_label")
+
+    def test_low_coverage_topic_acceptance_requires_shared_origin_topic(self) -> None:
+        accepted = route_topic_low_coverage_acceptance(
+            {
+                "role": "user",
+                "phase": "decision",
+                "snippet": "我们把未干的地图和机械飞升当成连续性隐喻。",
+                "scope_labels": [],
+                "semantic_scope_labels": [],
+            },
+            intent="小海马体 生命还能变成什么",
+            query_profile={"accepted": False},
+        )
+        unrelated = route_topic_low_coverage_acceptance(
+            {
+                "role": "user",
+                "phase": "decision",
+                "snippet": "我们把未干的地图和机械飞升当成连续性隐喻。",
+                "scope_labels": [],
+                "semantic_scope_labels": [],
+            },
+            intent="project triage milestone roadmap",
+            query_profile={"accepted": False},
+        )
+
+        self.assertTrue(accepted["accepted"])
+        self.assertEqual(accepted["route_topic"], RELATIONSHIP_ORIGIN_ROUTE_TOPIC)
+        self.assertEqual(accepted["acceptance_reason"], "shared_route_topic_label_navigation_only")
+        self.assertEqual(unrelated, {})
 
     def test_registry_wide_source_hit_becomes_cli_and_mcp_deepen_route(self) -> None:
         cli_cache = self.cwd / "cli-registry-source-last-recall.json"

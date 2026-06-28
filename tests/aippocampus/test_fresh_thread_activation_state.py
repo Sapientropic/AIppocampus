@@ -19,6 +19,8 @@ from aippocampus_runtime.recall.fresh_thread_scent import (
     fresh_thread_scent_packet_from_decision,
 )
 
+SOURCE_BACKED_AFTER_REOPEN = "source_backed"
+
 
 class FreshThreadActivationStateTests(unittest.TestCase):
     def _packet(self, *, confidence: str = "medium") -> dict[str, object]:
@@ -201,7 +203,7 @@ class FreshThreadActivationStateTests(unittest.TestCase):
             task_context={**context, "specific_memory_claim": True},
         )
 
-        self.assertEqual(state["state"], "source_backed")
+        self.assertEqual(state["state"], SOURCE_BACKED_AFTER_REOPEN)
         self.assertTrue(context["activation_source_reopened"])
         self.assertEqual(action["agent_action"], "source_reopen")
         self.assertTrue(action["requires_source_reopen"])

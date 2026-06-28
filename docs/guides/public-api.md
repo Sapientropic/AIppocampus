@@ -32,7 +32,7 @@ when integration or operator decisions need the larger contract.
 | No-clone probe or install smoke | PyPI `uvx aippocampus ...` and documented repository checks | Documented CLI command names, documented flags, return code success/failure, MCP tool names, and public-safe `--json` outputs where documented | Unreleased GitHub `uvx --from git+...` snapshots as stable release evidence; Codex-only scoped-provider status from the provider-matrix status command; unsigned binary paths beyond the dated Windows x64 evidence |
 | Local operator status | `aippocampus health`, `aippocampus onboard --status`, and `memory_health` MCP | Documented status fields, additive JSON fields, source-intake quality diagnostics, and CLI JSON error classes | Human-readable prose, local absolute paths, or private registry internals |
 | Agent continuity pull path | `aippocampus agent recall`, `agent background`, `agent aippo`, `agent deepen`, `agent explain`, `agent feedback`, and `do-not-use-here` | Documented command names, public-safe JSON envelope fields, compact foreground packet fields, reviewed background finding handles, explicit deepen/request handles, and low-authority feedback receipts or JSONL rows when explicitly chosen | Default foreground hooks, every-turn recall, public SDK stability, hosted API behavior, background findings as facts, feedback as source truth, or destructive forgetting |
-| Agent-host read and setup tools | MCP `agent_recall`, `agent_aippo`, `agent_deepen`, `agent_explain`, `search_memory`, `recall_context`, `recall_deepen`, `latest_reply`, `get_turn_context`, `list_threads`, `register_thread`, `sync_status`, `memory_health`, `list_telepathy_handoffs`, and `deepen_telepathy_handoff` | Tool names, required input fields, additive output fields, JSON tool errors, public-safe path redaction, and compact foreground projections by default | Broad memory writes, `agent feedback` through MCP, Telepathy card create/release through MCP, hook install/uninstall, sync push/pull, arbitrary file ingest through MCP, or mutating setup calls without an explicit write-shaped argument |
+| Agent-host read and setup tools | MCP `agent_recall`, `agent_aippo`, `agent_deepen`, `agent_explain`, `search_memory`, `latest_reply`, `get_turn_context`, `list_threads`, `register_thread`, `sync_status`, `memory_health`, `list_telepathy_handoffs`, `deepen_telepathy_handoff`, plus legacy/detail `recall_context` and `recall_deepen` | Tool names, required input fields, additive output fields, JSON tool errors, public-safe path redaction, and compact foreground projections by default | Broad memory writes, `agent feedback` through MCP, Telepathy card create/release through MCP, hook install/uninstall, sync push/pull, arbitrary file ingest through MCP, or mutating setup calls without an explicit write-shaped argument |
 | Provider-neutral import | `aippocampus import conversation --format generic-jsonl` | Generic JSONL required fields, validation diagnostics, canonical source refs, and import manifests | Markdown import as a public claim, role-ambiguous transcripts, host-private metadata as public identity, or internal registry modules as public CLI contracts |
 | Script or CI integration | CLI `--json`, public schemas, and `aippocampus_runtime.cli.facade.run_command(capture_output=True)` inside a trusted Python process | Same command names, JSON shapes, and return-code policy as the public CLI | A broad Python or TypeScript domain SDK; helper-module internals under `skills/aippocampus/scripts/` |
 | Agent-native fixture proposals | Linked architecture contracts such as `aippocampus_runtime.recall.agent_facade_contract`, `aippocampus_runtime.recall.agent_pull_gesture`, and `aippocampus_runtime.aippo.working_contract` | Current fixture-backed behavior and public-safe schema direction for trusted host experiments | Public SDK stability, hosted network endpoints, broad package internals, or claim-ready memory facts |
@@ -46,7 +46,7 @@ reading the full tool catalog:
 
 | Situation | First tool | Then |
 | --- | --- | --- |
-| Fuzzy old context, unfinished work, handoff, correction, or preference | `agent_recall` or `recall_context` | Deepen the selected route before claims. |
+| Fuzzy old context, unfinished work, handoff, correction, or preference | `agent_recall` | Deepen the selected route before claims. |
 | Exact phrase or distinctive wording | `search_memory` or `aippocampus search` | Reopen source before quoting or widening scope. |
 | Latest closeout | `latest_reply` | Use `get_turn_context` if surrounding turns matter. |
 | No route, stale registry, or missing source | `memory_health` or onboard/status card | Repair/setup only after explicit consent. |
@@ -499,8 +499,8 @@ tool names are:
 - `agent_aippo`
 - `agent_deepen`
 - `agent_explain`
-- `recall_context`
-- `recall_deepen`
+- `recall_context` (legacy/detail compatibility)
+- `recall_deepen` (legacy/detail compatibility)
 - `recall_diagnostic`
 - `latest_reply`
 - `get_turn_context`
@@ -516,10 +516,11 @@ For these tools:
 - Tool names and required input fields are stable. Mutating setup tools may add
   explicit consent-shaped required fields when needed to prevent accidental
   writes.
-- `agent_recall` and `recall_context` accept either `query` or `intent`;
-  `agent_deepen` accepts either `handle` or `request_index`. The MCP catalog
-  exposes these selector contracts as `required_any` so hosts can render useful
-  forms without guessing.
+- `agent_recall` accepts `query`, `intent`, or `cue`; `agent_deepen` accepts
+  either `handle` or `request_index`. The MCP catalog exposes these selector
+  contracts as `required_any` so hosts can render useful forms without
+  guessing. Legacy `recall_context` and `recall_deepen` keep their old selector
+  contracts only for detail/compat clients.
 - Optional input fields may be added.
 - Output fields may be added.
 - Tool errors use JSON payloads in MCP `content` text as documented in
@@ -575,17 +576,16 @@ next action, and warning counts/classes instead of full operator JSON. Use
 `--operator-json` for the complete marketplace/cache/host-probe report.
 `--compact-json`, `--public`, and `--summary` are equivalent summary aliases.
 
-`recall_context` and `recall_deepen` are the progressive recall navigation
-tools. `recall_context` accepts a fuzzy intent or query. Its default MCP result
-is a compact foreground receipt: route labels, evidence level, source boundary,
-and `routes[].foreground_action`, without raw opaque `aippo-nav:` handles,
-source refs, or source windows. Request `detail=full` only for local diagnostic
-or follow-through paths that need the short-lived route handle/source selector.
-It does not return a final answer or factual memory claim. `recall_deepen`
-consumes a route handle, source selector, route object, or ambient navigation
-seed and opens the next source-backed layer when the handle is still fresh and
-reopenable. Stale, malformed, or non-reopenable handles fail as MCP tool errors
-instead of silently becoming evidence.
+`recall_context` and `recall_deepen` are legacy/detail compatibility tools for
+route-handle clients. Ordinary foreground agents should use `agent_recall ->
+agent_deepen`, or `search_memory -> get_turn_context` when they have exact
+wording. Legacy `recall_context` accepts a fuzzy intent or query and can still
+return compact route labels, evidence level, source boundary, and route
+actions without raw private paths or source windows; request `detail=full` only
+for local diagnostic/follow-through paths that need the short-lived handle.
+`recall_deepen` consumes those legacy handles and opens source only when the
+handle is still fresh and reopenable. Stale, malformed, or non-reopenable
+handles fail as MCP tool errors instead of silently becoming evidence.
 
 The minimal agent-native shape over these tools is documented in
 [`agent-native-recall-facade.md`](../architecture/recall/agent-native-recall-facade.md):
@@ -618,8 +618,9 @@ aippocampus agent feedback "<route id>" --outcome source_reopen_success --json
 outcome feedback when the user or operator asks for it, but MCP hosts should
 not infer an unlisted feedback-write tool from this example.
 
-`agent recall` is a wrapper over the existing progressive
-`recall_context -> recall_deepen` path. Human CLI output is compact by default;
+`agent recall` is the agent-native foreground recall facade. It may reuse
+legacy/detail route machinery internally, but hosts should teach and call the
+`agent_recall -> agent_deepen` path by default. Human CLI output is compact by default;
 CLI `--json` remains a local diagnostic surface. `--public` /
 `--compact-json` returns a compact foreground projection with one canonical
 `foreground_action`, small route receipts, and no local-private handles. MCP

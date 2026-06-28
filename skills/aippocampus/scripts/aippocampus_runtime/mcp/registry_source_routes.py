@@ -11,6 +11,7 @@ from aippocampus_runtime.mcp.source_ref_registry import source_candidate_dirs_fo
 from aippocampus_runtime.recall.query_policy import semantic_trigger_terms
 from aippocampus_runtime.source.io_kernel import load_jsonl_dict_rows
 from aippocampus_runtime.source.registry_search import search_registry_sources
+from aippocampus_runtime.source.registry_search_evidence import match_has_direct_source_open_route
 from aippocampus_runtime.source.search import iter_clean_messages
 
 CleanRef = Callable[[dict[str, Any]], dict[str, Any]]
@@ -162,6 +163,7 @@ def route_from_registry_match(
     match: Mapping[str, Any],
     *,
     source_dir: Path,
+    registry_dir: Path | None,
     clean_ref: CleanRef,
     route_handle: RouteHandle,
     stable_id: StableId,
@@ -173,8 +175,16 @@ def route_from_registry_match(
     reason_codes: list[str] | None = None,
     source_chain_role: str = "",
 ) -> dict[str, Any] | None:
+    if not match_has_direct_source_open_route(match):
+        return None
     source_ref = source_ref_from_registry_match(match, clean_ref=clean_ref)
     if not source_ref:
+        return None
+    if not source_ref_exists(
+        source_ref,
+        clean_source_dir=source_dir,
+        registry_dir=registry_dir,
+    ):
         return None
     scope_labels = [
         str(label)
@@ -243,6 +253,7 @@ def registry_clean_source_routes(
         route = route_from_registry_match(
             match,
             source_dir=source_dir,
+            registry_dir=registry_dir,
             clean_ref=clean_ref,
             route_handle=route_handle,
             stable_id=stable_id,

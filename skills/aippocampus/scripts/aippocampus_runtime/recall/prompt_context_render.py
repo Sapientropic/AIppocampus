@@ -35,6 +35,7 @@ from aippocampus_runtime.recall.prompt_recall_result_tiers import (
     result_agent_surface_intent,
     result_hot_path_funnel,
     result_route_delivery_diagnostic,
+    result_semantic_bridge_diagnostic,
 )
 from aippocampus_runtime.recall.semantic_gate_response import (
     public_count,
@@ -296,9 +297,8 @@ def semantic_route_hint_lines(result: dict[str, Any]) -> list[str]:
     ][:4]
     if not aliases and not scopes:
         return []
-    if semantic_gate.get("decision") not in {"scent", "evidence"} and not result.get(
-        "semantic_bridge_diagnostic"
-    ):
+    semantic_bridge = result_semantic_bridge_diagnostic(result)
+    if semantic_gate.get("decision") not in {"scent", "evidence"} and not semantic_bridge:
         return []
     route_label = (
         "source_required/reopenable_route"
@@ -313,7 +313,7 @@ def semantic_route_hint_lines(result: dict[str, Any]) -> list[str]:
         parts.append("scope: " + ", ".join(scopes))
     if parts:
         lines.append("- " + " | ".join(parts))
-    if result.get("semantic_bridge_diagnostic"):
+    if semantic_bridge:
         lines.append("- Local evidence bridge did not pass; keep this as route material only.")
     return lines
 
@@ -586,13 +586,14 @@ def context_for_hook(result: dict[str, Any], *, max_chars: int = MAX_CONTEXT_CHA
         lines.append("Soft working memory candidates (working continuity; source-backed staging):")
         for item in result.get("working_memory") or []:
             terms = ", ".join(item.get("matched_terms") or [])
-            refs = item.get("source_refs") or []
-            ref = refs[0] if refs else {}
-            source = ""
-            if ref:
-                source = (
-                    f" | source: {ref.get('title') or ref.get('thread_key')} line {ref.get('line')}"
-                )
+            posture = str(item.get("delivery_source_posture") or "direction_only")
+            authority_tier = str(item.get("public_authority_tier") or "ambient_hint")
+            source_ref_count = int(item.get("source_ref_count") or 0)
+            source = (
+                f" | {authority_tier}; {posture}; source refs: {source_ref_count}"
+                if source_ref_count or posture != "direction_only"
+                else f" | {authority_tier}; {posture}"
+            )
             if item.get("candidate_type") == "dream_hypothesis":
                 invitation = item.get("prospective_invitation") or {}
                 artifact = item.get("constructive_artifact") or {}

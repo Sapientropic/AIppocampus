@@ -235,7 +235,7 @@ class AgentOptInCliContractsTests(unittest.TestCase):
             [
                 *base,
                 "recall",
-                "different intervening recall",
+                "Opt-in continuity source before claims",
                 "--cwd",
                 str(self.cwd),
                 "--clean-source-dir",

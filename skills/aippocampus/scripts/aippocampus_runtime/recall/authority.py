@@ -8,6 +8,7 @@ clean-source boundary.
 
 from __future__ import annotations
 
+# aippocampus-instruction-surface: recall authority owner; trust-ladder wording maps existing source boundaries, not runtime prompt text.
 from typing import Any, Mapping
 
 NAVIGATION_SCENT = "navigation_scent"
@@ -17,6 +18,11 @@ REOPEN_REQUIRED_BEFORE_CLAIM = "reopen_required_before_claim"
 HIGH_RISK_REOPEN_REQUIRED = "high_risk_reopen_required"
 AUTHORITY_NAVIGATION_ONLY = "navigation_only"
 CLAIM_NO_CLAIM_BEFORE_REOPEN = "no_claim_before_reopen"
+
+PUBLIC_AUTHORITY_SOURCE_EVIDENCE = "source_evidence"
+PUBLIC_AUTHORITY_ADJUDICATED_HYPOTHESIS = "adjudicated_hypothesis"
+PUBLIC_AUTHORITY_AMBIENT_HINT = "ambient_hint"
+PUBLIC_AUTHORITY_DIAGNOSTIC_ONLY = "diagnostic_only"
 
 TRUST_IGNORE = "ignore"
 TRUST_SEMANTIC_HINT = "semantic_hint"
@@ -123,7 +129,27 @@ def _mapping(value: Any) -> Mapping[str, Any]:
 
 
 def _has_route_refs(surface: Mapping[str, Any]) -> bool:
-    return bool(surface.get("source_refs") or surface.get("candidate_refs"))
+    return bool(
+        surface.get("source_refs")
+        or surface.get("candidate_refs")
+        or _route_ref_count(surface) > 0
+    )
+
+
+def _route_ref_count(surface: Mapping[str, Any]) -> int:
+    for key in ("source_ref_count", "reopenable_ref_count", "candidate_ref_count"):
+        try:
+            count = int(surface.get(key) or 0)
+        except (TypeError, ValueError):
+            count = 0
+        if count > 0:
+            return count
+    refs = surface.get("source_refs") or surface.get("candidate_refs") or []
+    if isinstance(refs, Mapping):
+        return 1
+    if isinstance(refs, list):
+        return sum(1 for ref in refs if isinstance(ref, Mapping))
+    return 0
 
 
 def _has_candidate_conflict(surface: Mapping[str, Any]) -> bool:
@@ -255,6 +281,37 @@ def conversation_authority_contract(surface: Mapping[str, Any]) -> dict[str, Any
         in {CONVERSATION_BOUNDED_EVIDENCE, CONVERSATION_SOURCE_OPEN},
         "compact_foreground_should_dump_cannot_claim": False,
     }
+
+
+def public_authority_tier(surface: Mapping[str, Any]) -> str:
+    """Project existing trust/action fields into the compact public tier.
+
+    The tier is intentionally small: it tells the foreground consumer whether a
+    surfaced item is evidence, an adjudicated route/hypothesis, an ambient hint,
+    or diagnostic-only. It must not be used to serialize extra proof into the
+    compact payload.
+    """
+
+    clean = _mapping(surface)
+    level = trust_level(clean)
+    action = action_grammar_for_level(level, clean)
+    candidate_type = str(clean.get("candidate_type") or "").casefold()
+    provenance = str(clean.get("provenance_class") or "").casefold()
+    if level in {TRUST_BOUNDED_EVIDENCE, TRUST_RAW_SOURCE_REOPENED}:
+        return PUBLIC_AUTHORITY_SOURCE_EVIDENCE
+    if action == ACTION_IGNORE_OR_BLOCKED:
+        return PUBLIC_AUTHORITY_DIAGNOSTIC_ONLY
+    if candidate_type == "dream_hypothesis" or provenance in {"working_memory_model"}:
+        if _has_route_refs(clean) and action in {
+            ACTION_DIRECTION_WITH_REF,
+            ACTION_REOPENABLE_ROUTE,
+            ACTION_DIRECTION_ONLY,
+        }:
+            return PUBLIC_AUTHORITY_ADJUDICATED_HYPOTHESIS
+        return PUBLIC_AUTHORITY_DIAGNOSTIC_ONLY
+    if action in {ACTION_DIRECTION_WITH_REF, ACTION_REOPENABLE_ROUTE}:
+        return PUBLIC_AUTHORITY_ADJUDICATED_HYPOTHESIS
+    return PUBLIC_AUTHORITY_AMBIENT_HINT
 
 
 def requires_reopen_before_claim(surface: Mapping[str, Any]) -> bool:
@@ -490,6 +547,8 @@ def with_trust_fields(surface: Mapping[str, Any]) -> dict[str, Any]:
     grammar = action_grammar_for_level(level, clean)
     clean["trust_level"] = level
     clean["action_grammar"] = grammar
+    clean.setdefault("source_ref_count", _route_ref_count(clean))
+    clean["public_authority_tier"] = public_authority_tier(clean)
     clean["trust_contract"] = trust_contract_for_level(level, clean)
     if is_navigation_only_surface(clean) and grammar == ACTION_DIRECTION_ONLY:
         clean["authority_level"] = AUTHORITY_NAVIGATION_ONLY

@@ -21,3 +21,4 @@ leave this folder and use
 | [json-compatibility-inventory.md](json-compatibility-inventory.md) | Inventory | Current JSON sunset map | Use before adding, removing, or reviving public JSON compatibility aliases. |
 | [legacy-alias-inventory.md](legacy-alias-inventory.md) | Inventory | Current sunset map | Use before documenting or removing legacy `CODEX_MEMORY_*` / path aliases. |
 | [project-planning-automation.md](project-planning-automation.md) | Implementation map | Current GitHub automation boundary | Use before changing issue triage, milestones, or roadmap drift audits. |
+| [runtime-ops-owner-map.md](runtime-ops-owner-map.md) | Implementation map | Current runtime ops owner map | Use before adding or moving `aippocampus_runtime/ops/` modules; it is the guard-backed allowlist for remaining flat ops files. |

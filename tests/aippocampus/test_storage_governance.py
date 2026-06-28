@@ -15,6 +15,11 @@ from aippocampus_runtime.ops import storage_eviction, storage_governance
 from aippocampus_runtime.recall import index_builder, rollout_search
 
 
+class TtyStringIO(StringIO):
+    def isatty(self) -> bool:
+        return True
+
+
 class StorageGovernanceTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
@@ -471,10 +476,13 @@ class StorageGovernanceTests(unittest.TestCase):
         self.assertEqual(payload["candidates_returned"], 1)
         self.assertEqual(payload["full_audit_flag"], "--full")
         self.assertFalse(payload["privacy"]["raw_session_like_ids_emitted"])
-        self.assertEqual(payload["safe_next_actions"][0]["id"], "bounded_storage_audit")
-        self.assertNotEqual(
-            payload["foreground_action"].get("command"),
-            "aippocampus storage gc --dry-run --json --full --cwd .",
+        self.assertEqual(payload["foreground_action"]["id"], "bounded_storage_audit")
+        self.assertTrue(payload["foreground_action"]["continue_without_command"])
+        self.assertNotIn("command", payload["foreground_action"])
+        self.assertEqual(payload["safe_next_actions"][0]["id"], "preview_storage_gc_summary")
+        self.assertEqual(
+            payload["safe_next_actions"][0]["command"],
+            "aippocampus storage gc --dry-run --summary-json --cwd .",
         )
 
     def test_dry_run_falls_back_to_capacity_aggregate_when_retention_report_is_missing(
@@ -519,6 +527,22 @@ class StorageGovernanceTests(unittest.TestCase):
         self.assertTrue(
             all(" --apply " not in action["command"] for action in plan["safe_next_actions"])
         )
+
+    def test_gc_no_flag_tty_defaults_to_human_dry_run_but_pipe_requires_mode(self) -> None:
+        with patch("sys.stdout", new=TtyStringIO()) as tty_stdout:
+            tty_code = storage_governance.main(
+                ["gc", "--cwd", str(self.root), "--registry-dir", str(self.registry)]
+            )
+
+        with patch("sys.stdout", new=StringIO()) as pipe_stdout, patch("sys.stderr", new=StringIO()):
+            pipe_code = storage_governance.main(
+                ["gc", "--cwd", str(self.root), "--registry-dir", str(self.registry)]
+            )
+
+        self.assertEqual(tty_code, 0)
+        self.assertIn("AIppocampus storage governance dry-run", tty_stdout.getvalue())
+        self.assertEqual(pipe_code, 2)
+        self.assertEqual("", pipe_stdout.getvalue())
 
     def test_summary_top_budget_does_not_hide_old_generation_cleanup_candidates(self) -> None:
         # Make session-one dominate the presentation sample while a smaller

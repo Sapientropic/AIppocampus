@@ -16,7 +16,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from aippocampus_runtime import core
-from aippocampus_runtime.mcp.contracts import build_mcp_compact_card
+from aippocampus_runtime.mcp.contracts import MCPCompactResponseContract, build_mcp_compact_card
 
 COMPACT_DEBUG_FIELD_DENYLIST = frozenset(
     {
@@ -74,7 +74,10 @@ MCP_ACTION_KEYS = frozenset(
         "command",
         "command_template",
         "followup_arguments_template",
+        "last_recall_fallback_command_template",
+        "primary_route_relation",
         "requires",
+        "route_index",
         "template_only",
         "continue_without_command",
     }
@@ -87,6 +90,9 @@ MCP_ROUTE_KEYS = frozenset(
         "why_this_route",
         "source_boundary",
         "claim_boundary",
+        "actionability",
+        "action_priority",
+        "primary_action_relation",
         "action",
     }
 )
@@ -110,6 +116,7 @@ MCP_SEARCH_SOURCE_BOUNDARY_KEYS = frozenset(
         "search_miss_is_not_absence_of_memory",
         "demoted_artifact_matches_are_diagnostic",
         "capped_snippets_are_bounded_receipts",
+        "source_open_selector_emitted",
         "snippets_are_source_open",
     }
 )
@@ -364,7 +371,7 @@ def compact_search_memory_payload(
     payload: dict[str, Any],
     *,
     include_source_snippets: bool = False,
-) -> dict[str, Any]:
+) -> MCPCompactResponseContract:
     """Project MCP search results as an action card, not a source table.
 
     Search often has useful receipts, but MCP compact structuredContent is
@@ -549,10 +556,15 @@ def compact_mcp_structured_content(payload: Any) -> Any:
         card["claim_boundary"] = boundary
     if "foreground_action_contract" in payload:
         card["foreground_action_contract"] = payload["foreground_action_contract"]
-    return build_mcp_compact_card(
+    compact_card = build_mcp_compact_card(
         strip_compact_foreground_debug_fields(card),
         surface=surface or "mcp_compact",
     )
+    if surface == "mcp_agent_recall_compact":
+        foreground_card: dict[str, Any] = dict(compact_card)
+        foreground_card.pop("surface", None)
+        return foreground_card
+    return compact_card
 
 
 def compact_mcp_tool_result(payload: Any, *, is_error: bool = False) -> dict[str, Any]:

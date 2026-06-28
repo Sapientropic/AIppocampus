@@ -15,6 +15,7 @@ SCRIPTS = ROOT / "scripts"
 from aippocampus_runtime.recall import (
     prompt_context_render,
     prompt_cues,
+    prompt_recall_result_tiers,
     prompt_route_blocks,
 )
 from aippocampus_runtime.recall import prompt_recall_decision as decision
@@ -124,6 +125,46 @@ class PromptRecallDecisionBoundaryTests(unittest.TestCase):
         )
         self.assertEqual(tiers.result_hot_path_funnel(trace_result)["decision"], "skip")
 
+    def test_default_prompt_result_keeps_route_and_trace_out_of_top_level(self) -> None:
+        tiers = self._result_tiers_module()
+
+        compact_result = decision.assess_prompt(
+            "还记得 NeonMemory 吗？",
+            cwd=self.workspace,
+            registry_path=self.registry_path,
+            use_semantic_gate=False,
+            search_budget=0,
+        )
+        trace_result = decision.assess_prompt(
+            "还记得 NeonMemory 吗？",
+            cwd=self.workspace,
+            registry_path=self.registry_path,
+            use_semantic_gate=False,
+            search_budget=0,
+            detail="trace",
+        )
+
+        self.assertEqual(compact_result["decision"], "scent")
+        self.assertNotIn("hot_path_funnel", compact_result)
+        self.assertNotIn("route_delivery_diagnostic", compact_result)
+        self.assertNotIn("agent_surface_intent", compact_result)
+        self.assertEqual(set(compact_result["result_tiers"]), {"decision"})
+        self.assertEqual(tiers.result_route_delivery_diagnostic(compact_result), {})
+        self.assertEqual(tiers.result_hot_path_funnel(compact_result), {})
+
+        self.assertNotIn("hot_path_funnel", trace_result)
+        self.assertNotIn("route_delivery_diagnostic", trace_result)
+        self.assertNotIn("agent_surface_intent", trace_result)
+        self.assertEqual(
+            set(trace_result["result_tiers"]),
+            {"decision", "diagnostics", "trace"},
+        )
+        self.assertEqual(
+            tiers.result_route_delivery_diagnostic(trace_result)["foreground_profile"],
+            "ambient_hot_path",
+        )
+        self.assertIn("decision", tiers.result_hot_path_funnel(trace_result))
+
     def test_prompt_cue_catalog_is_split_without_breaking_legacy_imports(self) -> None:
         catalog = importlib.import_module("aippocampus_runtime.recall.prompt_cue_catalog")
 
@@ -204,7 +245,9 @@ class PromptRecallDecisionBoundaryTests(unittest.TestCase):
                 }
                 for item in result.get("evidence") or []
             ],
-            "semantic_bridge_diagnostic": result.get("semantic_bridge_diagnostic"),
+            "semantic_bridge_diagnostic": (
+                prompt_recall_result_tiers.result_semantic_bridge_diagnostic(result)
+            ),
         }
 
     def test_context_helper_resolves_explicit_paths_and_loads_inputs(self) -> None:
@@ -349,6 +392,16 @@ class PromptRecallDecisionBoundaryTests(unittest.TestCase):
             "decision": "skip",
             "score": 0.0,
             "confidence": "low",
+            "result_tiers": {
+                "decision": {
+                    "outcome": "skip",
+                    "score": 0.0,
+                    "confidence": "low",
+                    "foreground_lane": "stay_silent",
+                    "agent_surface_intent": {},
+                    "foreground_route_profile": "noise_suppressed",
+                }
+            },
             "cwd": str(self.workspace.resolve()),
             "registry": str(self.registry_path.resolve()),
             "associations": str((self.registry_dir / "associations.json").resolve()),
@@ -368,7 +421,6 @@ class PromptRecallDecisionBoundaryTests(unittest.TestCase):
             "evidence": [],
             "working_memory": [],
             "semantic_gate": None,
-            "semantic_bridge_diagnostic": None,
         }
 
         self.assertEqual(
@@ -379,6 +431,9 @@ class PromptRecallDecisionBoundaryTests(unittest.TestCase):
             expected_without_elapsed,
         )
         self.assertIsInstance(result["elapsed_ms"], float)
+        self.assertIsNone(
+            prompt_recall_result_tiers.result_semantic_bridge_diagnostic(result)
+        )
 
     def test_current_checkout_fact_cue_is_live_source_boundary(self) -> None:
         self.assertTrue(
@@ -608,7 +663,7 @@ class PromptRecallDecisionBoundaryTests(unittest.TestCase):
                     "confidence": "medium",
                     "candidate_threads": [],
                     "evidence": [],
-                    "semantic_bridge_diagnostic": "semantic_evidence_without_source_bridge",
+                    "semantic_bridge_diagnostic": None,
                 },
             },
         )
@@ -636,12 +691,13 @@ class PromptRecallDecisionBoundaryTests(unittest.TestCase):
             registry_path=self.registry_path,
             semantic_gate_fn=cached_semantic_evidence_without_local_bridge,
             search_budget=1,
+            detail="detail",
         )
 
-        diagnostic = result.get("route_delivery_diagnostic")
+        diagnostic = self._result_tiers_module().result_route_delivery_diagnostic(result)
         self.assertEqual(result["decision"], "scent")
         self.assertEqual(
-            result.get("semantic_bridge_diagnostic"),
+            self._result_tiers_module().result_semantic_bridge_diagnostic(result),
             "semantic_evidence_without_source_bridge",
         )
         self.assertEqual(diagnostic["foreground_profile"], "ambient_hot_path")
@@ -659,11 +715,13 @@ class PromptRecallDecisionBoundaryTests(unittest.TestCase):
             registry_path=self.registry_path,
             use_semantic_gate=False,
             search_budget=0,
+            detail="detail",
         )
 
-        channels = result["recall_channels"]
+        channels = self._result_tiers_module().result_recall_channels(result)
 
         self.assertEqual(result["decision"], "scent")
+        self.assertNotIn("recall_channels", result)
         self.assertEqual(channels["fast"]["status"], "hit")
         self.assertEqual(channels["fast"]["candidate_count"], 1)
         self.assertEqual(channels["fast"]["candidates"][0]["channel"], "fast")
@@ -687,11 +745,13 @@ class PromptRecallDecisionBoundaryTests(unittest.TestCase):
             registry_path=self.registry_path,
             semantic_gate_fn=semantic_timeout,
             search_budget=0,
+            detail="detail",
         )
 
-        channels = result["recall_channels"]
+        channels = self._result_tiers_module().result_recall_channels(result)
 
         self.assertEqual(result["decision"], "scent")
+        self.assertNotIn("recall_channels", result)
         self.assertEqual(channels["fast"]["status"], "hit")
         self.assertEqual(channels["deep"]["status"], "timeout")
         self.assertIn("semantic_gate_timeout", channels["deep"]["reason_codes"])
@@ -715,11 +775,13 @@ class PromptRecallDecisionBoundaryTests(unittest.TestCase):
             registry_path=self.registry_path,
             semantic_gate_fn=semantic_source_free_evidence,
             search_budget=0,
+            detail="detail",
         )
 
-        channels = result["recall_channels"]
+        channels = self._result_tiers_module().result_recall_channels(result)
 
         self.assertEqual(result["decision"], "scent")
+        self.assertNotIn("recall_channels", result)
         self.assertEqual(result["evidence"], [])
         self.assertEqual(channels["fast"]["status"], "hit")
         self.assertEqual(channels["deep"]["status"], "hit")
@@ -747,16 +809,18 @@ class PromptRecallDecisionBoundaryTests(unittest.TestCase):
             semantic_gate_fn=semantic_evidence_with_local_route,
             search_budget=0,
             max_elapsed_ms=4300,
+            detail="detail",
         )
 
         packet = result["ambient_recall"]["fresh_thread_packet"]
-        diagnostic = result["route_delivery_diagnostic"]
+        diagnostic = self._result_tiers_module().result_route_delivery_diagnostic(result)
         context = prompt_context_render.context_for_hook(result)
 
         self.assertEqual(result["decision"], "scent")
         self.assertEqual(result["evidence"], [])
         self.assertTrue(result["semantic_source_reopen_route"])
-        self.assertIsNone(result["semantic_bridge_diagnostic"])
+        self.assertNotIn("semantic_bridge_diagnostic", result)
+        self.assertIsNone(self._result_tiers_module().result_semantic_bridge_diagnostic(result))
         self.assertEqual(packet["support_level"], "source_required")
         self.assertEqual(packet["action_grammar"], "reopenable_route")
         self.assertEqual(packet["reopen_plan"]["status"], "ready")

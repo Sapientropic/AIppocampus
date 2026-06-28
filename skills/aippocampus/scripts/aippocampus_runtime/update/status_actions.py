@@ -136,6 +136,8 @@ def foreground_command_mutation_risk(command: Any, *, default: str = "read_only"
         return default
     if "hooks action refresh-cache" in lowered and "--write" in lowered:
         return "explicit_local_cache_write"
+    if "hooks action probe" in lowered:
+        return "low_risk_local_cache_write"
     if "hooks action install" in lowered or "hooks action uninstall" in lowered:
         return "writes_local_hooks_config"
     if "plugin install" in lowered:

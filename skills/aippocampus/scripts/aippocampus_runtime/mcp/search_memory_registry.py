@@ -67,6 +67,12 @@ def registry_search_memory_payload(
         search_budget=str(arguments.get("search_budget") or "default"),
         record_last_search=False,
         cwd=cwd,
+        max_elapsed_ms=_int_range(
+            arguments.get("max_elapsed_ms"),
+            default=5000,
+            minimum=0,
+            maximum=120000,
+        ),
     )
 
 

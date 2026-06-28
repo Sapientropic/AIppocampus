@@ -20,6 +20,7 @@ from aippocampus_runtime.contracts import (
     foreground_shell_action,
     foreground_template_action,
 )
+from aippocampus_runtime.dream import lifecycle as dream_lifecycle
 from aippocampus_runtime.dream import working_memory_publication
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 from aippocampus_runtime.recall import background_finding_actions, background_finding_projection
@@ -122,6 +123,11 @@ def _project_finding(row: Mapping[str, Any], *, cue: str, index: int) -> dict[st
     use = row.get("dream_hypothesis_use")
     use_map = use if isinstance(use, Mapping) else {}
     projection = background_finding_projection.projection_fields(row)
+    delivery = dream_lifecycle.working_memory_delivery_posture(
+        row,
+        prompt=cue,
+        route_relevance=True,
+    )
     return {
         "index": index,
         "finding_id": str(row.get("candidate_key") or f"background:{index}"),
@@ -146,6 +152,13 @@ def _project_finding(row: Mapping[str, Any], *, cue: str, index: int) -> dict[st
         "project_label": row.get("project_label"),
         "review_state": row.get("review_state"),
         "dream_function": row.get("dream_function"),
+        "public_authority_tier": row.get("public_authority_tier")
+        or delivery["public_authority_tier"],
+        "delivery_source_posture": row.get("delivery_source_posture")
+        or delivery["delivery_source_posture"],
+        "delivery_next_action": row.get("delivery_next_action")
+        or delivery["delivery_next_action"],
+        "source_ref_count": row.get("source_ref_count") or delivery["source_ref_count"],
         "boundary": _finding_boundary(row),
         "source": background_finding_actions.source_summary(row),
         "next_actions": background_finding_actions.finding_next_actions(row, cue=cue),
@@ -202,6 +215,9 @@ def _finding_summary(finding: Mapping[str, Any], *, detail_level: str = "compact
             "match_strength": finding.get("match_strength"),
             "distinctive_match_count": finding.get("distinctive_match_count"),
             "why_it_may_matter_now": finding.get("why_it_may_matter_now"),
+            "public_authority_tier": finding.get("public_authority_tier"),
+            "delivery_source_posture": finding.get("delivery_source_posture"),
+            "delivery_next_action": finding.get("delivery_next_action"),
             "source_ref_count": source.get("source_ref_count"),
             "source_finding_count": source.get("source_finding_count"),
         }
@@ -222,6 +238,9 @@ def _finding_summary(finding: Mapping[str, Any], *, detail_level: str = "compact
         "review_state": finding.get("review_state"),
         "source_ref_count": source.get("source_ref_count"),
         "source_finding_count": source.get("source_finding_count"),
+        "public_authority_tier": finding.get("public_authority_tier"),
+        "delivery_source_posture": finding.get("delivery_source_posture"),
+        "delivery_next_action": finding.get("delivery_next_action"),
         "use_boundary": {
             "use": "navigation_only",
             "before_claiming": "reopen_source_route",

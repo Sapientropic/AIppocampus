@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Iterable, Protocol
+from typing import Any, Iterable, Mapping, Protocol
 
 from aippocampus_runtime.core import compact_text, dict_or_empty
 from aippocampus_runtime.navigation.associations import (
@@ -102,6 +102,16 @@ def _cue_matches(prompt_low: str, prompt_terms: list[str], cue: str) -> bool:
         return True
     cue_terms = [term.casefold() for term in split_query_terms([cue]) if len(term.strip()) >= 3]
     return any(term and term in prompt_terms for term in cue_terms)
+
+
+def _route_cues(route: Mapping[str, Any]) -> Iterable[str]:
+    for value in route.get("route_cues") or ():
+        yield str(value)
+    for value in route.get("query_terms") or ():
+        yield str(value)
+    title = route.get("title")
+    if title:
+        yield str(title)
 
 
 def _cue_score(cue: str) -> float:
@@ -220,9 +230,7 @@ def _mid_region_rows(
             + [
                 str(value)
                 for route in region_routes
-                for value in list(route.get("route_cues") or [])
-                + list(route.get("query_terms") or [])
-                + [route.get("title")]
+                for value in _route_cues(route)
             ],
             limit=40,
         )

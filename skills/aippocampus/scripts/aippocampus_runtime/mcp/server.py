@@ -6,9 +6,11 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from dataclasses import dataclass
 from typing import Any
 
 from aippocampus_runtime.cli.human_io import exit_code_for_payload
+from aippocampus_runtime.mcp import runtime_hot_reload
 from aippocampus_runtime.mcp.mutation_boundary import UNSUPPORTED_MUTATION_TOOLS
 from aippocampus_runtime.mcp.protocol import initialize_result
 from aippocampus_runtime.mcp.result_profile import render_profiled_result
@@ -156,6 +158,93 @@ def handle_payload(payload: Any) -> list[dict[str, Any]]:
     return responses
 
 
+@dataclass(frozen=True)
+class StdioDispatch:
+    output: str
+    reexec_after_response: bool = False
+
+
+def _request_id_from_raw(raw_message: str) -> Any:
+    try:
+        payload = json.loads(raw_message)
+    except json.JSONDecodeError:
+        return None
+    if isinstance(payload, dict):
+        return payload.get("id")
+    if isinstance(payload, list) and payload and isinstance(payload[0], dict):
+        return payload[0].get("id")
+    return None
+
+
+def _arguments_from_raw(raw_message: str) -> dict[str, Any]:
+    try:
+        payload = json.loads(raw_message)
+    except json.JSONDecodeError:
+        return {}
+    request = payload[0] if isinstance(payload, list) and payload else payload
+    if not isinstance(request, dict):
+        return {}
+    params = request.get("params")
+    if not isinstance(params, dict):
+        return {}
+    arguments = params.get("arguments")
+    return arguments if isinstance(arguments, dict) else {}
+
+
+def _runtime_hot_reload_failed_response(raw_message: str, summary: str) -> StdioDispatch:
+    request_id = _request_id_from_raw(raw_message)
+    arguments = _arguments_from_raw(raw_message)
+    payload = foreground_mcp_runtime_recovery_payload(
+        "mcp_transport",
+        RuntimeError(summary),
+    )
+    result = render_profiled_result(
+        arguments,
+        payload,
+        is_error=True,
+        full_output_boundary="foreground_mcp_runtime_hot_reload_recovery",
+    )
+    return StdioDispatch(
+        json.dumps(jsonrpc_result(request_id, result), ensure_ascii=False, separators=(",", ":"))
+        + "\n",
+        reexec_after_response=False,
+    )
+
+
+def dispatch_stdio_message(raw_message: str) -> StdioDispatch:
+    if runtime_hot_reload.runtime_generation_changed():
+        try:
+            proxied = runtime_hot_reload.proxy_request_through_fresh_runtime(raw_message)
+        except Exception as exc:
+            return _runtime_hot_reload_failed_response(
+                raw_message,
+                f"hot reload proxy failed: {type(exc).__name__}: {exc}",
+            )
+        if proxied.returncode == 0 and proxied.stdout.strip():
+            output = proxied.stdout
+            if not output.endswith("\n"):
+                output += "\n"
+            return StdioDispatch(output, reexec_after_response=True)
+        return _runtime_hot_reload_failed_response(
+            raw_message,
+            (
+                "hot reload proxy failed: "
+                f"exit={proxied.returncode}; stderr={proxied.stderr[-400:]}"
+            ),
+        )
+
+    try:
+        payload = json.loads(raw_message)
+        responses = handle_payload(payload)
+    except json.JSONDecodeError as exc:
+        responses = [jsonrpc_error(None, -32700, f"Parse error: {exc}")]
+    output = "".join(
+        json.dumps(response, ensure_ascii=False, separators=(",", ":")) + "\n"
+        for response in responses
+    )
+    return StdioDispatch(output)
+
+
 def serve_stdio() -> int:
     seen_request = False
     for raw_message in sys.stdin:
@@ -163,13 +252,11 @@ def serve_stdio() -> int:
         if not raw_message:
             continue
         seen_request = True
-        try:
-            payload = json.loads(raw_message)
-            responses = handle_payload(payload)
-        except json.JSONDecodeError as exc:
-            responses = [jsonrpc_error(None, -32700, f"Parse error: {exc}")]
-        for response in responses:
-            print(json.dumps(response, ensure_ascii=False, separators=(",", ":")), flush=True)
+        dispatch = dispatch_stdio_message(raw_message)
+        if dispatch.output:
+            print(dispatch.output, end="", flush=True)
+        if dispatch.reexec_after_response:
+            runtime_hot_reload.reexec_current_process()
     if not seen_request:
         print(json.dumps(tool_readiness_summary(), ensure_ascii=False, indent=2))
     return 0
@@ -183,6 +270,7 @@ def main(argv: list[str] | None = None) -> int:
             "MCP foreground/server entry.\n\n"
             "Action card:\n"
             "  mcp status              Compact readiness card for foreground agents.\n"
+            "  mcp status --detail full  Operator readiness detail, including explicit write fallbacks.\n"
             "  mcp list-tools          Full MCP schema catalog for host wiring.\n"
             "  mcp list-tools --json   Full MCP schema catalog for host wiring.\n"
             "  mcp list-tools --compact  Compact readiness card; no schema wall.\n"
@@ -212,6 +300,12 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="For list-tools, emit only visible tool names as JSON.",
     )
+    parser.add_argument(
+        "--detail",
+        choices=["compact", "full"],
+        default="compact",
+        help="For status, choose compact foreground readiness or full operator detail.",
+    )
     args = parser.parse_args(raw_argv)
     if args.names and args.command is None:
         payload = tool_names_summary()
@@ -219,7 +313,7 @@ def main(argv: list[str] | None = None) -> int:
         return exit_code_for_payload(payload)
     if args.list_tools or args.command in {"list-tools", "status"}:
         if args.summary_json or args.command == "status":
-            payload = tool_readiness_summary()
+            payload = tool_readiness_summary(detail=args.detail)
             print(json.dumps(payload, ensure_ascii=False, indent=2))
             return exit_code_for_payload(payload)
         if args.names:

@@ -223,8 +223,6 @@ def public_compact_route_receipts(routes: Any) -> list[dict[str, Any]]:
             or action_map.get("cli_command_template"),
             "requires": action_map.get("requires"),
             "template_only": action_map.get("template_only"),
-            "route_choice_posture": action_map.get("route_choice_posture"),
-            "confidence": action_map.get("confidence"),
             "claim_boundary": action_map.get("claim_boundary"),
         }
         receipts.append(
@@ -234,8 +232,9 @@ def public_compact_route_receipts(routes: Any) -> list[dict[str, Any]]:
                     "index": route.get("index") or route.get("route_index"),
                     "label": route.get("label") or route.get("route_label"),
                     "why_this_route": route.get("why_this_route"),
-                    "route_choice_posture": route.get("route_choice_posture"),
-                    "confidence": route.get("confidence"),
+                    "actionability": route.get("actionability"),
+                    "action_priority": route.get("action_priority"),
+                    "primary_action_relation": route.get("primary_action_relation"),
                     "claim_boundary": route.get("claim_boundary"),
                     "already_opened": route.get("already_opened"),
                     "action": {

@@ -47,14 +47,18 @@ def compact_registry_match(match: Mapping[str, Any]) -> dict[str, Any]:
     return {
         key: value
         for key, value in match.items()
-        if key not in {"score", "query_match_profile", "_ranking_haystack"}
+        if key not in {"score", "query_match_profile", "_ranking_haystack", "_route_note_anchor_match"}
     }
 
 
 def diagnostic_registry_match(match: Mapping[str, Any]) -> dict[str, Any]:
     """Keep ranking diagnostics while stripping private match-context text."""
 
-    return {key: value for key, value in match.items() if key != "_ranking_haystack"}
+    return {
+        key: value
+        for key, value in match.items()
+        if key not in {"_ranking_haystack", "_route_note_anchor_match"}
+    }
 
 
 def _duplicate_fingerprint(match: Mapping[str, Any]) -> str:

@@ -302,12 +302,14 @@ def _run_deepen_command(args: Namespace, json_out: JsonOut) -> int:
                     **recovery_payload,
                 }
             else:
-                recovery_payload = compact_agent_deepen_payload(
-                    recovery_payload,
-                    request_index=int(args.request or 1),
-                    last_recall=True,
-                    recall_selector=str(args.recall_selector or ""),
-                    surface="agent_cli_source_court_compact",
+                recovery_payload = dict(
+                    compact_agent_deepen_payload(
+                        recovery_payload,
+                        request_index=int(args.request or 1),
+                        last_recall=True,
+                        recall_selector=str(args.recall_selector or ""),
+                        surface="agent_cli_source_court_compact",
+                    )
                 )
             json_out(recovery_payload)
         else:
@@ -363,12 +365,14 @@ def _run_deepen_command(args: Namespace, json_out: JsonOut) -> int:
         if args.detail == "full":
             payload = {"detail": "full", "output_boundary": "local_private_diagnostic_full", **payload}
         else:
-            payload = compact_agent_deepen_payload(
-                payload,
-                request_index=request_index,
-                last_recall=request_index is not None,
-                recall_selector=str(args.recall_selector or ""),
-                surface="agent_cli_source_court_compact",
+            payload = dict(
+                compact_agent_deepen_payload(
+                    payload,
+                    request_index=request_index,
+                    last_recall=request_index is not None,
+                    recall_selector=str(args.recall_selector or ""),
+                    surface="agent_cli_source_court_compact",
+                )
             )
         json_out(payload)
     else:

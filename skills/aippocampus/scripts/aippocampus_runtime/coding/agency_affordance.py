@@ -21,7 +21,11 @@ from aippocampus_runtime.core import (
     stable_json_id,
 )
 from aippocampus_runtime.registry.api import unique_preserve
-from aippocampus_runtime.source.io_kernel import source_ref_key
+from aippocampus_runtime.source.io_kernel import (
+    merge_source_refs,
+    source_ref_fingerprint,
+    source_ref_key,
+)
 
 SCHEMA_VERSION = 1
 PROMPT_VERSION = "aippocampus-agency-affordance-v1"
@@ -67,49 +71,6 @@ LEVEL_RANK = {
     "backstage_only": 1,
     "silent": 0,
 }
-
-
-def clean_source_ref(ref: Any) -> dict[str, Any] | None:
-    if not isinstance(ref, Mapping):
-        return None
-    thread_key, message_id, turn_id, line = source_ref_key(ref)
-    if not thread_key or not (message_id or turn_id or line):
-        return None
-    clean = {
-        "thread_key": thread_key,
-        "message_id": ref.get("message_id"),
-        "turn_id": ref.get("turn_id"),
-        "source_id": ref.get("source_id"),
-        "clean_ordinal": ref.get("clean_ordinal"),
-        "source_line": ref.get("source_line") or ref.get("line"),
-        "role": ref.get("role"),
-        "phase": ref.get("phase") or "",
-        "timestamp": ref.get("timestamp"),
-    }
-    return {key: value for key, value in clean.items() if value not in {None, ""}}
-
-
-def merge_source_refs(*groups: Sequence[Any]) -> list[dict[str, Any]]:
-    refs: list[dict[str, Any]] = []
-    seen: set[tuple[str, str, str, str]] = set()
-    for group in groups:
-        for item in group or []:
-            clean = clean_source_ref(item)
-            if not clean:
-                continue
-            key = source_ref_key(clean)
-            if key in seen:
-                continue
-            seen.add(key)
-            refs.append(clean)
-    return refs[:12]
-
-
-def source_ref_fingerprint(refs: Sequence[Mapping[str, Any]]) -> str:
-    if not refs:
-        return ""
-    keys = [source_ref_key(ref) for ref in refs]
-    return stable_json_id("src_refs", keys, length=16)
 
 
 def source_thickness(refs: Sequence[Mapping[str, Any]], explicit: str | None = None) -> str:
@@ -239,6 +200,7 @@ def affordance_from_row(
         row.get("source_refs") or [],
         row.get("evidence_refs") or [],
         row.get("clean_source_refs") or [],
+        limit=12,
     )
     trigger = normalize_trigger(row.get("trigger") or row.get("why_now_trigger"), default_trigger)
     if trigger not in TRIGGERS:

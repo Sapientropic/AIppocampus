@@ -209,18 +209,18 @@ def merge_association_candidates(
             existing = by_key.get(thread_key)
             if existing:
                 existing["score"] = round(float(existing.get("score") or 0.0) + boost, 3)
-                existing["matched_terms"] = unique_preserve(
-                    list(existing.get("matched_terms") or [])
-                    + list(match.get("matched_terms") or [])
-                    + [match.get("term") or ""],
+                existing["matched_terms"] = prompt_cues.merge_unique_terms(
+                    existing.get("matched_terms") or (),
+                    match.get("matched_terms") or (),
+                    (match.get("term") or "",),
                     limit=8,
                 )
                 continue
             item = candidate_summary(entry, boost, query_terms)
-            item["matched_terms"] = unique_preserve(
-                list(item.get("matched_terms") or [])
-                + list(match.get("matched_terms") or [])
-                + [match.get("term") or ""],
+            item["matched_terms"] = prompt_cues.merge_unique_terms(
+                item.get("matched_terms") or (),
+                match.get("matched_terms") or (),
+                (match.get("term") or "",),
                 limit=8,
             )
             item["association_source"] = True
@@ -437,14 +437,14 @@ def merge_cognitive_map_candidates(
             existing = by_key.get(thread_key)
             if existing:
                 existing["score"] = round(float(existing.get("score") or 0.0) + boost, 3)
-                existing["matched_terms"] = unique_preserve(
-                    list(existing.get("matched_terms") or []) + matched_terms, limit=8
+                existing["matched_terms"] = prompt_cues.merge_unique_terms(
+                    existing.get("matched_terms") or (), matched_terms, limit=8
                 )
                 existing["cognitive_map_source"] = True
                 continue
             item = candidate_summary(entry, boost, query_terms)
-            item["matched_terms"] = unique_preserve(
-                list(item.get("matched_terms") or []) + matched_terms, limit=8
+            item["matched_terms"] = prompt_cues.merge_unique_terms(
+                item.get("matched_terms") or (), matched_terms, limit=8
             )
             item["cognitive_map_source"] = True
             candidates.append(item)

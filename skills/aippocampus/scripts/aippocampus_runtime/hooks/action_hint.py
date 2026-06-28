@@ -12,6 +12,11 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.hooks import recent_recall_routes
+from aippocampus_runtime.hooks.action_hint_auto_chain import (
+    DEFAULT_AUTO_CHAIN_MAX_ELAPSED_MS,
+    action_hint_refresh_auto_chain,
+)
+from aippocampus_runtime.hooks.action_hint_probe_projection import compact_probe_report
 
 # aippocampus-instruction-surface: action-hint hook/probe compact projection and detail diagnostics owner.
 
@@ -449,92 +454,6 @@ def _with_probe_usefulness(report: dict[str, Any]) -> dict[str, Any]:
     return report
 
 
-def _primary_probe_handle(hint: Mapping[str, Any]) -> dict[str, Any] | None:
-    for handle in hint.get("source_handles") or []:
-        if isinstance(handle, Mapping):
-            return dict(handle)
-    return None
-
-
-def compact_probe_report(report: Mapping[str, Any]) -> dict[str, Any]:
-    """Return the foreground probe card without feature extraction diagnostics.
-
-    The status card recommends this probe to foreground agents, so the default
-    JSON must stay action-sized. Full feature vectors, cache accounting, and raw
-    diagnostics remain available through ``--detail full`` for operator review.
-    """
-
-    raw_hint = report.get("hint")
-    hint = raw_hint if isinstance(raw_hint, Mapping) else {}
-    primary_handle = _primary_probe_handle(hint)
-    useful = bool(report.get("useful"))
-    action: dict[str, Any]
-    if useful and primary_handle and primary_handle.get("command"):
-        raw_arguments = primary_handle.get("arguments")
-        arguments = raw_arguments if isinstance(raw_arguments, Mapping) else {}
-        action = {
-            "id": "deepen_probe_source_route",
-            "label": "Deepen probe source route",
-            "command": str(primary_handle.get("command") or ""),
-            "tool_name": str(primary_handle.get("tool_name") or "agent_deepen"),
-            "arguments": dict(arguments),
-            "why": "The probe matched a prepared action-time hint; open its source route before claims.",
-            "mutation_risk": "read_only",
-            "claim_boundary": "no_claim_before_reopen",
-        }
-    else:
-        refresh_query = str((primary_handle or {}).get("query") or "").strip()
-        refresh_command = (
-            f"aippocampus agent recall {json.dumps(refresh_query, ensure_ascii=False)} --json"
-            if refresh_query
-            else "aippocampus hooks action refresh-cache --write --json"
-        )
-        action = {
-            "id": "refresh_probe_source_route",
-            "label": "Refresh probe source route",
-            "command": refresh_command,
-            "why": (
-                "The probe did not validate a live source route; refresh recall/source "
-                "routing before treating action-time hints as useful."
-            ),
-            "mutation_risk": "read_only",
-            "claim_boundary": "action_hints_are_navigation_not_source_truth",
-        }
-    compact_hint = None
-    if hint:
-        compact_hint = {
-            "hint_id": str(hint.get("hint_id") or ""),
-            "provider_family": str(hint.get("provider_family") or ""),
-            "action_hint_kind": str(hint.get("action_hint_kind") or ""),
-            "message": str(hint.get("message") or ""),
-            "recommended_action": str(hint.get("recommended_action") or ""),
-            "navigation_only": bool(hint.get("navigation_only", True)),
-            "source_reopen_required": bool(hint.get("source_reopen_required", True)),
-            "authority": str(hint.get("authority") or "navigation_only"),
-            "source_ref_count": int(hint.get("source_ref_count") or 0),
-        }
-    return {
-        "schema_version": int(report.get("schema_version") or SCHEMA_VERSION),
-        "kind": "aippocampus_action_hint_probe_compact",
-        "detail": "compact",
-        "ok": bool(report.get("ok", True)),
-        "decision": str(report.get("decision") or ""),
-        "reason": str(report.get("reason") or ""),
-        "useful": useful,
-        "usefulness_stage": str(report.get("usefulness_stage") or ""),
-        "hint": compact_hint,
-        "foreground_action": action,
-        "source_reopen_boundary": (
-            "Probe usefulness means a navigation handle exists; deepen or reopen "
-            "that source before factual claims."
-        ),
-        "claim_boundary": str(
-            report.get("claim_boundary")
-            or "action_hints_are_navigation_not_source_truth"
-        ),
-    }
-
-
 def _silent_report(reason: str, *, diagnostics: Mapping[str, Any] | None = None) -> dict[str, Any]:
     privacy = {
         "raw_tool_args_emitted": False,
@@ -651,6 +570,7 @@ def _cache_readiness(cache_jsonl: Path | None) -> dict[str, Any]:
 
 
 def main(argv: list[str] | None = None) -> int:
+    started_at = time.perf_counter()
     parser = argparse.ArgumentParser()
     parser.add_argument("action", choices=["run", "probe"], nargs="?", default="run")
     parser.add_argument("--cache-jsonl", type=Path, help="Prepared action-hint record JSONL.")
@@ -658,6 +578,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--compact-json", action="store_true", dest="compact_json")
     parser.add_argument("--operator-json", action="store_true", dest="operator_json")
     parser.add_argument("--detail", choices=["compact", "full"], default="compact")
+    parser.add_argument("--no-auto-chain", action="store_true")
+    parser.add_argument(
+        "--auto-chain-max-elapsed-ms",
+        type=int,
+        default=DEFAULT_AUTO_CHAIN_MAX_ELAPSED_MS,
+    )
     args = parser.parse_args(argv)
     try:
         envelope = _read_stdin_json() or (_default_probe_envelope() if args.action == "probe" else {})
@@ -670,6 +596,24 @@ def main(argv: list[str] | None = None) -> int:
 
             cache_jsonl = default_action_hint_cache_path()
         readiness = _cache_readiness(cache_jsonl)
+        auto_chain: dict[str, Any] = {
+            "status": "not_applicable",
+            "reason": "hot_hook_run_does_not_auto_write"
+            if args.action != "probe"
+            else "cache_ready",
+        }
+        if args.action == "probe" and readiness["cache_status"] != "with_fresh_records":
+            auto_chain = action_hint_refresh_auto_chain(
+                cache_jsonl=cache_jsonl,
+                cache_status=str(readiness["cache_status"]),
+                cwd=Path.cwd(),
+                surface="action_probe",
+                started_at=started_at,
+                max_elapsed_ms=args.auto_chain_max_elapsed_ms,
+                enabled=not args.no_auto_chain,
+            )
+            if auto_chain.get("status") == "auto_chained":
+                readiness = _cache_readiness(cache_jsonl)
         if readiness["cache_status"] != "with_fresh_records":
             report = _silent_report(
                 "cache_not_ready",
@@ -681,6 +625,7 @@ def main(argv: list[str] | None = None) -> int:
                     "prepared_record_count": readiness["record_count"],
                     "fresh_record_count": readiness["fresh_record_count"],
                     "malformed_cache_line_count": readiness["malformed_cache_line_count"],
+                    "auto_chain": auto_chain,
                 },
             )
         else:
@@ -692,8 +637,10 @@ def main(argv: list[str] | None = None) -> int:
                         "hot_path_bailed": False,
                         "cache_status": readiness["cache_status"],
                         "malformed_cache_line_count": readiness["malformed_cache_line_count"],
+                        "auto_chain": auto_chain,
                     }
                 )
+        report["auto_chain"] = auto_chain
     if args.action == "probe":
         report = _with_probe_usefulness(report)
     if args.operator_json:

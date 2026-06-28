@@ -15,7 +15,11 @@ from pathlib import Path
 from typing import Any, Callable, cast
 
 from aippocampus_runtime.core import codex_home
-from aippocampus_runtime.io_integrity import atomic_write_json
+from aippocampus_runtime.io_integrity import (
+    atomic_write_json,
+    prepared_directory_replace,
+    replace_directory,
+)
 from aippocampus_runtime.public_output import emit_public_text
 from aippocampus_runtime.update.agent_callable import (
     default_host_probe_report_path as _default_host_probe_report_path,
@@ -183,7 +187,7 @@ class CodexAppServerClient:
             if remaining <= 0:
                 raise TimeoutError(f"timed out waiting for {method}")
             try:
-                line = self._stdout.get(timeout=min(remaining, 1.0))
+                raw_response = self._stdout.get(timeout=min(remaining, 1.0))
             except queue.Empty:
                 if self._proc.poll() is not None:
                     raise AppServerError(
@@ -191,12 +195,12 @@ class CodexAppServerClient:
                         f"{method}: {self._proc.returncode}"
                     ) from None
                 continue
-            if line is None:
+            if raw_response is None:
                 raise AppServerError(f"codex app-server closed stdout while waiting for {method}")
             try:
-                response = json.loads(line)
+                response = json.loads(raw_response)
             except json.JSONDecodeError:
-                self._protocol_noise.append(line[:240])
+                self._protocol_noise.append(raw_response[:240])
                 if len(self._protocol_noise) > 20:
                     self._protocol_noise = self._protocol_noise[-20:]
                 continue
@@ -316,10 +320,10 @@ def recover_interrupted_plugin_install(target: Path) -> dict[str, Any]:
     recovered: list[str] = []
     cleaned: list[str] = []
     if not target.exists() and tmp.exists():
-        tmp.replace(target)
+        replace_directory(tmp, target)
         recovered.append("published_tmp_install")
     if not target.exists() and backup.exists():
-        backup.replace(target)
+        replace_directory(backup, target)
         recovered.append("restored_backup_install")
     if target.exists() and tmp.exists():
         shutil.rmtree(tmp)
@@ -349,16 +353,13 @@ def _safe_replace_tree(source: Path, target: Path) -> None:
     if len(target.parts) <= 2:
         raise ValueError("refusing shallow plugin marketplace refresh path")
     recover_interrupted_plugin_install(target)
-    tmp = _install_tmp_path(target)
     backup = _install_backup_path(target)
-    if tmp.exists():
-        shutil.rmtree(tmp)
     if backup.exists():
         shutil.rmtree(backup)
-    shutil.copytree(source, tmp)
-    if target.exists():
-        target.rename(backup)
-    tmp.replace(target)
+    with prepared_directory_replace(target) as tmp:
+        shutil.copytree(source, tmp)
+        if target.exists():
+            target.rename(backup)
     if backup.exists():
         shutil.rmtree(backup)
 

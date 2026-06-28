@@ -6,7 +6,7 @@ from io import StringIO
 from pathlib import Path
 from unittest import mock
 
-from aippocampus_runtime import health, health_stages
+from aippocampus_runtime import health, health_stages, health_storage_pressure
 from tests.aippocampus.health_fixtures import health_workspace
 
 
@@ -230,7 +230,9 @@ class HealthStoragePressureTests(unittest.TestCase):
             current.mkdir(parents=True)
             old.mkdir(parents=True)
             (current / "source_index.sqlite").write_bytes(b"current")
-            (old / "source_index.sqlite").write_bytes(b"x" * (health.STORAGE_PRESSURE_RECLAIMABLE_BYTES + 1))
+            (old / "source_index.sqlite").write_bytes(
+                b"x" * (health_storage_pressure.STORAGE_PRESSURE_RECLAIMABLE_BYTES + 1)
+            )
             (index_dir / "source_index.pointer.json").write_text(
                 json.dumps(
                     {

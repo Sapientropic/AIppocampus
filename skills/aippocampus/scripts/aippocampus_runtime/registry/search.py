@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
+from time import perf_counter
 
 from aippocampus_runtime.core import compact_text
 from aippocampus_runtime.source.rollout import is_injected_instruction_text
@@ -119,6 +120,7 @@ def deep_search_entry_result(
     max_hits: int = 3,
     *,
     search_budget: RegistrySearchBudget | None = None,
+    deadline: float | None = None,
 ) -> dict:
     budget = search_budget or REGISTRY_SEARCH_DEFAULT_BUDGET
     paths = entry.get("paths") or {}
@@ -127,6 +129,7 @@ def deep_search_entry_result(
     if clean_messages:
         try:
             from aippocampus_runtime.source.io_kernel import jsonl_loss_warning
+            from aippocampus_runtime.source.route_note_search import search_route_notes
             from aippocampus_runtime.source.search_core import (
                 load_clean_messages_with_loss,
                 score_message,
@@ -148,7 +151,20 @@ def deep_search_entry_result(
             )
             if warning:
                 warnings.append(warning)
-            for message in messages:
+            budget_exhausted = False
+            for index, message in enumerate(messages):
+                if deadline is not None and index % 64 == 0 and perf_counter() >= deadline:
+                    budget_exhausted = True
+                    warnings.append(
+                        {
+                            "stage": "clean_source",
+                            "code": "foreground_search_time_budget_exhausted",
+                            "message": "Stopped scanning this clean source at the foreground time budget.",
+                            "messages_scanned": index,
+                            "message_count": len(messages),
+                        }
+                    )
+                    break
                 semantic_scope_labels = semantic_labels_for_message(message, semantic_sidecar)
                 if semantic_scope_labels:
                     message = dict(message)
@@ -162,8 +178,9 @@ def deep_search_entry_result(
                 rank_score, noise_reason = clean_hit_rank_score(message, score)
                 clean_hits.append((rank_score, score, noise_reason, message))
             clean_hits.sort(key=lambda item: (-item[0], int(item[3].get("source_line") or 0)))
+            compact_hits: list[dict] = []
             if clean_hits:
-                compact_hits = [
+                compact_hits.extend(
                     {
                         "source": "clean_source",
                         "id": message.get("message_id") or message.get("id"),
@@ -195,11 +212,51 @@ def deep_search_entry_result(
                         ),
                     }
                     for rank_score, score, noise_reason, message in clean_hits[:max_hits]
-                ]
+                )
+            route_notes_value = str(paths.get("clean_source_route_notes_jsonl") or "").strip()
+            route_notes_path = (
+                Path(route_notes_value)
+                if route_notes_value
+                else messages_path.parent / "route-notes.jsonl"
+            )
+            if route_notes_path.exists():
+                route_note_hits, route_note_loss = search_route_notes(
+                    route_notes_path,
+                    terms,
+                    limit=max_hits,
+                    snippet_chars=budget.snippet_chars,
+                )
+                warning = jsonl_loss_warning(
+                    route_note_loss,
+                    stage="route_notes",
+                    path_label=str(route_notes_path),
+                )
+                if warning:
+                    warnings.append(warning)
+                compact_hits.extend(route_note_hits)
+            compact_hits.sort(
+                key=lambda item: (
+                    -float(item.get("rank_score") or item.get("score") or 0.0),
+                    int(item.get("line") or item.get("source_line") or 0),
+                )
+            )
+            if compact_hits:
                 return {
-                    "score": max(rank_score for rank_score, *_ in clean_hits[:max_hits]) * 0.08,
-                    "hits": compact_hits,
+                    "score": max(
+                        float(hit.get("rank_score") or hit.get("score") or 0.0)
+                        for hit in compact_hits[:max_hits]
+                    )
+                    * 0.08,
+                    "hits": compact_hits[:max_hits],
                     "warnings": warnings,
+                    "budget_exhausted": budget_exhausted,
+                }
+            if budget_exhausted:
+                return {
+                    "score": 0.0,
+                    "hits": [],
+                    "warnings": warnings,
+                    "budget_exhausted": True,
                 }
         except Exception as exc:
             warnings.append(_search_warning("clean_source", clean_messages, exc))
@@ -210,6 +267,15 @@ def deep_search_entry_result(
     sqlite_path = Path(sqlite_value)
     if not sqlite_path.exists():
         return {"score": 0.0, "hits": [], "warnings": warnings}
+    if deadline is not None and perf_counter() >= deadline:
+        warnings.append(
+            {
+                "stage": "sqlite",
+                "code": "foreground_search_time_budget_exhausted",
+                "message": "Skipped SQLite search at the foreground time budget.",
+            }
+        )
+        return {"score": 0.0, "hits": [], "warnings": warnings, "budget_exhausted": True}
     # Registry search is imported by low-level registry glue. Keep retrieval as
     # a use-site dependency so search policy can evolve without an import-time
     # cycle between catalog bookkeeping and heavier recall execution.

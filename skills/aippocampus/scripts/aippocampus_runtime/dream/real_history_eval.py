@@ -49,7 +49,12 @@ from aippocampus_runtime.model.routing import (
     route_service_name,
 )
 from aippocampus_runtime.registry.store import registry_paths
-from aippocampus_runtime.source.io_kernel import load_jsonl_dict_rows, safe_float, source_ref_key
+from aippocampus_runtime.source.io_kernel import (
+    load_jsonl_dict_rows,
+    normalize_source_refs,
+    safe_float,
+    source_ref_key,
+)
 from aippocampus_runtime.subconscious.candidate_router import (
     default_jobs_path,
     default_working_memory_path,
@@ -181,28 +186,6 @@ def source_ref_thread(ref: Mapping[str, Any]) -> str:
     return str(ref.get("thread_key") or ref.get("thread_id") or "")
 
 
-def normalize_source_refs(value: object) -> tuple[dict[str, Any], ...]:
-    if isinstance(value, Mapping):
-        raw_items: Iterable[object] = [value]
-    elif isinstance(value, (list, tuple)):
-        raw_items = value
-    else:
-        raw_items = []
-
-    refs: list[dict[str, Any]] = []
-    seen: set[tuple[str, str, str, str]] = set()
-    for item in raw_items:
-        if not isinstance(item, Mapping):
-            continue
-        ref = dict(item)
-        key = source_ref_key(ref)
-        if not any(key) or key in seen:
-            continue
-        seen.add(key)
-        refs.append({k: v for k, v in ref.items() if is_present(v)})
-    return tuple(refs)
-
-
 def normalized_term(value: object) -> str:
     text = re.sub(r"\s+", " ", str(value or "")).strip().casefold()
     text = re.sub(r"^[^\w\u4e00-\u9fff]+|[^\w\u4e00-\u9fff]+$", "", text)
@@ -235,7 +218,7 @@ def job_seed(row: Mapping[str, Any]) -> RealHistorySeed | None:
     finding_kind = str(row.get("finding_kind") or "")
     if finding_kind not in SEED_FINDING_KINDS:
         return None
-    refs = normalize_source_refs(row.get("source_refs"))
+    refs = normalize_source_refs(row.get("source_refs"), require_thread=False)
     if not refs:
         return None
     explicit_terms = [
@@ -291,7 +274,7 @@ def working_memory_seed(row: Mapping[str, Any]) -> RealHistorySeed | None:
         return None
     if row.get("status") != "active":
         return None
-    refs = normalize_source_refs(row.get("source_refs"))
+    refs = normalize_source_refs(row.get("source_refs"), require_thread=False)
     if not refs:
         return None
     explicit_terms = [*(row.get("trigger_terms") or []), *(row.get("concepts") or [])]

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+# aippocampus-instruction-surface: semantic-gate prompt-hook test fixtures; prompt strings are test contracts, not runtime instructions.
+from aippocampus_runtime.recall.prompt_recall_result_tiers import result_hot_path_funnel
 from tests.aippocampus.prompt_hook_fixtures import (
     AmbientRecallHookCase,
     cue_cache,
@@ -390,7 +392,7 @@ class PromptHookSemanticGateTests(AmbientRecallHookCase):
                 "cached": False,
             }
 
-        cue_updates = []
+        cue_reports = []
         for prompt in (
             "¿Podemos seguir con la memoria externa de la que hablamos?",
             "¿Puedes continuar esa memoria externa para mantener la continuidad?",
@@ -404,10 +406,11 @@ class PromptHookSemanticGateTests(AmbientRecallHookCase):
                 search_budget=0,
             )
             self.assertEqual(result["semantic_gate"]["decision"], "background_only")
-            cue_updates.append(result["semantic_cue_cache"])
+            self.assertNotIn("semantic_cue_cache", result)
+            cue_reports.append(cue_cache.semantic_cue_cache_report(cues_path))
 
-        self.assertEqual(cue_updates[0]["active_count"], 0)
-        self.assertGreater(cue_updates[1]["active_count"], 0)
+        self.assertEqual(cue_reports[0]["active_count"], 0)
+        self.assertGreater(cue_reports[1]["active_count"], 0)
 
         def fail_semantic_gate(*args, **kwargs) -> dict:
             raise AssertionError("active background semantic cues should avoid live semantic spend")
@@ -480,6 +483,7 @@ class PromptHookSemanticGateTests(AmbientRecallHookCase):
             semantic_gate_fn=fail_semantic_gate,
             use_semantic_gate=False,
             search_budget=0,
+            detail="detail",
         )
 
         self.assertEqual(result["decision"], "scent")
@@ -522,6 +526,7 @@ class PromptHookSemanticGateTests(AmbientRecallHookCase):
             registry_path=self.registry,
             use_semantic_gate=False,
             search_budget=0,
+            detail="trace",
         )
         public = hook.public_hook_debug_payload(result)
         encoded_public = json.dumps(public, ensure_ascii=False, sort_keys=True)
@@ -533,8 +538,9 @@ class PromptHookSemanticGateTests(AmbientRecallHookCase):
         self.assertIsNone(result["semantic_gate"])
         self.assertIn("living cue cache", " ".join(result["reasons"]))
         self.assertEqual(result["candidates"][0]["thread_key"], "session:test-old")
+        hot_path = result_hot_path_funnel(result)
         self.assertEqual(
-            result["hot_path_funnel"]["living_cue_cache"]["diagnostics"]["live_llm_call_count"],
+            hot_path["living_cue_cache"]["diagnostics"]["live_llm_call_count"],
             0,
         )
         self.assertEqual(
@@ -731,6 +737,7 @@ class PromptHookSemanticGateTests(AmbientRecallHookCase):
             semantic_gate_fn=fail_semantic_gate,
             use_semantic_gate=False,
             search_budget=0,
+            detail="detail",
         )
 
         self.assertEqual(result["decision"], "scent")
@@ -800,6 +807,7 @@ class PromptHookSemanticGateTests(AmbientRecallHookCase):
             semantic_gate_fn=fail_semantic_gate,
             use_semantic_gate=False,
             search_budget=0,
+            detail="detail",
         )
 
         self.assertEqual(result["decision"], "scent")
@@ -862,6 +870,7 @@ class PromptHookSemanticGateTests(AmbientRecallHookCase):
             semantic_gate_fn=fail_semantic_gate,
             use_semantic_gate=False,
             search_budget=0,
+            detail="detail",
         )
 
         self.assertEqual(result["decision"], "skip")

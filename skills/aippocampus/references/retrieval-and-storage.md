@@ -253,13 +253,13 @@ rebuildable snapshot. `append` writes one explicit event, `publish` materializes
 the rebuildable snapshot, and `report` emits the public-safety readout. These
 commands are trusted local producer/authoring surfaces, not hook paths.
 
-When a domain source ref carries `thread_key`, MCP `recall_deepen` may consult
-the machine registry to open that thread's clean-source store. Handles created
-by `recall_context` include freshness for those registry clean-source targets;
-blocked, stale, superseded, and retired domains still stay blocked at deepen
-time even if an old handle is replayed. The handle's refs define the current
-freshness/reopen set; extra refs visible in the domain brief are navigation
-until another handle or source reopen selects them.
+When a domain source ref carries `thread_key`, MCP deepen/source-open paths may
+consult the machine registry to open that thread's clean-source store. Legacy
+handles created by `recall_context` include freshness for those registry
+clean-source targets; blocked, stale, superseded, and retired domains still
+stay blocked at deepen time even if an old handle is replayed. The handle's
+refs define the current freshness/reopen set; extra refs visible in the domain
+brief are navigation until another handle or source reopen selects them.
 
 Macro tendencies in this layer are derived-only pointers. They are not
 runtime-writable facts, user profile facts, or replacements for clean source.
@@ -643,10 +643,12 @@ facts without source reopen.
 ## MCP Access Layer
 
 `aippocampus_runtime/mcp/server` is the local MCP surface for agent clients
-that should not shell out through skill instructions for every read. It exposes
-`search_memory`, `recall_context`, `recall_deepen`, `latest_reply`,
-`get_turn_context`, `list_threads`, `register_thread`, `sync_status`, and
-`memory_health`.
+that should not shell out through skill instructions for every read. The
+ordinary foreground loop is `agent_recall -> agent_deepen`; exact/source
+wording uses `search_memory -> get_turn_context`. The server also exposes
+`latest_reply`, `list_threads`, `register_thread`, `sync_status`, and
+`memory_health`, plus legacy/detail `recall_context` and `recall_deepen`
+compatibility tools for old route-handle clients.
 
 Default MCP tools read clean source, registry rows, or health metadata. The
 only mutating tool is `register_thread`, and it is explicit. `sync_status`
@@ -657,20 +659,15 @@ metadata writes with `.threads-registry.lock` and reports retryable
 `registry_writer_busy` contention, but it does not unlock broad memory-write
 tools or put global locks around read-only MCP queries.
 
-`recall_context` and `recall_deepen` are the agent-facing progressive recall
-funnel between hook-time scent and low-level source reopen. `recall_context`
-turns a fuzzy cue into compact route handles, source-window candidates, scope
-labels, and evidence levels. It must not include raw prompt text, raw private
-paths, raw tool payloads, or source claims that have not been reopened.
-When a published continuity-domain snapshot exists, `recall_context` may also
-surface continuity-domain handles or ordered pathlet handles before broad
-manual search. If that snapshot is missing or unreadable, the response should
-say so as a missing route artifact instead of flattening the result into "no
-memory." `recall_deepen` consumes those handles, ambient navigation seeds, or
-active recall lock handles and opens clean source only when the handle is still
-fresh and reopenable. Handles carry source-artifact freshness so a changed
-clean-source file forces the agent to rerun `recall_context` rather than using
-old navigation as evidence.
+`recall_context` and `recall_deepen` are legacy/detail compatibility tools, not
+the ordinary foreground funnel. They remain callable for old clients that still
+need route handles and freshness checks, but compact/default readiness, docs,
+and recovery cards should route ordinary agents through `agent_recall ->
+agent_deepen` or direct source-open selectors. Legacy handles may include
+continuity-domain or pathlet routes; `recall_deepen` opens clean source only
+when the handle is still fresh and reopenable. If a clean-source artifact
+changes, legacy clients must rerun `recall_context` rather than treating old
+navigation as evidence.
 
 The navigation packet may expose small benchmark-oriented counters such as
 funnel stage, handle count, source reopen success, and stale-handle detection.
@@ -693,7 +690,7 @@ compact activation packet for low-risk planning or patch posture; stale,
 challenged, gappy, privacy-blocked, or candidate-only clauses degrade to
 `reopenable_route`, `needs_review`, or blocked handling. Source refs, support
 ledgers, candidate provenance, counter-evidence, and changed-clause diagnostics
-belong behind `recall_deepen` / `deepen` / `explain`, not in foreground
+belong behind `agent_deepen` / legacy `recall_deepen` / `explain`, not in foreground
 packets.
 
 ## Cognitive Map

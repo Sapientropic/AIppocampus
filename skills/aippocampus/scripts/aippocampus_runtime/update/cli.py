@@ -370,7 +370,27 @@ def _plugin_source_map(repo_root: Path) -> dict[str, str]:
     skill_source = repo_root / "skills" / "aippocampus"
     result = file_map(plugin_source, root_exclusions={PLUGIN_BUILD_SCRIPT})
     result.update(file_map(skill_source, prefix="skills/aippocampus"))
+    result.update(_plugin_generated_source_map(repo_root))
     return result
+
+
+def _json_file_payload_hash(payload: dict[str, Any]) -> str:
+    return hashlib.sha256(
+        (json.dumps(payload, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
+    ).hexdigest()
+
+
+def _plugin_generated_source_map(repo_root: Path) -> dict[str, str]:
+    builder = _load_plugin_builder(repo_root)
+    payload_fn = getattr(builder, "runtime_generation_marker_payload", None)
+    marker_name = str(getattr(builder, "RUNTIME_GENERATION_MARKER", ""))
+    if builder is None or not marker_name or not callable(payload_fn):
+        return {}
+    # The runtime-generation marker is package output, not repo source. Keep it
+    # in the comparison map so sync verification catches missing or stale
+    # hot-reload metadata without treating the generated file as cache noise.
+    marker_payload = payload_fn(repo_root)
+    return {marker_name: _json_file_payload_hash(marker_payload)}
 
 
 def compare_plugin(*, repo_root: Path, plugin_output: Path | None = None) -> dict[str, Any]:

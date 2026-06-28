@@ -1695,9 +1695,19 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
         self.assertIn("foreground_action", recall_payload)
         self.assertNotIn("agent_next_action", recall_payload)
         self.assertNotIn("details", recall_payload["error"])
-        self.assertEqual(recall_payload["foreground_action"]["tool_name"], "recall_context")
+        self.assertEqual(recall_payload["foreground_action"]["tool_name"], "agent_recall")
         self.assertIn("arguments_template", recall_payload["foreground_action"])
-        self.assertEqual(recall_payload["staged_followup"][1]["tool_name"], "recall_deepen")
+        self.assertEqual(recall_payload["staged_followup"][1]["tool_name"], "agent_deepen")
+        action_surface = json.dumps(
+            {
+                "foreground_action": recall_payload.get("foreground_action"),
+                "safe_next_actions": recall_payload.get("safe_next_actions"),
+                "staged_followup": recall_payload.get("staged_followup"),
+            },
+            ensure_ascii=False,
+        )
+        self.assertNotIn("recall_context", action_surface)
+        self.assertNotIn("recall_deepen", action_surface)
         self.assertEqual(executable_command_violations(recall_payload), [])
 
     def test_get_turn_context_reports_missing_message_id(self) -> None:

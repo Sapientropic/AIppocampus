@@ -450,6 +450,9 @@ def analyze_staging_queues(
         ),
         "referenced_finding_id_count": len(referenced_ids),
         "compatibility": {
+            # owner: staging maintenance dry-run report; removal: after
+            # queued rows without stable finding ids are migrated; default/
+            # exposure: operator maintenance JSON only, count fields only.
             "legacy_sf_id_count": int(compatibility.get("legacy_sf_id_count", 0)),
             "sha256_hex_id_count": int(compatibility.get("sha256_hex_id_count", 0)),
             "derived_id_count": int(compatibility.get("derived_id_count", 0)),

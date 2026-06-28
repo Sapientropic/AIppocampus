@@ -228,7 +228,7 @@ class BuildCleanSourceTests(unittest.TestCase):
         self.assertEqual(result["source_rollout_size"], result["source_transcript_size"])
         self.assertEqual(result["source_rollout_mtime"], result["source_transcript_mtime"])
         self.assertEqual(result["source_rollout_sha256"], result["source_transcript_sha256"])
-        self.assertEqual(result["legacy_field_aliases"]["source_rollout"], "source_transcript")
+        self.assertNotIn("legacy_field_aliases", result)
         self.assertEqual(result["message_count"], 4)
         self.assertEqual(result["turn_count"], 2)
         loss = result["loss_accounting"]
@@ -282,6 +282,7 @@ class BuildCleanSourceTests(unittest.TestCase):
         self.assertEqual(route_notes[0]["output_authority"], "navigation_only")
         self.assertTrue(route_notes[0]["source_reopen_required_before_claim"])
         self.assertTrue(route_notes[0]["joined_evidence_refs"])
+        self.assertIn("旧线程", route_notes[0]["route_anchor_terms"])
         self.assertNotIn("我先查一下旧线程", route_notes_text)
         self.assertNotIn("very large tool output", route_notes_text)
         self.assertTrue(
@@ -809,10 +810,7 @@ class BuildCleanSourceTests(unittest.TestCase):
         self.assertEqual(result["source_artifact"]["provider"], "generic-jsonl")
         self.assertEqual(result["source_artifact"]["path"], str(transcript))
         self.assertEqual(result["source_rollout"], result["source_transcript"])
-        self.assertEqual(
-            result["legacy_field_aliases"]["source_rollout_sha256"],
-            "source_transcript_sha256",
-        )
+        self.assertNotIn("legacy_field_aliases", result)
         self.assertIn("source_ref", result["identity_policy"]["stable_join_keys"])
         messages = [
             json.loads(line)

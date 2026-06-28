@@ -6,51 +6,32 @@ import json
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
+from time import perf_counter
 from typing import Any
 
-from aippocampus_runtime.contracts import (
-    canonical_foreground_action_fields,
-    shell_quote,
-)
 from aippocampus_runtime.core import compact_text, stable_text_fingerprint
-from aippocampus_runtime.privacy import (
-    LOCAL_PATH_REDACTION,
-    redact_private_paths,
-    redact_sensitive_values,
-)
 from aippocampus_runtime.source.artifact_role import (
     artifact_role_profile,
     match_is_demoted_artifact,
-)
-from aippocampus_runtime.source.discussion_atlas_pointer import (
-    discussion_atlas_action,
-    discussion_atlas_pointer_for_query,
 )
 from aippocampus_runtime.source.query_match_gate import (
     match_query_profile,
     query_match_gate,
 )
-from aippocampus_runtime.source.registry_search_actions import registry_search_actions
 from aippocampus_runtime.source.registry_search_duplicates import (
     collapse_duplicate_matches,
-    compact_registry_match,
-    diagnostic_registry_match,
     match_haystack,
     process_noise_reason,
 )
 from aippocampus_runtime.source.registry_search_evidence import (
     duplicate_ref_has_direct_source_open_route,
-    first_match_usefulness_status,
-    match_evidence_diagnostics,
     match_has_direct_source_open_route,
-    match_is_useful_registry_target,
     query_anchor_rank,
-    suppressed_match_state,
 )
+from aippocampus_runtime.source.registry_search_render import render_registry_search_payload
 from aippocampus_runtime.source.registry_search_skips import (
     registry_entry_ref,
     registry_entry_search_skip,
-    skipped_maintenance_actions,
 )
 from aippocampus_runtime.source.registry_source_routes import (
     registry_clean_source_route,
@@ -77,6 +58,8 @@ class RegistrySearchInput:
     query_gate: Mapping[str, Any]
     budget: Any
     repo_doc_matches: list[dict[str, Any]]
+    max_elapsed_ms: int | None = None
+    started_at: float = 0.0
 
 
 @dataclass
@@ -88,6 +71,20 @@ class RegistrySearchEvaluation:
     skipped_entries: list[dict[str, Any]]
     skipped_reason_counts: dict[str, int]
     unavailable_source_count: int
+    budget_exhausted: bool = False
+    elapsed_ms: float = 0.0
+    max_elapsed_ms: int | None = None
+    unsearched_entry_count: int = 0
+
+
+def _search_deadline(started_at: float, max_elapsed_ms: int | None) -> float | None:
+    if max_elapsed_ms is None or max_elapsed_ms <= 0:
+        return None
+    return started_at + (max_elapsed_ms / 1000.0)
+
+
+def _deadline_exhausted(deadline: float | None) -> bool:
+    return deadline is not None and perf_counter() >= deadline
 
 
 def as_float(value: Any, default: float = 0.0) -> float:
@@ -122,10 +119,21 @@ def _registry_match(
     raw_paths = entry.get("paths")
     paths: Mapping[str, Any] = raw_paths if isinstance(raw_paths, Mapping) else {}
     thread_key = str(entry.get("thread_key") or "").strip()
-    source_route = registry_clean_source_route(
-        thread_key=thread_key,
-        message_id=hit.get("message_id") or hit.get("id"),
-        line=hit.get("line"),
+    source_kind = str(hit.get("source") or "")
+    source_open_hit = source_kind in {"clean_source", "route_note"}
+    message_id = hit.get("message_id") or (hit.get("id") if source_kind == "clean_source" else None)
+    route_line = hit.get("line") if source_open_hit or message_id else None
+    # SQLite line numbers are index/raw positions, not clean-source reopen keys.
+    # Keeping line-only index scent out of source_route prevents agents from
+    # treating it as a copy-pasteable source-open handle.
+    source_route = (
+        registry_clean_source_route(
+            thread_key=thread_key,
+            message_id=message_id,
+            line=route_line,
+        )
+        if message_id or route_line is not None
+        else {}
     )
     raw_snippet = str(hit.get("snippet") or "")
     snippet = compact_text(raw_snippet, DEFAULT_PUBLIC_SNIPPET_CHARS)
@@ -145,7 +153,7 @@ def _registry_match(
         "hit_selector": _hit_selector(source_route),
         "thread": registry_entry_ref(entry),
         "source": hit.get("source"),
-        "message_id": hit.get("message_id") or hit.get("id"),
+        "message_id": message_id,
         "turn_id": hit.get("turn_id"),
         "line": hit.get("line"),
         "role": hit.get("role"),
@@ -164,8 +172,23 @@ def _registry_match(
         "artifact_demoted": bool(artifact_role.get("demote")),
         "source_route": source_route,
     }
+    route_note_profile = hit.get("query_match_profile")
+    if (
+        source_kind == "route_note"
+        and isinstance(route_note_profile, Mapping)
+        and route_note_profile.get("accepted")
+        and source_route
+    ):
+        match["_route_note_anchor_match"] = True
+        matched_terms = [
+            str(term) for term in hit.get("matched_route_note_terms") or [] if str(term).strip()
+        ]
+        if matched_terms:
+            match["_ranking_haystack"] = " ".join(matched_terms + [raw_snippet])
     if raw_snippet and raw_snippet != snippet:
-        match["_ranking_haystack"] = raw_snippet
+        match["_ranking_haystack"] = " ".join(
+            item for item in [str(match.get("_ranking_haystack") or ""), raw_snippet] if item
+        )
     if include_paths:
         match["local_diagnostic"] = {
             "workspace": paths.get("workspace"),
@@ -239,6 +262,7 @@ def _load_registry_search_input(
     search_budget: str,
     cwd: str | Path | None,
     limit: int,
+    max_elapsed_ms: int | None,
 ) -> RegistrySearchInput:
     from aippocampus_runtime.registry.search import REGISTRY_SEARCH_DEEP_BUDGET
     from aippocampus_runtime.registry.store import load_registry, registry_paths
@@ -265,6 +289,8 @@ def _load_registry_search_input(
         query_gate=query_gate,
         budget=REGISTRY_SEARCH_DEEP_BUDGET if search_budget == "deep" else None,
         repo_doc_matches=repo_doc_matches,
+        max_elapsed_ms=max_elapsed_ms,
+        started_at=perf_counter(),
     )
 
 
@@ -281,6 +307,14 @@ def _profile_registry_match(
     )
     if profile["accepted"]:
         return profile
+    if match.get("_route_note_anchor_match") and match_has_direct_source_open_route(match):
+        return {
+            **profile,
+            "accepted": True,
+            "suppression_reason": "",
+            "acceptance_reason": "route_note_anchor_terms",
+            "relationship_origin_override": "route_note_anchor_terms",
+        }
     thread = match.get("thread")
     thread_map = thread if isinstance(thread, Mapping) else {}
     origin_profile = relationship_origin_allows_low_coverage(
@@ -328,9 +362,28 @@ def _collect_registry_search_matches(
     skipped_entries: list[dict[str, Any]] = []
     skipped_reason_counts: dict[str, int] = {}
     unavailable_source_count = 0
-    for entry in inputs.registry_payload.get("threads") or []:
-        if not isinstance(entry, Mapping):
-            continue
+    budget_exhausted = False
+    unsearched_entry_count = 0
+    deadline = _search_deadline(inputs.started_at, inputs.max_elapsed_ms)
+    entries = [
+        entry
+        for entry in inputs.registry_payload.get("threads") or []
+        if isinstance(entry, Mapping)
+    ]
+    for index, entry in enumerate(entries):
+        if _deadline_exhausted(deadline):
+            budget_exhausted = True
+            unsearched_entry_count = len(entries) - index
+            warnings.append(
+                {
+                    "stage": "registry_search",
+                    "code": "foreground_search_time_budget_exhausted",
+                    "message": "Registry-wide search stopped at the foreground wall-clock budget.",
+                    "max_elapsed_ms": inputs.max_elapsed_ms,
+                    "unsearched_entry_count": unsearched_entry_count,
+                }
+            )
+            break
         searched_entry_count += 1
         skip = registry_entry_search_skip(entry)
         if skip:
@@ -345,7 +398,10 @@ def _collect_registry_search_matches(
             inputs.terms,
             max_hits=per_thread_limit,
             search_budget=inputs.budget,
+            deadline=deadline,
         )
+        if result.get("budget_exhausted"):
+            budget_exhausted = True
         entry_warnings = []
         for warning in result.get("warnings") or []:
             item = dict(warning) if isinstance(warning, Mapping) else {"message": str(warning)}
@@ -389,15 +445,16 @@ def _collect_registry_search_matches(
             if profile["accepted"]:
                 matches.append(match)
             else:
-                suppressed_matches.append(
-                    {
-                        "thread": match.get("thread"),
-                        "score": match.get("score"),
-                        "query_match_profile": profile,
-                        "source": match.get("source"),
-                        "line": match.get("line"),
-                    }
-                )
+                # Suppressed hits are not target evidence, but some still carry
+                # a clean-source route that can help the foreground agent reopen
+                # nearby context as navigation. Keep the route/snippet here and
+                # let the renderer decide whether a compact low-confidence action
+                # is warranted; compact output still hides the diagnostic
+                # suppressed-hit list unless detail is explicitly requested.
+                suppressed_matches.append(match)
+        if budget_exhausted:
+            unsearched_entry_count = len(entries) - index - 1
+            break
     return RegistrySearchEvaluation(
         matches=matches,
         suppressed_matches=suppressed_matches,
@@ -406,6 +463,10 @@ def _collect_registry_search_matches(
         skipped_entries=skipped_entries,
         skipped_reason_counts=skipped_reason_counts,
         unavailable_source_count=unavailable_source_count,
+        budget_exhausted=budget_exhausted,
+        elapsed_ms=round((perf_counter() - inputs.started_at) * 1000, 3),
+        max_elapsed_ms=inputs.max_elapsed_ms,
+        unsearched_entry_count=unsearched_entry_count,
     )
 
 
@@ -451,178 +512,6 @@ def _finalize_registry_search_matches(
     return collapsed_matches, duplicate_metrics
 
 
-def _render_registry_search_payload(
-    inputs: RegistrySearchInput,
-    evaluation: RegistrySearchEvaluation,
-    *,
-    matches: list[dict[str, Any]],
-    duplicate_metrics: Mapping[str, int],
-    include_paths: bool,
-    search_budget: str,
-) -> dict[str, Any]:
-    first_match = matches[0] if matches else None
-    raw_first_match_profile = (
-        first_match.get("query_match_profile") if isinstance(first_match, Mapping) else None
-    )
-    first_match_profile: Mapping[str, Any] = (
-        raw_first_match_profile if isinstance(raw_first_match_profile, Mapping) else {}
-    )
-    first_match_useful = (
-        match_is_useful_registry_target(first_match)
-        if isinstance(first_match, Mapping)
-        else False
-    )
-    useful_target_hit = bool(first_match and first_match_useful)
-    no_phrase_like_matches, low_coverage_only_matches = suppressed_match_state(
-        phrase_like_query=bool(inputs.query_gate.get("phrase_like_query")),
-        visible_match_count=len(matches),
-        suppressed_match_count=len(evaluation.suppressed_matches),
-    )
-    first_match_status = first_match_usefulness_status(
-        first_match,
-        first_match_profile=first_match_profile,
-        first_match_useful=first_match_useful,
-        low_coverage_only_matches=low_coverage_only_matches,
-    )
-    discussion_pointer = discussion_atlas_pointer_for_query(
-        inputs.query_text,
-        cwd=inputs.registry_root or Path.cwd(),
-    )
-    discussion_action = discussion_atlas_action(discussion_pointer, query=inputs.query_text)
-    actions = registry_search_actions(
-        query=inputs.query_text,
-        has_matches=bool(matches),
-        first_match=matches[0] if matches else None,
-        useful_target_hit=useful_target_hit,
-        first_match_usefulness_status=first_match_status,
-        low_coverage_only_matches=low_coverage_only_matches,
-    )
-    if discussion_action:
-        actions = [discussion_action, *actions]
-    diagnostic_output = include_paths or search_budget == "deep"
-    output_matches = (
-        [diagnostic_registry_match(match) for match in matches]
-        if diagnostic_output
-        else [compact_registry_match(match) for match in matches]
-    )
-    raw_payload: dict[str, Any] = {
-        "kind": "aippocampus_registry_source_search",
-        "ok": useful_target_hit,
-        "status": (
-            "ok"
-            if useful_target_hit
-            else "identifier_not_found"
-            if inputs.query_gate.get("exact_identifier_query")
-            else "no_phrase_like_matches"
-            if no_phrase_like_matches
-            else "matches_need_broadened_source_search"
-            if matches or low_coverage_only_matches
-            else "no_matches"
-        ),
-        "search_scope": "registered_clean_source_and_indexes",
-        "scope_description": (
-            "registered clean-source/index entries across the local registry; "
-            "a miss is not proof that no memory exists"
-        ),
-        "registry": str(inputs.registry_json),
-        "query_text": inputs.query_text,
-        "query_terms": inputs.terms if diagnostic_output else None,
-        "query_match_gate": inputs.query_gate if diagnostic_output else None,
-        "matches": output_matches,
-        "match_count": len(matches),
-        "useful_target_hit": useful_target_hit,
-        "first_match_usefulness": (
-            {
-                "status": first_match_status,
-                "artifact_role": first_match.get("artifact_role") if first_match else None,
-                "first_hit_demoted": bool(
-                    first_match is not None and match_is_demoted_artifact(first_match)
-                ),
-                "matched_distinctive_anchor_count": first_match_profile.get(
-                    "matched_distinctive_anchor_count"
-                ),
-            }
-            if first_match
-            else None
-        ),
-        "duplicate_cluster_count": duplicate_metrics["duplicate_cluster_count"],
-        "duplicate_collapsed_hit_count": duplicate_metrics["duplicate_hit_count"],
-        "repo_doc_match_count": len(inputs.repo_doc_matches),
-        "discussion_atlas_pointer": discussion_pointer,
-        "suppressed_low_coverage_match_count": len(evaluation.suppressed_matches),
-        "match_evidence_diagnostics": (
-            match_evidence_diagnostics(
-                matches,
-                query_text=inputs.query_text,
-                suppressed_count=len(evaluation.suppressed_matches),
-            )
-            if diagnostic_output
-            else None
-        ),
-        "suppressed_low_coverage_matches": (
-            evaluation.suppressed_matches[:3] if diagnostic_output else None
-        ),
-        "searched_entry_count": evaluation.searched_entry_count,
-        "skipped_entry_count": len(evaluation.skipped_entries),
-        "skipped_reason_counts": evaluation.skipped_reason_counts or None,
-        "skipped_entries": evaluation.skipped_entries[:20] if diagnostic_output else None,
-        "maintenance_actions": skipped_maintenance_actions(evaluation.skipped_entries) or None,
-        "unavailable_source_count": evaluation.unavailable_source_count,
-        "warnings": evaluation.warnings,
-        "diagnostic_fields_omitted": (
-            [
-                "query_terms",
-                "query_match_gate",
-                "matches[].score",
-                "matches[].query_match_profile",
-                "suppressed_low_coverage_matches",
-                "skipped_entries",
-            ]
-            if not diagnostic_output
-            else None
-        ),
-        "diagnostic_detail_command": (
-            f"aippocampus search --all {shell_quote(inputs.query_text)} --search-budget deep --json"
-            if not diagnostic_output and inputs.query_text
-            else None
-        ),
-        "output_boundary": (
-            "local_private_source_routes_with_paths"
-            if include_paths
-            else "foreground_safe_registry_source_routes"
-        ),
-        "source_boundary": {
-            "authority": "bounded_evidence" if useful_target_hit else "direction_only",
-            "registry_wide_search": True,
-            "source_backed_claim_allowed": useful_target_hit,
-            "source_reopen_required_before_claim": True,
-            "demoted_artifact_matches_are_diagnostic": bool(matches) and not useful_target_hit,
-            "search_miss_is_not_absence_of_memory": not bool(matches),
-            "low_coverage_matches_suppressed": low_coverage_only_matches,
-            "phrase_like_low_coverage_suppressed": no_phrase_like_matches,
-        },
-        "privacy": {
-            "paths_included": include_paths,
-            "path_redaction": "none" if include_paths else LOCAL_PATH_REDACTION,
-            "raw_source_snippets_emitted": False,
-            "capped_source_snippets_emitted": bool(matches),
-            "full_session_metadata_emitted": False,
-            "last_search_cache_contains_paths": False,
-        },
-    }
-    payload: dict[str, Any] = {
-        key: item for key, item in raw_payload.items() if item not in (None, "", {})
-    }
-    if actions:
-        payload.update(
-            canonical_foreground_action_fields(
-                actions[0],
-                safe_next_actions=actions,
-            )
-        )
-    return payload if include_paths else redact_sensitive_values(redact_private_paths(payload))
-
-
 def search_registry_sources(
     patterns: list[str],
     *,
@@ -633,6 +522,7 @@ def search_registry_sources(
     search_budget: str = "default",
     record_last_search: bool = False,
     cwd: str | Path | None = None,
+    max_elapsed_ms: int | None = 5000,
 ) -> dict[str, Any]:
     """Search registered clean-source/index entries without exposing raw paths by default.
 
@@ -649,6 +539,7 @@ def search_registry_sources(
         search_budget=search_budget,
         cwd=cwd,
         limit=limit,
+        max_elapsed_ms=max_elapsed_ms,
     )
     evaluation = _collect_registry_search_matches(
         inputs,
@@ -663,11 +554,12 @@ def search_registry_sources(
         record_last_search=record_last_search,
         limit=limit,
     )
-    return _render_registry_search_payload(
+    return render_registry_search_payload(
         inputs,
         evaluation,
         matches=matches,
         duplicate_metrics=duplicate_metrics,
         include_paths=include_paths,
         search_budget=search_budget,
+        annotate_reopen_commands=_annotate_last_search_reopen_commands,
     )

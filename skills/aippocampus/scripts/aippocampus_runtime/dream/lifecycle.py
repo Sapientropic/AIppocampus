@@ -5,6 +5,18 @@ Dream findings move through several private/background shapes before they are
 safe to mention to a foreground agent. This module gives status/report surfaces
 one vocabulary without promoting model text into fact: examples are structural
 summaries only, and every non-adjudicated surface remains navigation-only.
+
+Lifecycle owner contract:
+
+candidate -> adjudicate -> deliver -> age/trust-horizon check ->
+compact/dead-letter -> optional rederive/review.
+
+Only source-ref adjudicated rows may deliver as working-memory hypotheses, and
+even those are route material rather than source truth. Compaction preserves
+hash/provenance counts as a tombstone; it does not delete clean source, reopen
+source, or keep raw hypothesis payload foreground-eligible. Review-due,
+expired, corrected, evidence-requested, or exact-quote use must reopen or
+confirm source before shaping claims.
 """
 
 from __future__ import annotations
@@ -16,6 +28,8 @@ from typing import Any
 
 from aippocampus_runtime.source.io_kernel import parse_utc, source_ref_key
 
+DREAM_HYPOTHESIS_TYPE = "dream_hypothesis"
+
 LIFECYCLE_STATES = (
     "candidate",
     "parked_with_reason",
@@ -24,16 +38,30 @@ LIFECYCLE_STATES = (
     "expired",
     "refuted",
     "ignored",
+    "payload_compacted",
 )
 
-ADJUDICATED_REVIEW_STATES = {
+ADJUDICATED_REVIEW_STATES = frozenset({
     "accepted",
     "approved",
     "reviewed",
     "agent_adjudicated",
     "auto_adjudicated",
     "source_adjudicated",
-}
+})
+
+PUBLIC_AUTHORITY_SOURCE_EVIDENCE = "source_evidence"
+PUBLIC_AUTHORITY_ADJUDICATED_HYPOTHESIS = "adjudicated_hypothesis"
+PUBLIC_AUTHORITY_AMBIENT_HINT = "ambient_hint"
+PUBLIC_AUTHORITY_DIAGNOSTIC_ONLY = "diagnostic_only"
+
+DELIVERY_ADJUDICATED_HYPOTHESIS_ROUTE = "adjudicated_hypothesis_route"
+DELIVERY_REOPENABLE_ROUTE = "reopenable_route"
+DELIVERY_NEEDS_REOPEN_CHECK = "needs_reopen_check"
+DELIVERY_NEEDS_CONFIRMATION = "needs_confirmation"
+DELIVERY_UNRESOLVED_SOURCE = "unresolved_source"
+DELIVERY_DIRECTION_ONLY = "direction_only"
+DELIVERY_DIAGNOSTIC_ONLY = "diagnostic_only"
 
 SPECULATIVE_SOURCE_AUDIT_STATUSES = {
     "model_candidate_source_ref_validated",
@@ -109,6 +137,10 @@ def _review_state(row: Mapping[str, Any]) -> str:
     return str(row.get("review_state") or "").strip()
 
 
+def is_adjudicated_review_state(value: object) -> bool:
+    return str(value or "").strip() in ADJUDICATED_REVIEW_STATES
+
+
 def _source_ref_audit(row: Mapping[str, Any]) -> Mapping[str, Any]:
     value = row.get("source_ref_audit") or {}
     return value if isinstance(value, Mapping) else {}
@@ -145,6 +177,240 @@ def next_review_or_cleanup(row: Mapping[str, Any]) -> dict[str, Any]:
 def _expired(row: Mapping[str, Any], *, now: str | datetime | None = None) -> bool:
     expires_at = parse_utc(row.get("expires_at"))
     return bool(expires_at and expires_at <= _now(now))
+
+
+def trust_horizon_map(row: Mapping[str, Any]) -> Mapping[str, Any]:
+    horizon = row.get("trust_horizon") or {}
+    return horizon if isinstance(horizon, Mapping) else {}
+
+
+def trust_horizon_timestamps(row: Mapping[str, Any], key: str) -> list[datetime]:
+    horizon = trust_horizon_map(row)
+    timestamps: list[datetime] = []
+    for value in (row.get(key), horizon.get(key)):
+        parsed = parse_utc(str(value or ""))
+        if parsed:
+            timestamps.append(parsed)
+    return timestamps
+
+
+def dream_hypothesis_expired(
+    row: Mapping[str, Any],
+    *,
+    now: str | datetime | None = None,
+) -> bool:
+    now_dt = _now(now)
+    return any(expires_at <= now_dt for expires_at in trust_horizon_timestamps(row, "expires_at"))
+
+
+def trust_horizon_status(
+    row: Mapping[str, Any],
+    *,
+    now: str | datetime | None = None,
+) -> str:
+    now_dt = _now(now)
+    if any(expires_at <= now_dt for expires_at in trust_horizon_timestamps(row, "expires_at")):
+        return "expired"
+    if any(review_after <= now_dt for review_after in trust_horizon_timestamps(row, "review_after")):
+        return "review_due"
+    return "valid"
+
+
+def _source_ref_count(row: Mapping[str, Any]) -> int:
+    return len(_source_refs(row.get("source_refs")))
+
+
+def public_authority_tier(row: Mapping[str, Any]) -> str:
+    """Return the compact public tier a foreground agent may act on.
+
+    This is deliberately coarser than internal review/source diagnostics. It
+    answers the product question "can this shape an answer, only a route, or
+    nothing yet?" without serializing source refs into compact output.
+    """
+
+    support = str(row.get("support_level") or "").casefold()
+    action = str(row.get("action_grammar") or "").casefold()
+    status = str(row.get("status") or "").casefold()
+    if (
+        support == "evidence"
+        or action in {"bounded_evidence", "source_open"}
+        or row.get("evidence_level") == "source_backed"
+    ):
+        return PUBLIC_AUTHORITY_SOURCE_EVIDENCE
+    if row.get("payload_compacted") or status in {"payload_compacted", "parked", "refuted"}:
+        return PUBLIC_AUTHORITY_DIAGNOSTIC_ONLY
+    if str(row.get("candidate_type") or "") == DREAM_HYPOTHESIS_TYPE:
+        if (
+            is_adjudicated_review_state(row.get("review_state"))
+            and _source_ref_count(row) > 0
+            and not (row.get("sensitive_use_gate") or {}).get("state") == "blocked"
+            and not row.get("human_review_required")
+        ):
+            return PUBLIC_AUTHORITY_ADJUDICATED_HYPOTHESIS
+        return PUBLIC_AUTHORITY_DIAGNOSTIC_ONLY
+    if str(row.get("route") or "") in {"use_with_source", "confirm_when_relevant"} and (
+        _source_ref_count(row) > 0 or int(row.get("source_ref_count") or 0) > 0
+    ):
+        return PUBLIC_AUTHORITY_ADJUDICATED_HYPOTHESIS
+    if action in {"ignore_or_blocked"}:
+        return PUBLIC_AUTHORITY_DIAGNOSTIC_ONLY
+    return PUBLIC_AUTHORITY_AMBIENT_HINT
+
+
+def delivery_cues_from_prompt(prompt: str) -> dict[str, bool]:
+    text = str(prompt or "").casefold()
+    return {
+        "user_requested_evidence": any(
+            marker in text
+            for marker in (
+                "证据",
+                "出处",
+                "evidence",
+                "证明",
+                "依据",
+                "原文",
+                "source?",
+                "source please",
+            )
+        ),
+        "exact_or_quote_claim": any(
+            marker in text
+            for marker in (
+                "原话",
+                "原句",
+                "逐字",
+                "quote",
+                "exact",
+                "verbatim",
+                "引用",
+            )
+        ),
+        "user_correction_visible": any(
+            marker in text
+            for marker in (
+                "不对",
+                "错了",
+                "纠正",
+                "correction",
+                "wrong",
+            )
+        ),
+    }
+
+
+def working_memory_delivery_posture(
+    row: Mapping[str, Any],
+    *,
+    prompt: str = "",
+    route_relevance: bool | None = None,
+    source_visible: bool = False,
+    exact_or_quote_claim: bool | None = None,
+    user_requested_evidence: bool | None = None,
+    user_correction_visible: bool | None = None,
+    contradiction_visible: bool = False,
+    sensitive_claim: bool = False,
+    strong_user_facing_claim: bool = False,
+    source_fingerprint_current: str | None = None,
+    now: str | datetime | None = None,
+) -> dict[str, Any]:
+    """Plan compact delivery posture without reopening source in the hot path."""
+
+    cues = delivery_cues_from_prompt(prompt)
+    exact = cues["exact_or_quote_claim"] if exact_or_quote_claim is None else exact_or_quote_claim
+    requested = (
+        cues["user_requested_evidence"]
+        if user_requested_evidence is None
+        else user_requested_evidence
+    )
+    corrected = (
+        cues["user_correction_visible"]
+        if user_correction_visible is None
+        else user_correction_visible
+    )
+    ref_count = _source_ref_count(row)
+    tier = public_authority_tier(row)
+    state = dream_lifecycle_state(row, now=now)
+    trust_status = trust_horizon_status(row, now=now)
+    if row.get("payload_compacted") or state in {"refuted", "ignored", "payload_compacted"}:
+        posture = DELIVERY_DIAGNOSTIC_ONLY
+        next_action = "leave_out_of_foreground_or_rederive_from_source"
+        reason = "compacted_refuted_or_ignored"
+    elif ref_count <= 0:
+        posture = DELIVERY_UNRESOLVED_SOURCE
+        next_action = "search_or_deepen_before_use"
+        reason = "missing_or_unresolved_source_refs"
+    elif str(row.get("candidate_type") or "") == DREAM_HYPOTHESIS_TYPE:
+        if not is_adjudicated_review_state(row.get("review_state")):
+            posture = DELIVERY_DIAGNOSTIC_ONLY
+            next_action = "review_before_foreground_use"
+            reason = "not_adjudicated"
+        elif (row.get("sensitive_use_gate") or {}).get("state") == "blocked" or row.get("human_review_required"):
+            posture = DELIVERY_DIAGNOSTIC_ONLY
+            next_action = "human_or_user_review_before_use"
+            reason = "sensitive_review_required"
+        elif source_visible:
+            posture = DELIVERY_DIRECTION_ONLY
+            next_action = "stay_silent_source_already_visible"
+            reason = "source_already_visible"
+        elif corrected:
+            posture = DELIVERY_NEEDS_CONFIRMATION
+            next_action = "ask_user_to_confirm_or_reopen_source"
+            reason = "user_correction_requires_confirmation"
+        elif (
+            trust_status in {"expired", "review_due"}
+            or bool(source_fingerprint_current)
+            and source_fingerprint_current
+            != str(row.get("source_fingerprint") or trust_horizon_map(row).get("source_fingerprint") or "")
+            or contradiction_visible
+            or requested
+            or exact
+            or sensitive_claim
+            or strong_user_facing_claim
+        ):
+            posture = DELIVERY_NEEDS_REOPEN_CHECK
+            next_action = "reopen_source_before_use"
+            if trust_status == "expired":
+                reason = "trust_horizon_expired"
+            elif trust_status == "review_due":
+                reason = "trust_horizon_review_due"
+            elif requested:
+                reason = "user_requested_evidence"
+            elif exact:
+                reason = "exact_or_quote_claim"
+            elif contradiction_visible:
+                reason = "contradiction_visible"
+            elif sensitive_claim:
+                reason = "sensitive_claim"
+            elif strong_user_facing_claim:
+                reason = "strong_claim"
+            else:
+                reason = "source_fingerprint_changed"
+        elif route_relevance is False:
+            posture = DELIVERY_DIRECTION_ONLY
+            next_action = "stay_silent_until_relevant"
+            reason = "no_route_relevance"
+        else:
+            posture = DELIVERY_ADJUDICATED_HYPOTHESIS_ROUTE
+            next_action = "use_as_route_reopen_before_claim"
+            reason = "adjudicated_hypothesis_can_seed_route"
+    elif str(row.get("route") or "") == "use_with_source":
+        posture = DELIVERY_REOPENABLE_ROUTE
+        next_action = "reopen_source_before_claim"
+        reason = "source_ref_backed_working_memory_route"
+    else:
+        posture = DELIVERY_DIRECTION_ONLY
+        next_action = "use_as_direction_only"
+        reason = "ambient_or_silent_working_memory"
+    return {
+        "public_authority_tier": tier,
+        "delivery_source_posture": posture,
+        "delivery_next_action": next_action,
+        "reason": reason,
+        "source_ref_count": ref_count,
+        "trust_horizon_status": trust_status if str(row.get("candidate_type") or "") == DREAM_HYPOTHESIS_TYPE else None,
+        "raw_source_refs_emitted": False,
+        "source_open_performed": False,
+    }
 
 
 def dream_lifecycle_state(row: Mapping[str, Any], *, now: str | datetime | None = None) -> str:

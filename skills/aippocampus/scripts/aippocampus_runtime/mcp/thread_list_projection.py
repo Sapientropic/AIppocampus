@@ -57,13 +57,13 @@ def list_threads_missing_registry_actions() -> list[dict[str, Any]]:
 
 
 def list_threads_ok_actions() -> list[dict[str, Any]]:
-    recall_context = mcp_template_action(
-        action_id="recall_context_from_thread_list",
-        tool_name="recall_context",
-        arguments_template={"intent": "{task_or_memory_cue}"},
-        requires=["intent"],
-        label="Use recall_context for a task-specific route",
-        why="Thread lists orient the registry; use recall_context with a concrete cue before relying on source.",
+    agent_recall = mcp_template_action(
+        action_id="agent_recall_from_thread_list",
+        tool_name="agent_recall",
+        arguments_template={"query": "{task_or_memory_cue}"},
+        requires=["query"],
+        label="Recall from a task-specific cue",
+        why="Thread lists orient the registry; use agent_recall with a concrete cue before relying on source.",
     )
     full_detail = mcp_template_action(
         action_id="inspect_list_threads_full_detail",
@@ -74,4 +74,4 @@ def list_threads_ok_actions() -> list[dict[str, Any]]:
         why="Full detail may expose private identifiers; keep it behind an explicit diagnostic need.",
         claim_boundary="operator_detail_not_source_evidence",
     )
-    return [recall_context, full_detail]
+    return [agent_recall, full_detail]

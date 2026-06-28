@@ -10,12 +10,14 @@ instead of raw commentary, commands, stdout, paths, or secrets.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterable, Mapping
 from typing import Any
 
 from aippocampus_runtime.core import stable_text_id
 from aippocampus_runtime.ops.route_readiness import safe_source_refs
-from aippocampus_runtime.privacy import redact_private_paths
+from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
+from aippocampus_runtime.source.search_terms import search_query_terms
 
 ROUTE_NOTE_KIND = "aippocampus_route_note_candidates"
 ROUTE_NOTE_SCHEMA_VERSION = 1
@@ -55,6 +57,13 @@ NOTE_REASON = {
     "handoff_hint": "A process note leaves a handoff hint joined to adjacent evidence.",
     "source_to_action_link": "A process note links source/tool evidence to a later action.",
 }
+
+FORBIDDEN_ANCHOR_RE = re.compile(
+    r"(?i)(api[_-]?key|apikey|secret|token|password|passwd|credential|bearer|"
+    r"authorization|private[_-]?key|refresh[_-]?token|client[_-]?secret|sk-|ghp_|akia)"
+)
+PATHLIKE_ANCHOR_RE = re.compile(r"(?i)(?:^[a-z]:[\\/]|[\\/]|(?:^|[.])\.(?:env|pem|key)$)")
+CJK_PROCESS_ANCHOR_RE = re.compile(r"(我|我们|你|先|一下|然后|接下来|看看|查一下)")
 
 
 def _text(value: Any) -> str:
@@ -300,6 +309,40 @@ def _dedupe_dicts(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return out
 
 
+def _safe_route_anchor_terms(text: str, *, limit: int = 16) -> list[str]:
+    """Keep only bounded cue anchors, never raw commentary.
+
+    Route notes are useful because commentary often names the route an agent is
+    about to try. The row must stay navigation-only, so this helper stores
+    searchable terms rather than the sentence itself and rejects path/secret
+    shaped material before the note can feed recall.
+    """
+
+    cleaned = str(redact_sensitive_values(redact_private_paths(text)) or "")
+    terms: list[str] = []
+    seen: set[str] = set()
+    for term in search_query_terms([cleaned]):
+        value = str(redact_sensitive_values(redact_private_paths(term)) or "").strip()
+        if not value:
+            continue
+        low = value.casefold()
+        if low in seen:
+            continue
+        if FORBIDDEN_ANCHOR_RE.search(value) or PATHLIKE_ANCHOR_RE.search(value):
+            continue
+        has_cjk = bool(re.search(r"[\u4e00-\u9fff]", value))
+        if has_cjk:
+            if len(value) > 6 or CJK_PROCESS_ANCHOR_RE.search(value):
+                continue
+        elif len(value) < 3 or len(value) > 64:
+            continue
+        seen.add(low)
+        terms.append(value)
+        if len(terms) >= limit:
+            break
+    return terms
+
+
 def _route_note_row(
     *,
     note_type: str,
@@ -342,6 +385,7 @@ def _route_note_row(
         "source_ref_count": len(_dedupe_dicts(source_refs)[:3]),
         "note_source_ref": note_ref,
         "joined_evidence_refs": joined_evidence_refs[:4],
+        "route_anchor_terms": _safe_route_anchor_terms(_text(message.get("text"))),
         "freshness": "current",
         "currentness": "current",
         "reason_codes": reason_codes,
@@ -426,6 +470,7 @@ def extract_route_note_candidates(
             "raw_commentary_serialized": False,
             "raw_commands_serialized": False,
             "stdout_serialized": False,
+            "route_anchor_terms_are_filtered_cues": True,
             "source_reopen_required_before_claim": True,
             "external_model_calls": False,
         },

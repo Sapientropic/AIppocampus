@@ -33,7 +33,7 @@ from aippocampus_runtime.core import (
 )
 from aippocampus_runtime.question.source_refs import compact_source_refs
 from aippocampus_runtime.registry.api import unique_preserve
-from aippocampus_runtime.source.io_kernel import load_jsonl_dict_rows, source_ref_key
+from aippocampus_runtime.source.io_kernel import load_jsonl_dict_rows, merge_source_refs
 from aippocampus_runtime.source.texture_consumption import (
     select_texture_signals,
     texture_signal_source_refs,
@@ -211,21 +211,6 @@ def sanitize_source_refs(
                 clean[key] = value
         out.append(clean)
     return out
-
-
-def merge_source_refs(*groups: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
-    refs: list[dict[str, Any]] = []
-    seen: set[tuple[str, str, str, str]] = set()
-    for group in groups:
-        for ref in group:
-            if not isinstance(ref, Mapping):
-                continue
-            key = source_ref_key(ref)
-            if key in seen:
-                continue
-            seen.add(key)
-            refs.append(dict(ref))
-    return refs[:12]
 
 
 def sanitize_evidence_items(
@@ -510,6 +495,7 @@ def build_adjudication_candidate(
         outcome.get("final_claim_source_refs") or [] if outcome else [],
         outcome.get("follow_up_source_refs") or [] if outcome else [],
         texture_signal_source_refs(outcome.get("texture_evidence") or []) if outcome else [],
+        limit=12,
     )
     activation_id = str(activation.get("event_id") or "")
     outcome_id = str(outcome.get("event_id") or "") if outcome else ""

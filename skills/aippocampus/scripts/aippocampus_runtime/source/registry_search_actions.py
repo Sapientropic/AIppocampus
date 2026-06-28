@@ -25,6 +25,36 @@ def _open_source_tool_arguments(query: str, match: Mapping[str, Any]) -> dict[st
     return {key: value for key, value in arguments.items() if value not in (None, "", [], {})}
 
 
+def registry_search_open_source_action(
+    *,
+    query: str,
+    match: Mapping[str, Any],
+    action_id: str = "open_registry_search_source_window",
+    label: str = "Open the selected registry search source window",
+    why: str | None = None,
+    claim_boundary: str = "source_reopen_required_before_claim",
+) -> dict[str, Any] | None:
+    command = str(match.get("reopen_command") or "").strip()
+    arguments = _open_source_tool_arguments(query, match)
+    if not command:
+        return None
+    open_action = foreground_shell_action(
+        action_id=action_id,
+        label=label,
+        command=command,
+        why=why
+        or (
+            "Registry search found capped snippets; open the selected "
+            "bounded source window before quoting or making strong claims."
+        ),
+        mutation_risk="read_only",
+        claim_boundary=claim_boundary,
+    )
+    open_action["tool_name"] = "search_memory"
+    open_action["arguments"] = arguments
+    return open_action
+
+
 def registry_search_actions(
     *,
     query: str,
@@ -41,7 +71,7 @@ def registry_search_actions(
                 label="Broaden registry search",
                 command=(
                     f"aippocampus search --all {shell_quote(query)} "
-                    "--search-budget deep --json"
+                    "--search-budget deep --json --max-elapsed-ms 15000"
                 ),
                 why=(
                     "Registry search found nearby snippets, but none carried the "
@@ -68,8 +98,8 @@ def registry_search_actions(
                     action_id="broaden_registry_search_for_topic_bearing_hit",
                     label="Broaden registry search",
                     command=(
-                        f"aippocampus search --all {shell_quote(query)} "
-                        "--search-budget deep --json"
+                    f"aippocampus search --all {shell_quote(query)} "
+                    "--search-budget deep --json --max-elapsed-ms 15000"
                     ),
                     why=(
                         "The first registry hit looks like validation, fixture, or closeout "
@@ -119,7 +149,7 @@ def registry_search_actions(
                         label="Broaden registry search",
                         command=(
                             f"aippocampus search --all {shell_quote(query)} "
-                            "--search-budget deep --json"
+                            "--search-budget deep --json --max-elapsed-ms 15000"
                         ),
                         why=(
                             "The first registry hit lacks a stable clean-source reopen key; "
@@ -146,7 +176,7 @@ def registry_search_actions(
                     label="Broaden registry search",
                     command=(
                         f"aippocampus search --all {shell_quote(query)} "
-                        "--search-budget deep --json"
+                        "--search-budget deep --json --max-elapsed-ms 15000"
                     ),
                     why=(
                         "Registry search found nearby snippets, but the first hit does not carry "
@@ -165,20 +195,12 @@ def registry_search_actions(
                     claim_boundary="no_claim_before_reopen",
                 ),
             ]
-        command = str(first_match.get("reopen_command") or "").strip()
-        open_action = foreground_shell_action(
-            action_id="open_registry_search_source_window",
-            label="Open the first registry search source window",
-            command=command,
-            why=(
-                "Registry search found capped snippets; open the selected "
-                "bounded source window before quoting or making strong claims."
-            ),
-            mutation_risk="read_only",
-            claim_boundary="source_reopen_required_before_claim",
+        open_action = registry_search_open_source_action(
+            query=query,
+            match=first_match,
         )
-        open_action["tool_name"] = "search_memory"
-        open_action["arguments"] = _open_source_tool_arguments(query, first_match)
+        if open_action is None:
+            return []
         actions = [
             open_action,
             foreground_template_action(
@@ -222,3 +244,9 @@ def registry_search_actions(
             claim_boundary="host_status_not_source_evidence",
         ),
     ]
+
+
+__all__ = [
+    "registry_search_actions",
+    "registry_search_open_source_action",
+]

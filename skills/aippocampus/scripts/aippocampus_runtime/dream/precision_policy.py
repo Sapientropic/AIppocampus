@@ -17,14 +17,17 @@ from datetime import datetime, timezone
 from typing import Any
 
 from aippocampus_runtime.core import compact_text
+from aippocampus_runtime.dream import lifecycle as dream_lifecycle
 from aippocampus_runtime.dream.probe_authority import active_imagination_probe_boundary
-from aippocampus_runtime.dream.risk_terms import dream_text_hard_risk
+from aippocampus_runtime.dream.risk_terms import dream_privacy_posture
 from aippocampus_runtime.dream.status import retention_lifecycle_action
-from aippocampus_runtime.source.io_kernel import parse_utc, safe_float, source_ref_key
+from aippocampus_runtime.source.io_kernel import merge_source_refs, parse_utc, safe_float
+from aippocampus_runtime.warm_ambient.privacy_policy import PRIVACY_HARD_BLOCK_ACTIONS
 
 SCHEMA_VERSION = 1
 POLICY_VERSION = "dream_precision_policy_v1"
 DEFAULT_COEFFICIENT_VERSION = "conservative_v1"
+MAX_SOURCE_REFS_PER_DREAM_PROBE = 256
 
 RETENTION_KIND = "aippocampus_dream_retention_policy"
 ACTIVATION_KIND = "aippocampus_dream_activation_policy"
@@ -32,14 +35,7 @@ RETROSPECTIVE_KIND = "aippocampus_dream_retrospective_policy"
 
 DREAM_FINDING_KIND = "dream_synthesized"
 DREAM_HYPOTHESIS_TYPE = "dream_hypothesis"
-ADJUDICATED_REVIEW_STATES = {
-    "accepted",
-    "approved",
-    "reviewed",
-    "agent_adjudicated",
-    "auto_adjudicated",
-    "source_adjudicated",
-}
+ADJUDICATED_REVIEW_STATES = dream_lifecycle.ADJUDICATED_REVIEW_STATES
 
 STAY_SILENT = "stay_silent"
 SILENT_TUNING = "silent_tuning"
@@ -82,18 +78,11 @@ def normalize_now(now: str | datetime | None) -> datetime:
 
 
 def trust_horizon_map(row: Mapping[str, Any]) -> Mapping[str, Any]:
-    horizon = row.get("trust_horizon") or {}
-    return horizon if isinstance(horizon, Mapping) else {}
+    return dream_lifecycle.trust_horizon_map(row)
 
 
 def trust_horizon_timestamps(row: Mapping[str, Any], key: str) -> list[datetime]:
-    horizon = trust_horizon_map(row)
-    timestamps: list[datetime] = []
-    for value in (row.get(key), horizon.get(key)):
-        parsed = parse_utc(value)
-        if parsed:
-            timestamps.append(parsed)
-    return timestamps
+    return dream_lifecycle.trust_horizon_timestamps(row, key)
 
 
 def string_values(value: object) -> list[str]:
@@ -112,24 +101,19 @@ def text_terms(text: str) -> list[str]:
     ]
 
 
-def normalize_source_refs(value: object) -> list[dict[str, Any]]:
+def source_refs_from_value(value: object) -> list[dict[str, Any]]:
     if isinstance(value, Mapping):
         raw_items: Iterable[object] = [value]
     elif isinstance(value, Iterable) and not isinstance(value, (str, bytes)):
         raw_items = value
     else:
         raw_items = []
-    refs: list[dict[str, Any]] = []
-    seen: set[tuple[str, str, str, str]] = set()
-    for item in raw_items:
-        if not isinstance(item, Mapping):
-            continue
-        key = source_ref_key(item)
-        if not any(key) or key in seen:
-            continue
-        seen.add(key)
-        refs.append(dict(item))
-    return refs
+    return merge_source_refs(
+        [],
+        (item for item in raw_items if isinstance(item, Mapping)),
+        limit=MAX_SOURCE_REFS_PER_DREAM_PROBE,
+        require_anchor=False,
+    )
 
 
 def source_thread_count(refs: Iterable[Mapping[str, Any]]) -> int:
@@ -140,17 +124,17 @@ def bridge_claim_ref_count(probe: Mapping[str, Any]) -> int:
     count = 0
     for claim in probe.get("bridge_claims") or []:
         if isinstance(claim, Mapping):
-            count += len(normalize_source_refs(claim.get("source_refs")))
+            count += len(source_refs_from_value(claim.get("source_refs")))
     return count
 
 
 def bridge_claims_have_source_refs(probe: Mapping[str, Any]) -> bool:
     claims = [claim for claim in probe.get("bridge_claims") or [] if isinstance(claim, Mapping)]
-    return bool(claims) and all(normalize_source_refs(claim.get("source_refs")) for claim in claims)
+    return bool(claims) and all(source_refs_from_value(claim.get("source_refs")) for claim in claims)
 
 
 def source_anchor_component(probe: Mapping[str, Any]) -> dict[str, Any]:
-    refs = normalize_source_refs(probe.get("source_refs"))
+    refs = source_refs_from_value(probe.get("source_refs"))
     thread_count = source_thread_count(refs)
     bridge_ref_count = bridge_claim_ref_count(probe)
     value = clamp(min(len(refs), 4) / 4 * 0.45 + min(thread_count, 3) / 3 * 0.4 + min(bridge_ref_count, 4) / 4 * 0.15)
@@ -165,19 +149,48 @@ def source_anchor_component(probe: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def sensitive_probe(probe: Mapping[str, Any]) -> bool:
-    return dream_text_hard_risk(probe.get("title"), probe.get("summary"), probe.get("counter_evidence"))
+    return bool(probe_privacy_posture(probe).get("hard_block"))
+
+
+def probe_privacy_posture(probe: Mapping[str, Any]) -> dict[str, Any]:
+    existing = probe.get("privacy_posture")
+    if isinstance(existing, Mapping) and existing.get("privacy_action"):
+        return {
+            "privacy_action": str(existing.get("privacy_action") or "allow"),
+            "privacy_reason_codes": list(existing.get("privacy_reason_codes") or []),
+            "hard_block": bool(existing.get("hard_block")),
+            "raw_external_projection_allowed": False,
+            "source_boundary": str(
+                existing.get("source_boundary") or "ordinary_same_user_continuity"
+            ),
+        }
+    return dream_privacy_posture(
+        probe.get("title"),
+        probe.get("summary"),
+        probe.get("counter_evidence"),
+        cross_domain_sensitive_reuse=bool(probe.get("cross_domain_sensitive_reuse")),
+        raw_external_projection=bool(probe.get("raw_external_projection")),
+        disabled_scope=bool(probe.get("user_disabled_scope")),
+        high_risk_answer_support=bool(probe.get("high_risk_answer_support")),
+    )
 
 
 def hard_gate_failures(probe: Mapping[str, Any]) -> list[str]:
     failures: list[str] = []
-    refs = normalize_source_refs(probe.get("source_refs"))
+    refs = source_refs_from_value(probe.get("source_refs"))
     if not refs:
         failures.append("source_refs_present")
     if not bridge_claims_have_source_refs(probe):
         failures.append("bridge_claims_source_refs")
     if probe.get("foreground_eligible") is True:
         failures.append("foreground_eligible_false")
-    if sensitive_probe(probe) or (probe.get("sensitive_use_gate") or {}).get("state") == "blocked":
+    privacy_posture = probe_privacy_posture(probe)
+    gate_state = (probe.get("sensitive_use_gate") or {}).get("state")
+    if (
+        privacy_posture.get("privacy_action") in PRIVACY_HARD_BLOCK_ACTIONS
+        or privacy_posture.get("hard_block")
+        or gate_state == "blocked"
+    ):
         failures.append("sensitive_profile_claim_parked")
     if str(probe.get("dream_function") or "") == "active_imagination":
         boundary = active_imagination_probe_boundary(probe)
@@ -191,7 +204,7 @@ def hard_gate_failures(probe: Mapping[str, Any]) -> list[str]:
 
 
 def structural_divergence_component(voices: Iterable[Mapping[str, Any]] | None = None) -> dict[str, Any]:
-    anchored = [dict(voice) for voice in voices or [] if normalize_source_refs(voice.get("source_refs"))]
+    anchored = [dict(voice) for voice in voices or [] if source_refs_from_value(voice.get("source_refs"))]
     voice_ids = {str(voice.get("voice_id") or voice.get("dream_function") or "") for voice in anchored}
     candidate_keys = {
         stable_digest(
@@ -206,7 +219,7 @@ def structural_divergence_component(voices: Iterable[Mapping[str, Any]] | None =
     thread_keys = {
         str(ref.get("thread_key") or ref.get("thread_id") or "")
         for voice in anchored
-        for ref in normalize_source_refs(voice.get("source_refs"))
+        for ref in source_refs_from_value(voice.get("source_refs"))
         if ref.get("thread_key") or ref.get("thread_id")
     }
     self_ratings = [safe_float(voice.get("model_self_rating"), 0.0) for voice in anchored if voice.get("model_self_rating") is not None]
@@ -342,6 +355,7 @@ def retention_policy_for_probe(
         **recomputed,
         "probe_id": str(probe.get("dream_finding_id") or probe.get("fingerprint") or probe.get("id") or ""),
         "hard_gate": {"passed": not failures, "failures": failures},
+        "privacy_posture": probe_privacy_posture(probe),
         "decision": decision,
         "lifecycle_action": retention_lifecycle_action(decision),
         "authority": active_imagination_probe_boundary(probe)
@@ -384,7 +398,7 @@ def activation_hard_gate_failures(row: Mapping[str, Any], *, now: str | datetime
         failures.append("dream_hypothesis_expired")
     if any(review_after <= now_dt for review_after in trust_horizon_timestamps(row, "review_after")):
         failures.append("trust_horizon_review_due")
-    if not normalize_source_refs(row.get("source_refs")):
+    if not source_refs_from_value(row.get("source_refs")):
         failures.append("source_refs_present")
     return failures
 
@@ -495,7 +509,7 @@ def retrospective_policy_for_probe(
             continue
         if target_id not in validation_targets(row):
             continue
-        refs = normalize_source_refs(row.get("source_refs"))
+        refs = source_refs_from_value(row.get("source_refs"))
         if not refs:
             continue
         status = validation_status(row)

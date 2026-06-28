@@ -64,7 +64,7 @@ from aippocampus_runtime.mcp.selector_cache import (
     handle_from_selector_or_last_recall,
     recall_cache_path_for_mcp_recall,
 )
-from aippocampus_runtime.mcp.sync_status_projection import backend_selection_payload
+from aippocampus_runtime.mcp.sync_tool_handlers import call_sync_status
 from aippocampus_runtime.mcp.thread_list_projection import (
     list_threads_missing_registry_actions,
     list_threads_ok_actions,
@@ -73,7 +73,6 @@ from aippocampus_runtime.ops import telepathy_handoff_store
 from aippocampus_runtime.privacy import LOCAL_PATH_REDACTION
 from aippocampus_runtime.recall import agent_deepen_requests, why_cli
 from aippocampus_runtime.recall.agent_continuity_cli_support import (
-    RouteLimitError,
     agent_recall_missing_query_payload,
     attach_recall_gate_context_to_payload,
     compact_aippo_guidance_card,
@@ -97,8 +96,6 @@ from aippocampus_runtime.source.search import (
     public_search_result,
     search_clean_source,
 )
-from aippocampus_runtime.sync import bundle as sync_bundle
-from aippocampus_runtime.sync.object_storage import cli as sync_object_storage
 from conversation_sources import PROVIDER_CHOICES, create_conversation_provider
 
 
@@ -121,7 +118,11 @@ class MCPArgumentError(ValueError):
 def route_limit_arg(value: Any, *, default: int) -> int:
     try:
         return normalize_route_limit(value, default=default, field="max")
-    except RouteLimitError as exc:
+    except ValueError as exc:
+        # Tests and long-lived hosts may reload `agent_continuity_cli_support`.
+        # Catch the validation meaning, not the import-time class identity, so
+        # explicit bad MCP arguments stay client-visible instead of degrading
+        # into generic `tool_failed` after a reload.
         raise MCPArgumentError(str(exc)) from exc
 
 
@@ -203,6 +204,10 @@ def clean_source_message_sort_key(item: dict[str, Any]) -> int:
         return 0
 
 
+def _compact_search_memory_card(raw: dict[str, Any], *, include_source_snippets: bool) -> dict[str, Any]:
+    return dict(compact_search_memory_payload(raw, include_source_snippets=include_source_snippets))
+
+
 def call_search_memory(arguments: dict[str, Any]) -> dict[str, Any]:
     query = str(arguments.get("query") or "").strip()
     if not query:
@@ -218,7 +223,11 @@ def call_search_memory(arguments: dict[str, Any]) -> dict[str, Any]:
                     {"query": "{specific_cue_or_phrase}", "max": 10},
                     ["query"],
                 ),
-                _template_tool_action("recall_context", {"intent": "{task_or_memory_cue}"}, ["intent"]),
+                _template_tool_action(
+                    "agent_recall",
+                    {"query": "{task_or_memory_cue}"},
+                    ["query"],
+                ),
             ],
         )
     limit = int_range(arguments.get("max"), default=10, minimum=1, maximum=25)
@@ -248,15 +257,14 @@ def call_search_memory(arguments: dict[str, Any]) -> dict[str, Any]:
         return render_profiled_result(
             arguments,
             payload,
-            compact_projector=lambda raw: compact_search_memory_payload(
+            compact_projector=lambda raw: _compact_search_memory_card(
                 raw,
                 include_source_snippets=bool(
                     arguments.get("include_source_snippets") or arguments.get("include_snippets")
                 ),
             ),
-            runtime_provenance_context=RuntimeProvenanceContext(
-                clean_source_dir=clean_source_dir_for(arguments),
-                registry_dir=registry_dir_arg(arguments),
+            runtime_provenance_context=runtime_context_for(
+                arguments, clean_source_dir=clean_source_dir_for(arguments)
             ),
         )
     if scope == "last_recall_candidates":
@@ -279,15 +287,14 @@ def call_search_memory(arguments: dict[str, Any]) -> dict[str, Any]:
             arguments,
             payload,
             is_error=not bool(payload.get("ok")),
-            compact_projector=lambda raw: compact_search_memory_payload(
+            compact_projector=lambda raw: _compact_search_memory_card(
                 raw,
                 include_source_snippets=bool(
                     arguments.get("include_source_snippets") or arguments.get("include_snippets")
                 ),
             ),
-            runtime_provenance_context=RuntimeProvenanceContext(
-                clean_source_dir=clean_source_dir_for(arguments),
-                registry_dir=registry_dir_arg(arguments),
+            runtime_provenance_context=runtime_context_for(
+                arguments, clean_source_dir=clean_source_dir_for(arguments)
             ),
         )
     if scope != "current":
@@ -323,6 +330,7 @@ def call_search_memory(arguments: dict[str, Any]) -> dict[str, Any]:
         result,
         include_paths=include_paths,
         metadata_only=not include_source_snippets,
+        emit_source_open_selector=True,
         query_text=query,
     )
     payload["mcp_search_scope"] = "current"
@@ -331,14 +339,11 @@ def call_search_memory(arguments: dict[str, Any]) -> dict[str, Any]:
     return render_profiled_result(
         arguments,
         payload,
-        compact_projector=lambda raw: compact_search_memory_payload(
+        compact_projector=lambda raw: _compact_search_memory_card(
             raw,
             include_source_snippets=include_source_snippets,
         ),
-        runtime_provenance_context=RuntimeProvenanceContext(
-            clean_source_dir=source_dir,
-            registry_dir=registry_dir_arg(arguments),
-        ),
+        runtime_provenance_context=runtime_context_for(arguments, clean_source_dir=source_dir),
     )
 
 
@@ -346,6 +351,18 @@ def registry_dir_arg(arguments: dict[str, Any]) -> Path | None:
     if arguments.get("registry_dir"):
         return Path(str(arguments["registry_dir"])).resolve()
     return core.aippocampus_registry_dir().resolve()
+
+
+def runtime_context_for(
+    arguments: dict[str, Any],
+    *,
+    clean_source_dir: Path | None = None,
+    registry_dir: Path | None = None,
+) -> RuntimeProvenanceContext:
+    return RuntimeProvenanceContext(
+        clean_source_dir=clean_source_dir,
+        registry_dir=registry_dir if registry_dir is not None else registry_dir_arg(arguments),
+    )
 
 
 def continuity_domains_snapshot_arg(arguments: dict[str, Any]) -> Path | None:
@@ -363,11 +380,6 @@ def call_recall_context(arguments: dict[str, Any]) -> dict[str, Any]:
             arguments=arguments,
             required_any=["intent", "query", "cue"],
             safe_next_actions=[
-                _template_tool_action(
-                    "recall_context",
-                    {"intent": "{task_or_memory_cue}", "cwd": "{project_cwd}"},
-                    ["intent_or_query"],
-                ),
                 _template_tool_action(
                     "agent_recall",
                     {"query": "{task_or_memory_cue}", "cwd": "{project_cwd}"},
@@ -394,12 +406,18 @@ def call_recall_context(arguments: dict[str, Any]) -> dict[str, Any]:
             max_routes=route_limit_arg(arguments.get("max"), default=5),
         )
     except RecallNavigationError as exc:
-        return text_result(public_payload(arguments, navigation_error_payload(exc)), is_error=True)
-    if detail_arg(arguments) == "compact" and not arguments.get("include_private_paths"):
-        payload = compact_recall_context_payload(payload)
-    else:
-        payload = {"detail": "full", **payload}
-    return text_result(public_payload(arguments, payload))
+        return render_profiled_result(
+            arguments,
+            navigation_error_payload(exc),
+            is_error=True,
+            runtime_provenance_context=runtime_context_for(arguments, clean_source_dir=source_dir),
+        )
+    return render_profiled_result(
+        arguments,
+        payload,
+        compact_projector=compact_recall_context_payload,
+        runtime_provenance_context=runtime_context_for(arguments, clean_source_dir=source_dir),
+    )
 
 
 def call_recall_deepen(arguments: dict[str, Any]) -> dict[str, Any]:
@@ -412,40 +430,46 @@ def call_recall_deepen(arguments: dict[str, Any]) -> dict[str, Any]:
             required_any=["handle"],
             safe_next_actions=[
                 _template_tool_action(
-                    "recall_context",
-                    {"intent": "{task_or_memory_cue}", "cwd": "{project_cwd}"},
-                    ["intent_or_query"],
-                ),
-                _template_tool_action(
                     "agent_recall",
                     {"query": "{task_or_memory_cue}", "cwd": "{project_cwd}"},
+                    ["query"],
+                ),
+                _template_tool_action(
+                    "search_memory",
+                    {"query": "{exact_phrase_or_cue}", "cwd": "{project_cwd}"},
                     ["query"],
                 ),
             ],
             staged_followup=[
                 _template_tool_action(
-                    "recall_context",
-                    {"intent": "{task_or_memory_cue}", "cwd": "{project_cwd}"},
-                    ["intent_or_query"],
+                    "agent_recall",
+                    {"query": "{task_or_memory_cue}", "cwd": "{project_cwd}"},
+                    ["query"],
                 ),
                 _template_tool_action(
-                    "recall_deepen",
-                    {"handle": "{handle_from_recall_context_routes}", "cwd": "{project_cwd}"},
-                    ["handle"],
+                    "agent_deepen",
+                    {
+                        "request_index": "{request_index_from_agent_recall}",
+                        "recall_selector": "{recall_selector_from_agent_recall}",
+                        "cwd": "{project_cwd}",
+                    },
+                    ["request_index", "recall_selector"],
                 ),
             ],
             legacy_details={
                 "required": ["handle"],
                 "next_step_hint": (
-                    "Call recall_context with intent/query, then pass a selected route handle "
-                    "to recall_deepen."
+                    "Prefer agent_recall with a cue, then agent_deepen with the emitted selector. "
+                    "Legacy clients may still call recall_context and pass a selected route handle "
+                    "to recall_deepen explicitly."
                 ),
                 "arguments_template": {
-                    "intent": "continue the issue-work context",
+                    "query": "continue the issue-work context",
                     "cwd": "{project_cwd}",
                 },
                 "followup_arguments_template": {
-                    "handle": "{handle_from_recall_context_routes}",
+                    "request_index": "{request_index_from_agent_recall}",
+                    "recall_selector": "{recall_selector_from_agent_recall}",
                     "cwd": "{project_cwd}",
                 },
             },
@@ -453,7 +477,7 @@ def call_recall_deepen(arguments: dict[str, Any]) -> dict[str, Any]:
     try:
         normalized_handle = normalize_handle(arguments.get("handle"))
     except RecallNavigationError as exc:
-        return text_result(public_payload(arguments, navigation_error_payload(exc)), is_error=True)
+        return render_profiled_result(arguments, navigation_error_payload(exc), is_error=True)
     source_dir = recall_clean_source_dir_for(arguments)
     required = ["messages.jsonl"]
     if str(normalized_handle.get("kind") or "") != "active_recall_lock" and missing_files(
@@ -474,8 +498,21 @@ def call_recall_deepen(arguments: dict[str, Any]) -> dict[str, Any]:
             max_matches=route_limit_arg(arguments.get("max"), default=5),
         )
     except RecallNavigationError as exc:
-        return text_result(public_payload(arguments, navigation_error_payload(exc)), is_error=True)
-    return text_result(public_payload(arguments, payload))
+        return render_profiled_result(
+            arguments,
+            navigation_error_payload(exc),
+            is_error=True,
+            runtime_provenance_context=runtime_context_for(
+                arguments, clean_source_dir=source_dir, registry_dir=registry_dir
+            ),
+        )
+    return render_profiled_result(
+        arguments,
+        payload,
+        runtime_provenance_context=runtime_context_for(
+            arguments, clean_source_dir=source_dir, registry_dir=registry_dir
+        ),
+    )
 
 
 def call_agent_recall(arguments: dict[str, Any]) -> dict[str, Any]:
@@ -484,7 +521,7 @@ def call_agent_recall(arguments: dict[str, Any]) -> dict[str, Any]:
     def _compact_recall(raw: dict[str, Any]) -> dict[str, Any]:
         raw = dict(raw)
         raw["query"] = query
-        return compact_agent_recall_payload(raw)
+        return dict(compact_agent_recall_payload(raw))
 
     if not query:
         payload = agent_recall_missing_query_payload(
@@ -558,9 +595,8 @@ def call_agent_recall(arguments: dict[str, Any]) -> dict[str, Any]:
         arguments,
         payload,
         compact_projector=_compact_recall,
-        runtime_provenance_context=RuntimeProvenanceContext(
-            clean_source_dir=source_dir,
-            registry_dir=registry_dir,
+        runtime_provenance_context=runtime_context_for(
+            arguments, clean_source_dir=source_dir, registry_dir=registry_dir
         ),
     )
 
@@ -574,7 +610,7 @@ def call_agent_aippo(arguments: dict[str, Any]) -> dict[str, Any]:
     else:
         payload = {"detail": "full", "output_boundary": "local_private_diagnostic_full", **payload}
     is_error = payload.get("ok") is False or payload.get("status") == "needs_input"
-    return text_result(public_payload(arguments, payload), is_error=is_error)
+    return render_profiled_result(arguments, payload, is_error=is_error)
 
 
 def call_agent_background(arguments: dict[str, Any]) -> dict[str, Any]:
@@ -588,7 +624,7 @@ def call_agent_background(arguments: dict[str, Any]) -> dict[str, Any]:
         detail=str(arguments.get("detail") or "compact"),
     )
     is_error = payload.get("ok") is False or payload.get("status") == "needs_input"
-    return text_result(public_payload(arguments, payload), is_error=is_error)
+    return render_profiled_result(arguments, payload, is_error=is_error)
 
 
 def call_agent_deepen(arguments: dict[str, Any]) -> dict[str, Any]:
@@ -598,13 +634,7 @@ def call_agent_deepen(arguments: dict[str, Any]) -> dict[str, Any]:
     selector_cache_path: str | Path | None = arguments.get("last_recall_path")
 
     def _compact_deepen(raw: dict[str, Any]) -> dict[str, Any]:
-        return compact_agent_deepen_payload(
-            raw,
-            request_index=request_index_arg,
-            last_recall=bool(arguments.get("last_recall") or request_index_arg is not None),
-            recall_selector=str(arguments.get("recall_selector") or ""),
-            surface="mcp_agent_deepen_compact",
-        )
+        return dict(compact_agent_deepen_payload(raw, request_index=request_index_arg, last_recall=bool(arguments.get("last_recall") or request_index_arg is not None), recall_selector=str(arguments.get("recall_selector") or ""), surface="mcp_agent_deepen_compact"))
 
     def _deepen_result(payload: dict[str, Any], *, is_error: bool = False) -> dict[str, Any]:
         return render_profiled_result(
@@ -693,13 +723,7 @@ def call_agent_explain(arguments: dict[str, Any]) -> dict[str, Any]:
     selector_cache_path: str | Path | None = arguments.get("last_recall_path")
 
     def _compact_explain(raw: dict[str, Any]) -> dict[str, Any]:
-        return compact_agent_explain_payload(
-            raw,
-            request_index=request_index_arg,
-            last_recall=bool(arguments.get("last_recall") or request_index_arg is not None),
-            recall_selector=str(arguments.get("recall_selector") or ""),
-            surface="mcp_agent_explain_compact",
-        )
+        return dict(compact_agent_explain_payload(raw, request_index=request_index_arg, last_recall=bool(arguments.get("last_recall") or request_index_arg is not None), recall_selector=str(arguments.get("recall_selector") or ""), surface="mcp_agent_explain_compact"))
 
     def _explain_result(payload: dict[str, Any], *, is_error: bool = False) -> dict[str, Any]:
         return render_profiled_result(
@@ -802,10 +826,7 @@ def call_recall_diagnostic(arguments: dict[str, Any]) -> dict[str, Any]:
         arguments,
         payload,
         full_output_boundary="local_private_diagnostic_full",
-        runtime_provenance_context=RuntimeProvenanceContext(
-            clean_source_dir=source_dir,
-            registry_dir=registry_dir_arg(arguments),
-        ),
+        runtime_provenance_context=runtime_context_for(arguments, clean_source_dir=source_dir),
     )
 
 
@@ -838,32 +859,30 @@ def call_latest_reply(arguments: dict[str, Any]) -> dict[str, Any]:
             "authority_after_running": "source_open_within_clean_source_turn_scope",
             "why": "Use the clean-source selector before quoting exact wording from the compact latest-reply card.",
         }
-        return text_result(
-            public_payload(
-                arguments,
-                {
-                    "status": "clean_source_final_answer",
-                    "detail": detail,
-                    "source": str(source_dir / "messages.jsonl"),
-                    "message": message,
-                    "message_count": len(messages),
-                    "source_reopen_action": source_reopen_action,
-                    **canonical_foreground_action_fields(
-                        full_latest_reply_action,
-                        safe_next_actions=[full_latest_reply_action, source_reopen_action],
-                    ),
-                },
-            )
+        return render_profiled_result(
+            arguments,
+            {
+                "status": "clean_source_final_answer",
+                "detail": detail,
+                "source": str(source_dir / "messages.jsonl"),
+                "message": message,
+                "message_count": len(messages),
+                "source_reopen_action": source_reopen_action,
+                **canonical_foreground_action_fields(
+                    full_latest_reply_action,
+                    safe_next_actions=[full_latest_reply_action, source_reopen_action],
+                ),
+            },
         )
     try:
         rollout = Path(str(arguments["rollout"])) if arguments.get("rollout") else core.locate_rollout(cwd)
         payload = latest_reply_module.latest_reply(rollout)
     except (FileNotFoundError, OSError, ValueError) as exc:
         payload = latest_reply_module.latest_reply_unavailable_payload(exc, detail=detail)
-        return text_result(public_payload(arguments, payload), is_error=True)
+        return render_profiled_result(arguments, payload, is_error=True)
     if isinstance(payload, dict):
         payload = latest_reply_module.public_latest_reply_result(payload, detail=detail)
-    return text_result(public_payload(arguments, payload))
+    return render_profiled_result(arguments, payload)
 
 
 def call_get_turn_context(arguments: dict[str, Any]) -> dict[str, Any]:
@@ -885,9 +904,9 @@ def call_get_turn_context(arguments: dict[str, Any]) -> dict[str, Any]:
                     ["query"],
                 ),
                 _template_tool_action(
-                    "recall_context",
-                    {"intent": "{task_or_memory_cue}", "cwd": "{project_cwd}"},
-                    ["intent_or_query"],
+                    "search_memory",
+                    {"query": "{exact_phrase_or_cue}", "cwd": "{project_cwd}"},
+                    ["query"],
                 ),
             ],
             staged_followup=[
@@ -958,15 +977,14 @@ def call_get_turn_context(arguments: dict[str, Any]) -> dict[str, Any]:
         or item.get("turn_id") == selected_turn.get("turn_id")
     ]
     selected_messages.sort(key=clean_source_message_sort_key)
-    return text_result(
-        public_payload(
-            arguments,
-            {
-                "source": str(source_dir),
-                "turn": selected_turn,
-                "messages": selected_messages,
-            },
-        )
+    return render_profiled_result(
+        arguments,
+        {
+            "source": str(source_dir),
+            "turn": selected_turn,
+            "messages": selected_messages,
+        },
+        runtime_provenance_context=runtime_context_for(arguments, clean_source_dir=source_dir),
     )
 
 def call_list_threads(arguments: dict[str, Any]) -> dict[str, Any]:
@@ -1009,24 +1027,23 @@ def call_list_threads(arguments: dict[str, Any]) -> dict[str, Any]:
     else:
         threads = [public_thread_detail_without_private_identifiers(item) for item in raw_threads]
     actions = list_threads_ok_actions()
-    return text_result(
-        public_payload(
-            arguments,
-            {
-                "status": "ok",
-                "detail": detail,
-                "registry": str(json_path),
-                "threads": threads,
-                "count": len(threads),
-                "total_count": len(payload.get("threads") or []),
-                "identifier_boundary": (
-                    "private_identifiers_included"
-                    if include_private_identifiers
-                    else "compact_thread_handles_are_stable_local_fingerprints"
-                ),
-                **canonical_foreground_action_fields(actions[0], safe_next_actions=actions),
-            },
-        )
+    return render_profiled_result(
+        arguments,
+        {
+            "status": "ok",
+            "detail": detail,
+            "registry": str(json_path),
+            "threads": threads,
+            "count": len(threads),
+            "total_count": len(payload.get("threads") or []),
+            "identifier_boundary": (
+                "private_identifiers_included"
+                if include_private_identifiers
+                else "compact_thread_handles_are_stable_local_fingerprints"
+            ),
+            **canonical_foreground_action_fields(actions[0], safe_next_actions=actions),
+        },
+        runtime_provenance_context=runtime_context_for(arguments, registry_dir=registry_dir),
     )
 
 
@@ -1073,33 +1090,14 @@ def call_register_thread(arguments: dict[str, Any]) -> dict[str, Any]:
         )
     if not arguments.get("include_private_paths"):
         result = compact_register_thread_payload(result)
-    return text_result(public_payload(arguments, result))
-
-
-def call_sync_status(arguments: dict[str, Any]) -> dict[str, Any]:
-    cwd = cwd_arg(arguments)
-    if arguments.get("object_store_url"):
-        token_env = str(arguments.get("token_env") or "AIPPOCAMPUS_OBJECT_STORE_TOKEN")
-        return text_result(
-            public_payload(
-                arguments,
-                sync_object_storage.status_object_storage_bundle(
-                    str(arguments["object_store_url"]),
-                    prefix=str(arguments.get("object_prefix") or sync_object_storage.DEFAULT_PREFIX),
-                    token=os.environ.get(token_env),
-                ),
-            )
-        )
-    if arguments.get("sync_dir"):
-        return text_result(
-            public_payload(arguments, sync_bundle.status_sync_bundle(str(arguments["sync_dir"])))
-        )
-
-    return text_result(
-        public_payload(
+    return render_profiled_result(
+        arguments,
+        result,
+        runtime_provenance_context=runtime_context_for(
             arguments,
-            backend_selection_payload(cwd, diagnostic=bool(arguments.get("diagnostic"))),
-        )
+            clean_source_dir=clean_source_dir_for(arguments),
+            registry_dir=registry_dir,
+        ),
     )
 
 
@@ -1112,9 +1110,8 @@ def call_memory_health(arguments: dict[str, Any]) -> dict[str, Any]:
             arguments,
             payload,
             is_error=False,
-            runtime_provenance_context=RuntimeProvenanceContext(
-                clean_source_dir=clean_source_dir_for(arguments),
-                registry_dir=registry_dir_arg(arguments),
+            runtime_provenance_context=runtime_context_for(
+                arguments, clean_source_dir=clean_source_dir_for(arguments)
             ),
         )
 
@@ -1125,9 +1122,8 @@ def call_memory_health(arguments: dict[str, Any]) -> dict[str, Any]:
     return render_profiled_result(
         arguments,
         payload,
-        runtime_provenance_context=RuntimeProvenanceContext(
-            clean_source_dir=clean_source_dir_for(arguments),
-            registry_dir=registry_dir_arg(arguments),
+        runtime_provenance_context=runtime_context_for(
+            arguments, clean_source_dir=clean_source_dir_for(arguments)
         ),
     )
 
@@ -1140,7 +1136,13 @@ def call_list_telepathy_handoffs(arguments: dict[str, Any]) -> dict[str, Any]:
         status=str(arguments.get("status") or "active"),
         limit=int_range(arguments.get("max"), default=20, minimum=1, maximum=100),
     )
-    return text_result(public_payload(arguments, payload))
+    return render_profiled_result(
+        arguments,
+        payload,
+        runtime_provenance_context=runtime_context_for(
+            arguments, clean_source_dir=clean_source_dir_for(arguments)
+        ),
+    )
 
 
 def call_deepen_telepathy_handoff(arguments: dict[str, Any]) -> dict[str, Any]:
@@ -1169,7 +1171,14 @@ def call_deepen_telepathy_handoff(arguments: dict[str, Any]) -> dict[str, Any]:
         cwd=cwd_arg(arguments),
         store_path=arguments.get("store_path"),
     )
-    return text_result(public_payload(arguments, payload), is_error=not bool(payload.get("ok")))
+    return render_profiled_result(
+        arguments,
+        payload,
+        is_error=not bool(payload.get("ok")),
+        runtime_provenance_context=runtime_context_for(
+            arguments, clean_source_dir=clean_source_dir_for(arguments)
+        ),
+    )
 
 
 TOOL_CALLS = {

@@ -94,6 +94,31 @@ def route_deepen_action(
     return action
 
 
+def _is_associative_path_route(packet: Mapping[str, Any]) -> bool:
+    return (
+        str(packet.get("route_kind") or "") == "associative_path"
+        or str(packet.get("matched_cue_family") or "") == "associative_path_fallback"
+        or str(packet.get("label_granularity") or "") == "associative_path_terms"
+    )
+
+
+def _route_is_callable(packet: Mapping[str, Any], *, cache_available: bool) -> bool:
+    if not cache_available:
+        return False
+    if str(packet.get("output_mode") or "") == "reopenable_route":
+        return True
+    handle = packet.get("handle")
+    has_source_ref_handle = (
+        isinstance(handle, Mapping)
+        and str(handle.get("kind") or "") == "source_ref"
+        and bool(handle.get("source_refs"))
+    )
+    # APW source-ref fallbacks are intentionally navigation-only, but they are
+    # still executable reopen routes. Treating them as `preview_only` makes the
+    # compact foreground card contradict its own deepen command.
+    return bool(packet.get("reopenable")) and has_source_ref_handle
+
+
 def project_route_receipts(
     memory_packets: list[dict[str, Any]],
     *,
@@ -115,9 +140,14 @@ def project_route_receipts(
     route_receipts: list[dict[str, Any]] = []
     for index, packet in displayed_packets:
         already_opened = bool(packet.get("already_opened"))
-        route_is_callable = (
-            cache_available
-            and str(packet.get("output_mode") or "") == "reopenable_route"
+        route_is_callable = _route_is_callable(packet, cache_available=cache_available)
+        low_confidence_route = labels_low_specificity or _is_associative_path_route(packet)
+        actionability = (
+            "low_confidence_reopenable"
+            if route_is_callable and low_confidence_route
+            else "reopenable"
+            if route_is_callable
+            else "preview_only"
         )
         route_receipts.append(
             core.strip_empty(
@@ -132,10 +162,11 @@ def project_route_receipts(
                     ),
                     "already_opened": already_opened or None,
                     "source_boundary": "reopen_required_before_claim",
+                    "actionability": actionability,
                     "action": route_deepen_action(
                         index,
                         recall_selector=recall_selector,
-                        low_confidence=labels_low_specificity,
+                        low_confidence=low_confidence_route,
                     )
                     if route_is_callable
                     else None,

@@ -195,6 +195,7 @@ def main(argv: list[str] | None = None) -> int:
                 dream_delivery.get("prefilter_reason") or "budget_zero"
             ),
             dream_delivery_task_mode=str(dream_delivery.get("task_mode") or "unknown"),
+            detail="trace" if args.json_output else None,
         )
         result = runtime["apply_dream_delivery_boundary"](
             result,

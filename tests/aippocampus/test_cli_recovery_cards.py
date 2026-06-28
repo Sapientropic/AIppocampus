@@ -29,6 +29,11 @@ from tests.aippocampus.frontstage_assertions import (
 )
 
 
+class TtyStringIO(StringIO):
+    def isatty(self) -> bool:
+        return True
+
+
 class AippocampusCliRecoveryCardTests(unittest.TestCase):
     run_cli = staticmethod(run_aippocampus_cli)
 
@@ -40,6 +45,9 @@ class AippocampusCliRecoveryCardTests(unittest.TestCase):
 
         self.assertEqual(proc.returncode, 0)
         self.assertIn("Status decision card", proc.stdout)
+        self.assertIn("pulse: one-line readiness", proc.stdout)
+        self.assertIn("status: summary/current posture", proc.stdout)
+        self.assertIn("health: full diagnostics/operator view", proc.stdout)
         self.assertIn("aippocampus update status --json", proc.stdout)
         self.assertNotIn("--index-dir", proc.stdout)
         self.assertNotIn("--deep-graph-bytes", proc.stdout)
@@ -121,11 +129,19 @@ class AippocampusCliRecoveryCardTests(unittest.TestCase):
         self.assertIn("Memory action card", memory.stdout)
         self.assertIn("source-backed", memory.stdout)
         self.assertIn("aippocampus search", memory.stdout)
+        self.assertIn("agent recall finds fuzzy continuity routes", memory.stdout)
+        self.assertIn("search finds exact/source wording", memory.stdout)
         self.assertIn("Privacy and control card", privacy.stdout)
         self.assertIn("pause", privacy.stdout)
         self.assertIn("provider-key", privacy.stdout)
+        self.assertIn("same-user local conversation source stays usable", privacy.stdout)
+        self.assertIn("raw external projection", privacy.stdout)
+        self.assertIn("do-not-use-here is current-scope exclusion", privacy.stdout)
+        self.assertNotIn("approve every recall", privacy.stdout.casefold())
+        self.assertNotIn("confirm every memory", privacy.stdout.casefold())
         self.assertIn("Personal controls card", controls.stdout)
         self.assertIn("do-not-use-here", controls.stdout)
+        self.assertIn("forget is an explicit target workflow", controls.stdout)
 
     def test_agent_parent_json_is_foreground_chooser_not_argparse(self) -> None:
         proc = self.run_cli("agent", "--json")
@@ -173,9 +189,21 @@ class AippocampusCliRecoveryCardTests(unittest.TestCase):
             "aippocampus agent recall",
             memory_payload["foreground_action"]["command_template"],
         )
+        self.assertEqual(
+            memory_payload["command_gradient"]["agent_recall"],
+            "fuzzy continuity route finding from old decisions, corrections, or handoffs",
+        )
+        self.assertEqual(
+            memory_payload["intent_gradient"]["search"],
+            "exact/source wording search when a distinctive phrase is known",
+        )
 
         privacy_payload = parse_cli_json(self, cards["privacy"], expected_returncode=0, label="privacy")
         self.assertEqual(privacy_payload["kind"], "aippocampus_privacy_chooser")
+        self.assertEqual(
+            privacy_payload["control_gradient"]["do_not_use_here"],
+            "current-scope exclusion for a bad route",
+        )
         privacy_action_ids = {
             action["id"]
             for action in [privacy_payload["foreground_action"], *privacy_payload["safe_next_actions"]]
@@ -183,12 +211,67 @@ class AippocampusCliRecoveryCardTests(unittest.TestCase):
         self.assertIn("open_controls", privacy_action_ids)
         privacy_actions = {action["id"]: action for action in privacy_payload["safe_next_actions"]}
         self.assertEqual(privacy_actions["export_boundary"]["command"], "aippocampus export --json")
-        self.assertEqual(privacy_actions["provider_key_boundary"]["command"], "aippocampus provider-key --json")
-        self.assertNotIn("--help", json.dumps(privacy_payload, ensure_ascii=False))
+        self.assertEqual(
+            privacy_payload["default_posture"]["ordinary_conversation_source"],
+            "private_route_or_reopenable",
+        )
+        self.assertEqual(
+            privacy_payload["default_posture"]["secret_like"],
+            "hard_block",
+        )
+        self.assertEqual(
+            privacy_payload["default_posture"]["unprovided_background_scan"],
+            "hard_block",
+        )
+        self.assertEqual(
+            privacy_payload["default_posture"]["raw_external_projection"],
+            "blocked_without_explicit_opt_in",
+        )
+        self.assertEqual(
+            privacy_payload["default_posture"]["cross_domain_sensitive_use"],
+            "purpose_check",
+        )
+        encoded_privacy = json.dumps(privacy_payload, ensure_ascii=False).casefold()
+        self.assertIn("public-core-boundary.md#personalcore-default", encoded_privacy)
+        self.assertNotIn("--help", encoded_privacy)
+        self.assertNotIn("approve every recall", encoded_privacy)
+        self.assertNotIn("confirm every memory", encoded_privacy)
 
         controls_payload = parse_cli_json(self, cards["controls"], expected_returncode=0, label="controls")
         self.assertEqual(controls_payload["kind"], "aippocampus_controls_chooser")
         self.assertTrue(any(action["id"] == "do_not_use_here" for action in controls_payload["safe_next_actions"]))
+        self.assertEqual(
+            controls_payload["control_gradient"]["forget"],
+            "stronger explicit target workflow; no surprise deletion from the chooser",
+        )
+
+    def test_frontdoor_accept_runs_only_concrete_read_only_actions(self) -> None:
+        executed = self.run_cli("logs", "--accept", "status", "--json")
+        executed_payload = parse_cli_json(self, executed, expected_returncode=0, label="logs accept")
+        self.assertEqual(executed_payload["kind"], "aippocampus_logs_chooser_accept_result")
+        self.assertTrue(executed_payload["accepted_action_ran"])
+        self.assertEqual(executed_payload["accepted_action_id"], "status")
+        self.assertEqual(executed_payload["status"], "accepted_action_ran")
+        self.assertEqual(executed_payload["result"]["kind"], "aippocampus_logs_status_card")
+        self.assertTrue(executed_payload["write_boundary"]["no_write_happened"])
+        self.assertFalse(executed_payload["write_boundary"]["explicit_write_required"])
+
+        template = self.run_cli("memory", "--accept", "--json")
+        template_payload = parse_cli_json(self, template, expected_returncode=2, label="memory accept")
+        self.assertFalse(template_payload["accepted_action_ran"])
+        self.assertEqual(template_payload["status"], "needs_input")
+        self.assertEqual(template_payload["reason"], "selected_action_needs_input")
+        self.assertEqual(template_payload["requires"], ["continuity_cue"])
+        self.assertTrue(template_payload["action"]["template_only"])
+        self.assertTrue(template_payload["write_boundary"]["no_write_happened"])
+
+        write_like = self.run_cli("logs", "--accept", "rotate_apply", "--json")
+        write_payload = parse_cli_json(self, write_like, expected_returncode=2, label="logs write accept")
+        self.assertFalse(write_payload["accepted_action_ran"])
+        self.assertEqual(write_payload["status"], "explicit_write_required")
+        self.assertEqual(write_payload["reason"], "selected_action_is_not_read_only")
+        self.assertEqual(write_payload["accepted_action_id"], "rotate_apply")
+        self.assertTrue(write_payload["write_boundary"]["explicit_write_required"])
 
     def test_plugin_install_status_recovers_to_plugin_status(self) -> None:
         proc = self.run_cli("plugin", "install", "--status")
@@ -369,6 +452,44 @@ class AippocampusCliRecoveryCardTests(unittest.TestCase):
         self.assertIn("Private/high-risk", proc.stdout)
         self.assertIn("local filesystem paths", proc.stdout)
         self.assertLess(proc.stdout.index("Safe first step"), proc.stdout.index("--include-active"))
+
+    def test_storage_gc_tty_no_flag_runs_human_dry_run_but_pipe_stays_recovery(self) -> None:
+        module_name = "aippocampus_runtime.ops.storage_governance"
+        fake_module = types.ModuleType(module_name)
+        seen_argv: list[list[str] | None] = []
+
+        def main(argv: list[str] | None = None) -> int:
+            seen_argv.append(argv)
+            print("AIppocampus storage governance dry-run")
+            return 0
+
+        fake_module.main = main
+        previous = sys.modules.get(module_name)
+        sys.modules[module_name] = fake_module
+        stdout = TtyStringIO()
+        stderr = StringIO()
+        try:
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                invocation, code = facade.dispatch(["storage", "gc"])
+        finally:
+            if previous is None:
+                sys.modules.pop(module_name, None)
+            else:
+                sys.modules[module_name] = previous
+
+        self.assertEqual(code, 0, stderr.getvalue())
+        self.assertIsNotNone(invocation)
+        self.assertEqual([["gc", "--dry-run"]], seen_argv)
+        self.assertIn("AIppocampus storage governance dry-run", stdout.getvalue())
+
+        piped = facade.run_command(["storage", "gc"], capture_output=True)
+        self.assertTrue(piped.ok, piped.stderr)
+        self.assertIn("storage gc --dry-run --summary-json --cwd .", piped.stdout)
+
+        json_recovery = facade.run_command(["storage", "gc", "--json"], capture_output=True)
+        self.assertTrue(json_recovery.ok, json_recovery.stderr)
+        payload = json.loads(json_recovery.stdout)
+        self.assertEqual(payload["kind"], "aippocampus_storage_gc_recovery")
 
     def test_questions_and_navigation_frontdoors_are_bounded_read_paths(self) -> None:
         questions = self.run_cli("questions", "status", "--json")
@@ -640,11 +761,13 @@ class AippocampusCliRecoveryCardTests(unittest.TestCase):
             "import_private_bundle",
             {action["id"] for action in payload["write_actions"]},
         )
-        self.assertIn("bundle_import", payload["choices"])
-        self.assertTrue(payload["choices"]["bundle_import"]["template_only"])
-        self.assertIn("conversation_import", payload["choices"])
-        conversation_choice = payload["choices"]["conversation_import"]
-        self.assertIn("--dry-run --json", conversation_choice["preview_command_template"])
+        self.assertIsInstance(payload["choices"], list)
+        choices = {action["id"]: action for action in payload["choices"]}
+        self.assertIn("import_private_bundle", choices)
+        self.assertTrue(choices["import_private_bundle"]["template_only"])
+        self.assertIn("preview_conversation_import", choices)
+        conversation_choice = choices["preview_conversation_import"]
+        self.assertIn("--dry-run --json", conversation_choice["command_template"])
         self.assertEqual(conversation_choice["requires"], ["input_path"])
         self.assertEqual(executable_command_violations(payload), [])
         self.assertFalse(payload["privacy_boundary"]["raw_local_paths_emitted"])
@@ -885,6 +1008,42 @@ class AippocampusCliRecoveryCardTests(unittest.TestCase):
         self.assertEqual(payload["kind"], "aippocampus_cli_recovery_error")
         self.assertIn("safe_next_actions", payload)
         self.assertEqual(payload["foreground_action"]["command_template"], 'aippocampus agent recall "{cue}" --json')
+
+    def test_search_all_registry_failure_recovers_to_registry_audit_not_generic_help(self) -> None:
+        module_name = "aippocampus_runtime._test_search_registry_error"
+        fake_module = types.ModuleType(module_name)
+
+        def main(argv: list[str]) -> int:
+            self.assertIn("--all", argv)
+            raise PermissionError(r"denied C:\private\aippocampus\threads.json")
+
+        fake_module.main = main
+        sys.modules[module_name] = fake_module
+        stdout = StringIO()
+        stderr = StringIO()
+        try:
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                code = facade.run_module_main(
+                    module_name,
+                    "search_clean_source.py",
+                    ["--all", "distinctive cue", "--json"],
+                )
+        finally:
+            sys.modules.pop(module_name, None)
+
+        raw = stdout.getvalue() + stderr.getvalue()
+        self.assertEqual(code, 1)
+        self.assertEqual(stderr.getvalue(), "")
+        self.assertNotIn("Traceback", raw)
+        self.assertNotIn(r"C:\private\aippocampus", raw)
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(payload["status"], "source_search_blocked")
+        self.assertEqual(payload["blocker"], "registered source index could not be read; registry-wide search did not run")
+        self.assertEqual(payload["foreground_action"]["id"], "audit_registry_sources")
+        self.assertEqual(payload["foreground_action"]["command"], "aippocampus registry audit --json")
+        self.assertNotEqual(payload["foreground_action"]["id"], "inspect_cli_help")
+        self.assertEqual(payload["safe_next_actions"][0]["id"], "fallback_current_thread_search")
+        self.assertTrue(payload["recovery_boundary"]["search_error_is_not_absence_of_memory"])
 
     def test_delegated_invalid_actions_with_json_return_recovery_cards(self) -> None:
         cases = [
@@ -1175,7 +1334,7 @@ class AippocampusCliRecoveryCardTests(unittest.TestCase):
         cases = {
             ("search", "--json"): "aippocampus_search_recovery",
             ("plugin", "--json"): "aippocampus_plugin_chooser",
-            ("hooks", "--json"): "aippocampus_hooks_chooser",
+            ("hooks", "--json"): "aippocampus_hooks_readiness",
             ("sync", "--json"): "aippocampus_sync_chooser",
             ("object-sync", "--json"): "aippocampus_object_sync_chooser",
             ("storage", "--json"): "aippocampus_storage_chooser",

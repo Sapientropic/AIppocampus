@@ -11,18 +11,12 @@ from datetime import datetime, timezone
 from typing import Any
 
 from aippocampus_runtime.dream import constructive_outputs as dream_constructive
+from aippocampus_runtime.dream import lifecycle as dream_lifecycle
 from aippocampus_runtime.source.io_kernel import parse_utc
 
 DREAM_HYPOTHESIS_TYPE = "dream_hypothesis"
 
-ADJUDICATED_DREAM_STATES = (
-    "accepted",
-    "approved",
-    "reviewed",
-    "agent_adjudicated",
-    "auto_adjudicated",
-    "source_adjudicated",
-)
+ADJUDICATED_DREAM_STATES = dream_lifecycle.ADJUDICATED_REVIEW_STATES
 
 
 def dream_horizon_timestamps(row: dict[str, Any], key: str) -> list[datetime]:
@@ -39,7 +33,7 @@ def dream_horizon_timestamps(row: dict[str, Any], key: str) -> list[datetime]:
 def dream_hypothesis_block_reason(row: dict[str, Any]) -> str:
     if row.get("candidate_type") != DREAM_HYPOTHESIS_TYPE:
         return ""
-    if str(row.get("review_state") or "") not in ADJUDICATED_DREAM_STATES:
+    if not dream_lifecycle.is_adjudicated_review_state(row.get("review_state")):
         return "not_adjudicated"
     if (row.get("sensitive_use_gate") or {}).get("state") == "blocked" or row.get("human_review_required"):
         return "sensitive_review_required"

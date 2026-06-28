@@ -9,6 +9,10 @@ summaries, scents, embeddings, or old sidecars.
 
 This page is the canonical recall-layer audit pointer for source-backed as a
 product discipline. It does not replace the source layer or evidence ledger.
+Trace-derived rows use
+[`agent-trace-admission-contract.md`](agent-trace-admission-contract.md) for
+admission levels, authority joins, graph/funnel boundaries, and compact versus
+detail projection discipline.
 
 ## Operating Rule
 

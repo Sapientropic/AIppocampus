@@ -61,6 +61,8 @@ class TaskOrientationPacketTests(unittest.TestCase):
             "claim_boundary",
             {key for action in packet["safe_next_actions"] for key in action},
         )
+        self.assertTrue(packet["more_actions_available_in_detail"])
+        self.assertNotIn("foreground_action_budget", packet)
         assert_compact_detail_affordances(self, packet, surface="task_orientation.compact")
         self.assertNotIn("cannot_claim", packet)
         self.assertNotIn("red_lines", packet)
@@ -88,6 +90,9 @@ class TaskOrientationPacketTests(unittest.TestCase):
         )
         self.assertIn("cannot_claim", full_packet)
         self.assertIn("red_lines", full_packet)
+        self.assertEqual(full_packet["foreground_action_budget"]["max_safe_actions"], 1)
+        self.assertEqual(full_packet["foreground_action_budget"]["safe_action_count"], 2)
+        self.assertTrue(full_packet["foreground_action_budget"]["budget_limited"])
         self.assertIn("foreground_json_bytes", full_packet["metrics"])
         self.assertNotIn("trust_taxonomy", full_packet["active_path_packet"])
         self.assertNotIn("active_path_packet_proves_memory_fact", encoded)

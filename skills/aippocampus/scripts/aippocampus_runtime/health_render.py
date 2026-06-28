@@ -23,6 +23,29 @@ def _command_kind(command: str) -> str:
 
 
 def render_health_text(result: dict[str, Any]) -> None:
+    if "rollout" not in result:
+        print("AIppocampus health")
+        print(f"status: {result.get('status') or ('OK' if result.get('ok') else 'needs maintenance')}")
+        readiness = result.get("product_readiness") or {}
+        if readiness:
+            print(f"readiness: {readiness.get('status') or 'unknown'}")
+            print(
+                "can_continue_recall_now: "
+                + ("yes" if readiness.get("ordinary_first_recall_usable") else "no")
+            )
+        actions = result.get("recommended_actions") or []
+        first_action = next((item for item in actions if isinstance(item, dict)), None)
+        if first_action:
+            print(f"best next action: {first_action.get('kind') or first_action.get('id') or 'inspect'}")
+            command = _action_command(first_action)
+            if command:
+                print(f"{_command_kind(command)}: {command}")
+        if result.get("error"):
+            error = result["error"]
+            print(f"reason: {error.get('code') or error.get('message')}")
+        print("boundary: health is setup guidance, not source evidence")
+        return
+
     status = "OK" if result["ok"] else "needs maintenance"
     rollout = result["rollout"]
     index = result["index"]

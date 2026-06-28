@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import os
 import subprocess
@@ -328,6 +330,227 @@ class ActionHintHookTests(unittest.TestCase):
         self.assertEqual(stale_payload["reason"], "stale_recall_handle")
         self.assertEqual(stale_payload["foreground_action"]["id"], "refresh_probe_source_route")
         self.assertNotIn("agent deepen", stale_payload["foreground_action"]["command"])
+        self.assertEqual(stale_payload["foreground_action"]["mutation_risk"], "read_only")
+
+    def test_compact_probe_labels_cache_refresh_as_explicit_write(self) -> None:
+        payload = action_hint.compact_probe_report(
+            {
+                "schema_version": 1,
+                "ok": True,
+                "decision": "silent",
+                "reason": "cache_not_ready",
+                "hint": None,
+                "useful": False,
+                "usefulness_stage": "callable",
+            }
+        )
+
+        action = payload["foreground_action"]
+        self.assertEqual(action["id"], "refresh_probe_source_route")
+        self.assertIn("refresh-cache --write", action["command"])
+        self.assertEqual(action["mutation_risk"], "explicit_local_cache_write")
+        self.assertFalse(payload["useful"])
+
+    def test_probe_auto_chains_missing_cache_before_foregrounding_refresh(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            cache_path = Path(tmp) / "action-hints.jsonl"
+
+            def fake_refresh(**kwargs: object) -> dict[str, object]:
+                record = {
+                    "schema_version": 1,
+                    "kind": "aippocampus_action_hint_prepared_record",
+                    "record_id": "auto-chain-record",
+                    "provider_family": "recent_recall_route",
+                    "action_hint_kind": "reopen_route_before_action",
+                    "next_action": "reopen_route_before_action",
+                    "navigation_only": True,
+                    "no_claim_before_reopen": True,
+                    "source_reopen_required": True,
+                    "can_support_factual_claim": False,
+                    "authority": "navigation_only",
+                    "freshness": "current",
+                    "expires_at_unix": 9999999999,
+                    "confidence": "high",
+                    "occurrence_count": 1,
+                    "source_refs": [source_ref("auto-chain")],
+                    "source_handles": [
+                        {
+                            "tool_name": "agent_deepen",
+                            "command": "aippocampus agent deepen --recall-selector sel_auto",
+                            "arguments": {"recall_selector": "sel_auto"},
+                            "query": "AIppocampus recall source route",
+                            "reopen_required": True,
+                        }
+                    ],
+                    "command_terms": ["rg", "search"],
+                    "match_terms": ["aippocampus", "recall", "source", "route"],
+                    "privacy_boundary": {
+                        "raw_prompt_stored": False,
+                        "raw_command_text_stored": False,
+                        "raw_tool_args_stored": False,
+                        "local_paths_stored": False,
+                        "model_reasoning_stored": False,
+                    },
+                }
+                report = {
+                    "kind": "aippocampus_action_hint_prepared_cache",
+                    "schema_version": 1,
+                    "record_count": 1,
+                    "records": [record],
+                    "provider_counts": {"recent_recall_route": 1},
+                    "privacy_boundary": {},
+                }
+                action_hint_cache.write_action_hint_cache(Path(kwargs["cache_jsonl"]), report)
+                return {
+                    "ok": True,
+                    "cache_status": "with_cache_records",
+                    "cache": report,
+                    "action_hints_ready": True,
+                    "foreground_action": {
+                        "id": "check_action_hint_status",
+                        "label": "Check action hint status",
+                        "command": "aippocampus hooks action status --json",
+                        "mutation_risk": "read_only",
+                        "claim_boundary": "action_hints_are_navigation_not_source_truth",
+                    },
+                }
+
+            stdout = io.StringIO()
+            with (
+                mock.patch("sys.stdin", io.StringIO("")),
+                mock.patch(
+                    "aippocampus_runtime.hooks.action_hint_auto_chain.refresh_action_hint_cache",
+                    side_effect=fake_refresh,
+                ),
+                mock.patch(
+                    "aippocampus_runtime.hooks.recent_recall_routes.probe_recent_recall_handle_followthrough",
+                    return_value={"status": "passed"},
+                ),
+                contextlib.redirect_stdout(stdout),
+            ):
+                code = action_hint.main(
+                    ["probe", "--cache-jsonl", str(cache_path), "--compact-json"]
+                )
+
+        payload = json.loads(stdout.getvalue())
+        encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertEqual(code, 0, payload)
+        self.assertTrue(payload["auto_chained"])
+        self.assertEqual(payload["auto_chain_status"], "auto_chained")
+        self.assertEqual(payload["deferred_auto_chain_reason"], "")
+        self.assertTrue(payload["useful"])
+        self.assertEqual(payload["foreground_action"]["id"], "deepen_probe_source_route")
+        self.assertNotIn("refresh-cache --write", encoded)
+        self.assertNotIn(str(cache_path), encoded)
+
+    def test_probe_explains_deferred_auto_chain_when_write_disabled(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            cache_path = Path(tmp) / "action-hints.jsonl"
+            stdout = io.StringIO()
+            with (
+                mock.patch("sys.stdin", io.StringIO("")),
+                mock.patch(
+                    "aippocampus_runtime.hooks.action_hint.action_hint_refresh_auto_chain"
+                ) as auto_chain,
+                contextlib.redirect_stdout(stdout),
+            ):
+                auto_chain.return_value = {
+                    "status": "deferred",
+                    "reason": "auto_chain_disabled",
+                }
+                code = action_hint.main(
+                    [
+                        "probe",
+                        "--cache-jsonl",
+                        str(cache_path),
+                        "--no-auto-chain",
+                        "--compact-json",
+                    ]
+                )
+
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(code, 0, payload)
+        self.assertFalse(payload["auto_chained"])
+        self.assertEqual(payload["auto_chain_status"], "deferred")
+        self.assertEqual(payload["deferred_auto_chain_reason"], "auto_chain_disabled")
+        self.assertIn("refresh-cache --write", payload["foreground_action"]["command"])
+
+    def test_probe_defers_auto_chain_when_lock_busy_or_latency_budget_spent(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            cache_path = Path(tmp) / "action-hints.jsonl"
+            lock_path = cache_path.with_suffix(cache_path.suffix + ".auto-chain.lock")
+            lock_path.write_text('{"owner_token":"other","created_at":"now"}', encoding="utf-8")
+            busy_stdout = io.StringIO()
+            with (
+                mock.patch("sys.stdin", io.StringIO("")),
+                mock.patch(
+                    "aippocampus_runtime.hooks.action_hint_auto_chain.refresh_action_hint_cache"
+                ) as refresh,
+                contextlib.redirect_stdout(busy_stdout),
+            ):
+                busy_code = action_hint.main(
+                    ["probe", "--cache-jsonl", str(cache_path), "--compact-json"]
+                )
+            refresh.assert_not_called()
+
+            latency_stdout = io.StringIO()
+            with (
+                mock.patch("sys.stdin", io.StringIO("")),
+                contextlib.redirect_stdout(latency_stdout),
+            ):
+                latency_code = action_hint.main(
+                    [
+                        "probe",
+                        "--cache-jsonl",
+                        str(cache_path),
+                        "--auto-chain-max-elapsed-ms",
+                        "0",
+                        "--compact-json",
+                    ]
+                )
+
+        busy_payload = json.loads(busy_stdout.getvalue())
+        latency_payload = json.loads(latency_stdout.getvalue())
+        self.assertEqual(busy_code, 0, busy_payload)
+        self.assertEqual(busy_payload["auto_chain_status"], "deferred")
+        self.assertEqual(busy_payload["deferred_auto_chain_reason"], "refresh_lock_busy")
+        self.assertEqual(latency_code, 0, latency_payload)
+        self.assertEqual(latency_payload["auto_chain_status"], "deferred")
+        self.assertEqual(
+            latency_payload["deferred_auto_chain_reason"],
+            "latency_budget_exhausted",
+        )
+
+    def test_hot_run_path_never_auto_chains_cache_write(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            cache_path = Path(tmp) / "action-hints.jsonl"
+            stdout = io.StringIO()
+            with (
+                mock.patch(
+                    "sys.stdin",
+                    io.StringIO(
+                        json.dumps(
+                            {
+                                "hook_event_name": "PreToolUse",
+                                "tool_name": "Bash",
+                                "tool_input": {"command": "rg recall", "command_family": "rg"},
+                            }
+                        )
+                    ),
+                ),
+                mock.patch(
+                    "aippocampus_runtime.hooks.action_hint.action_hint_refresh_auto_chain"
+                ) as auto_chain,
+                contextlib.redirect_stdout(stdout),
+            ):
+                code = action_hint.main(["run", "--cache-jsonl", str(cache_path), "--json"])
+
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(code, 0, payload)
+        auto_chain.assert_not_called()
+        self.assertFalse(cache_path.exists())
+        self.assertEqual(payload["decision"], "silent")
+        self.assertEqual(payload["diagnostics"]["cache_status"], "with_missing_cache_file")
 
     def test_unsupported_event_fails_open(self) -> None:
         report = action_hint.evaluate_action_hint(

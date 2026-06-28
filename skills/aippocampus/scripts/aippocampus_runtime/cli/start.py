@@ -9,12 +9,23 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime import core
+from aippocampus_runtime.cli.start_profiles import (
+    START_PROFILE_CHOICES,
+    annotate_trusted_personal_write_actions,
+    is_trusted_local_personal_profile,
+    trusted_personal_card_fields,
+)
 from aippocampus_runtime.contracts import (
     canonical_foreground_action_fields,
+    foreground_action_is_read_only,
     foreground_shell_action,
     shell_quote,
 )
-from aippocampus_runtime.first_recall_readiness import start_first_recall_readiness
+from aippocampus_runtime.first_recall_readiness import (
+    compact_start_first_recall_readiness,
+    start_first_recall_readiness,
+    start_first_recall_readiness_diagnostic,
+)
 from aippocampus_runtime.onboarding.facade import provider_status_report
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 from aippocampus_runtime.public_output import emit_public_json, emit_public_text
@@ -402,20 +413,6 @@ def _start_actions(cwd: Path, state: dict[str, Any], cue: str = "") -> tuple[str
                 else []
             ),
             *(_exact_latest_maintenance_actions() if source_stale else []),
-            _template_action(
-                action_id="deepen_selected_route",
-                label="Deepen selected route",
-                command_template=(
-                    "aippocampus agent deepen --request {request_index} "
-                    "--recall-selector {recall_selector} --json"
-                ),
-                requires=["request_index", "recall_selector"],
-                why=(
-                    "Use after a recall card exposes a request-index route and recall_selector; "
-                    "--last-recall is only a mutable-cache compatibility fallback."
-                ),
-            ),
-            *_carry_actions(),
         ]
         if cue_specificity.get("status") == "weak_cue_search_fallback_recommended":
             decision = (
@@ -499,8 +496,10 @@ def build_start_card(
     clean_source_dir: str | None = None,
     detail: str = "compact",
     cue: str | None = None,
+    profile: str = "default",
 ) -> dict[str, Any]:
     clean_cue = _cue_value(cue)
+    trusted_personal = is_trusted_local_personal_profile(profile)
     clean_source = _clean_source_state(cwd, clean_source_dir)
     freshness = _workspace_freshness_state(cwd, clean_source_dir)
     state: dict[str, Any] = {
@@ -509,70 +508,63 @@ def build_start_card(
         "provider_registration_candidates": _provider_registration_candidates(cwd),
     }
     decision, actions = _start_actions(cwd, state, clean_cue)
-    actions.append(
-        _template_action(
-            action_id="exact_search_fallback",
-            label="Exact phrase fallback",
-            command_template='aippocampus search "{exact_phrase}" --json',
-            requires=["exact_phrase"],
-            why=(
-                "Use only for exact known wording against the configured local source; "
-                "use public_safe_demo_search for the packaged public demo fixture."
-            ),
-            claim_boundary="exact_search_result_requires_source_scope",
+    if trusted_personal and not state["clean_source"].get("exists"):
+        annotate_trusted_personal_write_actions(actions, clean_cue=clean_cue)
+    if not state["clean_source"].get("exists"):
+        actions.append(
+            _template_action(
+                action_id="exact_search_fallback",
+                label="Exact phrase fallback",
+                command_template='aippocampus search "{exact_phrase}" --json',
+                requires=["exact_phrase"],
+                why=(
+                    "Use only for exact known wording against the configured local source; "
+                    "use public_safe_demo_search for the packaged public demo fixture."
+                ),
+                claim_boundary="exact_search_result_requires_source_scope",
+            )
         )
-    )
     primary = actions[0]
     source_state = state["clean_source"]
-    first_recall_readiness = start_first_recall_readiness(
-        decision=decision,
-        source_exists=bool(source_state.get("exists")),
-        source_stale=bool(source_state.get("stale")),
-        action_id=str(primary.get("id") or ""),
-    )
     cue_specific = _cue_specificity(clean_cue) if clean_cue else {
         "status": "not_checked_no_cue_supplied",
         "bounded_recall_preview_run": False,
         "usefulness_verified_for_cue": False,
     }
-    first_recall_readiness.update(
-        {
-            "ordinary_first_recall_usable_scope": (
-                "cue_action_callable_not_previewed"
-                if clean_cue
-                else "artifact_level_not_cue_specific"
-            ),
-            "source_artifacts_present": bool(source_state.get("exists")),
-            "exact_source_search_available": bool(source_state.get("exists")),
-            "compact_agent_recall_action_callable": bool(
-                clean_cue
-                and any(
-                    action.get("id") in {"recall_supplied_cue", "try_first_recall"}
-                    and str(action.get("command") or "").startswith("aippocampus ")
-                    for action in actions
-                )
-            ),
-            "cue_specific_route_usefulness": cue_specific,
-            "warm_or_ambient_degraded_is_optional": True,
-            "source_stale_scope": str(source_state.get("freshness_scope") or "manifest_only"),
-            "manifest_stale": bool(source_state.get("manifest_stale")),
-            "latest_current_thread_may_be_missing": bool(
-                first_recall_readiness.get("latest_current_thread_may_be_missing")
-                or source_state.get("latest_source_may_be_missing")
-            ),
-            "workspace_source_maintenance_required": bool(
-                source_state.get("workspace_source_maintenance_required")
-            ),
-            "blocks_exact_latest_claims": bool(
-                first_recall_readiness.get("blocks_exact_latest_claims")
-                or source_state.get("blocks_exact_latest_claims")
-            ),
-            "maintenance_recommended_before_exact_latest": bool(
-                first_recall_readiness.get("maintenance_recommended_before_exact_latest")
-                or source_state.get("workspace_source_maintenance_required")
-            ),
-        }
+    full_first_recall_readiness = start_first_recall_readiness_diagnostic(
+        start_first_recall_readiness(
+            decision=decision,
+            source_exists=bool(source_state.get("exists")),
+            source_stale=bool(source_state.get("stale")),
+            action_id=str(primary.get("id") or ""),
+        ),
+        source_state=source_state,
+        cue_specific=cue_specific,
+        cue_supplied=bool(clean_cue),
+        actions=actions,
     )
+    compact_first_recall_readiness = compact_start_first_recall_readiness(
+        full_first_recall_readiness
+    )
+    write_actions = [
+        action
+        for action in actions
+        if isinstance(action, dict) and not foreground_action_is_read_only(action)
+    ]
+    action_fields = canonical_foreground_action_fields(
+        primary,
+        safe_next_actions=actions,
+        safe_next_read_only_only=True,
+    )
+    detail_actions: dict[str, Any] = {
+        "deepen_after_recall": (
+            "aippocampus agent deepen --request {request_index} "
+            "--recall-selector {recall_selector} --json"
+        ),
+        "export_after_recall": "aippocampus export --json",
+        "sync_after_recall": "aippocampus sync --json",
+    }
+    hide_maintenance_write_actions = bool(source_state.get("exists")) and bool(write_actions)
     card: dict[str, Any] = {
         "kind": "aippocampus_start_card",
         "schema_version": SCHEMA_VERSION,
@@ -588,25 +580,36 @@ def build_start_card(
         "decision": decision,
         "cue_supplied": bool(clean_cue),
         **({"cue": clean_cue} if clean_cue else {}),
-        **canonical_foreground_action_fields(primary, safe_next_actions=actions),
-        "first_recall_readiness": first_recall_readiness,
-        "performance_expectation": first_recall_readiness.get("performance_expectation"),
+        **action_fields,
+        "first_recall_readiness": compact_first_recall_readiness,
+        "performance_expectation": full_first_recall_readiness.get("performance_expectation"),
         "blocks_exact_latest_claims": bool(
-            first_recall_readiness.get("blocks_exact_latest_claims")
+            full_first_recall_readiness.get("blocks_exact_latest_claims")
         ),
         "write_boundary": {
             "written": False,
             "no_write_happened": True,
             "explicit_write_required": True,
         },
+        **(trusted_personal_card_fields(clean_cue) if trusted_personal else {}),
+        "detail_actions_available": detail_actions,
+        **(
+            {"manage_command": "aippocampus maintenance plan --summary-json"}
+            if hide_maintenance_write_actions
+            else {}
+        ),
+        **({"write_actions": write_actions} if write_actions and not hide_maintenance_write_actions else {}),
         "claim_boundary": "start chooses a route; source-backed claims still require recall/deepen source reopen",
-        "state_summary": state,
     }
     if detail == "full":
         card["operator_detail"] = {
             "cwd_checked": "current_working_directory",
             "clean_source_path_redacted": True,
             "plugin_manifest_checked": True,
+            "state_summary": state,
+            "first_recall_readiness_diagnostic": full_first_recall_readiness,
+            "carry_actions": _carry_actions(),
+            "write_actions": write_actions,
         }
     return card
 
@@ -629,6 +632,14 @@ def render_text(card: dict[str, Any]) -> str:
     ]
     if readiness_status:
         lines.append(f"first recall: {readiness_status}")
+    setup_profile = card.get("setup_profile") if isinstance(card, dict) else {}
+    if isinstance(setup_profile, dict) and setup_profile.get("id"):
+        lines.append(f"profile: {setup_profile.get('id')}")
+    if card.get("status") == "ready_with_freshness_degraded":
+        lines.append(
+            "ordinary recall: usable now; exact/latest claims need maintenance review first."
+        )
+        lines.append("maintenance: aippocampus maintenance plan --summary-json")
     if action.get("command_template"):
         requires = action.get("requires") or []
         if requires:
@@ -636,6 +647,13 @@ def render_text(card: dict[str, Any]) -> str:
         lines.append(f"template: {action.get('command_template')}")
     else:
         lines.append(f"next: {action.get('command')}")
+    magic_path = card.get("first_magic_path") if isinstance(card, dict) else {}
+    if isinstance(magic_path, dict):
+        after_setup = magic_path.get("after_setup_command") or magic_path.get(
+            "after_setup_command_template"
+        )
+        if after_setup:
+            lines.append(f"after setup: {after_setup}")
     lines.append(f"why: {action.get('why')}")
     lines.append("boundary: start is a chooser; reopen/deepen source before claims.")
     return "\n".join(lines) + "\n"
@@ -652,6 +670,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--cwd", default=".")
     parser.add_argument("--clean-source-dir")
     parser.add_argument("--cue")
+    parser.add_argument(
+        "--profile",
+        choices=START_PROFILE_CHOICES,
+        default="default",
+    )
     parser.add_argument("cue_parts", nargs="*")
     args = parser.parse_args(argv)
     detail = "full" if args.operator_json else args.detail
@@ -661,6 +684,7 @@ def main(argv: list[str] | None = None) -> int:
         clean_source_dir=args.clean_source_dir,
         detail=detail,
         cue=cue,
+        profile=args.profile,
     )
     public_card = _public_start_card(card)
     if args.json_output or args.operator_json:

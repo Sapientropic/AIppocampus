@@ -10,6 +10,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.io_integrity import prepared_directory_replace
 from aippocampus_runtime.source.io_kernel import load_json_dict
 from aippocampus_runtime.update import status_actions
 
@@ -430,8 +431,10 @@ def build_plugin_cache_status(
         "local_marketplace": local_marketplace,
         "installed_cache": installed_cache,
         "auto_detected_installed_cache_count": len(cached_roots),
+        # owner: plugin cache status; removal: after unconfigured old Codex
+        # cache layouts are no longer detected; default/exposure: count only,
+        # no local cache root paths.
         "ignored_legacy_cache_count": len(ignored_cached_roots),
-        "ignored_legacy_cache_roots": [str(path) for path in ignored_cached_roots],
         "installed_cache_auto_resolution": auto_resolution,
         "recommended_actions": recommended_actions,
         "recommended_action_cards": recommended_action_cards,
@@ -551,15 +554,16 @@ def _replace_plugin_tree(source: Path, target: Path, *, preserve_portable_mcp: b
     if preserve_portable_mcp and existing_mcp.exists() and _portable_mcp_config(existing_mcp):
         preserved_mcp = existing_mcp.read_text(encoding="utf-8")
     target.parent.mkdir(parents=True, exist_ok=True)
-    tmp = target.parent / f".{target.name}.tmp-update"
-    if tmp.exists():
-        shutil.rmtree(tmp)
-    shutil.copytree(source, tmp, ignore=shutil.ignore_patterns(*IGNORED_DIR_NAMES, "*.egg-info", "*.pyc", "*.pyo"))
-    if preserved_mcp is not None:
-        (tmp / ".mcp.json").write_text(preserved_mcp, encoding="utf-8")
-    if target.exists():
-        shutil.rmtree(target)
-    tmp.replace(target)
+    with prepared_directory_replace(target) as tmp:
+        shutil.copytree(
+            source,
+            tmp,
+            ignore=shutil.ignore_patterns(*IGNORED_DIR_NAMES, "*.egg-info", "*.pyc", "*.pyo"),
+        )
+        if preserved_mcp is not None:
+            (tmp / ".mcp.json").write_text(preserved_mcp, encoding="utf-8")
+        if target.exists():
+            shutil.rmtree(target)
     return {
         # Cache-refresh receipts are surfaced to agents after `update apply`.
         # Keep the actual write path private: rollback/install commands own

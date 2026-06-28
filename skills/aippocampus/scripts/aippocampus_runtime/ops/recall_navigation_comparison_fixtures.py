@@ -23,6 +23,10 @@ from aippocampus_runtime.ops.recall_navigation_comparison import (
 from aippocampus_runtime.recall import ambient_cards
 from aippocampus_runtime.recall.prompt_context_render import context_for_hook
 from aippocampus_runtime.recall.prompt_recall_decision import assess_prompt
+from aippocampus_runtime.recall.prompt_recall_result_tiers import (
+    result_hot_path_funnel,
+    result_route_delivery_diagnostic,
+)
 from aippocampus_runtime.source.io_kernel import write_jsonl_dict_rows
 
 
@@ -80,7 +84,7 @@ def _write_fixture(clean_source_dir: Path) -> None:
             ordinal=2,
             turn_index=1,
             text=(
-                "Field continuity magic moment book 345 evidence is source-backed. "
+                "Old field continuity magic moment book 345 thing evidence is source-backed. "
                 "Reopen this clean-source turn before making the claim."
             ),
         ),
@@ -100,7 +104,10 @@ def _write_fixture(clean_source_dir: Path) -> None:
             line=13,
             ordinal=4,
             turn_index=3,
-            text="中文模糊线索：外置海马体首次召回需要候选路线，而不是要求用户记住原句。",
+            text=(
+                "中文模糊线索：还记得外置海马体第一次召回那个路线，"
+                "首次召回需要候选路线，而不是要求用户记住原句。"
+            ),
         ),
         _message(
             message_id="msg_ru_final",
@@ -391,6 +398,7 @@ def fixture_foreground_lift_measurement(root: Path) -> dict[str, Any]:
         ambient_cache_path=cache_path,
         warm_background=False,
         search_budget=0,
+        detail="trace",
     )
     second = assess_prompt(
         "继续这个 Books 3/4/5 边界",
@@ -405,8 +413,13 @@ def fixture_foreground_lift_measurement(root: Path) -> dict[str, Any]:
         search_budget=0,
     )
 
-    first_hot_path = dict_or_empty(first.get("hot_path_funnel"))
-    first_route = dict_or_empty(first.get("route_delivery_diagnostic"))
+    # The default prompt-hook foreground intentionally no longer carries
+    # hot-path or route-delivery diagnostics. This deterministic measurement
+    # asks for trace detail and reads it through the tier owner helper so future
+    # agents do not "fix" the fixture by leaking diagnostics back into compact
+    # output.
+    first_hot_path = result_hot_path_funnel(first)
+    first_route = result_route_delivery_diagnostic(first)
     first_ambient = dict_or_empty(first.get("ambient_recall"))
     first_cache = dict_or_empty(first_ambient.get("cache_status"))
     second_ambient = dict_or_empty(second.get("ambient_recall"))

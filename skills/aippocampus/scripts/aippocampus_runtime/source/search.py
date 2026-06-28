@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 from pathlib import Path
 from typing import Any
 
@@ -20,10 +21,16 @@ from aippocampus_runtime.source.current_source_window import (
     open_current_thread_source_window,
 )
 from aippocampus_runtime.source.io_kernel import jsonl_loss_warning
+from aippocampus_runtime.source.query_match_gate import (
+    match_query_profile,
+    query_match_gate,
+)
 from aippocampus_runtime.source.registry_search import (
     add_registry_search_arguments,
     run_registry_search_cli,
 )
+from aippocampus_runtime.source.route_note_search import search_route_notes
+from aippocampus_runtime.source.route_topics import route_topic_low_coverage_acceptance
 from aippocampus_runtime.source.search_core import (
     iter_clean_messages,  # noqa: F401 - public aggregate import used by runtime callers.
     load_clean_messages_with_loss,
@@ -58,6 +65,7 @@ PROCESS_NOISE_PREFIXES = (
     ("<subagent_notification>", "process_notification"),
     ("<tool", "tool_process"),
 )
+CJK_RE = re.compile(r"[\u4e00-\u9fff]")
 def non_negative_int(value: str) -> int:
     parsed = int(value)
     if parsed < 0:
@@ -101,6 +109,18 @@ def process_noise_reason(text: str) -> str:
     return ""
 
 
+def current_search_profile_accepted(profile: dict[str, Any]) -> bool:
+    if profile.get("accepted"):
+        return True
+    matched = [str(item) for item in profile.get("matched_distinctive_anchors") or []]
+    cjk_matched = [item for item in matched if CJK_RE.search(item)]
+    return (
+        bool(cjk_matched)
+        and int(profile.get("matched_distinctive_anchor_count") or 0) >= 3
+        and float(profile.get("distinctive_anchor_coverage") or 0.0) >= 0.5
+    )
+
+
 def search_clean_source(
     cwd: str | Path,
     patterns: list[str],
@@ -115,6 +135,9 @@ def search_clean_source(
     messages_path = source_dir / "messages.jsonl"
     semantic_sidecar = load_semantic_scope_labels(source_dir)
     terms = search_query_terms(patterns)
+    query_text = " ".join(str(pattern) for pattern in patterns)
+    query_gate_text = " ".join(str(term) for term in terms) or query_text
+    gate = query_match_gate(query_gate_text)
     label_filter = [str(label).strip() for label in scope_labels or [] if str(label).strip()]
     known_scope_labels = set(SCOPE_LABEL_ORDER)
     warnings: list[dict[str, Any]] = [
@@ -138,6 +161,7 @@ def search_clean_source(
         warnings.append(warning)
 
     matches: list[dict[str, Any]] = []
+    suppressed_low_coverage_match_count = 0
     for message in messages:
         message_text = str(message.get("text") or "")
         if "scope_labels" not in message:
@@ -152,6 +176,32 @@ def search_clean_source(
         score = score_message(message, terms)
         if score <= 0:
             continue
+        query_profile = match_query_profile(
+            query_text=query_gate_text,
+            gate=gate,
+            haystack=message_text,
+        )
+        if not current_search_profile_accepted(query_profile):
+            topic_acceptance = route_topic_low_coverage_acceptance(
+                {
+                    "role": message.get("role"),
+                    "phase": message.get("phase") or "",
+                    "snippet": message_text,
+                    "scope_labels": message_scope_labels,
+                    "semantic_scope_labels": semantic_scope_labels,
+                },
+                intent=query_gate_text,
+                query_profile=query_profile,
+            )
+            if topic_acceptance:
+                query_profile = {**query_profile, **topic_acceptance}
+            else:
+                suppressed_low_coverage_match_count += 1
+                continue
+        if not query_profile.get("accepted"):
+            query_profile = dict(query_profile)
+            query_profile["accepted"] = True
+            query_profile["acceptance_reason"] = "cjk_sidecar_anchor_cluster"
         noise_reason = process_noise_reason(message_text)
         artifact_role = artifact_role_profile(
             text=message_text,
@@ -185,6 +235,7 @@ def search_clean_source(
             "scope_labels": message_scope_labels,
             "semantic_scope_labels": semantic_scope_labels,
             "score": round(score, 3),
+            "query_match_profile": query_profile,
             "snippet": compact_text(message_text, snippet_chars) if snippet_chars else "",
             "snippet_omitted": snippet_chars == 0,
         }
@@ -203,6 +254,35 @@ def search_clean_source(
             as_int(item.get("source_line")),
         )
     )
+    route_notes_path = source_dir / "route-notes.jsonl"
+    if route_notes_path.exists():
+        route_note_matches, route_note_loss = search_route_notes(
+            route_notes_path,
+            terms,
+            limit=limit,
+            snippet_chars=snippet_chars,
+        )
+        if label_filter:
+            route_note_matches = [
+                item
+                for item in route_note_matches
+                if set(label_filter).intersection(item.get("scope_labels") or [])
+            ]
+        warning = jsonl_loss_warning(
+            route_note_loss,
+            stage="route_notes",
+            path_label=route_notes_path.name,
+        )
+        if warning:
+            warnings.append(warning)
+        matches.extend(route_note_matches)
+        matches.sort(
+            key=lambda item: (
+                1 if item.get("search_noise") or item.get("artifact_demoted") else 0,
+                -as_float(item.get("rank_score") or item.get("score")),
+                as_int(item.get("source_line")),
+            )
+        )
     if label_filter and missing_scope_label_count:
         warnings.append(
             {
@@ -215,13 +295,14 @@ def search_clean_source(
         "source": str(messages_path),
         "search_scope": "current_thread_clean_source",
         "scope_description": (
-            "current resolved thread clean-source directory only; this is not a "
-            "registry-wide memory search"
+            "current resolved thread clean-source directory plus joined route-note "
+            "navigation; this is not a registry-wide memory search"
         ),
         "query_terms": terms,
         "scope_labels": label_filter,
         "warnings": warnings,
         "jsonl_loss": jsonl_loss,
+        "suppressed_low_coverage_match_count": suppressed_low_coverage_match_count,
         "matches": matches[:limit],
     }
 
@@ -294,6 +375,12 @@ the reopened source boundary.""",
         help="Filter to clean-source messages carrying this scope label. Repeat for OR semantics.",
     )
     parser.add_argument("--json", action="store_true", dest="json_output")
+    parser.add_argument(
+        "--detail",
+        choices=("compact", "full"),
+        default="compact",
+        help="JSON detail level. Default compact is a foreground action card; full includes diagnostics.",
+    )
     parser.add_argument(
         "--include-paths",
         action="store_true",
@@ -402,6 +489,7 @@ the reopened source boundary.""",
         include_paths=bool(args.include_paths),
         metadata_only=bool(args.metadata_only),
         query_text=" ".join(str(pattern) for pattern in args.patterns),
+        detail=args.detail if args.json_output else "full",
     )
     if args.json_output:
         print(json.dumps(public_result, ensure_ascii=False, indent=2))

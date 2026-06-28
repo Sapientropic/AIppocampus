@@ -706,7 +706,7 @@ def public_recall_projection(payload: Mapping[str, Any], *, query: str | None = 
     source = dict(payload)
     source["query"] = query if query is not None else source.get("query")
     source.update(handle_boundary_fields())
-    projected = compact_agent_recall_payload(source)
+    projected: dict[str, Any] = dict(compact_agent_recall_payload(source))
     projected["routes"] = _public_compact_route_receipts(projected.get("routes"))
     projected.pop("policy_boundary", None)
     cache_available = bool(source.get("last_recall_cache_available"))

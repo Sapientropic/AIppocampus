@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import unittest
 
+from aippocampus_runtime.dream import lifecycle as dream_lifecycle
 from aippocampus_runtime.dream import precision_policy as policy
 
 
@@ -61,6 +62,9 @@ def working_memory_row(**overrides: object) -> dict[str, object]:
     return base
 
 class DreamPrecisionPolicyTests(unittest.TestCase):
+    def test_precision_policy_reads_canonical_adjudicated_review_states(self) -> None:
+        self.assertIs(policy.ADJUDICATED_REVIEW_STATES, dream_lifecycle.ADJUDICATED_REVIEW_STATES)
+
     def test_retention_policy_separates_hard_gates_from_soft_pressure(self) -> None:
         finding = dream_finding(source_refs=[], bridge_claims=[], confidence=0.99)
 
@@ -131,7 +135,7 @@ class DreamPrecisionPolicyTests(unittest.TestCase):
         self.assertEqual(payload["authority"]["state"], "cross_thread_source_required")
         self.assertEqual(payload["decision"], "retain_for_review")
 
-    def test_retention_policy_still_parks_profile_or_secret_claims(self) -> None:
+    def test_retention_policy_routes_profile_like_claims_without_hard_blocking(self) -> None:
         finding = dream_finding(
             title="Personality diagnosis",
             summary="The user's personality secretly proves the preferred route.",
@@ -140,8 +144,23 @@ class DreamPrecisionPolicyTests(unittest.TestCase):
 
         payload = policy.retention_policy_for_probe(finding, now="2026-05-30T00:00:00Z")
 
+        self.assertTrue(payload["hard_gate"]["passed"])
+        self.assertNotIn("sensitive_profile_claim_parked", payload["hard_gate"]["failures"])
+        self.assertEqual(payload["privacy_posture"]["privacy_action"], "private_route")
+        self.assertNotEqual(payload["decision"], "park_for_review")
+
+    def test_retention_policy_still_parks_secret_like_claims(self) -> None:
+        finding = dream_finding(
+            title="Credential leakage",
+            summary="The candidate includes a bearer token and private key.",
+            confidence=0.7,
+        )
+
+        payload = policy.retention_policy_for_probe(finding, now="2026-05-30T00:00:00Z")
+
         self.assertFalse(payload["hard_gate"]["passed"])
         self.assertIn("sensitive_profile_claim_parked", payload["hard_gate"]["failures"])
+        self.assertEqual(payload["privacy_posture"]["privacy_action"], "hard_block")
         self.assertEqual(payload["decision"], "park_for_review")
 
     def test_structural_divergence_outranks_model_self_rating(self) -> None:

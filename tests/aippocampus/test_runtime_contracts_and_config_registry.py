@@ -1,3 +1,5 @@
+# aippocampus-instruction-surface: runtime contract test fixtures; foreground action strings assert local contract behavior, not hidden runtime instructions.
+
 from __future__ import annotations
 
 import json
@@ -31,6 +33,10 @@ from aippocampus_runtime.contracts import (
     foreground_chooser_card,
     public_envelope,
     shell_quote,
+)
+from aippocampus_runtime.foreground_action_lint import (
+    compact_foreground_action_budget_report,
+    compact_foreground_action_violations,
 )
 from aippocampus_runtime.mcp.public_projection import compact_health_payload
 from aippocampus_runtime.registry import store as registry_store
@@ -186,6 +192,193 @@ class RuntimeContractsAndConfigRegistryTests(unittest.TestCase):
             ("foreground_action.claim_boundary", "required_foreground_action_field_missing"),
             reasons,
         )
+
+    def test_compact_foreground_action_lint_catches_semantic_menu_drift(self) -> None:
+        payload = {
+            "foreground_action_contract": "foreground-action-v2",
+            "foreground_action": {
+                "id": "review_storage_gc_summary",
+                "label": "Review storage",
+                "command": "aippocampus storage gc --dry-run --summary-json",
+                "why": "Read the no-write storage summary.",
+                "mutation_risk": "read_only",
+                "claim_boundary": "summary_not_source_evidence",
+            },
+            "safe_next_actions": [
+                {
+                    "id": "review_storage_gc_summary",
+                    "label": "Review storage again",
+                    "command": "aippocampus storage gc --dry-run --summary-json",
+                    "why": "Same action with different incidental fields.",
+                    "mutation_risk": "read_only",
+                    "claim_boundary": "summary_not_source_evidence",
+                },
+                {
+                    "id": "apply_after_user_consent",
+                    "label": "Apply maintenance",
+                    "command": "aippocampus maintenance apply --summary-json",
+                    "why": "Write generated artifacts.",
+                    "mutation_risk": "writes_generated_source_artifacts",
+                    "claim_boundary": "explicit_write_not_source_evidence",
+                },
+                {
+                    "id": "manual_cleanup",
+                    "label": "Manual cleanup",
+                    "why": "Operator-only cleanup placeholder.",
+                    "mutation_risk": "manual_cleanup",
+                    "claim_boundary": "operator_only",
+                },
+            ],
+        }
+
+        reasons = {
+            violation["reason"]
+            for violation in compact_foreground_action_violations(payload, max_safe_actions=1)
+        }
+
+        self.assertIn("primary_action_semantically_repeated_in_safe_next_actions", reasons)
+        self.assertIn("compact_safe_next_actions_exceeds_budget", reasons)
+        self.assertIn("write_capable_action_not_allowed_in_default_compact", reasons)
+        self.assertIn("manual_safe_action_needs_command_or_continue_marker", reasons)
+
+    def test_compact_foreground_action_budget_report_is_detail_metadata(self) -> None:
+        payload = {
+            "foreground_action_contract": "foreground-action-v2",
+            "foreground_action": {
+                "id": "review_recall_route",
+                "command": "aippocampus agent deepen --request 1 --recall-selector sel --json",
+                "mutation_risk": "read_only",
+                "claim_boundary": "no_claim_before_reopen",
+            },
+            "safe_next_actions": [
+                {
+                    "id": "refine_cue",
+                    "command_template": 'aippocampus agent recall "{tighter_cue}" --json',
+                    "requires": ["tighter_cue"],
+                    "template_only": True,
+                    "mutation_risk": "read_only",
+                    "claim_boundary": "no_claim_before_reopen",
+                }
+            ],
+        }
+
+        report = compact_foreground_action_budget_report(payload)
+
+        self.assertEqual(report["budget_reason"], "compact_safe_next_actions_budget")
+        self.assertEqual(report["max_safe_actions"], 1)
+        self.assertEqual(report["safe_action_count"], 1)
+        self.assertEqual(report["visible_safe_action_count"], 1)
+        self.assertEqual(report["hidden_safe_action_count"], 0)
+        self.assertFalse(report["budget_limited"])
+        self.assertFalse(report["more_actions_available_in_detail"])
+        self.assertNotIn("action_budget", payload)
+
+    def test_compact_foreground_action_budget_report_exposes_truncation(self) -> None:
+        payload = {
+            "foreground_action_contract": "foreground-action-v2",
+            "foreground_action": {
+                "id": "review_recall_route",
+                "command": "aippocampus agent deepen --request 1 --recall-selector sel --json",
+                "mutation_risk": "read_only",
+                "claim_boundary": "no_claim_before_reopen",
+            },
+            "safe_next_actions": [
+                {
+                    "id": "refine_cue",
+                    "command_template": 'aippocampus agent recall "{tighter_cue}" --json',
+                    "requires": ["tighter_cue"],
+                    "template_only": True,
+                    "mutation_risk": "read_only",
+                    "claim_boundary": "no_claim_before_reopen",
+                },
+                {
+                    "id": "search_exact_phrase",
+                    "command_template": 'aippocampus search "{exact_phrase}" --json',
+                    "requires": ["exact_phrase"],
+                    "template_only": True,
+                    "mutation_risk": "read_only",
+                    "claim_boundary": "search_result_requires_source_boundary",
+                },
+            ],
+        }
+
+        report = compact_foreground_action_budget_report(payload, max_safe_actions=1)
+
+        self.assertEqual(report["max_safe_actions"], 1)
+        self.assertEqual(report["safe_action_count"], 2)
+        self.assertEqual(report["visible_safe_action_count"], 1)
+        self.assertEqual(report["hidden_safe_action_count"], 1)
+        self.assertTrue(report["budget_limited"])
+        self.assertTrue(report["more_actions_available_in_detail"])
+
+    def test_compact_foreground_action_lint_rejects_write_primary_action(self) -> None:
+        payload = {
+            "foreground_action_contract": "foreground-action-v2",
+            "foreground_action": {
+                "id": "apply_after_user_consent",
+                "label": "Apply maintenance",
+                "command": "aippocampus maintenance apply --summary-json",
+                "why": "Writes generated artifacts.",
+                "mutation_risk": "writes_generated_source_artifacts",
+                "claim_boundary": "explicit_write_not_source_evidence",
+            },
+            "safe_next_actions": [],
+        }
+
+        self.assertIn(
+            {
+                "field": "foreground_action.mutation_risk",
+                "reason": "write_capable_action_not_allowed_in_default_compact",
+            },
+            compact_foreground_action_violations(payload),
+        )
+
+    def test_compact_foreground_action_lint_catches_status_self_loop_and_duplicate_commands(self) -> None:
+        payload = {
+            "foreground_action_contract": "foreground-action-v2",
+            "foreground_action": {
+                "id": "continue_with_ordinary_recall",
+                "label": "Continue with ordinary recall",
+                "command_template": 'aippocampus agent recall "{cue}" --json',
+                "template_only": True,
+                "requires": ["cue"],
+                "why": "Warm ambient is optional.",
+                "mutation_risk": "read_only",
+                "claim_boundary": "ordinary_recall_usable",
+            },
+            "safe_next_actions": [
+                {
+                    "id": "snooze_optional_warm_ambient",
+                    "label": "Snooze",
+                    "command_template": "aippocampus warm status --json",
+                    "template_only": True,
+                    "why": "This loops back to the same status card.",
+                    "mutation_risk": "configuration_change",
+                    "claim_boundary": "warm_status_not_source_evidence",
+                },
+                {
+                    "id": "recheck_warm_status",
+                    "label": "Recheck",
+                    "command": "aippocampus warm status --json",
+                    "why": "Duplicate command.",
+                    "mutation_risk": "read_only",
+                    "claim_boundary": "warm_status_not_source_evidence",
+                },
+            ],
+        }
+
+        reasons = {
+            violation["reason"]
+            for violation in compact_foreground_action_violations(
+                payload,
+                max_safe_actions=2,
+                current_status_command="aippocampus warm status --json",
+            )
+        }
+
+        self.assertIn("duplicate_safe_next_action_semantic_key", reasons)
+        self.assertIn("status_self_loop_not_allowed_in_default_compact", reasons)
+        self.assertIn("write_capable_action_not_allowed_in_default_compact", reasons)
 
     def test_foreground_action_contract_lint_rejects_unmarked_command_templates(self) -> None:
         action = {
@@ -412,7 +605,8 @@ class RuntimeContractsAndConfigRegistryTests(unittest.TestCase):
         self.assertNotIn(summary["foreground_action"], summary.get("safe_next_actions", []))
         self.assertEqual(summary["foreground_action"]["id"], "review_unknown_config_env")
         self.assertNotIn("action_id", summary["foreground_action"])
-        self.assertEqual(summary["safe_next_actions"][0]["command"], "aippocampus doctor config --detail full --json")
+        self.assertEqual(summary["foreground_action"]["command"], "aippocampus doctor config --detail full --json")
+        self.assertEqual(summary["safe_next_actions"], [])
         self.assertEqual(summary["full_audit_command"], "aippocampus doctor config --detail full --json")
         self.assertTrue(summary["audit_json_available"])
         self.assertTrue(summary["recommended_actions"])

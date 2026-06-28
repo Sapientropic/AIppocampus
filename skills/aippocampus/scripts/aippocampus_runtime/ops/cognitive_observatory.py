@@ -24,6 +24,7 @@ from aippocampus_runtime.ops.observatory_cognitive_load import (
 from aippocampus_runtime.ops.observatory_control_authority import (
     observatory_control_authority_audit,
 )
+from aippocampus_runtime.ops.observatory_inputs import mapping_payload
 from aippocampus_runtime.ops.route_readiness import (
     ROUTE_READINESS_KIND,
     fixture_route_readiness_report,
@@ -258,11 +259,6 @@ def _rows_from_observatory_input(value: Any, key: str) -> list[dict[str, Any]]:
     if isinstance(payload, list):
         return [dict(item) for item in payload if isinstance(item, Mapping)]
     return []
-
-
-def _as_mapping(value: Any, key: str | None = None) -> dict[str, Any] | None:
-    payload = value.get(key) if key and isinstance(value, Mapping) else value
-    return dict(payload) if isinstance(payload, Mapping) else None
 
 
 def _recall_diagnostic_from_fixture() -> dict[str, Any]:
@@ -892,7 +888,9 @@ def main(argv: list[str] | None = None) -> int:
             "[--fixture] [operator/audit inputs]"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        description="""Foreground summary:
+        description="""Observatory - route-readiness dashboard, read-only.
+
+Foreground summary:
   aippocampus observatory --summary-json
   One-screen read-only card: useful now / quiet for a reason / needs ripening / wasted motion.
 
@@ -931,20 +929,20 @@ Operator/audit inputs:
                 _load_observatory_input(args.route_candidates),
                 "candidates",
             ),
-            route_readiness=_as_mapping(_load_observatory_input(args.route_readiness)),
-            active_lock_roi=_as_mapping(_load_observatory_input(args.active_lock_roi)),
+            route_readiness=mapping_payload(_load_observatory_input(args.route_readiness)),
+            active_lock_roi=mapping_payload(_load_observatory_input(args.active_lock_roi)),
             activation_surfaces=_rows_from_observatory_input(
                 _load_observatory_input(args.activation_surfaces),
                 "surfaces",
             ),
-            recall_diagnostic=_as_mapping(_load_observatory_input(args.recall_diagnostic)),
-            sleep_cycle_payload=_as_mapping(_load_observatory_input(args.sleep_cycle)),
+            recall_diagnostic=mapping_payload(_load_observatory_input(args.recall_diagnostic)),
+            sleep_cycle_payload=mapping_payload(_load_observatory_input(args.sleep_cycle)),
             query_pattern_routes=(
                 _rows_from_observatory_input(_load_json_or_jsonl(args.query_pattern_routes), "routes")
                 if args.query_pattern_routes
                 else None
             ),
-            cognitive_load_calibration=_as_mapping(
+            cognitive_load_calibration=mapping_payload(
                 _load_observatory_input(args.cognitive_load_calibration)
             ),
             min_roi_score=args.min_roi_score,

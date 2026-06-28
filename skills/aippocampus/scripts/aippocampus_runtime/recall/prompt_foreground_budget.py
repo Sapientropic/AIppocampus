@@ -8,6 +8,10 @@ from collections.abc import Mapping
 from typing import Any
 
 from aippocampus_runtime.core import compact_text
+from aippocampus_runtime.recall.prompt_recall_result_tiers import (
+    result_hot_path_funnel,
+    result_route_delivery_diagnostic,
+)
 
 WEAK_SCENT_CONTEXT_MAX_CHARS = 650
 WEAK_SCENT_CONTEXT_MAX_LINES = 9
@@ -328,8 +332,8 @@ def foreground_context_debug_summary(
         "debug_only_field_leak_count": debug_only_field_leak_count,
         "observatory_debug_payload_available": bool(
             result.get("ambient_recall")
-            or result.get("hot_path_funnel")
-            or result.get("route_delivery_diagnostic")
+            or result_hot_path_funnel(result)
+            or result_route_delivery_diagnostic(result)
         ),
     }
 

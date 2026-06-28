@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import base64
 import json
-import re
 import time
 from collections.abc import Mapping
 from pathlib import Path
@@ -20,6 +19,7 @@ from typing import Any
 
 from aippocampus_runtime.core import compact_text, sanitize_external_model_text, stable_text_id
 from aippocampus_runtime.mcp.continuity_routes import continuity_routes_for_context
+from aippocampus_runtime.mcp.current_turn_anchors import current_turn_anchor_routes
 from aippocampus_runtime.mcp.handle_inputs import nested_navigation_handle_value
 from aippocampus_runtime.mcp.registry_source_routes import (
     dedupe_routes_by_source_ref,
@@ -55,8 +55,9 @@ from aippocampus_runtime.recall.continuity_domains import (
     load_continuity_domains_snapshot,
 )
 from aippocampus_runtime.recall.query_policy import split_query_terms
-from aippocampus_runtime.source.relationship_origin import RELATIONSHIP_ORIGIN_ROUTE_TOPIC
+from aippocampus_runtime.source.route_topics import route_topic_for_clean_hit
 from aippocampus_runtime.source.search import iter_clean_messages, search_clean_source
+from aippocampus_runtime.source.search_terms import searchable_query_text
 
 HANDLE_PREFIX = "aippo-nav:"
 HANDLE_SCHEMA_VERSION = 1
@@ -65,77 +66,6 @@ DEFAULT_MAX_ROUTES = 5
 MAX_HANDLE_REFS = 3
 MAX_INTENT_CHARS = 280
 DEFAULT_TTL_SECONDS = 30 * 60
-_ROUTE_TOPIC_RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
-    (
-        "benchmark_claim_posture",
-        (
-            "benchmark",
-            "quality gate",
-            "quality_gate",
-            "claim",
-            "cannot_claim",
-            "current claims",
-            "evidence map",
-            "readiness",
-            "over-conservative",
-            "overconservative",
-        ),
-    ),
-    (
-        "issue_backlog_interpretation",
-        ("issue", "backlog", "project triage", "milestone", "roadmap", "planning"),
-    ),
-    (
-        "developer_assessment",
-        ("developer assessment", "evaluation", "review", "critique", "second-user"),
-    ),
-    (
-        "competitor_comparison",
-        ("competitor", "comparison", "baseline", "external", "amemgym", "longmemeval", "mem0", "zep"),
-    ),
-    (
-        "route_usefulness_feedback",
-        (
-            "usefulness",
-            "blind deepen",
-            "manual search",
-            "wrong route",
-            "route label",
-            "hint collision",
-            "wasted motion",
-        ),
-    ),
-    (
-        "source_reopen_boundary",
-        ("source reopen", "source-backed", "currentness", "conflict", "privacy", "mask"),
-    ),
-    (
-        "agent_native_recall_facade",
-        ("agent recall", "memorypacket", "memory packet", "deepen", "mcp", "facade"),
-    ),
-    (
-        "workflow_contract",
-        ("aippo", "working contract", "clause", "skill", "ficus"),
-    ),
-    (
-        "coding_route_recovery",
-        ("rejected route", "test failed", "failed route", "patch", "pr", "pull request"),
-    ),
-    (
-        RELATIONSHIP_ORIGIN_ROUTE_TOPIC,
-        (
-            "小海马体",
-            "外置海马体",
-            "未干的地图",
-            "机械飞升",
-            "机仆",
-            "机械种族",
-            "未来机械生命",
-            "生命还能变成什么",
-        ),
-    ),
-)
-_TOPIC_TOKEN_RE = re.compile(r"[a-z0-9_]+")
 
 
 class RecallNavigationError(ValueError):
@@ -240,7 +170,7 @@ def _query_terms(intent: str) -> list[str]:
         "之前",
         "上次",
     }
-    terms = split_query_terms([_safe_text(intent, MAX_INTENT_CHARS)])
+    terms = split_query_terms([compact_text(searchable_query_text(intent), MAX_INTENT_CHARS)])
     out: list[str] = []
     for term in terms:
         clean = _safe_text(term, 80)
@@ -289,68 +219,6 @@ def _route_label_for_clean_hit(hit: dict[str, Any]) -> str:
     if bucket in {"final_answer", "assistant", "user", "source_window"}:
         return f"{bucket} source route"
     return f"{bucket} route"
-
-
-def _topic_cue_match_count(text: str, cues: tuple[str, ...]) -> int:
-    tokens = _TOPIC_TOKEN_RE.findall(text.casefold())
-    token_set = set(tokens)
-    normalized_text = " ".join(tokens)
-    count = 0
-    for cue in cues:
-        cue_tokens = _TOPIC_TOKEN_RE.findall(cue.casefold())
-        if not cue_tokens:
-            continue
-        if len(cue_tokens) == 1:
-            if cue_tokens[0] in token_set:
-                count += 1
-            continue
-        if " ".join(cue_tokens) in normalized_text:
-            count += 1
-    return count
-
-
-def _route_topic_for_clean_hit(hit: dict[str, Any], *, intent: str) -> dict[str, Any]:
-    local_text = " ".join(
-        str(value or "")
-        for value in (
-            hit.get("phase"),
-            hit.get("role"),
-            hit.get("snippet"),
-            " ".join(str(label) for label in hit.get("scope_labels") or []),
-            " ".join(str(label) for label in hit.get("semantic_scope_labels") or []),
-        )
-    ).casefold()
-    query_text = str(intent or "").casefold()
-    matched: list[tuple[int, str]] = []
-    for topic, cues in _ROUTE_TOPIC_RULES:
-        # Topic labels are foreground route-selection hints, so broad substring
-        # matches are worse than silence: "pr" inside "PRIVATE" or "review"
-        # inside "preview" makes clean routes collide and sends agents to the
-        # wrong source. Keep short cues token-bound and let source scope labels
-        # carry the route when no safe topic cue is present.
-        score = _topic_cue_match_count(local_text, cues)
-        if score:
-            matched.append((score, topic))
-    if not matched:
-        for topic, cues in _ROUTE_TOPIC_RULES:
-            score = _topic_cue_match_count(query_text, cues)
-            if score:
-                matched.append((score, topic))
-    if matched:
-        matched.sort(key=lambda item: (-item[0], item[1]))
-        matched_topics = [topic for _, topic in matched]
-        return {
-            "route_topic": matched_topics[0],
-            "label_granularity": "topic_label",
-            "route_label_specificity_score": 1.0 if len(matched_topics) == 1 else 0.85,
-            "topic_reason_codes": [f"topic_{topic}" for topic in matched_topics[:3]],
-        }
-    return {
-        "route_topic": "",
-        "label_granularity": "scope_bucket_only",
-        "route_label_specificity_score": 0.35,
-        "topic_reason_codes": ["no_safe_topic_label"],
-    }
 
 
 def _route_label_for_topic(hit: dict[str, Any], topic: Mapping[str, Any]) -> str:
@@ -417,7 +285,7 @@ def _route_from_clean_hit(
     ]
     scope_bucket = _scope_bucket(hit)
     matched_cue_family = _matched_cue_family(hit)
-    route_topic = _route_topic_for_clean_hit(hit, intent=intent)
+    route_topic = route_topic_for_clean_hit(hit, intent=intent)
     return {
         "handle": handle,
         "route_id": route_id,
@@ -472,11 +340,11 @@ def recall_context_packet(
     continuity_domains_snapshot_path: Path | None = None,
     max_routes: int = DEFAULT_MAX_ROUTES,
 ) -> dict[str, Any]:
-    clean_intent = _safe_text(intent, MAX_INTENT_CHARS)
+    clean_intent = compact_text(searchable_query_text(str(intent or "")), MAX_INTENT_CHARS)
     if not clean_intent:
         raise RecallNavigationError(
             "missing_intent",
-            "recall_context requires a non-empty intent or query.",
+            "recall_context requires a non-empty source cue after private path and secret redaction.",
         )
     limit = max(1, min(25, int(max_routes or DEFAULT_MAX_ROUTES)))
     search_result = search_clean_source(
@@ -512,6 +380,13 @@ def recall_context_packet(
         for hit in search_result.get("matches") or []
         if isinstance(hit, dict)
     ]
+    if not current_source_routes:
+        current_source_routes = current_turn_anchor_routes(
+            intent=clean_intent,
+            source_dir=clean_source_dir,
+            max_routes=limit,
+            route_from_clean_hit=_route_from_clean_hit,
+        )
     registry_semantic_path = registry_dir / "semantic_triggers.jsonl" if registry_dir else None
     semantic_routes, semantic_trigger_diagnostics = semantic_trigger_source_routes(
         intent=clean_intent,

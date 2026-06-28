@@ -87,6 +87,19 @@ class SyncBundleTests(unittest.TestCase):
             + "\n",
             encoding="utf-8",
         )
+        (self.clean_source / "route-notes.jsonl").write_text(
+            json.dumps(
+                {
+                    "route_id": "rn_1",
+                    "origin": "route_note",
+                    "navigation_only": True,
+                    "source_refs": [{"message_id": "msg_1", "line": 1}],
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
         (self.clean_source / "source-texture.jsonl").write_text(
             json.dumps(
                 {
@@ -169,6 +182,7 @@ class SyncBundleTests(unittest.TestCase):
         self.assertNotIn("registry/threads/session-test/clean-source/messages.jsonl", relative_paths)
         self.assertNotIn("registry/threads/session-test/clean-source/turns.jsonl", relative_paths)
         self.assertNotIn("registry/threads/session-test/clean-source/events.jsonl", relative_paths)
+        self.assertNotIn("registry/threads/session-test/clean-source/route-notes.jsonl", relative_paths)
         self.assertNotIn(
             "registry/threads/session-test/clean-source/source-texture.jsonl", relative_paths
         )
@@ -176,11 +190,12 @@ class SyncBundleTests(unittest.TestCase):
         self.assertIn("clean-source-chunks/manifest.json", relative_paths)
         self.assertEqual(delta["kind"], "content_addressed_clean_source_chunks")
         self.assertEqual(delta["generated_cache_export"], "explicit_only")
-        self.assertEqual(delta["file_count"], 5)
-        self.assertEqual(delta["chunk_count"], 5)
+        self.assertEqual(delta["file_count"], 6)
+        self.assertEqual(delta["chunk_count"], 6)
         logical_paths = {item["path"] for item in delta["files"]}
         self.assertIn("registry/threads/session-test/clean-source/messages.jsonl", logical_paths)
         self.assertIn("registry/threads/session-test/clean-source/events.jsonl", logical_paths)
+        self.assertIn("registry/threads/session-test/clean-source/route-notes.jsonl", logical_paths)
         self.assertIn(
             "registry/threads/session-test/clean-source/source-texture.jsonl", logical_paths
         )
@@ -201,6 +216,10 @@ class SyncBundleTests(unittest.TestCase):
         self.assertEqual(
             portable_paths["clean_source_events_jsonl"],
             "registry/threads/session-test/clean-source/events.jsonl",
+        )
+        self.assertEqual(
+            portable_paths["clean_source_route_notes_jsonl"],
+            "registry/threads/session-test/clean-source/route-notes.jsonl",
         )
         self.assertEqual(
             portable_paths["clean_source_texture_jsonl"],
@@ -549,6 +568,16 @@ class SyncBundleTests(unittest.TestCase):
                 / "session-test"
                 / "clean-source"
                 / "turns.jsonl"
+            ).resolve(),
+        )
+        self.assertEqual(
+            Path(paths["clean_source_route_notes_jsonl"]).resolve(),
+            (
+                target_registry
+                / "threads"
+                / "session-test"
+                / "clean-source"
+                / "route-notes.jsonl"
             ).resolve(),
         )
         self.assertEqual(

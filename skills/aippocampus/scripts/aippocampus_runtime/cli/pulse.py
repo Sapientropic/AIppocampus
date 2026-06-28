@@ -9,6 +9,10 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from aippocampus_runtime import health as health_runtime
+from aippocampus_runtime.mcp.public_projection import compact_health_payload
+
+PULSE_QUICK_HEALTH_TIMEOUT_MS = 750
+PULSE_SLOW_SECTION_THRESHOLD_MS = 250
 
 
 def _one_line(value: Any, *, fallback: str) -> str:
@@ -30,9 +34,13 @@ def _readiness(payload: Mapping[str, Any]) -> Mapping[str, Any]:
 
 def _recommended_actions(payload: Mapping[str, Any]) -> list[Mapping[str, Any]]:
     actions = payload.get("recommended_actions")
-    if not isinstance(actions, list):
-        return []
-    return [item for item in actions if isinstance(item, Mapping)]
+    if isinstance(actions, list):
+        return [item for item in actions if isinstance(item, Mapping)]
+    safe_next_actions = payload.get("safe_next_actions")
+    if isinstance(safe_next_actions, list):
+        return [item for item in safe_next_actions if isinstance(item, Mapping)]
+    foreground = payload.get("foreground_action")
+    return [foreground] if isinstance(foreground, Mapping) else []
 
 
 def _ordinary_first_recall_usable(payload: Mapping[str, Any], readiness: Mapping[str, Any]) -> bool:
@@ -115,14 +123,29 @@ def pulse_payload(health_payload: Mapping[str, Any]) -> dict[str, str]:
 
 
 def build_pulse_payload(cwd: str | Path) -> dict[str, str]:
+    """Build the compact foreground pulse from the cheap health contract.
+
+    Pulse is the "can I use AIppocampus right now?" signal. It deliberately
+    opts out of operator and expensive diagnostics so storage, host-state, and
+    registry-wide repairs stay behind their owner commands. If cheap health
+    cannot prove a lane is clean, the compact projection should surface a
+    yellow/red next action instead of doing the expensive work inline.
+    """
+
     try:
         health_payload = health_runtime.build_health_report(
-            health_runtime.HealthOptions(cwd=cwd, include_operator_diagnostics=False)
+            health_runtime.HealthOptions(
+                cwd=cwd,
+                include_operator_diagnostics=False,
+                include_expensive_diagnostics=False,
+                operator_timeout_ms=PULSE_QUICK_HEALTH_TIMEOUT_MS,
+                slow_section_threshold_ms=PULSE_SLOW_SECTION_THRESHOLD_MS,
+            )
         )
     except FileNotFoundError as exc:
         health_payload = health_runtime.missing_rollout_health_report(cwd, exc)
     public_payload = health_runtime.public_health_report(health_payload, include_paths=False)
-    return pulse_payload(public_payload)
+    return pulse_payload(compact_health_payload(public_payload))
 
 
 def render_pulse_text(payload: Mapping[str, Any]) -> str:
@@ -135,7 +158,10 @@ def render_pulse_text(payload: Mapping[str, Any]) -> str:
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="aippocampus pulse",
-        description="One-line green/yellow/red readiness pulse.",
+        description=(
+            "One-line green/yellow/red readiness pulse. Default pulse uses the "
+            "cheap health path and never opts into operator or expensive diagnostics."
+        ),
     )
     parser.add_argument("--cwd", default=Path.cwd())
     parser.add_argument("--json", action="store_true", dest="json_output")

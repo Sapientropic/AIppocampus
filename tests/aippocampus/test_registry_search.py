@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from aippocampus_runtime.mcp import registry_source_routes as mcp_registry_source_routes
 from aippocampus_runtime.recall import retrieval as retrieval_impl
 from aippocampus_runtime.registry import search as registry_search
 from aippocampus_runtime.source import registry_search as source_registry_search
@@ -162,6 +163,76 @@ class RegistrySearchBudgetTests(unittest.TestCase):
         self.assertTrue(result["hits"][1]["search_noise"])
         self.assertEqual(result["hits"][1]["noise_reason"], "process_notification")
 
+    def test_deep_registry_search_reads_joined_route_notes(self) -> None:
+        clean_dir = self.root / "clean-route-notes"
+        clean_dir.mkdir()
+        messages = clean_dir / "messages.jsonl"
+        route_notes = clean_dir / "route-notes.jsonl"
+        messages.write_text(
+            json.dumps(
+                {
+                    "message_id": "msg_route_note_final",
+                    "source_id": "src_route_note",
+                    "source_line": 44,
+                    "turn_id": "turn_route_note",
+                    "turn_index": 4,
+                    "role": "assistant",
+                    "phase": "final_answer",
+                    "is_final": True,
+                    "text": "Final anchor RN-44 confirms the joined route window.",
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        route_notes.write_text(
+            json.dumps(
+                {
+                    "route_id": "route_note_source_texture",
+                    "origin": "route_note",
+                    "readiness_class": "source_reopen_ready",
+                    "note_type": "decision_breadcrumb",
+                    "title": "Commentary route note: decision breadcrumb",
+                    "why_lit": "A process note records a route decision.",
+                    "navigation_only": True,
+                    "route_anchor_terms": ["source_texture", "old", "source", "decide"],
+                    "source_refs": [{"message_id": "msg_route_note_final", "line": 44}],
+                    "joined_evidence_refs": [
+                        {
+                            "evidence_kind": "final_answer",
+                            "source_ref": {
+                                "source_id": "src_route_note",
+                                "message_id": "msg_route_note_final",
+                                "turn_id": "turn_route_note",
+                                "turn_index": 4,
+                                "line": 44,
+                            },
+                        }
+                    ],
+                    "reason_codes": ["route_note", "decision_breadcrumb"],
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        result = registry_search.deep_search_entry_result(
+            {
+                "paths": {
+                    "clean_source_messages_jsonl": str(messages),
+                    "clean_source_route_notes_jsonl": str(route_notes),
+                }
+            },
+            ["previous", "agent", "decided", "old", "source", "source_texture"],
+            max_hits=3,
+        )
+
+        self.assertEqual(result["hits"][0]["source"], "route_note")
+        self.assertEqual(result["hits"][0]["message_id"], "msg_route_note_final")
+        self.assertEqual(result["hits"][0]["line"], 44)
+
 
 class RegistrySourceSearchUsefulnessTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -198,8 +269,9 @@ class RegistrySourceSearchUsefulnessTests(unittest.TestCase):
             *,
             max_hits: int,
             search_budget: object = None,
+            deadline: object = None,
         ) -> dict:
-            del entry, terms, max_hits, search_budget
+            del entry, terms, max_hits, search_budget, deadline
             return {
                 "hits": [
                     {
@@ -230,7 +302,9 @@ class RegistrySourceSearchUsefulnessTests(unittest.TestCase):
         self.assertEqual(result["match_count"], 0)
         self.assertEqual(result["suppressed_low_coverage_match_count"], 1)
         self.assertNotIn("first_match_usefulness", result)
-        self.assertEqual(result["source_boundary"]["authority"], "direction_only")
+        self.assertEqual(result["claim_boundary"], "search_miss_is_not_absence_of_memory")
+        self.assertEqual(result["source_reopen_boundary"], "search_miss_is_not_absence_of_memory")
+        self.assertEqual(result["suppression_boundary"], "low_coverage_matches_suppressed")
         self.assertEqual(
             result["foreground_action"]["id"],
             "broaden_registry_search_for_query_anchors",
@@ -240,6 +314,98 @@ class RegistrySourceSearchUsefulnessTests(unittest.TestCase):
             "open_registry_search_source_window",
         )
 
+    def test_near_hit_reopen_candidate_is_navigation_until_opened(self) -> None:
+        near_text = "隐私保护 到底 要服务连续性，不能把本地记忆做成阻断器。"
+        self.messages.write_text(
+            json.dumps(
+                {
+                    "id": "msg_privacy_near_hit",
+                    "message_id": "msg_privacy_near_hit",
+                    "source_line": 88,
+                    "role": "assistant",
+                    "phase": "final_answer",
+                    "is_final": True,
+                    "text": near_text,
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        def fake_deep_search_entry_result(
+            entry: dict,
+            terms: list[str],
+            *,
+            max_hits: int,
+            search_budget: object = None,
+            deadline: object = None,
+        ) -> dict:
+            del entry, terms, max_hits, search_budget, deadline
+            return {
+                "hits": [
+                    {
+                        "source": "clean_source",
+                        "message_id": "msg_privacy_near_hit",
+                        "line": 88,
+                        "role": "assistant",
+                        "phase": "final_answer",
+                        "is_final": True,
+                        "score": 22.0,
+                        "snippet": near_text,
+                    }
+                ]
+            }
+
+        with patch.object(
+            registry_search,
+            "deep_search_entry_result",
+            side_effect=fake_deep_search_entry_result,
+        ):
+            result = source_registry_search.search_registry_sources(
+                ["隐私保护 到底 要到什么程度"],
+                registry_dir=self.root,
+                cwd=self.root,
+                record_last_search=True,
+            )
+
+        self.assertFalse(result["ok"])
+        self.assertFalse(result["useful_target_hit"])
+        self.assertEqual(result["status"], "low_confidence_reopen_candidate")
+        self.assertEqual(result["match_count"], 0)
+        self.assertEqual(result["suppressed_low_coverage_match_count"], 1)
+        self.assertEqual(result["claim_boundary"], "near_hit_navigation_only_no_claim")
+        self.assertEqual(
+            result["source_reopen_boundary"],
+            "open_low_confidence_near_hit_as_navigation_before_claim",
+        )
+        self.assertEqual(
+            result["foreground_action"]["id"],
+            "inspect_low_confidence_registry_near_hit",
+        )
+        self.assertEqual(
+            result["foreground_action"]["claim_boundary"],
+            "near_hit_navigation_only_no_claim",
+        )
+        self.assertNotIn("suppressed_low_coverage_matches", result)
+        candidate = result["low_confidence_reopen_candidates"][0]
+        self.assertEqual(candidate["candidate_kind"], "low_confidence_reopen_candidate")
+        self.assertEqual(candidate["message_id"], "msg_privacy_near_hit")
+        self.assertIn("--open-source", result["foreground_action"]["command"])
+        self.assertIn("--thread-key session:test", result["foreground_action"]["command"])
+
+        reopened = source_registry_search.open_registry_source_window(
+            registry_dir=self.root,
+            thread_key="session:test",
+            message_id="msg_privacy_near_hit",
+        )
+        opened = json.dumps(reopened["source_window"], ensure_ascii=False)
+
+        self.assertTrue(reopened["ok"])
+        self.assertEqual(reopened["source_boundary"]["authority"], "source_open")
+        self.assertIn("隐私保护", opened)
+        self.assertIn("阻断器", opened)
+
     def test_exact_session_identifier_does_not_promote_fuzzy_session_hits(self) -> None:
         def fake_deep_search_entry_result(
             entry: dict,
@@ -247,8 +413,9 @@ class RegistrySourceSearchUsefulnessTests(unittest.TestCase):
             *,
             max_hits: int,
             search_budget: object = None,
+            deadline: object = None,
         ) -> dict:
-            del entry, terms, max_hits, search_budget
+            del entry, terms, max_hits, search_budget, deadline
             return {
                 "hits": [
                     {
@@ -291,8 +458,9 @@ class RegistrySourceSearchUsefulnessTests(unittest.TestCase):
             *,
             max_hits: int,
             search_budget: object = None,
+            deadline: object = None,
         ) -> dict:
-            del entry, terms, max_hits, search_budget
+            del entry, terms, max_hits, search_budget, deadline
             return {
                 "hits": [
                     {
@@ -315,6 +483,7 @@ class RegistrySourceSearchUsefulnessTests(unittest.TestCase):
                 ["开发者真实水平 小号"],
                 registry_dir=self.root,
                 cwd=self.root,
+                record_last_search=True,
             )
 
         self.assertFalse(result["ok"])
@@ -326,7 +495,9 @@ class RegistrySourceSearchUsefulnessTests(unittest.TestCase):
             result["foreground_action"]["id"],
             "broaden_registry_search_for_query_anchors",
         )
-        self.assertEqual(result["source_boundary"]["authority"], "direction_only")
+        self.assertEqual(result["claim_boundary"], "search_miss_is_not_absence_of_memory")
+        self.assertEqual(result["source_reopen_boundary"], "search_miss_is_not_absence_of_memory")
+        self.assertEqual(result["suppression_boundary"], "low_coverage_matches_suppressed")
 
     def test_sqlite_line_only_hit_does_not_emit_source_open_action(self) -> None:
         def fake_deep_search_entry_result(
@@ -335,8 +506,9 @@ class RegistrySourceSearchUsefulnessTests(unittest.TestCase):
             *,
             max_hits: int,
             search_budget: object = None,
+            deadline: object = None,
         ) -> dict:
-            del entry, terms, max_hits, search_budget
+            del entry, terms, max_hits, search_budget, deadline
             return {
                 "hits": [
                     {
@@ -369,12 +541,142 @@ class RegistrySourceSearchUsefulnessTests(unittest.TestCase):
             result["first_match_usefulness"]["status"],
             "source_route_not_reopenable",
         )
+        self.assertNotIn("source_route", result["matches"][0])
         self.assertNotIn("reopen_command", result["matches"][0])
         self.assertEqual(
             result["foreground_action"]["id"],
             "broaden_registry_search_for_reopenable_source",
         )
-        self.assertEqual(result["source_boundary"]["authority"], "direction_only")
+        self.assertEqual(result["claim_boundary"], "search_miss_is_not_absence_of_memory")
+        self.assertEqual(result["source_reopen_boundary"], "search_miss_is_not_absence_of_memory")
+        reopened = source_registry_search.open_registry_source_window(
+            registry_dir=self.root,
+            hit_index=1,
+            use_last_search=True,
+        )
+        self.assertFalse(reopened["ok"])
+        self.assertEqual(reopened["error"]["code"], "last_registry_search_unavailable")
+
+    def test_route_note_hit_becomes_direct_registry_source_route(self) -> None:
+        route_notes = self.clean / "route-notes.jsonl"
+        self.messages.write_text(
+            json.dumps(
+                {
+                    "message_id": "msg_route_note_final",
+                    "source_id": "src_route_note",
+                    "source_line": 55,
+                    "turn_id": "turn_route_note",
+                    "turn_index": 5,
+                    "role": "assistant",
+                    "phase": "final_answer",
+                    "is_final": True,
+                    "text": "Joined final anchor RN-55 confirms the reopened window.",
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        route_notes.write_text(
+            json.dumps(
+                {
+                    "route_id": "route_note_source_texture",
+                    "origin": "route_note",
+                    "readiness_class": "source_reopen_ready",
+                    "note_type": "decision_breadcrumb",
+                    "title": "Commentary route note: decision breadcrumb",
+                    "why_lit": "A process note records a route decision.",
+                    "navigation_only": True,
+                    "route_anchor_terms": ["source_texture", "old", "source", "decide"],
+                    "source_refs": [{"message_id": "msg_route_note_final", "line": 55}],
+                    "joined_evidence_refs": [
+                        {
+                            "evidence_kind": "final_answer",
+                            "source_ref": {
+                                "source_id": "src_route_note",
+                                "message_id": "msg_route_note_final",
+                                "turn_id": "turn_route_note",
+                                "turn_index": 5,
+                                "line": 55,
+                            },
+                        }
+                    ],
+                    "reason_codes": ["route_note", "decision_breadcrumb"],
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (self.root / "threads.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "threads": [
+                        {
+                            "thread_key": "session:test",
+                            "title": "continuity route",
+                            "paths": {
+                                "clean_source_messages_jsonl": str(self.messages),
+                                "clean_source_route_notes_jsonl": str(route_notes),
+                            },
+                        }
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        result = source_registry_search.search_registry_sources(
+            ["previous agent decided old source source_texture"],
+            registry_dir=self.root,
+            cwd=self.root,
+        )
+
+        self.assertTrue(result["ok"], result)
+        match = result["matches"][0]
+        self.assertEqual(match["source"], "route_note")
+        self.assertEqual(match["message_id"], "msg_route_note_final")
+        self.assertEqual(match["source_route"]["kind"], "registry_clean_source_hit")
+        self.assertEqual(match["source_route"]["message_id"], "msg_route_note_final")
+        self.assertIn("last_search_reopen_command", match)
+
+    def test_sqlite_line_only_match_does_not_become_agent_recall_route(self) -> None:
+        with patch.object(
+            mcp_registry_source_routes,
+            "search_registry_sources",
+            return_value={
+                "matches": [
+                    {
+                        "source": "sqlite",
+                        "thread": {"thread_key": "session:test"},
+                        "source_route": {
+                            "kind": "registry_clean_source_hit",
+                            "thread_key": "session:test",
+                            "line": 135501,
+                        },
+                        "line": 135501,
+                        "role": "assistant",
+                        "phase": "commentary",
+                        "snippet": "旧索引闻到了 cue，但没有 clean-source message_id。",
+                    }
+                ]
+            },
+        ):
+            routes = mcp_registry_source_routes.registry_clean_source_routes(
+                intent="旧索引 cue",
+                cwd=self.root,
+                source_dir=self.clean,
+                registry_dir=self.root,
+                max_routes=1,
+                clean_ref=lambda ref: dict(ref),
+                route_handle=lambda **_: "handle",
+                stable_id=lambda *_: "route",
+                safe_text=lambda value, chars: str(value or "")[:chars],
+            )
+
+        self.assertEqual(routes, [])
 
     def test_partial_sqlite_hit_loses_to_reopenable_exact_clean_source(self) -> None:
         partial_clean = self.root / "partial-clean"
@@ -434,8 +736,9 @@ class RegistrySourceSearchUsefulnessTests(unittest.TestCase):
             *,
             max_hits: int,
             search_budget: object = None,
+            deadline: object = None,
         ) -> dict:
-            del terms, max_hits, search_budget
+            del terms, max_hits, search_budget, deadline
             path = str(((entry.get("paths") or {}).get("clean_source_messages_jsonl") or ""))
             if "partial-clean" in path:
                 return {
@@ -490,6 +793,138 @@ class RegistrySourceSearchUsefulnessTests(unittest.TestCase):
         self.assertEqual(reopened["source_boundary"]["authority"], "source_open")
         self.assertIn("开发者真实水平", opened)
         self.assertIn("小号", opened)
+
+    def test_foreground_search_budget_returns_partial_with_precise_reopen(self) -> None:
+        exact_clean = self.root / "exact-clean"
+        slow_clean = self.root / "slow-clean"
+        unsearched_clean = self.root / "unsearched-clean"
+        exact_clean.mkdir()
+        slow_clean.mkdir()
+        unsearched_clean.mkdir()
+        exact_text = "scarlet walnut source anchor survives bounded registry search"
+        (exact_clean / "messages.jsonl").write_text(
+            json.dumps(
+                {
+                    "id": "msg_exact",
+                    "message_id": "msg_exact",
+                    "source_line": 17,
+                    "role": "user",
+                    "text": exact_text,
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (slow_clean / "messages.jsonl").write_text("", encoding="utf-8")
+        (unsearched_clean / "messages.jsonl").write_text("", encoding="utf-8")
+        (self.root / "threads.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "threads": [
+                        {
+                            "thread_key": "session:exact",
+                            "title": "exact source",
+                            "paths": {
+                                "clean_source_messages_jsonl": str(
+                                    exact_clean / "messages.jsonl"
+                                )
+                            },
+                        },
+                        {
+                            "thread_key": "session:slow",
+                            "title": "slow source",
+                            "paths": {
+                                "clean_source_messages_jsonl": str(
+                                    slow_clean / "messages.jsonl"
+                                )
+                            },
+                        },
+                        {
+                            "thread_key": "session:unsearched",
+                            "title": "unsearched source",
+                            "paths": {
+                                "clean_source_messages_jsonl": str(
+                                    unsearched_clean / "messages.jsonl"
+                                )
+                            },
+                        },
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        def fake_deep_search_entry_result(
+            entry: dict,
+            terms: list[str],
+            *,
+            max_hits: int,
+            search_budget: object = None,
+            deadline: object = None,
+        ) -> dict:
+            del terms, max_hits, search_budget, deadline
+            thread_key = str(entry.get("thread_key") or "")
+            if thread_key == "session:exact":
+                return {
+                    "hits": [
+                        {
+                            "source": "clean_source",
+                            "message_id": "msg_exact",
+                            "line": 17,
+                            "role": "user",
+                            "score": 20.0,
+                            "snippet": exact_text,
+                        }
+                    ]
+                }
+            return {
+                "hits": [],
+                "budget_exhausted": True,
+                "warnings": [
+                    {
+                        "stage": "registry_search",
+                        "code": "foreground_search_time_budget_exhausted",
+                    }
+                ],
+            }
+
+        with patch.object(
+            registry_search,
+            "deep_search_entry_result",
+            side_effect=fake_deep_search_entry_result,
+        ):
+            result = source_registry_search.search_registry_sources(
+                ["scarlet walnut source anchor"],
+                registry_dir=self.root,
+                cwd=self.root,
+                record_last_search=True,
+                max_elapsed_ms=5000,
+            )
+
+        self.assertTrue(result["ok"])
+        self.assertTrue(result["partial"])
+        self.assertEqual(result["degraded_reason"], "foreground_search_time_budget_exhausted")
+        self.assertEqual(result["max_elapsed_ms"], 5000)
+        self.assertGreaterEqual(result["elapsed_ms"], 0)
+        self.assertEqual(result["unsearched_entry_count"], 1)
+        self.assertEqual(result["claim_boundary"], "source_reopen_required_before_claim")
+        self.assertEqual(result["source_reopen_boundary"], "reopen_selected_registry_hit_before_claim")
+        self.assertEqual(result["foreground_action"]["id"], "open_registry_search_source_window")
+        self.assertIn("--open-source", result["foreground_action"]["command"])
+        self.assertIn("--thread-key session:exact", result["foreground_action"]["command"])
+        self.assertIn("--message-id msg_exact", result["foreground_action"]["command"])
+        self.assertEqual(result["next_precise_reopen_command"], result["foreground_action"]["command"])
+
+        reopened = source_registry_search.open_registry_source_window(
+            registry_dir=self.root,
+            hit_index=1,
+            use_last_search=True,
+        )
+        self.assertTrue(reopened["ok"])
+        self.assertIn("scarlet walnut", json.dumps(reopened["source_window"], ensure_ascii=False))
 
     def test_deep_search_ranks_exact_hit_after_public_snippet_cutoff_first(self) -> None:
         exact_clean = self.root / "exact-clean"

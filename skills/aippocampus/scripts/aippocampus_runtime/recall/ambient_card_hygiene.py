@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+# aippocampus-instruction-surface: ambient card hygiene owner; foreground demotion text is a local invariant, not source evidence.
 import re
 from typing import Any
 
@@ -32,6 +33,12 @@ def _card_brief_text(card: dict[str, Any]) -> str:
 def _has_concrete_reopen_path(card: dict[str, Any]) -> bool:
     if any(isinstance(ref, dict) for ref in card.get("source_refs") or []):
         return True
+    for key in ("source_ref_count", "reopenable_ref_count", "candidate_ref_count"):
+        try:
+            if int(card.get(key) or 0) > 0:
+                return True
+        except (TypeError, ValueError):
+            pass
     reopen_plan = card.get("reopen_plan")
     if isinstance(reopen_plan, dict) and reopen_plan:
         return True

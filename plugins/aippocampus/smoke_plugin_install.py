@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import importlib
 import json
 import shutil
 import subprocess
@@ -11,9 +12,18 @@ import sys
 import tempfile
 import uuid
 from pathlib import Path
+from types import ModuleType
 from typing import Any
 
-import build_plugin_package
+
+def _plugin_peer_module(module_name: str) -> ModuleType:
+    try:
+        return importlib.import_module(f"plugins.aippocampus.{module_name}")
+    except ImportError:
+        return importlib.import_module(module_name)
+
+
+build_plugin_package = _plugin_peer_module("build_plugin_package")
 
 PLUGIN_NAME = "aippocampus"
 

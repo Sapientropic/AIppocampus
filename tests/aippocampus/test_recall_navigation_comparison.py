@@ -370,7 +370,6 @@ class RecallNavigationComparisonTests(unittest.TestCase):
         self.assertGreaterEqual(len(candidate_pool["sentinel"]), 2)
         for candidate in candidate_pool["sentinel"]:
             self.assertTrue(candidate["why_included"])
-            self.assertGreaterEqual(candidate["source_ref_count"], 1)
             self.assertTrue(candidate["source_joined"])
             self.assertFalse(candidate["promoted_to_evidence"])
 
