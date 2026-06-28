@@ -9,13 +9,16 @@ from __future__ import annotations
 
 import hashlib
 import json
-import re
-import subprocess
 import sys
 from collections import Counter
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
+
+from aippocampus_runtime.core import dict_or_empty
+from aippocampus_runtime.ops.successor_issue_state import (
+    load_github_successor_issue_state as _load_github_successor_issue_state,
+)
 
 
 def _issue(
@@ -190,10 +193,6 @@ def _json(path: Path) -> Any:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def _as_mapping(value: Any) -> Mapping[str, Any]:
-    return value if isinstance(value, Mapping) else {}
-
-
 def _jsonl(path: Path) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     if not path.exists():
@@ -236,11 +235,6 @@ def _public_inventory(repo_root: Path) -> dict[str, Any]:
     }
 
 
-def _parse_parent(body: str) -> int | None:
-    match = re.search(r"(?im)^\s*(?:Parent|Umbrella|Predecessor):\s*#(\d+)", body)
-    return int(match.group(1)) if match else None
-
-
 def _declared_successor_issue_numbers() -> list[int]:
     numbers: set[int] = set()
     for path in [
@@ -253,228 +247,18 @@ def _declared_successor_issue_numbers() -> list[int]:
     return sorted(numbers)
 
 
-def _closeout_pointer_kind(text: str) -> str:
-    lowered = text.casefold()
-    if re.search(r"\bpr\s+#\d+", lowered) or re.search(r"#\d+", lowered):
-        if any(
-            term in lowered
-            for term in (
-                "artifact",
-                "receipt",
-                "trace",
-                "validation",
-                "covered",
-                "report",
-                "evidence",
-            )
-        ):
-            return "artifact_pointer"
-    if any(
-        term in lowered
-        for term in (
-            "artifact",
-            "receipt",
-            "trace artifact",
-            "benchmark smoke",
-            "provider artifact",
-            "validation was extended",
-        )
-    ):
-        return "artifact_pointer"
-    if re.search(r"\b(successor|follow[- ]?up|child)\s+#\d+", lowered):
-        return "explicit_deferral_pointer"
-    if any(term in lowered for term in ("defer", "deferred", "current blocker", "remains open")):
-        return "explicit_deferral_pointer"
-    return "none"
-
-
-def _github_issue_row(item: Mapping[str, Any]) -> dict[str, Any]:
-    number = int(item.get("number") or 0)
-    labels = [
-        str(label.get("name") or "")
-        for label in item.get("labels") or []
-        if isinstance(label, Mapping)
-    ]
-    body = str(item.get("body") or "")
-    body_parent = _parse_parent(body)
-    comment_bodies = [
-        str(comment.get("body") or "")
-        for comment in item.get("comments") or []
-        if isinstance(comment, Mapping)
-    ]
-    closeout_text = "\n".join([body, *comment_bodies])
-    pointer_kind = _closeout_pointer_kind(closeout_text)
-    return {
-        "state": str(item.get("state") or "").casefold(),
-        "title": str(item.get("title") or f"issue {number}"),
-        "parent": body_parent,
-        "body_parent": body_parent,
-        "native_parent": None,
-        "parent_relationship_source": "body_parent_fallback" if body_parent else "none",
-        "native_sub_issue_numbers": [],
-        "labels": labels,
-        "closedAt": item.get("closedAt"),
-        "closeout_pointer_kind": pointer_kind,
-        "closeout_pointer_present": pointer_kind != "none",
-        "source": "github_live",
-    }
-
-
-def _repo_owner_name(repo: str | None) -> tuple[str, str]:
-    if repo and "/" in repo:
-        owner, name = repo.split("/", 1)
-        return owner, name
-    return "Sapientropic", "AIppocampus"
-
-
-def _chunks(values: list[int], size: int) -> list[list[int]]:
-    return [values[index : index + size] for index in range(0, len(values), size)]
-
-
-def _load_native_issue_relationships_via_gh(
-    issue_numbers: list[int],
-    *,
-    repo: str | None = None,
-) -> dict[int, dict[str, Any]]:
-    owner, name = _repo_owner_name(repo)
-    relationships: dict[int, dict[str, Any]] = {}
-    for chunk in _chunks(sorted(set(issue_numbers)), 40):
-        aliases = "\n".join(
-            (
-                f"i{number}: issue(number:{number}) {{ "
-                "number parent { number } "
-                "subIssues(first:100) { totalCount nodes { number } } "
-                "}"
-            )
-            for number in chunk
-        )
-        query = f"""
-        query($owner:String!, $repo:String!) {{
-          repository(owner:$owner, name:$repo) {{
-            {aliases}
-          }}
-        }}
-        """
-        payload = subprocess.check_output(
-            [
-                "gh",
-                "api",
-                "graphql",
-                "-f",
-                f"owner={owner}",
-                "-f",
-                f"repo={name}",
-                "-f",
-                f"query={query}",
-            ],
-            text=True,
-            encoding="utf-8",
-        )
-        data = ((json.loads(payload).get("data") or {}).get("repository") or {})
-        for number in chunk:
-            node = data.get(f"i{number}")
-            if not isinstance(node, Mapping):
-                continue
-            raw_parent = node.get("parent")
-            parent = raw_parent if isinstance(raw_parent, Mapping) else {}
-            raw_subissues = node.get("subIssues")
-            subissues = raw_subissues if isinstance(raw_subissues, Mapping) else {}
-            raw_subissue_nodes = subissues.get("nodes")
-            subissue_nodes = raw_subissue_nodes if isinstance(raw_subissue_nodes, list) else []
-            native_parent_number = parent.get("number")
-            relationships[number] = {
-                "native_parent": (
-                    int(native_parent_number) if native_parent_number is not None else None
-                ),
-                "native_sub_issue_numbers": [
-                    int(child_number)
-                    for child in subissue_nodes
-                    if isinstance(child, Mapping)
-                    for child_number in [child.get("number")]
-                    if child_number is not None
-                ],
-                "native_sub_issue_count": int(subissues.get("totalCount") or 0),
-            }
-    return relationships
-
-
 def load_github_successor_issue_state(
     *,
     repo: str | None = None,
     min_issue_number: int = 1918,
     limit: int = 200,
 ) -> dict[int, dict[str, Any]]:
-    """Return a GitHub issue-state snapshot for the successor range.
-
-    Unit tests use fixture state, but this live path lets CI or an operator catch
-    a newly opened successor before the local manifest is updated. The sweep is
-    still an inventory guard; live GitHub availability is not required for normal
-    runtime use.
-    """
-
-    command = [
-        "gh",
-        "issue",
-        "list",
-        "--state",
-        "all",
-        "--limit",
-        str(limit),
-        "--json",
-        "number,title,state,closedAt,body,labels",
-    ]
-    if repo:
-        command[2:2] = ["-R", repo]
-    payload = subprocess.check_output(command, text=True, encoding="utf-8")
-    rows = json.loads(payload)
-    result: dict[int, dict[str, Any]] = {}
-    for item in rows if isinstance(rows, list) else []:
-        number = int(item.get("number") or 0)
-        if number < min_issue_number:
-            continue
-        result[number] = _github_issue_row(item)
-    for number in _declared_successor_issue_numbers():
-        if number in result:
-            continue
-        view_command = [
-            "gh",
-            "issue",
-            "view",
-            str(number),
-            "--json",
-            "number,title,state,closedAt,body,comments,labels",
-        ]
-        if repo:
-            view_command[2:2] = ["-R", repo]
-        try:
-            item = json.loads(
-                subprocess.check_output(view_command, text=True, encoding="utf-8")
-            )
-        except (subprocess.CalledProcessError, json.JSONDecodeError):
-            continue
-        if isinstance(item, Mapping):
-            result[number] = _github_issue_row(item)
-    try:
-        native = _load_native_issue_relationships_via_gh(sorted(result), repo=repo)
-    except (subprocess.CalledProcessError, json.JSONDecodeError):
-        # Native GitHub parent/sub-issue edges are the preferred live scope, but
-        # the sweep must remain usable during transient GraphQL/auth failures.
-        # Body-parent parsing is less authoritative and is surfaced separately
-        # in coverage, so callers can distinguish a fallback run from a native
-        # parent-graph run instead of silently trusting stale issue-number ranges.
-        native = {}
-    for number, relationship in native.items():
-        row = result.get(number)
-        if not row:
-            continue
-        native_parent = relationship.get("native_parent")
-        row["native_parent"] = native_parent
-        row["native_sub_issue_numbers"] = relationship.get("native_sub_issue_numbers") or []
-        row["native_sub_issue_count"] = relationship.get("native_sub_issue_count") or 0
-        if native_parent is not None:
-            row["parent"] = native_parent
-            row["parent_relationship_source"] = "native_parent_graph"
-    return result
+    return _load_github_successor_issue_state(
+        declared_issue_numbers=_declared_successor_issue_numbers(),
+        repo=repo,
+        min_issue_number=min_issue_number,
+        limit=limit,
+    )
 
 
 def _merged_issue_state(
@@ -774,8 +558,8 @@ def _attention_promotion_reconciled_metrics() -> dict[str, Any]:
         "contract-smoke"
     )
     promotion = benchmark_family_promotion_candidates.build_family_promotion_candidate_report()
-    public_metrics = _as_mapping(public_profile.get("metrics"))
-    public_gate = _as_mapping(public_profile.get("quality_gate"))
+    public_metrics = dict_or_empty(public_profile.get("metrics"))
+    public_gate = dict_or_empty(public_profile.get("quality_gate"))
     promoted = [
         row
         for row in promotion.get("promoted_families") or []
@@ -798,7 +582,7 @@ def _attention_promotion_reconciled_metrics() -> dict[str, Any]:
         ),
         {},
     )
-    promoted_public = _as_mapping(attention_row.get("public_cohort_completed"))
+    promoted_public = dict_or_empty(attention_row.get("public_cohort_completed"))
     return {
         "public_cohort_profile_ok": bool(public_profile.get("ok")),
         "contract_smoke_profile_ok": bool(contract_profile.get("ok")),
@@ -839,8 +623,8 @@ def _provider_conformance_replay_metrics() -> dict[str, Any]:
     import benchmark_provider_conformance
 
     report = benchmark_provider_conformance.build_provider_conformance_replay_report()
-    metrics = _as_mapping(report.get("metrics"))
-    gates = _as_mapping(report.get("quality_gates"))
+    metrics = dict_or_empty(report.get("metrics"))
+    gates = dict_or_empty(report.get("quality_gates"))
     return {
         "sanitized_replay_ok": bool(report.get("ok")),
         "synthetic_kit_passed": bool(gates.get("synthetic_kit_passed")),
@@ -894,21 +678,21 @@ def _h1h2_currentness_public_metrics() -> dict[str, Any]:
 
     synthetic = benchmark_hippocampal_hard_negatives.run_benchmark()
     currentness = benchmark_hippocampal_hard_negatives.run_public_currentness_cohort()
-    metrics = _as_mapping(currentness.get("metrics"))
-    unsupported = _as_mapping(currentness.get("unsupported_families"))
+    metrics = dict_or_empty(currentness.get("metrics"))
+    unsupported = dict_or_empty(currentness.get("unsupported_families"))
     locomo_boundary = benchmark_hippocampal_hard_negatives.PUBLIC_DIALOGUE_UNSUPPORTED_FAMILIES[
         "superseded_currentness_trap"
     ]
     return {
         "public_currentness_case_count": metrics["public_currentness_case_count"],
         "public_dialogue_case_count": metrics["public_dialogue_case_count"],
-        "synthetic_contract_case_count": _as_mapping(synthetic.get("metrics"))[
+        "synthetic_contract_case_count": dict_or_empty(synthetic.get("metrics"))[
             "case_count"
         ],
         "per_family_case_counts": metrics["per_family_case_counts"],
         "unsupported_family_count": metrics["unsupported_family_count"],
         "unsupported_family_reasons": {
-            str(family): str(_as_mapping(row).get("reason") or "")
+            str(family): str(dict_or_empty(row).get("reason") or "")
             for family, row in unsupported.items()
         },
         "locomo_supersession_unsupported_reason": str(
@@ -942,9 +726,9 @@ def _multimodal_corpus_source_open_metrics() -> dict[str, Any]:
     report = benchmark_multimodal_corpus_retrieval.run_benchmark(
         source_open_replay=True
     )
-    metrics = _as_mapping(report.get("metrics"))
-    tracks = _as_mapping(report.get("tracks"))
-    provider_blocked = _as_mapping(tracks.get("provider_blocked"))
+    metrics = dict_or_empty(report.get("metrics"))
+    tracks = dict_or_empty(report.get("tracks"))
+    provider_blocked = dict_or_empty(tracks.get("provider_blocked"))
     return {
         "source_open_replay_ok": bool(report.get("ok")),
         "multimodal_replay_case_count": metrics["multimodal_replay_case_count"],
@@ -988,7 +772,7 @@ def _conversational_media_source_open_metrics() -> dict[str, Any]:
     report = benchmark_conversational_media_ingest_recall.run_benchmark(
         source_open_replay=True
     )
-    metrics = _as_mapping(report.get("metrics"))
+    metrics = dict_or_empty(report.get("metrics"))
     return {
         "source_open_replay_ok": bool(report.get("ok")),
         "conversational_media_replay_case_count": metrics[
@@ -1034,9 +818,9 @@ def _multimodal_niah_answerer_metrics() -> dict[str, Any]:
     report = benchmark_multimodal_niah_evidence_pool.run_benchmark(
         answerer_replay=True
     )
-    metrics = _as_mapping(report.get("metrics"))
-    tracks = _as_mapping(report.get("tracks"))
-    answerer = _as_mapping(tracks.get("observed_answerer_replay"))
+    metrics = dict_or_empty(report.get("metrics"))
+    tracks = dict_or_empty(report.get("tracks"))
+    answerer = dict_or_empty(tracks.get("observed_answerer_replay"))
     return {
         "answerer_replay_ok": bool(report.get("ok")) and bool(answerer.get("ok")),
         "niah_observed_answerer_case_count": metrics[
@@ -1079,7 +863,7 @@ def _governed_knowledge_runtime_metrics() -> dict[str, Any]:
     report = benchmark_knowledge_pollution.run_benchmark(
         governed_runtime_replay=True
     )
-    metrics = _as_mapping(report.get("metrics"))
+    metrics = dict_or_empty(report.get("metrics"))
     return {
         "governed_runtime_replay_ok": bool(report.get("ok")),
         "governed_runtime_replay_case_count": metrics[
@@ -1123,11 +907,11 @@ def _segmented_merge_replay_metrics() -> dict[str, Any]:
     report = benchmark_segmented_merge_policy.run_segmented_merge_policy_benchmark(
         include_replay_cohort=True
     )
-    metrics = _as_mapping(report.get("metrics"))
-    cohorts = _as_mapping(report.get("evidence_cohorts"))
-    replay = _as_mapping(cohorts.get("replay_source_evidence"))
-    generated = _as_mapping(cohorts.get("generated_physical_soak"))
-    synthetic = _as_mapping(cohorts.get("synthetic_policy_fixture"))
+    metrics = dict_or_empty(report.get("metrics"))
+    cohorts = dict_or_empty(report.get("evidence_cohorts"))
+    replay = dict_or_empty(cohorts.get("replay_source_evidence"))
+    generated = dict_or_empty(cohorts.get("generated_physical_soak"))
+    synthetic = dict_or_empty(cohorts.get("synthetic_policy_fixture"))
     return {
         "segmented_merge_replay_ok": bool(report.get("ok")),
         "synthetic_policy_fixture_case_count": metrics[
@@ -1222,9 +1006,9 @@ def _semantic_learning_observed_outcome_metrics() -> dict[str, Any]:
     observed_report = summarize_semantic_learning_guidance_outcomes(guidance, observed)
     dogfood = build_semantic_learning_dogfood_fixture_report()
     private_fixture = build_private_history_replay_report()
-    observed_metrics = _as_mapping(observed_report.get("metrics"))
-    dogfood_metrics = _as_mapping(dogfood.get("metrics"))
-    private_metrics = _as_mapping(private_fixture.get("metrics"))
+    observed_metrics = dict_or_empty(observed_report.get("metrics"))
+    dogfood_metrics = dict_or_empty(dogfood.get("metrics"))
+    private_metrics = dict_or_empty(private_fixture.get("metrics"))
     return {
         "semantic_learning_observed_outcome_ok": bool(observed_report.get("ok")),
         "observed_guidance_outcome_case_count": observed_metrics[
@@ -1251,7 +1035,7 @@ def _semantic_learning_observed_outcome_metrics() -> dict[str, Any]:
             "outcome_unobserved_count"
         ],
         "dogfood_fixture_contract_smoke_only": bool(
-            _as_mapping(dogfood.get("contract_fixture_smoke")).get(
+            dict_or_empty(dogfood.get("contract_fixture_smoke")).get(
                 "fixture_metrics_are_not_real_history"
             )
         ),
@@ -1268,7 +1052,7 @@ def _e2e50_field_validation_metrics() -> dict[str, Any]:
     import benchmark_e2e50_silent_constraint
 
     report = benchmark_e2e50_silent_constraint.build_private_local_field_behavior_report()
-    metrics = _as_mapping(report.get("metrics"))
+    metrics = dict_or_empty(report.get("metrics"))
     return {
         "e2e50_field_validation_report_ok": bool(report.get("ok")),
         "field_validation_gate_ok": bool(report.get("field_validation_gate_ok")),
@@ -1291,7 +1075,7 @@ def _e2e50_field_validation_metrics() -> dict[str, Any]:
         ],
         "semantic_judge_quality_claimed": metrics["semantic_judge_quality_claimed"],
         "private_shortfall_blocks_public_pack": bool(
-            _as_mapping(report.get("evidence_separation")).get(
+            dict_or_empty(report.get("evidence_separation")).get(
                 "private_scarcity_blocks_public_pack"
             )
         ),
@@ -1359,6 +1143,14 @@ def _track_metrics(
     *,
     coverage: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
+    """aippocampus-stage-map: per-track metric projection only.
+
+    This legacy switch is intentionally not the owner for GitHub issue-state
+    loading, artifact reading, or closeout policy. New state/coverage logic
+    belongs in focused ops owners such as successor_issue_state.py, then this
+    function should only consume already-shaped inventory rows.
+    """
+
     counts = _base_counts(inventory)
     common = _common_metrics(inventory)
     public_cases = counts["public_cases"]
@@ -1825,6 +1617,14 @@ def build_successor_evidence_sweep_report(
     issue_state: Mapping[int, Mapping[str, Any]] | None = None,
     github_state_checked: bool = False,
 ) -> dict[str, Any]:
+    """aippocampus-stage-map: orchestrate successor evidence sweep stages.
+
+    Keep this as a wiring/report assembler: inventory -> issue-state merge ->
+    per-track metrics -> blocker projection. New live GitHub readers, parent
+    relationship logic, or closeout policy lanes must live in focused owner
+    modules so this sweep does not become another mega-facade.
+    """
+
     root = Path(repo_root) if repo_root is not None else _find_repo_root()
     inventory = _public_inventory(root)
     state = _merged_issue_state(issue_state)
@@ -1999,7 +1799,7 @@ def build_successor_evidence_sweep_report(
         required_parent = int(raw_required_parent) if raw_required_parent is not None else parent
         metric = str(requirement.get("metric") or "")
         parent_row = by_issue.get(parent)
-        parent_metrics = _as_mapping(parent_row.get("metrics") if parent_row else {})
+        parent_metrics = dict_or_empty(parent_row.get("metrics") if parent_row else {})
         metric_present = bool(metric and metric in parent_metrics)
         parent_matches = bool(parent and parent == required_parent and parent_row)
         covered = parent_matches and (metric_present or (not metric and bool(_specific_metric_keys(parent_metrics))))

@@ -201,12 +201,15 @@ def _annotate_route_action_priority(
     annotated: list[dict[str, Any]] = []
     for route in routes:
         row = dict(route)
+        existing_actionability = str(row.get("actionability") or "")
         row_index = _route_index(row)
         has_action = _route_has_action(row)
-        if primary_route_index is not None and row_index == primary_route_index:
+        if existing_actionability == "preview_only":
+            row["action_priority"] = "secondary_preview"
+            row["actionability"] = "preview_only"
+        elif primary_route_index is not None and row_index == primary_route_index:
             row["action_priority"] = "primary"
             row["primary_action_relation"] = "foreground_action_deepens_this_route"
-            existing_actionability = str(row.get("actionability") or "")
             if has_action and existing_actionability in {
                 "low_confidence_reopenable",
                 "reopenable",

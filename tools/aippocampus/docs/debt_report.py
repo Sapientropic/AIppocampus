@@ -7,12 +7,15 @@ import argparse
 import ast
 import json
 import re
-from collections import Counter
 from functools import lru_cache
 from pathlib import Path
 
 try:
-    from tools.aippocampus.docs import guard_pressure
+    from tools.aippocampus.docs import broad_exception_debt, guard_pressure
+    from tools.aippocampus.docs.actionable_debt_queues import (
+        accepted_exception_marker_inventory,
+        build_actionable_debt_queues,
+    )
     from tools.aippocampus.docs.changed_file_args import (
         add_changed_file_arguments,
         collect_changed_file_arguments,
@@ -46,7 +49,12 @@ try:
         test_debt_inventory,
     )
 except ModuleNotFoundError:
+    import broad_exception_debt
     import guard_pressure
+    from actionable_debt_queues import (
+        accepted_exception_marker_inventory,
+        build_actionable_debt_queues,
+    )
     from changed_file_args import add_changed_file_arguments, collect_changed_file_arguments
     from debt_report_projection import (
         compact_changed_surface_report,
@@ -344,58 +352,18 @@ def mcp_compact_debug_literals_guarded(path: Path) -> bool:
     )
 
 
-@lru_cache(maxsize=1)
-def broad_exception_handlers() -> tuple[dict[str, object], ...]:
-    handlers: list[dict[str, object]] = []
-    for path in scan_python_files():
-        rel_path = repo_relative(path)
-        tree = parse_python(path)
-        if tree is None:
-            continue
-        for node in ast.walk(tree):
-            if not isinstance(node, ast.ExceptHandler):
-                continue
-            names = exception_type_names(node.type)
-            if not ({"Exception", "BaseException", "bare"} & names):
-                continue
-            pure_silent = all(isinstance(stmt, (ast.Pass, ast.Continue)) for stmt in node.body)
-            handlers.append(
-                {
-                    "path": rel_path,
-                    "line": int(getattr(node, "lineno", 0) or 0),
-                    "exception_types": sorted(names),
-                    "hot_path": is_hot_path(rel_path),
-                    "pure_silent": pure_silent,
-                    "diagnostic_boundary": except_handler_has_diagnostic_boundary(node),
-                    "documented_boundary": source_window_has_marker(
-                        path,
-                        int(getattr(node, "lineno", 0) or 0),
-                        BROAD_EXCEPTION_BOUNDARY_MARKER,
-                    ),
-                }
-            )
-    return tuple(handlers)
-
-
 def broad_exception_inventory(*, detail: bool = False) -> dict[str, object]:
-    handlers = list(broad_exception_handlers())
-    by_file = Counter(str(item["path"]) for item in handlers)
-    return {
-        "summary": {
-            "broad_total": len(handlers),
-            "hot_path_broad_total": sum(1 for item in handlers if item["hot_path"]),
-            "pure_silent_broad_except_total": sum(1 for item in handlers if item["pure_silent"]),
-            "hot_path_pure_silent_total": sum(
-                1 for item in handlers if item["hot_path"] and item["pure_silent"]
-            ),
-        },
-        "top_files": [
-            {"path": path, "count": count}
-            for path, count in by_file.most_common(20)
-        ],
-        "handler_sample": handlers[:80],
-        **({"handlers": handlers} if detail else {}),
-    }
+    handlers = broad_exception_debt.broad_exception_handlers(
+        scan_python_files(),
+        parse_python=parse_python,
+        repo_relative=repo_relative,
+        exception_type_names=exception_type_names,
+        is_hot_path=is_hot_path,
+        except_handler_has_diagnostic_boundary=except_handler_has_diagnostic_boundary,
+        source_window_has_marker=source_window_has_marker,
+        boundary_marker=BROAD_EXCEPTION_BOUNDARY_MARKER,
+    )
+    return broad_exception_debt.broad_exception_inventory(handlers, detail=detail)
 
 
 def changed_surface_guard_pressure(
@@ -1087,6 +1055,21 @@ def build_report(
         detail=full_detail,
     )
     broad_exceptions = broad_exception_inventory(detail=full_detail)
+    accepted_exceptions = accepted_exception_marker_inventory(
+        scan_python_files(),
+        repo_root=REPO_ROOT,
+        marker_prefix="aippocampus-debt-ok:",
+        detail=full_detail,
+    )
+    actionable_queues = build_actionable_debt_queues(
+        rows=list(headroom["rows"]),
+        count_drifts=list(headroom["count_drift"]),
+        stale_allowances=list(headroom["stale_allowances"]),
+        single_digit_guard_pressure=list(
+            headroom["system_weight"]["single_digit_guard_pressure"]
+        ),
+        accepted_exception_debt=accepted_exceptions,
+    )
     compact_debug_fields = compact_debug_field_inventory(
         mcp_root=REPO_ROOT / "skills" / "aippocampus" / "scripts" / "aippocampus_runtime" / "mcp",
         repo_root=REPO_ROOT,
@@ -1133,6 +1116,8 @@ def build_report(
         "helper_duplication": helper_duplication,
         "direct_jsonl_io": direct_jsonl_io,
         "broad_exception_debt": broad_exceptions,
+        "accepted_exception_debt": accepted_exceptions,
+        "actionable_debt_queues": actionable_queues,
         "compact_debug_field_leaks": compact_debug_fields,
         "instruction_surface_debt": instruction_surface,
         "giant_hot_path_functions": giant_functions,

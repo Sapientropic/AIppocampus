@@ -143,6 +143,7 @@ navigation until source is reopened.
 Current owner package:
 
 - `semantic/__init__.py`
+- `semantic/confidence_policy.py`
 - `semantic/cue_learning.py`
 
 Current flat files:

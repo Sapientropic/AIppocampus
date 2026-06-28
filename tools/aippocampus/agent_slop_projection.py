@@ -19,22 +19,34 @@ def compact_report(report: Mapping[str, Any], *, detail_command: str) -> dict[st
         if item.get("baseline_status") != "baselined"
         and item.get("changed_surface") is True
     ]
+    has_blockers = bool(blockers)
+    hard_failed = not bool(report.get("ok"))
+    status = "fail" if hard_failed else "attention_required" if has_blockers else "pass"
+    gate_status = (
+        "failed"
+        if hard_failed
+        else "advisory_attention_required"
+        if has_blockers
+        else report.get("gate_status")
+    )
     return {
         "kind": report.get("kind"),
         "schema_version": report.get("schema_version"),
-        "ok": report.get("ok"),
-        "status": "pass" if report.get("ok") else "fail",
+        "ok": False if has_blockers else report.get("ok"),
+        "status": status,
         "gate_class": "advisory" if report.get("advisory") else "hard",
         "verification_owner": "local_fail_fast",
         "guard_id": "agent-slop-guard",
         "owner_doc": "docs/architecture/ops/guard-lifecycle-registry.md",
-        "gate_status": report.get("gate_status"),
+        "gate_status": gate_status,
         "advisory": report.get("advisory"),
         "mode": report.get("mode"),
         "scanned_file_count": report.get("scanned_file_count"),
         "finding_count": report.get("finding_count"),
         "changed_surface_unbaselined_count": report.get("changed_surface_unbaselined_count"),
         "fixture_failure_count": report.get("fixture_failure_count"),
+        "blocker_count": len(blockers),
+        "first_blocker": blockers[0] if blockers else None,
         "blockers": blockers,
         "compact_output_budget": compact_output_budget_for_guard("agent-slop-guard"),
         "detail_command": detail_command,

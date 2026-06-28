@@ -17,6 +17,7 @@ from typing import Any
 from aippocampus_runtime.core import compact_text, now_utc
 from aippocampus_runtime.recall import semantic_cue_cache as cue_cache
 from aippocampus_runtime.recall.query_policy import split_query_terms
+from aippocampus_runtime.recall.semantic.confidence_policy import SOURCE_REOPEN_CONFIDENCE
 from aippocampus_runtime.registry.api import unique_preserve
 from aippocampus_runtime.source.agent_trace_admission import learning_priority_for_signal
 from aippocampus_runtime.source.io_kernel import write_jsonl_dict_rows
@@ -47,7 +48,7 @@ def promote_recall_cue_after_source_open(
     source_refs: list[dict[str, Any]],
     route_id: str = "",
     explicit_useful: bool = False,
-    confidence: float = 0.82,
+    confidence: float = SOURCE_REOPEN_CONFIDENCE,
 ) -> dict[str, Any]:
     """Learn a successful recall cue as a source-reopenable alias."""
 

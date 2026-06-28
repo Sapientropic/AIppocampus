@@ -142,6 +142,58 @@ class WheelContractReleaseTests(unittest.TestCase):
         self.assertEqual(calls[0][1:], ["mcp", "list-tools", "--json"])
         self.assertEqual(checks[0].status, "pass")
 
+    def test_import_only_contract_skips_cli_mcp_and_reopen_checks(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            wheel = root / "dist" / "aippocampus-0.0.0-py3-none-any.whl"
+            venv = root / "venv"
+            with (
+                patch.object(wheel_contract, "build_wheel", return_value=wheel) as build_wheel,
+                patch.object(wheel_contract, "create_and_install_venv", return_value=venv),
+                patch.object(wheel_contract, "check_import_matrix") as check_imports,
+                patch.object(wheel_contract, "check_cli_help") as check_cli_help,
+                patch.object(wheel_contract, "check_cli_command_matrix") as check_cli_matrix,
+                patch.object(wheel_contract, "check_mcp_tools") as check_mcp_tools,
+                patch.object(wheel_contract, "check_generic_jsonl_reopen_path") as check_reopen,
+            ):
+                check_imports.side_effect = lambda _venv, _work, _env, checks: wheel_contract.add(
+                    checks,
+                    "public_import_matrix",
+                    "pass",
+                    "import matrix passed",
+                )
+                result = wheel_contract.run_contract(root, import_only=True)
+
+        self.assertTrue(result["ok"], result)
+        self.assertEqual(result["mode"], "import_only")
+        self.assertTrue(result["contract"]["import_only"])
+        build_wheel.assert_called_once()
+        check_imports.assert_called_once()
+        check_cli_help.assert_not_called()
+        check_cli_matrix.assert_not_called()
+        check_mcp_tools.assert_not_called()
+        check_reopen.assert_not_called()
+
+    def test_import_only_failure_report_names_first_failure_and_next_command(self) -> None:
+        result = wheel_contract.render_result(
+            [
+                wheel_contract.Check("build_wheel", "pass", "built one wheel"),
+                wheel_contract.Check(
+                    "public_import_matrix",
+                    "fail",
+                    "No module named aippocampus_runtime.recall.foreground",
+                ),
+            ],
+            import_only=True,
+        )
+
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["status"], "fail")
+        self.assertEqual(result["mode"], "import_only")
+        self.assertEqual(result["first_failure"]["id"], "public_import_matrix")
+        self.assertIn("recall.foreground", result["first_failure"]["message"])
+        self.assertIn("--import-only --json", result["next_command"])
+
     def test_release_docs_and_workflows_run_fresh_wheel_contract(self) -> None:
         checklist = RELEASE_CHECKLIST.read_text(encoding="utf-8")
         publish_workflow = PUBLISH_WORKFLOW.read_text(encoding="utf-8")

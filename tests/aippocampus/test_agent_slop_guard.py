@@ -274,8 +274,8 @@ def payload():
         self.assertEqual(bad_findings[0]["owner_issue"], "#2699")
         self.assertEqual(allowed_findings, [])
 
-    def test_field_only_test_rule_requires_recall_deepen_followthrough(self) -> None:
-        bad = """
+    def test_field_only_test_rule_ignores_selector_inventory_without_reopen_claim(self) -> None:
+        text = """
 import unittest
 
 class RecallTests(unittest.TestCase):
@@ -284,6 +284,27 @@ class RecallTests(unittest.TestCase):
         self.assertIn("recall_selector_id", recall)
         self.assertGreater(recall["route_count"], 0)
 """
+        path = "tests/aippocampus/test_agent_recall.py"
+
+        findings = agent_slop_guard.analyze_text(text, path=path, changed_files={path})
+
+        self.assertEqual(findings, [])
+
+    def test_field_only_test_rule_requires_reopenability_followthrough(self) -> None:
+        bad = """
+import unittest
+
+class RecallTests(unittest.TestCase):
+    def test_recall_route_is_reopenable(self):
+        recall = {
+            "foreground_action": {"tool_name": "agent_deepen"},
+            "routes": [{"actionability": "low_confidence_reopenable"}],
+            "source_anchor_gate": {"opened_anchor_hits": 2},
+        }
+        self.assertEqual(recall["foreground_action"]["tool_name"], "agent_deepen")
+        self.assertEqual(recall["routes"][0]["actionability"], "low_confidence_reopenable")
+        self.assertEqual(recall["source_anchor_gate"]["opened_anchor_hits"], 2)
+"""
         allowed = """
 import unittest
 from tests.aippocampus.product_probe_helpers import assert_cli_recall_deepens_to_source
@@ -291,9 +312,43 @@ from tests.aippocampus.product_probe_helpers import assert_cli_recall_deepens_to
 class RecallTests(unittest.TestCase):
     def test_recall_selector_opens_source(self):
         recall, deepen = assert_cli_recall_deepens_to_source(self, cue="x")
-        self.assertIn("recall_selector_id", recall)
+        self.assertEqual(recall["routes"][0]["actionability"], "low_confidence_reopenable")
 """
         path = "tests/aippocampus/test_agent_recall.py"
+
+        bad_findings = agent_slop_guard.analyze_text(bad, path=path, changed_files={path})
+        allowed_findings = agent_slop_guard.analyze_text(allowed, path=path, changed_files={path})
+
+        self.assertEqual([item["rule_id"] for item in bad_findings], ["field_only_followthrough_test"])
+        self.assertEqual(bad_findings[0]["owner_issue"], "#2699")
+        self.assertEqual(allowed_findings, [])
+
+    def test_field_only_rule_catches_foreground_actionability_without_opened_source(self) -> None:
+        bad = """
+import unittest
+
+class RecallCompactProjectionTests(unittest.TestCase):
+    def test_compact_route_looks_reopenable(self):
+        payload = {
+            "foreground_action": {"tool_name": "agent_deepen", "arguments": {"request_index": 1}},
+            "routes": [{"actionability": "low_confidence_reopenable"}],
+            "source_anchor_gate": {"opened_anchor_hits": 2, "target_source_matched": True},
+        }
+        self.assertEqual(payload["foreground_action"]["tool_name"], "agent_deepen")
+        self.assertEqual(payload["routes"][0]["actionability"], "low_confidence_reopenable")
+        self.assertEqual(payload["source_anchor_gate"]["opened_anchor_hits"], 2)
+"""
+        allowed = """
+import unittest
+from tests.aippocampus.product_probe_helpers import assert_deepen_opened_expected_source
+
+class RecallCompactProjectionTests(unittest.TestCase):
+    def test_compact_route_opens_expected_source(self):
+        recall_payload, deepen_payload = assert_deepen_opened_expected_source(self, cue="x")
+        self.assertEqual(recall_payload["foreground_action"]["tool_name"], "agent_deepen")
+        self.assertEqual(deepen_payload["source_open_posture"], "target_evidence_opened")
+"""
+        path = "tests/aippocampus/test_agent_recall_compact_projection.py"
 
         bad_findings = agent_slop_guard.analyze_text(bad, path=path, changed_files={path})
         allowed_findings = agent_slop_guard.analyze_text(allowed, path=path, changed_files={path})
@@ -637,8 +692,13 @@ def load(rows):
         self.assertEqual(advisory.returncode, 0, advisory.stderr)
         payload = json.loads(advisory.stdout)
         self.assertEqual(payload["kind"], "aippocampus_agent_slop_guard")
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["status"], "attention_required")
+        self.assertEqual(payload["gate_status"], "advisory_attention_required")
         self.assertTrue(payload["advisory"])
         self.assertEqual(payload["changed_surface_unbaselined_count"], 1)
+        self.assertEqual(payload["blocker_count"], 1)
+        self.assertEqual(payload["first_blocker"]["rule_id"], "compact_projector_bypass")
         self.assertNotIn("rules", payload)
         self.assertNotIn("owner_layer_contracts", payload)
         self.assertEqual(payload["blockers"][0]["rule_id"], "compact_projector_bypass")
@@ -650,6 +710,27 @@ def load(rows):
         self.assertEqual(hard_payload["gate_status"], "failed")
         self.assertEqual(hard_payload["status"], "fail")
         self.assertEqual(hard_payload["blockers"][0]["rule_id"], "compact_projector_bypass")
+
+    def test_cli_json_allowed_fixture_remains_advisory_pass(self) -> None:
+        allowed_file = (
+            "tests/aippocampus/agent_slop_guard_fixtures/allowed/"
+            "mcp/detail_profile.py"
+        )
+        proc = subprocess.run(
+            [sys.executable, str(GUARD), "--json", "--changed-file", allowed_file],
+            cwd=REPO_ROOT,
+            text=True,
+            encoding="utf-8",
+            capture_output=True,
+            check=False,
+        )
+
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        payload = json.loads(proc.stdout)
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["status"], "pass")
+        self.assertEqual(payload["gate_status"], "advisory")
+        self.assertEqual(payload["blocker_count"], 0)
 
     def test_cli_changed_file_manifest_matches_repeated_changed_file(self) -> None:
         bad_file = (

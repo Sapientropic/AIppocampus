@@ -38,6 +38,22 @@ GENERIC_FLOW_ANCHORS = {
 } | foreground_route_quality.LOW_SIGNAL_ANCHOR_TERMS
 
 
+def _required_meaningful_hits(meaningful_anchor_count: int) -> int:
+    """Return the minimum meaningful anchors needed for APW target evidence.
+
+    APW often runs when ordinary recall is already weak. Letting a route pass
+    with one real cue plus generic workflow words such as `agent`, `issue`, or
+    `CI` reintroduces the old failure mode: compact recall offers a confident
+    source-open action that lands in nearby memory-product discussion instead
+    of the source the user actually cued. Single-anchor technical probes still
+    pass, but multi-anchor cues need at least two meaningful source anchors.
+    """
+
+    if meaningful_anchor_count <= 1:
+        return max(0, meaningful_anchor_count)
+    return min(2, meaningful_anchor_count)
+
+
 def cjk_context_anchor_terms(query: str, *, limit: int = 8) -> list[str]:
     """Keep generic ASCII flow words from standing in for mixed CJK cues."""
 
@@ -94,7 +110,9 @@ def low_actual_anchor_coverage_reason(
         return "missing_cjk_context_anchor"
     if int(quality.get("meaningful_anchor_count") or 0) <= 0:
         return "low_signal_apw_anchors_only"
-    if int(quality.get("meaningful_anchor_hits") or 0) <= 0:
+    meaningful_anchor_count = int(quality.get("meaningful_anchor_count") or 0)
+    meaningful_anchor_hits = int(quality.get("meaningful_anchor_hits") or 0)
+    if meaningful_anchor_hits < _required_meaningful_hits(meaningful_anchor_count):
         return "low_meaningful_anchor_coverage"
     if len(anchors) <= 2:
         return "" if matched & anchors else "low_actual_source_anchor_coverage"
@@ -131,8 +149,12 @@ def source_anchor_gate(
     missing_cjk_context = bool(cjk_context_anchors and not (matched & cjk_context_anchors))
     meaningful_anchor_count = int(quality.get("meaningful_anchor_count") or 0)
     meaningful_anchor_hits = int(quality.get("meaningful_anchor_hits") or 0)
+    required_meaningful_hits = _required_meaningful_hits(meaningful_anchor_count)
     weak_only = meaningful_anchor_count <= 0
-    missing_meaningful = meaningful_anchor_count > 0 and meaningful_anchor_hits <= 0
+    missing_meaningful = (
+        meaningful_anchor_count > 0
+        and meaningful_anchor_hits < required_meaningful_hits
+    )
     passed = hits >= required and not missing_cjk_context and not weak_only and not missing_meaningful
     return {
         "status": "pass" if passed else "blocked",
@@ -150,6 +172,7 @@ def source_anchor_gate(
         "required_anchor_hits": required,
         "meaningful_anchor_count": meaningful_anchor_count,
         "meaningful_anchor_hits": meaningful_anchor_hits,
+        "required_meaningful_anchor_hits": required_meaningful_hits,
         "weak_anchor_hits": int(quality.get("weak_anchor_hits") or 0),
         "target_source_matched": passed,
     }

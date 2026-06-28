@@ -14,6 +14,7 @@ from typing import Any
 from aippocampus_runtime import core, schema_profiles
 from aippocampus_runtime.contracts import shell_quote
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
+from aippocampus_runtime.source.query_match_gate import query_match_gate
 
 CARD_FIELD_BUDGET = 8
 CARD_BYTE_BUDGET = 900
@@ -134,6 +135,24 @@ def _next_action(decision: str, request: Mapping[str, Any], packet: Mapping[str,
     return "continue_normally"
 
 
+def _next_action_for_canonical_action(
+    action: Mapping[str, Any],
+    *,
+    fallback: str,
+) -> str:
+    tool_name = str(action.get("tool_name") or "")
+    action_id = str(action.get("action_id") or "")
+    if tool_name == "search_memory":
+        return "search_memory"
+    if tool_name == "agent_deepen":
+        return "deepen"
+    if action_id == "register_source_before_recall":
+        return "onboard_source"
+    if action_id == "use_opened_route_context":
+        return "continue_with_opened_context"
+    return fallback
+
+
 def _search_recovery_action(query: Any, *, registry_wide: bool = False) -> dict[str, Any]:
     cue = _safe_text(query, limit=160)
     base = {
@@ -177,6 +196,23 @@ def _search_recovery_action(query: Any, *, registry_wide: bool = False) -> dict[
     }
 
 
+def _phrase_like_registry_search_first(query: Any) -> bool:
+    gate = query_match_gate(str(query or ""))
+    return bool(gate.get("phrase_like_query")) and int(gate.get("distinctive_anchor_count") or 0) >= 4
+
+
+def _inspect_low_confidence_action(request: Mapping[str, Any]) -> dict[str, Any]:
+    action = _deepen_route_action(request)
+    action["action_id"] = "inspect_low_confidence_route"
+    action["label"] = "Inspect low-confidence recall route"
+    action["claim_boundary"] = "low_confidence_no_claim_before_reopen"
+    action["why"] = (
+        "A route surfaced but failed target-anchor confidence; open it read-only as "
+        "navigation inspection before broad source search."
+    )
+    return action
+
+
 def _onboarding_register_action() -> dict[str, Any]:
     return {
         "action_id": "register_source_before_recall",
@@ -208,15 +244,12 @@ def _canonical_action(
     source_registered: bool | None,
 ) -> dict[str, Any]:
     if decision == "recover_low_confidence_route" and request:
-        action = _deepen_route_action(request)
-        action["action_id"] = "inspect_low_confidence_route"
-        action["label"] = "Inspect low-confidence recall route"
-        action["claim_boundary"] = "low_confidence_no_claim_before_reopen"
-        action["why"] = (
-            "A route surfaced but failed target-anchor confidence; open it read-only as "
-            "navigation inspection before broad source search."
-        )
-        return action
+        if _phrase_like_registry_search_first(query) and source_registered is not False:
+            return _search_recovery_action(
+                query,
+                registry_wide=True,
+            )
+        return _inspect_low_confidence_action(request)
     if decision in {"recover_no_route", "recover_low_confidence_route"}:
         if source_registered is False:
             return _onboarding_register_action()
@@ -286,21 +319,26 @@ def build_recall_foreground_action_card(
     route_id = str(packet.get("route_id") or "")
     request = _request_for_route(deepen_requests, route_id)
     decision = _decision_for(status, packet, request)
+    canonical_action = _canonical_action(
+        decision,
+        request,
+        query,
+        source_registered=source_registered,
+    )
+    fallback_next_action = _next_action(decision, request, packet)
     card: dict[str, Any] = {
         "decision": decision,
         "why": _why_for_decision(decision, packet),
-        "next_action": _next_action(decision, request, packet),
+        "next_action": _next_action_for_canonical_action(
+            canonical_action,
+            fallback=fallback_next_action,
+        ),
         "claim_boundary": (
             "no_route_claim"
             if decision in {"continue_normally", "recover_no_route"}
             else CLAIM_BOUNDARY
         ),
-        "canonical_action": _canonical_action(
-            decision,
-            request,
-            query,
-            source_registered=source_registered,
-        ),
+        "canonical_action": canonical_action,
     }
     if decision == "recover_no_route":
         search_action = _search_recovery_action(query)
@@ -315,11 +353,15 @@ def build_recall_foreground_action_card(
             else _onboarding_status_action()
         )
         if request:
-            search_action["why"] = (
-                "Fallback only: use broad source search if the low-confidence route "
-                "does not open the right source."
-            )
-            card["safe_next_actions"] = [card["canonical_action"], search_action]
+            inspect_action = _inspect_low_confidence_action(request)
+            if card["canonical_action"].get("action_id") == search_action.get("action_id"):
+                card["safe_next_actions"] = [inspect_action]
+            else:
+                search_action["why"] = (
+                    "Fallback only: use broad source search if the low-confidence route "
+                    "does not open the right source."
+                )
+                card["safe_next_actions"] = [card["canonical_action"], search_action]
         else:
             card["safe_next_actions"] = [card["canonical_action"], search_action]
     if packet:

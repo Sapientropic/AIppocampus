@@ -43,6 +43,7 @@ CURRENT_FLAT_HEADING_RE = re.compile(r"^Current flat files:\s*$")
 MARKDOWN_HEADING_RE = re.compile(r"^#{2,6}\s+")
 EXCEPTION_ROW_RE = re.compile(r"^\|\s*`(?P<file>[A-Za-z_][A-Za-z0-9_]*\.py)`\s*\|(?P<rest>.*)\|\s*$")
 EXCEPTION_KINDS = {"entrypoint", "temporary_compatibility_wrapper"}
+OWNER_FILE_RE = re.compile(r"^\s*-\s*`(?P<path>[^`]+\.py)`\s*$")
 
 
 def _flat_recall_modules(repo_root: Path) -> set[str]:
@@ -143,6 +144,87 @@ def _flat_exceptions(text: str) -> tuple[set[str], list[str]]:
     return exceptions, issues
 
 
+def _owner_family_inventory(text: str) -> list[dict[str, object]]:
+    families: list[dict[str, object]] = []
+    current: dict[str, object] | None = None
+    section: str | None = None
+    for line in text.splitlines():
+        if line.startswith("### "):
+            if current is not None:
+                families.append(current)
+            current = {
+                "owner": line.removeprefix("### ").strip(),
+                "flat_files": [],
+                "owner_package_files": [],
+            }
+            section = None
+            continue
+        if current is None:
+            continue
+        if line.strip() == "Current flat files:":
+            section = "flat_files"
+            continue
+        if line.strip() == "Current owner package:":
+            section = "owner_package_files"
+            continue
+        if MARKDOWN_HEADING_RE.match(line):
+            section = None
+            continue
+        file_match = OWNER_FILE_RE.match(line)
+        if section and file_match:
+            cast_list = current[section]
+            if isinstance(cast_list, list):
+                cast_list.append(file_match.group("path"))
+    if current is not None:
+        families.append(current)
+    for family in families:
+        flat_files = family.get("flat_files")
+        package_files = family.get("owner_package_files")
+        family["flat_file_count"] = len(flat_files) if isinstance(flat_files, list) else 0
+        family["owner_package_file_count"] = (
+            len(package_files) if isinstance(package_files, list) else 0
+        )
+    return families
+
+
+def _int_inventory_value(value: object) -> int:
+    if isinstance(value, int) and not isinstance(value, bool):
+        return value
+    if isinstance(value, str) and value.isdigit():
+        return int(value)
+    return 0
+
+
+def recall_fragmentation_inventory(repo_root: Path) -> dict[str, object]:
+    """Return a compact, auditable inventory of recall owner fragmentation."""
+
+    owner_map = repo_root / OWNER_MAP
+    if not owner_map.exists():
+        return {
+            "kind": "recall_fragmentation_inventory",
+            "owner_map": OWNER_MAP,
+            "issues": [f"missing recall owner map: {OWNER_MAP}"],
+        }
+    text = owner_map.read_text(encoding="utf-8")
+    families = _owner_family_inventory(text)
+    legacy_modules = _legacy_flat_modules(text)
+    flat_modules = _flat_recall_modules(repo_root)
+    return {
+        "kind": "recall_fragmentation_inventory",
+        "owner_map": OWNER_MAP,
+        "new_flat_files_rejected_by_default": True,
+        "sealed_legacy_flat_count": len(legacy_modules),
+        "current_flat_module_count": len(flat_modules),
+        "owner_package_file_count": sum(
+            _int_inventory_value(family.get("owner_package_file_count"))
+            for family in families
+        ),
+        "unclassified_flat_modules": sorted(flat_modules - legacy_modules),
+        "owner_families": families,
+        "issues": recall_owner_map_issues(repo_root),
+    }
+
+
 def recall_owner_map_issues(repo_root: Path) -> list[str]:
     issues: list[str] = []
     owner_map = repo_root / OWNER_MAP
@@ -200,4 +282,4 @@ def recall_owner_map_issues(repo_root: Path) -> list[str]:
     return issues
 
 
-__all__ = ["recall_owner_map_issues"]
+__all__ = ["recall_fragmentation_inventory", "recall_owner_map_issues"]

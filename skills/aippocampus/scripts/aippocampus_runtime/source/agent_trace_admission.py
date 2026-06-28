@@ -8,14 +8,14 @@ slightly different authority story.
 
 from __future__ import annotations
 
-import json
 import re
 from collections import Counter
 from collections.abc import Iterable, Mapping
 from typing import Any
 
 from aippocampus_runtime.core import stable_json_join_id
-from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
+from aippocampus_runtime.source import agent_trace_families
+from aippocampus_runtime.source.io_kernel import normalize_source_refs
 
 ADMISSION_LEVELS = (
     "ignore",
@@ -71,41 +71,66 @@ NEGATIVE_OUTCOMES = {
 REPLAY_OUTCOMES = {"missed_opportunity", "manual_recovered", "replay_sample"}
 HINDSIGHT_OUTCOMES = {"hindsight_relabel", "narrower_route_found", "failed_but_relabelable"}
 
-RAW_TRACE_FAMILIES = {
-    "raw_stdout",
-    "raw_stderr",
-    "full_command_args",
-    "raw_tool_output",
-    "selector_cache_internal",
-    "policy_gate_matrix",
-}
-IGNORE_FAMILIES = {"routine_commentary", "chain_of_thought_like_process"}
-SOURCE_OPEN_FAMILIES = {
-    "successful_source_open_receipt",
-    "successful_recall_deepen_source_open",
-}
-CHECK_RECEIPT_FAMILIES = {"successful_test_check_event", "successful_tool_check_receipt"}
-ROUTE_NOTE_FAMILIES = {"joined_route_note", "agent_trajectory"}
-FINAL_CLOSEOUT_FAMILIES = {"final_answer_closeout", "assistant_final_answer_closeout"}
-REPO_BREADCRUMB_FAMILIES = {"repo_breadcrumb", "safe_repo_relative_breadcrumb"}
-
-SECRET_OR_PATH_RE = re.compile(
-    r"(?i)(api[_-]?key|secret|token|password|passwd|bearer|authorization|"
-    r"sk-[a-z0-9]|[a-z]:[\\/]|/(?:users|home|tmp|private|var)/)"
+SOURCE_REF_INLINE_FIELDS = (
+    "thread_key",
+    "thread_id",
+    "message_id",
+    "turn_id",
+    "turn_index",
+    "source_ref",
+    "source_id",
+    "source_line",
+    "line",
 )
-
 
 def _text(value: Any) -> str:
     return str(value or "").strip()
 
 
-def _family(row: Mapping[str, Any]) -> str:
-    return _text(
-        row.get("trace_family")
-        or row.get("family")
-        or row.get("event_kind")
-        or row.get("kind")
-    ).casefold()
+def _inline_ref_has_anchor(ref: Mapping[str, Any]) -> bool:
+    return any(
+        ref.get(key) not in (None, "", [])
+        for key in (
+            "message_id",
+            "turn_id",
+            "turn_index",
+            "source_line",
+            "line",
+            "source_id",
+        )
+    )
+
+
+def _behavior_source_refs(row: Mapping[str, Any]) -> list[dict[str, Any]]:
+    raw_refs: list[Mapping[str, Any]] = []
+    refs = row.get("source_refs")
+    if isinstance(refs, list):
+        raw_refs.extend(ref for ref in refs if isinstance(ref, Mapping))
+    inline = {
+        key: row.get(key)
+        for key in SOURCE_REF_INLINE_FIELDS
+        if row.get(key) not in (None, "", [])
+    }
+    if inline and _inline_ref_has_anchor(inline):
+        raw_refs.append(inline)
+    normalized = normalize_source_refs(
+        raw_refs,
+        limit=8,
+        require_anchor=True,
+        require_thread=False,
+        identity_key=True,
+        allow_string_ref=False,
+    )
+    return [dict(ref) for ref in normalized]
+
+
+def _adapt_trace_row(row: Mapping[str, Any]) -> dict[str, Any]:
+    adapted = dict(row)
+    source_refs = _behavior_source_refs(row)
+    if source_refs:
+        adapted["source_refs"] = source_refs
+        adapted["source_ref_count"] = len(source_refs)
+    return adapted
 
 
 def _has_refs(row: Mapping[str, Any], key: str = "source_refs") -> bool:
@@ -132,15 +157,6 @@ def _success(row: Mapping[str, Any]) -> bool:
     return False
 
 
-def _safe_row_blob(row: Mapping[str, Any]) -> str:
-    redacted = redact_sensitive_values(redact_private_paths(dict(row)))
-    return json.dumps(redacted, ensure_ascii=False, sort_keys=True, default=str)
-
-
-def _contains_private_shape(row: Mapping[str, Any]) -> bool:
-    return bool(SECRET_OR_PATH_RE.search(_safe_row_blob(row)))
-
-
 def _cue_hash(cue: Any = None, row: Mapping[str, Any] | None = None) -> str:
     row = row or {}
     explicit = _text(row.get("cue_hash") or row.get("prompt_hash") or row.get("query_hash"))
@@ -156,22 +172,6 @@ def _cue_hash(cue: Any = None, row: Mapping[str, Any] | None = None) -> str:
         default_str=False,
         length=20,
     )
-
-
-def _safe_optional_token(value: Any, *, prefix: str) -> str:
-    text = _text(value)
-    if not text:
-        return ""
-    redacted = redact_sensitive_values(redact_private_paths(text))
-    if redacted != text or SECRET_OR_PATH_RE.search(redacted):
-        return stable_json_join_id(
-            prefix,
-            redacted,
-            ensure_ascii=False,
-            default_str=False,
-            length=20,
-        )
-    return redacted[:160]
 
 
 def _source_ref_count(row: Mapping[str, Any]) -> int:
@@ -310,22 +310,27 @@ def _data_card(
 
 
 def classify_trace_row(row: Mapping[str, Any]) -> dict[str, Any]:
-    family = _family(row)
+    row = _adapt_trace_row(row)
+    family = agent_trace_families.normalized_family(row)
+    producer_family = agent_trace_families.raw_family(row)
+    unknown_family = agent_trace_families.unknown_family(row)
     admission_level = "operator_only"
     authority_join = "trace_operator_only"
     training_role = "none"
     source_state = "missing_source_or_receipt"
     reason = "default_operator_only"
 
-    if family in IGNORE_FAMILIES:
+    if family in agent_trace_families.IGNORE_FAMILIES:
         admission_level = "ignore"
         authority_join = "ignored_routine_trace"
         reason = "routine_or_process_prose"
-    elif family in RAW_TRACE_FAMILIES or _contains_private_shape(row):
+    elif family in agent_trace_families.RAW_TRACE_FAMILIES or (
+        agent_trace_families.contains_private_shape(row)
+    ):
         admission_level = "operator_only"
         authority_join = "raw_or_private_trace_operator_only"
         reason = "raw_or_private_trace_material"
-    elif family in FINAL_CLOSEOUT_FAMILIES:
+    elif family in agent_trace_families.FINAL_CLOSEOUT_FAMILIES:
         if _has_refs(row) and _has_receipt(row):
             admission_level = "reopenable_route"
             authority_join = "reported_and_receipted_navigation"
@@ -338,25 +343,36 @@ def classify_trace_row(row: Mapping[str, Any]) -> dict[str, Any]:
             training_role = "replay_sample"
             source_state = "source_refs_without_receipt"
             reason = "closeout_self_report_only"
-    elif family in SOURCE_OPEN_FAMILIES and _has_refs(row):
+    elif family in agent_trace_families.SOURCE_OPEN_FAMILIES and _has_refs(row):
         admission_level = "bounded_evidence_after_open"
         authority_join = "behavior_receipt_navigation"
         training_role = "positive_demo"
         source_state = "source_open_receipt"
         reason = "source_open_anchor_receipt"
-    elif family in CHECK_RECEIPT_FAMILIES and _success(row) and _has_refs(row):
+    elif (
+        family in agent_trace_families.CHECK_RECEIPT_FAMILIES
+        and _success(row)
+        and _has_refs(row)
+    ):
         admission_level = "reopenable_route"
         authority_join = "behavior_receipt_navigation"
         training_role = "process_supervision"
         source_state = "source_refs_and_success_receipt"
         reason = "successful_check_receipt_with_source_ref"
-    elif family in ROUTE_NOTE_FAMILIES and _has_refs(row) and _has_refs(row, "joined_evidence_refs"):
+    elif (
+        family in agent_trace_families.ROUTE_NOTE_FAMILIES
+        and _has_refs(row)
+        and _has_refs(row, "joined_evidence_refs")
+    ):
         admission_level = "reopenable_route"
         authority_join = "joined_process_navigation"
         training_role = "process_supervision"
         source_state = "joined_source_refs"
         reason = "route_note_joined_to_source"
-    elif family in REPO_BREADCRUMB_FAMILIES and row.get("safe_repo_relative") is True:
+    elif (
+        family in agent_trace_families.REPO_BREADCRUMB_FAMILIES
+        and row.get("safe_repo_relative") is True
+    ):
         admission_level = "navigation_candidate"
         authority_join = "repo_breadcrumb_navigation_only"
         training_role = "replay_sample"
@@ -366,10 +382,15 @@ def classify_trace_row(row: Mapping[str, Any]) -> dict[str, Any]:
     return {
         "trace_id": _text(row.get("trace_id") or row.get("id")),
         "trace_family": family or "unknown",
+        "producer_trace_family": producer_family or "",
+        "family_alias_applied": bool(producer_family and producer_family != family),
+        "unknown_trace_family": unknown_family,
         "admission_level": admission_level,
         "authority_join": authority_join,
         "training_role": training_role,
         "source_state": source_state,
+        "source_ref_count": _source_ref_count(row),
+        "source_ref_digest": _source_ref_digest(row),
         "reason": reason,
         "candidate_lifecycle_state": _candidate_lifecycle_for(admission_level),
         "graph_projection": _graph_projection_for(admission_level),
@@ -399,6 +420,8 @@ def behavior_training_signal_from_trace(
         or row.get("status")
     ).casefold()
     role = _training_role_from_outcome(normalized_outcome, classification["training_role"])
+    if role == "positive_demo" and classification["admission_level"] == "operator_only":
+        role = "none"
     if role == "none" and classification["admission_level"] == "reopenable_route":
         role = "process_supervision"
     signal_id = stable_json_join_id(
@@ -407,8 +430,11 @@ def behavior_training_signal_from_trace(
         classification["admission_level"],
         role,
         _cue_hash(cue, row),
-        _safe_optional_token(row.get("route_id") or row.get("candidate_id"), prefix="route"),
-        _source_ref_digest(row),
+        agent_trace_families.safe_optional_token(
+            row.get("route_id") or row.get("candidate_id"),
+            prefix="route",
+        ),
+        classification.get("source_ref_digest"),
         ensure_ascii=False,
         default_str=False,
         length=20,
@@ -425,16 +451,22 @@ def behavior_training_signal_from_trace(
         "candidate_lifecycle_state": classification["candidate_lifecycle_state"],
         "graph_projection": classification["graph_projection"],
         "cue_hash": _cue_hash(cue, row),
-        "route_id": _safe_optional_token(row.get("route_id") or row.get("candidate_id"), prefix="route"),
-        "preferred_route_id": _safe_optional_token(row.get("preferred_route_id"), prefix="route"),
+        "route_id": agent_trace_families.safe_optional_token(
+            row.get("route_id") or row.get("candidate_id"),
+            prefix="route",
+        ),
+        "preferred_route_id": agent_trace_families.safe_optional_token(
+            row.get("preferred_route_id"),
+            prefix="route",
+        ),
         "rejected_route_ids": [
             token
             for value in row.get("rejected_route_ids") or []
-            if (token := _safe_optional_token(value, prefix="route"))
+            if (token := agent_trace_families.safe_optional_token(value, prefix="route"))
         ][:8],
         "outcome": normalized_outcome,
-        "source_ref_count": _source_ref_count(row),
-        "source_ref_digest": _source_ref_digest(row),
+        "source_ref_count": int(classification.get("source_ref_count") or 0),
+        "source_ref_digest": classification.get("source_ref_digest") or "",
         "opened_anchor_hits": int(row.get("opened_anchor_hits") or row.get("source_open_anchor_hits") or 0),
         "micro_data_card": classification["micro_data_card"],
         "privacy_boundary": {
@@ -456,7 +488,10 @@ def behavior_training_signal_from_trace(
             "cue_hash": signal["cue_hash"],
             "preferred_route_id": signal["preferred_route_id"],
             "rejected_route_ids": signal["rejected_route_ids"],
-            "scope": _safe_optional_token(row.get("scope") or row.get("scope_key"), prefix="scope"),
+            "scope": agent_trace_families.safe_optional_token(
+                row.get("scope") or row.get("scope_key"),
+                prefix="scope",
+            ),
             "freshness": _text(row.get("freshness") or "recheck_on_new_feedback"),
         }
     return signal
@@ -532,7 +567,7 @@ def draft_navigation_candidate_from_signal(
     producer_family: str = "behavior_training_signal",
 ) -> dict[str, Any]:
     cue_hash = _text(signal.get("cue_hash"))
-    route_id = _safe_optional_token(signal.get("route_id"), prefix="route")
+    route_id = agent_trace_families.safe_optional_token(signal.get("route_id"), prefix="route")
     dedupe_key = stable_json_join_id(
         "navcand",
         producer_family,
@@ -594,7 +629,9 @@ def verify_navigation_candidate(
     verified["verifier_outcome"] = normalized
     verified["lifecycle_state"] = next_state
     verified["training_role"] = role
-    verified["verified_reason"] = _safe_optional_token(reason, prefix="reason") if reason else ""
+    verified["verified_reason"] = (
+        agent_trace_families.safe_optional_token(reason, prefix="reason") if reason else ""
+    )
     verified["foreground_eligible"] = next_state in {
         "actionable_reopenable_route",
         "source_open_claim_ready",
@@ -712,6 +749,9 @@ def project_trace_admission(
     counts = Counter(item["admission_level"] for item in admitted)
     training_counts = Counter(item["training_role"] for item in admitted)
     graph_counts = Counter(item["graph_projection"] for item in admitted)
+    unknown_families = Counter(
+        item["unknown_trace_family"] for item in admitted if item.get("unknown_trace_family")
+    )
     actionable = [item for item in admitted if _priority(item) <= 2]
     actionable.sort(key=_priority)
 
@@ -728,6 +768,11 @@ def project_trace_admission(
             ),
             "operator_only_count": counts.get("operator_only", 0),
             "ignored_count": counts.get("ignore", 0),
+            "unknown_family_count": sum(unknown_families.values()),
+            "unknown_trace_families": [
+                {"family": family, "count": count}
+                for family, count in sorted(unknown_families.items())[:8]
+            ],
         }
 
     primary = actionable[0] if actionable else None

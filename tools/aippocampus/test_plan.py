@@ -90,6 +90,16 @@ NAVIGATION_DATA_QUALITY_SURFACE_PREFIXES = (
     "skills/aippocampus/scripts/aippocampus_runtime/navigation/theme",
     "skills/aippocampus/scripts/aippocampus_runtime/subconscious/",
 )
+FOLLOWTHROUGH_SENSITIVE_TEST_PATH_TOKENS = (
+    "agent_recall",
+    "apw",
+    "deepen",
+    "foreground",
+    "mcp",
+    "recall",
+    "source_open",
+    "source_reopen",
+)
 DEBT_REGISTER_SOURCES = (
     REPO_ROOT / "docs" / "architecture" / "architecture-debt-register.md",
     REPO_ROOT / "docs" / "evidence" / "reports" / "architecture-debt-snapshot-2026-06-04.md",
@@ -520,6 +530,8 @@ def classify_changed_files(changed_files: Iterable[str]) -> set[str]:
             categories.add("release_tool")
         if path.startswith("tests/aippocampus/") and not _is_agent_slop_fixture(path):
             categories.add("tests")
+            if _is_followthrough_sensitive_test_path(path):
+                categories.add("followthrough_sensitive_tests")
         if path.startswith("benchmarks/aippocampus/") or path.startswith("benchmark_corpus/"):
             categories.add("benchmark")
         if path.startswith("tests/aippocampus/test_benchmark"):
@@ -538,6 +550,8 @@ def classify_changed_files(changed_files: Iterable[str]) -> set[str]:
             categories.add("mcp")
         if path.startswith("skills/aippocampus/scripts/"):
             categories.add("runtime")
+        if path.startswith("skills/aippocampus/scripts/aippocampus_runtime/") and path.endswith(".py"):
+            categories.add("packaged_runtime_import")
         if path in APW_PARITY_SURFACES:
             categories.add("apw_parity")
         if path in RECALL_INTEGRATION_READINESS_SURFACES:
@@ -557,6 +571,14 @@ def _is_static_python_surface(path: str) -> bool:
 
 def _is_agent_slop_fixture(path: str) -> bool:
     return _repo_relative(path).startswith("tests/aippocampus/agent_slop_guard_fixtures/")
+
+
+def _is_followthrough_sensitive_test_path(path: str) -> bool:
+    path = _repo_relative(path)
+    if not path.startswith("tests/aippocampus/") or _is_agent_slop_fixture(path):
+        return False
+    lowered = path.casefold()
+    return any(token in lowered for token in FOLLOWTHROUGH_SENSITIVE_TEST_PATH_TOKENS)
 
 
 def _mypy_tracked_paths() -> set[str]:
@@ -769,6 +791,24 @@ def build_test_plan(
             ),
         )
 
+    if "packaged_runtime_import" in categories:
+        _add_command(
+            commands,
+            PlannedCommand(
+                command=py_script(
+                    "tools/aippocampus/release/check_wheel_contract.py",
+                    "--import-only --json",
+                    local_executable=local_executable,
+                ),
+                reason=(
+                    "Shipped runtime import surfaces changed; build/install the wheel "
+                    "and run the public import matrix before focused source-tree tests "
+                    "so missing packaged modules are not discovered first in CI."
+                ),
+                scope="packaged-runtime",
+            ),
+        )
+
     if "docs" in categories or "skill_surface" in categories:
         _add_command(
             commands,
@@ -835,7 +875,8 @@ def build_test_plan(
                 command=py_command(
                     "-m unittest "
                     "tests.aippocampus.test_agent_discovery_release_check "
-                    "tests.aippocampus.test_public_boundary_check -v",
+                    "tests.aippocampus.test_public_boundary_check "
+                    "tests.aippocampus.test_wheel_contract_release -v",
                     local_executable=local_executable,
                 ),
                 reason="Release tooling changes need focused checks for metadata readiness and public-boundary hygiene.",
@@ -1026,6 +1067,7 @@ def build_test_plan(
             ]
             if categories
             & {"mcp", "apw_parity", "recall_integration_readiness", "hooks", "runtime"}
+            or "followthrough_sensitive_tests" in categories
             else []
         ),
         "followup": [

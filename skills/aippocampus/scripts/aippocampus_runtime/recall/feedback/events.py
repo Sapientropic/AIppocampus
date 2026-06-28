@@ -32,7 +32,7 @@ from aippocampus_runtime.source.agent_trace_admission import (
     behavior_training_signal_from_trace,
     project_behavior_training_ledger,
 )
-from aippocampus_runtime.source.io_kernel import safe_float
+from aippocampus_runtime.source.io_kernel import normalize_source_refs, safe_float
 
 SCHEMA_VERSION = 1
 RECALL_FEEDBACK_KIND = "aippocampus_recall_feedback_event"
@@ -115,10 +115,10 @@ def _validated_kind(
     aliases: Mapping[str, str] | None = None,
 ) -> str:
     text = str(value or "").strip()
-    if aliases and text in aliases:
-        return aliases[text]
     if text in accepted:
         return text
+    if aliases and text in aliases:
+        return aliases[text]
     raise InvalidFeedbackValue(field, text, accepted, aliases)
 
 
@@ -224,7 +224,8 @@ def active_flow_event(
     route_kind: str,
     signal: str,
     source_id: str = "",
-    source_ref: str = "",
+    source_ref: Any = "",
+    source_refs: Iterable[Mapping[str, Any]] | None = None,
     timestamp: str | None = None,
     weight_delta: float | None = None,
     reason: str = "",
@@ -237,14 +238,15 @@ def active_flow_event(
     )
     safe_route_kind = _validated_kind(route_kind, ROUTE_KINDS, field="route_kind")
     delta = DEFAULT_SIGNAL_DELTAS[safe_signal] if weight_delta is None else safe_float(weight_delta)
-    return {
+    normalized_refs = _canonical_source_refs(source_ref=source_ref, source_refs=source_refs)
+    row = {
         "schema_version": SCHEMA_VERSION,
         "kind": ACTIVE_FLOW_EVENT_KIND,
         "created_at": timestamp or now_utc(),
         "route_id": _safe_token(route_id, fallback_prefix="route"),
         "route_kind": safe_route_kind,
         "signal": safe_signal,
-        "source_id": _safe_token(source_id or source_ref, fallback_prefix="source"),
+        "source_id": _source_id_from_inputs(source_id, source_ref),
         "weight_delta": round(delta, 6),
         "reason": _safe_token(reason, fallback_prefix="reason") if reason else "",
         "signal_family": "route_context",
@@ -259,6 +261,38 @@ def active_flow_event(
             "does_not_delete_source_refs": True,
         },
     }
+    if normalized_refs:
+        row["source_refs"] = normalized_refs
+        row["source_ref_count"] = len(normalized_refs)
+    return row
+
+
+def _canonical_source_refs(
+    *,
+    source_ref: Any = "",
+    source_refs: Iterable[Mapping[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    raw_refs: Any = source_refs if source_refs is not None else source_ref
+    refs = normalize_source_refs(
+        raw_refs,
+        limit=4,
+        require_anchor=True,
+        require_thread=False,
+        identity_key=True,
+        allow_string_ref=False,
+    )
+    return [dict(ref) for ref in refs]
+
+
+def _source_id_from_inputs(source_id: Any, source_ref: Any) -> str:
+    if source_id:
+        return _safe_token(source_id, fallback_prefix="source")
+    if isinstance(source_ref, Mapping):
+        for key in ("source_id", "source_ref", "thread_key", "message_id"):
+            if source_ref.get(key):
+                return _safe_token(source_ref.get(key), fallback_prefix="source")
+        return _safe_token("", fallback_prefix="source")
+    return _safe_token(source_ref, fallback_prefix="source")
 
 
 def alias_merge_event(
@@ -465,6 +499,12 @@ def feedback_training_signal_rows(events: Iterable[Mapping[str, Any]]) -> list[d
             "scope": event.get("blend_context") or event.get("scope") or "",
             "safe_repo_relative": True,
         }
+        if isinstance(event.get("source_refs"), list):
+            source_refs = [
+                dict(ref) for ref in event.get("source_refs") or [] if isinstance(ref, Mapping)
+            ]
+            trace["source_refs"] = source_refs
+            trace["source_ref_count"] = len(source_refs)
         rows.append(behavior_training_signal_from_trace(trace))
     return rows
 
@@ -485,10 +525,12 @@ def recall_feedback_calibration_report(events: Iterable[Mapping[str, Any]]) -> d
             route_id = _safe_token(event.get("route_id"), fallback_prefix="route")
             route_kind = _safe_kind(event.get("route_kind"), ROUTE_KINDS, "active_path")
             outcome = _safe_kind(event.get("signal"), ACTIVE_FLOW_SIGNALS, "candidate_delivered")
+            event_delta = safe_float(event.get("weight_delta"), DEFAULT_SIGNAL_DELTAS[outcome])
         elif kind == RECALL_FEEDBACK_KIND:
             route_id = _safe_token(event.get("candidate_id"), fallback_prefix="candidate")
             route_kind = _safe_kind(event.get("route_kind"), ROUTE_KINDS, "active_path")
             outcome = _safe_kind(event.get("outcome"), RECALL_OUTCOMES, "candidate_delivered")
+            event_delta = DEFAULT_SIGNAL_DELTAS.get(outcome, 0.0)
         else:
             continue
         key = (route_id, route_kind)
@@ -502,9 +544,8 @@ def recall_feedback_calibration_report(events: Iterable[Mapping[str, Any]]) -> d
                 "signals": Counter(),
             },
         )
-        delta = DEFAULT_SIGNAL_DELTAS.get(outcome, 0.0)
         row["event_count"] += 1
-        row["delta"] += delta
+        row["delta"] += event_delta
         row["signals"][outcome] += 1
         totals[outcome] += 1
 

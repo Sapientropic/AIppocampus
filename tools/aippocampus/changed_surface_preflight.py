@@ -29,6 +29,7 @@ SCOPE_PRIORITY = {
     "architecture-debt": 20,
     "changed-surface-debt": 30,
     "changed-surface-advisory": 40,
+    "packaged-runtime": 50,
     "focused": 60,
     "diagnostic": 80,
     "pre-push": 90,
@@ -47,6 +48,7 @@ DEFAULT_PREFLIGHT_BASE_SCOPES = {
     "architecture-debt",
     "changed-surface-debt",
     "changed-surface-advisory",
+    "packaged-runtime",
     "diagnostic",
     "sanity",
 }
@@ -375,6 +377,14 @@ def _compact_skipped_command(item: Mapping[str, Any]) -> dict[str, Any]:
     return row
 
 
+def _compact_manual_claim(item: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        key: item[key]
+        for key in ("gate_class", "verification_owner", "guard_id", "reason")
+        if key in item and item[key] not in {None, ""}
+    }
+
+
 def _compact_duplicate_run_budget(report: Mapping[str, Any]) -> dict[str, Any]:
     row = {
         "status": report.get("status"),
@@ -461,6 +471,7 @@ def _compact_preflight_report(report: Mapping[str, Any]) -> dict[str, Any]:
         "schema_version": report.get("schema_version"),
         "ok": report.get("ok"),
         "status": report.get("status"),
+        "runnable_gates_status": report.get("runnable_gates_status"),
         "gate_class": report.get("gate_class"),
         "verification_owner": report.get("verification_owner"),
         "guard_id": report.get("guard_id"),
@@ -474,6 +485,8 @@ def _compact_preflight_report(report: Mapping[str, Any]) -> dict[str, Any]:
         "skipped_command_count": report.get("skipped_command_count"),
         "skipped_by_mode_count": report.get("skipped_by_mode_count"),
         "first_failure": report.get("first_failure"),
+        "manual_required_claim_count": report.get("manual_required_claim_count"),
+        "first_manual_required_claim": report.get("first_manual_required_claim"),
         "duplicate_run_budget": _compact_duplicate_run_budget(
             report.get("duplicate_run_budget") or {}
         ),
@@ -533,14 +546,28 @@ def run_preflight(
             break
 
     skipped_after_failure = runnable[len(results) :]
-    ok = first_failure is None
+    manual_required = [
+        item
+        for item in list(plan.get("manual_required_claims") or [])
+        if isinstance(item, Mapping)
+    ]
+    runnable_gates_passed = first_failure is None
+    ok = runnable_gates_passed and not manual_required
+    status = (
+        "fail"
+        if first_failure is not None
+        else "manual_required_pending"
+        if manual_required
+        else "pass"
+    )
     row = CommandResult.full if detail == "full" else CommandResult.compact
     guard_id = "changed-surface-preflight"
     report = {
         "kind": "aippocampus_changed_surface_preflight",
         "schema_version": SCHEMA_VERSION,
         "ok": ok,
-        "status": "pass" if ok else "fail",
+        "status": status,
+        "runnable_gates_status": "pass" if runnable_gates_passed else "fail",
         "gate_class": "hard",
         "verification_owner": "local_fail_fast" if selected_mode == DEFAULT_MODE else "local_closeout",
         "guard_id": guard_id,
@@ -555,6 +582,13 @@ def run_preflight(
         "skipped_by_mode_count": len(skipped_by_mode),
         "skipped_after_failure_count": len(skipped_after_failure),
         "first_failure": row(first_failure) if first_failure else None,
+        "manual_required_claim_count": len(manual_required),
+        "first_manual_required_claim": (
+            _compact_manual_claim(manual_required[0]) if manual_required else None
+        ),
+        "manual_required_claims": [
+            _compact_manual_claim(item) for item in manual_required
+        ] if detail == "full" else [],
         "commands": [row(item) for item in results],
         "skipped_commands": [_compact_skipped_command(item) for item in [*skipped_after_failure, *skipped_by_mode][:5]],
         "skipped_by_mode": [

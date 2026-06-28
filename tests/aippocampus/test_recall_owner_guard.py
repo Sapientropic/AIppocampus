@@ -18,6 +18,20 @@ class RecallOwnerGuardTests(unittest.TestCase):
 
         self.assertEqual([], issues)
 
+    def test_recall_fragmentation_inventory_names_owner_subpackages(self) -> None:
+        inventory = recall_owner_guard.recall_fragmentation_inventory(REPO_ROOT)
+
+        self.assertEqual(inventory["issues"], [])
+        self.assertTrue(inventory["new_flat_files_rejected_by_default"])
+        self.assertGreater(inventory["sealed_legacy_flat_count"], 100)
+        semantic = next(
+            family
+            for family in inventory["owner_families"]
+            if family["owner"] == "Semantic"
+        )
+        self.assertIn("semantic/confidence_policy.py", semantic["owner_package_files"])
+        self.assertNotIn("confidence_policy.py", semantic["flat_files"])
+
     def test_feedback_owner_package_removed_flat_import_compatibility(self) -> None:
         new_events = import_module("aippocampus_runtime.recall.feedback.events")
         new_apw = import_module("aippocampus_runtime.recall.feedback.associative_path")

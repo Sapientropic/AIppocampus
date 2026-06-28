@@ -1281,6 +1281,12 @@ def audit_pr_body(
 
 
 def _body_from_args(args: argparse.Namespace) -> str:
+    if args.pr:
+        body, error = closeout_audit_followthrough.pr_body_from_gh(args.pr, repo=args.github_repo)
+        if error:
+            args.pr_body_error = error
+            return ""
+        return body
     if args.body_file:
         return Path(args.body_file).read_text(encoding="utf-8")
     if args.body_env:
@@ -1309,7 +1315,9 @@ def _issue_metadata_from_args(args: argparse.Namespace, body: str) -> Any:
 
 def _detail_command_from_args(args: argparse.Namespace) -> str | None:
     parts = ["python", "tools/aippocampus/github/closeout_audit.py", "--json", "--detail", "full"]
-    if args.body_file:
+    if args.pr:
+        parts.extend(["--pr", str(args.pr)])
+    elif args.body_file:
         parts.extend(["--body-file", str(args.body_file)])
     elif args.body_env:
         parts.extend(["--body-env", str(args.body_env)])
@@ -1324,6 +1332,7 @@ def _detail_command_from_args(args: argparse.Namespace) -> str | None:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
+    parser.add_argument("--pr", help="Fetch and audit the actual GitHub PR body with gh pr view.")
     parser.add_argument("--body-file", type=Path)
     parser.add_argument("--body-env")
     parser.add_argument("--body")
@@ -1349,6 +1358,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--github-annotations", action="store_true")
     args = parser.parse_args(argv)
+    args.pr_body_error = None
 
     if args.closed_issues_file:
         report = audit_closed_issue_traceability(
@@ -1372,7 +1382,14 @@ def main(argv: list[str] | None = None) -> int:
         )
     else:
         body = _body_from_args(args)
-        if args.body_env and not str(body or "").strip():
+        if args.pr and args.pr_body_error:
+            report = closeout_audit_followthrough.missing_pr_body_report(
+                str(args.pr),
+                github_repo=args.github_repo,
+                schema_version=SCHEMA_VERSION,
+                error=str(args.pr_body_error),
+            )
+        elif args.body_env and not str(body or "").strip():
             report = closeout_audit_followthrough.missing_body_env_report(
                 str(args.body_env),
                 schema_version=SCHEMA_VERSION,

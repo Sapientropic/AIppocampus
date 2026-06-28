@@ -1169,6 +1169,62 @@ class CloseoutAuditTests(unittest.TestCase):
         self.assertEqual(payload["status"], "not_audited")
         self.assertEqual(payload["blockers"][0]["kind"], "audit_input_missing")
 
+    def test_pr_cli_fetches_actual_pr_body_before_audit(self) -> None:
+        completed = subprocess.CompletedProcess(
+            args=["gh", "pr", "view"],
+            returncode=0,
+            stdout=json.dumps(
+                {
+                    "body": """
+                    ## Summary
+                    Fixes the local closeout path.
+
+                    Closes #1304.
+                    """
+                }
+            ),
+            stderr="",
+        )
+        with (
+            mock.patch.object(
+                closeout_audit.closeout_audit_followthrough,
+                "infer_github_repo_from_origin",
+                return_value="Sapientropic/AIppocampus",
+            ),
+            mock.patch.object(
+                closeout_audit.closeout_audit_followthrough.subprocess,
+                "run",
+                return_value=completed,
+            ) as run,
+            mock.patch("sys.stdout", new_callable=io.StringIO) as stdout,
+        ):
+            code = closeout_audit.main(["--pr", "42", "--json"])
+
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(code, 0)
+        self.assertTrue(payload["ok"], payload)
+        self.assertEqual(payload["status"], "pass")
+        self.assertIn("pr", run.call_args.args[0])
+        self.assertIn("42", run.call_args.args[0])
+
+    def test_pr_cli_missing_repo_reports_not_audited_next_command(self) -> None:
+        with (
+            mock.patch.object(
+                closeout_audit.closeout_audit_followthrough,
+                "infer_github_repo_from_origin",
+                return_value=None,
+            ),
+            mock.patch("sys.stdout", new_callable=io.StringIO) as stdout,
+        ):
+            code = closeout_audit.main(["--pr", "42", "--json"])
+
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(code, 1)
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["status"], "not_audited")
+        self.assertEqual(payload["blockers"][0]["kind"], "pr_body_audit_not_run")
+        self.assertIn("--pr 42", payload["blockers"][0]["message"] + payload["detail_command"])
+
     def test_closed_window_fetch_keeps_list_comments_when_detail_view_fails(self) -> None:
         list_completed = subprocess.CompletedProcess(
             args=["gh", "issue", "list"],

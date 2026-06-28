@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.core import compact_text, now_utc, sanitize_external_model_text
+from aippocampus_runtime.recall.semantic.confidence_policy import meets_active_cue_confidence
 from aippocampus_runtime.registry.api import registry_paths, unique_preserve
 from aippocampus_runtime.source.agent_trace_admission import learning_priority_for_signal
 from aippocampus_runtime.source.io_kernel import (
@@ -36,6 +37,7 @@ MAX_PROMPT_HASHES = 8
 MAX_FALSE_POSITIVE_REASONS = 4
 MAX_POSITION_TERMS = 18
 MAX_POSITION_INTENTS = 6
+MIN_ACTIVE_CUE_FEEDBACK_SCORE = 2
 POSITIVE_RECALL_FEEDBACK_SIGNALS = {
     "source_reopen_success",
     "source_open",
@@ -194,26 +196,39 @@ def all_recall_positions(path: Path) -> list[dict[str, Any]]:
 
 def cue_is_active(row: dict[str, Any]) -> bool:
     hit_count = int(row.get("hit_count") or 0)
-    false_positive_count = int(row.get("false_positive_count") or 0)
     explicit_useful_count = int(row.get("explicit_useful_feedback_count") or 0)
     confidence = float(row.get("confidence") or 0.0)
-    positive_weight = hit_count + explicit_useful_count
     return bool(
         row.get("status") == "active"
         and (hit_count >= MIN_PROMOTION_HITS or explicit_useful_count > 0)
-        and false_positive_count < positive_weight
-        and confidence >= 0.55
+        and cue_feedback_allows_foreground(row)
+        and meets_active_cue_confidence(confidence)
         and row.get("source_refs")
     )
 
 
+def cue_feedback_score(row: dict[str, Any]) -> int:
+    hit_count = int(row.get("hit_count") or 0)
+    explicit_useful_count = int(row.get("explicit_useful_feedback_count") or 0)
+    false_positive_count = int(row.get("false_positive_count") or 0)
+    return hit_count + explicit_useful_count * 2 - false_positive_count
+
+
+def cue_feedback_allows_foreground(row: dict[str, Any]) -> bool:
+    if int(row.get("false_positive_count") or 0) < 2:
+        return cue_feedback_score(row) > 0
+    return cue_feedback_score(row) >= MIN_ACTIVE_CUE_FEEDBACK_SCORE
+
+
 def refresh_status(row: dict[str, Any]) -> dict[str, Any]:
     hit_count = int(row.get("hit_count") or 0)
-    false_positive_count = int(row.get("false_positive_count") or 0)
     explicit_useful_count = int(row.get("explicit_useful_feedback_count") or 0)
     confidence = float(row.get("confidence") or 0.0)
     has_refs = bool(row.get("source_refs"))
     last_signal = str(row.get("last_feedback_signal") or "").casefold()
+    feedback_score = cue_feedback_score(row)
+    row["feedback_score"] = feedback_score
+    row["active_feedback_score_threshold"] = MIN_ACTIVE_CUE_FEEDBACK_SCORE
     if last_signal in HARD_NEGATIVE_RECALL_FEEDBACK_SIGNALS:
         row["status"] = "suppressed_hard_negative"
         row["candidate_lifecycle_state"] = "rejected_hard_negative"
@@ -226,16 +241,17 @@ def refresh_status(row: dict[str, Any]) -> dict[str, Any]:
         row["status"] = "expired_recheck"
         row["candidate_lifecycle_state"] = "expired_recheck"
         return row
-    positive_weight = hit_count + explicit_useful_count
     if (
         (hit_count >= MIN_PROMOTION_HITS or explicit_useful_count > 0)
-        and false_positive_count < positive_weight
+        and cue_feedback_allows_foreground(row)
         and has_refs
-        and confidence >= 0.55
+        and meets_active_cue_confidence(confidence)
     ):
         row["status"] = "active"
+        row["candidate_lifecycle_state"] = "actionable_reopenable_route"
     else:
         row["status"] = "staging"
+        row["candidate_lifecycle_state"] = "draft_candidate_staging"
     return row
 
 

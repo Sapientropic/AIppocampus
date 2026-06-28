@@ -899,6 +899,7 @@ def run_contract(
     wheel: Path | None = None,
     keep_temp: bool = False,
     include_live_provider: bool = False,
+    import_only: bool = False,
 ) -> dict[str, Any]:
     checks: list[Check] = []
     temp_context = tempfile.TemporaryDirectory(prefix="aippocampus-wheel-contract-")
@@ -909,42 +910,63 @@ def run_contract(
         if selected_wheel is None:
             selected_wheel = build_wheel(repo, work_dir / "dist", checks)
             if selected_wheel is None:
-                return render_result(checks, work_dir=work_dir if keep_temp else None)
+                return render_result(checks, work_dir=work_dir if keep_temp else None, import_only=import_only)
         else:
             add(checks, "build_wheel", "pass", "using prebuilt wheel", {"wheel": selected_wheel.name})
 
         venv = create_and_install_venv(selected_wheel, work_dir, env, checks)
         if venv is not None:
             check_import_matrix(venv, work_dir, env, checks)
-            check_cli_help(venv, work_dir, env, checks)
-            check_cli_command_matrix(venv, work_dir, env, checks)
-            check_doctor_config(venv, work_dir, env, checks)
-            check_mcp_tools(venv, work_dir, env, checks)
-            check_package_data(venv, work_dir, env, checks)
-            check_generic_jsonl_reopen_path(venv, work_dir, env, checks)
-            check_hooks_isolated_rollback(venv, work_dir, env, checks)
-        return render_result(checks, work_dir=work_dir if keep_temp else None)
+            if not import_only:
+                check_cli_help(venv, work_dir, env, checks)
+                check_cli_command_matrix(venv, work_dir, env, checks)
+                check_doctor_config(venv, work_dir, env, checks)
+                check_mcp_tools(venv, work_dir, env, checks)
+                check_package_data(venv, work_dir, env, checks)
+                check_generic_jsonl_reopen_path(venv, work_dir, env, checks)
+                check_hooks_isolated_rollback(venv, work_dir, env, checks)
+        return render_result(checks, work_dir=work_dir if keep_temp else None, import_only=import_only)
     finally:
         if keep_temp:
             temp_context.cleanup = lambda: None  # type: ignore[method-assign]
         temp_context.cleanup()
 
 
-def render_result(checks: list[Check], *, work_dir: Path | None = None) -> dict[str, Any]:
+def render_result(
+    checks: list[Check],
+    *,
+    work_dir: Path | None = None,
+    import_only: bool = False,
+) -> dict[str, Any]:
     summary: dict[str, int] = {"pass": 0, "fail": 0, "warn": 0}
     for check in checks:
         summary[check.status] = summary.get(check.status, 0) + 1
+    failures = [check for check in checks if check.status == "fail"]
     result: dict[str, Any] = {
         "kind": "aippocampus_wheel_contract_check",
         "schema_version": 1,
         "ok": summary.get("fail", 0) == 0,
+        "status": "fail" if failures else "pass",
+        "mode": "import_only" if import_only else "full",
         "summary": summary,
         "checks": [asdict(check) for check in checks],
+        "first_failure": asdict(failures[0]) if failures else None,
+        "next_command": (
+            "python tools/aippocampus/release/check_wheel_contract.py --import-only --json"
+            if import_only
+            else "python tools/aippocampus/release/check_wheel_contract.py --json"
+        ),
+        "detail_command": (
+            "python tools/aippocampus/release/check_wheel_contract.py --import-only --json --keep-temp"
+            if import_only
+            else "python tools/aippocampus/release/check_wheel_contract.py --json --keep-temp"
+        ),
         "contract": {
             "fresh_venv": True,
             "no_network_install": True,
             "live_provider_default": False,
             "source_tree_imports_forbidden": True,
+            "import_only": import_only,
             "public_import_modules": list(PUBLIC_IMPORT_MODULES),
             "public_cli_help_commands": [list(args) for args in PUBLIC_CLI_HELP_COMMANDS],
             "expected_mcp_tools": list(EXPECTED_MCP_TOOLS),
@@ -967,6 +989,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--keep-temp", action="store_true", help="Keep the fresh venv work directory for debugging.")
     parser.add_argument(
+        "--import-only",
+        action="store_true",
+        help="Build/install the wheel and run only the public import matrix.",
+    )
+    parser.add_argument(
         "--include-live-provider",
         action="store_true",
         help="Do not scrub provider/token-like environment variables. Off by default.",
@@ -984,6 +1011,7 @@ def main(argv: list[str] | None = None) -> int:
         wheel=wheel,
         keep_temp=args.keep_temp,
         include_live_provider=args.include_live_provider,
+        import_only=args.import_only,
     )
     if args.json_output:
         print(json.dumps(result, ensure_ascii=False, indent=2))

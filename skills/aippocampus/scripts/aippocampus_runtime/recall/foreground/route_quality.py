@@ -1,10 +1,4 @@
-"""Foreground route-label and cue-anchor quality helpers.
-
-These checks deliberately judge whether a route is useful for a foreground
-agent to choose, not whether the underlying source can be reopened. A source
-route may be mechanically valid while still being too generic or meta-shaped to
-answer the user's cue; keep that distinction close to the route producers.
-"""
+"""Route-label and cue-anchor quality helpers."""
 
 from __future__ import annotations
 
@@ -98,6 +92,39 @@ LOW_SIGNAL_CJK_TERMS = {
     "标签",
 }
 
+SHORT_MEANINGFUL_TECHNICAL_ANCHOR_TERMS = {
+    "batch",
+    "cache",
+    "data",
+    "edge",
+    "graph",
+    "macro",
+    "node",
+    "queue",
+    "rust",
+}
+
+ANCHOR_QUALITY_DRIFT_SAMPLE_TERMS = (
+    "rust",
+    "data",
+    "node",
+    "edge",
+    "graph",
+    "queue",
+    "cache",
+    "batch",
+    "macro",
+    "ci",
+    "pr",
+    "ux",
+    "mcp",
+    "apw",
+    "why",
+    "too",
+    "route",
+    "label",
+)
+
 GENERIC_PUBLIC_LABEL_KEYS = {
     "agent native recall facade",
     "aippocampus",
@@ -128,6 +155,8 @@ def is_low_signal_anchor(value: Any) -> bool:
         return True
     if key in LOW_SIGNAL_ANCHOR_TERMS or key in LOW_SIGNAL_CJK_TERMS:
         return True
+    if key in SHORT_MEANINGFUL_TECHNICAL_ANCHOR_TERMS:
+        return False
     if key.isascii() and len(key) < 6:
         return True
     return False
@@ -159,12 +188,7 @@ def _keyed_terms(terms: Sequence[Any]) -> dict[str, str]:
 
 
 def term_sequence(terms: Sequence[Any] | Any) -> list[Any]:
-    """Normalize term containers before quality checks.
-
-    Route producers usually pass lists, but this helper is the shared
-    foreground-quality primitive. Treating a plain string as a sequence of
-    characters would make low-signal gates flaky and invite future narrow fixes.
-    """
+    """Return a list without splitting strings into characters."""
 
     if terms is None:
         return []
@@ -255,8 +279,63 @@ def repaired_public_label(packet: Mapping[str, Any], fallback_label: str) -> str
     return "Low-specificity route"
 
 
+def anchor_quality_drift_report(terms: Sequence[Any] | None = None) -> dict[str, Any]:
+    """Classify short anchor examples for the tiny guard report."""
+
+    raw_terms = list(terms) if terms is not None else list(ANCHOR_QUALITY_DRIFT_SAMPLE_TERMS)
+    rows: list[dict[str, Any]] = []
+    for term in term_sequence(raw_terms):
+        text = public_text(term, limit=48)
+        key = term_key(text)
+        if not key:
+            continue
+        low_signal = is_low_signal_anchor(text)
+        if key in LOW_SIGNAL_ANCHOR_TERMS or key in LOW_SIGNAL_CJK_TERMS:
+            reason = "explicit_low_signal_vocabulary"
+        elif key in SHORT_MEANINGFUL_TECHNICAL_ANCHOR_TERMS:
+            reason = "short_meaningful_technical_allowlist"
+        elif key.isascii() and len(key) < 6:
+            reason = "short_ascii_needs_owner_decision"
+        else:
+            reason = "meaningful_by_default"
+        rows.append(
+            {
+                "term": text,
+                "key": key,
+                "low_signal": low_signal,
+                "reason": reason,
+            }
+        )
+    unresolved = [
+        row
+        for row in rows
+        if row["reason"] == "short_ascii_needs_owner_decision"
+        and row["key"] not in LOW_SIGNAL_ANCHOR_TERMS
+    ]
+    return {
+        "kind": "aippocampus_route_anchor_quality_drift_report",
+        "schema_version": 1,
+        "ok": not unresolved,
+        "term_count": len(rows),
+        "short_meaningful_allowlist": sorted(SHORT_MEANINGFUL_TECHNICAL_ANCHOR_TERMS),
+        "explicit_low_signal_count": sum(
+            1 for row in rows if row["reason"] == "explicit_low_signal_vocabulary"
+        ),
+        "unresolved_short_ascii_count": len(unresolved),
+        "unresolved_short_ascii_terms": [row["term"] for row in unresolved[:12]],
+        "classifications": rows,
+        "privacy_boundary": {
+            "raw_source_text_serialized": False,
+            "terms_redacted_before_output": True,
+        },
+    }
+
+
 __all__ = [
+    "ANCHOR_QUALITY_DRIFT_SAMPLE_TERMS",
     "LOW_SIGNAL_ANCHOR_TERMS",
+    "SHORT_MEANINGFUL_TECHNICAL_ANCHOR_TERMS",
+    "anchor_quality_drift_report",
     "anchor_quality",
     "is_low_signal_anchor",
     "label_is_generic",

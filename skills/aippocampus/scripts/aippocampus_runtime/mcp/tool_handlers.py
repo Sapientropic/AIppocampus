@@ -17,7 +17,7 @@ from typing import Any
 from aippocampus_runtime import core
 from aippocampus_runtime import health as aippocampus_health
 from aippocampus_runtime.contracts import canonical_foreground_action_fields
-from aippocampus_runtime.mcp import memory_health_recovery
+from aippocampus_runtime.mcp import memory_health_recovery, telepathy_tool_handlers
 from aippocampus_runtime.mcp.agent_deepen_projection import compact_agent_deepen_payload
 from aippocampus_runtime.mcp.agent_explain_projection import compact_agent_explain_payload
 from aippocampus_runtime.mcp.agent_recall_action_menu import foreground_action_menu
@@ -70,7 +70,6 @@ from aippocampus_runtime.mcp.thread_list_projection import (
     list_threads_missing_registry_actions,
     list_threads_ok_actions,
 )
-from aippocampus_runtime.ops import telepathy_handoff_store
 from aippocampus_runtime.privacy import LOCAL_PATH_REDACTION
 from aippocampus_runtime.recall import agent_deepen_requests, why_cli
 from aippocampus_runtime.recall.agent_continuity_cli_support import (
@@ -1126,55 +1125,21 @@ def call_memory_health(arguments: dict[str, Any]) -> dict[str, Any]:
 
 
 def call_list_telepathy_handoffs(arguments: dict[str, Any]) -> dict[str, Any]:
-    payload = telepathy_handoff_store.list_handoffs_payload(
-        cwd=cwd_arg(arguments),
-        store_path=arguments.get("store_path"),
-        scope=arguments.get("scope"),
-        status=str(arguments.get("status") or "active"),
-        limit=int_range(arguments.get("max"), default=20, minimum=1, maximum=100),
-    )
-    return render_profiled_result(
+    return telepathy_tool_handlers.call_list_telepathy_handoffs(
         arguments,
-        payload,
-        runtime_provenance_context=runtime_context_for(
-            arguments, clean_source_dir=clean_source_dir_for(arguments)
-        ),
+        cwd_arg=cwd_arg,
+        int_range=int_range,
+        clean_source_dir_for=clean_source_dir_for,
+        runtime_context_for=runtime_context_for,
     )
 
 
 def call_deepen_telepathy_handoff(arguments: dict[str, Any]) -> dict[str, Any]:
-    card_id = str(arguments.get("card_id") or "").strip()
-    if not card_id:
-        return missing_input_recovery_card(
-            code="missing_telepathy_handoff_card_id",
-            message="deepen_telepathy_handoff requires a card_id.",
-            tool_name="deepen_telepathy_handoff",
-            arguments=arguments,
-            required_any=["card_id"],
-            safe_next_actions=[
-                {
-                    "tool_name": "list_telepathy_handoffs",
-                    "arguments": {"status": "active", "max": 20},
-                },
-                _template_tool_action(
-                    "deepen_telepathy_handoff",
-                    {"card_id": "{card_id_from_list_telepathy_handoffs_cards}"},
-                    ["card_id"],
-                ),
-            ],
-        )
-    payload = telepathy_handoff_store.deepen_handoff_payload(
-        card_id=card_id,
-        cwd=cwd_arg(arguments),
-        store_path=arguments.get("store_path"),
-    )
-    return render_profiled_result(
+    return telepathy_tool_handlers.call_deepen_telepathy_handoff(
         arguments,
-        payload,
-        is_error=not bool(payload.get("ok")),
-        runtime_provenance_context=runtime_context_for(
-            arguments, clean_source_dir=clean_source_dir_for(arguments)
-        ),
+        cwd_arg=cwd_arg,
+        clean_source_dir_for=clean_source_dir_for,
+        runtime_context_for=runtime_context_for,
     )
 
 

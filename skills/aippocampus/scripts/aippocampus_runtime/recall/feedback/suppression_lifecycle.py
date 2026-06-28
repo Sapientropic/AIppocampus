@@ -107,6 +107,13 @@ def _safe_signal(value: Any) -> str:
     return signal if signal in ACTIVE_FLOW_SIGNALS else "candidate_delivered"
 
 
+def _safe_float(value: Any, default: float) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def route_reason_codes(signals: Counter[str], score: float) -> list[str]:
     reasons: list[str] = []
     if signals.get("blocked"):
@@ -161,19 +168,19 @@ def feedback_trace_family(outcome: str) -> str:
     return "joined_route_note"
 
 
-def _lifecycle_status(counts: Counter[str], last_signal: str) -> tuple[str, bool]:
+def _lifecycle_status(counts: Counter[str], last_signal: str) -> str:
     negative = any(counts.get(signal) for signal in HARD_NEGATIVE_SUPPRESSION_SIGNALS)
     parked = any(counts.get(signal) for signal in PARKED_SUPPRESSION_SIGNALS)
     expired = bool(counts.get("expired"))
     if last_signal in POSITIVE_SUPPRESSION_SIGNALS:
-        return "overridden_by_positive_source_open", True
+        return "overridden_by_positive_source_open"
     if last_signal in HARD_NEGATIVE_SUPPRESSION_SIGNALS or negative:
-        return "suppressed_hard_negative", False
+        return "suppressed_hard_negative"
     if last_signal in PARKED_SUPPRESSION_SIGNALS or parked:
-        return "parked_recheck", False
+        return "parked_recheck"
     if last_signal == "expired" or expired:
-        return "expired_recheck", False
-    return "neutral", False
+        return "expired_recheck"
+    return "neutral"
 
 
 def suppression_lifecycle_report(
@@ -199,29 +206,40 @@ def suppression_lifecycle_report(
             {
                 "route_id": route_id,
                 "signal_counts": Counter(),
+                "activation_score": 0.0,
                 "last_index": -1,
                 "last_signal": "",
             },
         )
         row["signal_counts"][signal] += 1
+        row["activation_score"] += _safe_float(
+            event.get("weight_delta"),
+            DEFAULT_SIGNAL_DELTAS[signal],
+        )
         row["last_index"] = index
         row["last_signal"] = signal
 
     routes: list[dict[str, Any]] = []
     for row in grouped.values():
         counts: Counter[str] = row["signal_counts"]
-        status, is_foreground_eligible = _lifecycle_status(counts, str(row["last_signal"]))
+        last_signal = str(row["last_signal"])
+        score = round(float(row["activation_score"]), 6)
+        status = _lifecycle_status(counts, last_signal)
+        is_foreground_eligible = foreground_eligible(counts, last_signal, score)
         routes.append(
             {
                 "route_id": row["route_id"],
                 "status": status,
                 "foreground_eligible": is_foreground_eligible,
+                "activation_score": score,
+                "reason_codes": route_reason_codes(counts, score),
                 "signal_counts": dict(sorted(counts.items())),
                 "claim_boundary": "feedback_suppression_is_navigation_calibration_not_source_truth",
             }
         )
     routes.sort(key=lambda item: (str(item["status"]), str(item["route_id"])))
     status_counts = Counter(str(row["status"]) for row in routes)
+    foreground_ineligible_count = sum(1 for row in routes if not row.get("foreground_eligible"))
     if detail in {"detail", "full", "operator"}:
         return {
             "kind": "aippocampus_feedback_suppression_lifecycle",
@@ -232,6 +250,7 @@ def suppression_lifecycle_report(
             "status_counts": dict(sorted(status_counts.items())),
             "hard_negative_count": status_counts.get("suppressed_hard_negative", 0),
             "overridden_by_positive_count": status_counts.get("overridden_by_positive_source_open", 0),
+            "foreground_ineligible_count": foreground_ineligible_count,
             "policy_boundary": {
                 "suppression_is_route_local": True,
                 "suppression_is_reversible": True,
@@ -242,8 +261,13 @@ def suppression_lifecycle_report(
         "kind": "aippocampus_feedback_suppression_lifecycle",
         "schema_version": 1,
         "detail": "compact",
-        "status": "has_suppression" if status_counts.get("suppressed_hard_negative") else "clear",
+        "status": (
+            "has_suppression"
+            if status_counts.get("suppressed_hard_negative") or foreground_ineligible_count
+            else "clear"
+        ),
         "hard_negative_count": status_counts.get("suppressed_hard_negative", 0),
         "overridden_by_positive_count": status_counts.get("overridden_by_positive_source_open", 0),
+        "foreground_ineligible_count": foreground_ineligible_count,
         "claim_boundary": "feedback_suppression_is_navigation_calibration_not_source_truth",
     }

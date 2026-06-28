@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from typing import Any
 
 from aippocampus_runtime.foreground_action_lint import compact_foreground_action_violations
@@ -53,66 +54,185 @@ COMPACT_DETAIL_AFFORDANCE_KEYS = {
     "detail_requires",
 }
 
+@dataclass(frozen=True)
+class CompactDetailAffordancePolicy:
+    owner: str
+    reason: str
+    default_exposure: str
+    removal_condition: str
+
+
+def _detail_policy(
+    *,
+    owner: str,
+    reason: str,
+    default_exposure: str,
+    removal_condition: str,
+) -> CompactDetailAffordancePolicy:
+    return CompactDetailAffordancePolicy(
+        owner=owner,
+        reason=reason,
+        default_exposure=default_exposure,
+        removal_condition=removal_condition,
+    )
+
+
 COMPACT_DETAIL_AFFORDANCE_ALLOWLIST: dict[
     str,
-    Mapping[tuple[PathComponent, ...], str],
+    Mapping[tuple[PathComponent, ...], CompactDetailAffordancePolicy],
 ] = {
     "agent_recall.safe_cue_detail": {
         (
             "operator_detail_command",
-        ): "A safe cue can offer one full-detail CLI reopen path without exposing diagnostics inline.",
+        ): _detail_policy(
+            owner="recall foreground projection",
+            reason=(
+                "A safe cue can offer one full-detail CLI reopen path without "
+                "exposing diagnostics inline."
+            ),
+            default_exposure="one explicit full-detail CLI command only",
+            removal_condition="remove when recall compact exposes no command-bearing detail hatch",
+        ),
         (
             "claim_boundary",
             "detail_available_with",
-        ): "The claim boundary may point at the same full-detail command as the compact escape hatch.",
+        ): _detail_policy(
+            owner="recall foreground projection",
+            reason=(
+                "The claim boundary may point at the same full-detail command "
+                "as the compact escape hatch."
+            ),
+            default_exposure="claim boundary points to the same detail command",
+            removal_condition="remove with agent_recall.safe_cue_detail command hatch",
+        ),
     },
     "agent_recall.template_detail": {
         (
             "operator_detail_command_template",
-        ): "No cue-specific command is executable yet, so compact JSON carries only a template.",
+        ): _detail_policy(
+            owner="recall foreground projection",
+            reason="No cue-specific command is executable yet, so compact JSON carries only a template.",
+            default_exposure="template_only command; not executable until caller supplies cue",
+            removal_condition="remove when missing-cue recall card has a non-command detail signal",
+        ),
         (
             "operator_detail_requires",
-        ): "The template must name the missing cue instead of pretending to be executable.",
+        ): _detail_policy(
+            owner="recall foreground projection",
+            reason="The template must name the missing cue instead of pretending to be executable.",
+            default_exposure="required-input metadata beside the template",
+            removal_condition="remove with agent_recall.template_detail command template",
+        ),
         (
             "claim_boundary",
             "detail_available_with_template",
-        ): "Claim-boundary detail follows the same template-only rule.",
+        ): _detail_policy(
+            owner="recall foreground projection",
+            reason="Claim-boundary detail follows the same template-only rule.",
+            default_exposure="claim boundary names the template-only detail path",
+            removal_condition="remove with agent_recall.template_detail command template",
+        ),
         (
             "claim_boundary",
             "detail_requires",
-        ): "The claim-boundary template must also declare its missing cue.",
+        ): _detail_policy(
+            owner="recall foreground projection",
+            reason="The claim-boundary template must also declare its missing cue.",
+            default_exposure="required-input metadata beside the claim-boundary template",
+            removal_condition="remove with agent_recall.template_detail command template",
+        ),
     },
     "cli.agent_aippo.needs_input": {
         (
             "operator_json_command_template",
-        ): "The AIppo parent card needs one operator JSON template for explicit diagnostic mode.",
+        ): _detail_policy(
+            owner="agent aippo CLI foreground card",
+            reason="The AIppo parent card needs one operator JSON template for explicit diagnostic mode.",
+            default_exposure="template_only operator JSON path; not a safe_next_action",
+            removal_condition="remove when the no-input AIppo card has a non-command detail affordance",
+        ),
         (
             "operator_json_requires",
-        ): "The operator JSON template must name the missing task cue.",
+        ): _detail_policy(
+            owner="agent aippo CLI foreground card",
+            reason="The operator JSON template must name the missing task cue.",
+            default_exposure="required-input metadata beside the template",
+            removal_condition="remove with cli.agent_aippo.needs_input command template",
+        ),
         (
             "claim_boundary",
             "detail_available_with_template",
-        ): "The claim boundary may point at the same operator JSON template without serializing diagnostics.",
+        ): _detail_policy(
+            owner="agent aippo CLI foreground card",
+            reason=(
+                "The claim boundary may point at the same operator JSON "
+                "template without serializing diagnostics."
+            ),
+            default_exposure="claim boundary names the template-only detail path",
+            removal_condition="remove with cli.agent_aippo.needs_input command template",
+        ),
         (
             "claim_boundary",
             "detail_requires",
-        ): "The claim-boundary template must also declare its missing task cue.",
+        ): _detail_policy(
+            owner="agent aippo CLI foreground card",
+            reason="The claim-boundary template must also declare its missing task cue.",
+            default_exposure="required-input metadata beside the claim-boundary template",
+            removal_condition="remove with cli.agent_aippo.needs_input command template",
+        ),
     },
     "cli.navigate.needs_cue": {
         (
             "lanes",
             0,
             "operator_detail_command",
-        ): "The no-cue navigation card has no route to deepen, so one lane-level detail affordance is useful.",
+        ): _detail_policy(
+            owner="CLI recovery navigation card",
+            reason=(
+                "The no-cue navigation card has no route to deepen, so one "
+                "lane-level detail affordance is useful."
+            ),
+            default_exposure="lane-level detail command only when no cue exists",
+            removal_condition="remove when no-cue navigation has a non-command detail affordance",
+        ),
         (
             "lanes",
             1,
             "operator_detail_command",
-        ): "Concept expansion is also operator-only until the user supplies a concrete navigation cue.",
+        ): _detail_policy(
+            owner="CLI recovery navigation card",
+            reason="Concept expansion is also operator-only until the user supplies a concrete navigation cue.",
+            default_exposure="lane-level detail command only when no cue exists",
+            removal_condition="remove when no-cue navigation has a non-command detail affordance",
+        ),
     },
     "mcp.agent_deepen.missing_selector": {},
     "task_orientation.compact": {},
 }
+
+
+def compact_detail_affordance_policy_issues(
+    allowlist: Mapping[
+        str,
+        Mapping[tuple[PathComponent, ...], Any],
+    ] = COMPACT_DETAIL_AFFORDANCE_ALLOWLIST,
+) -> list[str]:
+    issues: list[str] = []
+    for surface, paths in sorted(allowlist.items()):
+        for path, policy in sorted(paths.items(), key=lambda item: _format_path(item[0])):
+            if not isinstance(policy, CompactDetailAffordancePolicy):
+                issues.append(f"{surface}:{_format_path(path)} missing structured policy")
+                continue
+            missing = [
+                name
+                for name in ("owner", "reason", "default_exposure", "removal_condition")
+                if not str(getattr(policy, name)).strip()
+            ]
+            if missing:
+                issues.append(
+                    f"{surface}:{_format_path(path)} missing {', '.join(missing)}"
+                )
+    return issues
 
 
 def _format_path(path: tuple[PathComponent, ...]) -> str:

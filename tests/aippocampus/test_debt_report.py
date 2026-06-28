@@ -348,6 +348,8 @@ class DebtReportTests(unittest.TestCase):
         self.assertIn("helper_duplication", report)
         self.assertIn("direct_jsonl_io", report)
         self.assertIn("broad_exception_debt", report)
+        self.assertIn("accepted_exception_debt", report)
+        self.assertIn("actionable_debt_queues", report)
         self.assertIn("compact_debug_field_leaks", report)
         self.assertIn("instruction_surface_debt", report)
         self.assertIn("giant_hot_path_functions", report)
@@ -364,6 +366,68 @@ class DebtReportTests(unittest.TestCase):
         self.assertEqual(
             report["direct_jsonl_io"]["ordinary_json_object_reads"],
             "excluded",
+        )
+
+    def test_actionable_debt_queue_prioritizes_positive_drift_before_exceptions(self) -> None:
+        queues = debt_report.build_actionable_debt_queues(
+            rows=[
+                {
+                    "path": "skills/aippocampus/scripts/aippocampus_runtime/near.py",
+                    "margin": 1,
+                }
+            ],
+            count_drifts=[
+                {
+                    "path": "skills/aippocampus/scripts/aippocampus_runtime/grew.py",
+                    "drift_class": "positive_drift",
+                }
+            ],
+            stale_allowances=[],
+            single_digit_guard_pressure=[],
+            accepted_exception_debt={
+                "summary": {"marker_total": 1},
+                "top_files": [
+                    {
+                        "path": "skills/aippocampus/scripts/aippocampus_runtime/update/cli.py",
+                        "count": 1,
+                    }
+                ],
+            },
+        )
+
+        self.assertEqual(queues["top_queue"]["queue_id"], "positive_count_drift")
+        self.assertEqual(queues["top_queue"]["sample_paths"][0], "skills/aippocampus/scripts/aippocampus_runtime/grew.py")
+        self.assertIn(
+            "accepted_exception_debt",
+            {queue["queue_id"] for queue in queues["queues"]},
+        )
+
+    def test_accepted_exception_inventory_groups_markers_by_file_and_family(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "skills" / "aippocampus" / "scripts" / "aippocampus_runtime" / "update" / "lane.py"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(
+                "def recover():\n"
+                "    try:\n"
+                "        return {}\n"
+                "    except Exception:\n"
+                "        # aippocampus-debt-ok: broad-exception-boundary\n"
+                "        return {'status': 'degraded'}\n",
+                encoding="utf-8",
+            )
+
+            inventory = debt_report.accepted_exception_marker_inventory(
+                [path],
+                repo_root=root,
+                detail=True,
+            )
+
+        self.assertEqual(inventory["summary"]["marker_total"], 1)
+        self.assertEqual(inventory["families"][0]["marker_family"], "broad-exception-boundary")
+        self.assertEqual(
+            inventory["markers_by_file"][0]["families"],
+            {"broad-exception-boundary": 1},
         )
 
     def test_direct_jsonl_inventory_classifies_runtime_line_parsers(self) -> None:

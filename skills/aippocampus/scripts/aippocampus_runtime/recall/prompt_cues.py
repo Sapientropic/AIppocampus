@@ -17,6 +17,11 @@ from aippocampus_runtime.recall.prompt_route_blocks import (
     old_route_negation_has_later_source_request,
 )
 from aippocampus_runtime.recall.query_policy import RECALL_TRIGGERS, split_query_terms
+from aippocampus_runtime.recall.semantic.confidence_policy import (
+    meets_background_warm_cache_confidence,
+    meets_memory_cue_confidence,
+    meets_source_reopen_confidence,
+)
 from aippocampus_runtime.text import has_cjk_ideograph, is_low_value_cjk_fragment
 
 # Keep these assignments as the legacy public surface for callers that imported
@@ -429,11 +434,12 @@ def semantic_gate_terms(result: dict[str, Any] | None) -> list[str]:
 
 
 def semantic_gate_is_memory_cue(result: dict[str, Any] | None) -> bool:
+    confidence = float((result or {}).get("confidence") or 0.0)
     return bool(
         result
         and result.get("available")
         and str(result.get("decision") or "") in SEMANTIC_GATE_CUE_DECISIONS
-        and float(result.get("confidence") or 0.0) >= 0.35
+        and meets_memory_cue_confidence(confidence)
     )
 
 
@@ -444,8 +450,12 @@ def semantic_gate_can_warm_cue_cache(result: dict[str, Any] | None) -> bool:
     # `background_only` can warm reusable aliases, but it stays below the
     # foreground memory-cue/evidence line and still needs local candidates plus
     # repeated source-backed hits before `semantic_cue_cache` promotes it.
-    return (decision in SEMANTIC_GATE_CUE_DECISIONS and confidence >= 0.35) or (
-        decision == "background_only" and confidence >= 0.55
+    return (
+        decision in SEMANTIC_GATE_CUE_DECISIONS
+        and meets_memory_cue_confidence(confidence)
+    ) or (
+        decision == "background_only"
+        and meets_background_warm_cache_confidence(confidence)
     )
 
 
@@ -477,7 +487,7 @@ def semantic_gate_can_request_source_reopen(prompt: str, result: dict[str, Any] 
         return False
     if negative_evidence_intent(prompt) or current_checkout_live_fact_intent(prompt):
         return False
-    if float(result.get("confidence") or 0.0) < 0.82:
+    if not meets_source_reopen_confidence(float(result.get("confidence") or 0.0)):
         return False
     risk = str(result.get("anti_personalization_risk") or "").strip().casefold()
     intent = str(result.get("intent") or "").strip().casefold()

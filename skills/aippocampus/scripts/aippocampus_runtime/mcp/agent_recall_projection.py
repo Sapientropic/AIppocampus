@@ -312,9 +312,8 @@ def _projection_context(payload: Mapping[str, Any]) -> RecallProjectionContext:
     cache_available = bool(payload.get("last_recall_cache_available"))
     recall_selector = str(payload.get("recall_selector_id") or "").strip() if cache_available else ""
     current_source_anchor_probe = payload.get("current_source_anchor_probe")
-    current_source_anchor_probe = (
-        current_source_anchor_probe if isinstance(current_source_anchor_probe, Mapping) else {}
-    )
+    if not isinstance(current_source_anchor_probe, Mapping):
+        current_source_anchor_probe = {}
     return RecallProjectionContext(
         recovery_cue=recovery_cue,
         exact_wording_source_search_requested=exact_wording_source_search_requested,
@@ -696,6 +695,7 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> MCPCompactResponseC
         labels_low_specificity=context.labels_low_specificity,
         cache_available=context.cache_available,
         recall_selector=context.recall_selector,
+        deepen_requests=payload.get("deepen_requests"),
     )
     selection = _select_initial_foreground_action(payload, context)
     foreground_action, safe_next_actions, exact_wording_source_search_primary = (

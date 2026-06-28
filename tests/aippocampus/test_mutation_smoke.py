@@ -17,11 +17,23 @@ class MutationSmokeTests(unittest.TestCase):
         self.assertTrue(report["ok"])
         self.assertTrue(report["advisory"])
         self.assertEqual(report["mode"], "dry_run")
-        self.assertEqual(report["target_set"], "local_file_lock_owner_identity")
+        self.assertEqual(
+            report["target_set"],
+            "local_file_lock_and_recall_source_open_invariants",
+        )
         self.assertFalse(report["platform_contract"]["uses_fork"])
         self.assertFalse(report["platform_contract"]["working_tree_mutation"])
         self.assertFalse(report["platform_contract"]["default_gate"])
-        self.assertGreaterEqual(report["mutant_count"], 2)
+        self.assertGreaterEqual(report["mutant_count"], 4)
+        mutant_ids = {row["mutant_id"] for row in report["mutants"]}
+        self.assertIn(
+            "mcp_agent_recall_drops_recall_selector_from_deepen_arguments",
+            mutant_ids,
+        )
+        self.assertIn(
+            "cli_recall_blocked_source_anchor_route_marked_reopenable",
+            mutant_ids,
+        )
 
     def test_mutation_specs_still_match_current_sources_once_each(self) -> None:
         for mutant in mutation_smoke.MUTANTS:
@@ -30,10 +42,7 @@ class MutationSmokeTests(unittest.TestCase):
                 text = target.read_text(encoding="utf-8")
                 self.assertEqual(text.count(mutant.old), 1)
                 self.assertNotEqual(mutant.old, mutant.new)
-                self.assertEqual(
-                    mutant.expected_test_module,
-                    "tests.aippocampus.test_local_file_lock",
-                )
+                self.assertTrue(mutant.expected_test_module.startswith("tests.aippocampus."))
 
     def test_json_cli_dry_run_is_machine_readable(self) -> None:
         stdout = io.StringIO()

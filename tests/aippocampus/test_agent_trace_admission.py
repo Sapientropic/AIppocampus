@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 import unittest
 
+from aippocampus_runtime.recall.feedback.suppression_lifecycle import feedback_trace_family
+from aippocampus_runtime.recall.rollout_search import rollout_payload_class
 from aippocampus_runtime.source.agent_trace_admission import (
     ADMISSION_LEVELS,
     TRAINING_ROLES,
@@ -102,6 +104,74 @@ class AgentTraceAdmissionTests(unittest.TestCase):
             classified["check-1"]["graph_projection"],
             "typed_graph_contribution_after_owner_gate",
         )
+
+    def test_family_aliases_admit_final_answer_closeout_without_silent_downgrade(self) -> None:
+        payload_family = rollout_payload_class({"role": "assistant", "is_final": True})
+        classified = classify_trace_row(
+            {
+                "trace_id": "final-1",
+                "family": payload_family,
+                "source_refs": [{"message_id": "msg-1", "line": 1}],
+                "receipt_refs": [{"event_id": "evt-1"}],
+            }
+        )
+
+        self.assertEqual(payload_family, "assistant_final")
+        self.assertEqual(classified["producer_trace_family"], "assistant_final")
+        self.assertEqual(classified["trace_family"], "final_answer_closeout")
+        self.assertTrue(classified["family_alias_applied"])
+        self.assertEqual(classified["admission_level"], "reopenable_route")
+        self.assertEqual(classified["reason"], "closeout_joined_to_receipt")
+
+    def test_operator_detail_reports_unknown_family_without_compact_inventory(self) -> None:
+        rows = [{"trace_id": "unknown-1", "family": "brand_new_family"}]
+        detail = project_trace_admission(rows, detail="operator")
+        compact = project_trace_admission(rows, detail="compact")
+
+        self.assertEqual(detail["unknown_family_count"], 1)
+        self.assertEqual(detail["unknown_trace_families"][0]["family"], "brand_new_family")
+        self.assertEqual(compact["status"], "diagnostic_only")
+        self.assertNotIn("unknown_trace_families", compact)
+
+    def test_behavior_source_ref_adapter_preserves_feedback_and_clean_receipt_refs(self) -> None:
+        feedback_row = {
+            "trace_id": "feedback-1",
+            "trace_family": feedback_trace_family("source_reopen_success"),
+            "outcome": "source_reopen_success",
+            "source_refs": [{"thread_key": "thread-a", "message_id": "msg-a", "line": 4}],
+        }
+        clean_receipt = {
+            "trace_id": "clean-1",
+            "event_kind": "tool_call_observed",
+            "hard_event_kind": "tool_call_succeeded",
+            "status": "succeeded",
+            "source_ref": "provider:session:line-8",
+            "source_line": 8,
+        }
+        malformed = {
+            "trace_id": "malformed-1",
+            "event_kind": "tool_call_succeeded",
+            "status": "succeeded",
+            "source_ref": "provider:session:line-only",
+        }
+
+        feedback_classified = classify_trace_row(feedback_row)
+        clean_classified = classify_trace_row(clean_receipt)
+        malformed_classified = classify_trace_row(malformed)
+        feedback_signal = behavior_training_signal_from_trace(feedback_row)
+        malformed_signal = behavior_training_signal_from_trace(
+            {**malformed, "outcome": "source_reopen_success"}
+        )
+
+        self.assertEqual(feedback_classified["admission_level"], "bounded_evidence_after_open")
+        self.assertEqual(feedback_classified["source_ref_count"], 1)
+        self.assertEqual(feedback_signal["training_role"], "positive_demo")
+        self.assertEqual(clean_classified["trace_family"], "successful_tool_check_receipt")
+        self.assertEqual(clean_classified["admission_level"], "reopenable_route")
+        self.assertEqual(clean_classified["source_ref_count"], 1)
+        self.assertEqual(malformed_classified["source_ref_count"], 0)
+        self.assertEqual(malformed_classified["admission_level"], "operator_only")
+        self.assertEqual(malformed_signal["training_role"], "none")
 
     def test_compact_projection_is_action_boundary_not_trace_inventory(self) -> None:
         compact = project_trace_admission(self._mixed_rows(), detail="compact")

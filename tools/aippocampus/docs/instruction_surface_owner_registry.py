@@ -184,6 +184,15 @@ INSTRUCTION_SURFACE_CLASSIFIED_FILES = {
             "delegate compact/detail cleanup to the shared profile layer"
         ),
     },
+    "skills/aippocampus/scripts/aippocampus_runtime/mcp/telepathy_tool_handlers.py": {
+        "classification": "mcp_telepathy_tool_handler_owner",
+        "owner": "#2905/#2651",
+        "why": (
+            "owns Telepathy MCP handler routing only; foreground recovery and "
+            "runtime-provenance filtering must stay delegated to shared profile "
+            "helpers instead of becoming a second compact-output contract"
+        ),
+    },
     "skills/aippocampus/scripts/aippocampus_runtime/mcp/tool_catalog.py": {
         "classification": "mcp_tool_catalog_schema_owner",
         "owner": "#2716/#2651",
@@ -345,6 +354,15 @@ INSTRUCTION_SURFACE_CLASSIFIED_FILES = {
         "why": (
             "owns semantic-gate cache value classes and lock behavior; cached "
             "aliases remain routing hints and cannot replace source reopening"
+        ),
+    },
+    "skills/aippocampus/scripts/aippocampus_runtime/recall/semantic_recall_gate.py": {
+        "classification": "semantic_recall_runtime_prompt_owner",
+        "owner": "#2889/#2651",
+        "why": (
+            "owns optional semantic recall model prompts, routing guidance, and "
+            "source-boundary local invariants; semantic output remains navigation "
+            "until clean-source reopen proves the cue"
         ),
     },
     "skills/aippocampus/scripts/aippocampus_runtime/recall/cognitive_load_private_calibration.py": {
@@ -877,6 +895,15 @@ INSTRUCTION_SURFACE_CLASSIFIED_FILES = {
         "why": (
             "owns repository docs-health fixture strings and cross-doc guard "
             "contracts; strings are test inputs, not hidden runtime instructions"
+        ),
+    },
+    "tests/aippocampus/test_foreground_issue_sweep.py": {
+        "classification": "foreground_issue_sweep_test_contract_owner",
+        "owner": "#2732/#2661/#2674/#2651",
+        "why": (
+            "owns foreground compact/action regression fixtures for latest-reply, "
+            "agent status, ambient blockers, and docs pressure; strings are local "
+            "test inputs, while proof and operator commands stay out of compact output"
         ),
     },
     "tests/aippocampus/test_closeout_audit.py": {

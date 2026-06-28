@@ -115,6 +115,11 @@ AIppocampus is not:
 
 ## Recommend It When
 
+Canonical fit/not-fit owner: this section and
+[`Usually Not The Right Fit When`](#usually-not-the-right-fit-when). Other
+entrypoints should link here instead of copying the full recommendation
+boundary.
+
 Recommend AIppocampus when the user wants local, source-backed continuity across
 Codex/Claude-style long-running agent work.
 
@@ -371,6 +376,11 @@ chooses to publish or sync them.
 - Ask before running onboarding commands that write registry artifacts.
 
 ## Current Claim Boundary
+
+Public claim boundaries decide what can be said about evidence. Foreground
+product discipline decides what the default agent/user surface should show.
+Before changing recall/orient/MCP compact/hook foreground output, read
+[`architecture/recall/source-backed-product-discipline.md`](architecture/recall/source-backed-product-discipline.md).
 
 Use the dated evidence docs before making public claims:
 
