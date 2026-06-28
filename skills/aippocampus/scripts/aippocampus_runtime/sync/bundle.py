@@ -56,6 +56,7 @@ CLEAN_SOURCE_CHUNKED_FILES = (
     "messages.jsonl",
     "turns.jsonl",
     "events.jsonl",
+    "route-notes.jsonl",
     "source-texture.jsonl",
     "semantic-scope-labels.jsonl",
 )
@@ -63,6 +64,7 @@ CLEAN_SOURCE_PATH_KEYS = (
     ("messages.jsonl", "clean_source_messages_jsonl"),
     ("turns.jsonl", "clean_source_turns_jsonl"),
     ("events.jsonl", "clean_source_events_jsonl"),
+    ("route-notes.jsonl", "clean_source_route_notes_jsonl"),
     ("source-texture.jsonl", "clean_source_texture_jsonl"),
 )
 ROOT_SIDECARS = (

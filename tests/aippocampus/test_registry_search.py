@@ -163,6 +163,76 @@ class RegistrySearchBudgetTests(unittest.TestCase):
         self.assertTrue(result["hits"][1]["search_noise"])
         self.assertEqual(result["hits"][1]["noise_reason"], "process_notification")
 
+    def test_deep_registry_search_reads_joined_route_notes(self) -> None:
+        clean_dir = self.root / "clean-route-notes"
+        clean_dir.mkdir()
+        messages = clean_dir / "messages.jsonl"
+        route_notes = clean_dir / "route-notes.jsonl"
+        messages.write_text(
+            json.dumps(
+                {
+                    "message_id": "msg_route_note_final",
+                    "source_id": "src_route_note",
+                    "source_line": 44,
+                    "turn_id": "turn_route_note",
+                    "turn_index": 4,
+                    "role": "assistant",
+                    "phase": "final_answer",
+                    "is_final": True,
+                    "text": "Final anchor RN-44 confirms the joined route window.",
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        route_notes.write_text(
+            json.dumps(
+                {
+                    "route_id": "route_note_source_texture",
+                    "origin": "route_note",
+                    "readiness_class": "source_reopen_ready",
+                    "note_type": "decision_breadcrumb",
+                    "title": "Commentary route note: decision breadcrumb",
+                    "why_lit": "A process note records a route decision.",
+                    "navigation_only": True,
+                    "route_anchor_terms": ["source_texture", "old", "source", "decide"],
+                    "source_refs": [{"message_id": "msg_route_note_final", "line": 44}],
+                    "joined_evidence_refs": [
+                        {
+                            "evidence_kind": "final_answer",
+                            "source_ref": {
+                                "source_id": "src_route_note",
+                                "message_id": "msg_route_note_final",
+                                "turn_id": "turn_route_note",
+                                "turn_index": 4,
+                                "line": 44,
+                            },
+                        }
+                    ],
+                    "reason_codes": ["route_note", "decision_breadcrumb"],
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        result = registry_search.deep_search_entry_result(
+            {
+                "paths": {
+                    "clean_source_messages_jsonl": str(messages),
+                    "clean_source_route_notes_jsonl": str(route_notes),
+                }
+            },
+            ["previous", "agent", "decided", "old", "source", "source_texture"],
+            max_hits=3,
+        )
+
+        self.assertEqual(result["hits"][0]["source"], "route_note")
+        self.assertEqual(result["hits"][0]["message_id"], "msg_route_note_final")
+        self.assertEqual(result["hits"][0]["line"], 44)
+
 
 class RegistrySourceSearchUsefulnessTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -486,6 +556,91 @@ class RegistrySourceSearchUsefulnessTests(unittest.TestCase):
         )
         self.assertFalse(reopened["ok"])
         self.assertEqual(reopened["error"]["code"], "last_registry_search_unavailable")
+
+    def test_route_note_hit_becomes_direct_registry_source_route(self) -> None:
+        route_notes = self.clean / "route-notes.jsonl"
+        self.messages.write_text(
+            json.dumps(
+                {
+                    "message_id": "msg_route_note_final",
+                    "source_id": "src_route_note",
+                    "source_line": 55,
+                    "turn_id": "turn_route_note",
+                    "turn_index": 5,
+                    "role": "assistant",
+                    "phase": "final_answer",
+                    "is_final": True,
+                    "text": "Joined final anchor RN-55 confirms the reopened window.",
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        route_notes.write_text(
+            json.dumps(
+                {
+                    "route_id": "route_note_source_texture",
+                    "origin": "route_note",
+                    "readiness_class": "source_reopen_ready",
+                    "note_type": "decision_breadcrumb",
+                    "title": "Commentary route note: decision breadcrumb",
+                    "why_lit": "A process note records a route decision.",
+                    "navigation_only": True,
+                    "route_anchor_terms": ["source_texture", "old", "source", "decide"],
+                    "source_refs": [{"message_id": "msg_route_note_final", "line": 55}],
+                    "joined_evidence_refs": [
+                        {
+                            "evidence_kind": "final_answer",
+                            "source_ref": {
+                                "source_id": "src_route_note",
+                                "message_id": "msg_route_note_final",
+                                "turn_id": "turn_route_note",
+                                "turn_index": 5,
+                                "line": 55,
+                            },
+                        }
+                    ],
+                    "reason_codes": ["route_note", "decision_breadcrumb"],
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (self.root / "threads.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "threads": [
+                        {
+                            "thread_key": "session:test",
+                            "title": "continuity route",
+                            "paths": {
+                                "clean_source_messages_jsonl": str(self.messages),
+                                "clean_source_route_notes_jsonl": str(route_notes),
+                            },
+                        }
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        result = source_registry_search.search_registry_sources(
+            ["previous agent decided old source source_texture"],
+            registry_dir=self.root,
+            cwd=self.root,
+        )
+
+        self.assertTrue(result["ok"], result)
+        match = result["matches"][0]
+        self.assertEqual(match["source"], "route_note")
+        self.assertEqual(match["message_id"], "msg_route_note_final")
+        self.assertEqual(match["source_route"]["kind"], "registry_clean_source_hit")
+        self.assertEqual(match["source_route"]["message_id"], "msg_route_note_final")
+        self.assertIn("last_search_reopen_command", match)
 
     def test_sqlite_line_only_match_does_not_become_agent_recall_route(self) -> None:
         with patch.object(

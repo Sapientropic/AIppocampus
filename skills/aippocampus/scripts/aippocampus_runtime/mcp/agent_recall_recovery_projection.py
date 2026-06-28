@@ -150,6 +150,7 @@ def associative_path_fallback_action(
         )
     )
     action["claim_boundary"] = "no_claim_before_reopen"
+    action["actionability"] = "low_confidence_reopenable"
     action["route_choice_posture"] = str(
         card.get("route_choice_posture") or "associative_path_opt_in_fallback"
     )

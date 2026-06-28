@@ -282,6 +282,7 @@ class BuildCleanSourceTests(unittest.TestCase):
         self.assertEqual(route_notes[0]["output_authority"], "navigation_only")
         self.assertTrue(route_notes[0]["source_reopen_required_before_claim"])
         self.assertTrue(route_notes[0]["joined_evidence_refs"])
+        self.assertIn("旧线程", route_notes[0]["route_anchor_terms"])
         self.assertNotIn("我先查一下旧线程", route_notes_text)
         self.assertNotIn("very large tool output", route_notes_text)
         self.assertTrue(
