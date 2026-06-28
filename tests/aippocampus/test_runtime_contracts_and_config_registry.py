@@ -188,10 +188,6 @@ class RuntimeContractsAndConfigRegistryTests(unittest.TestCase):
             ("foreground_action.mutation_risk", "required_foreground_action_field_missing"),
             reasons,
         )
-        self.assertIn(
-            ("foreground_action.claim_boundary", "required_foreground_action_field_missing"),
-            reasons,
-        )
 
     def test_compact_foreground_action_lint_catches_semantic_menu_drift(self) -> None:
         payload = {

@@ -117,7 +117,8 @@ class AippocampusMcpServerSearchMemoryTests(unittest.TestCase):
         self.assertEqual(action["id"], "inspect_low_confidence_registry_near_hit")
         self.assertEqual(action["tool_name"], "search_memory")
         self.assertTrue(action["arguments"]["open_source"])
-        self.assertEqual(action["claim_boundary"], "near_hit_navigation_only_no_claim")
+        self.assertNotIn("claim_boundary", action)
+        self.assertIn("navigation", action["why"])
         self.assertNotIn("suppressed_low_coverage_matches", search_payload)
 
         open_payload = call_mcp_tool_payload(

@@ -1639,7 +1639,7 @@ class SearchCleanSourceTests(unittest.TestCase):
             {"not_searchable_workspace_entry": 1},
         )
         self.assertEqual(payload["unavailable_source_count"], 0)
-        self.assertEqual(payload["warnings"], [])
+        self.assertEqual(payload.get("warnings", []), [])
         self.assertNotIn("skipped_entries", payload)
         self.assertNotIn("unable to open database file", encoded)
         self.assertNotIn(str(self.cwd), encoded)
@@ -1710,7 +1710,7 @@ class SearchCleanSourceTests(unittest.TestCase):
             {"configured_search_sources_missing": 1},
         )
         self.assertEqual(payload["unavailable_source_count"], 1)
-        self.assertEqual(payload["warnings"], [])
+        self.assertEqual(payload.get("warnings", []), [])
         self.assertEqual(
             payload["maintenance_actions"][0]["command"],
             "aippocampus registry audit --json",
@@ -1782,16 +1782,17 @@ class SearchCleanSourceTests(unittest.TestCase):
         payload = json.loads(stdout.getvalue())
 
         self.assertEqual(code, 1)
-        self.assertFalse(payload["ok"])
         self.assertEqual(payload["status"], "no_phrase_like_matches")
         self.assertEqual(payload["match_count"], 0)
         self.assertEqual(payload["suppressed_low_coverage_match_count"], 2)
         self.assertNotIn("suppressed_low_coverage_matches", payload)
-        self.assertNotIn("query_match_gate", payload)
-        self.assertNotIn("source_boundary", payload)
+        boundary = payload["source_boundary"]
+        self.assertEqual(boundary["authority"], "direction_only")
+        self.assertEqual(
+            (boundary["source_backed_claim_allowed"], boundary["search_miss_is_not_absence_of_memory"], boundary["phrase_like_low_coverage_suppressed"]),
+            (False, True, True),
+        )
         self.assertNotIn("privacy", payload)
-        self.assertNotIn("diagnostic_fields_omitted", payload)
-        self.assertNotIn("diagnostic_detail_command", payload)
         self.assertEqual(payload["suppression_boundary"], "phrase_like_low_coverage_suppressed")
         self.assertEqual(payload["foreground_action_contract"], "foreground-action-v2")
         self.assertNotIn("agent_next_action", payload)

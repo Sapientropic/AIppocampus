@@ -300,7 +300,9 @@ class AgentOptInCliContractsTests(unittest.TestCase):
         self.assertEqual(payload["foreground_action"]["tool_name"], "agent_deepen")
         self.assertEqual(payload["foreground_action"]["arguments"]["request_index"], 1)
         self.assertNotIn("cannot_claim", payload)
-        self.assertIn("reopen", payload["claim_boundary"])
+        self.assertNotIn("claim_boundary", payload)
+        self.assertNotIn("claim_boundary", payload["foreground_action"])
+        self.assertIn("reopen", payload["foreground_action"]["why"])
         self.assertNotIn("output_boundary", payload)
         self.assertNotIn("action_boundary", payload)
         self.assertNotIn("metrics", payload)
@@ -630,7 +632,7 @@ class AgentOptInCliContractsTests(unittest.TestCase):
         self.assertNotIn('"handle"', json.dumps(json.loads(cache_text)["requests"]))
         self.assertIn("local_reopen_token", cache_text)
 
-    def test_cli_agent_deepen_can_use_public_stdout_cache_card(self) -> None:
+    def test_cli_agent_deepen_can_execute_public_foreground_action(self) -> None:
         local_last_recall_path = self.cwd / "local-last-recall.json"
         public_cache_path = self.cwd / "public-cache.json"
         env = {
@@ -663,16 +665,21 @@ class AgentOptInCliContractsTests(unittest.TestCase):
         )
         self.assertEqual(recall_proc.returncode, 0, recall_proc.stderr)
         public_cache_path.write_text(recall_proc.stdout, encoding="utf-8", newline="\n")
+        recall_payload = json.loads(recall_proc.stdout)
+        action = recall_payload["foreground_action"]
+        self.assertEqual(action["tool_name"], "agent_deepen")
+        self.assertNotIn("local_reopen_token", recall_proc.stdout)
+        self.assertNotIn("claim_boundary", json.dumps(action, ensure_ascii=False))
+        args = action["arguments"]
 
         deepen_proc = subprocess.run(
             [
                 *base,
                 "deepen",
                 "--request",
-                "1",
-                "--last-recall",
-                "--last-recall-path",
-                str(public_cache_path),
+                str(args["request_index"]),
+                "--recall-selector",
+                args["recall_selector"],
                 "--json",
             ],
             **run_kwargs,

@@ -421,7 +421,7 @@ def _registry_search_raw_payload(
                 low_coverage_only_matches=low_coverage_only_matches,
                 no_phrase_like_matches=no_phrase_like_matches,
             )
-            if diagnostic_output
+            if diagnostic_output or not matches
             else None
         ),
         "privacy": (
