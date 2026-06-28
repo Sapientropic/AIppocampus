@@ -68,7 +68,10 @@ def _reporting_boundary() -> dict[str, Any]:
 
 def _warm_queue_health(root: Path, *, now: datetime) -> dict[str, Any]:
     status = warm_status_payload(job_dir=root / "ambient_warm_jobs", now=now)
-    activity = status.get("job_activity") if isinstance(status.get("job_activity"), Mapping) else {}
+    activity_value = status.get("job_activity")
+    activity: Mapping[str, Any] = (
+        activity_value if isinstance(activity_value, Mapping) else {}
+    )
     return runtime_core.sanitize_external_model_payload(
         {
             "status": status.get("status"),

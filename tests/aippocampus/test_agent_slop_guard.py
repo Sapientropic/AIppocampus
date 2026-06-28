@@ -335,6 +335,10 @@ def compact_card():
         "kind": "demo",
         "status": "pass",
         "gate_class": "hard",
+        "blocker_count": 1,
+        "error": {"code": "demo"},
+        "likely_cause": "demo cause",
+        "source_boundary": {"local_paths_serialized": False},
         "detail_command": "python tool.py --detail full",
     }
 """

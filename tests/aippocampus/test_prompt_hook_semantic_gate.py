@@ -392,7 +392,7 @@ class PromptHookSemanticGateTests(AmbientRecallHookCase):
                 "cached": False,
             }
 
-        cue_updates = []
+        cue_reports = []
         for prompt in (
             "¿Podemos seguir con la memoria externa de la que hablamos?",
             "¿Puedes continuar esa memoria externa para mantener la continuidad?",
@@ -406,10 +406,11 @@ class PromptHookSemanticGateTests(AmbientRecallHookCase):
                 search_budget=0,
             )
             self.assertEqual(result["semantic_gate"]["decision"], "background_only")
-            cue_updates.append(result["semantic_cue_cache"])
+            self.assertNotIn("semantic_cue_cache", result)
+            cue_reports.append(cue_cache.semantic_cue_cache_report(cues_path))
 
-        self.assertEqual(cue_updates[0]["active_count"], 0)
-        self.assertGreater(cue_updates[1]["active_count"], 0)
+        self.assertEqual(cue_reports[0]["active_count"], 0)
+        self.assertGreater(cue_reports[1]["active_count"], 0)
 
         def fail_semantic_gate(*args, **kwargs) -> dict:
             raise AssertionError("active background semantic cues should avoid live semantic spend")

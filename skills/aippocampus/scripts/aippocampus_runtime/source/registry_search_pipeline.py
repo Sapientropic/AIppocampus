@@ -421,15 +421,13 @@ def _collect_registry_search_matches(
             if profile["accepted"]:
                 matches.append(match)
             else:
-                suppressed_matches.append(
-                    {
-                        "thread": match.get("thread"),
-                        "score": match.get("score"),
-                        "query_match_profile": profile,
-                        "source": match.get("source"),
-                        "line": match.get("line"),
-                    }
-                )
+                # Suppressed hits are not target evidence, but some still carry
+                # a clean-source route that can help the foreground agent reopen
+                # nearby context as navigation. Keep the route/snippet here and
+                # let the renderer decide whether a compact low-confidence action
+                # is warranted; compact output still hides the diagnostic
+                # suppressed-hit list unless detail is explicitly requested.
+                suppressed_matches.append(match)
         if budget_exhausted:
             unsearched_entry_count = len(entries) - index - 1
             break

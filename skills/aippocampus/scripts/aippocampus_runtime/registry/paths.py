@@ -33,6 +33,9 @@ def aippocampus_registry_resolution(home: Path | None = None) -> dict[str, Any]:
         return {
             "path": str(Path(env)),
             "source": "AIPPOCAMPUS_REGISTRY_DIR",
+            # owner: registry storage resolver; removal: when Codex-home
+            # storage migration is complete; default/exposure: operator
+            # storage status only, with paths redacted by callers.
             "legacy_fallback": False,
         }
     aippo_home = aippocampus_home()
@@ -40,6 +43,9 @@ def aippocampus_registry_resolution(home: Path | None = None) -> dict[str, Any]:
         return {
             "path": str(aippo_home / "registry"),
             "source": "AIPPOCAMPUS_HOME/registry",
+            # owner: registry storage resolver; removal: when Codex-home
+            # storage migration is complete; default/exposure: operator
+            # storage status only, with paths redacted by callers.
             "legacy_fallback": False,
         }
     legacy_home = legacy_codex_home(home)
@@ -50,6 +56,9 @@ def aippocampus_registry_resolution(home: Path | None = None) -> dict[str, Any]:
             if os.environ.get("CODEX_HOME") or home
             else "default_CODEX_HOME/aippocampus-registry"
         ),
+        # owner: registry storage resolver; removal: when Codex-home storage
+        # migration is complete; default/exposure: operator storage status
+        # only, with paths redacted by callers.
         "legacy_fallback": True,
     }
 

@@ -25,7 +25,10 @@ from aippocampus_runtime.dream.working_memory import (
     adjudicated_dream_findings_to_working_memory,  # noqa: F401
     reviewed_dream_findings_to_working_memory,  # noqa: F401
 )
-from aippocampus_runtime.source.io_kernel import source_ref_identity_key
+from aippocampus_runtime.source.io_kernel import (
+    normalize_source_refs,
+    source_ref_identity_key,
+)
 
 SCHEMA_VERSION = 1
 REPORT_KIND = "aippocampus_compensatory_dream_report"
@@ -116,32 +119,6 @@ def is_present(value: object) -> bool:
     return value is not None and value != ""
 
 
-def normalize_source_refs(value: object, *, thread_key: str | None = None) -> tuple[dict[str, Any], ...]:
-    if isinstance(value, Mapping):
-        raw_items: Iterable[object] = [value]
-    elif isinstance(value, (list, tuple)):
-        raw_items = value
-    elif isinstance(value, str) and value.strip():
-        raw_items = [{"source_ref": value.strip()}]
-    else:
-        raw_items = []
-
-    refs: list[dict[str, Any]] = []
-    seen: set[tuple[str, str, str, str, str]] = set()
-    for item in raw_items:
-        if not isinstance(item, Mapping):
-            continue
-        ref = dict(item)
-        if thread_key and not ref.get("thread_key") and not ref.get("thread_id"):
-            ref["thread_key"] = thread_key
-        key = source_ref_identity_key(ref)
-        if not any(key) or key in seen:
-            continue
-        seen.add(key)
-        refs.append({k: v for k, v in ref.items() if is_present(v)})
-    return tuple(refs)
-
-
 def string_values(value: object) -> tuple[str, ...]:
     if isinstance(value, str):
         return (value,)
@@ -183,7 +160,13 @@ def row_id(row: Mapping[str, Any]) -> str:
 
 
 def input_row_from_mapping(row: Mapping[str, Any], *, thread_key: str) -> DreamInputRow | None:
-    refs = normalize_source_refs(row.get("source_refs") or row.get("source_ref"), thread_key=thread_key)
+    refs = normalize_source_refs(
+        row.get("source_refs") or row.get("source_ref"),
+        thread_key=thread_key,
+        identity_key=True,
+        require_thread=False,
+        allow_string_ref=True,
+    )
     refs = tuple(ref for ref in refs if source_ref_thread(ref) == thread_key)
     if not refs:
         return None
@@ -396,7 +379,13 @@ def run_compensatory_dream(
     findings = build_compensatory_findings(thread_key, rows)
     missing_source_count = 0
     for row in raw_rows:
-        refs = normalize_source_refs(row.get("source_refs") or row.get("source_ref"), thread_key=thread_key)
+        refs = normalize_source_refs(
+            row.get("source_refs") or row.get("source_ref"),
+            thread_key=thread_key,
+            identity_key=True,
+            require_thread=False,
+            allow_string_ref=True,
+        )
         if not refs and str(row.get("thread_key") or row.get("thread_id") or "") == thread_key:
             missing_source_count += 1
     return {

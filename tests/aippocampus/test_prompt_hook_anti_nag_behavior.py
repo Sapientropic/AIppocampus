@@ -73,4 +73,6 @@ class PromptHookAntiNagBehaviorTests(AmbientRecallHookCase):
         self.assertEqual(second["ambient_policy"]["frequency_capped"], 1)
         self.assertEqual(stop["ambient_policy_update"]["action"], "dismiss")
         self.assertEqual(stop["ambient_policy_update"]["target_count"], 1)
-
+        self.assertEqual(set(stop["result_tiers"]), {"decision"})
+        self.assertNotIn("semantic_bridge_diagnostic", stop)
+        self.assertNotIn("semantic_cue_cache", stop)

@@ -195,6 +195,13 @@ def nested_increment(root: dict[str, Any], *keys: str) -> None:
     cursor[keys[-1]] = int(cursor.get(keys[-1], 0)) + 1
 
 
+def nested_add(root: dict[str, Any], count: int, *keys: str) -> None:
+    cursor: dict[str, Any] = root
+    for key in keys[:-1]:
+        cursor = cursor.setdefault(key, {})
+    cursor[keys[-1]] = int(cursor.get(keys[-1], 0)) + max(0, int(count))
+
+
 def lifecycle_diagnostics(con: sqlite3.Connection) -> dict[str, Any]:
     concept_status_counts = status_counts(con, "concepts")
     edge_status_counts = status_counts(con, "concept_edges")
@@ -208,19 +215,19 @@ def lifecycle_diagnostics(con: sqlite3.Connection) -> dict[str, Any]:
             reason = str(row["reason"] or "unknown")
             reason_counts[reason] = reason_counts.get(reason, 0) + int(row["count"] or 0)
     suppressed_reasons: dict[str, Any] = {}
-    for row in con.execute(
+    suppressed_reason_rows = con.execute(
         """
         SELECT edge_type, status, lifecycle_reason, COUNT(*) AS count
         FROM concept_edges
         WHERE status IN ('parked', 'retired')
         GROUP BY edge_type, status, lifecycle_reason
         """
-    ).fetchall():
+    ).fetchall()
+    for row in suppressed_reason_rows:
         edge_type = safe_edge_type(row["edge_type"] or "unknown")
         status = str(row["status"] or "unknown")
         reason = str(row["lifecycle_reason"] or "unknown")
-        for _ in range(int(row["count"] or 0)):
-            nested_increment(suppressed_reasons, edge_type, status, reason)
+        nested_add(suppressed_reasons, int(row["count"] or 0), edge_type, status, reason)
     oldest_staging_rows: list[dict[str, Any]] = []
     for row in con.execute(
         """

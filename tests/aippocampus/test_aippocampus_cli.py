@@ -1137,7 +1137,10 @@ class AippocampusCliTests(unittest.TestCase):
 
         doctor_invocation = facade.resolve_command(["doctor", "provider", "--json"])
         self.assertEqual(doctor_invocation.command, "doctor")
-        self.assertEqual(doctor_invocation.module_name, "aippocampus_runtime.ops.provider_doctor")
+        self.assertEqual(
+            doctor_invocation.module_name,
+            "aippocampus_runtime.ops.doctors.provider_doctor",
+        )
         self.assertEqual(doctor_invocation.script_name, "provider_doctor.py")
         self.assertEqual(doctor_invocation.args, ["provider", "--json"])
 
@@ -1145,7 +1148,7 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertEqual(doctor_config_invocation.command, "doctor")
         self.assertEqual(
             doctor_config_invocation.module_name,
-            "aippocampus_runtime.ops.provider_doctor",
+            "aippocampus_runtime.ops.doctors.provider_doctor",
         )
         self.assertEqual(doctor_config_invocation.script_name, "provider_doctor.py")
         self.assertEqual(doctor_config_invocation.args, ["config", "--json"])

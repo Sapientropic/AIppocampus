@@ -43,12 +43,16 @@ PROVIDER_ENTRYPOINT_INVENTORY = (
     REPO_ROOT / "docs" / "architecture" / "host" / "provider-entrypoint-inventory.md"
 )
 RUNTIME_SCRIPT_MAP = REPO_ROOT / "docs" / "architecture" / "runtime-script-map.md"
+OPS_OWNER_MAP = REPO_ROOT / "docs" / "architecture" / "ops" / "runtime-ops-owner-map.md"
 ENCRYPTED_SYNC_V2 = REPO_ROOT / "docs" / "architecture" / "ops" / "encrypted-sync-v2.md"
 SOURCE_BACKED_PRODUCT_DISCIPLINE = (
     REPO_ROOT / "docs" / "architecture" / "recall" / "source-backed-product-discipline.md"
 )
 INSTRUCTION_SURFACE_POLICY = (
     REPO_ROOT / "docs" / "architecture" / "runtime" / "instruction-surface-policy.md"
+)
+PROGRESSIVE_DISCLOSURE_CONTRACT = (
+    REPO_ROOT / "docs" / "architecture" / "runtime" / "progressive-disclosure-contract.md"
 )
 LARGE_RUNTIME_THRESHOLD = 600
 LARGE_TEST_THRESHOLD = 1500
@@ -68,7 +72,7 @@ OPS_DIRECT_RECALL_HOOK_IMPORT_ALLOWLIST = {
         "aippocampus_runtime.recall.authority",
         "aippocampus_runtime.recall.prompt_context_render",
     },
-    "aippocampus_runtime.ops.provider_doctor": {
+    "aippocampus_runtime.ops.doctors.provider_doctor": {
         "aippocampus_runtime.recall.semantic_recall_gate",
     },
     "aippocampus_runtime.ops.provider_key_bridge": {
@@ -111,10 +115,10 @@ OPS_DIRECT_RECALL_HOOK_IMPORT_ALLOWLIST = {
     "aippocampus_runtime.ops.route_readiness": {
         "aippocampus_runtime.recall.active_recall_lock_lifecycle",
     },
-    "aippocampus_runtime.ops.spend_doctor": {
+    "aippocampus_runtime.ops.doctors.spend_doctor": {
         "aippocampus_runtime.recall.semantic_recall_gate",
     },
-    "aippocampus_runtime.ops.spend_doctor_compact": {
+    "aippocampus_runtime.ops.doctors.spend_doctor_compact": {
         "aippocampus_runtime.recall.semantic_recall_gate",
     },
     "aippocampus_runtime.ops.worker_hook_handoff": {
@@ -190,6 +194,19 @@ def tool_python_files() -> list[Path]:
         path
         for path in (REPO_ROOT / "tools" / "aippocampus").rglob("*.py")
         if "__pycache__" not in path.parts
+    )
+
+def ops_flat_python_files() -> list[str]:
+    ops_dir = SCRIPTS / "aippocampus_runtime" / "ops"
+    return sorted(path.name for path in ops_dir.glob("*.py"))
+
+def documented_ops_flat_allowlist() -> list[str]:
+    text = OPS_OWNER_MAP.read_text(encoding="utf-8")
+    return sorted(
+        {
+            match.group(1)
+            for match in re.finditer(r"`aippocampus_runtime/ops/([^`/]+\.py)`", text)
+        }
     )
 
 def claim_boundary_helper_files() -> list[Path]:
@@ -332,6 +349,34 @@ class ArchitectureBoundaryTests(unittest.TestCase):
             self.assertIn(phrase, text)
         self.assertIn("instruction-surface-policy.md", runtime_index)
 
+    def test_progressive_disclosure_contract_is_canonical_frontstage_budget(self) -> None:
+        text = PROGRESSIVE_DISCLOSURE_CONTRACT.read_text(encoding="utf-8")
+        runtime_index = (REPO_ROOT / "docs" / "architecture" / "runtime" / "README.md").read_text(
+            encoding="utf-8",
+        )
+
+        for phrase in (
+            "Role: current contract.",
+            "Default compact output is a frontstage card",
+            "Outcome tier",
+            "Primary next step",
+            "exactly one `foreground_action`",
+            "Boundary tier",
+            "Detail tier",
+            "safe_next_actions",
+            "tests/aippocampus/frontstage_assertions.py",
+            "setup/start",
+            "update status",
+            "plugin status/install",
+            "MCP compact tools",
+            "hooks/action hints",
+            "recall/deepen/APW",
+            "search/registry search",
+            "trusted-personal first-run",
+        ):
+            self.assertIn(phrase, text)
+        self.assertIn("progressive-disclosure-contract.md", runtime_index)
+
     def test_instruction_surface_changed_surface_gate_uses_owner_classification(self) -> None:
         classified = subprocess.run(
             [
@@ -451,6 +496,22 @@ class ArchitectureBoundaryTests(unittest.TestCase):
             | OPS_STRING_ONLY_RECALL_COMMAND_MODULES
         ):
             self.assertIn(f"`{module}`", text)
+
+    def test_runtime_ops_flat_modules_are_owner_mapped_before_growth(self) -> None:
+        actual = ops_flat_python_files()
+        documented = documented_ops_flat_allowlist()
+
+        self.assertEqual(actual, documented)
+        text = OPS_OWNER_MAP.read_text(encoding="utf-8")
+        for phrase in (
+            "## Owner Packages",
+            "`aippocampus_runtime/ops/doctors/`",
+            "provider/preflight/spend diagnostics",
+            "new doctor code must not be added as flat `ops/*.py`",
+            "Compatibility wrappers",
+            "sunset when the next public-API review removes direct module entrypoints",
+        ):
+            self.assertIn(phrase, text)
 
     def test_encrypted_sync_v2_contract_records_deferred_decisions(self) -> None:
         self.assertTrue(ENCRYPTED_SYNC_V2.is_file(), "encrypted sync v2 design note is missing")

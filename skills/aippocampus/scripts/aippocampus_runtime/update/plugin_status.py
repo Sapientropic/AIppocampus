@@ -62,8 +62,10 @@ def enrich_plugin_cache_status(
             "auto_detected_installed_cache_count": cache_status[
                 "auto_detected_installed_cache_count"
             ],
+            # owner: plugin status projection; removal: follows plugin_cache's
+            # legacy-cache detector sunset; default/exposure: count only, no
+            # local cache root paths.
             "ignored_legacy_cache_count": cache_status["ignored_legacy_cache_count"],
-            "ignored_legacy_cache_roots": cache_status["ignored_legacy_cache_roots"],
             "installed_cache_auto_resolution": cache_status[
                 "installed_cache_auto_resolution"
             ],

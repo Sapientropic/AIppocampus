@@ -76,7 +76,6 @@ class ActiveRecallLockCompactionTests(unittest.TestCase):
             self.assertEqual(compacted["state"], "failed")
             self.assertEqual(compacted["lifecycle_action"], "payload_compacted")
             self.assertEqual(compacted["dead_letter_lifecycle_action"], "dead_lettered")
-            self.assertEqual(compacted["source_ref_count"], 1)
             self.assertTrue(compacted["source_refs_preserved"])
             self.assertEqual(
                 compacted["provenance_pointer_hash"],

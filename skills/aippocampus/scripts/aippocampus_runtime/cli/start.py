@@ -9,6 +9,12 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime import core
+from aippocampus_runtime.cli.start_profiles import (
+    START_PROFILE_CHOICES,
+    annotate_trusted_personal_write_actions,
+    is_trusted_local_personal_profile,
+    trusted_personal_card_fields,
+)
 from aippocampus_runtime.contracts import (
     canonical_foreground_action_fields,
     foreground_action_is_read_only,
@@ -486,8 +492,10 @@ def build_start_card(
     clean_source_dir: str | None = None,
     detail: str = "compact",
     cue: str | None = None,
+    profile: str = "default",
 ) -> dict[str, Any]:
     clean_cue = _cue_value(cue)
+    trusted_personal = is_trusted_local_personal_profile(profile)
     clean_source = _clean_source_state(cwd, clean_source_dir)
     freshness = _workspace_freshness_state(cwd, clean_source_dir)
     state: dict[str, Any] = {
@@ -496,6 +504,8 @@ def build_start_card(
         "provider_registration_candidates": _provider_registration_candidates(cwd),
     }
     decision, actions = _start_actions(cwd, state, clean_cue)
+    if trusted_personal and not state["clean_source"].get("exists"):
+        annotate_trusted_personal_write_actions(actions, clean_cue=clean_cue)
     if not state["clean_source"].get("exists"):
         actions.append(
             _template_action(
@@ -606,6 +616,7 @@ def build_start_card(
             "no_write_happened": True,
             "explicit_write_required": True,
         },
+        **(trusted_personal_card_fields(clean_cue) if trusted_personal else {}),
         "detail_actions_available": detail_actions,
         **(
             {"manage_command": "aippocampus maintenance plan --summary-json"}
@@ -645,6 +656,9 @@ def render_text(card: dict[str, Any]) -> str:
     ]
     if readiness_status:
         lines.append(f"first recall: {readiness_status}")
+    setup_profile = card.get("setup_profile") if isinstance(card, dict) else {}
+    if isinstance(setup_profile, dict) and setup_profile.get("id"):
+        lines.append(f"profile: {setup_profile.get('id')}")
     if card.get("status") == "ready_with_freshness_degraded":
         lines.append(
             "ordinary recall: usable now; exact/latest claims need maintenance review first."
@@ -657,6 +671,13 @@ def render_text(card: dict[str, Any]) -> str:
         lines.append(f"template: {action.get('command_template')}")
     else:
         lines.append(f"next: {action.get('command')}")
+    magic_path = card.get("first_magic_path") if isinstance(card, dict) else {}
+    if isinstance(magic_path, dict):
+        after_setup = magic_path.get("after_setup_command") or magic_path.get(
+            "after_setup_command_template"
+        )
+        if after_setup:
+            lines.append(f"after setup: {after_setup}")
     lines.append(f"why: {action.get('why')}")
     lines.append("boundary: start is a chooser; reopen/deepen source before claims.")
     return "\n".join(lines) + "\n"
@@ -673,6 +694,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--cwd", default=".")
     parser.add_argument("--clean-source-dir")
     parser.add_argument("--cue")
+    parser.add_argument(
+        "--profile",
+        choices=START_PROFILE_CHOICES,
+        default="default",
+    )
     parser.add_argument("cue_parts", nargs="*")
     args = parser.parse_args(argv)
     detail = "full" if args.operator_json else args.detail
@@ -682,6 +708,7 @@ def main(argv: list[str] | None = None) -> int:
         clean_source_dir=args.clean_source_dir,
         detail=detail,
         cue=cue,
+        profile=args.profile,
     )
     public_card = _public_start_card(card)
     if args.json_output or args.operator_json:

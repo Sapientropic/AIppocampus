@@ -13,19 +13,13 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 
 from aippocampus_runtime.cli import facade
-from aippocampus_runtime.ops import spend_doctor
-from aippocampus_runtime.ops.spend_doctor_card import compact_spend_doctor_card
+from aippocampus_runtime.ops.doctors import spend_doctor
+from aippocampus_runtime.ops.doctors.spend_doctor_card import compact_spend_doctor_card
+from aippocampus_runtime.source.io_kernel import write_jsonl_dict_rows
 from aippocampus_runtime.warm_ambient import recall as warm_recall
 
 FAKE_PRIVATE_MARKER = "spend-doctor-private-marker"
 FAKE_LOCAL_PATH = "C:\\Users\\Private\\AIppocampus\\source.txt"
-
-def write_jsonl(path: Path, rows: list[dict[str, object]]) -> None:
-    path.write_text(
-        "\n".join(json.dumps(row, ensure_ascii=False) for row in rows) + "\n",
-        encoding="utf-8",
-    )
-
 class SpendDoctorTests(unittest.TestCase):
     def test_subconscious_operator_switch_defaults_disabled_without_explicit_hook(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(
@@ -101,7 +95,7 @@ class SpendDoctorTests(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
-            write_jsonl(
+            write_jsonl_dict_rows(
                 root / "subconscious_jobs.jsonl",
                 [
                     {
@@ -116,7 +110,7 @@ class SpendDoctorTests(unittest.TestCase):
                     }
                 ],
             )
-            write_jsonl(
+            write_jsonl_dict_rows(
                 root / "subconscious_edges.jsonl",
                 [
                     {
@@ -128,7 +122,7 @@ class SpendDoctorTests(unittest.TestCase):
                     }
                 ],
             )
-            write_jsonl(
+            write_jsonl_dict_rows(
                 root / "dream_queue.jsonl",
                 [
                     {
@@ -148,7 +142,7 @@ class SpendDoctorTests(unittest.TestCase):
                     }
                 ],
             )
-            write_jsonl(
+            write_jsonl_dict_rows(
                 root / "working_memory.jsonl",
                 [
                     {
@@ -268,7 +262,7 @@ class SpendDoctorTests(unittest.TestCase):
     ) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            write_jsonl(
+            write_jsonl_dict_rows(
                 root / "dream_queue.jsonl",
                 [
                     {

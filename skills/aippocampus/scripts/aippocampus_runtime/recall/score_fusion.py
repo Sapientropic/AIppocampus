@@ -19,7 +19,11 @@ from aippocampus_runtime.recall.scoring_policy import (
     SCORE_FUSION_POLICY,
     SOURCE_SIGNAL_POLICY,
 )
-from aippocampus_runtime.source.io_kernel import safe_float, source_ref_key
+from aippocampus_runtime.source.io_kernel import (
+    safe_float,
+    source_ref_fingerprint,
+    source_ref_key,
+)
 
 SCHEMA_VERSION = 1
 FUSION_KIND = "aippocampus_retrieval_score_fusion"
@@ -85,19 +89,6 @@ def rag_chunk_text_score(
     )
 
 
-def source_ref_fingerprint(refs: Sequence[Mapping[str, Any]]) -> str:
-    keys = [source_ref_key(ref) for ref in refs if source_ref_key(ref)[0]]
-    if not keys:
-        return ""
-    return stable_json_lines_id(
-        "src_refs",
-        keys,
-        length=16,
-        ensure_ascii=False,
-        default_str=False,
-    )
-
-
 def source_join_key(candidate: Mapping[str, Any]) -> str:
     for key in ("stable_source_id", "source_id", "clean_source_id"):
         value = str(candidate.get(key) or "").strip()
@@ -111,7 +102,7 @@ def source_join_key(candidate: Mapping[str, Any]) -> str:
         if value:
             return value
     refs = [ref for ref in candidate.get("source_refs") or [] if isinstance(ref, Mapping)]
-    fingerprint = source_ref_fingerprint(refs)
+    fingerprint = source_ref_fingerprint(refs, algorithm="stable_json_lines_id")
     if fingerprint:
         return fingerprint
     line = str(candidate.get("line") or candidate.get("source_line") or "").strip()

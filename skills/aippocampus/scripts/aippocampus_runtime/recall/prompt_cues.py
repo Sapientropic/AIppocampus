@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from collections.abc import Iterable
 from typing import Any
 
 from aippocampus_runtime.recall import prompt_cue_catalog as _cue_catalog
@@ -66,10 +67,28 @@ def unique_preserve(items: list[str], limit: int | None = None) -> list[str]:
     return out
 
 
-def matched_terms(prompt: str, terms: set[str]) -> list[str]:
+def merge_unique_terms(*groups: Iterable[Any], limit: int = 8) -> list[str]:
+    """Merge already-bounded term groups without loop-local list materialization."""
+
+    seen: set[str] = set()
+    out: list[str] = []
+    for group in groups:
+        for item in group:
+            value = re.sub(r"\s+", " ", str(item or "")).strip()
+            folded = value.casefold()
+            if not value or folded in seen:
+                continue
+            seen.add(folded)
+            out.append(value)
+            if len(out) >= limit:
+                return out
+    return out
+
+
+def matched_terms(prompt: str, bounded_terms: set[str]) -> list[str]:
     low = prompt.casefold()
     matches: list[str] = []
-    for term in sorted(terms, key=len, reverse=True):
+    for term in sorted(bounded_terms, key=len, reverse=True):
         needle = term.casefold()
         if not needle:
             continue

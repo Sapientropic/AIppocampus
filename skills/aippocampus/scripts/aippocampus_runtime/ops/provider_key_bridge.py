@@ -22,7 +22,7 @@ from aippocampus_runtime.contracts import canonical_foreground_action_fields
 from aippocampus_runtime.core import codex_home, now_utc
 from aippocampus_runtime.hooks import install_lifecycle, install_prompt
 from aippocampus_runtime.io_integrity import atomic_write_json
-from aippocampus_runtime.ops.provider_credentials import public_token
+from aippocampus_runtime.ops.doctors.provider_credentials import public_token
 
 SCHEMA_VERSION = 1
 BRIDGE_DIR_NAME = "provider-credential-bridge"

@@ -21,7 +21,14 @@ from aippocampus_runtime.contracts import (
     foreground_shell_action,
 )
 from aippocampus_runtime.core import compact_text, now_utc, stable_json_id
-from aippocampus_runtime.source.io_kernel import parse_utc, source_ref_key, source_ref_key_set
+from aippocampus_runtime.source.io_kernel import (
+    merge_source_refs as merge_source_ref_groups,
+)
+from aippocampus_runtime.source.io_kernel import (
+    normalize_source_refs,
+    parse_utc,
+    source_ref_key_set,
+)
 
 SCHEMA_VERSION = 1
 TOPOLOGY_KIND = "aippocampus_reflection_topology"
@@ -63,41 +70,18 @@ def clamp(value: float, low: float, high: float) -> float:
     return max(low, min(high, value))
 
 
-def normalize_source_refs(value: object) -> tuple[dict[str, Any], ...]:
-    if isinstance(value, Mapping):
-        raw_items: Iterable[object] = [value]
-    elif isinstance(value, (list, tuple)):
-        raw_items = value
-    else:
-        raw_items = []
-
-    refs: list[dict[str, Any]] = []
-    seen: set[tuple[str, str, str, str]] = set()
-    for item in raw_items:
-        if not isinstance(item, Mapping):
-            continue
-        ref = {key: val for key, val in dict(item).items() if val not in {None, ""}}
-        key = source_ref_key(ref)
-        if not any(key) or key in seen:
-            continue
-        seen.add(key)
-        refs.append(ref)
-    return tuple(refs)
+def space_source_refs(value: object) -> tuple[dict[str, Any], ...]:
+    return normalize_source_refs(value, require_thread=False)
 
 
 def merge_refs(*groups: object, limit: int = 12) -> tuple[dict[str, Any], ...]:
-    refs: list[dict[str, Any]] = []
-    seen: set[tuple[str, str, str, str]] = set()
-    for group in groups:
-        for ref in normalize_source_refs(group):
-            key = source_ref_key(ref)
-            if key in seen:
-                continue
-            seen.add(key)
-            refs.append(dict(ref))
-            if len(refs) >= limit:
-                return tuple(refs)
-    return tuple(refs)
+    return tuple(
+        merge_source_ref_groups(
+            *(space_source_refs(group) for group in groups),
+            limit=limit,
+            require_thread=False,
+        )
+    )
 
 
 def journey_id_of(row: Mapping[str, Any]) -> str:
@@ -109,7 +93,7 @@ def journey_refs(row: Mapping[str, Any]) -> tuple[dict[str, Any], ...]:
         ref
         for waypoint in row.get("waypoints") or []
         if isinstance(waypoint, Mapping)
-        for ref in normalize_source_refs(waypoint.get("source_refs") or [])
+        for ref in space_source_refs(waypoint.get("source_refs") or [])
     ]
     return merge_refs(
         row.get("source_refs") or [],
@@ -147,7 +131,7 @@ def adjustment_source_refs(
     *,
     journey_by_id: Mapping[str, Mapping[str, Any]],
 ) -> tuple[dict[str, Any], ...]:
-    refs = normalize_source_refs(row.get("source_refs") or row.get("evidence_refs") or [])
+    refs = space_source_refs(row.get("source_refs") or row.get("evidence_refs") or [])
     if refs:
         return refs
     target = journey_by_id.get(str(row.get("journey_id") or row.get("target_journey_id") or ""))
@@ -414,7 +398,7 @@ def waypoint_nodes_and_edges(journey: Mapping[str, Any]) -> tuple[list[dict[str,
             or stable_json_id("wp", "reflection-space-id", journey_node_id, index)
         )
         node_id = f"waypoint:{waypoint_id}"
-        refs = normalize_source_refs(waypoint.get("source_refs") or [])
+        refs = space_source_refs(waypoint.get("source_refs") or [])
         nodes.append(
             {
                 "kind": NODE_KIND,
@@ -438,7 +422,7 @@ def waypoint_nodes_and_edges(journey: Mapping[str, Any]) -> tuple[list[dict[str,
             }
         )
     frontier = compact_text(str(journey.get("current_frontier") or ""), 260)
-    frontier_refs = normalize_source_refs(journey.get("current_frontier_source_refs") or [])
+    frontier_refs = space_source_refs(journey.get("current_frontier_source_refs") or [])
     if frontier and frontier_refs:
         frontier_id = f"frontier:{journey_id_of(journey)}"
         nodes.append(
@@ -470,7 +454,7 @@ def dream_hypothesis_block_reason(row: Mapping[str, Any], *, now: datetime | Non
         return "not_adjudicated"
     if "reflection_space" not in {str(item) for item in row.get("downstream_use") or []}:
         return "reflection_not_allowed"
-    if not normalize_source_refs(row.get("source_refs") or []):
+    if not space_source_refs(row.get("source_refs") or []):
         return "missing_source_refs"
     gate = row.get("sensitive_use_gate") or {}
     if isinstance(gate, Mapping) and gate.get("state") == "blocked":
@@ -501,7 +485,7 @@ def dream_hypothesis_nodes_and_edges(
         if reason:
             ignored += 1
             continue
-        refs = normalize_source_refs(row.get("source_refs") or [])
+        refs = space_source_refs(row.get("source_refs") or [])
         node_id = "dream_hypothesis:" + str(
             row.get("candidate_key")
             or (row.get("source_finding_ids") or [""])[0]

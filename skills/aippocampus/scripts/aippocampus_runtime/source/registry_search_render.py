@@ -59,6 +59,64 @@ def _best_useful_registry_match(matches: list[dict[str, Any]]) -> dict[str, Any]
     return None
 
 
+def _source_cluster_key(match: Mapping[str, Any]) -> str:
+    route_value = match.get("source_route")
+    route: Mapping[str, Any] = route_value if isinstance(route_value, Mapping) else {}
+    thread_key = str(route.get("thread_key") or "").strip()
+    if not thread_key:
+        thread = match.get("thread")
+        thread_map = thread if isinstance(thread, Mapping) else {}
+        thread_key = str(thread_map.get("thread_key") or "").strip()
+    if not thread_key:
+        return ""
+    message_id = str(route.get("message_id") or match.get("message_id") or "").strip()
+    line = str(route.get("line") or match.get("line") or "").strip()
+    return "|".join(part for part in (thread_key, message_id or line) if part)
+
+
+def _source_cluster_counts(matches: list[dict[str, Any]]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for match in matches:
+        key = _source_cluster_key(match)
+        if not key:
+            continue
+        counts[key] = counts.get(key, 0) + 1
+    return counts
+
+
+def _is_low_confidence_reopen_candidate(
+    match: Mapping[str, Any],
+    *,
+    cluster_count: int,
+) -> bool:
+    """Decide whether a suppressed hit can be foreground navigation.
+
+    This is deliberately stricter than "has a high score": exact identifiers
+    must never open fuzzy matches, artifacts stay diagnostic, and a near hit
+    must either carry several query anchors or be reinforced by another hit in
+    the same source route. The result is still navigation-only until opened.
+    """
+
+    if match_is_demoted_artifact(match) or not match_has_direct_source_open_route(match):
+        return False
+    profile_value = match.get("query_match_profile")
+    profile: Mapping[str, Any] = profile_value if isinstance(profile_value, Mapping) else {}
+    if profile.get("exact_identifier_query") and not profile.get("identifier_match"):
+        return False
+    matched_count = _as_int(profile.get("matched_distinctive_anchor_count"))
+    coverage = _as_float(profile.get("distinctive_anchor_coverage"))
+    if profile.get("exact_phrase_match"):
+        return True
+    if matched_count >= 2 and coverage >= 0.5:
+        return True
+    return cluster_count >= 2 and matched_count >= 1 and coverage >= 0.25
+
+
+def _query_match_profile(match: Mapping[str, Any]) -> Mapping[str, Any]:
+    profile = match.get("query_match_profile")
+    return profile if isinstance(profile, Mapping) else {}
+
+
 def _low_confidence_reopen_matches(
     suppressed_matches: list[dict[str, Any]],
     *,
@@ -68,16 +126,25 @@ def _low_confidence_reopen_matches(
     limit: int = 1,
 ) -> list[dict[str, Any]]:
     candidates: list[dict[str, Any]] = []
-    for match in suppressed_matches:
-        if match_is_demoted_artifact(match) or not match_has_direct_source_open_route(match):
-            continue
-        profile_value = match.get("query_match_profile")
-        profile: Mapping[str, Any] = profile_value if isinstance(profile_value, Mapping) else {}
-        matched_count = _as_int(profile.get("matched_distinctive_anchor_count"))
-        coverage = _as_float(profile.get("distinctive_anchor_coverage"))
-        if not profile.get("exact_phrase_match") and matched_count < 2 and coverage < 0.5:
+    cluster_counts = _source_cluster_counts(suppressed_matches)
+    sorted_matches = sorted(
+        suppressed_matches,
+        key=lambda match: (
+            -_as_int(_query_match_profile(match).get("matched_distinctive_anchor_count")),
+            -_as_float(_query_match_profile(match).get("distinctive_anchor_coverage")),
+            -cluster_counts.get(_source_cluster_key(match), 0),
+            -_as_float(match.get("score")),
+        ),
+    )
+    for match in sorted_matches:
+        if not _is_low_confidence_reopen_candidate(
+            match,
+            cluster_count=cluster_counts.get(_source_cluster_key(match), 0),
+        ):
             continue
         candidate = dict(match)
+        candidate["candidate_kind"] = "low_confidence_reopen_candidate"
+        candidate["claim_boundary"] = "near_hit_navigation_only_no_claim"
         annotate_reopen_commands(
             [candidate],
             registry_dir=registry_root,
@@ -138,11 +205,18 @@ def render_registry_search_payload(
         first_match_usefulness_status=first_match_status,
         low_coverage_only_matches=low_coverage_only_matches,
     )
-    low_confidence_matches = _low_confidence_reopen_matches(
-        evaluation.suppressed_matches,
-        registry_root=inputs.registry_root,
-        include_paths=include_paths,
-        annotate_reopen_commands=annotate_reopen_commands,
+    # Exact phrase-like misses are a strong foreground signal: if no visible
+    # match preserved enough query coverage, do not promote generic suppressed
+    # rows into a "near hit" just because they are reopenable.
+    low_confidence_matches = (
+        []
+        if no_phrase_like_matches
+        else _low_confidence_reopen_matches(
+            evaluation.suppressed_matches,
+            registry_root=inputs.registry_root,
+            include_paths=include_paths,
+            annotate_reopen_commands=annotate_reopen_commands,
+        )
     )
     if low_confidence_matches and not useful_target_hit:
         near_hit_action = registry_search_open_source_action(
@@ -180,6 +254,8 @@ def render_registry_search_payload(
         "status": (
             "ok"
             if useful_target_hit
+            else "low_confidence_reopen_candidate"
+            if low_confidence_matches
             else "identifier_not_found"
             if inputs.query_gate.get("exact_identifier_query")
             else "no_phrase_like_matches"
@@ -261,11 +337,15 @@ def render_registry_search_payload(
         "claim_boundary": (
             "source_reopen_required_before_claim"
             if useful_target_hit
+            else "near_hit_navigation_only_no_claim"
+            if low_confidence_matches
             else "search_miss_is_not_absence_of_memory"
         ),
         "source_reopen_boundary": (
             "reopen_selected_registry_hit_before_claim"
             if useful_target_hit
+            else "open_low_confidence_near_hit_as_navigation_before_claim"
+            if low_confidence_matches
             else "search_miss_is_not_absence_of_memory"
         ),
         "suppression_boundary": (
@@ -286,6 +366,7 @@ def render_registry_search_payload(
                 "registry_wide_search": True,
                 "source_backed_claim_allowed": useful_target_hit,
                 "source_reopen_required_before_claim": True,
+                "low_confidence_reopen_candidate": bool(low_confidence_matches),
                 "partial_search_results": evaluation.budget_exhausted,
                 "demoted_artifact_matches_are_diagnostic": bool(matches) and not useful_target_hit,
                 "search_miss_is_not_absence_of_memory": not bool(matches),

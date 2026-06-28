@@ -60,6 +60,7 @@ from aippocampus_runtime.recall.prompt_recall_projection import (
 )
 from aippocampus_runtime.recall.prompt_recall_result_tiers import (
     build_prompt_result_from_state,
+    build_result_tiers,
     cheap_casual_skip_result,
 )
 from aippocampus_runtime.recall.prompt_recall_route_context import (
@@ -85,6 +86,18 @@ def _deep_archival_requested(prompt: str) -> bool:
         "exact wording", "original wording", "verbatim", "quote", "dispute",
     )
     return any(cue in text for cue in cues)
+
+
+def _cheap_skip_prompt_result(
+    prompt: str, start: float, *, detail: str | None = None
+) -> dict[str, Any]:
+    clean_prompt = str(prompt or "").strip()
+    return cheap_casual_skip_result(
+        clean_prompt,
+        query_terms=expand_query_terms(clean_prompt)[:8],
+        elapsed_ms=round((time.perf_counter() - start) * 1000, 2),
+        detail=detail,
+    )
 
 
 def _decision_reasons(
@@ -321,12 +334,21 @@ def _candidate_matches_for_prompt(
     return expanded_candidates, expanded_query_terms, concept_expansions, diagnostic
 
 
-def _noise_prompt_result(context: Any, start: float) -> dict[str, Any]:
+def _noise_prompt_result(context: Any, start: float, *, detail: str | None = None) -> dict[str, Any]:
     elapsed_ms = round((time.perf_counter() - start) * 1000, 2)
     return {
         "decision": "skip",
         "score": 0.0,
         "confidence": "low",
+        "result_tiers": build_result_tiers(
+            outcome="skip",
+            score=0.0,
+            confidence="low",
+            detail=detail,
+            foreground_lane="stay_silent",
+            foreground_route_profile="noise_suppressed",
+            diagnostics={"semantic_bridge_diagnostic": None},
+        ),
         **context.hook_path_fields(),
         "query_terms": [],
         "cognitive_map": [],
@@ -336,17 +358,34 @@ def _noise_prompt_result(context: Any, start: float) -> dict[str, Any]:
         "evidence": [],
         "working_memory": [],
         "semantic_gate": None,
-        "semantic_bridge_diagnostic": None,
         "elapsed_ms": elapsed_ms,
     }
 
 
-def _policy_update_result(context: Any, start: float, update: dict[str, Any]) -> dict[str, Any]:
+def _policy_update_result(
+    context: Any,
+    start: float,
+    update: dict[str, Any],
+    *,
+    detail: str | None = None,
+) -> dict[str, Any]:
     elapsed_ms = round((time.perf_counter() - start) * 1000, 2)
     return {
         "decision": "skip",
         "score": 0.0,
         "confidence": "low",
+        "result_tiers": build_result_tiers(
+            outcome="skip",
+            score=0.0,
+            confidence="low",
+            detail=detail,
+            foreground_lane="stay_silent",
+            foreground_route_profile="ambient_policy_update",
+            diagnostics={
+                "semantic_bridge_diagnostic": None,
+                "semantic_cue_cache": None,
+            },
+        ),
         **context.hook_path_fields(),
         "query_terms": [],
         "cognitive_map": [],
@@ -356,8 +395,6 @@ def _policy_update_result(context: Any, start: float, update: dict[str, Any]) ->
         "evidence": [],
         "working_memory": [],
         "semantic_gate": None,
-        "semantic_bridge_diagnostic": None,
-        "semantic_cue_cache": None,
         "ambient_policy_update": update,
         "elapsed_ms": elapsed_ms,
     }
@@ -372,6 +409,7 @@ def _maybe_policy_update_result(
     thread_id: str | None,
     workspace: str,
     start: float,
+    detail: str | None = None,
 ) -> dict[str, Any] | None:
     update = policy_update_for_prompt(
         prompt=prompt,
@@ -386,7 +424,7 @@ def _maybe_policy_update_result(
         thread_id=thread_id,
         workspace=workspace,
     )
-    return _policy_update_result(context, start, update) if update is not None else None
+    return _policy_update_result(context, start, update, detail=detail) if update is not None else None
 
 
 def _semantic_cue_source_refs(
@@ -540,16 +578,16 @@ def assess_prompt(
     dream_hypothesis_limit: int | None = None, dream_delivery_prefilter_reason: str | None = None, dream_delivery_task_mode: str | None = None,
     detail: str | None = None,
 ) -> dict[str, Any]:
+    """Assess the prompt for foreground recall routing.
+
+    aippocampus-stage-map: cheap skip -> load source context -> local route
+    prep -> candidate scoring -> decision/evidence -> tiered result -> ambient
+    attach. Split a stage owner before adding another diagnostic family here.
+    """
+
     start = time.perf_counter()
     if low_value_casual_prompt(prompt):
-        elapsed_ms = round((time.perf_counter() - start) * 1000, 2)
-        clean_prompt = str(prompt or "").strip()
-        return cheap_casual_skip_result(
-            clean_prompt,
-            query_terms=expand_query_terms(clean_prompt)[:8],
-            elapsed_ms=elapsed_ms,
-            detail=detail,
-        )
+        return _cheap_skip_prompt_result(prompt, start, detail=detail)
     context = build_recall_decision_context(
         prompt, cwd=cwd, registry_path=registry_path, registry_dir=registry_dir,
         associations_path=associations_path, cognitive_map_path=cognitive_map_path,
@@ -563,7 +601,7 @@ def assess_prompt(
     cwd_path = context.cwd_path
     path = context.registry_path
     if context.is_noise:
-        return _noise_prompt_result(context, start)
+        return _noise_prompt_result(context, start, detail=detail)
     policy_result = _maybe_policy_update_result(
         context=context,
         prompt=prompt,
@@ -572,6 +610,7 @@ def assess_prompt(
         thread_id=thread_id,
         workspace=str(cwd_path),
         start=start,
+        detail=detail,
     )
     if policy_result is not None:
         return policy_result

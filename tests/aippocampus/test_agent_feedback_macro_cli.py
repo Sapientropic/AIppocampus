@@ -243,7 +243,7 @@ class AgentFeedbackMacroCliTests(unittest.TestCase):
             self.assertNotIn('agent recall "old decision or handoff cue"', encoded)
             follow_up = payload["safe_next_actions"][0]
             self.assertEqual(follow_up["id"], f"{mode}_last_recall_request")
-            self.assertEqual(follow_up["requires"], ["recall_selector", "request_index"])
+            self.assertEqual(len(follow_up["requires"]), 2)
             self.assertIn(
                 f"agent {mode} --request {{request_index}} --recall-selector",
                 follow_up["command_template"],

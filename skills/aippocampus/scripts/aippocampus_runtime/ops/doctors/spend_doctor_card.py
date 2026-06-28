@@ -22,10 +22,9 @@ def _safe_int(value: Any) -> int:
 
 def _primary_spend_action(decision: Mapping[str, Any]) -> dict[str, Any]:
     action = str(decision.get("action") or "continue")
-    warm_queue = (
-        decision.get("warm_queue_health")
-        if isinstance(decision.get("warm_queue_health"), Mapping)
-        else {}
+    warm_queue_value = decision.get("warm_queue_health")
+    warm_queue: Mapping[str, Any] = (
+        warm_queue_value if isinstance(warm_queue_value, Mapping) else {}
     )
     if warm_queue.get("status") == "blocked":
         return {
@@ -42,10 +41,9 @@ def _primary_spend_action(decision: Mapping[str, Any]) -> dict[str, Any]:
     command = str(decision.get("safe_next_command") or "aippocampus doctor spend --detail full --json")
     routes = [str(route) for route in decision.get("routes_to_pause_or_inspect") or []]
     if action == "inspect":
-        lowest_yield = (
-            decision.get("lowest_yield_route")
-            if isinstance(decision.get("lowest_yield_route"), Mapping)
-            else {}
+        lowest_yield_value = decision.get("lowest_yield_route")
+        lowest_yield: Mapping[str, Any] = (
+            lowest_yield_value if isinstance(lowest_yield_value, Mapping) else {}
         )
         route = routes[0] if routes else str(lowest_yield.get("route") or "unknown")
         return {
@@ -88,13 +86,15 @@ def _primary_spend_action(decision: Mapping[str, Any]) -> dict[str, Any]:
 def compact_spend_doctor_card(report: Mapping[str, Any]) -> dict[str, Any]:
     """Project the operator spend report into the default foreground JSON card."""
 
-    decision = report.get("decision") if isinstance(report.get("decision"), Mapping) else {}
-    totals = report.get("totals") if isinstance(report.get("totals"), Mapping) else {}
-    spend = totals.get("spend") if isinstance(totals.get("spend"), Mapping) else {}
-    route_scan = (
-        report.get("route_artifact_scan")
-        if isinstance(report.get("route_artifact_scan"), Mapping)
-        else {}
+    decision_value = report.get("decision")
+    decision: Mapping[str, Any] = decision_value if isinstance(decision_value, Mapping) else {}
+    totals_value = report.get("totals")
+    totals: Mapping[str, Any] = totals_value if isinstance(totals_value, Mapping) else {}
+    spend_value = totals.get("spend")
+    spend: Mapping[str, Any] = spend_value if isinstance(spend_value, Mapping) else {}
+    route_scan_value = report.get("route_artifact_scan")
+    route_scan: Mapping[str, Any] = (
+        route_scan_value if isinstance(route_scan_value, Mapping) else {}
     )
     scan_status = str(route_scan.get("status") or "complete")
     effective_tokens_known = bool(route_scan.get("effective_tokens_known", scan_status == "complete"))

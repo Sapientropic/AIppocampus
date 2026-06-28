@@ -199,6 +199,72 @@ class AippocampusStartCliTests(unittest.TestCase):
         self.assertIn("inspect_onboarding_status", action_ids)
         self.assertIn("review_claude_code_hooks", action_ids)
 
+    def test_trusted_personal_profile_groups_setup_and_first_recall_receipt(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            proc = self.run_cli(
+                "start",
+                "--json",
+                "--cwd",
+                tmp,
+                "--profile",
+                "trusted-local-personal-continuity",
+                "--cue",
+                "old privacy product decision",
+            )
+
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        payload = json.loads(proc.stdout)
+        self.assertEqual(payload["decision"], "register_source_before_continuity")
+        self.assertEqual(payload["setup_profile"]["id"], "trusted-local-personal-continuity")
+        self.assertEqual(
+            payload["setup_profile"]["consent_model"],
+            "consent_once_for_low_risk_local_personal_setup",
+        )
+        self.assertEqual(payload["foreground_action"]["id"], "register_codex_source")
+        self.assertEqual(
+            payload["foreground_action"]["consent_bundle_id"],
+            "trusted-local-personal-continuity",
+        )
+        self.assertIn(
+            "old privacy product decision",
+            payload["foreground_action"]["after_success_command"],
+        )
+        self.assertEqual(payload["first_magic_path"]["target"], "first_useful_recall_receipt")
+        self.assertIn(
+            "old privacy product decision",
+            payload["first_magic_path"]["after_setup_command"],
+        )
+        self.assertIn(
+            "local_source_registration_or_refresh",
+            payload["consent_bundle"]["low_risk_local_actions"],
+        )
+        self.assertIn(
+            "destructive_cleanup",
+            payload["consent_bundle"]["requires_separate_consent"],
+        )
+        self.assertEqual(payload["setup_profile"]["rollback_command"], "aippocampus uninstall --dry-run --json")
+        self.assertLessEqual(len(payload["safe_next_actions"]), 3)
+        self.assertNotIn("surfaces", payload)
+        self.assertNotIn("operator_diagnostics", payload)
+
+    def test_trusted_personal_text_shows_value_path_before_detail(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            proc = self.run_cli(
+                "start",
+                "--cwd",
+                tmp,
+                "--profile",
+                "trusted-local-personal-continuity",
+                "--cue",
+                "old privacy product decision",
+            )
+
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertIn("profile: trusted-local-personal-continuity", proc.stdout)
+        self.assertIn("after setup: aippocampus agent recall", proc.stdout)
+        self.assertIn("old privacy product decision", proc.stdout)
+        self.assertNotIn("operator_diagnostics", proc.stdout)
+
     def test_start_json_prefers_detected_non_codex_source_registration(self) -> None:
         from aippocampus_runtime.cli import start as start_cli
 

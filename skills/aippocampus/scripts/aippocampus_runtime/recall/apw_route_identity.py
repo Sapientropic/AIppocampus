@@ -9,10 +9,13 @@ carry only ids, cue anchors, and a source-ref digest.
 
 from __future__ import annotations
 
-import hashlib
-import json
 from collections.abc import Mapping, Sequence
 from typing import Any
+
+from aippocampus_runtime.source.io_kernel import (
+    clean_source_refs,
+    source_ref_digest,
+)
 
 SOURCE_REF_KEYS = (
     "thread_key",
@@ -37,38 +40,6 @@ IDENTITY_ID_KEYS = (
 )
 
 
-def clean_source_refs(value: Any, *, limit: int = 8) -> list[dict[str, Any]]:
-    rows = value if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)) else []
-    refs: list[dict[str, Any]] = []
-    seen: set[tuple[tuple[str, str], ...]] = set()
-    for row in rows:
-        if not isinstance(row, Mapping):
-            continue
-        clean = {
-            key: row.get(key)
-            for key in SOURCE_REF_KEYS
-            if row.get(key) not in (None, "", [])
-        }
-        if not clean:
-            continue
-        marker = tuple(sorted((key, str(value)) for key, value in clean.items()))
-        if marker in seen:
-            continue
-        seen.add(marker)
-        refs.append(clean)
-        if len(refs) >= limit:
-            break
-    return refs
-
-
-def source_ref_digest(refs: Sequence[Mapping[str, Any]]) -> str:
-    clean = clean_source_refs(refs)
-    if not clean:
-        return ""
-    raw = json.dumps(clean, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
-
-
 def id_variants(value: Any) -> set[str]:
     text = str(value or "").strip()
     if not text:
@@ -87,11 +58,11 @@ def id_variants(value: Any) -> set[str]:
 
 def source_ref_identity_keys(refs: Sequence[Mapping[str, Any]]) -> set[str]:
     keys: set[str] = set()
-    clean_refs = clean_source_refs(refs)
+    clean_refs = clean_source_refs(refs, fields=SOURCE_REF_KEYS, require_thread=False)
     for ref in clean_refs:
         for key in ("source_id", "message_id"):
             keys.update(id_variants(ref.get(key)))
-    digest = source_ref_digest(clean_refs)
+    digest = source_ref_digest(clean_refs, fields=SOURCE_REF_KEYS)
     if digest:
         keys.update(id_variants(digest))
     return keys
@@ -101,7 +72,15 @@ def identity_keys(route_id: Any, row: Mapping[str, Any]) -> set[str]:
     keys: set[str] = set()
     for value in (route_id, *(row.get(key) for key in IDENTITY_ID_KEYS)):
         keys.update(id_variants(value))
-    refs = clean_source_refs(row.get("source_refs")) or clean_source_refs(row.get("event_refs"))
+    refs = clean_source_refs(
+        row.get("source_refs"),
+        fields=SOURCE_REF_KEYS,
+        require_thread=False,
+    ) or clean_source_refs(
+        row.get("event_refs"),
+        fields=SOURCE_REF_KEYS,
+        require_thread=False,
+    )
     keys.update(source_ref_identity_keys(refs))
     return keys
 
@@ -162,8 +141,8 @@ def route_identity_envelope(
     request_index: Any = None,
     recall_selector: Any = "",
 ) -> dict[str, Any]:
-    refs = clean_source_refs(source_refs or [])
-    digest = str(source_ref_digest_value or source_ref_digest(refs)).strip()
+    refs = clean_source_refs(source_refs or [], fields=SOURCE_REF_KEYS, require_thread=False)
+    digest = str(source_ref_digest_value or source_ref_digest(refs, fields=SOURCE_REF_KEYS)).strip()
     public_id = _public_identity_id(public_route_id, digest=digest)
     candidate_route_id = _public_identity_id(apw_candidate_route_id, digest=digest)
     candidate_id = _public_identity_id(apw_candidate_id, digest=digest)

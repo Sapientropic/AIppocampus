@@ -451,6 +451,7 @@ _ACTION_STEP_RISK = {
 def _action_hint_step_action(step: Mapping[str, Any], *, claim_boundary: str) -> dict[str, Any]:
     label = str(step.get("label") or "action")
     command = str(step.get("command") or "")
+    mutation_risk = str(step.get("mutation_risk") or _ACTION_STEP_RISK.get(label) or "read_only")
     why_by_id = {
         "review_action_hint_guidance": (
             "Review whether prepared or semantic learning guidance exists before "
@@ -487,7 +488,7 @@ def _action_hint_step_action(step: Mapping[str, Any], *, claim_boundary: str) ->
                 action_id,
                 "Use this hook action to keep action-time navigation hints aligned with the installed host setup.",
             ),
-            mutation_risk=_ACTION_STEP_RISK.get(label, "read_only"),
+            mutation_risk=mutation_risk,
             claim_boundary=claim_boundary,
         )
     )

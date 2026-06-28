@@ -280,9 +280,10 @@ class AIppoWorkingContractTests(unittest.TestCase):
     def test_deepen_and_stability_surfaces_preserve_audit_without_foreground_leakage(self) -> None:
         report = aippo_fixtures.build_aippo_working_contract_fixture_report()
         deepen = report["deepen_surface"]
+        ledger = deepen["source_support_ledger"]
 
         self.assertEqual(deepen["kind"], "aippocampus_aippo_deepen_surface")
-        self.assertEqual(deepen["source_support_ledger"]["source_ref_count"], 8)
+        self.assertEqual(len(ledger["source_refs"]), 8)
         self.assertIn("agent_self_notes", deepen["candidate_provenance"]["allowed_candidate_inputs"])
         self.assertFalse(deepen["candidate_provenance"]["candidate_inputs_are_truth"])
         self.assertEqual(report["metrics"]["stable_rebuild_hash_changed_count"], 0)

@@ -122,7 +122,9 @@ class AgentOptInAippoSemanticTests(unittest.TestCase):
         macro_state.append_macro_orientation_state(macro_path, entry)
         return macro_path
 
-    def test_aippo_activation_deepen_explain_and_feedback_stay_low_authority(self) -> None:
+    def test_aippo_activation_agent_deepen_explain_and_feedback_stay_low_authority(self) -> None:
+        """agent_deepen keeps source support in detail while foreground stays low-authority."""
+
         activation = agent_continuity.activate_aippo(task="coding issue closeout")
         encoded_activation = json.dumps(activation, ensure_ascii=False, sort_keys=True)
 

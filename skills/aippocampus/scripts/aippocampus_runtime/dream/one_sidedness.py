@@ -18,6 +18,10 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.core import compact_text, now_utc
+from aippocampus_runtime.source.io_kernel import (
+    merge_source_ref_groups,
+    normalize_source_refs,
+)
 
 SCHEMA_VERSION = 1
 
@@ -43,53 +47,8 @@ def stable_digest(*parts: object, prefix: str, length: int = 18) -> str:
     return f"{prefix}_{hashlib.sha1(raw.encode('utf-8', errors='replace')).hexdigest()[:length]}"
 
 
-def _items(value: object) -> list[object]:
-    if isinstance(value, list):
-        return value
-    if isinstance(value, tuple):
-        return list(value)
-    if value in {None, ""}:
-        return []
-    return [value]
-
-
-def normalize_source_refs(value: object) -> list[dict[str, Any]]:
-    refs: list[dict[str, Any]] = []
-    seen: set[tuple[str, str, str, str]] = set()
-    for item in _items(value):
-        if not isinstance(item, Mapping):
-            continue
-        key = (
-            str(item.get("thread_key") or item.get("thread_id") or ""),
-            str(item.get("message_id") or ""),
-            str(item.get("turn_id") or ""),
-            str(item.get("source_line") or item.get("line") or item.get("source_id") or ""),
-        )
-        if not any(key) or key in seen:
-            continue
-        seen.add(key)
-        refs.append(dict(item))
-    return refs
-
-
 def merge_refs(*groups: Iterable[Mapping[str, Any]], limit: int = 12) -> list[dict[str, Any]]:
-    refs: list[dict[str, Any]] = []
-    seen: set[tuple[str, str, str, str]] = set()
-    for group in groups:
-        for ref in group:
-            key = (
-                str(ref.get("thread_key") or ref.get("thread_id") or ""),
-                str(ref.get("message_id") or ""),
-                str(ref.get("turn_id") or ""),
-                str(ref.get("source_line") or ref.get("line") or ref.get("source_id") or ""),
-            )
-            if not any(key) or key in seen:
-                continue
-            seen.add(key)
-            refs.append(dict(ref))
-            if len(refs) >= limit:
-                return refs
-    return refs
+    return merge_source_ref_groups(*groups, limit=limit, require_thread=False)
 
 
 def _arc_from_text(text: str) -> dict[str, str]:
@@ -135,7 +94,7 @@ def _waypoints(journey: Mapping[str, Any]) -> list[dict[str, Any]]:
 def _source_backed_waypoints(journey: Mapping[str, Any]) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for waypoint in _waypoints(journey):
-        refs = normalize_source_refs(waypoint.get("source_refs"))
+        refs = normalize_source_refs(waypoint.get("source_refs"), require_thread=False)
         arc = normalize_arc(waypoint.get("arc"))
         if refs and arc["upper_trigram"] and arc["lower_trigram"]:
             rows.append({**waypoint, "source_refs": refs, "normalized_arc": arc})
@@ -164,8 +123,13 @@ def _same_trigram_signal(journey: Mapping[str, Any]) -> dict[str, Any] | None:
 def _source_backed_repeated_questions(active_questions: Sequence[Mapping[str, Any]]) -> dict[str, Any] | None:
     grouped: dict[str, list[Mapping[str, Any]]] = {}
     for row in active_questions:
-        refs = normalize_source_refs(row.get("source_refs"))
-        has_counter = bool(normalize_source_refs(row.get("counter_perspective_refs") or row.get("counter_evidence_refs")))
+        refs = normalize_source_refs(row.get("source_refs"), require_thread=False)
+        has_counter = bool(
+            normalize_source_refs(
+                row.get("counter_perspective_refs") or row.get("counter_evidence_refs"),
+                require_thread=False,
+            )
+        )
         if not refs or has_counter:
             continue
         key = str(row.get("question_id") or row.get("question") or row.get("title") or "").casefold()
@@ -177,7 +141,9 @@ def _source_backed_repeated_questions(active_questions: Sequence[Mapping[str, An
         return None
     return {
         "signal": "repeated_questions_without_counter_perspective",
-        "source_refs": merge_refs(*(normalize_source_refs(row.get("source_refs")) for row in repeated)),
+        "source_refs": merge_refs(
+            *(normalize_source_refs(row.get("source_refs"), require_thread=False) for row in repeated)
+        ),
         "counter_evidence": ["repeated active question has no source-backed counter-perspective yet"],
         "raw": {"question_count": len(repeated)},
     }
@@ -186,7 +152,7 @@ def _source_backed_repeated_questions(active_questions: Sequence[Mapping[str, An
 def _source_backed_absent_theme(theme_residue: Sequence[Mapping[str, Any]]) -> dict[str, Any] | None:
     grouped: dict[str, list[Mapping[str, Any]]] = {}
     for row in theme_residue:
-        refs = normalize_source_refs(row.get("source_refs"))
+        refs = normalize_source_refs(row.get("source_refs"), require_thread=False)
         status = str(row.get("status") or row.get("state") or "").casefold()
         if not refs or status not in {"absent", "residue", "recurring_absent", "avoided"}:
             continue
@@ -199,7 +165,9 @@ def _source_backed_absent_theme(theme_residue: Sequence[Mapping[str, Any]]) -> d
         return None
     return {
         "signal": "recurring_absent_theme_residue",
-        "source_refs": merge_refs(*(normalize_source_refs(row.get("source_refs")) for row in recurring)),
+        "source_refs": merge_refs(
+            *(normalize_source_refs(row.get("source_refs"), require_thread=False) for row in recurring)
+        ),
         "counter_evidence": ["theme recurs as absent residue rather than foreground route"],
         "raw": {"theme_count": len(recurring)},
     }
@@ -209,13 +177,16 @@ def _source_backed_avoided_correction(corrections: Sequence[Mapping[str, Any]]) 
     rows = [
         row
         for row in corrections
-        if normalize_source_refs(row.get("source_refs")) and (row.get("avoided_angle") or row.get("angle"))
+        if normalize_source_refs(row.get("source_refs"), require_thread=False)
+        and (row.get("avoided_angle") or row.get("angle"))
     ]
     if len(rows) < 2:
         return None
     return {
         "signal": "corrections_point_at_avoided_angle",
-        "source_refs": merge_refs(*(normalize_source_refs(row.get("source_refs")) for row in rows)),
+        "source_refs": merge_refs(
+            *(normalize_source_refs(row.get("source_refs"), require_thread=False) for row in rows)
+        ),
         "counter_evidence": ["source-backed corrections repeatedly point at an avoided angle"],
         "raw": {"correction_count": len(rows)},
     }

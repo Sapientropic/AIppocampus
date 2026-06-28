@@ -15,7 +15,7 @@ from typing import Any
 
 from aippocampus_runtime.core import compact_text, now_utc, stable_json_id
 from aippocampus_runtime.dream import retrospective_lifecycle as dream_retrospective_lifecycle
-from aippocampus_runtime.source.io_kernel import parse_utc, source_ref_key
+from aippocampus_runtime.source.io_kernel import normalize_source_refs, parse_utc
 
 PROBE_KIND = "aippocampus_dream_finding"
 PROBE_FAMILY = "coding_rejected_route"
@@ -29,26 +29,6 @@ def format_utc(value: datetime) -> str:
 def future_utc(created_at: object, *, days: int) -> str:
     base = parse_utc(created_at) or parse_utc(now_utc()) or datetime.now(timezone.utc)
     return format_utc(base + timedelta(days=max(1, int(days))))
-
-
-def normalize_source_refs(value: object) -> list[dict[str, Any]]:
-    if isinstance(value, Mapping):
-        raw_items: Iterable[object] = [value]
-    elif isinstance(value, Iterable) and not isinstance(value, (str, bytes)):
-        raw_items = value
-    else:
-        raw_items = []
-    refs: list[dict[str, Any]] = []
-    seen: set[tuple[str, str, str, str]] = set()
-    for item in raw_items:
-        if not isinstance(item, Mapping):
-            continue
-        key = source_ref_key(item)
-        if not any(key) or key in seen:
-            continue
-        seen.add(key)
-        refs.append({key: value for key, value in dict(item).items() if value not in {None, ""}})
-    return refs
 
 
 def rejected_route_surface(event: Mapping[str, Any]) -> str:
@@ -70,7 +50,7 @@ def build_rejected_route_probe(
 ) -> dict[str, Any]:
     if not event_is_rejected_route(event):
         raise ValueError("event is not an eligible coding rejected-route decision")
-    refs = normalize_source_refs(event.get("source_refs"))
+    refs = list(normalize_source_refs(event.get("source_refs")))
     if not refs:
         raise ValueError("coding rejected-route probe requires source refs")
     decision_id = str(event.get("decision_id") or stable_json_id("decision", event, length=18))

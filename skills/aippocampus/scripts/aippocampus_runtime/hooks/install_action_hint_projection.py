@@ -9,7 +9,6 @@ from typing import Any
 from aippocampus_runtime.contracts import foreground_shell_action
 from aippocampus_runtime.hooks.action_hint_cache import DEFAULT_ACTION_HINT_CACHE_LABEL
 from aippocampus_runtime.hooks.foreground_status import (
-    action_hint_cache_refresh_primary,
     hook_install_closeout_contract,
     no_action_needed_install_primary,
 )
@@ -30,7 +29,7 @@ def action_hint_frontstage_card(
     if not installed:
         first_command = "aippocampus learning guidance --json"
     elif not active:
-        first_command = "aippocampus hooks action refresh-cache --write --json"
+        first_command = "aippocampus hooks action probe --compact-json"
     else:
         first_command = "aippocampus hooks action probe --compact-json"
     next_steps = [{"label": "check", "command": "aippocampus hooks action status --json"}]
@@ -44,7 +43,13 @@ def action_hint_frontstage_card(
             }
         )
     elif not active:
-        next_steps.append({"label": "refresh_cache", "command": first_command})
+        next_steps.append(
+            {
+                "label": "probe",
+                "command": first_command,
+                "mutation_risk": "low_risk_local_cache_write",
+            }
+        )
     else:
         next_steps.append({"label": "probe", "command": first_command})
     next_steps.append(
@@ -91,7 +96,10 @@ def action_hint_frontstage_card(
             "before broad tests, retries, or source-sensitive edits",
         ],
         "reads": ["prepared action-hint cache"],
-        "writes": ["Codex hooks.json only during explicit install/uninstall"],
+        "writes": [
+            "Codex hooks.json only during explicit install/uninstall",
+            "prepared action-hint cache during explicit probe auto-chain",
+        ],
         "next_steps": next_steps,
         "claim_boundary": "Hints are route guidance only; reopen or deepen source before claims.",
     }
@@ -99,7 +107,6 @@ def action_hint_frontstage_card(
 
 def redact_public_result(result: Mapping[str, Any], *, path: Path) -> dict[str, Any]:
     public = dict(result)
-    raw_cache_path = str(public.get("cache_path") or "")
     public["path"] = path.name
     public["path_redacted"] = True
     raw_commands = public.get("commands")
@@ -113,9 +120,7 @@ def redact_public_result(result: Mapping[str, Any], *, path: Path) -> dict[str, 
         public["cache_path_redacted"] = True
     else:
         public["cache_path_redacted"] = False
-    next_command = public.get("next_command")
-    if raw_cache_path and isinstance(next_command, str):
-        public["next_command"] = "aippocampus hooks action refresh-cache --write --json"
+    public.pop("next_command", None)
     public.pop("command", None)
     return public
 
@@ -145,8 +150,21 @@ def public_install_result(result: Mapping[str, Any], *, path: Path) -> dict[str,
             )
         )
         if active
-        else action_hint_cache_refresh_primary(
-            claim_boundary=str(public.get("claim_boundary") or "host_setup_not_memory_evidence")
+        else dict(
+            foreground_shell_action(
+                action_id="probe_action_hint_hot_path",
+                label="Probe action-hint hot path",
+                command="aippocampus hooks action probe --compact-json",
+                why=(
+                    "The hook is installed but the prepared cache is not useful yet; "
+                    "the explicit probe may auto-refresh the local cache, then report "
+                    "whether a source route can be followed."
+                ),
+                mutation_risk="low_risk_local_cache_write",
+                claim_boundary=str(
+                    public.get("claim_boundary") or "host_setup_not_memory_evidence"
+                ),
+            )
         )
     )
     public.pop("path", None)

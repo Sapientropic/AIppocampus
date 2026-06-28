@@ -127,6 +127,7 @@ CONFIG_KNOBS = (
     _knob("AIPPOCAMPUS_PROMPT_SEMANTIC_TIMEOUT", "hooks", "experimental", "prompt hook", "host-safe default"),
     _knob("AIPPOCAMPUS_PROMPT_PROBE_LIMIT", "recall", "experimental", "prompt recall", "built-in default"),
     _knob("AIPPOCAMPUS_PROMPT_SKIP_TELEMETRY", "hooks", "stable_public", "prompt hook telemetry", "enabled"),
+    _knob("AIPPOCAMPUS_ACTION_HINT_AUTO_CHAIN", "hooks", "experimental", "action hint", "auto"),
     _knob("AIPPOCAMPUS_CURRENT_THREAD_KEY", "source/agent_self_note_cli", "experimental", "current-thread self-note", "unset"),
     _knob("AIPPOCAMPUS_AGENT_LAST_RECALL_PATH", "recall/agent_continuity", "experimental", "agent recall", "registry cache"),
     _knob(

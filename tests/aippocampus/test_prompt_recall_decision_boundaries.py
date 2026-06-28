@@ -392,6 +392,16 @@ class PromptRecallDecisionBoundaryTests(unittest.TestCase):
             "decision": "skip",
             "score": 0.0,
             "confidence": "low",
+            "result_tiers": {
+                "decision": {
+                    "outcome": "skip",
+                    "score": 0.0,
+                    "confidence": "low",
+                    "foreground_lane": "stay_silent",
+                    "agent_surface_intent": {},
+                    "foreground_route_profile": "noise_suppressed",
+                }
+            },
             "cwd": str(self.workspace.resolve()),
             "registry": str(self.registry_path.resolve()),
             "associations": str((self.registry_dir / "associations.json").resolve()),
@@ -411,7 +421,6 @@ class PromptRecallDecisionBoundaryTests(unittest.TestCase):
             "evidence": [],
             "working_memory": [],
             "semantic_gate": None,
-            "semantic_bridge_diagnostic": None,
         }
 
         self.assertEqual(
@@ -422,6 +431,9 @@ class PromptRecallDecisionBoundaryTests(unittest.TestCase):
             expected_without_elapsed,
         )
         self.assertIsInstance(result["elapsed_ms"], float)
+        self.assertIsNone(
+            prompt_recall_result_tiers.result_semantic_bridge_diagnostic(result)
+        )
 
     def test_current_checkout_fact_cue_is_live_source_boundary(self) -> None:
         self.assertTrue(

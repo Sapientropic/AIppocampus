@@ -14,6 +14,8 @@ from typing import Any
 from aippocampus_runtime.core import stable_text_non_null_join_id
 from aippocampus_runtime.navigation import attention_router_contract
 
+MAX_SOURCE_SPAN_CANDIDATES = 32
+
 
 def _text(value: Any, default: str = "") -> str:
     text = str(value or "").strip()
@@ -175,7 +177,11 @@ def _package_window(window: Mapping[str, Any]) -> dict[str, Any]:
     baseline = _baseline_window(window)
     rejected = []
     selected: Mapping[str, Any] | None = None
-    for span in sorted(_mappings(window.get("span_candidates")), key=_span_rank):
+    bounded_span_candidates = sorted(
+        _mappings(window.get("span_candidates")),
+        key=_span_rank,
+    )[:MAX_SOURCE_SPAN_CANDIDATES]
+    for span in bounded_span_candidates:
         reason = _reject_reason(window, span)
         if reason:
             rejected.append(

@@ -448,7 +448,7 @@ def main(argv: list[str] | None = None) -> int:
             else "explicit_output_dir",
             "storage_policy": {
                 "default": "AIPPOCAMPUS_REGISTRY_DIR or AIPPOCAMPUS_HOME/registry, with legacy CODEX_HOME fallback",
-                "legacy_project_local": ".aippocampus",
+                "explicit_project_local_output": ".aippocampus",
                 "why": "Indexes are private generated recall artifacts; project-local output is explicit compatibility, not the default.",
             },
             "publish_policy": {
