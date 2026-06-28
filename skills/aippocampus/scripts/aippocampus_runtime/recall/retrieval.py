@@ -101,9 +101,54 @@ def message_select_columns(con: sqlite3.Connection, alias: str | None = None) ->
     return ", ".join(base)
 
 
+# Patterns that indicate a message is a validation/commentary echo of a
+# quoted cue rather than the original source moment.
+_ECHO_VALIDATION_PATTERNS = (
+    "regression probe",
+    "validation echo",
+    "rerunning",
+    "re-running",
+    "closeout",
+    "close-out",
+    "subagent prompt",
+    "sub-agent prompt",
+    "issue #",
+    "aippocampus search",
+    "search-budget",
+    "--search-budget",
+    "matches_need_broadened",
+    "broadened_source_search",
+)
+
+
+def _is_validation_echo(text: str) -> bool:
+    """Return True when text looks like a validation/closeout/issue echo.
+
+    These are messages that quote a distinctive cue back in order to verify,
+    rerun, or close out a search result rather than being the original source
+    moment that the user is trying to recall.
+    """
+    low = text.casefold()
+    return any(pat in low for pat in _ECHO_VALIDATION_PATTERNS)
+
+
 def phase_weight(row: sqlite3.Row) -> float:
     phase = str(row["phase"] or "")
     role = str(row["role"] or "")
+    text = str(row["text"] or "")
+
+    # Echo/validation demotion must run before phase promotion so that a
+    # commentary or tool message that merely quotes the cue back for
+    # verification does not inherit final_answer or user ranking.
+    if _is_validation_echo(text):
+        if "closeout" in text.casefold() or "close-out" in text.casefold():
+            return scoring_policy.PHASE_WEIGHT_POLICY.closeout_echo
+        if "subagent" in text.casefold() or "sub-agent" in text.casefold():
+            return scoring_policy.PHASE_WEIGHT_POLICY.subagent_echo
+        if "issue #" in text.casefold():
+            return scoring_policy.PHASE_WEIGHT_POLICY.issue_echo
+        return scoring_policy.PHASE_WEIGHT_POLICY.validation_echo
+
     if phase == "final_answer" or int(row["is_final"] or 0):
         return scoring_policy.PHASE_WEIGHT_POLICY.final_answer
     if role == "user":

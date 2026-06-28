@@ -17,6 +17,14 @@ class PhaseWeightPolicy:
     user: float = 3.0
     commentary: float = -5.0
     tool: float = -12.0
+    # Echo/validation demotion: messages that quote a cue back for
+    # verification/closeout/issue purposes should rank below the original
+    # source moment. These penalties are applied in retrieval.phase_weight()
+    # when echo indicators are detected in the message text or metadata.
+    validation_echo: float = -18.0
+    closeout_echo: float = -18.0
+    subagent_echo: float = -15.0
+    issue_echo: float = -15.0
 
 
 @dataclass(frozen=True)
