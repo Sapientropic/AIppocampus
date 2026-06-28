@@ -206,6 +206,15 @@ INSTRUCTION_SURFACE_CLASSIFIED_FILES = {
             "is not source evidence and compact output must stay action-sized"
         ),
     },
+    "skills/aippocampus/scripts/aippocampus_runtime/mcp/thread_list_projection.py": {
+        "classification": "mcp_thread_list_foreground_action_owner",
+        "owner": "#2814/#2651",
+        "why": (
+            "owns list_threads compact foreground actions and registry-detail "
+            "diagnostic affordances; ordinary routing must prefer agent_recall "
+            "while legacy recall stays compat/detail-only"
+        ),
+    },
     "skills/aippocampus/scripts/aippocampus_runtime/recall/agent_continuity.py": {
         "classification": "runtime_prompt_and_route_owner",
         "owner": "#2636/#2651",

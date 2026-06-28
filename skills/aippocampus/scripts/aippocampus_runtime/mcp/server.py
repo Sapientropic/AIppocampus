@@ -183,6 +183,7 @@ def main(argv: list[str] | None = None) -> int:
             "MCP foreground/server entry.\n\n"
             "Action card:\n"
             "  mcp status              Compact readiness card for foreground agents.\n"
+            "  mcp status --detail full  Operator readiness detail, including explicit write fallbacks.\n"
             "  mcp list-tools          Full MCP schema catalog for host wiring.\n"
             "  mcp list-tools --json   Full MCP schema catalog for host wiring.\n"
             "  mcp list-tools --compact  Compact readiness card; no schema wall.\n"
@@ -212,6 +213,12 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="For list-tools, emit only visible tool names as JSON.",
     )
+    parser.add_argument(
+        "--detail",
+        choices=["compact", "full"],
+        default="compact",
+        help="For status, choose compact foreground readiness or full operator detail.",
+    )
     args = parser.parse_args(raw_argv)
     if args.names and args.command is None:
         payload = tool_names_summary()
@@ -219,7 +226,7 @@ def main(argv: list[str] | None = None) -> int:
         return exit_code_for_payload(payload)
     if args.list_tools or args.command in {"list-tools", "status"}:
         if args.summary_json or args.command == "status":
-            payload = tool_readiness_summary()
+            payload = tool_readiness_summary(detail=args.detail)
             print(json.dumps(payload, ensure_ascii=False, indent=2))
             return exit_code_for_payload(payload)
         if args.names:

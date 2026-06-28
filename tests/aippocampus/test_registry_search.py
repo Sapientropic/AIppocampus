@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from aippocampus_runtime.mcp import registry_source_routes as mcp_registry_source_routes
 from aippocampus_runtime.recall import retrieval as retrieval_impl
 from aippocampus_runtime.registry import search as registry_search
 from aippocampus_runtime.source import registry_search as source_registry_search
@@ -320,6 +321,7 @@ class RegistrySourceSearchUsefulnessTests(unittest.TestCase):
                 ["开发者真实水平 小号"],
                 registry_dir=self.root,
                 cwd=self.root,
+                record_last_search=True,
             )
 
         self.assertFalse(result["ok"])
@@ -377,6 +379,7 @@ class RegistrySourceSearchUsefulnessTests(unittest.TestCase):
             result["first_match_usefulness"]["status"],
             "source_route_not_reopenable",
         )
+        self.assertNotIn("source_route", result["matches"][0])
         self.assertNotIn("reopen_command", result["matches"][0])
         self.assertEqual(
             result["foreground_action"]["id"],
@@ -384,6 +387,49 @@ class RegistrySourceSearchUsefulnessTests(unittest.TestCase):
         )
         self.assertEqual(result["claim_boundary"], "search_miss_is_not_absence_of_memory")
         self.assertEqual(result["source_reopen_boundary"], "search_miss_is_not_absence_of_memory")
+        reopened = source_registry_search.open_registry_source_window(
+            registry_dir=self.root,
+            hit_index=1,
+            use_last_search=True,
+        )
+        self.assertFalse(reopened["ok"])
+        self.assertEqual(reopened["error"]["code"], "last_registry_search_unavailable")
+
+    def test_sqlite_line_only_match_does_not_become_agent_recall_route(self) -> None:
+        with patch.object(
+            mcp_registry_source_routes,
+            "search_registry_sources",
+            return_value={
+                "matches": [
+                    {
+                        "source": "sqlite",
+                        "thread": {"thread_key": "session:test"},
+                        "source_route": {
+                            "kind": "registry_clean_source_hit",
+                            "thread_key": "session:test",
+                            "line": 135501,
+                        },
+                        "line": 135501,
+                        "role": "assistant",
+                        "phase": "commentary",
+                        "snippet": "旧索引闻到了 cue，但没有 clean-source message_id。",
+                    }
+                ]
+            },
+        ):
+            routes = mcp_registry_source_routes.registry_clean_source_routes(
+                intent="旧索引 cue",
+                cwd=self.root,
+                source_dir=self.clean,
+                registry_dir=self.root,
+                max_routes=1,
+                clean_ref=lambda ref: dict(ref),
+                route_handle=lambda **_: "handle",
+                stable_id=lambda *_: "route",
+                safe_text=lambda value, chars: str(value or "")[:chars],
+            )
+
+        self.assertEqual(routes, [])
 
     def test_partial_sqlite_hit_loses_to_reopenable_exact_clean_source(self) -> None:
         partial_clean = self.root / "partial-clean"

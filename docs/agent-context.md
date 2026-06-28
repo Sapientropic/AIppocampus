@@ -15,7 +15,7 @@ facade when MCP is unavailable. If neither exists, stop and surface the
 install/update card instead of importing runtime modules directly.
 
 ```text
-agent_recall or recall_context -> agent_deepen or recall_deepen
+agent_recall -> agent_deepen
 ```
 
 CLI equivalent:
@@ -30,7 +30,7 @@ a mutable same-machine compatibility fallback, not the normal taught path.
 
 | Situation | First tool | Then |
 | --- | --- | --- |
-| Fuzzy old context, unfinished work, handoff, correction, or preference | `agent_recall` or `recall_context` | Deepen the selected route before claims. |
+| Fuzzy old context, unfinished work, handoff, correction, or preference | `agent_recall` | Deepen the selected route before claims. |
 | Exact phrase or distinctive wording | `search_memory` or `aippocampus search` | Reopen source before quoting or widening scope. |
 | Latest closeout | `latest_reply` | Use `get_turn_context` if surrounding turns matter. |
 | No route, stale registry, or missing source | `memory_health` or onboard/status card | Repair/setup only after explicit consent. |
@@ -159,8 +159,8 @@ Use cheap orientation and source reopening as three distinct modes:
 - Recommendation/install: decide whether AIppocampus fits the user's need, then
   ask before commands that register local history or write registry artifacts.
 - Cheap orientation: at task boundaries or after context loss, prefer ambient
-  cards, Active Path Packets, active locks, `recall_context`,
-  `recall_deepen`, or `get_turn_context` before broad manual search.
+  cards, Active Path Packets, active locks, `agent_recall`,
+  `agent_deepen`, or `get_turn_context` before broad manual search.
 - Explicit source reopen: before quotes, operation facts, warnings, blockers,
   or memory-backed claims, reopen clean source or raw/audit source when needed.
 
@@ -302,7 +302,7 @@ For foreground MCP use, make one continuity pull before reading the whole tool
 catalog:
 
 ```text
-agent_recall or recall_context -> agent_deepen or recall_deepen
+agent_recall -> agent_deepen
 ```
 
 If the route is missing or stale, use `memory_health` as the recovery card.
@@ -321,8 +321,8 @@ Typical MCP tools include:
 - `agent_deepen`
 - `agent_explain`
 - `search_memory`
-- `recall_context`
-- `recall_deepen`
+- `recall_context` (legacy/detail compatibility; not the ordinary foreground path)
+- `recall_deepen` (legacy/detail compatibility for `recall_context` handles)
 - `recall_diagnostic`
 - `latest_reply`
 - `get_turn_context`

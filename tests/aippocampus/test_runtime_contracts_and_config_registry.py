@@ -238,6 +238,28 @@ class RuntimeContractsAndConfigRegistryTests(unittest.TestCase):
         self.assertIn("write_capable_action_not_allowed_in_default_compact", reasons)
         self.assertIn("manual_safe_action_needs_command_or_continue_marker", reasons)
 
+    def test_compact_foreground_action_lint_rejects_write_primary_action(self) -> None:
+        payload = {
+            "foreground_action_contract": "foreground-action-v2",
+            "foreground_action": {
+                "id": "apply_after_user_consent",
+                "label": "Apply maintenance",
+                "command": "aippocampus maintenance apply --summary-json",
+                "why": "Writes generated artifacts.",
+                "mutation_risk": "writes_generated_source_artifacts",
+                "claim_boundary": "explicit_write_not_source_evidence",
+            },
+            "safe_next_actions": [],
+        }
+
+        self.assertIn(
+            {
+                "field": "foreground_action.mutation_risk",
+                "reason": "write_capable_action_not_allowed_in_default_compact",
+            },
+            compact_foreground_action_violations(payload),
+        )
+
     def test_compact_foreground_action_lint_catches_status_self_loop_and_duplicate_commands(self) -> None:
         payload = {
             "foreground_action_contract": "foreground-action-v2",

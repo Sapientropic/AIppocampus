@@ -119,10 +119,20 @@ def _registry_match(
     raw_paths = entry.get("paths")
     paths: Mapping[str, Any] = raw_paths if isinstance(raw_paths, Mapping) else {}
     thread_key = str(entry.get("thread_key") or "").strip()
-    source_route = registry_clean_source_route(
-        thread_key=thread_key,
-        message_id=hit.get("message_id") or hit.get("id"),
-        line=hit.get("line"),
+    source_kind = str(hit.get("source") or "")
+    message_id = hit.get("message_id") or (hit.get("id") if source_kind == "clean_source" else None)
+    route_line = hit.get("line") if source_kind == "clean_source" or message_id else None
+    # SQLite line numbers are index/raw positions, not clean-source reopen keys.
+    # Keeping line-only index scent out of source_route prevents agents from
+    # treating it as a copy-pasteable source-open handle.
+    source_route = (
+        registry_clean_source_route(
+            thread_key=thread_key,
+            message_id=message_id,
+            line=route_line,
+        )
+        if message_id or route_line is not None
+        else {}
     )
     raw_snippet = str(hit.get("snippet") or "")
     snippet = compact_text(raw_snippet, DEFAULT_PUBLIC_SNIPPET_CHARS)
@@ -142,7 +152,7 @@ def _registry_match(
         "hit_selector": _hit_selector(source_route),
         "thread": registry_entry_ref(entry),
         "source": hit.get("source"),
-        "message_id": hit.get("message_id") or hit.get("id"),
+        "message_id": message_id,
         "turn_id": hit.get("turn_id"),
         "line": hit.get("line"),
         "role": hit.get("role"),

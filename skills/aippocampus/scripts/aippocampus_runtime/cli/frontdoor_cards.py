@@ -90,6 +90,7 @@ def print_privacy_card(*, file: TextIO | None = None) -> None:
     print("Privacy and control card:", file=target)
     print("  Defaults are read-only and redacted; destructive or private-path output is explicit operator work.", file=target)
     print("  Personal default: same-user local conversation source stays usable through private reopen routes.", file=target)
+    print("  Hard blocks: secret-like material, unprovided background scans, and raw external projection; cross-domain sensitive reuse gets a purpose check.", file=target)
     print("  Gradient: pause is temporary quieting, do-not-use-here is current-scope exclusion, forget is an explicit target workflow.", file=target)
     print("", file=target)
     print("Controls:", file=target)

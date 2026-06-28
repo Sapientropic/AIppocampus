@@ -270,8 +270,8 @@ class AippocampusMcpServerOpsTests(unittest.TestCase):
         )
         self.assertEqual(payload["foreground_action_contract"], "foreground-action-v2")
         self.assertIn("foreground_action", payload)
-        self.assertEqual(payload["foreground_action"]["tool_name"], "recall_context")
-        self.assertEqual(payload["foreground_action"]["arguments_template"], {"intent": "{task_or_memory_cue}"})
+        self.assertEqual(payload["foreground_action"]["tool_name"], "agent_recall")
+        self.assertEqual(payload["foreground_action"]["arguments_template"], {"query": "{task_or_memory_cue}"})
         self.assertTrue(payload["foreground_action"]["template_only"])
         self.assertNotIn(payload["foreground_action"], payload["safe_next_actions"])
         self.assertEqual(executable_command_violations(payload), [])
@@ -532,7 +532,7 @@ class AippocampusMcpServerOpsTests(unittest.TestCase):
         self.assertEqual(payload["error"]["code"], "malformed_arguments")
         self.assertEqual(payload["error"]["details"]["expected"], "object")
 
-    def test_search_memory_metadata_only_has_structured_authority_next_action(self) -> None:
+    def test_search_memory_metadata_only_opens_source_from_foreground_action(self) -> None:
         response = mcp.handle_request(
             {
                 "jsonrpc": "2.0",
@@ -563,27 +563,35 @@ class AippocampusMcpServerOpsTests(unittest.TestCase):
         self.assertEqual(payload["surface"], "mcp_search_memory_compact")
         self.assertEqual(payload["source_boundary"]["authority"], "reopenable_route")
         self.assertTrue(payload["source_boundary"]["capped_snippets_are_bounded_receipts"])
-        self.assertEqual(payload["foreground_action"]["id"], "rerun_search_with_local_source_refs")
-        self.assertEqual(payload["foreground_action"]["tool_name"], "search_memory")
-        self.assertEqual(payload["foreground_action"]["arguments"]["query"], "clean source")
-        self.assertEqual(
-            payload["foreground_action"]["arguments"]["scope"],
-            "current_thread_clean_source",
-        )
-        self.assertEqual(payload["foreground_action"]["arguments"]["detail"], "full")
-        self.assertIn("aippocampus search", payload["foreground_action"]["command"])
+        self.assertTrue(payload["source_boundary"]["source_open_selector_emitted"])
+        self.assertEqual(payload["foreground_action"]["id"], "reopen_search_match_source")
+        self.assertEqual(payload["foreground_action"]["tool_name"], "get_turn_context")
+        self.assertEqual(payload["foreground_action"]["arguments"]["message_id"], "msg_final")
+        self.assertIn("aippocampus search --open-current-source", payload["foreground_action"]["command"])
         self.assertEqual(
             payload["foreground_action"]["claim_boundary"],
-            "metadata_only_no_private_reopen_refs",
+            "source_reopen_required_before_claim",
         )
         self.assertIsInstance(payload["foreground_action"], dict)
         self.assertIn("foreground_action", payload)
         self.assertNotIn("matches", payload)
         self.assertTrue(payload["source_hits"][0]["snippet_omitted"])
+        self.assertNotIn("摘要替代事实", encoded)
         self.assertNotIn(payload["foreground_action"], payload.get("safe_next_actions", []))
         self.assertNotIn("runtime_provenance", payload)
         self.assertNotIn("output_boundary", payload)
         self.assertNotIn(str(self.cwd), encoded)
+
+        opened = self.call_tool_payload(
+            payload["foreground_action"]["tool_name"],
+            {
+                **payload["foreground_action"]["arguments"],
+                "cwd": str(self.cwd),
+                "clean_source_dir": str(self.clean),
+            },
+        )
+        opened_text = json.dumps(opened["messages"], ensure_ascii=False)
+        self.assertIn("摘要替代事实", opened_text)
 
     def test_memory_health_runs_in_process_for_frozen_binary_entrypoints(self) -> None:
         old_argv = sys.argv[:]

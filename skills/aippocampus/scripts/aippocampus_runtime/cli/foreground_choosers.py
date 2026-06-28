@@ -230,10 +230,12 @@ def privacy_chooser_payload() -> dict[str, Any]:
     )
     payload["control_gradient"] = CONTROL_GRADIENT
     payload["default_posture"] = {
-        "same_user_conversation_source": "allow_with_boundary",
-        "ordinary_memory_route": "private_route",
-        "external_projection": "blocked_without_explicit_export",
-        "secret_or_credential_material": "hard_block",
+        "ordinary_conversation_source": "private_route_or_reopenable",
+        "secret_like": "hard_block",
+        "unprovided_background_scan": "hard_block",
+        "raw_external_projection": "blocked_without_explicit_opt_in",
+        "cross_domain_sensitive_use": "purpose_check",
+        "contract": "docs/guides/public-core-boundary.md#personalcore-default",
         "boundary": (
             "Privacy controls narrow or stop specific reuse; they should not make "
             "ordinary local source-backed continuity feel unavailable by default."

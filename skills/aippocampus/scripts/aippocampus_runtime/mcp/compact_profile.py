@@ -111,6 +111,7 @@ MCP_SEARCH_SOURCE_BOUNDARY_KEYS = frozenset(
         "search_miss_is_not_absence_of_memory",
         "demoted_artifact_matches_are_diagnostic",
         "capped_snippets_are_bounded_receipts",
+        "source_open_selector_emitted",
         "snippets_are_source_open",
     }
 )

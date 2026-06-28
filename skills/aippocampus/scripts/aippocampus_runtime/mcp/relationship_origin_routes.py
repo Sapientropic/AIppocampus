@@ -194,6 +194,7 @@ def relationship_origin_registry_routes(
         route = route_from_registry_match(
             match,
             source_dir=source_dir,
+            registry_dir=registry_dir,
             clean_ref=clean_ref,
             route_handle=route_handle,
             stable_id=stable_id,
