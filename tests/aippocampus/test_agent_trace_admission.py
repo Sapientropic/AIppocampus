@@ -6,8 +6,14 @@ import unittest
 from aippocampus_runtime.source.agent_trace_admission import (
     ADMISSION_LEVELS,
     TRAINING_ROLES,
+    TRAINING_SIGNAL_KIND,
+    behavior_training_signal_from_trace,
     classify_trace_row,
+    draft_navigation_candidate_from_signal,
+    project_behavior_training_ledger,
+    project_candidate_funnel,
     project_trace_admission,
+    verify_navigation_candidate,
 )
 
 
@@ -135,6 +141,132 @@ class AgentTraceAdmissionTests(unittest.TestCase):
         encoded = json.dumps(detail, ensure_ascii=False)
         self.assertNotIn("stdout", encoded)
         self.assertNotIn("C:\\private", encoded)
+
+    def test_behavior_training_ledger_covers_five_signal_roles_without_raw_leak(self) -> None:
+        rows = [
+            {
+                "trace_id": "positive",
+                "trace_family": "successful_recall_deepen_source_open",
+                "outcome": "source_reopen_success",
+                "cue": "private fuzzy cue",
+                "source_refs": [{"message_id": "msg-positive", "line": 1}],
+                "opened_anchor_hits": 3,
+                "low_confidence_before": True,
+                "multilingual": True,
+                "cue_frequency": 1,
+            },
+            {
+                "trace_id": "negative",
+                "trace_family": "repo_breadcrumb",
+                "outcome": "wrong_route_drag",
+                "safe_repo_relative": True,
+                "route_id": "route:bad",
+                "preferred_route_id": "route:good",
+                "rejected_route_ids": ["route:bad"],
+            },
+            {
+                "trace_id": "process",
+                "trace_family": "joined_route_note",
+                "source_refs": [{"message_id": "msg-route", "line": 2}],
+                "joined_evidence_refs": [{"message_id": "msg-final", "line": 3}],
+            },
+            {
+                "trace_id": "replay",
+                "trace_family": "repo_breadcrumb",
+                "outcome": "missed_opportunity",
+                "safe_repo_relative": True,
+            },
+            {
+                "trace_id": "relabel",
+                "trace_family": "repo_breadcrumb",
+                "outcome": "hindsight_relabel",
+                "safe_repo_relative": True,
+            },
+        ]
+
+        signals = [behavior_training_signal_from_trace(row) for row in rows]
+        by_trace = {row["trace_id"]: row for row in signals}
+        self.assertEqual({row["kind"] for row in signals}, {TRAINING_SIGNAL_KIND})
+        self.assertEqual(by_trace["positive"]["training_role"], "positive_demo")
+        self.assertEqual(by_trace["negative"]["training_role"], "hard_negative")
+        self.assertEqual(by_trace["process"]["training_role"], "process_supervision")
+        self.assertEqual(by_trace["replay"]["training_role"], "replay_sample")
+        self.assertEqual(by_trace["relabel"]["training_role"], "hindsight_relabel")
+        self.assertEqual(
+            by_trace["positive"]["learning_priority"]["bucket"],
+            "high_information",
+        )
+        self.assertTrue(by_trace["negative"]["contrastive_pair"])
+
+        compact = project_behavior_training_ledger(signals, detail="compact")
+        detail = project_behavior_training_ledger(signals, detail="operator")
+        encoded = json.dumps({"compact": compact, "detail": detail}, ensure_ascii=False)
+
+        self.assertEqual(compact["decision"], "use_training_signals_as_navigation_calibration_only")
+        self.assertEqual(detail["training_role_counts"]["positive_demo"], 1)
+        self.assertEqual(detail["training_role_counts"]["hard_negative"], 1)
+        self.assertEqual(detail["training_role_counts"]["process_supervision"], 1)
+        self.assertEqual(detail["training_role_counts"]["replay_sample"], 1)
+        self.assertEqual(detail["training_role_counts"]["hindsight_relabel"], 1)
+        self.assertEqual(detail["contrastive_pair_count"], 1)
+        self.assertNotIn("private fuzzy cue", encoded)
+        self.assertNotIn("source_refs", encoded)
+        self.assertNotIn("C:\\", encoded)
+
+    def test_candidate_funnel_verifier_outcomes_drive_foreground_exposure(self) -> None:
+        positive_signal = behavior_training_signal_from_trace(
+            {
+                "trace_id": "positive",
+                "trace_family": "successful_recall_deepen_source_open",
+                "outcome": "source_reopen_success",
+                "cue_hash": "cue-positive",
+                "route_id": "route:positive",
+                "source_refs": [{"message_id": "msg-positive"}],
+                "opened_anchor_hits": 2,
+            }
+        )
+        negative_signal = behavior_training_signal_from_trace(
+            {
+                "trace_id": "negative",
+                "trace_family": "repo_breadcrumb",
+                "outcome": "wrong_route_drag",
+                "safe_repo_relative": True,
+                "cue_hash": "cue-positive",
+                "route_id": "route:negative",
+            }
+        )
+
+        good_candidate = draft_navigation_candidate_from_signal(
+            positive_signal,
+            producer_family="semantic_cue_alias",
+        )
+        bad_candidate = draft_navigation_candidate_from_signal(
+            negative_signal,
+            producer_family="semantic_cue_alias",
+        )
+        verified_good = verify_navigation_candidate(
+            good_candidate,
+            outcome="source_open_hit",
+        )
+        verified_bad = verify_navigation_candidate(
+            bad_candidate,
+            outcome="wrong_route",
+        )
+
+        compact = project_candidate_funnel([verified_bad, verified_good], detail="compact")
+        detail = project_candidate_funnel([verified_bad, verified_good], detail="operator")
+        encoded = json.dumps({"compact": compact, "detail": detail}, ensure_ascii=False)
+
+        self.assertEqual(compact["status"], "foreground_route_available")
+        self.assertEqual(
+            compact["primary_candidate"]["lifecycle_state"],
+            "source_open_claim_ready",
+        )
+        self.assertEqual(detail["foreground_exposed_count"], 1)
+        self.assertEqual(detail["lifecycle_counts"]["rejected_hard_negative"], 1)
+        self.assertEqual(detail["training_role_counts"]["hard_negative"], 1)
+        self.assertNotIn("route:positive", encoded)
+        self.assertNotIn("route:negative", encoded)
 
 
 if __name__ == "__main__":

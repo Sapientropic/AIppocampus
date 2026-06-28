@@ -32,6 +32,10 @@ from aippocampus_runtime.navigation.concept_graph_timeline_ingress import (
 from aippocampus_runtime.navigation.concept_kinds import classify_concept_kind
 from aippocampus_runtime.navigation.concept_lifecycle import normalize_graph_status
 from aippocampus_runtime.registry.api import unique_preserve
+from aippocampus_runtime.source.agent_trace_admission import (
+    TRAINING_SIGNAL_KIND,
+    behavior_training_signal_from_trace,
+)
 
 CONTRIBUTION_MANIFEST_META_KEY = "contribution_manifest"
 CONTRIBUTION_MANIFEST_SCHEMA_VERSION = "concept_graph_contribution_manifest_v1"
@@ -89,6 +93,8 @@ EDGE_CONTRIBUTION_COLUMNS = [
     "source_thread_key",
     "source_message_id",
 ]
+
+TRACE_DERIVED_GRAPH_SOURCE_FAMILY = "trace_derived_training_signal"
 
 EdgeKey = tuple[str, str, str, str]
 SliceRef = tuple[str, str]
@@ -711,6 +717,75 @@ def copy_all_temp_contributions(con: sqlite3.Connection) -> tuple[int, int]:
         """
     )
     return max(0, node_cursor.rowcount), max(0, edge_cursor.rowcount)
+
+
+def trace_derived_graph_contribution_candidates(
+    rows: list[dict[str, Any]] | tuple[dict[str, Any], ...],
+) -> list[dict[str, Any]]:
+    """Project admitted trace/training rows into typed graph ingress candidates.
+
+    This is intentionally a staging ingress, not a default graph-ranker
+    promotion. The trace-admission contract decides whether a row is eligible;
+    graph-quality gates still decide whether these candidates can affect active
+    recall expansion.
+    """
+
+    candidates: list[dict[str, Any]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        signal = row if row.get("kind") == TRAINING_SIGNAL_KIND else behavior_training_signal_from_trace(row)
+        role = str(signal.get("training_role") or "none")
+        admission = str(signal.get("admission_level") or "operator_only")
+        source_count = int(signal.get("source_ref_count") or 0)
+        if admission in {"ignore", "operator_only"} and role != "hard_negative":
+            continue
+        if role == "positive_demo":
+            edge_type = "trace_positive_reopen"
+            status = "verified" if source_count else "staging"
+            lifecycle_reason = "trace_positive_source_open" if source_count else "trace_positive_waiting_source"
+            active = bool(source_count)
+        elif role == "hard_negative":
+            edge_type = "trace_rejected_route"
+            status = "parked"
+            lifecycle_reason = "trace_hard_negative_demotion"
+            active = False
+        elif role == "process_supervision":
+            edge_type = "trace_process_supervision"
+            status = "staging"
+            lifecycle_reason = "trace_process_waiting_quality_gate"
+            active = False
+        elif role == "replay_sample":
+            edge_type = "trace_replay_sample"
+            status = "eval_only"
+            lifecycle_reason = "trace_replay_not_active_graph_evidence"
+            active = False
+        elif role == "hindsight_relabel":
+            edge_type = "trace_hindsight_relabel"
+            status = "staging"
+            lifecycle_reason = "trace_hindsight_requires_verifier"
+            active = False
+        else:
+            continue
+        candidates.append(
+            {
+                "kind": "aippocampus_trace_derived_graph_candidate",
+                "source_family": TRACE_DERIVED_GRAPH_SOURCE_FAMILY,
+                "signal_id": signal.get("signal_id"),
+                "training_role": role,
+                "admission_level": admission,
+                "edge_type": edge_type,
+                "status": status,
+                "active_graph_edge": active,
+                "lifecycle_reason": lifecycle_reason,
+                "source_ref_count": source_count,
+                "source_ref_digest": signal.get("source_ref_digest") or "",
+                "candidate_lifecycle_state": signal.get("candidate_lifecycle_state"),
+                "learning_priority": signal.get("learning_priority") or {},
+                "claim_boundary": "trace_graph_candidate_not_source_truth",
+            }
+        )
+    return candidates
 
 
 def _row_float(row: sqlite3.Row, column: str) -> float:

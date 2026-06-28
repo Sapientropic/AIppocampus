@@ -14,6 +14,9 @@ from aippocampus_runtime.contracts import (
     canonical_foreground_action_fields,
     foreground_shell_action,
 )
+from aippocampus_runtime.foreground_action_lint import (
+    compact_foreground_action_budget_report,
+)
 from aippocampus_runtime.hooks.action_hint_cache import refresh_action_hint_cache
 from aippocampus_runtime.learning_loop.behavioral_records import (
     behavioral_records,
@@ -59,6 +62,8 @@ from aippocampus_runtime.learning_loop.repro_package import (
 from aippocampus_runtime.learning_loop.semantic_learning import (
     build_semantic_learning_dogfood_fixture_report,
 )
+
+COMPACT_SAFE_NEXT_ACTION_BUDGET = 1
 
 
 def _json_out(payload: Mapping[str, Any]) -> None:
@@ -123,6 +128,42 @@ def _unique_actions(*actions: Mapping[str, Any] | None) -> list[dict[str, Any]]:
         seen.add(identity)
         unique.append(normalized)
     return unique
+
+
+def _compact_learning_action_fields(
+    primary_action: Mapping[str, Any],
+    actions: list[dict[str, Any]],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Keep learning frontdoors action-sized without losing operator routes."""
+
+    unique_actions = _unique_actions(primary_action, *actions)
+    full_action_fields = canonical_foreground_action_fields(
+        primary_action,
+        safe_next_actions=unique_actions,
+    )
+    compact_action_fields = canonical_foreground_action_fields(
+        primary_action,
+        safe_next_actions=unique_actions,
+        max_safe_next_actions=COMPACT_SAFE_NEXT_ACTION_BUDGET,
+    )
+    budget = compact_foreground_action_budget_report(
+        full_action_fields,
+        max_safe_actions=COMPACT_SAFE_NEXT_ACTION_BUDGET,
+        budget_reason="learning_frontdoor_compact_action_budget",
+    )
+    if budget["more_actions_available_in_detail"]:
+        compact_action_fields["more_actions_available_in_detail"] = True
+    operator_detail = {
+        "profile": "learning_frontdoor_action_menu",
+        "claim_boundary": (
+            "compact learning frontdoors expose one primary action and at most "
+            "one alternative; detail owns the wider action menu"
+        ),
+        "foreground_action_budget": budget,
+        "foreground_action": full_action_fields["foreground_action"],
+        "safe_next_actions": full_action_fields["safe_next_actions"],
+    }
+    return compact_action_fields, operator_detail
 
 
 def _compact_semantic_lifecycle(
@@ -263,6 +304,7 @@ def discover_history_payload(*, cwd: Path) -> dict[str, Any]:
     action_fields = canonical_foreground_action_fields(
         primary_action,
         safe_next_actions=_unique_actions(primary_action, *setup_actions),
+        max_safe_next_actions=COMPACT_SAFE_NEXT_ACTION_BUDGET,
     )
     return _public_payload(
         _with_boundary_detail(
@@ -393,11 +435,11 @@ def status_payload(
             *_learning_setup_actions(),
         )
     )
-    action_fields = canonical_foreground_action_fields(
+    action_fields, frontdoor_operator_detail = _compact_learning_action_fields(
         primary_action,
-        safe_next_actions=followup_actions,
+        followup_actions,
     )
-    next_actions = cast(list[dict[str, object]], action_fields["safe_next_actions"])[:3]
+    next_actions = cast(list[dict[str, object]], action_fields["safe_next_actions"])
     payload: dict[str, Any] = {
         "kind": KIND,
         "schema_version": SCHEMA_VERSION,
@@ -428,6 +470,10 @@ def status_payload(
         "privacy_boundary": _privacy_boundary(),
     }
     if include_operator_detail:
+        operator_detail = {
+            **operator_detail,
+            "learning_frontdoor_actions": frontdoor_operator_detail,
+        }
         payload["semantic_loop"] = {
             "stage": (semantic_report.get("stage_report") or {}).get("stage"),
             "stage_counts": {
@@ -514,9 +560,9 @@ def guidance_payload(
         if semantic_count
         else _unique_actions(next_action, *_learning_setup_actions())
     )
-    action_fields = canonical_foreground_action_fields(
+    action_fields, frontdoor_operator_detail = _compact_learning_action_fields(
         next_action,
-        safe_next_actions=safe_next_actions,
+        safe_next_actions,
     )
     semantic_guidance = {
         "guidance_count": semantic_count,
@@ -526,6 +572,9 @@ def guidance_payload(
     }
     if include_operator_detail:
         semantic_guidance["lifecycle"] = lifecycle
+        operator_detail = dict(payload.get("operator_detail") or {})
+        operator_detail["learning_frontdoor_actions"] = frontdoor_operator_detail
+        payload["operator_detail"] = operator_detail
     if not include_operator_detail:
         payload.pop("semantic_guidance_lifecycle", None)
         payload.pop("operator_detail", None)

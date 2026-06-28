@@ -22,7 +22,9 @@ from aippocampus_runtime.recall import (
     foreground_action_card,
     macro_field_live,
     macro_live_recall,
+    query_policy,
     recall_recovery_layers,
+    semantic_cue_cache,
 )
 from aippocampus_runtime.recall import associative_path_fallback as apw_fallback
 from aippocampus_runtime.recall import (
@@ -56,6 +58,7 @@ from aippocampus_runtime.recall.source_gate_context import (
     attach_source_gate_context_to_deepen_requests,
 )
 from aippocampus_runtime.source.discussion_atlas_pointer import discussion_atlas_pointer_for_query
+from aippocampus_runtime.source.io_kernel import load_json_dict
 
 
 @dataclass(frozen=True)
@@ -164,6 +167,7 @@ def run_agent_recall_pipeline(
         feedback_path=feedback_path,
     )
     actions = _select_recall_action(inputs, packets)
+    recall_positioning = _record_recall_semantic_position(inputs, routes)
     return _public_payload(
         _assemble_recall_result(
             inputs,
@@ -171,6 +175,7 @@ def run_agent_recall_pipeline(
             packets,
             recovery,
             actions,
+            recall_positioning=recall_positioning,
             run_semantic_gate=run_semantic_gate,
             semantic_gate_mode=semantic_gate_mode,
             semantic_timeout=semantic_timeout,
@@ -480,6 +485,69 @@ def _select_recall_action(
     )
 
 
+def _source_generation_fingerprint_payload(inputs: RecallInputStage) -> dict[str, Any]:
+    manifest = load_json_dict(inputs.source_dir / "manifest.json").data
+    messages_path = inputs.source_dir / "messages.jsonl"
+    try:
+        stat = messages_path.stat()
+    except OSError:
+        stat = None
+    return {
+        "source_thread_key": manifest.get("source_thread_key") or core.workspace_thread_key(inputs.cwd_path),
+        "message_count": manifest.get("message_count"),
+        "turn_count": manifest.get("turn_count"),
+        "messages_size": stat.st_size if stat else None,
+        "messages_mtime_ns": stat.st_mtime_ns if stat else None,
+    }
+
+
+def _record_recall_semantic_position(
+    inputs: RecallInputStage,
+    routes: RecallRouteStage,
+) -> dict[str, Any]:
+    terms = query_policy.split_query_terms([inputs.query])
+    if not terms:
+        return {"status": "skipped", "reason": "no_safe_terms"}
+    source_generation = _source_generation_fingerprint_payload(inputs)
+    source_refs: list[dict[str, Any]] = []
+    for route in routes.routes[:3]:
+        raw_refs = route.get("source_refs") or []
+        if isinstance(raw_refs, list):
+            source_refs.extend(dict(ref) for ref in raw_refs if isinstance(ref, Mapping))
+    try:
+        result = semantic_cue_cache.record_recall_semantic_position(
+            semantic_cue_cache.default_semantic_cues_path(registry_dir=inputs.registry_path),
+            prompt=inputs.query,
+            terms=terms,
+            cwd=inputs.cwd_path,
+            thread_key=str(source_generation.get("source_thread_key") or ""),
+            source_generation=source_generation,
+            source_refs=source_refs,
+            recall_status="ok" if routes.routes else "no_routes",
+            route_count=len(routes.routes),
+        )
+    except OSError as exc:
+        return {
+            "status": "write_failed",
+            "reason": type(exc).__name__,
+            "authority_level": "direction_only",
+            "foreground_visible": False,
+        }
+    return {
+        key: value
+        for key, value in {
+            "status": result.get("status") or "recorded",
+            "updated_count": result.get("updated_count"),
+            "position_count": result.get("position_count"),
+            "terms_recorded_count": result.get("terms_recorded_count"),
+            "authority_level": result.get("authority_level") or "direction_only",
+            "foreground_visible": False,
+            "source_reopen_required_before_claim": True,
+        }.items()
+        if value not in (None, "", [], {})
+    }
+
+
 def _assemble_recall_result(
     inputs: RecallInputStage,
     routes: RecallRouteStage,
@@ -487,6 +555,7 @@ def _assemble_recall_result(
     recovery: RecallRecoveryStage,
     actions: RecallActionStage,
     *,
+    recall_positioning: dict[str, Any] | None,
     run_semantic_gate: bool,
     semantic_gate_mode: str,
     semantic_timeout: int,
@@ -535,6 +604,7 @@ def _assemble_recall_result(
         "background_recovery": recovery.background_recovery_card,
         "repo_familiarity_fallback": actions.repo_familiarity_fallback,
         "current_source_anchor_probe": actions.current_source_anchor_probe,
+        "recall_semantic_positioning": recall_positioning,
         "source_anchor_gate": packets.source_anchor_gate,
         "discussion_atlas_pointer": discussion_atlas_pointer_for_query(
             inputs.query,

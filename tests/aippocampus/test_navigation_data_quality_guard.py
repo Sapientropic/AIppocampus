@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 
 from aippocampus_runtime.navigation import concept_graph as graph
+from aippocampus_runtime.navigation import concept_graph_contributions as contributions
 from aippocampus_runtime.navigation import data_quality_guard as navigation_guard
 
 
@@ -160,6 +161,56 @@ class NavigationDataQualityGuardTests(unittest.TestCase):
         )
         self.assertNotIn("AIppocampus", encoded)
         self.assertNotIn("memory report.md", encoded)
+
+    def test_trace_derived_graph_ingress_and_adoption_gate_use_source_open_lift(self) -> None:
+        trace_rows = [
+            {
+                "trace_id": "positive",
+                "trace_family": "successful_recall_deepen_source_open",
+                "outcome": "source_reopen_success",
+                "source_refs": [{"message_id": "msg-positive", "line": 1}],
+                "opened_anchor_hits": 2,
+            },
+            {
+                "trace_id": "negative",
+                "trace_family": "repo_breadcrumb",
+                "outcome": "wrong_route_drag",
+                "safe_repo_relative": True,
+                "route_id": "route:bad",
+            },
+            {
+                "trace_id": "replay",
+                "trace_family": "repo_breadcrumb",
+                "outcome": "missed_opportunity",
+                "safe_repo_relative": True,
+            },
+        ]
+
+        candidates = contributions.trace_derived_graph_contribution_candidates(trace_rows)
+        metrics = navigation_guard.trace_graph_adoption_metrics(candidates)
+        report = navigation_guard.build_report(
+            associations_path=None,
+            concept_graph_path=None,
+            trace_graph_candidates=candidates,
+        )
+        by_role = {row["training_role"]: row for row in candidates}
+        encoded = json.dumps({"candidates": candidates, "metrics": metrics, "report": report}, ensure_ascii=False)
+
+        self.assertEqual(by_role["positive_demo"]["edge_type"], "trace_positive_reopen")
+        self.assertTrue(by_role["positive_demo"]["active_graph_edge"])
+        self.assertEqual(by_role["hard_negative"]["status"], "parked")
+        self.assertFalse(by_role["hard_negative"]["active_graph_edge"])
+        self.assertEqual(by_role["replay_sample"]["status"], "eval_only")
+        self.assertEqual(metrics["useful_source_open_hit_count"], 1)
+        self.assertEqual(metrics["wrong_route_drag_count"], 1)
+        self.assertEqual(metrics["false_accept_count"], 0)
+        self.assertEqual(metrics["adoption_status"], "active_allowed")
+        self.assertEqual(
+            report["trace_graph_adoption"]["source_open_hits_by_training_role"]["positive_demo"],
+            1,
+        )
+        self.assertNotIn("msg-positive", encoded)
+        self.assertNotIn("route:bad", encoded)
 
 
 if __name__ == "__main__":

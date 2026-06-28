@@ -208,6 +208,7 @@ files = [
     "skills/aippocampus/scripts/aippocampus_runtime/source/__init__.py",
     "skills/aippocampus/scripts/aippocampus_runtime/source/io_kernel.py",
     "skills/aippocampus/scripts/aippocampus_runtime/source/anchors.py",
+    "skills/aippocampus/scripts/aippocampus_runtime/source/agent_trace_admission.py",
     "skills/aippocampus/scripts/aippocampus_runtime/source/agent_self_note_cli.py",
     "skills/aippocampus/scripts/aippocampus_runtime/source/agent_self_notes.py",
     "skills/aippocampus/scripts/aippocampus_runtime/source/behavior_events.py",

@@ -92,6 +92,15 @@ class RecallFeedbackEventTests(unittest.TestCase):
         self.assertEqual(report["metrics"]["source_reopen_success_count"], 1)
         self.assertEqual(report["metrics"]["wrong_route_drag_count"], 1)
         self.assertEqual(report["metrics"]["blocked_count"], 1)
+        self.assertEqual(
+            report["training_signal_summary"]["training_role_counts"]["positive_demo"],
+            2,
+        )
+        self.assertEqual(
+            report["training_signal_summary"]["training_role_counts"]["hard_negative"],
+            2,
+        )
+        self.assertEqual(report["suppression_lifecycle"]["hard_negative_count"], 1)
         self.assertEqual(report["policy_boundary"]["activation_weights_are_not_source_truth"], True)
         self.assertEqual(
             report["policy_boundary"]["default_route_weighting_consumer"],
@@ -111,6 +120,43 @@ class RecallFeedbackEventTests(unittest.TestCase):
             report["policy_boundary"]["default_route_weighting_consumer"],
             "bounded_route_activation_metadata",
         )
+
+    def test_feedback_training_signals_are_contrastive_and_suppression_is_reversible(self) -> None:
+        positive = feedback.active_flow_event(
+            route_id="route:good",
+            route_kind="pathlet",
+            signal="source_reopen_success",
+            source_id="source:good",
+        )
+        negative = feedback.active_flow_event(
+            route_id="route:bad",
+            route_kind="pathlet",
+            signal="wrong_route_drag",
+            source_id="source:bad",
+        )
+        negative["cue_hash"] = "cue-shared"
+        negative["preferred_route_id"] = "route:good"
+        negative["rejected_route_ids"] = ["route:bad"]
+        reopen = feedback.active_flow_event(
+            route_id="route:bad",
+            route_kind="pathlet",
+            signal="source_reopen_success",
+            source_id="source:bad",
+        )
+
+        signals = feedback.feedback_training_signal_rows([positive, negative])
+        by_role = {row["training_role"]: row for row in signals}
+        lifecycle = feedback.suppression_lifecycle_report([negative, reopen], detail="operator")
+        compact = feedback.suppression_lifecycle_report([negative], detail="compact")
+        encoded = json.dumps({"signals": signals, "lifecycle": lifecycle, "compact": compact}, ensure_ascii=False)
+
+        self.assertEqual(by_role["positive_demo"]["training_role"], "positive_demo")
+        self.assertEqual(by_role["hard_negative"]["training_role"], "hard_negative")
+        self.assertTrue(by_role["hard_negative"]["contrastive_pair"])
+        self.assertEqual(lifecycle["overridden_by_positive_count"], 1)
+        self.assertEqual(compact["hard_negative_count"], 1)
+        self.assertNotIn("source:good", encoded)
+        self.assertNotIn("source:bad", encoded)
 
     def test_public_route_feedback_fixture_file_is_replayable(self) -> None:
         fixture_path = REPO_ROOT / "benchmark_corpus" / "route_feedback" / "fixture.json"

@@ -6,7 +6,9 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from aippocampus_runtime import core
 from aippocampus_runtime.mcp import registry_source_routes as mcp_registry_source_routes
+from aippocampus_runtime.recall import agent_continuity
 from aippocampus_runtime.recall import retrieval as retrieval_impl
 from aippocampus_runtime.registry import search as registry_search
 from aippocampus_runtime.source import registry_search as source_registry_search
@@ -99,6 +101,89 @@ class RegistrySearchBudgetTests(unittest.TestCase):
         self.assertEqual(registry_search.REGISTRY_SEARCH_DEFAULT_BUDGET.candidate_limit, 80)
         self.assertEqual(registry_search.REGISTRY_SEARCH_DEFAULT_BUDGET.snippet_chars, 260)
         self.assertEqual(registry_search.REGISTRY_SEARCH_DEFAULT_BUDGET.context_radius, 0)
+
+    def test_agent_recall_positioning_can_route_later_registry_search_to_source(self) -> None:
+        cwd = self.root / "project"
+        clean = self.root / "project-clean-source"
+        registry_dir = self.root / "registry"
+        cwd.mkdir(parents=True)
+        clean.mkdir(parents=True)
+        registry_dir.mkdir(parents=True)
+        message = {
+            "id": "msg-latest-positioned",
+            "message_id": "msg-latest-positioned",
+            "turn_id": "turn-latest-positioned",
+            "source_line": 17,
+            "role": "assistant",
+            "phase": "final_answer",
+            "turn_index": 7,
+            "is_final": True,
+            "text": "This latest source row is reopenable after semantic positioning.",
+        }
+        (clean / "messages.jsonl").write_text(
+            json.dumps(message, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+        thread_key = core.workspace_thread_key(cwd)
+        (registry_dir / "threads.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "threads": [
+                        {
+                            "thread_key": thread_key,
+                            "title": "Current positioned thread",
+                            "paths": {
+                                "clean_source_messages_jsonl": str(clean / "messages.jsonl"),
+                            },
+                        }
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        cue = "activation live shadow PARK latest turn freshness gap"
+
+        recall = agent_continuity.recall(
+            cue,
+            cwd=cwd,
+            clean_source_dir=clean,
+            registry_dir=registry_dir,
+            max_routes=1,
+        )
+        searched = source_registry_search.search_registry_sources(
+            [cue],
+            cwd=cwd,
+            registry_dir=registry_dir,
+            limit=1,
+        )
+        action = searched["foreground_action"]
+        reopened = source_registry_search.open_registry_source_window(
+            registry_dir=registry_dir,
+            thread_key=action["arguments"]["thread_key"],
+            message_id=action["arguments"]["message_id"],
+            line=action["arguments"]["line"],
+        )
+
+        self.assertIn(recall["status"], {"ok", "no_routes"})
+        self.assertEqual(
+            recall["recall_semantic_positioning"]["authority_level"],
+            "direction_only",
+        )
+        self.assertFalse(recall["recall_semantic_positioning"]["foreground_visible"])
+        self.assertFalse(searched["ok"])
+        self.assertEqual(searched["status"], "recall_semantic_position_candidate")
+        self.assertEqual(action["id"], "inspect_recall_semantic_position_source")
+        self.assertEqual(action["claim_boundary"], "semantic_positioning_navigation_only_no_claim")
+        self.assertEqual(action["arguments"]["thread_key"], thread_key)
+        self.assertEqual(action["arguments"]["message_id"], "msg-latest-positioned")
+        self.assertTrue(reopened["ok"], reopened)
+        self.assertEqual(reopened["source_route"]["message_id"], "msg-latest-positioned")
+        self.assertIn(
+            "latest source row",
+            reopened["source_window"][0]["text"],
+        )
 
     def test_deep_registry_search_budget_can_request_more_context(self) -> None:
         captured: dict = {}

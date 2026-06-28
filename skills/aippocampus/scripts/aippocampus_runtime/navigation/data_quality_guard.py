@@ -159,6 +159,69 @@ def association_quality_metrics(associations: Mapping[str, Any]) -> dict[str, An
     }
 
 
+def trace_graph_adoption_metrics(candidates: list[Mapping[str, Any]] | None) -> dict[str, Any]:
+    rows = [row for row in candidates or [] if isinstance(row, Mapping)]
+    role_counts: dict[str, int] = {}
+    status_counts: dict[str, int] = {}
+    source_open_hits_by_role: dict[str, int] = {}
+    wrong_route_drag_by_role: dict[str, int] = {}
+    false_accept_count = 0
+    missed_opportunity_count = 0
+    useful_count = 0
+    encoded_bytes = 0
+    for row in rows:
+        role = str(row.get("training_role") or "none")
+        status = str(row.get("status") or row.get("lifecycle_state") or "unknown")
+        role_counts[role] = role_counts.get(role, 0) + 1
+        status_counts[status] = status_counts.get(status, 0) + 1
+        encoded_bytes += len(json.dumps(row, ensure_ascii=False, sort_keys=True, default=str))
+        verifier_outcome = str(row.get("verifier_outcome") or "").casefold()
+        source_hit = bool(
+            verifier_outcome == "source_open_hit"
+            or (
+                row.get("active_graph_edge") is True
+                and role in {"positive_demo", "process_supervision"}
+                and int(row.get("source_ref_count") or 0) > 0
+            )
+        )
+        if source_hit:
+            source_open_hits_by_role[role] = source_open_hits_by_role.get(role, 0) + 1
+            useful_count += 1
+        wrong_route = bool(role == "hard_negative" or verifier_outcome in {"wrong_route", "dismissed"})
+        if wrong_route:
+            wrong_route_drag_by_role[role] = wrong_route_drag_by_role.get(role, 0) + 1
+        if row.get("active_graph_edge") is True and role in {"hard_negative", "replay_sample", "hindsight_relabel"}:
+            false_accept_count += 1
+        if verifier_outcome == "missed_opportunity" or role == "replay_sample":
+            missed_opportunity_count += 1
+    generated = len(rows)
+    foreground_exposed = sum(1 for row in rows if row.get("foreground_exposed") or row.get("active_graph_edge"))
+    verifier_seen = sum(1 for row in rows if row.get("verifier_outcome") or row.get("active_graph_edge"))
+    return {
+        "kind": "aippocampus_trace_graph_adoption_metrics",
+        "candidate_count": generated,
+        "generated_candidate_count": generated,
+        "foreground_exposed_candidate_count": foreground_exposed,
+        "verifier_seen_candidate_count": verifier_seen,
+        "useful_source_open_hit_count": useful_count,
+        "wrong_route_drag_count": sum(wrong_route_drag_by_role.values()),
+        "false_accept_count": false_accept_count,
+        "missed_opportunity_count": missed_opportunity_count,
+        "source_open_hits_by_training_role": dict(sorted(source_open_hits_by_role.items())),
+        "wrong_route_drag_by_training_role": dict(sorted(wrong_route_drag_by_role.items())),
+        "training_role_counts": dict(sorted(role_counts.items())),
+        "status_counts": dict(sorted(status_counts.items())),
+        "bytes_per_useful_candidate": round(encoded_bytes / useful_count, 2) if useful_count else None,
+        "adoption_status": "active_allowed" if useful_count and not false_accept_count else "staging_only",
+        "policy_boundary": {
+            "edge_count_is_not_success_metric": True,
+            "source_open_lift_required_for_active_adoption": True,
+            "hard_negatives_cannot_be_active_edges": True,
+            "replay_samples_are_eval_material_until_promoted": True,
+        },
+    }
+
+
 def _threshold_findings(
     metrics: Mapping[str, Any],
     *,
@@ -261,6 +324,7 @@ def build_report(
     max_weak_cjk_anchor_ratio: float = DEFAULT_MAX_WEAK_CJK_ANCHOR_RATIO,
     max_graph_low_value_cjk_fragments: int = DEFAULT_MAX_GRAPH_LOW_VALUE_CJK_FRAGMENTS,
     max_subconscious_collapsed_hubs: int = DEFAULT_MAX_SUBCONSCIOUS_COLLAPSED_HUBS,
+    trace_graph_candidates: list[Mapping[str, Any]] | None = None,
 ) -> dict[str, Any]:
     associations_metrics = _empty_association_metrics()
     if associations_path and associations_path.exists():
@@ -305,6 +369,7 @@ def build_report(
             "subconscious_hub_quality": graph_health.get("subconscious_hub_quality", {}),
             "warnings": graph_health.get("warnings", []),
         },
+        "trace_graph_adoption": trace_graph_adoption_metrics(trace_graph_candidates),
         "findings": findings,
         "thresholds": {
             "max_low_value_cjk_ratio": max_low_value_cjk_ratio,

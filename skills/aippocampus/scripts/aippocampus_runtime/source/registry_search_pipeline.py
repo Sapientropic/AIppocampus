@@ -29,6 +29,9 @@ from aippocampus_runtime.source.registry_search_evidence import (
     query_anchor_rank,
 )
 from aippocampus_runtime.source.registry_search_render import render_registry_search_payload
+from aippocampus_runtime.source.registry_search_semantic_position import (
+    semantic_position_registry_candidates,
+)
 from aippocampus_runtime.source.registry_search_skips import (
     registry_entry_ref,
     registry_entry_search_skip,
@@ -58,6 +61,7 @@ class RegistrySearchInput:
     query_gate: Mapping[str, Any]
     budget: Any
     repo_doc_matches: list[dict[str, Any]]
+    semantic_position_matches: list[dict[str, Any]]
     max_elapsed_ms: int | None = None
     started_at: float = 0.0
 
@@ -71,6 +75,7 @@ class RegistrySearchEvaluation:
     skipped_entries: list[dict[str, Any]]
     skipped_reason_counts: dict[str, int]
     unavailable_source_count: int
+    semantic_position_candidates: list[dict[str, Any]]
     budget_exhausted: bool = False
     elapsed_ms: float = 0.0
     max_elapsed_ms: int | None = None
@@ -280,6 +285,16 @@ def _load_registry_search_input(
         limit=limit,
         snippet_chars=DEFAULT_PUBLIC_SNIPPET_CHARS,
     )
+    from aippocampus_runtime.recall.semantic_cue_cache import (
+        default_semantic_cues_path,
+        semantic_position_matches,
+    )
+
+    semantic_positions = semantic_position_matches(
+        default_semantic_cues_path(registry_dir=registry_root),
+        terms=terms,
+        limit=5,
+    )
     return RegistrySearchInput(
         registry_root=registry_root,
         registry_json=registry_json,
@@ -289,6 +304,7 @@ def _load_registry_search_input(
         query_gate=query_gate,
         budget=REGISTRY_SEARCH_DEEP_BUDGET if search_budget == "deep" else None,
         repo_doc_matches=repo_doc_matches,
+        semantic_position_matches=semantic_positions,
         max_elapsed_ms=max_elapsed_ms,
         started_at=perf_counter(),
     )
@@ -370,6 +386,13 @@ def _collect_registry_search_matches(
         for entry in inputs.registry_payload.get("threads") or []
         if isinstance(entry, Mapping)
     ]
+    semantic_position_candidates = semantic_position_registry_candidates(
+        positions=inputs.semantic_position_matches,
+        entries=entries,
+        include_paths=include_paths,
+        build_match=_registry_match,
+        snippet_chars=DEFAULT_PUBLIC_SNIPPET_CHARS,
+    )
     for index, entry in enumerate(entries):
         if _deadline_exhausted(deadline):
             budget_exhausted = True
@@ -463,6 +486,7 @@ def _collect_registry_search_matches(
         skipped_entries=skipped_entries,
         skipped_reason_counts=skipped_reason_counts,
         unavailable_source_count=unavailable_source_count,
+        semantic_position_candidates=semantic_position_candidates,
         budget_exhausted=budget_exhausted,
         elapsed_ms=round((perf_counter() - inputs.started_at) * 1000, 3),
         max_elapsed_ms=inputs.max_elapsed_ms,

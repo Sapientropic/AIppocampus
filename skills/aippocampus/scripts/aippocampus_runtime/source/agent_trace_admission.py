@@ -14,6 +14,7 @@ from collections import Counter
 from collections.abc import Iterable, Mapping
 from typing import Any
 
+from aippocampus_runtime.core import stable_json_join_id
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 
 ADMISSION_LEVELS = (
@@ -31,6 +32,44 @@ TRAINING_ROLES = (
     "replay_sample",
     "hindsight_relabel",
 )
+TRAINING_SIGNAL_KIND = "aippocampus_behavior_training_signal"
+SPECULATIVE_CANDIDATE_KIND = "aippocampus_speculative_navigation_candidate"
+LEDGER_SCHEMA_VERSION = 1
+CANDIDATE_SCHEMA_VERSION = 1
+
+VERIFIER_OUTCOMES = (
+    "source_open_hit",
+    "actionable_reopenable_route",
+    "wrong_route",
+    "dismissed",
+    "manual_search_after_route",
+    "privacy_blocked",
+    "stale",
+    "duplicate",
+    "needs_refine",
+    "missed_opportunity",
+)
+
+POSITIVE_OUTCOMES = {
+    "source_reopen_success",
+    "reopened_deepened",
+    "source_open_hit",
+    "actionable_reopenable_route",
+    "user_confirmed",
+    "useful_final_action",
+    "prevented_failure",
+}
+NEGATIVE_OUTCOMES = {
+    "wrong_route_drag",
+    "wrong_route",
+    "dismissed",
+    "ignored",
+    "blocked",
+    "manual_search_after_route",
+    "unrelated_repo_familiarity",
+}
+REPLAY_OUTCOMES = {"missed_opportunity", "manual_recovered", "replay_sample"}
+HINDSIGHT_OUTCOMES = {"hindsight_relabel", "narrower_route_found", "failed_but_relabelable"}
 
 RAW_TRACE_FAMILIES = {
     "raw_stdout",
@@ -82,10 +121,15 @@ def _success(row: Mapping[str, Any]) -> bool:
     status = _text(row.get("status") or row.get("outcome")).casefold()
     if status in {"ok", "pass", "passed", "success", "succeeded"}:
         return True
-    try:
-        return int(row.get("exit_code")) == 0
-    except (TypeError, ValueError):
-        return False
+    exit_code = row.get("exit_code")
+    if isinstance(exit_code, int):
+        return exit_code == 0
+    if isinstance(exit_code, str):
+        try:
+            return int(exit_code) == 0
+        except ValueError:
+            return False
+    return False
 
 
 def _safe_row_blob(row: Mapping[str, Any]) -> str:
@@ -95,6 +139,133 @@ def _safe_row_blob(row: Mapping[str, Any]) -> str:
 
 def _contains_private_shape(row: Mapping[str, Any]) -> bool:
     return bool(SECRET_OR_PATH_RE.search(_safe_row_blob(row)))
+
+
+def _cue_hash(cue: Any = None, row: Mapping[str, Any] | None = None) -> str:
+    row = row or {}
+    explicit = _text(row.get("cue_hash") or row.get("prompt_hash") or row.get("query_hash"))
+    if explicit:
+        return explicit[:80]
+    cue_text = _text(cue or row.get("cue") or row.get("query") or row.get("prompt"))
+    if not cue_text:
+        return ""
+    return stable_json_join_id(
+        "cue",
+        re.sub(r"\s+", " ", cue_text),
+        ensure_ascii=False,
+        default_str=False,
+        length=20,
+    )
+
+
+def _safe_optional_token(value: Any, *, prefix: str) -> str:
+    text = _text(value)
+    if not text:
+        return ""
+    redacted = redact_sensitive_values(redact_private_paths(text))
+    if redacted != text or SECRET_OR_PATH_RE.search(redacted):
+        return stable_json_join_id(
+            prefix,
+            redacted,
+            ensure_ascii=False,
+            default_str=False,
+            length=20,
+        )
+    return redacted[:160]
+
+
+def _source_ref_count(row: Mapping[str, Any]) -> int:
+    refs = row.get("source_refs")
+    if not isinstance(refs, list):
+        return 0
+    return sum(1 for ref in refs if isinstance(ref, Mapping))
+
+
+def _source_ref_digest(row: Mapping[str, Any]) -> str:
+    refs = row.get("source_refs")
+    if not isinstance(refs, list) or not refs:
+        return ""
+    safe_refs = []
+    for ref in refs[:8]:
+        if not isinstance(ref, Mapping):
+            continue
+        safe_refs.append(
+            {
+                "message_id": _text(ref.get("message_id"))[:80],
+                "turn_id": _text(ref.get("turn_id"))[:80],
+                "thread_key": _text(ref.get("thread_key"))[:120],
+                "line": ref.get("line") or ref.get("source_line"),
+            }
+        )
+    return (
+        stable_json_join_id("src", safe_refs, ensure_ascii=False, default_str=False, length=20)
+        if safe_refs
+        else ""
+    )
+
+
+def _training_role_from_outcome(outcome: str, fallback: str) -> str:
+    normalized = outcome.casefold()
+    if normalized in POSITIVE_OUTCOMES:
+        return "positive_demo"
+    if normalized in NEGATIVE_OUTCOMES:
+        return "hard_negative"
+    if normalized in REPLAY_OUTCOMES:
+        return "replay_sample"
+    if normalized in HINDSIGHT_OUTCOMES:
+        return "hindsight_relabel"
+    return fallback if fallback in TRAINING_ROLES else "none"
+
+
+def _priority_bucket(score: int) -> str:
+    if score >= 4:
+        return "high_information"
+    if score >= 2:
+        return "medium"
+    return "low"
+
+
+def learning_priority_for_signal(row: Mapping[str, Any]) -> dict[str, Any]:
+    """Return a public-safe replay/promotion priority for a training row.
+
+    This is a queueing hint, not foreground ranking magic. It helps rare,
+    previously missed, source-opened, multilingual, or manual-recovered cues
+    get replayed before generic successes.
+    """
+
+    score = 0
+    reasons: list[str] = []
+    if _source_ref_count(row) or row.get("source_ref_count"):
+        score += 1
+        reasons.append("has_source_or_reopen_ref")
+    if row.get("opened_anchor_hits") or row.get("source_open_anchor_hits"):
+        score += 1
+        reasons.append("source_anchor_hits")
+    if row.get("previously_missed") or row.get("low_confidence_before") or row.get("manual_recovered"):
+        score += 1
+        reasons.append("previously_missed_or_manual_recovered")
+    if row.get("multilingual") or row.get("alias_like") or row.get("non_obvious_alias"):
+        score += 1
+        reasons.append("multilingual_or_non_obvious_alias")
+    if row.get("manual_search_reduced") or row.get("wrong_route_drag_reduced"):
+        score += 1
+        reasons.append("reduced_manual_or_wrong_route_drag")
+    try:
+        frequency = int(row.get("cue_frequency") or row.get("hit_count") or 0)
+    except (TypeError, ValueError):
+        frequency = 0
+    if 0 < frequency <= 2:
+        score += 1
+        reasons.append("rare_or_low_frequency")
+    if frequency > 8:
+        score -= 1
+        reasons.append("generic_high_frequency")
+    return {
+        "score": max(0, score),
+        "bucket": _priority_bucket(score),
+        "reason_codes": reasons[:8],
+        "policy": "promotion_replay_priority_not_foreground_ranking",
+    }
 
 
 def _candidate_lifecycle_for(admission_level: str) -> str:
@@ -211,6 +382,317 @@ def classify_trace_row(row: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def behavior_training_signal_from_trace(
+    row: Mapping[str, Any],
+    *,
+    cue: Any = None,
+    outcome: str | None = None,
+) -> dict[str, Any]:
+    """Project one trace/feedback row into the shared training-signal ledger."""
+
+    classification = classify_trace_row(row)
+    normalized_outcome = _text(
+        outcome
+        or row.get("outcome")
+        or row.get("signal")
+        or row.get("verifier_outcome")
+        or row.get("status")
+    ).casefold()
+    role = _training_role_from_outcome(normalized_outcome, classification["training_role"])
+    if role == "none" and classification["admission_level"] == "reopenable_route":
+        role = "process_supervision"
+    signal_id = stable_json_join_id(
+        "bts",
+        classification["trace_family"],
+        classification["admission_level"],
+        role,
+        _cue_hash(cue, row),
+        _safe_optional_token(row.get("route_id") or row.get("candidate_id"), prefix="route"),
+        _source_ref_digest(row),
+        ensure_ascii=False,
+        default_str=False,
+        length=20,
+    )
+    signal: dict[str, Any] = {
+        "schema_version": LEDGER_SCHEMA_VERSION,
+        "kind": TRAINING_SIGNAL_KIND,
+        "signal_id": signal_id,
+        "trace_id": classification["trace_id"],
+        "trace_family": classification["trace_family"],
+        "admission_level": classification["admission_level"],
+        "training_role": role,
+        "authority_join": classification["authority_join"],
+        "candidate_lifecycle_state": classification["candidate_lifecycle_state"],
+        "graph_projection": classification["graph_projection"],
+        "cue_hash": _cue_hash(cue, row),
+        "route_id": _safe_optional_token(row.get("route_id") or row.get("candidate_id"), prefix="route"),
+        "preferred_route_id": _safe_optional_token(row.get("preferred_route_id"), prefix="route"),
+        "rejected_route_ids": [
+            token
+            for value in row.get("rejected_route_ids") or []
+            if (token := _safe_optional_token(value, prefix="route"))
+        ][:8],
+        "outcome": normalized_outcome,
+        "source_ref_count": _source_ref_count(row),
+        "source_ref_digest": _source_ref_digest(row),
+        "opened_anchor_hits": int(row.get("opened_anchor_hits") or row.get("source_open_anchor_hits") or 0),
+        "micro_data_card": classification["micro_data_card"],
+        "privacy_boundary": {
+            "stores_raw_prompt_text": False,
+            "stores_raw_tool_output": False,
+            "stores_full_command_args": False,
+            "stores_local_path": False,
+            "stores_private_source_excerpt": False,
+        },
+        "policy_boundary": {
+            "training_signal_not_source_truth": True,
+            "source_reopen_required_for_claims": True,
+            "priority_not_foreground_ranking_magic": True,
+        },
+    }
+    signal["learning_priority"] = learning_priority_for_signal({**dict(row), **signal})
+    if signal["preferred_route_id"] and signal["rejected_route_ids"]:
+        signal["contrastive_pair"] = {
+            "cue_hash": signal["cue_hash"],
+            "preferred_route_id": signal["preferred_route_id"],
+            "rejected_route_ids": signal["rejected_route_ids"],
+            "scope": _safe_optional_token(row.get("scope") or row.get("scope_key"), prefix="scope"),
+            "freshness": _text(row.get("freshness") or "recheck_on_new_feedback"),
+        }
+    return signal
+
+
+def project_behavior_training_ledger(
+    rows: Iterable[Mapping[str, Any]],
+    *,
+    detail: str = "compact",
+) -> dict[str, Any]:
+    signals = [
+        dict(row)
+        if row.get("kind") == TRAINING_SIGNAL_KIND
+        else behavior_training_signal_from_trace(row)
+        for row in rows
+        if isinstance(row, Mapping)
+    ]
+    role_counts = Counter(str(row.get("training_role") or "none") for row in signals)
+    admission_counts = Counter(str(row.get("admission_level") or "operator_only") for row in signals)
+    priority_counts = Counter(
+        str((row.get("learning_priority") or {}).get("bucket") or "low")
+        for row in signals
+    )
+    if detail in {"detail", "full", "operator"}:
+        samples = []
+        for row in signals[:8]:
+            samples.append(
+                {
+                    "signal_id": row.get("signal_id"),
+                    "training_role": row.get("training_role"),
+                    "admission_level": row.get("admission_level"),
+                    "candidate_lifecycle_state": row.get("candidate_lifecycle_state"),
+                    "learning_priority": row.get("learning_priority"),
+                    "has_contrastive_pair": bool(row.get("contrastive_pair")),
+                    "source_ref_count": row.get("source_ref_count"),
+                }
+            )
+        return {
+            "kind": "aippocampus_behavior_training_signal_ledger",
+            "schema_version": LEDGER_SCHEMA_VERSION,
+            "detail": detail,
+            "status": "ok",
+            "signal_count": len(signals),
+            "training_role_counts": dict(sorted(role_counts.items())),
+            "admission_counts": dict(sorted(admission_counts.items())),
+            "learning_priority_counts": dict(sorted(priority_counts.items())),
+            "contrastive_pair_count": sum(1 for row in signals if row.get("contrastive_pair")),
+            "sample_rows": samples,
+            "privacy_boundary": {
+                "sample_rows_omit_raw_prompts_tools_paths_and_source_text": True,
+            },
+        }
+    active_count = sum(
+        1
+        for row in signals
+        if row.get("training_role") in {"positive_demo", "process_supervision", "hard_negative"}
+    )
+    return {
+        "kind": "aippocampus_behavior_training_signal_ledger",
+        "schema_version": LEDGER_SCHEMA_VERSION,
+        "detail": "compact",
+        "status": "has_training_signals" if active_count else "diagnostic_only",
+        "decision": "use_training_signals_as_navigation_calibration_only",
+        "signal_count": len(signals),
+        "active_signal_count": active_count,
+        "claim_boundary": "behavior_training_signals_are_not_source_truth",
+    }
+
+
+def draft_navigation_candidate_from_signal(
+    signal: Mapping[str, Any],
+    *,
+    producer_family: str = "behavior_training_signal",
+) -> dict[str, Any]:
+    cue_hash = _text(signal.get("cue_hash"))
+    route_id = _safe_optional_token(signal.get("route_id"), prefix="route")
+    dedupe_key = stable_json_join_id(
+        "navcand",
+        producer_family,
+        cue_hash,
+        route_id,
+        signal.get("training_role"),
+        signal.get("source_ref_digest"),
+        ensure_ascii=False,
+        default_str=False,
+        length=20,
+    )
+    return {
+        "schema_version": CANDIDATE_SCHEMA_VERSION,
+        "kind": SPECULATIVE_CANDIDATE_KIND,
+        "candidate_id": dedupe_key,
+        "dedupe_key": dedupe_key,
+        "producer_family": producer_family,
+        "signal_id": signal.get("signal_id"),
+        "cue_hash": cue_hash,
+        "route_id": route_id,
+        "training_role": signal.get("training_role") or "none",
+        "admission_level": signal.get("admission_level") or "operator_only",
+        "lifecycle_state": "draft_candidate",
+        "intended_use": "source_reopen_navigation",
+        "claim_boundary": "candidate_requires_verifier_or_source_open_before_claim",
+        "learning_priority": signal.get("learning_priority") or {},
+        "source_ref_count": int(signal.get("source_ref_count") or 0),
+        "source_ref_digest": signal.get("source_ref_digest") or "",
+    }
+
+
+def verify_navigation_candidate(
+    candidate: Mapping[str, Any],
+    *,
+    outcome: str,
+    reason: str = "",
+) -> dict[str, Any]:
+    normalized = _text(outcome).casefold()
+    if normalized not in VERIFIER_OUTCOMES:
+        normalized = "needs_refine"
+    next_state = {
+        "source_open_hit": "source_open_claim_ready",
+        "actionable_reopenable_route": "actionable_reopenable_route",
+        "wrong_route": "rejected_hard_negative",
+        "dismissed": "rejected_hard_negative",
+        "manual_search_after_route": "rejected_hard_negative",
+        "privacy_blocked": "parked_privacy_blocked",
+        "stale": "parked_stale_recheck",
+        "duplicate": "deduped_duplicate",
+        "needs_refine": "staging_needs_refine",
+        "missed_opportunity": "replay_only_missed_opportunity",
+    }[normalized]
+    role = str(candidate.get("training_role") or "none")
+    if next_state == "rejected_hard_negative":
+        role = "hard_negative"
+    elif next_state == "replay_only_missed_opportunity" and role == "none":
+        role = "replay_sample"
+    verified = dict(candidate)
+    verified["verifier_outcome"] = normalized
+    verified["lifecycle_state"] = next_state
+    verified["training_role"] = role
+    verified["verified_reason"] = _safe_optional_token(reason, prefix="reason") if reason else ""
+    verified["foreground_eligible"] = next_state in {
+        "actionable_reopenable_route",
+        "source_open_claim_ready",
+    }
+    verified["claim_boundary"] = (
+        "bounded_to_opened_source_scope"
+        if next_state == "source_open_claim_ready"
+        else "source_reopen_required_before_claim"
+    )
+    return verified
+
+
+def dedupe_navigation_candidates(candidates: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    by_key: dict[str, dict[str, Any]] = {}
+    for candidate in candidates:
+        if not isinstance(candidate, Mapping):
+            continue
+        key = _text(candidate.get("dedupe_key") or candidate.get("candidate_id"))
+        if not key:
+            continue
+        existing = by_key.get(key)
+        current = dict(candidate)
+        if not existing:
+            by_key[key] = current
+            continue
+        existing_priority = int((existing.get("learning_priority") or {}).get("score") or 0)
+        current_priority = int((current.get("learning_priority") or {}).get("score") or 0)
+        existing_foreground = bool(existing.get("foreground_eligible"))
+        current_foreground = bool(current.get("foreground_eligible"))
+        if (current_foreground, current_priority) > (existing_foreground, existing_priority):
+            by_key[key] = current
+    return sorted(
+        by_key.values(),
+        key=lambda row: (
+            not bool(row.get("foreground_eligible")),
+            -int((row.get("learning_priority") or {}).get("score") or 0),
+            str(row.get("candidate_id") or ""),
+        ),
+    )
+
+
+def project_candidate_funnel(
+    candidates: Iterable[Mapping[str, Any]],
+    *,
+    detail: str = "compact",
+) -> dict[str, Any]:
+    deduped = dedupe_navigation_candidates(candidates)
+    lifecycle_counts = Counter(str(row.get("lifecycle_state") or "unknown") for row in deduped)
+    producer_counts = Counter(str(row.get("producer_family") or "unknown") for row in deduped)
+    role_counts = Counter(str(row.get("training_role") or "none") for row in deduped)
+    foreground = [row for row in deduped if row.get("foreground_eligible")]
+    if detail in {"detail", "full", "operator"}:
+        return {
+            "kind": "aippocampus_speculative_navigation_candidate_funnel",
+            "schema_version": CANDIDATE_SCHEMA_VERSION,
+            "detail": detail,
+            "status": "ok",
+            "candidate_count": len(deduped),
+            "foreground_exposed_count": len(foreground),
+            "lifecycle_counts": dict(sorted(lifecycle_counts.items())),
+            "producer_counts": dict(sorted(producer_counts.items())),
+            "training_role_counts": dict(sorted(role_counts.items())),
+            "privacy_boundary": {
+                "candidate_inventory_omits_raw_prompts_tools_paths_and_source_text": True,
+            },
+        }
+    if not foreground:
+        return {
+            "kind": "aippocampus_speculative_navigation_candidate_funnel",
+            "schema_version": CANDIDATE_SCHEMA_VERSION,
+            "detail": "compact",
+            "status": "diagnostic_only",
+            "decision": "no_candidate_reaches_foreground",
+            "claim_boundary": "candidate_funnel_not_source_truth",
+        }
+    first = foreground[0]
+    return {
+        "kind": "aippocampus_speculative_navigation_candidate_funnel",
+        "schema_version": CANDIDATE_SCHEMA_VERSION,
+        "detail": "compact",
+        "status": "foreground_route_available",
+        "decision": "open_verified_candidate_source",
+        "foreground_action": {
+            "id": "open_candidate_source",
+            "tool_name": "agent_deepen",
+            "mutation_risk": "read_only",
+            "claim_boundary": first.get("claim_boundary") or "source_reopen_required_before_claim",
+        },
+        "primary_candidate": {
+            "producer_family": first.get("producer_family"),
+            "lifecycle_state": first.get("lifecycle_state"),
+            "training_role": first.get("training_role"),
+            "claim_boundary": first.get("claim_boundary"),
+        },
+        "claim_boundary": "candidate_navigation_only_until_source_open",
+    }
+
+
 def _priority(item: Mapping[str, Any]) -> int:
     return {
         "bounded_evidence_after_open": 0,
@@ -282,7 +764,19 @@ def project_trace_admission(
 
 __all__ = [
     "ADMISSION_LEVELS",
+    "CANDIDATE_SCHEMA_VERSION",
+    "LEDGER_SCHEMA_VERSION",
+    "SPECULATIVE_CANDIDATE_KIND",
+    "TRAINING_SIGNAL_KIND",
     "TRAINING_ROLES",
+    "VERIFIER_OUTCOMES",
+    "behavior_training_signal_from_trace",
     "classify_trace_row",
+    "dedupe_navigation_candidates",
+    "draft_navigation_candidate_from_signal",
+    "learning_priority_for_signal",
+    "project_behavior_training_ledger",
+    "project_candidate_funnel",
     "project_trace_admission",
+    "verify_navigation_candidate",
 ]
