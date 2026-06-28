@@ -170,7 +170,8 @@ def selected_active_clauses(
             for term in TASK_FAMILY_TERMS.get(family, ())
             if term in guidance or term in applies
         )
-        return family_hits * 4 + term_hits, str(clause.get("clause_id") or "")
+        route_first_bonus = 6 if "follow it before broad manual search" in guidance else 0
+        return family_hits * 4 + term_hits + route_first_bonus, str(clause.get("clause_id") or "")
 
     ranked = sorted(active, key=score, reverse=True)
     selected = [clause for clause in ranked if score(clause)[0] > 0][:limit]

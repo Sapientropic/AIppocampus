@@ -16,6 +16,12 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.core import compact_text, now_utc, sanitize_external_model_text
+from aippocampus_runtime.recall.feedback.vocabulary import (
+    HARD_NEGATIVE_FEEDBACK_SIGNALS,
+    PARKED_FEEDBACK_SIGNALS,
+    POSITIVE_FEEDBACK_SIGNALS,
+    normalize_feedback_signal,
+)
 from aippocampus_runtime.recall.semantic.confidence_policy import meets_active_cue_confidence
 from aippocampus_runtime.registry.api import registry_paths, unique_preserve
 from aippocampus_runtime.source.agent_trace_admission import learning_priority_for_signal
@@ -38,31 +44,9 @@ MAX_FALSE_POSITIVE_REASONS = 4
 MAX_POSITION_TERMS = 18
 MAX_POSITION_INTENTS = 6
 MIN_ACTIVE_CUE_FEEDBACK_SCORE = 2
-POSITIVE_RECALL_FEEDBACK_SIGNALS = {
-    "source_reopen_success",
-    "source_open",
-    "user_confirmed",
-    "explicit_useful",
-    "prevented_failure",
-}
-HARD_NEGATIVE_RECALL_FEEDBACK_SIGNALS = {
-    "wrong_route_drag",
-    "wrong_route",
-    "dismissed",
-    "ignored",
-    "manual_search_after_route",
-    "context_suppressed",
-    "blocked",
-}
-PARKED_RECALL_FEEDBACK_SIGNALS = {
-    "parked",
-    "park",
-    "privacy_blocked",
-    "stale",
-    "off_phase",
-    "needs_refine",
-    "duplicate",
-}
+POSITIVE_RECALL_FEEDBACK_SIGNALS = POSITIVE_FEEDBACK_SIGNALS | frozenset({"source_open", "explicit_useful"})
+HARD_NEGATIVE_RECALL_FEEDBACK_SIGNALS = HARD_NEGATIVE_FEEDBACK_SIGNALS
+PARKED_RECALL_FEEDBACK_SIGNALS = PARKED_FEEDBACK_SIGNALS
 SENSITIVE_TERM_RE = re.compile(
     r"\b[A-Za-z0-9_]*(?:TOKEN|SECRET|PASSWORD|API_KEY|ACCESS_KEY)[A-Za-z0-9_]*\s*=\s*\S+",
     re.I,
@@ -225,7 +209,12 @@ def refresh_status(row: dict[str, Any]) -> dict[str, Any]:
     explicit_useful_count = int(row.get("explicit_useful_feedback_count") or 0)
     confidence = float(row.get("confidence") or 0.0)
     has_refs = bool(row.get("source_refs"))
-    last_signal = str(row.get("last_feedback_signal") or "").casefold()
+    raw_last_signal = str(row.get("last_feedback_signal") or "").casefold()
+    last_signal = (
+        raw_last_signal
+        if raw_last_signal in {"source_open", "explicit_useful"}
+        else normalize_feedback_signal(raw_last_signal, default=raw_last_signal)
+    )
     feedback_score = cue_feedback_score(row)
     row["feedback_score"] = feedback_score
     row["active_feedback_score_threshold"] = MIN_ACTIVE_CUE_FEEDBACK_SCORE

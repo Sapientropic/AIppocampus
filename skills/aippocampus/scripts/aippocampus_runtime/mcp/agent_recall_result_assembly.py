@@ -10,6 +10,7 @@ from aippocampus_runtime.contracts import (
     canonical_foreground_action_fields,
     normalize_foreground_action,
 )
+from aippocampus_runtime.foreground_compact_language import strip_compact_policy_vocabulary
 from aippocampus_runtime.mcp import agent_recall_result_projection as result_projection
 from aippocampus_runtime.mcp import agent_recall_route_projection as route_projection
 from aippocampus_runtime.mcp.compact_profile import strip_compact_foreground_debug_fields
@@ -33,7 +34,6 @@ _RECALL_COMPACT_ACTION_KEYS = frozenset(
         "requires",
         "template_only",
         "mutation_risk",
-        "claim_boundary",
         "actionability",
         "route_index",
         "primary_route_relation",
@@ -72,9 +72,6 @@ def assemble_compact_recall_payload(
             action_options=safe_next_actions,
             foreground_action=foreground_action,
         )
-    can_use_for = ["next_action_choice"]
-    if not context.labels_low_specificity and not exact_wording_source_search_primary:
-        can_use_for.append("route_selection")
     apw_primary = _action_id(foreground_action) == "deepen_associative_path_fallback"
     if apw_primary:
         miss_recovery_card = None
@@ -90,11 +87,12 @@ def assemble_compact_recall_payload(
         "background_recovery_card": background_recovery,
         "routes": route_receipts,
         "repo_familiarity_fallback": repo_familiarity_fallback,
-        "claim_boundary": _compact_claim_boundary(can_use_for=can_use_for),
     }
     result.update(action_fields)
     compact_card = build_mcp_compact_card(
-        strip_compact_foreground_debug_fields(core.strip_empty(result)),
+        strip_compact_policy_vocabulary(
+            strip_compact_foreground_debug_fields(core.strip_empty(result))
+        ),
         surface="mcp_agent_recall_compact",
     )
     # `surface` is an internal routing hint. Recall compact is the flagship
@@ -140,7 +138,7 @@ def _compact_recall_action_fields(
     if safe_actions:
         result["safe_next_actions"] = safe_actions
     if len(candidate_safe_actions) > len(safe_actions):
-        result["operator_details_available"] = True
+        result["details_available"] = True
     return result
 
 
@@ -153,12 +151,6 @@ def _compact_recall_action(action: Any) -> dict[str, Any]:
         for key, value in normalized.items()
         if key in _RECALL_COMPACT_ACTION_KEYS and value not in (None, "", [], {})
     }
-
-
-def _compact_claim_boundary(*, can_use_for: list[str]) -> str:
-    if "route_selection" in can_use_for:
-        return "route_selection_ok_after_source_reopen"
-    return "next_action_only_reopen_before_claims"
 
 
 def _action_request_index(action: Mapping[str, Any]) -> int | None:

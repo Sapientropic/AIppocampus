@@ -205,9 +205,9 @@ def _extract_clauses(markdown: str, *, skill_id: str, description: str) -> list[
         )
 
     workflow_candidates: list[str] = []
-    for section in ("agent stance", "first moves", "workflow"):
+    for section in ("agent stance", "first moves", "useful foreground follow-ups", "workflow"):
         workflow_candidates.extend(_bullets(sections.get(section, [])))
-    for index, guidance in enumerate(workflow_candidates[:6], start=1):
+    for index, guidance in enumerate(workflow_candidates[:8], start=1):
         clauses.append(
             _clause(skill_slug=skill_slug, kind="workflow", index=index, guidance=guidance)
         )

@@ -49,6 +49,7 @@ an architecture decision, not a routine way to make a test pass.
 - `aippocampus_runtime/ops/capture_consolidation_boundary.py`
 - `aippocampus_runtime/ops/cognitive_observatory.py`
 - `aippocampus_runtime/ops/cognitive_observatory_actions.py`
+- `aippocampus_runtime/ops/cognitive_observatory_summary.py`
 - `aippocampus_runtime/ops/cold_archive.py`
 - `aippocampus_runtime/ops/coordination_topology.py`
 - `aippocampus_runtime/ops/foreground_output_audit.py`
@@ -95,6 +96,7 @@ an architecture decision, not a routine way to make a test pass.
 - `aippocampus_runtime/ops/storage_governance_contract.py`
 - `aippocampus_runtime/ops/storage_governance_projection.py`
 - `aippocampus_runtime/ops/successor_evidence.py`
+- `aippocampus_runtime/ops/successor_closeout_evidence.py`
 - `aippocampus_runtime/ops/successor_issue_state.py`
 - `aippocampus_runtime/ops/telepathy_coordination_packet.py`
 - `aippocampus_runtime/ops/telepathy_handoff_store.py`

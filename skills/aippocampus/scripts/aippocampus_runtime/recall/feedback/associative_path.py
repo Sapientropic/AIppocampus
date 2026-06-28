@@ -13,31 +13,11 @@ from typing import Any
 
 from aippocampus_runtime import core
 from aippocampus_runtime.mcp import recall_navigation
-
-POSITIVE_OUTCOMES = {"source_reopened", "source_helped_task", "task_advanced"}
-NEGATIVE_OUTCOMES = {
-    "action_ignored",
-    "source_not_useful",
-    "wrong_hop",
-    "irrelevant_drag",
-    "stale_route",
-    "superseded_route",
-    "private_or_wrong_scope",
-    "manual_search_needed_first",
-}
-OUTCOME_TO_SIGNAL = {
-    "source_reopened": "source_reopen_success",
-    "source_helped_task": "user_confirmed",
-    "task_advanced": "user_confirmed",
-    "action_ignored": "ignored",
-    "source_not_useful": "wrong_route_drag",
-    "wrong_hop": "wrong_route_drag",
-    "irrelevant_drag": "wrong_route_drag",
-    "stale_route": "superseded",
-    "superseded_route": "superseded",
-    "private_or_wrong_scope": "blocked",
-    "manual_search_needed_first": "wrong_route_drag",
-}
+from aippocampus_runtime.recall.feedback.vocabulary import (
+    APW_FOLLOWTHROUGH_NEGATIVE_OUTCOMES,
+    APW_FOLLOWTHROUGH_OUTCOME_TO_SIGNAL,
+    APW_FOLLOWTHROUGH_POSITIVE_OUTCOMES,
+)
 
 
 def _text(value: Any, limit: int = 120) -> str:
@@ -64,9 +44,9 @@ def build_followthrough_event(
     note: str = "",
 ) -> dict[str, Any]:
     safe_outcome = _text(outcome, 80)
-    if safe_outcome not in OUTCOME_TO_SIGNAL:
+    if safe_outcome not in APW_FOLLOWTHROUGH_OUTCOME_TO_SIGNAL:
         raise ValueError(f"unknown APW follow-through outcome: {safe_outcome}")
-    signal = OUTCOME_TO_SIGNAL[safe_outcome]
+    signal = APW_FOLLOWTHROUGH_OUTCOME_TO_SIGNAL[safe_outcome]
     event = {
         "kind": "aippocampus_apw_followthrough_feedback",
         "schema_version": 1,
@@ -77,8 +57,8 @@ def build_followthrough_event(
         "scope_bucket": _text(scope_bucket, 80) or "public_default",
         "freshness": _text(freshness, 80) or "current",
         "occurred_at": occurred_at or core.now_utc(),
-        "positive": safe_outcome in POSITIVE_OUTCOMES,
-        "negative": safe_outcome in NEGATIVE_OUTCOMES,
+        "positive": safe_outcome in APW_FOLLOWTHROUGH_POSITIVE_OUTCOMES,
+        "negative": safe_outcome in APW_FOLLOWTHROUGH_NEGATIVE_OUTCOMES,
         "source_refs": _clean_refs(source_refs or []),
         "authority": "navigation_calibration_only",
         "claim_boundary": "feedback_is_not_source_truth",

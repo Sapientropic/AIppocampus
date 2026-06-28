@@ -561,11 +561,9 @@ class RouteReadinessObservatoryTests(unittest.TestCase):
         )
         self.assertEqual(payload["useful_now_count"], 0)
         self.assertEqual(payload["activation_surface_count"], 0)
-        self.assertEqual(
-            payload["operator_json_command"],
-            "aippocampus observatory --operator-json",
-        )
-        self.assertTrue(payload["operator_json_available"])
+        self.assertTrue(payload["details_available"])
+        self.assertNotIn("operator_json_command", payload)
+        self.assertNotIn("operator_json_available", payload)
         self.assertNotIn("route_readiness", payload)
         self.assertNotIn("activation_authority", payload)
         self.assertNotIn("control_authority_audit", payload)
@@ -603,7 +601,8 @@ class RouteReadinessObservatoryTests(unittest.TestCase):
         self.assertIn("panel_previews", payload)
         self.assertTrue(payload["panel_previews"]["useful_now"])
         self.assertLessEqual(len(payload["panel_previews"]["useful_now"]), 3)
-        self.assertEqual(payload["full_audit_flag"], "--operator-json")
+        self.assertTrue(payload["details_available"])
+        self.assertNotIn("full_audit_flag", payload)
         self.assertEqual(
             payload["foreground_action"]["command"],
             "aippocampus observatory --summary-json",
@@ -611,7 +610,7 @@ class RouteReadinessObservatoryTests(unittest.TestCase):
         self.assertNotIn("agent_next_action", payload)
         self.assertEqual(payload["foreground_action_contract"], "foreground-action-v2")
         self.assertNotIn(payload["foreground_action"], payload["safe_next_actions"])
-        self.assertIn("control_state_changes", payload["claim_boundary"]["must_reopen_for"])
+        self.assertNotIn("claim_boundary", payload)
         self.assertNotIn("route_readiness", payload)
         self.assertNotIn("activation_authority", payload)
 

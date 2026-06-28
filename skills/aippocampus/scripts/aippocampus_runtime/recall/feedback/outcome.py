@@ -15,47 +15,17 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.recall.feedback.vocabulary import (
+    HELPFUL_RECALL_OUTCOME_SIGNALS,
+    NO_VISIBLE_EFFECT_RECALL_OUTCOME_SIGNALS,
+    NOISY_OR_HARMFUL_RECALL_OUTCOME_SIGNALS,
+    normalize_recall_outcome_signal,
+)
 from aippocampus_runtime.source.io_kernel import append_jsonl_dict_rows, load_jsonl_dict_rows
 
 SCHEMA_VERSION = 1
 AUTHORITY = "retrieval_tuning_only_not_source_truth"
 PRIVACY_BOUNDARY = "local_counts_and_route_ids_no_raw_prompt_or_source_text"
-ALLOWED_OUTCOMES = {
-    "answer_improved_after_deepen",
-    "source_reopen_success",
-    "wrong_route_drag",
-    "ignored",
-    "requery_after_miss",
-    "blocked_boundary",
-    "user_correction",
-    "deepened",
-    "superseded",
-    "accepted_route",
-    "dismissed_anti_nag",
-    "prevented_failure",
-    "stale_route_revival",
-    "manual_search_avoided",
-    "no_visible_effect",
-    "recall_added_noise",
-    "user_confirmed_helpful",
-    "user_reprompted_with_thread_id",
-}
-HELPFUL_OUTCOMES = {
-    "answer_improved_after_deepen",
-    "accepted_route",
-    "deepened",
-    "manual_search_avoided",
-    "prevented_failure",
-    "source_reopen_success",
-    "user_confirmed_helpful",
-}
-NOISY_OR_HARMFUL_OUTCOMES = {
-    "recall_added_noise",
-    "requery_after_miss",
-    "user_correction",
-    "user_reprompted_with_thread_id",
-    "wrong_route_drag",
-}
 
 
 def _now_utc() -> str:
@@ -112,7 +82,7 @@ def build_recall_outcome_event(
     timestamp: str | None = None,
 ) -> dict[str, Any]:
     shape = _shape_for_query(raw_query)
-    signal = outcome_signal if outcome_signal in ALLOWED_OUTCOMES else "ignored"
+    signal = normalize_recall_outcome_signal(outcome_signal)
     candidate_refs = _candidate_refs(delivered_candidates)
     return {
         "kind": "aippocampus_recall_outcome_feedback",
@@ -183,11 +153,11 @@ def recall_outcome_report(path: str | Path) -> dict[str, Any]:
         by_query_shape[str(event.get("query_shape_hash") or "unknown")] += 1
         if int(event.get("delivered_candidate_count") or 0) > 0:
             surfaced_count += 1
-        if outcome in HELPFUL_OUTCOMES:
+        if outcome in HELPFUL_RECALL_OUTCOME_SIGNALS:
             helped_count += 1
-        if outcome in NOISY_OR_HARMFUL_OUTCOMES:
+        if outcome in NOISY_OR_HARMFUL_RECALL_OUTCOME_SIGNALS:
             noisy_count += 1
-        if outcome in {"ignored", "no_visible_effect", "blocked_boundary", "superseded"}:
+        if outcome in NO_VISIBLE_EFFECT_RECALL_OUTCOME_SIGNALS:
             no_visible_effect_count += 1
     repeated = [
         {"query_shape": shape, "count": count}

@@ -12,21 +12,24 @@ from __future__ import annotations
 
 import json
 from collections import Counter
-from collections.abc import Iterable, Mapping
+from collections.abc import Collection, Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.core import now_utc, stable_json_join_id
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 from aippocampus_runtime.recall.feedback.suppression_lifecycle import (
-    ACTIVE_FLOW_SIGNALS,
-    DEFAULT_SIGNAL_DELTAS,
-    OUTCOME_ALIASES,
     current_feedback_state,
     feedback_trace_family,
     foreground_eligible,
     route_reason_codes,
     suppression_lifecycle_report,
+)
+from aippocampus_runtime.recall.feedback.vocabulary import (
+    ACTIVE_FLOW_SIGNALS,
+    DEFAULT_SIGNAL_DELTAS,
+    OUTCOME_ALIASES,
+    normalize_feedback_signal,
 )
 from aippocampus_runtime.source.agent_trace_admission import (
     behavior_training_signal_from_trace,
@@ -63,7 +66,13 @@ ROUTE_KINDS = {"pathlet", "continuity_domain", "sequence_packet", "active_path"}
 class InvalidFeedbackValue(ValueError):
     """Raised when feedback would otherwise be silently misclassified."""
 
-    def __init__(self, field: str, value: Any, accepted: set[str], aliases: Mapping[str, str] | None = None):
+    def __init__(
+        self,
+        field: str,
+        value: Any,
+        accepted: Collection[str],
+        aliases: Mapping[str, str] | None = None,
+    ):
         self.field = field
         self.value = value
         self.accepted = set(accepted)
@@ -102,14 +111,14 @@ def _safe_alias_value(value: Any) -> str:
     return safe[:72]
 
 
-def _safe_kind(value: Any, accepted: set[str], default: str) -> str:
+def _safe_kind(value: Any, accepted: Collection[str], default: str) -> str:
     text = str(value or "").strip()
     return text if text in accepted else default
 
 
 def _validated_kind(
     value: Any,
-    accepted: set[str],
+    accepted: Collection[str],
     *,
     field: str,
     aliases: Mapping[str, str] | None = None,
@@ -230,12 +239,9 @@ def active_flow_event(
     weight_delta: float | None = None,
     reason: str = "",
 ) -> dict[str, Any]:
-    safe_signal = _validated_kind(
-        signal,
-        ACTIVE_FLOW_SIGNALS,
-        field="outcome",
-        aliases=OUTCOME_ALIASES,
-    )
+    safe_signal = normalize_feedback_signal(signal, default="")
+    if safe_signal not in ACTIVE_FLOW_SIGNALS:
+        raise InvalidFeedbackValue("outcome", signal, ACTIVE_FLOW_SIGNALS, OUTCOME_ALIASES)
     safe_route_kind = _validated_kind(route_kind, ROUTE_KINDS, field="route_kind")
     delta = DEFAULT_SIGNAL_DELTAS[safe_signal] if weight_delta is None else safe_float(weight_delta)
     normalized_refs = _canonical_source_refs(source_ref=source_ref, source_refs=source_refs)

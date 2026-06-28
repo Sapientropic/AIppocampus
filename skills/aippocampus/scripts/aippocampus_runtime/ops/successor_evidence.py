@@ -16,6 +16,12 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.core import dict_or_empty
+from aippocampus_runtime.ops.successor_closeout_evidence import (
+    BOUNDED_VALIDATION_DEFERRED_PATHS,
+    HARD_BLOCKER_EXECUTION_PATHS,
+    declared_successor_issue_numbers,
+    execution_path_status,
+)
 from aippocampus_runtime.ops.successor_issue_state import (
     load_github_successor_issue_state as _load_github_successor_issue_state,
 )
@@ -128,42 +134,6 @@ SUCCESSOR_ISSUES: dict[int, tuple[str, str]] = {
 
 LIVE_OR_PROVIDER_TRACKS = {"external_provider", "live_blocked"}
 
-HARD_BLOCKER_EXECUTION_PATHS: dict[int, dict[str, Any]] = {
-    1929: {
-        "path_kind": "open_successor_issue",
-        "successor_issue": 2043,
-        "blocker": "declared provider/model artifact required for AMemGym fixed-arm score",
-    },
-    1931: {
-        "path_kind": "open_successor_issue",
-        "successor_issue": 2043,
-        "blocker": "declared provider/model artifact required for MemoryAgentBench generation/judge run",
-    },
-    1942: {
-        "path_kind": "open_successor_issue",
-        "successor_issue": 2044,
-        "blocker": "host-faithful private compaction-survival/live trace required",
-    },
-    1944: {
-        "path_kind": "open_successor_issue",
-        "successor_issue": 2044,
-        "blocker": "agency timing and annoyance require live trace evidence",
-    },
-    1945: {
-        "path_kind": "open_successor_issue",
-        "successor_issue": 2044,
-        "blocker": "observed PreToolUse action-time hint behavior requires live host trace",
-    },
-}
-
-BOUNDED_VALIDATION_DEFERRED_PATHS: dict[int, dict[str, Any]] = {
-    1981: {
-        "path_kind": "open_successor_issue",
-        "successor_issue": 2045,
-        "blocker": "retained private/local E2E50 case shortfall",
-    }
-}
-
 COMMON_METRIC_KEYS = {
     "public_replay_case_count",
     "fixture_contract_case_count",
@@ -235,18 +205,6 @@ def _public_inventory(repo_root: Path) -> dict[str, Any]:
     }
 
 
-def _declared_successor_issue_numbers() -> list[int]:
-    numbers: set[int] = set()
-    for path in [
-        *HARD_BLOCKER_EXECUTION_PATHS.values(),
-        *BOUNDED_VALIDATION_DEFERRED_PATHS.values(),
-    ]:
-        number = int(path.get("successor_issue") or 0)
-        if number:
-            numbers.add(number)
-    return sorted(numbers)
-
-
 def load_github_successor_issue_state(
     *,
     repo: str | None = None,
@@ -254,7 +212,7 @@ def load_github_successor_issue_state(
     limit: int = 200,
 ) -> dict[int, dict[str, Any]]:
     return _load_github_successor_issue_state(
-        declared_issue_numbers=_declared_successor_issue_numbers(),
+        declared_issue_numbers=declared_successor_issue_numbers(),
         repo=repo,
         min_issue_number=min_issue_number,
         limit=limit,
@@ -282,68 +240,6 @@ def _open_issue_numbers(issue_state: Mapping[int, Mapping[str, Any]]) -> list[in
         for number, row in issue_state.items()
         if str(row.get("state") or "open").casefold() == "open"
     )
-
-
-def _execution_path_status(
-    path: Mapping[str, Any] | None,
-    *,
-    live_state: Mapping[int, Mapping[str, Any]],
-    github_state_checked: bool,
-) -> dict[str, Any]:
-    if not path:
-        return {
-            "path_kind": "missing",
-            "ok": False,
-            "status": "missing_successor_or_deferred_pointer",
-        }
-    result = dict(path)
-    successor_issue = int(result.get("successor_issue") or 0)
-    if successor_issue:
-        result["successor_issue"] = successor_issue
-        live_row = live_state.get(successor_issue)
-        if live_row:
-            successor_state = str(live_row.get("state") or "").casefold()
-            pointer_kind = str(live_row.get("closeout_pointer_kind") or "none")
-            result["successor_state"] = successor_state
-            if live_row.get("closedAt"):
-                result["successor_closed_at"] = live_row.get("closedAt")
-            result["successor_closeout_pointer_kind"] = pointer_kind
-            result["successor_closeout_pointer_present"] = bool(
-                live_row.get("closeout_pointer_present")
-            )
-            if successor_state == "open":
-                result["status"] = "open_successor"
-                result["ok"] = True
-            elif pointer_kind == "artifact_pointer":
-                result["status"] = "closed_successor_artifact_pointer"
-                result["ok"] = True
-            elif pointer_kind == "explicit_deferral_pointer":
-                result["status"] = "closed_successor_deferred_pointer"
-                result["ok"] = True
-            else:
-                result["status"] = "closed_successor_without_artifact_pointer"
-                result["ok"] = False
-        elif github_state_checked and live_state and successor_issue <= max(live_state):
-            result["status"] = "successor_not_seen_in_live_github_state"
-            result["ok"] = False
-        elif github_state_checked:
-            result["status"] = "declared_successor_outside_live_fixture_range"
-            result["ok"] = True
-        else:
-            result["status"] = "declared_successor_not_live_checked"
-            result["ok"] = True
-        return result
-    if result.get("deferred_pointer"):
-        result["status"] = "deferred_pointer_recorded"
-        result["ok"] = True
-        return result
-    if result.get("reopened_owner"):
-        result["status"] = "reopened_owner_recorded"
-        result["ok"] = True
-        return result
-    result["status"] = "missing_successor_or_deferred_pointer"
-    result["ok"] = False
-    return result
 
 
 def _base_counts(inventory: Mapping[str, Any]) -> dict[str, int]:
@@ -1714,10 +1610,10 @@ def build_successor_evidence_sweep_report(
         "native_parent_link_verified_count": native_parent_count,
         "hard_coded_inventory_only": False,
         "github_state_checked": github_state_checked,
-        "declared_successor_issue_numbers": _declared_successor_issue_numbers(),
+        "declared_successor_issue_numbers": declared_successor_issue_numbers(),
         "closed_declared_successor_issue_numbers": [
             number
-            for number in _declared_successor_issue_numbers()
+            for number in declared_successor_issue_numbers()
             if str(live_state.get(number, {}).get("state") or "").casefold().startswith("closed")
         ],
     }
@@ -1747,7 +1643,7 @@ def build_successor_evidence_sweep_report(
         )
         hard_blocker_path = None
         if live_blocked:
-            hard_blocker_path = _execution_path_status(
+            hard_blocker_path = execution_path_status(
                 HARD_BLOCKER_EXECUTION_PATHS.get(number),
                 live_state=live_state,
                 github_state_checked=github_state_checked,
@@ -1757,7 +1653,7 @@ def build_successor_evidence_sweep_report(
                 hard_blocker_without_path.append(number)
         bounded_deferred_path = None
         if number in BOUNDED_VALIDATION_DEFERRED_PATHS:
-            bounded_deferred_path = _execution_path_status(
+            bounded_deferred_path = execution_path_status(
                 BOUNDED_VALIDATION_DEFERRED_PATHS.get(number),
                 live_state=live_state,
                 github_state_checked=github_state_checked,

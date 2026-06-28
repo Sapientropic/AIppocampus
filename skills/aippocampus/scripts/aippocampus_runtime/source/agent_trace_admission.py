@@ -14,6 +14,11 @@ from collections.abc import Iterable, Mapping
 from typing import Any
 
 from aippocampus_runtime.core import stable_json_join_id
+from aippocampus_runtime.recall.feedback.vocabulary import (
+    feedback_signal_is_negative,
+    feedback_signal_is_positive,
+    normalize_feedback_signal,
+)
 from aippocampus_runtime.source import agent_trace_families
 from aippocampus_runtime.source.io_kernel import normalize_source_refs
 
@@ -50,22 +55,12 @@ VERIFIER_OUTCOMES = (
     "missed_opportunity",
 )
 
-POSITIVE_OUTCOMES = {
-    "source_reopen_success",
-    "reopened_deepened",
+TRACE_POSITIVE_OUTCOMES = {
     "source_open_hit",
     "actionable_reopenable_route",
-    "user_confirmed",
     "useful_final_action",
-    "prevented_failure",
 }
-NEGATIVE_OUTCOMES = {
-    "wrong_route_drag",
-    "wrong_route",
-    "dismissed",
-    "ignored",
-    "blocked",
-    "manual_search_after_route",
+TRACE_NEGATIVE_OUTCOMES = {
     "unrelated_repo_familiarity",
 }
 REPLAY_OUTCOMES = {"missed_opportunity", "manual_recovered", "replay_sample"}
@@ -205,10 +200,11 @@ def _source_ref_digest(row: Mapping[str, Any]) -> str:
 
 
 def _training_role_from_outcome(outcome: str, fallback: str) -> str:
-    normalized = outcome.casefold()
-    if normalized in POSITIVE_OUTCOMES:
+    folded = outcome.casefold()
+    normalized = normalize_feedback_signal(folded, default=folded)
+    if normalized in TRACE_POSITIVE_OUTCOMES or feedback_signal_is_positive(normalized):
         return "positive_demo"
-    if normalized in NEGATIVE_OUTCOMES:
+    if normalized in TRACE_NEGATIVE_OUTCOMES or feedback_signal_is_negative(normalized):
         return "hard_negative"
     if normalized in REPLAY_OUTCOMES:
         return "replay_sample"
@@ -412,13 +408,14 @@ def behavior_training_signal_from_trace(
     """Project one trace/feedback row into the shared training-signal ledger."""
 
     classification = classify_trace_row(row)
-    normalized_outcome = _text(
+    raw_outcome = _text(
         outcome
         or row.get("outcome")
         or row.get("signal")
         or row.get("verifier_outcome")
         or row.get("status")
     ).casefold()
+    normalized_outcome = normalize_feedback_signal(raw_outcome, default=raw_outcome)
     role = _training_role_from_outcome(normalized_outcome, classification["training_role"])
     if role == "positive_demo" and classification["admission_level"] == "operator_only":
         role = "none"

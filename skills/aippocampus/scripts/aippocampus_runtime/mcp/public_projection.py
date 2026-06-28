@@ -17,6 +17,10 @@ from aippocampus_runtime.contracts import (
     strip_foreground_action_legacy_aliases,
 )
 from aippocampus_runtime.first_recall_readiness import compact_health_first_recall_fields
+from aippocampus_runtime.foreground_compact_language import (
+    compact_details_flag,
+    strip_compact_policy_vocabulary,
+)
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 from aippocampus_runtime.source.latest_reply import MAX_COMPACT_FINAL_ANSWER_CHARS
 
@@ -609,7 +613,8 @@ def compact_health_payload(payload: dict[str, Any]) -> dict[str, Any]:
     ]
     if write_actions:
         card["manage_command"] = "aippocampus maintenance plan --summary-json"
-    return core.strip_empty(card)
+    card.update(compact_details_flag(card))
+    return core.strip_empty(strip_compact_policy_vocabulary(card))
 
 
 def compact_register_thread_payload(payload: dict[str, Any]) -> dict[str, Any]:

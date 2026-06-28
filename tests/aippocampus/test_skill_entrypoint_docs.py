@@ -79,7 +79,7 @@ class SkillEntrypointDocsTests(unittest.TestCase):
             "aippocampus agent deepen --request 1 "
             "--recall-selector <emitted-selector> --json"
         )
-        repair_section = skill_text.index("Repair, setup, status, provider, storage")
+        repair_section = skill_text.index("Setup, repair, storage, provider")
         self.assertLess(
             skill_text.index(recall_cmd),
             skill_text.index(selector_deepen_cmd),
@@ -91,7 +91,7 @@ class SkillEntrypointDocsTests(unittest.TestCase):
         for phrase in (
             recall_cmd,
             selector_deepen_cmd,
-            "direct clean-source search",
+            "source search/open",
             "Primary foreground loop",
         ):
             self.assertLess(skill_text.index(phrase), repair_section)

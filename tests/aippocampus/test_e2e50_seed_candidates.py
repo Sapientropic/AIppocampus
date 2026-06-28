@@ -6,15 +6,9 @@ import unittest
 from pathlib import Path
 
 from tests.aippocampus.import_path_helpers import import_smoke_module
+from tests.aippocampus.jsonl_helpers import write_jsonl_rows
 
 scanner = import_smoke_module("smoke_e2e50_seed_candidates")
-
-def write_jsonl(path: Path, rows: list[dict[str, object]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows),
-        encoding="utf-8",
-    )
 
 class E2E50SeedCandidateScannerTests(unittest.TestCase):
     def test_scanner_selects_long_compacted_thread_without_leaking_source_text(self) -> None:
@@ -65,8 +59,8 @@ class E2E50SeedCandidateScannerTests(unittest.TestCase):
                 {"event_id": "evt-precompact-private", "hook_stage": "PreCompact"},
                 {"event_id": "evt-postcompact-private", "hook_stage": "PostCompact"},
             ]
-            write_jsonl(messages_path, messages)
-            write_jsonl(events_path, events)
+            write_jsonl_rows(messages_path, messages)
+            write_jsonl_rows(events_path, events)
             registry_path.parent.mkdir(parents=True)
             registry_path.write_text(
                 json.dumps(
@@ -117,7 +111,7 @@ class E2E50SeedCandidateScannerTests(unittest.TestCase):
             registry_path = root / "registry" / "threads.json"
             messages_path = root / "clean-source" / "short" / "messages.jsonl"
             events_path = root / "clean-source" / "short" / "events.jsonl"
-            write_jsonl(
+            write_jsonl_rows(
                 messages_path,
                 [
                     {
@@ -128,7 +122,7 @@ class E2E50SeedCandidateScannerTests(unittest.TestCase):
                     }
                 ],
             )
-            write_jsonl(events_path, [])
+            write_jsonl_rows(events_path, [])
             registry_path.parent.mkdir(parents=True)
             registry_path.write_text(
                 json.dumps(

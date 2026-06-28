@@ -387,7 +387,7 @@ class ArchitectureBoundaryTests(unittest.TestCase):
                 "--detail",
                 "full",
                 "--changed-file",
-                "skills/aippocampus/scripts/aippocampus_runtime/mcp/agent_recall_projection.py",
+                "skills/aippocampus/scripts/aippocampus_runtime/source/registry_search_render.py",
             ],
             text=True,
             encoding="utf-8",

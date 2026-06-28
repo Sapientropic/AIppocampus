@@ -9,6 +9,10 @@ from typing import Any
 
 from aippocampus_runtime.core import stable_json_join_id
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
+from aippocampus_runtime.recall.feedback.vocabulary import (
+    POSITIVE_FEEDBACK_SIGNALS,
+    normalize_feedback_signal,
+)
 
 RAW_TRACE_FAMILIES = {
     "raw_stdout",
@@ -43,9 +47,7 @@ KNOWN_TRACE_FAMILIES = (
     | FINAL_CLOSEOUT_FAMILIES
     | REPO_BREADCRUMB_FAMILIES
 )
-POSITIVE_SOURCE_OPEN_OUTCOMES = {
-    "source_reopen_success",
-    "reopened_deepened",
+POSITIVE_SOURCE_OPEN_OUTCOMES = POSITIVE_FEEDBACK_SIGNALS | {
     "source_open_hit",
     "actionable_reopenable_route",
 }
@@ -86,7 +88,9 @@ def raw_family(row: Mapping[str, Any]) -> str:
     event_kind = _text(row.get("event_kind")).casefold()
     if event_kind:
         return event_kind
-    signal = _text(row.get("signal") or row.get("outcome")).casefold()
+    signal = normalize_feedback_signal(
+        _text(row.get("signal") or row.get("outcome")).casefold()
+    )
     if signal in POSITIVE_SOURCE_OPEN_OUTCOMES:
         return "successful_recall_deepen_source_open"
     return _text(row.get("kind")).casefold()

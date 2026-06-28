@@ -2,6 +2,21 @@
 
 from __future__ import annotations
 
+try:
+    from tools.aippocampus.docs.instruction_surface_observatory_registry import (
+        OBSERVATORY_INSTRUCTION_SURFACE_CLASSIFIED_FILES,
+    )
+    from tools.aippocampus.docs.instruction_surface_recall_feedback_registry import (
+        RECALL_FEEDBACK_INSTRUCTION_SURFACE_CLASSIFIED_FILES,
+    )
+except ModuleNotFoundError:  # pragma: no cover - direct script fallback
+    from instruction_surface_observatory_registry import (  # type: ignore[no-redef]
+        OBSERVATORY_INSTRUCTION_SURFACE_CLASSIFIED_FILES,
+    )
+    from instruction_surface_recall_feedback_registry import (  # type: ignore[no-redef]
+        RECALL_FEEDBACK_INSTRUCTION_SURFACE_CLASSIFIED_FILES,
+    )
+
 INSTRUCTION_SURFACE_CLASSIFIED_FILES = {
     "skills/aippocampus/scripts/aippocampus_runtime/mcp/agent_recall_projection.py": {
         "classification": "compact_projection_owner",
@@ -281,30 +296,6 @@ INSTRUCTION_SURFACE_CLASSIFIED_FILES = {
             "owns same-machine last-recall selector/cache navigation text and "
             "typed cache-read recovery; local handles stay private and source "
             "claims require deepen/open follow-through"
-        ),
-    },
-    "skills/aippocampus/scripts/aippocampus_runtime/recall/associative_path_fallback.py": {
-        "classification": "apw_fallback_projection_owner",
-        "owner": "#2678/#2651",
-        "why": (
-            "owns APW fallback cards and deepen-request projection; policy gating "
-            "lives in the focused sibling helper after the #2678 split"
-        ),
-    },
-    "skills/aippocampus/scripts/aippocampus_runtime/recall/associative_path_fallback_policy.py": {
-        "classification": "apw_fallback_policy_owner",
-        "owner": "#2678/#2651",
-        "why": (
-            "owns APW fallback promotion and candidate-input gating; source-open "
-            "proof remains in fallback/deepen follow-through, not policy text"
-        ),
-    },
-    "skills/aippocampus/scripts/aippocampus_runtime/recall/associative_path_inputs.py": {
-        "classification": "apw_input_sidecar_owner",
-        "owner": "#2635/#2636/#2651",
-        "why": (
-            "owns APW sidecar input-status and diagnostic wording; sidecars guide "
-            "navigation only and source-open proof stays in deepen/open probes"
         ),
     },
     "skills/aippocampus/scripts/aippocampus_runtime/recall/background_findings.py": {
@@ -1020,3 +1011,5 @@ INSTRUCTION_SURFACE_CLASSIFIED_FILES = {
         ),
     },
 }
+INSTRUCTION_SURFACE_CLASSIFIED_FILES.update(OBSERVATORY_INSTRUCTION_SURFACE_CLASSIFIED_FILES)
+INSTRUCTION_SURFACE_CLASSIFIED_FILES.update(RECALL_FEEDBACK_INSTRUCTION_SURFACE_CLASSIFIED_FILES)

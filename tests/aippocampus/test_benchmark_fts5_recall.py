@@ -8,19 +8,13 @@ from io import StringIO
 from pathlib import Path
 
 from tests.aippocampus.import_path_helpers import import_benchmark_module
+from tests.aippocampus.jsonl_helpers import write_jsonl_rows
 
 benchmark = import_benchmark_module("benchmark_fts5_recall")
 from aippocampus_runtime.recall.index_builder import make_sqlite
 from aippocampus_runtime.recall.query_policy import split_query_terms
 from aippocampus_runtime.recall.retrieval import search_hybrid_index
 
-
-def write_jsonl(path: Path, rows: list[dict]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows),
-        encoding="utf-8",
-    )
 
 class Fts5RecallBenchmarkTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -53,7 +47,7 @@ class Fts5RecallBenchmarkTests(unittest.TestCase):
                 "text": "A different final answer about unrelated project notes.",
             },
         ]
-        write_jsonl(self.clean / "messages.jsonl", self.messages)
+        write_jsonl_rows(self.clean / "messages.jsonl", self.messages)
         make_sqlite(
             self.sqlite,
             [
@@ -125,7 +119,7 @@ class Fts5RecallBenchmarkTests(unittest.TestCase):
             "Connect with postgres://user:pass@db.internal:5432/app "
             "and contact person@example.com for access."
         )
-        write_jsonl(
+        write_jsonl_rows(
             self.clean / "messages.jsonl",
             [
                 *self.messages,

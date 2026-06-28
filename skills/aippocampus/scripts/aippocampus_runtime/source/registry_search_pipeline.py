@@ -363,6 +363,29 @@ def _profile_registry_match(
     }
 
 
+def _user_exact_phrase_overrides_artifact_demotion(
+    match: Mapping[str, Any],
+    profile: Mapping[str, Any],
+    artifact_role: Mapping[str, Any],
+) -> bool:
+    """Keep exact user wording reopenable even when it mentions validation terms.
+
+    Artifact demotion protects agents from treating assistant closeout reports,
+    fixtures, and proof transcripts as product truth. A user's exact instruction
+    is different: if the query phrase is present in a user clean-source row, the
+    foreground action should reopen that row instead of falling back to a generic
+    route note. Control/goal/injected instruction carriers stay demoted.
+    """
+
+    if str(match.get("role") or "").casefold() != "user":
+        return False
+    if not profile.get("exact_phrase_match"):
+        return False
+    if artifact_role.get("role") == "control_or_goal_context_artifact":
+        return False
+    return match_has_direct_source_open_route(match)
+
+
 def _collect_registry_search_matches(
     inputs: RegistrySearchInput,
     *,
@@ -464,6 +487,15 @@ def _collect_registry_search_matches(
                 query_text=inputs.query_text,
                 query_gate=inputs.query_gate,
             )
+            if _user_exact_phrase_overrides_artifact_demotion(match, profile, artifact_role):
+                artifact_role = {
+                    **artifact_role,
+                    "demote": False,
+                    "topic_bearing": True,
+                    "user_exact_phrase_source": True,
+                }
+                match["artifact_role"] = artifact_role
+                match["artifact_demoted"] = False
             match["query_match_profile"] = profile
             if profile["accepted"]:
                 matches.append(match)

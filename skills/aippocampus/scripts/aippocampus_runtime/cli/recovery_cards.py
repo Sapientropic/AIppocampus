@@ -391,7 +391,7 @@ def storage_chooser_payload() -> dict[str, Any]:
 def storage_gc_recovery_payload() -> dict[str, Any]:
     return foreground_chooser_card(
         kind="aippocampus_storage_gc_recovery",
-        decision="choose dry-run preview or explicit rebuildable cleanup apply",
+        decision="choose a dry-run preview before any storage cleanup apply",
         choices=[
             foreground_shell_action(
                 action_id="preview_bounded_storage_gc",
@@ -408,14 +408,6 @@ def storage_gc_recovery_payload() -> dict[str, Any]:
                 why="Use this when a compact no-write decision card is enough.",
                 mutation_risk="read_only",
                 claim_boundary="operator_diagnostic_not_source_evidence",
-            ),
-            foreground_shell_action(
-                action_id="apply_rebuildable_storage_gc_after_review",
-                label="Apply rebuildable cleanup after review",
-                command="aippocampus storage gc --apply --class rebuildable --include-active --summary-json --cwd .",
-                why="Apply is explicit and limited to candidates that pass rebuildability and safety checks.",
-                mutation_risk="explicit_local_delete_of_rebuildable_cache",
-                claim_boundary="operator_action_not_source_evidence",
             ),
         ],
     )

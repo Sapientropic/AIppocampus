@@ -175,7 +175,7 @@ class RegistrySearchBudgetTests(unittest.TestCase):
         self.assertFalse(searched["ok"])
         self.assertEqual(searched["status"], "recall_semantic_position_candidate")
         self.assertEqual(action["id"], "inspect_recall_semantic_position_source")
-        self.assertEqual(action["claim_boundary"], "semantic_positioning_navigation_only_no_claim")
+        self.assertNotIn("claim_boundary", action)
         self.assertEqual(action["arguments"]["thread_key"], thread_key)
         self.assertEqual(action["arguments"]["message_id"], "msg-latest-positioned")
         self.assertTrue(reopened["ok"], reopened)
@@ -347,6 +347,71 @@ class RegistrySourceSearchUsefulnessTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.tmp.cleanup()
 
+    def test_exact_user_artifact_phrase_beats_generic_route_note_action(self) -> None:
+        exact_phrase = "agent recall -> agent deepen -> opened source anchor hits"
+
+        def fake_deep_search_entry_result(
+            entry: dict,
+            terms: list[str],
+            *,
+            max_hits: int,
+            search_budget: object = None,
+            deadline: object = None,
+        ) -> dict:
+            del entry, terms, max_hits, search_budget, deadline
+            return {
+                "hits": [
+                    {
+                        "source": "route_note",
+                        "message_id": "msg_route_note",
+                        "line": 7,
+                        "role": "assistant",
+                        "phase": "route_note",
+                        "material_class": "agent_trace_navigation",
+                        "score": 90.0,
+                        "snippet": "Route note: active recall issue handoff, but not the requested exact source.",
+                        "matched_route_note_terms": ["agent", "recall", "active"],
+                        "query_match_profile": {
+                            "accepted": True,
+                            "exact_phrase_match": False,
+                            "matched_distinctive_anchor_count": 2,
+                            "distinctive_anchor_coverage": 0.5,
+                        },
+                    },
+                    {
+                        "source": "clean_source",
+                        "message_id": "msg_user_exact",
+                        "line": 42,
+                        "role": "user",
+                        "score": 10.0,
+                        "snippet": (
+                            "每个 recall/APW/MCP issue close 前必须贴真实命令："
+                            f"{exact_phrase}。PR closeout 必须 dogfood。"
+                        ),
+                    },
+                ]
+            }
+
+        with patch.object(
+            registry_search,
+            "deep_search_entry_result",
+            side_effect=fake_deep_search_entry_result,
+        ):
+            result = source_registry_search.search_registry_sources(
+                [exact_phrase],
+                registry_dir=self.root,
+                cwd=self.root,
+                record_last_search=True,
+            )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["matches"][0]["message_id"], "msg_user_exact")
+        self.assertFalse(result["first_match_usefulness"]["first_hit_demoted"])
+        self.assertNotIn("artifact_role", result["matches"][0])
+        self.assertNotIn("artifact_demoted", result["matches"][0])
+        self.assertIn("--message-id msg_user_exact", result["foreground_action"]["command"])
+        self.assertNotIn("--message-id msg_route_note", result["foreground_action"]["command"])
+
     def test_useful_target_hit_requires_top_hit_query_anchor(self) -> None:
         def fake_deep_search_entry_result(
             entry: dict,
@@ -387,8 +452,8 @@ class RegistrySourceSearchUsefulnessTests(unittest.TestCase):
         self.assertEqual(result["match_count"], 0)
         self.assertEqual(result["suppressed_low_coverage_match_count"], 1)
         self.assertNotIn("first_match_usefulness", result)
-        self.assertEqual(result["claim_boundary"], "search_miss_is_not_absence_of_memory")
-        self.assertEqual(result["source_reopen_boundary"], "search_miss_is_not_absence_of_memory")
+        self.assertNotIn("claim_boundary", result)
+        self.assertNotIn("source_reopen_boundary", result)
         self.assertEqual(result["suppression_boundary"], "low_coverage_matches_suppressed")
         self.assertEqual(
             result["foreground_action"]["id"],
@@ -459,19 +524,13 @@ class RegistrySourceSearchUsefulnessTests(unittest.TestCase):
         self.assertEqual(result["status"], "low_confidence_reopen_candidate")
         self.assertEqual(result["match_count"], 0)
         self.assertEqual(result["suppressed_low_coverage_match_count"], 1)
-        self.assertEqual(result["claim_boundary"], "near_hit_navigation_only_no_claim")
-        self.assertEqual(
-            result["source_reopen_boundary"],
-            "open_low_confidence_near_hit_as_navigation_before_claim",
-        )
+        self.assertNotIn("claim_boundary", result)
+        self.assertNotIn("source_reopen_boundary", result)
         self.assertEqual(
             result["foreground_action"]["id"],
             "inspect_low_confidence_registry_near_hit",
         )
-        self.assertEqual(
-            result["foreground_action"]["claim_boundary"],
-            "near_hit_navigation_only_no_claim",
-        )
+        self.assertNotIn("claim_boundary", result["foreground_action"])
         self.assertNotIn("suppressed_low_coverage_matches", result)
         candidate = result["low_confidence_reopen_candidates"][0]
         self.assertEqual(candidate["candidate_kind"], "low_confidence_reopen_candidate")
@@ -580,8 +639,8 @@ class RegistrySourceSearchUsefulnessTests(unittest.TestCase):
             result["foreground_action"]["id"],
             "broaden_registry_search_for_query_anchors",
         )
-        self.assertEqual(result["claim_boundary"], "search_miss_is_not_absence_of_memory")
-        self.assertEqual(result["source_reopen_boundary"], "search_miss_is_not_absence_of_memory")
+        self.assertNotIn("claim_boundary", result)
+        self.assertNotIn("source_reopen_boundary", result)
         self.assertEqual(result["suppression_boundary"], "low_coverage_matches_suppressed")
 
     def test_sqlite_line_only_hit_does_not_emit_source_open_action(self) -> None:
@@ -632,8 +691,8 @@ class RegistrySourceSearchUsefulnessTests(unittest.TestCase):
             result["foreground_action"]["id"],
             "broaden_registry_search_for_reopenable_source",
         )
-        self.assertEqual(result["claim_boundary"], "search_miss_is_not_absence_of_memory")
-        self.assertEqual(result["source_reopen_boundary"], "search_miss_is_not_absence_of_memory")
+        self.assertNotIn("claim_boundary", result)
+        self.assertNotIn("source_reopen_boundary", result)
         reopened = source_registry_search.open_registry_source_window(
             registry_dir=self.root,
             hit_index=1,
@@ -995,8 +1054,8 @@ class RegistrySourceSearchUsefulnessTests(unittest.TestCase):
         self.assertEqual(result["max_elapsed_ms"], 5000)
         self.assertGreaterEqual(result["elapsed_ms"], 0)
         self.assertEqual(result["unsearched_entry_count"], 1)
-        self.assertEqual(result["claim_boundary"], "source_reopen_required_before_claim")
-        self.assertEqual(result["source_reopen_boundary"], "reopen_selected_registry_hit_before_claim")
+        self.assertNotIn("claim_boundary", result)
+        self.assertNotIn("source_reopen_boundary", result)
         self.assertEqual(result["foreground_action"]["id"], "open_registry_search_source_window")
         self.assertIn("--open-source", result["foreground_action"]["command"])
         self.assertIn("--thread-key session:exact", result["foreground_action"]["command"])

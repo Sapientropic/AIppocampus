@@ -68,7 +68,6 @@ MCP_ACTION_KEYS = frozenset(
         "arguments",
         "arguments_template",
         "mutation_risk",
-        "claim_boundary",
         "label",
         "why",
         "command",
@@ -88,8 +87,6 @@ MCP_ROUTE_KEYS = frozenset(
         "index",
         "label",
         "why_this_route",
-        "source_boundary",
-        "claim_boundary",
         "actionability",
         "action_priority",
         "primary_action_relation",
@@ -233,7 +230,7 @@ def _compact_background_recovery_card(card: Any) -> dict[str, Any]:
     }
     result = {
         key: strip_compact_foreground_debug_fields(card[key])
-        for key in ("kind", "status", "summary", "primary_action", "claim_boundary")
+        for key in ("kind", "status", "summary", "primary_action")
         if key in card and card[key] not in (None, "", [], {})
     }
     if best_summary:
@@ -511,7 +508,7 @@ def compact_mcp_structured_content(payload: Any) -> Any:
             "reopen_more_if",
             "surface_class",
             "required_any",
-            "operator_details_available",
+            "details_available",
         )
         if key in payload and payload[key] not in (None, "")
     }
@@ -552,9 +549,6 @@ def compact_mcp_structured_content(payload: Any) -> Any:
     snippet = payload.get("primary_source_snippet")
     if isinstance(snippet, Mapping):
         card["primary_source_snippet"] = strip_compact_foreground_debug_fields(dict(snippet))
-    boundary = _compact_claim_boundary(payload.get("claim_boundary"))
-    if boundary:
-        card["claim_boundary"] = boundary
     if "foreground_action_contract" in payload:
         card["foreground_action_contract"] = payload["foreground_action_contract"]
     compact_card = build_mcp_compact_card(

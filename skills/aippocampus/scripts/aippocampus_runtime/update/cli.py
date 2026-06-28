@@ -20,8 +20,8 @@ from aippocampus_runtime.core import codex_home, now_utc
 from aippocampus_runtime.hooks import install_action_hint, install_lifecycle, install_prompt
 from aippocampus_runtime.public_output import emit_public_text
 from aippocampus_runtime.source.io_kernel import load_json_dict
+from aippocampus_runtime.update import recovery_guards, status_foreground
 from aippocampus_runtime.update import status_actions as update_actions
-from aippocampus_runtime.update import status_foreground
 from aippocampus_runtime.update.agent_callable import (
     default_host_probe_report_path,
     load_json_file,
@@ -794,11 +794,14 @@ def build_status(args: argparse.Namespace, *, mode: str) -> dict[str, Any]:
     actionable, core_blockers, magic_blockers, optional_surfaces, operator_blockers = update_actions.filter_plan_surface_groups(plan_surface_filter, actionable, core_blockers, magic_blockers, optional_surfaces, operator_blockers)
     core_ready = not core_blockers
     capability_ladder = build_capability_ladder(surfaces, core_ready=core_ready)
-    dirty_worktree_guards = _status_dirty_worktree_guards(
+    dirty_worktree_guards = recovery_guards.status_dirty_worktree_guards(
         args,
         update_actions.unique_names(
             [*core_blockers, *magic_blockers, *operator_blockers, *actionable]
         ),
+        write_paths_for_surface=_apply_surface_write_paths,
+        dirty_overlaps=_dirty_git_overlaps,
+        schema_version=SCHEMA_VERSION,
     )
     host_conformance = surfaces["host_conformance"]
     subsystem_magic_ready = not magic_blockers
@@ -1239,78 +1242,6 @@ def _apply_surface_write_paths(surface: str, args: argparse.Namespace) -> dict[s
     return {}
 
 
-def _dirty_worktree_recovery(surface: str, write_paths: dict[str, Path], overlaps: list[dict[str, Any]]) -> dict[str, Any]:
-    dirty_paths = sorted({str(item.get("dirty_path") or "") for item in overlaps if item.get("dirty_path")})
-    git_roots = sorted({str(item.get("git_root") or "") for item in overlaps if item.get("git_root")})
-    return {
-        "schema_version": SCHEMA_VERSION,
-        "kind": "aippocampus_update_recovery",
-        "mode": "apply_recovery",
-        "ok": False,
-        "status": "blocked_dirty_worktree",
-        "surface": surface,
-        "dirty_worktree_detected": True,
-        "dirty_paths": dirty_paths,
-        "git_roots": git_roots,
-        "would_write": {key: str(value) for key, value in write_paths.items()},
-        "safe_next_actions": [
-            {
-                "label": "inspect dirty worktree",
-                "command": "git status --short",
-                "mutation_risk": "read_only",
-            },
-            {
-                "label": "preview update plan",
-                "command": "aippocampus update plan --json",
-                "mutation_risk": "read_only",
-            },
-        ],
-        "override": "rerun with --force-dirty-worktree only after human review",
-        "override_used": False,
-        "safety": {
-            "no_write_happened": True,
-            "auto_stash": False,
-            "auto_cleanup": False,
-        },
-    }
-
-
-def _dirty_worktree_blocker(surface: str, args: argparse.Namespace) -> dict[str, Any] | None:
-    write_paths = _apply_surface_write_paths(surface, args)
-    if not write_paths:
-        return None
-    overlaps = _dirty_git_overlaps(list(write_paths.values()))
-    if not overlaps:
-        return None
-    return _dirty_worktree_recovery(surface, write_paths, overlaps)
-
-
-def _status_dirty_worktree_guards(
-    args: argparse.Namespace,
-    surfaces: list[str],
-) -> dict[str, dict[str, Any]]:
-    guards: dict[str, dict[str, Any]] = {}
-    if getattr(args, "force_dirty_worktree", False):
-        return guards
-    for surface in surfaces:
-        blocker = _dirty_worktree_blocker(surface, args)
-        if blocker is None:
-            continue
-        guards[surface] = {
-            "status": "blocked_dirty_worktree",
-            "dirty_worktree_detected": True,
-            "dirty_paths": list(blocker.get("dirty_paths") or []),
-            "would_write": {
-                str(key): "path_redacted"
-                for key in (blocker.get("would_write") or {}).keys()
-            },
-            "safe_next_actions": list(blocker.get("safe_next_actions") or []),
-            "override": blocker.get("override"),
-            "safety": blocker.get("safety") or {},
-        }
-    return guards
-
-
 def rollback_update(args: argparse.Namespace) -> dict[str, Any]:
     surface = str(args.surface or "")
     backup = Path(args.backup_path).resolve() if args.backup_path else None
@@ -1449,7 +1380,13 @@ def apply_update(args: argparse.Namespace) -> dict[str, Any]:
         }
     if not getattr(args, "force_dirty_worktree", False):
         for surface in surfaces:
-            blocker = _dirty_worktree_blocker(surface, args)
+            blocker = recovery_guards.dirty_worktree_blocker(
+                surface,
+                args,
+                write_paths_for_surface=_apply_surface_write_paths,
+                dirty_overlaps=_dirty_git_overlaps,
+                schema_version=SCHEMA_VERSION,
+            )
             if blocker is not None:
                 return blocker
     results: list[dict[str, Any]] = []

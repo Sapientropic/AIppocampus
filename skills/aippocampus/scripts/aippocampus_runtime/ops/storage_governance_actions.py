@@ -2,7 +2,13 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
+
+from aippocampus_runtime.ops.storage_governance_contract import (
+    CLASS_REBUILDABLE,
+    TIER_REBUILDABLE_CACHE,
+)
 
 CAPACITY_AGGREGATE_PLAN_ONLY_REASON = (
     "Capacity aggregate candidates need path-level retention candidates before apply or rebuild."
@@ -11,6 +17,75 @@ CAPACITY_AGGREGATE_REBUILD_NOTE = (
     "Rebuild generated index/vector/semantic caches from exact source for this "
     "registered thread; exact command depends on the cache class."
 )
+GENERATION_CLEANUP_KINDS = {
+    "rebuildable_old_index_generations",
+    "rebuildable_old_segment_generations",
+}
+
+
+def _has_concrete_path(candidate: Mapping[str, Any]) -> bool:
+    path = candidate.get("path")
+    if not isinstance(path, Mapping):
+        return False
+    return bool(path.get("path_known") or path.get("path") or path.get("relative_path"))
+
+
+def _has_known_blocked_precondition(candidate: Mapping[str, Any]) -> bool:
+    preconditions = candidate.get("preconditions")
+    if not isinstance(preconditions, Mapping):
+        return False
+    for item in preconditions.values():
+        if not isinstance(item, Mapping):
+            continue
+        status = str(item.get("status") or "")
+        if status == "blocked":
+            return True
+    return False
+
+
+def candidate_can_offer_compact_apply(candidate: Mapping[str, Any]) -> bool:
+    """Return True only when compact summary may expose an apply lane.
+
+    Compact storage summaries are foreground choosers. They must not infer
+    "apply is probably fine" from a non-aggregate actionability flag: agents
+    routinely mistake that for a safe deletion path. Keep the predicate tied to
+    apply-owned candidate classes, path-level evidence, and non-blocked
+    preconditions. `needs_apply_check` stays eligible because live lease/current
+    thread checks are intentionally deferred to explicit apply mode.
+    """
+
+    if _has_known_blocked_precondition(candidate):
+        return False
+    if not _has_concrete_path(candidate):
+        return False
+    if (
+        candidate.get("class") != CLASS_REBUILDABLE
+        or candidate.get("tier") != TIER_REBUILDABLE_CACHE
+    ):
+        return False
+    kind = str(candidate.get("kind") or "")
+    candidate_id = str(candidate.get("id") or "")
+    if kind in GENERATION_CLEANUP_KINDS:
+        return True
+    return kind == "rebuildable_generated_index" and candidate_id == "retention:rebuildable-main-sqlite"
+
+
+def retention_report_generation_action() -> dict[str, Any]:
+    """Return the discoverable pre-apply evidence step for storage GC.
+
+    Storage apply must be backed by path-level retention evidence. Keep this as
+    an explicit action instead of burying the lower-level module command in a
+    warning string, so compact storage cards can route users toward evidence
+    without making cleanup feel inevitable.
+    """
+
+    return {
+        "id": "generate_retention_report",
+        "label": "Generate retention report",
+        "command": "python -m aippocampus_runtime.ops.retention_report --cwd . --write --json",
+        "mutation_risk": "writes_local_retention_report_artifacts",
+        "why": "Create path-level retention evidence before considering any storage cleanup apply.",
+    }
 
 
 def storage_gc_foreground_actions(
@@ -28,6 +103,7 @@ def storage_gc_foreground_actions(
                     "claim_boundary": "operator_diagnostic_not_source_evidence",
                     "why": "Use the compact no-write pressure card before opening path-level storage detail.",
                 },
+                retention_report_generation_action(),
                 {
                     "id": "bounded_storage_audit",
                     "label": "Run bounded storage audit",
@@ -83,6 +159,7 @@ def storage_gc_summary_actions(
     limit: int,
     include_apply: bool,
     pressure_present: bool,
+    needs_retention_report: bool = False,
 ) -> list[dict[str, Any]]:
     """Return compact summary choices without making cleanup feel inevitable.
 
@@ -144,6 +221,8 @@ def storage_gc_summary_actions(
                 ),
             }
         )
+    elif pressure_present and needs_retention_report:
+        actions.append(retention_report_generation_action())
     if pressure_present:
         actions.append(stop_action)
     return actions

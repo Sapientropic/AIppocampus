@@ -487,10 +487,8 @@ class AippocampusMcpServerCatalogTests(unittest.TestCase):
             guide["workflow"]["agent_deepen"]["requires_prior"],
             ["agent_recall"],
         )
-        self.assertEqual(
-            guide["workflow"]["agent_recall"]["claim_boundary"],
-            "no_claim_before_reopen",
-        )
+        self.assertNotIn("claim_boundary", guide["workflow"]["agent_recall"])
+        self.assertNotIn("posture", guide["workflow"]["agent_recall"])
 
         foreground_parameters = guide["foreground_parameters"]
         self.assertEqual(
@@ -569,7 +567,7 @@ class AippocampusMcpServerCatalogTests(unittest.TestCase):
         self.assertNotIn("metrics", payload)
         self.assertNotIn("audit_available", payload)
         self.assertNotIn("cannot_claim", payload)
-        self.assertIn("reopen", payload["claim_boundary"])
+        self.assertNotIn("claim_boundary", payload)
         action = payload["foreground_action"]
         self.assertEqual(action["id"], "agent_deepen_selected_route")
         self.assertEqual(action["tool_name"], "agent_deepen")
@@ -577,7 +575,7 @@ class AippocampusMcpServerCatalogTests(unittest.TestCase):
         self.assertIn("recall_selector", action["arguments"])
         self.assertNotIn("last_recall", action["arguments"])
         self.assertIn("--recall-selector", action["command"])
-        self.assertEqual(action["claim_boundary"], "no_claim_before_reopen")
+        self.assertNotIn("claim_boundary", action)
         self.assertNotIn("foreground_action_card", payload)
         self.assertNotIn("memory_packets", payload)
         self.assertNotIn("deepen_requests", payload)

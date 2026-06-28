@@ -8,6 +8,10 @@ from typing import Any
 
 from aippocampus_runtime.contracts import canonical_foreground_action_fields
 from aippocampus_runtime.first_recall_readiness import maintenance_impact_readiness_fields
+from aippocampus_runtime.foreground_compact_language import (
+    compact_details_flag,
+    strip_compact_policy_vocabulary,
+)
 from aippocampus_runtime.privacy import LOCAL_PATH_REDACTION
 
 APPLY_SUMMARY_COMMAND = "aippocampus maintenance apply --summary-json"
@@ -18,6 +22,25 @@ STORAGE_GC_BOUNDED_AUDIT_COMMAND = "aippocampus storage gc --dry-run --json --to
 INTERRUPTED_WRITE_CLEANUP_COMMAND = (
     "aippocampus maintenance apply --cleanup-interrupted-writes --summary-json"
 )
+MAINTENANCE_COMPACT_POLICY_KEYS = frozenset(
+    {
+        "mutates",
+        "mutation_risk",
+        "preflight_commands",
+        "requires_clean_or_intentionally_dirty_worktree",
+        "requires_user_consent",
+    }
+)
+
+
+def _frontstage_summary_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    """Keep maintenance compact as next-step status, not policy taxonomy."""
+
+    payload.update(compact_details_flag(payload))
+    return strip_compact_policy_vocabulary(
+        payload,
+        extra_denied_keys=MAINTENANCE_COMPACT_POLICY_KEYS,
+    )
 
 
 def unique_action_ids(action_ids: list[str]) -> list[str]:
@@ -379,7 +402,7 @@ def summary_payload(result: dict) -> dict:
     best = best_next_action(result.get("remaining_recommended_actions") or [])
     agent_action = maintenance_foreground_action(best, read_only=False)
     safe_actions = maintenance_safe_next_actions(best, read_only=False)
-    return {
+    return _frontstage_summary_payload({
         "kind": "aippocampus_maintenance_summary",
         "ok": result.get("maintenance_status") in {"ok", "degraded"},
         "mode": "applied",
@@ -411,7 +434,7 @@ def summary_payload(result: dict) -> dict:
         "operator_detail_command": "aippocampus maintenance apply --json",
         "plan_first_command": STATUS_COMMAND,
         **canonical_foreground_action_fields(agent_action, safe_next_actions=safe_actions),
-    }
+    })
 
 
 def plan_payload(
@@ -505,4 +528,4 @@ def plan_payload(
             "status": "failed",
             "message": health_error[:240],
         }
-    return payload
+    return _frontstage_summary_payload(payload)

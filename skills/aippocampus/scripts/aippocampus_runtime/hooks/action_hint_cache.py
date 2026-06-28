@@ -15,6 +15,10 @@ from aippocampus_runtime.contracts import (
     canonical_foreground_action_fields,
     foreground_shell_action,
 )
+from aippocampus_runtime.foreground_compact_language import (
+    compact_details_flag,
+    strip_compact_policy_vocabulary,
+)
 from aippocampus_runtime.hooks.action_hint_cache_records import (
     BLOCKED_STATES,
     CACHE_KIND,
@@ -647,7 +651,10 @@ def compact_refresh_cache_report(result: Mapping[str, Any]) -> dict[str, Any]:
         ),
     }
     payload.update(canonical_foreground_action_fields(primary, safe_next_actions=safe_actions))
-    return {key: value for key, value in payload.items() if value is not None}
+    payload.update(compact_details_flag(payload))
+    return strip_compact_policy_vocabulary(
+        {key: value for key, value in payload.items() if value is not None}
+    )
 
 
 def main(argv: list[str] | None = None) -> int:

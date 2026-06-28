@@ -14,6 +14,11 @@ from collections.abc import Iterable, Mapping, Sequence
 from typing import Any
 
 from aippocampus_runtime.recall import apw_route_identity, authority
+from aippocampus_runtime.recall.feedback.vocabulary import (
+    feedback_signal_is_negative,
+    feedback_signal_is_positive,
+    normalize_feedback_signal,
+)
 from aippocampus_runtime.recall.query_policy import normalize_term, unique_preserve
 from aippocampus_runtime.recall.semantic_bridge_map import reduce_semantic_bridge_candidates
 
@@ -40,8 +45,6 @@ GENERIC_TERMS = {
 }
 PRIVATE_BUCKETS = {"private", "restricted", "personal", "user_private", "machine_private"}
 STALE_STATUSES = {"stale", "superseded", "refuted", "retired", "archived", "expired"}
-NEGATIVE_OUTCOMES = {"wrong_route_drag", "wrong_route", "ignored", "blocked", "superseded", "expired"}
-POSITIVE_OUTCOMES = {"source_reopen_success", "reopened_deepened", "user_confirmed"}
 DEFAULT_SAFE_SCOPE = "public_default"
 FRONTIER_POLICY_NAME = "bounded_associative_frontier"
 
@@ -529,10 +532,7 @@ def _scope_allows_positive_feedback(candidate: Mapping[str, Any], feedback: Mapp
 
 
 def _feedback_signal(row: Mapping[str, Any]) -> str:
-    signal = str(row.get("signal") or row.get("outcome") or "").strip()
-    if signal == "wrong_route":
-        return "wrong_route_drag"
-    return signal
+    return normalize_feedback_signal(row.get("signal") or row.get("outcome"), default="")
 
 
 def _feedback_keys(row: Mapping[str, Any]) -> set[str]:
@@ -565,7 +565,12 @@ def _feedback_by_id(rows: Iterable[Mapping[str, Any]]) -> dict[str, list[Mapping
 
 def _negative_feedback(route_id: str, row: Mapping[str, Any], counts: Mapping[str, Counter[str]]) -> bool:
     keys = _candidate_feedback_keys(route_id, row)
-    return any(counts.get(key, Counter()).get(signal, 0) for key in keys for signal in NEGATIVE_OUTCOMES)
+    return any(
+        count
+        for key in keys
+        for signal, count in counts.get(key, Counter()).items()
+        if feedback_signal_is_negative(signal)
+    )
 
 
 def _positive_feedback(
@@ -577,7 +582,7 @@ def _positive_feedback(
         feedback
         for key in _candidate_feedback_keys(route_id, row)
         for feedback in by_id.get(key, [])
-        if _feedback_signal(feedback) in POSITIVE_OUTCOMES
+        if feedback_signal_is_positive(_feedback_signal(feedback))
     ]
     if not matched_positive:
         return False, False

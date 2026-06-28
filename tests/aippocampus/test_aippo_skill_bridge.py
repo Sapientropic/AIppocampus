@@ -62,7 +62,8 @@ class AIppoSkillBridgeTests(unittest.TestCase):
         self.assertNotIn("source_refs", encoded_packet)
         self.assertNotIn("C:\\", encoded_packet)
         self.assertGreaterEqual(len(deepen["commands"]), 3)
-        self.assertIn("aippocampus health", " ".join(deepen["commands"]))
+        self.assertIn("aippocampus plugin install --codex --verify", deepen["commands"])
+        self.assertIn("python tools/aippocampus/docs/check_docs_health.py", deepen["commands"])
         self.assertGreaterEqual(len(deepen["references"]), 2)
 
     def test_overbroad_skill_instruction_is_suppressed_before_activation(self) -> None:

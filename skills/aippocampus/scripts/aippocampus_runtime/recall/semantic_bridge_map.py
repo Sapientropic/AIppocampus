@@ -19,6 +19,11 @@ from typing import Any
 from aippocampus_runtime.navigation.semantic_candidate_context import (
     build_semantic_candidate_context,
 )
+from aippocampus_runtime.recall.feedback.vocabulary import (
+    feedback_signal_is_negative,
+    feedback_signal_is_positive,
+    normalize_feedback_signal,
+)
 from aippocampus_runtime.recall.query_policy import normalize_term, unique_preserve
 from aippocampus_runtime.recall.semantic_effectiveness import (
     apply_semantic_effectiveness_to_candidates,
@@ -31,8 +36,6 @@ AUTHORITY = "navigation_only"
 CLAIM_PERMISSION = "none"
 PRIVATE_BUCKETS = {"private", "restricted", "personal", "user_private", "machine_private"}
 STALE_FRESHNESS = {"stale", "superseded", "refuted", "retired", "archived", "expired"}
-NEGATIVE_OUTCOMES = {"wrong_route_drag", "wrong_route", "ignored", "blocked", "superseded", "expired"}
-POSITIVE_OUTCOMES = {"source_reopen_success", "reopened_deepened", "user_confirmed"}
 SEMANTIC_BRIDGE_SOURCE = "semantic_bridge"
 
 
@@ -122,9 +125,10 @@ def _feedback_counts(feedback_rows: Iterable[Mapping[str, Any]], candidate_id: s
         route_id = str(row.get("route_id") or row.get("candidate_id") or "")
         if route_id != candidate_id:
             continue
-        signal = str(row.get("signal") or row.get("outcome") or "").strip()
-        if signal == "wrong_route":
-            signal = "wrong_route_drag"
+        signal = normalize_feedback_signal(
+            row.get("signal") or row.get("outcome"),
+            default="",
+        )
         if signal:
             counts[signal] += 1
     return counts
@@ -161,13 +165,13 @@ def reduce_semantic_bridge_candidate(
     elif freshness in STALE_FRESHNESS or invalidators:
         status = "retired"
         reasons.append("stale_or_invalidated")
-    elif any(feedback.get(signal) for signal in NEGATIVE_OUTCOMES):
+    elif any(count for signal, count in feedback.items() if feedback_signal_is_negative(signal)):
         status = "demoted"
         reasons.append("negative_route_feedback")
     elif not refs and not event_refs:
         status = "local_only_scent" if bucket in {"workspace", "machine", "local_only"} else "rejected"
         reasons.append("source_free_bridge_cannot_expand_public_query")
-    elif sum(feedback.get(signal, 0) for signal in POSITIVE_OUTCOMES) > 0:
+    elif sum(count for signal, count in feedback.items() if feedback_signal_is_positive(signal)) > 0:
         reasons.append("source_reopen_success_seen")
     else:
         reasons.append("source_or_event_refs_present")
@@ -237,7 +241,7 @@ def reduce_semantic_bridge_candidates(
 
 
 def _negative_outcome(value: Any) -> bool:
-    return str(value or "").strip() in NEGATIVE_OUTCOMES
+    return feedback_signal_is_negative(normalize_feedback_signal(value, default=""))
 
 
 def _materialized_bridge_row(

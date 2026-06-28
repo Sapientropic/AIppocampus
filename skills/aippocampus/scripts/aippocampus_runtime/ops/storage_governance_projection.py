@@ -7,7 +7,10 @@ from typing import Any
 
 from aippocampus_runtime import core
 from aippocampus_runtime.contracts import canonical_foreground_action_fields
-from aippocampus_runtime.ops.storage_governance_actions import storage_gc_summary_actions
+from aippocampus_runtime.ops.storage_governance_actions import (
+    candidate_can_offer_compact_apply,
+    storage_gc_summary_actions,
+)
 
 
 def _bounded_items(items: list[dict[str, Any]], *, limit: int) -> tuple[list[dict[str, Any]], bool]:
@@ -274,18 +277,37 @@ def bounded_cli_projection(
             )
         )
         apply_candidate_present = any(
-            str(item.get("actionability") or "") != "plan_only_aggregate"
+            candidate_can_offer_compact_apply(item)
             for item in candidates
+            if isinstance(item, dict)
+        )
+        retention_source = (report.get("report_sources") or {}).get("retention") or {}
+        needs_retention_report = (
+            isinstance(retention_source, dict)
+            and str(retention_source.get("mode") or "") == "missing"
         )
         summary_actions = storage_gc_summary_actions(
             limit=limit,
             include_apply=apply_candidate_present and pressure_present,
             pressure_present=pressure_present,
+            needs_retention_report=needs_retention_report,
         )
         action_fields = canonical_foreground_action_fields(
             summary_actions[0],
             safe_next_actions=summary_actions,
         )
+        next_steps = [
+            "Continue normal work when cleanup was not the user goal.",
+            "Use the bounded audit sample only if the reclaimable amount is worth inspecting.",
+        ]
+        if apply_candidate_present:
+            next_steps.append(
+                "Use apply only for path-level rebuildable candidates after deterministic checks pass."
+            )
+        else:
+            next_steps.append(
+                "Generate or pass a retention report, or inspect path-level old-generation candidates, before apply."
+            )
         projection = {
             "kind": "aippocampus_storage_gc_summary",
             "schema_version": report.get("schema_version", schema_version),
@@ -332,11 +354,7 @@ def bounded_cli_projection(
             },
             "comparable_metrics_command": audit_command,
             "warnings": list(report.get("warnings") or [])[:6],
-            "next_steps": [
-                "Continue normal work when cleanup was not the user goal.",
-                "Use the bounded audit sample only if the reclaimable amount is worth inspecting.",
-                "Use apply only for rebuildable cache candidates after deterministic checks pass.",
-            ],
+            "next_steps": next_steps,
             "full_audit_available": True,
             "full_audit_flag": "--json --full",
             "operator_audit_command": "aippocampus storage gc --dry-run --json --full --cwd .",

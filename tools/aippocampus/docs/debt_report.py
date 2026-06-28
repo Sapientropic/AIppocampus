@@ -371,6 +371,7 @@ def changed_surface_guard_pressure(
     *,
     rows: list[dict[str, object]] | None = None,
     split_boundaries: dict[str, str] | None = None,
+    owner_issue_states: dict[str, object] | None = None,
 ) -> list[dict[str, object]]:
     split_map = split_boundary_entries() if split_boundaries is None else split_boundaries
     return guard_pressure.changed_surface_guard_pressure(
@@ -382,6 +383,7 @@ def changed_surface_guard_pressure(
         split_boundaries=split_map,
         layer_for_path=layer_for_path,
         margin_limit=SINGLE_DIGIT_GUARD_MARGIN_LIMIT,
+        owner_issue_states=owner_issue_states,
     )
 
 
@@ -608,6 +610,7 @@ def build_system_weight(
     rows: list[dict[str, object]],
     *,
     split_boundaries: dict[str, str],
+    owner_issue_states: dict[str, object] | None = None,
 ) -> dict[str, object]:
     layers: dict[str, dict[str, object]] = {
         name: {
@@ -657,6 +660,10 @@ def build_system_weight(
                 }
             )
         low_margin_owner = guard_pressure.low_margin_owner_issue(rel_path)
+        owner_metadata = guard_pressure.owner_issue_metadata(
+            low_margin_owner,
+            owner_issue_states=owner_issue_states,
+        )
         if margin <= SINGLE_DIGIT_GUARD_MARGIN_LIMIT:
             single_digit_guard_pressure.append(
                 {
@@ -665,8 +672,7 @@ def build_system_weight(
                     "current_count": current,
                     "guard_budget": budget,
                     "margin": margin,
-                    "owner_issue": low_margin_owner,
-                    "tracked_owner_issue": bool(low_margin_owner),
+                    **owner_metadata,
                     "next_split_boundary": split_boundaries.get(
                         rel_path,
                         "Open or assign a focused split owner before growing this file.",
@@ -687,8 +693,7 @@ def build_system_weight(
                 "recommendation": "split_owner_or_archive_stale_supporting_material",
             }
             if margin <= SINGLE_DIGIT_GUARD_MARGIN_LIMIT:
-                target["owner_issue"] = low_margin_owner
-                target["tracked_owner_issue"] = bool(low_margin_owner)
+                target.update(owner_metadata)
             archive_or_split_targets.append(target)
     total_lines = sum(int(layer["tracked_lines"]) for layer in layers.values())
     archive_or_split_targets.sort(key=lambda item: (int(item["margin"]), str(item["path"])))
