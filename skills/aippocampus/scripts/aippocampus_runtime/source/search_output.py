@@ -205,6 +205,7 @@ def public_search_result(
     *,
     include_paths: bool = False,
     metadata_only: bool = False,
+    emit_source_open_selector: bool = False,
     query_text: str | None = None,
     detail: str = "full",
 ) -> dict[str, Any]:
@@ -220,6 +221,7 @@ def public_search_result(
             original_matches=original_matches,
             include_paths=include_paths,
             metadata_only=metadata_only,
+            emit_source_open_selector=emit_source_open_selector,
             query_text=query_text,
         )
     public = dict(result) if include_paths else redact_sensitive_values(redact_private_paths(result))
@@ -266,7 +268,11 @@ def public_search_result(
         if not include_paths:
             public["source"] = LOCAL_PATH_REDACTION
             public["source_omitted"] = True
-        public["output_boundary"] = "public_metadata_with_capped_source_snippets_no_reopen_refs"
+        public["output_boundary"] = (
+            "public_metadata_with_source_open_selector_no_raw_snippets"
+            if emit_source_open_selector
+            else "public_metadata_with_capped_source_snippets_no_reopen_refs"
+        )
     else:
         public["output_boundary"] = (
             "local_private_source_snippets"
@@ -303,7 +309,8 @@ def public_search_result(
         "metadata_only": metadata_only,
         "capped_source_snippets_emitted": bool(metadata_only and capped_public_snippets_emitted),
         "raw_source_snippets_emitted": bool(public.get("matches")) and not metadata_only,
-        "local_reopen_refs_emitted": bool(public.get("matches")) and not metadata_only,
+        "source_open_selector_emitted": bool(public.get("matches")) and emit_source_open_selector,
+        "local_reopen_refs_emitted": bool(public.get("matches")) and emit_source_open_selector,
     }
     public["match_count"] = len(public.get("matches") or [])
     public.update(
@@ -311,6 +318,7 @@ def public_search_result(
             matches=original_matches,
             query_terms=[str(term) for term in public.get("query_terms") or []],
             metadata_only=metadata_only,
+            emit_source_open_selector=emit_source_open_selector,
             query_text=query_text,
         )
     )
@@ -372,6 +380,7 @@ def _compact_public_search_result(
     original_matches: list[dict[str, Any]],
     include_paths: bool,
     metadata_only: bool,
+    emit_source_open_selector: bool,
     query_text: str | None,
 ) -> dict[str, Any]:
     query = str(query_text or "").strip()
@@ -381,6 +390,7 @@ def _compact_public_search_result(
         matches=original_matches,
         query_terms=[str(term) for term in result.get("query_terms") or []],
         metadata_only=metadata_only,
+        emit_source_open_selector=emit_source_open_selector,
         query_text=query,
     )
     suppressed_count = int(result.get("suppressed_low_coverage_match_count") or 0)
@@ -422,14 +432,19 @@ def _compact_public_search_result(
         if isinstance(match, dict)
     )
     if metadata_only:
-        payload["output_boundary"] = "public_metadata_with_capped_source_snippets_no_reopen_refs"
+        payload["output_boundary"] = (
+            "public_metadata_with_source_open_selector_no_raw_snippets"
+            if emit_source_open_selector
+            else "public_metadata_with_capped_source_snippets_no_reopen_refs"
+        )
         payload["privacy"] = {
             "paths_included": include_paths,
             "path_redaction": "none" if include_paths else LOCAL_PATH_REDACTION,
             "metadata_only": True,
             "capped_source_snippets_emitted": capped_public_snippets_emitted,
             "raw_source_snippets_emitted": False,
-            "local_reopen_refs_emitted": False,
+            "source_open_selector_emitted": bool(original_matches) and emit_source_open_selector,
+            "local_reopen_refs_emitted": bool(original_matches) and emit_source_open_selector,
         }
     if suppressed_count:
         payload["suppressed_low_coverage_match_count"] = suppressed_count

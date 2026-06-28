@@ -34,8 +34,6 @@ WORKFLOW_GUIDE_TOOLS = (
     "agent_explain",
     "recall_diagnostic",
     "memory_health",
-    "recall_context",
-    "recall_deepen",
 )
 
 
@@ -74,18 +72,32 @@ def _foreground_parameter_guide(tools_by_name: dict[str, dict[str, Any]]) -> dic
     return guide
 
 
-def _workflow_guide(tools_by_name: dict[str, dict[str, Any]]) -> dict[str, Any]:
+def _workflow_guide(
+    tools_by_name: dict[str, dict[str, Any]],
+    *,
+    tool_names: tuple[str, ...] = WORKFLOW_GUIDE_TOOLS,
+    include_legacy_edges: bool = False,
+) -> dict[str, Any]:
     guide: dict[str, Any] = {}
-    for tool_name in WORKFLOW_GUIDE_TOOLS:
+    for tool_name in tool_names:
         metadata = _aippocampus_metadata(tools_by_name.get(tool_name, {}))
         if not metadata:
             continue
+        requires_prior = list(metadata.get("requires_prior") or [])
+        enables_next = list(metadata.get("enables_next") or [])
+        if not include_legacy_edges:
+            requires_prior = [
+                name for name in requires_prior if name not in {"recall_context", "recall_deepen"}
+            ]
+            enables_next = [
+                name for name in enables_next if name not in {"recall_context", "recall_deepen"}
+            ]
         guide[tool_name] = {
             "workflow": metadata.get("workflow"),
             "posture": metadata.get("posture"),
             "claim_boundary": metadata.get("claim_boundary"),
-            "requires_prior": list(metadata.get("requires_prior") or []),
-            "enables_next": list(metadata.get("enables_next") or []),
+            "requires_prior": requires_prior,
+            "enables_next": enables_next,
         }
         if metadata.get("legacy"):
             guide[tool_name]["legacy"] = True
@@ -96,31 +108,59 @@ def _workflow_guide(tools_by_name: dict[str, dict[str, Any]]) -> dict[str, Any]:
     return guide
 
 
-def _tool_use_guide() -> dict[str, Any]:
+def _tool_use_guide(*, detail: str = "compact") -> dict[str, Any]:
     tools_by_name = _tools_by_name()
-    return {
+    guide = {
         "primary_consumer_field": "foreground_action",
         "foreground_parameters": _foreground_parameter_guide(tools_by_name),
         "workflow": _workflow_guide(tools_by_name),
         "when_to_use": {
             "agent_recall": "Use first when the agent has a task cue, old correction, issue title, or handoff phrase.",
             "agent_deepen": "Use after recall surfaces a numbered route that may support a claim or decision.",
-            "route_feedback": "Use the CLI feedback fallback only after judging a route as helpful, wrong, stale, noisy, or quiet-worthy.",
         },
         "fallbacks": {
             "current_thread_visibility_missing": (
                 "Run recall with a concrete cue or exact search; tool discovery is routing metadata, not source evidence."
             ),
             "route_selector_missing": "Run agent_recall again or request detail=full only for local diagnostics.",
-            "route_feedback_cli": (
-                "MCP does not expose an agent_feedback tool; use `aippocampus agent feedback ... --json` only when explicitly recording local route feedback."
-            ),
         },
         "boundary": "tool_discovery_routes_attention_source_claims_require_recall_or_deepen",
     }
+    if detail == "full":
+        guide["legacy_workflow"] = _workflow_guide(
+            {
+                name: tools_by_name[name]
+                for name in ("recall_context", "recall_deepen")
+                if name in tools_by_name
+            },
+            tool_names=("recall_context", "recall_deepen"),
+            include_legacy_edges=True,
+        )
+        guide["operator_write_lanes"] = {
+            "route_feedback_cli": (
+                "MCP does not expose an agent_feedback tool; use `aippocampus agent feedback ... --json` "
+                "only when explicitly recording local route feedback."
+            )
+        }
+    return guide
 
 
-def tool_readiness_summary() -> dict[str, Any]:
+def _feedback_operator_action() -> dict[str, Any]:
+    return foreground_template_action(
+        action_id="record_route_feedback_cli_fallback",
+        command_template=(
+            "aippocampus agent feedback {route_id} --outcome {feedback_outcome} --json"
+        ),
+        requires=["route_id", "feedback_outcome"],
+        label="Record route feedback",
+        why="Use only when explicitly recording whether a route helped, misled, went stale, or should stay quiet.",
+        mutation_risk="durable_low_authority_feedback_write",
+        claim_boundary="feedback_is_not_source_truth",
+    )
+
+
+def tool_readiness_summary(*, detail: str = "compact") -> dict[str, Any]:
+    detail = "full" if str(detail or "").strip().casefold() == "full" else "compact"
     names = visible_tool_names()
     key_present = [name for name in KEY_AGENT_NATIVE_TOOLS if name in names]
     missing = [name for name in KEY_AGENT_NATIVE_TOOLS if name not in names]
@@ -128,6 +168,7 @@ def tool_readiness_summary() -> dict[str, Any]:
         "kind": "aippocampus_mcp_tool_readiness",
         "ok": not missing,
         "tool_count": len(names),
+        "detail": detail,
         "agent_native_tools_present": not missing,
         "key_tools_present": key_present,
         "missing_key_tools": missing,
@@ -136,11 +177,11 @@ def tool_readiness_summary() -> dict[str, Any]:
     }
     if missing:
         primary = foreground_shell_action(
-            action_id="repair_mcp_tool_catalog",
-            command="aippocampus plugin install --codex --verify --json",
-            label="Repair Codex plugin MCP wiring",
-            why="Key agent-native MCP tools are missing; reinstall or verify the local Codex plugin wiring.",
-            mutation_risk="writes_local_plugin_cache",
+            action_id="inspect_mcp_plugin_status",
+            command="aippocampus plugin status --json",
+            label="Inspect Codex plugin MCP wiring",
+            why="Key agent-native MCP tools are missing; inspect local plugin status before choosing an explicit repair write.",
+            mutation_risk="read_only",
             claim_boundary="install_status_not_memory_evidence",
         )
         status = foreground_shell_action(
@@ -152,6 +193,17 @@ def tool_readiness_summary() -> dict[str, Any]:
             claim_boundary="tool_visibility_not_memory_evidence",
         )
         payload.update(canonical_foreground_action_fields(primary, safe_next_actions=[primary, status]))
+        if detail == "full":
+            payload["operator_write_actions"] = [
+                foreground_shell_action(
+                    action_id="repair_mcp_tool_catalog",
+                    command="aippocampus plugin install --codex --verify --json",
+                    label="Repair Codex plugin MCP wiring",
+                    why="Run only after deciding to refresh local plugin/cache wiring.",
+                    mutation_risk="writes_local_plugin_cache",
+                    claim_boundary="install_status_not_memory_evidence",
+                )
+            ]
     else:
         primary = foreground_shell_action(
             action_id="inspect_current_thread_tool_discovery",
@@ -159,7 +211,7 @@ def tool_readiness_summary() -> dict[str, Any]:
             label="Inspect current-thread continuity tools",
             why=(
                 "MCP tools are visible; inspect current-thread status before choosing "
-                "recall, deepen, or feedback."
+                "recall or deepen."
             ),
             mutation_risk="read_only",
             claim_boundary="tool_discovery_not_memory_evidence",
@@ -188,23 +240,13 @@ def tool_readiness_summary() -> dict[str, Any]:
             mutation_risk="read_only",
             claim_boundary="no_claim_before_reopen",
         )
-        feedback = foreground_template_action(
-            action_id="record_route_feedback_cli_fallback",
-            command_template=(
-                "aippocampus agent feedback {route_id} --outcome {feedback_outcome} --json"
-            ),
-            requires=["route_id", "feedback_outcome"],
-            label="Record route feedback",
-            why="Use after a route helped, misled, went stale, or should stay quiet.",
-            mutation_risk="durable_low_authority_feedback_write",
-            claim_boundary="feedback_is_not_source_truth",
-        )
-        payload["tool_use_guide"] = _tool_use_guide()
+        payload["tool_use_guide"] = _tool_use_guide(detail=detail)
         payload.update(
             canonical_foreground_action_fields(
                 primary,
                 safe_next_actions=[primary, recall, deepen],
             )
         )
-        payload["cli_fallback_actions"] = [feedback]
+        if detail == "full":
+            payload["operator_write_actions"] = [_feedback_operator_action()]
     return payload

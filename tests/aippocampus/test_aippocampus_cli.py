@@ -991,6 +991,25 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertEqual(payload["kind"], "aippocampus_mcp_tool_readiness")
         self.assertIn("agent_recall", payload["key_tools_present"])
         self.assertNotIn("tools", payload)
+        encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertNotIn("record_route_feedback_cli_fallback", encoded)
+        self.assertNotIn("durable_low_authority_feedback_write", encoded)
+
+    def test_mcp_status_detail_full_exposes_operator_write_fallbacks(self) -> None:
+        proc = self.run_cli("mcp", "status", "--detail", "full")
+
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        payload = parse_cli_json(self, proc)
+        self.assertEqual(payload["kind"], "aippocampus_mcp_tool_readiness")
+        self.assertEqual(payload["detail"], "full")
+        self.assertEqual(
+            payload["operator_write_actions"][0]["id"],
+            "record_route_feedback_cli_fallback",
+        )
+        self.assertEqual(
+            payload["operator_write_actions"][0]["mutation_risk"],
+            "durable_low_authority_feedback_write",
+        )
 
     def test_bare_mcp_without_stdio_request_prints_readiness_card(self) -> None:
         proc = self.run_cli("mcp")

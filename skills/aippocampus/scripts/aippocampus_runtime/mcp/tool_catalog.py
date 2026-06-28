@@ -18,6 +18,17 @@ OPERATOR_INTERNAL_PARAMETER_POLICY = {
     ),
 }
 
+LEGACY_RECALL_TOOL_POLICY = {
+    "owner": "mcp_detail_and_compat_surface",
+    "replacement": "agent_recall -> agent_deepen",
+    "default_exposure": "full_schema_and_explicit_legacy_tool_calls_only",
+    "removal_or_wrapper_condition": (
+        "Keep callable for existing recall_context/recall_deepen clients; do not "
+        "surface in compact/default foreground guidance. Remove or wrap once "
+        "supported MCP hosts consume agent_recall selectors directly."
+    ),
+}
+
 
 def tool_schema(
     name: str,
@@ -239,7 +250,7 @@ TOOLS: list[dict[str, Any]] = [
     ),
     tool_schema(
         "search_memory",
-        "Search clean source for source-backed receipts. When: use exact or distinctive wording; use agent_recall or recall_context for fuzzy continuity. After: reopen with get_turn_context or deepen a route before exact claims.",
+        "Search clean source for source-backed receipts. When: use exact or distinctive wording; use agent_recall for fuzzy continuity. After: reopen with get_turn_context or deepen an agent_recall route before exact claims.",
         {
             "query": {"type": "string"},
             "scope": {
@@ -329,6 +340,10 @@ TOOLS: list[dict[str, Any]] = [
             "requires_prior": [],
             "enables_next": ["recall_deepen"],
             "legacy": True,
+            "owner": LEGACY_RECALL_TOOL_POLICY["owner"],
+            "default_exposure": LEGACY_RECALL_TOOL_POLICY["default_exposure"],
+            "removal_condition": LEGACY_RECALL_TOOL_POLICY["removal_or_wrapper_condition"],
+            "deprecation": LEGACY_RECALL_TOOL_POLICY,
             "foreground_recommended": False,
         },
     ),
@@ -353,6 +368,10 @@ TOOLS: list[dict[str, Any]] = [
             "requires_prior": ["recall_context"],
             "enables_next": ["get_turn_context"],
             "legacy": True,
+            "owner": LEGACY_RECALL_TOOL_POLICY["owner"],
+            "default_exposure": LEGACY_RECALL_TOOL_POLICY["default_exposure"],
+            "removal_condition": LEGACY_RECALL_TOOL_POLICY["removal_or_wrapper_condition"],
+            "deprecation": LEGACY_RECALL_TOOL_POLICY,
             "foreground_recommended": False,
         },
     ),
@@ -428,7 +447,7 @@ TOOLS: list[dict[str, Any]] = [
     ),
     tool_schema(
         "list_threads",
-        "List registered local memory threads as route handles, not source evidence. When: use for inventory or debugging before recall, not for answering from memory. After: pass a useful cue to recall_context or agent_recall.",
+        "List registered local memory threads as route handles, not source evidence. When: use for inventory or debugging before recall, not for answering from memory. After: pass a useful cue to agent_recall or search_memory.",
         {
             "registry_dir": {"type": "string"},
             "max": {"type": "integer", "minimum": 1, "maximum": 100},

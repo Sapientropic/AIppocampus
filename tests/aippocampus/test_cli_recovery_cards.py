@@ -134,7 +134,11 @@ class AippocampusCliRecoveryCardTests(unittest.TestCase):
         self.assertIn("Privacy and control card", privacy.stdout)
         self.assertIn("pause", privacy.stdout)
         self.assertIn("provider-key", privacy.stdout)
+        self.assertIn("same-user local conversation source stays usable", privacy.stdout)
+        self.assertIn("raw external projection", privacy.stdout)
         self.assertIn("do-not-use-here is current-scope exclusion", privacy.stdout)
+        self.assertNotIn("approve every recall", privacy.stdout.casefold())
+        self.assertNotIn("confirm every memory", privacy.stdout.casefold())
         self.assertIn("Personal controls card", controls.stdout)
         self.assertIn("do-not-use-here", controls.stdout)
         self.assertIn("forget is an explicit target workflow", controls.stdout)
@@ -208,14 +212,30 @@ class AippocampusCliRecoveryCardTests(unittest.TestCase):
         privacy_actions = {action["id"]: action for action in privacy_payload["safe_next_actions"]}
         self.assertEqual(privacy_actions["export_boundary"]["command"], "aippocampus export --json")
         self.assertEqual(
-            privacy_payload["default_posture"]["same_user_conversation_source"],
-            "allow_with_boundary",
+            privacy_payload["default_posture"]["ordinary_conversation_source"],
+            "private_route_or_reopenable",
         )
         self.assertEqual(
-            privacy_payload["default_posture"]["ordinary_memory_route"],
-            "private_route",
+            privacy_payload["default_posture"]["secret_like"],
+            "hard_block",
         )
-        self.assertNotIn("--help", json.dumps(privacy_payload, ensure_ascii=False))
+        self.assertEqual(
+            privacy_payload["default_posture"]["unprovided_background_scan"],
+            "hard_block",
+        )
+        self.assertEqual(
+            privacy_payload["default_posture"]["raw_external_projection"],
+            "blocked_without_explicit_opt_in",
+        )
+        self.assertEqual(
+            privacy_payload["default_posture"]["cross_domain_sensitive_use"],
+            "purpose_check",
+        )
+        encoded_privacy = json.dumps(privacy_payload, ensure_ascii=False).casefold()
+        self.assertIn("public-core-boundary.md#personalcore-default", encoded_privacy)
+        self.assertNotIn("--help", encoded_privacy)
+        self.assertNotIn("approve every recall", encoded_privacy)
+        self.assertNotIn("confirm every memory", encoded_privacy)
 
         controls_payload = parse_cli_json(self, cards["controls"], expected_returncode=0, label="controls")
         self.assertEqual(controls_payload["kind"], "aippocampus_controls_chooser")

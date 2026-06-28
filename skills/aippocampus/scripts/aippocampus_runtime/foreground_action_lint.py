@@ -29,6 +29,18 @@ def compact_foreground_action_violations(
     """
 
     violations = foreground_action_contract_violations(payload)
+    foreground = payload.get("foreground_action")
+    if (
+        isinstance(foreground, Mapping)
+        and not allow_write_safe_actions
+        and not foreground_action_is_read_only(foreground)
+    ):
+        violations.append(
+            {
+                "field": "foreground_action.mutation_risk",
+                "reason": "write_capable_action_not_allowed_in_default_compact",
+            }
+        )
     safe_actions = payload.get("safe_next_actions")
     if not isinstance(safe_actions, Sequence) or isinstance(safe_actions, str):
         return violations

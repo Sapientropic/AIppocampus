@@ -17,6 +17,7 @@ from aippocampus_runtime.privacy import (
     redact_private_paths,
     redact_sensitive_values,
 )
+from aippocampus_runtime.source.registry_search_evidence import match_has_direct_source_open_route
 from aippocampus_runtime.source.registry_search_skips import registry_entry_ref
 
 DEFAULT_SOURCE_WINDOW_CHARS = 700
@@ -42,6 +43,7 @@ def write_last_registry_search_cache(
     for match in matches:
         raw_route = match.get("source_route")
         route: Mapping[str, Any] = raw_route if isinstance(raw_route, Mapping) else {}
+        direct_source_open = match_has_direct_source_open_route(match)
         duplicate_source_routes = []
         for ref in match.get("duplicate_source_refs") or []:
             if not isinstance(ref, Mapping):
@@ -66,11 +68,19 @@ def write_last_registry_search_cache(
             {
                 "hit_index": match.get("hit_index"),
                 "hit_selector": match.get("hit_selector"),
-                "source_route": {
-                    key: route.get(key)
-                    for key in ("kind", "thread_key", "message_id", "line", "boundary")
-                    if route.get(key) not in (None, "", [])
-                },
+                # The cache feeds `search --last-search --hit ... --open-source`.
+                # SQLite-only rows can look line-addressable while still having
+                # no matching clean-source message; caching those routes gives
+                # agents a copy-paste command that is guaranteed to fail.
+                "source_route": (
+                    {
+                        key: route.get(key)
+                        for key in ("kind", "thread_key", "message_id", "line", "boundary")
+                        if route.get(key) not in (None, "", [])
+                    }
+                    if direct_source_open
+                    else {}
+                ),
                 "duplicate_source_routes": duplicate_source_routes,
             }
         )

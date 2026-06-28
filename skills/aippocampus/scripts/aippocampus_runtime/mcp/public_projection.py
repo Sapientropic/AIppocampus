@@ -628,9 +628,9 @@ def compact_register_thread_payload(payload: dict[str, Any]) -> dict[str, Any]:
     foreground_action = {
         "id": "recall_from_registered_thread",
         "label": "Recall from registered thread",
-        "tool_name": "recall_context",
-        "arguments_template": {"intent": "{task_or_memory_cue}"},
-        "requires": ["task_or_memory_cue"],
+        "tool_name": "agent_recall",
+        "arguments_template": {"query": "{task_or_memory_cue}"},
+        "requires": ["query"],
         "template_only": True,
         "mutation_risk": "read_only",
         "claim_boundary": "registered_thread_status_is_not_memory_evidence",
@@ -661,7 +661,7 @@ def compact_register_thread_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "has_clean_source": bool(paths.get("clean_source_messages_jsonl") or paths.get("clean_source_dir")),
         "index_built": bool(payload.get("index_report") or payload.get("index_built")),
         "next_step_hint": (
-            "Use recall_context or search_memory for task-specific routes; request diagnostic output only for local audit."
+            "Use agent_recall or search_memory for task-specific routes; request diagnostic output only for local audit."
         ),
         **canonical_foreground_action_fields(
             foreground_action,

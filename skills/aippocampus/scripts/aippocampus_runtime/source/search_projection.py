@@ -27,11 +27,51 @@ def _first_match_selector(matches: list[dict[str, Any]]) -> dict[str, Any]:
     return {}
 
 
+def _first_match_reopen_action(matches: list[dict[str, Any]], *, query: str) -> dict[str, Any]:
+    selector = _first_match_selector(matches)
+    if selector:
+        return {
+            "action_id": "reopen_search_match_source",
+            "label": "Open the first search match",
+            "tool_name": "get_turn_context",
+            "arguments": selector,
+            "command": str(
+                matches[0].get("source_window_command")
+                or matches[0].get("reopen_command")
+                or ""
+            ).strip(),
+            "cli_equivalent_for_tool_action": True,
+            "mutation_risk": "read_only",
+            "claim_boundary": "source_reopen_required_before_claim",
+            "why": (
+                "Search found a reopenable clean-source hit; open its bounded "
+                "source window before quoting or making strong claims."
+            ),
+        }
+    return {
+        "action_id": "rerun_search_for_source_selector",
+        "label": "Rerun search for a source selector",
+        "tool_name": "search_memory",
+        "arguments": {
+            "query": query or "distinctive old source cue",
+            "scope": "current",
+            "detail": "full",
+        },
+        "mutation_risk": "read_only",
+        "claim_boundary": "search_hit_without_reopen_selector",
+        "why": (
+            "Search found a hit but no source-open selector; rerun in full detail "
+            "or refine the cue before relying on it."
+        ),
+    }
+
+
 def search_foreground_authority(
     *,
     matches: list[dict[str, Any]],
     query_terms: list[str],
     metadata_only: bool,
+    emit_source_open_selector: bool = False,
     query_text: str | None = None,
 ) -> dict[str, Any]:
     """Project clean-source search into the shared foreground authority posture.
@@ -95,30 +135,19 @@ def search_foreground_authority(
             ],
         }
     if has_matches and metadata_only:
-        local_search_command = (
-            f"aippocampus search {shell_quote(query)} --json --detail full"
-            if query
-            else "aippocampus search \"<distinctive old source cue>\" --json --detail full"
-        )
-        return {
-            "kind": "aippocampus_search_result",
-            "ok": True,
-            "status": "ok",
-            "entry_state": "explicit_search_invoked",
-            "route_state": "metadata_only_needs_local_source_refs",
-            "usefulness": "useful_for_next_action",
-            "useful_target_hit": True,
-            "first_match_usefulness": first_hit_profile,
-            "claim_permission": "capped_search_snippet_no_claim_before_reopen",
-            "source_boundary": {
-                "authority": "reopenable_route",
-                "source_backed_claim_allowed": False,
-                "metadata_only": True,
-                "capped_snippets_are_bounded_receipts": True,
-                "source_reopen_required_before_claim": True,
-                "snippets_are_source_open": False,
-            },
-            "foreground_action": {
+        if emit_source_open_selector:
+            reopen_action = _first_match_reopen_action(matches, query=query)
+            if not reopen_action.get("command"):
+                reopen_action.pop("command", None)
+            route_state = "metadata_only_source_open_handle_available"
+            source_open_selector_emitted = True
+        else:
+            local_search_command = (
+                f"aippocampus search {shell_quote(query)} --json --detail full"
+                if query
+                else "aippocampus search \"<distinctive old source cue>\" --json --detail full"
+            )
+            reopen_action = {
                 "action_id": "rerun_search_with_local_source_refs",
                 "label": "Rerun locally with source refs",
                 "tool_name": "search_memory",
@@ -135,7 +164,29 @@ def search_foreground_authority(
                     "Public metadata found a capped receipt but withheld private "
                     "source refs; rerun locally before quoting or relying on exact wording."
                 ),
+            }
+            route_state = "metadata_only_needs_local_source_refs"
+            source_open_selector_emitted = False
+        return {
+            "kind": "aippocampus_search_result",
+            "ok": True,
+            "status": "ok",
+            "entry_state": "explicit_search_invoked",
+            "route_state": route_state,
+            "usefulness": "useful_for_next_action",
+            "useful_target_hit": True,
+            "first_match_usefulness": first_hit_profile,
+            "claim_permission": "capped_search_snippet_no_claim_before_reopen",
+            "source_boundary": {
+                "authority": "reopenable_route",
+                "source_backed_claim_allowed": False,
+                "metadata_only": True,
+                "capped_snippets_are_bounded_receipts": True,
+                "source_reopen_required_before_claim": True,
+                "source_open_selector_emitted": source_open_selector_emitted,
+                "snippets_are_source_open": False,
             },
+            "foreground_action": reopen_action,
             "forbidden_claims": [
                 "exact wording",
                 "sensitive/stale/disputed facts",
@@ -160,20 +211,7 @@ def search_foreground_authority(
                 "source_reopen_required_before_claim": True,
                 "snippets_are_bounded_receipts": True,
             },
-            "foreground_action": {
-                "action_id": "reopen_search_match_source",
-                "label": "Reopen the first search match",
-                "tool_name": "get_turn_context",
-                "arguments": _first_match_selector(matches),
-                "command": str(matches[0].get("reopen_command") or "").strip(),
-                "cli_equivalent_for_tool_action": True,
-                "mutation_risk": "read_only",
-                "claim_boundary": "source_reopen_required_before_claim",
-                "why": (
-                    "Use the selected clean-source match as a route, then reopen "
-                    "the surrounding turn before quoting or making strong claims."
-                ),
-            },
+            "foreground_action": _first_match_reopen_action(matches, query=query),
             "forbidden_claims": [
                 "exact wording beyond the emitted snippet",
                 "sensitive/stale/disputed facts",

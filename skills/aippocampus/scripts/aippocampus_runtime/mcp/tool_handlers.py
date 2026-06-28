@@ -223,7 +223,11 @@ def call_search_memory(arguments: dict[str, Any]) -> dict[str, Any]:
                     {"query": "{specific_cue_or_phrase}", "max": 10},
                     ["query"],
                 ),
-                _template_tool_action("recall_context", {"intent": "{task_or_memory_cue}"}, ["intent"]),
+                _template_tool_action(
+                    "agent_recall",
+                    {"query": "{task_or_memory_cue}"},
+                    ["query"],
+                ),
             ],
         )
     limit = int_range(arguments.get("max"), default=10, minimum=1, maximum=25)
@@ -326,6 +330,7 @@ def call_search_memory(arguments: dict[str, Any]) -> dict[str, Any]:
         result,
         include_paths=include_paths,
         metadata_only=not include_source_snippets,
+        emit_source_open_selector=True,
         query_text=query,
     )
     payload["mcp_search_scope"] = "current"
@@ -376,11 +381,6 @@ def call_recall_context(arguments: dict[str, Any]) -> dict[str, Any]:
             required_any=["intent", "query", "cue"],
             safe_next_actions=[
                 _template_tool_action(
-                    "recall_context",
-                    {"intent": "{task_or_memory_cue}", "cwd": "{project_cwd}"},
-                    ["intent_or_query"],
-                ),
-                _template_tool_action(
                     "agent_recall",
                     {"query": "{task_or_memory_cue}", "cwd": "{project_cwd}"},
                     ["query"],
@@ -430,40 +430,46 @@ def call_recall_deepen(arguments: dict[str, Any]) -> dict[str, Any]:
             required_any=["handle"],
             safe_next_actions=[
                 _template_tool_action(
-                    "recall_context",
-                    {"intent": "{task_or_memory_cue}", "cwd": "{project_cwd}"},
-                    ["intent_or_query"],
-                ),
-                _template_tool_action(
                     "agent_recall",
                     {"query": "{task_or_memory_cue}", "cwd": "{project_cwd}"},
+                    ["query"],
+                ),
+                _template_tool_action(
+                    "search_memory",
+                    {"query": "{exact_phrase_or_cue}", "cwd": "{project_cwd}"},
                     ["query"],
                 ),
             ],
             staged_followup=[
                 _template_tool_action(
-                    "recall_context",
-                    {"intent": "{task_or_memory_cue}", "cwd": "{project_cwd}"},
-                    ["intent_or_query"],
+                    "agent_recall",
+                    {"query": "{task_or_memory_cue}", "cwd": "{project_cwd}"},
+                    ["query"],
                 ),
                 _template_tool_action(
-                    "recall_deepen",
-                    {"handle": "{handle_from_recall_context_routes}", "cwd": "{project_cwd}"},
-                    ["handle"],
+                    "agent_deepen",
+                    {
+                        "request_index": "{request_index_from_agent_recall}",
+                        "recall_selector": "{recall_selector_from_agent_recall}",
+                        "cwd": "{project_cwd}",
+                    },
+                    ["request_index", "recall_selector"],
                 ),
             ],
             legacy_details={
                 "required": ["handle"],
                 "next_step_hint": (
-                    "Call recall_context with intent/query, then pass a selected route handle "
-                    "to recall_deepen."
+                    "Prefer agent_recall with a cue, then agent_deepen with the emitted selector. "
+                    "Legacy clients may still call recall_context and pass a selected route handle "
+                    "to recall_deepen explicitly."
                 ),
                 "arguments_template": {
-                    "intent": "continue the issue-work context",
+                    "query": "continue the issue-work context",
                     "cwd": "{project_cwd}",
                 },
                 "followup_arguments_template": {
-                    "handle": "{handle_from_recall_context_routes}",
+                    "request_index": "{request_index_from_agent_recall}",
+                    "recall_selector": "{recall_selector_from_agent_recall}",
                     "cwd": "{project_cwd}",
                 },
             },
@@ -898,9 +904,9 @@ def call_get_turn_context(arguments: dict[str, Any]) -> dict[str, Any]:
                     ["query"],
                 ),
                 _template_tool_action(
-                    "recall_context",
-                    {"intent": "{task_or_memory_cue}", "cwd": "{project_cwd}"},
-                    ["intent_or_query"],
+                    "search_memory",
+                    {"query": "{exact_phrase_or_cue}", "cwd": "{project_cwd}"},
+                    ["query"],
                 ),
             ],
             staged_followup=[
