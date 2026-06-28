@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
+from aippocampus_runtime.identity import stable_json_digest, stable_json_id, stable_json_lines_id
 from aippocampus_runtime.io_integrity import atomic_write_json, atomic_write_jsonl
 
 MAX_LOSS_LINE_NUMBERS = 20
@@ -389,15 +390,126 @@ def clean_source_ref(ref: Any, *, require_anchor: bool = True) -> dict[str, Any]
         "turn_id": ref.get("turn_id"),
         "turn_index": ref.get("turn_index"),
         "message_id": ref.get("message_id"),
+        "stable_source_id": ref.get("stable_source_id"),
+        "ref": ref.get("ref"),
+        "turn_ref": ref.get("turn_ref"),
+        "source_ref": ref.get("source_ref"),
         "source_id": ref.get("source_id"),
+        "clean_ordinal": ref.get("clean_ordinal"),
         "source_line": ref.get("source_line"),
         "assistant_line": ref.get("assistant_line"),
         "user_line": ref.get("user_line"),
         "line": ref.get("line"),
+        "event_id": ref.get("event_id"),
+        "role": ref.get("role"),
+        "phase": ref.get("phase"),
         "timestamp": ref.get("timestamp"),
         "source": ref.get("source"),
     }
     return {key: value for key, value in clean.items() if value not in {None, ""}}
+
+
+def _source_ref_items(value: Any, *, allow_string_ref: bool) -> Iterable[Any]:
+    if isinstance(value, Mapping):
+        return [value]
+    if isinstance(value, (list, tuple)):
+        return value
+    if allow_string_ref and isinstance(value, str) and value.strip():
+        return [{"source_ref": value.strip()}]
+    return []
+
+
+def normalize_source_refs(
+    value: Any,
+    *,
+    thread_key: str | None = None,
+    limit: int = 8,
+    require_anchor: bool = False,
+    require_thread: bool = True,
+    identity_key: bool = False,
+    allow_string_ref: bool = False,
+) -> tuple[dict[str, Any], ...]:
+    """Normalize source refs through the source IO owner.
+
+    Some low-authority caches carry identity-only refs that are not reopenable
+    until another owner joins them to source state. Keep that weaker shape
+    explicit with ``require_thread=False`` / ``identity_key=True`` instead of
+    letting modules grow local normalization copies that silently blur the
+    source-open boundary.
+    """
+
+    refs: list[dict[str, Any]] = []
+    seen: set[tuple[str, ...]] = set()
+    for item in _source_ref_items(value, allow_string_ref=allow_string_ref):
+        if not isinstance(item, Mapping):
+            continue
+        raw: dict[str, Any] = dict(item)
+        clean: dict[str, Any] | None
+        if thread_key and not raw.get("thread_key") and not raw.get("thread_id"):
+            raw["thread_key"] = thread_key
+        clean = clean_source_ref(raw, require_anchor=require_anchor)
+        if clean is None and not require_thread:
+            clean = {key: item_value for key, item_value in raw.items() if item_value not in {None, ""}}
+        if not clean:
+            continue
+        key_values = source_ref_identity_key(clean) if identity_key else source_ref_key(clean)
+        key = tuple(str(part) for part in key_values)
+        if not any(key) or key in seen:
+            continue
+        seen.add(key)
+        refs.append(clean)
+        if len(refs) >= limit:
+            break
+    return tuple(refs)
+
+
+def clean_source_refs(
+    value: Any,
+    *,
+    fields: Iterable[str] | None = None,
+    limit: int = 8,
+    require_anchor: bool = False,
+    require_thread: bool = True,
+    allow_string_ref: bool = False,
+) -> list[dict[str, Any]]:
+    """Return source refs cleaned and de-duplicated by the source owner.
+
+    ``fields`` preserves legacy digest inputs such as APW's public
+    source-ref-digest while still moving the cleanup rule to this owner module.
+    """
+
+    refs: list[dict[str, Any]] = []
+    seen: set[tuple[tuple[str, str], ...]] = set()
+    field_tuple = tuple(fields or ())
+    for item in _source_ref_items(value, allow_string_ref=allow_string_ref):
+        if not isinstance(item, Mapping):
+            continue
+        raw: dict[str, Any] = dict(item)
+        clean: dict[str, Any] | None
+        if field_tuple:
+            clean = {}
+            for key in field_tuple:
+                item_value = raw.get(key)
+                if item_value not in (None, "", []):
+                    clean[key] = item_value
+        else:
+            clean = clean_source_ref(raw, require_anchor=require_anchor)
+            if clean is None and not require_thread:
+                clean = {
+                    key: item_value
+                    for key, item_value in raw.items()
+                    if item_value not in (None, "", [])
+                }
+        if not clean:
+            continue
+        marker = tuple(sorted((key, str(item_value)) for key, item_value in clean.items()))
+        if marker in seen:
+            continue
+        seen.add(marker)
+        refs.append(clean)
+        if len(refs) >= limit:
+            break
+    return refs
 
 
 def source_message_keys(thread_key: str, message: Mapping[str, Any]) -> list[tuple[str, str, str, str]]:
@@ -421,25 +533,106 @@ def source_message_keys(thread_key: str, message: Mapping[str, Any]) -> list[tup
 
 def merge_source_refs(
     existing: Iterable[Any],
-    incoming: Iterable[Any],
-    *,
+    incoming: Iterable[Any] = (),
+    *additional: Iterable[Any],
     limit: int = 8,
     require_anchor: bool = False,
+    require_thread: bool = True,
 ) -> list[dict[str, Any]]:
     refs: list[dict[str, Any]] = []
     seen: set[tuple[str, str, str, str]] = set()
-    for raw in [*list(existing or []), *list(incoming or [])]:
-        ref = clean_source_ref(raw, require_anchor=require_anchor)
-        if not ref:
-            continue
-        key = source_ref_key(ref)
-        if key in seen:
-            continue
-        seen.add(key)
-        refs.append(ref)
-        if len(refs) >= limit:
-            break
+    for group in (existing, incoming, *additional):
+        for raw in group or []:
+            ref = clean_source_ref(raw, require_anchor=require_anchor)
+            if ref is None and not require_thread and isinstance(raw, Mapping):
+                ref = {key: value for key, value in dict(raw).items() if value not in {None, ""}}
+            if not ref:
+                continue
+            key = source_ref_key(ref)
+            if key in seen:
+                continue
+            seen.add(key)
+            refs.append(ref)
+            if len(refs) >= limit:
+                return refs
     return refs
+
+
+def merge_source_ref_groups(
+    *groups: Iterable[Any],
+    limit: int = 8,
+    require_anchor: bool = False,
+    require_thread: bool = True,
+) -> list[dict[str, Any]]:
+    """Merge arbitrary source-ref groups through the source IO owner.
+
+    Dream and source-side owners often collect refs from multiple optional
+    evidence buckets. Keep that varargs call shape here so those callers do not
+    grow local wrappers or reach for the two-argument merge primitive directly.
+    """
+
+    if not groups:
+        return []
+    first, *rest = groups
+    return merge_source_refs(
+        first,
+        *rest,
+        limit=limit,
+        require_anchor=require_anchor,
+        require_thread=require_thread,
+    )
+
+
+def source_ref_fingerprint(
+    refs: Iterable[Mapping[str, Any]],
+    *,
+    length: int = 16,
+    identity_key: bool = False,
+    algorithm: str = "stable_json_id",
+) -> str:
+    clean_refs = normalize_source_refs(
+        list(refs or []),
+        limit=10_000,
+        require_anchor=False,
+        require_thread=not identity_key,
+        identity_key=identity_key,
+    )
+    key_fn = source_ref_identity_key if identity_key else source_ref_key
+    keys = [key_fn(ref) for ref in clean_refs if any(key_fn(ref))]
+    if not keys:
+        return ""
+    if algorithm == "stable_json_lines_id":
+        return stable_json_lines_id(
+            "src_refs",
+            keys,
+            length=length,
+            ensure_ascii=False,
+            default_str=False,
+        )
+    return stable_json_id("src_refs", keys, length=length)
+
+
+def source_ref_digest(
+    refs: Iterable[Mapping[str, Any]],
+    *,
+    length: int = 16,
+    fields: Iterable[str] | None = None,
+) -> str:
+    clean_refs = clean_source_refs(
+        list(refs or []),
+        fields=fields,
+        limit=10_000,
+        require_thread=False,
+    )
+    if not clean_refs:
+        return ""
+    return stable_json_digest(
+        list(clean_refs),
+        length=length,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        default_str=True,
+    )
 
 
 def safe_float(value: Any, default: float = 0.0) -> float:

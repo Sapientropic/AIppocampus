@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import os
 import re
 from collections.abc import Mapping
@@ -13,6 +12,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from aippocampus_runtime import anchor_graph as _anchor_graph
+from aippocampus_runtime import identity as _identity
 from aippocampus_runtime import safety as _safety
 from aippocampus_runtime import text as _text
 from aippocampus_runtime.cli import errors as _cli_errors
@@ -268,13 +268,11 @@ def stable_text_fingerprint(
 def stable_json_id(prefix: str, *parts: object, length: int = 18) -> str:
     """Return a stable id for local structural metadata, not proof of content truth."""
 
-    raw = "\0".join(json.dumps(part, sort_keys=True, default=str) for part in parts)
-    digest = hashlib.sha256(raw.encode("utf-8", errors="replace")).hexdigest()[:length]
-    return f"{prefix}_{digest}"
+    return _identity.stable_json_id(prefix, *parts, length=length)
 
 
 def _stable_digest(text: str, *, length: int) -> str:
-    return hashlib.sha256(text.encode("utf-8", errors="replace")).hexdigest()[:length]
+    return _identity.stable_digest(text, length=length)
 
 
 def stable_text_join_digest(
@@ -366,8 +364,7 @@ def stable_json_tuple_digest(
     cleanup from changing persisted ids or source-join keys.
     """
 
-    raw = json.dumps(parts, ensure_ascii=ensure_ascii, sort_keys=True, default=str)
-    return _stable_digest(raw, length=length)
+    return _identity.stable_json_tuple_digest(*parts, length=length, ensure_ascii=ensure_ascii)
 
 
 def stable_json_tuple_id(
@@ -378,7 +375,7 @@ def stable_json_tuple_id(
 ) -> str:
     """Return a prefixed id for legacy tuple-JSON identity material."""
 
-    return f"{prefix}_{stable_json_tuple_digest(*parts, length=length, ensure_ascii=ensure_ascii)}"
+    return _identity.stable_json_tuple_id(prefix, *parts, length=length, ensure_ascii=ensure_ascii)
 
 
 def stable_json_digest(
@@ -397,17 +394,13 @@ def stable_json_digest(
     bytes are part of the existing row identity.
     """
 
-    if default_str:
-        raw = json.dumps(
-            value,
-            ensure_ascii=ensure_ascii,
-            sort_keys=True,
-            separators=separators,
-            default=str,
-        )
-    else:
-        raw = json.dumps(value, ensure_ascii=ensure_ascii, sort_keys=True, separators=separators)
-    return _stable_digest(raw, length=length)
+    return _identity.stable_json_digest(
+        value,
+        length=length,
+        ensure_ascii=ensure_ascii,
+        separators=separators,
+        default_str=default_str,
+    )
 
 
 def stable_json_join_id(
@@ -420,14 +413,14 @@ def stable_json_join_id(
 ) -> str:
     """Return a prefixed id for legacy joined JSON part material."""
 
-    if default_str:
-        raw = sep.join(
-            json.dumps(part, ensure_ascii=ensure_ascii, sort_keys=True, default=str)
-            for part in parts
-        )
-    else:
-        raw = sep.join(json.dumps(part, ensure_ascii=ensure_ascii, sort_keys=True) for part in parts)
-    return f"{prefix}_{_stable_digest(raw, length=length)}"
+    return _identity.stable_json_join_id(
+        prefix,
+        *parts,
+        sep=sep,
+        length=length,
+        ensure_ascii=ensure_ascii,
+        default_str=default_str,
+    )
 
 
 def stable_json_lines_id(
@@ -445,14 +438,13 @@ def stable_json_lines_id(
     hash format.
     """
 
-    if default_str:
-        raw = "\n".join(
-            json.dumps(part, ensure_ascii=ensure_ascii, sort_keys=True, default=str)
-            for part in parts
-        )
-    else:
-        raw = "\n".join(json.dumps(part, ensure_ascii=ensure_ascii, sort_keys=True) for part in parts)
-    return f"{prefix}_{_stable_digest(raw, length=length)}"
+    return _identity.stable_json_lines_id(
+        prefix,
+        *parts,
+        length=length,
+        ensure_ascii=ensure_ascii,
+        default_str=default_str,
+    )
 
 
 def stable_bytes_id(prefix: str, value: bytes | str, *, length: int = 20) -> str:

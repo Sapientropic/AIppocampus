@@ -19,8 +19,8 @@ from typing import Any
 from aippocampus_runtime.core import compact_text, now_utc, sanitize_external_model_text
 from aippocampus_runtime.registry.api import registry_paths, unique_preserve
 from aippocampus_runtime.source.io_kernel import (
+    clean_source_refs,
     load_jsonl_dict_rows,
-    source_ref_key,
     write_jsonl_dict_rows,
 )
 
@@ -107,38 +107,26 @@ def language_hint_for_script(script: str) -> str:
     }.get(script, "und")
 
 
-def compact_source_ref(ref: dict[str, Any]) -> dict[str, Any]:
-    allowed = (
-        "thread_key",
-        "title",
-        "project_label",
-        "message_id",
-        "turn_id",
-        "turn_index",
-        "source_line",
-        "line",
-        "source",
+def merge_semantic_source_refs(
+    existing: list[Any],
+    incoming: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    return clean_source_refs(
+        [*existing, *incoming],
+        fields=(
+            "thread_key",
+            "title",
+            "project_label",
+            "message_id",
+            "turn_id",
+            "turn_index",
+            "source_line",
+            "line",
+            "source",
+        ),
+        limit=MAX_SOURCE_REFS,
+        require_thread=False,
     )
-    return {key: ref.get(key) for key in allowed if ref.get(key) not in {None, ""}}
-
-
-def merge_source_refs(existing: list[Any], incoming: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    refs: list[dict[str, Any]] = []
-    seen: set[tuple[str, str, str, str]] = set()
-    for raw in [*existing, *incoming]:
-        if not isinstance(raw, dict):
-            continue
-        ref = compact_source_ref(raw)
-        if not ref:
-            continue
-        key = source_ref_key(ref)
-        if key in seen:
-            continue
-        seen.add(key)
-        refs.append(ref)
-        if len(refs) >= MAX_SOURCE_REFS:
-            break
-    return refs
 
 
 def all_semantic_cues(path: Path) -> list[dict[str, Any]]:
@@ -230,7 +218,7 @@ def record_semantic_cue_hits(
     source_refs: list[dict[str, Any]],
     route: str = "semantic_gate",
 ) -> dict[str, Any]:
-    refs = merge_source_refs([], source_refs)
+    refs = merge_semantic_source_refs([], source_refs)
     aliases = semantic_aliases_from_result(semantic_result)
     if not refs or not aliases:
         return {"path": str(path), "updated_count": 0, "active_count": 0, "cues": []}
@@ -266,7 +254,7 @@ def record_semantic_cue_hits(
         row["last_seen_unix"] = time.time()
         row["hit_count"] = int(row.get("hit_count") or 0) + 1
         row["confidence"] = round(max(float(row.get("confidence") or 0.0), confidence), 4)
-        row["source_refs"] = merge_source_refs(list(row.get("source_refs") or []), refs)
+        row["source_refs"] = merge_semantic_source_refs(list(row.get("source_refs") or []), refs)
         row["prompt_hashes"] = unique_preserve(
             [str(value) for value in row.get("prompt_hashes") or []] + [prompt_id],
             limit=MAX_PROMPT_HASHES,

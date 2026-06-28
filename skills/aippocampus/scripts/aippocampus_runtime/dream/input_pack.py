@@ -20,7 +20,11 @@ from typing import Any
 from aippocampus_runtime.core import compact_text, now_utc
 from aippocampus_runtime.dream.input_pack_summary import public_pack_summary as _public_pack_summary
 from aippocampus_runtime.dream.macro_guidance import line_topology_dream_seed_payload
-from aippocampus_runtime.source.io_kernel import load_jsonl_dict_rows, source_ref_key
+from aippocampus_runtime.source.io_kernel import (
+    load_jsonl_dict_rows,
+    normalize_source_refs,
+    source_ref_key,
+)
 from aippocampus_runtime.source.texture_consumption import (
     select_texture_signals,
     texture_signal_summary,
@@ -31,29 +35,6 @@ PACK_KIND = "aippocampus_dream_input_pack"
 READY_STATUS = "ready_for_dream_worker"
 PACK_KIND_CROSS_THREAD = "cross_thread_resonance_seed"
 TRUTH_BOUNDARY = "dream_input_pack_seed_not_fact"
-SAFE_SOURCE_REF_KEYS = {
-    "ref",
-    "turn_ref",
-    "thread_key",
-    "thread_id",
-    "message_id",
-    "turn_id",
-    "source_id",
-    "source_ref",
-    "clean_ordinal",
-    "source_line",
-    "line",
-    "user_line",
-    "assistant_line",
-    "turn_index",
-    "title",
-    "project_label",
-    "role",
-    "phase",
-    "timestamp",
-}
-
-
 @dataclass(frozen=True)
 class DreamSeed:
     seed_id: str
@@ -107,28 +88,6 @@ def source_ref_thread(ref: Mapping[str, Any]) -> str:
     return str(ref.get("thread_key") or ref.get("thread_id") or "")
 
 
-def normalize_source_refs(value: object) -> tuple[dict[str, Any], ...]:
-    if isinstance(value, Mapping):
-        raw_items: Iterable[object] = [value]
-    elif isinstance(value, (list, tuple)):
-        raw_items = value
-    else:
-        raw_items = []
-
-    refs: list[dict[str, Any]] = []
-    seen: set[tuple[str, str, str, str]] = set()
-    for item in raw_items:
-        if not isinstance(item, Mapping):
-            continue
-        ref = dict(item)
-        key = source_ref_key(ref)
-        if not any(key) or key in seen:
-            continue
-        seen.add(key)
-        refs.append({k: v for k, v in ref.items() if k in SAFE_SOURCE_REF_KEYS and is_present(v)})
-    return tuple(refs)
-
-
 def merge_refs(seeds: Iterable[DreamSeed], *, limit: int = 24) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     seen: set[tuple[str, str, str, str]] = set()
@@ -171,9 +130,9 @@ def row_types(row: Mapping[str, Any]) -> set[str]:
 def refs_from_row(row: Mapping[str, Any]) -> tuple[dict[str, Any], ...]:
     return tuple(
         [
-            *normalize_source_refs(row.get("source_refs")),
-            *normalize_source_refs(row.get("evidence_refs")),
-            *normalize_source_refs(row.get("clean_source_refs")),
+            *normalize_source_refs(row.get("source_refs"), require_thread=False),
+            *normalize_source_refs(row.get("evidence_refs"), require_thread=False),
+            *normalize_source_refs(row.get("clean_source_refs"), require_thread=False),
         ]
     )
 
@@ -194,7 +153,7 @@ def weak_handles_from_row(row: Mapping[str, Any]) -> tuple[str, ...]:
 def question_link_seed(row: Mapping[str, Any]) -> DreamSeed | None:
     if str(row.get("finding_kind") or row.get("kind") or "") != "question_link":
         return None
-    refs = normalize_source_refs(row.get("source_refs"))
+    refs = normalize_source_refs(row.get("source_refs"), require_thread=False)
     if not refs:
         return None
     linked_questions = [
@@ -250,8 +209,11 @@ def journey_seed(row: Mapping[str, Any]) -> DreamSeed | None:
         return None
     refs = tuple(
         [
-            *normalize_source_refs(row.get("source_refs")),
-            *normalize_source_refs(row.get("current_frontier_source_refs")),
+            *normalize_source_refs(row.get("source_refs"), require_thread=False),
+            *normalize_source_refs(
+                row.get("current_frontier_source_refs"),
+                require_thread=False,
+            ),
         ]
     )
     if not refs:
@@ -594,7 +556,10 @@ def runtime_recheck_seed(row: Mapping[str, Any]) -> DreamSeed | None:
 
 def line_topology_seed(row: Mapping[str, Any]) -> DreamSeed | None:
     payload = line_topology_dream_seed_payload(row)
-    refs = normalize_source_refs(payload.get("source_refs") if payload else None)
+    refs = normalize_source_refs(
+        payload.get("source_refs") if payload else None,
+        require_thread=False,
+    )
     if not payload or not refs:
         return None
     values = lambda key, limit: tuple(unique_preserve(string_values(payload.get(key)), limit=limit))
@@ -602,7 +567,7 @@ def line_topology_seed(row: Mapping[str, Any]) -> DreamSeed | None:
 
 
 def texture_seed_from_signal(signal: Mapping[str, Any]) -> DreamSeed | None:
-    refs = normalize_source_refs(signal.get("source_refs"))
+    refs = normalize_source_refs(signal.get("source_refs"), require_thread=False)
     if not refs:
         return None
     signal_kind = compact_text(str(signal.get("signal_kind") or "source_texture"), 80)

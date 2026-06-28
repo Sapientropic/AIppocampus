@@ -244,6 +244,98 @@ class RegistrySourceSearchUsefulnessTests(unittest.TestCase):
             "open_registry_search_source_window",
         )
 
+    def test_near_hit_reopen_candidate_is_navigation_until_opened(self) -> None:
+        near_text = "隐私保护 到底 要服务连续性，不能把本地记忆做成阻断器。"
+        self.messages.write_text(
+            json.dumps(
+                {
+                    "id": "msg_privacy_near_hit",
+                    "message_id": "msg_privacy_near_hit",
+                    "source_line": 88,
+                    "role": "assistant",
+                    "phase": "final_answer",
+                    "is_final": True,
+                    "text": near_text,
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        def fake_deep_search_entry_result(
+            entry: dict,
+            terms: list[str],
+            *,
+            max_hits: int,
+            search_budget: object = None,
+            deadline: object = None,
+        ) -> dict:
+            del entry, terms, max_hits, search_budget, deadline
+            return {
+                "hits": [
+                    {
+                        "source": "clean_source",
+                        "message_id": "msg_privacy_near_hit",
+                        "line": 88,
+                        "role": "assistant",
+                        "phase": "final_answer",
+                        "is_final": True,
+                        "score": 22.0,
+                        "snippet": near_text,
+                    }
+                ]
+            }
+
+        with patch.object(
+            registry_search,
+            "deep_search_entry_result",
+            side_effect=fake_deep_search_entry_result,
+        ):
+            result = source_registry_search.search_registry_sources(
+                ["隐私保护 到底 要到什么程度"],
+                registry_dir=self.root,
+                cwd=self.root,
+                record_last_search=True,
+            )
+
+        self.assertFalse(result["ok"])
+        self.assertFalse(result["useful_target_hit"])
+        self.assertEqual(result["status"], "low_confidence_reopen_candidate")
+        self.assertEqual(result["match_count"], 0)
+        self.assertEqual(result["suppressed_low_coverage_match_count"], 1)
+        self.assertEqual(result["claim_boundary"], "near_hit_navigation_only_no_claim")
+        self.assertEqual(
+            result["source_reopen_boundary"],
+            "open_low_confidence_near_hit_as_navigation_before_claim",
+        )
+        self.assertEqual(
+            result["foreground_action"]["id"],
+            "inspect_low_confidence_registry_near_hit",
+        )
+        self.assertEqual(
+            result["foreground_action"]["claim_boundary"],
+            "near_hit_navigation_only_no_claim",
+        )
+        self.assertNotIn("suppressed_low_coverage_matches", result)
+        candidate = result["low_confidence_reopen_candidates"][0]
+        self.assertEqual(candidate["candidate_kind"], "low_confidence_reopen_candidate")
+        self.assertEqual(candidate["message_id"], "msg_privacy_near_hit")
+        self.assertIn("--open-source", result["foreground_action"]["command"])
+        self.assertIn("--thread-key session:test", result["foreground_action"]["command"])
+
+        reopened = source_registry_search.open_registry_source_window(
+            registry_dir=self.root,
+            thread_key="session:test",
+            message_id="msg_privacy_near_hit",
+        )
+        opened = json.dumps(reopened["source_window"], ensure_ascii=False)
+
+        self.assertTrue(reopened["ok"])
+        self.assertEqual(reopened["source_boundary"]["authority"], "source_open")
+        self.assertIn("隐私保护", opened)
+        self.assertIn("阻断器", opened)
+
     def test_exact_session_identifier_does_not_promote_fuzzy_session_hits(self) -> None:
         def fake_deep_search_entry_result(
             entry: dict,

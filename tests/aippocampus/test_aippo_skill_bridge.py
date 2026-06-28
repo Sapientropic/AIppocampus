@@ -23,7 +23,7 @@ class AIppoSkillBridgeTests(unittest.TestCase):
 
         self.assertTrue(report["ok"], json.dumps(report, ensure_ascii=False, indent=2))
         self.assertEqual(seed["kind"], "candidate_aippo_seed")
-        self.assertIn("candidate_aiipo_seed", seed["compat_aliases"])
+        self.assertNotIn("compat_aliases", seed)
         self.assertEqual(seed["source_kind"], "skill_file")
         self.assertEqual(seed["skill_id"], "aippocampus")
         self.assertEqual(seed["source_ref"], "skills/aippocampus/SKILL.md")

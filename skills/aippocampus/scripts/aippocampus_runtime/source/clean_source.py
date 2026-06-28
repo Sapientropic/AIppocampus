@@ -495,7 +495,7 @@ def build_clean_source(
         "artifact_scope": "global_thread_store" if output_dir is None else "explicit_output_dir",
         "storage_policy": {
             "default": "AIPPOCAMPUS_REGISTRY_DIR or AIPPOCAMPUS_HOME/registry, with legacy CODEX_HOME fallback",
-            "legacy_project_local": LEGACY_OUTPUT_DIR,
+            "explicit_project_local_output": LEGACY_OUTPUT_DIR,
             "why": "Clean source is private cross-project memory; project-local output is explicit compatibility, not the default.",
         },
         "source_id": source_id,
@@ -507,12 +507,6 @@ def build_clean_source(
         "source_transcript_sha256": source_sha256,
         "source_artifact": source_artifact,
         "material_class_contract": clean_source_material_contract(),
-        "legacy_field_aliases": {
-            "source_rollout": "source_transcript",
-            "source_rollout_size": "source_transcript_size",
-            "source_rollout_mtime": "source_transcript_mtime",
-            "source_rollout_sha256": "source_transcript_sha256",
-        },
         "source_rollout": str(source_path),
         "source_rollout_size": stat.st_size,
         "source_rollout_mtime": stat.st_mtime,

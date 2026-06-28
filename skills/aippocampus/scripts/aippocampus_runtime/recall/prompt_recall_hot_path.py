@@ -107,8 +107,9 @@ def merge_hot_path_candidates(
         item["hot_path_source"] = True
         if hot_path_reason:
             item["hot_path_reason"] = hot_path_reason
-        item["matched_terms"] = unique_preserve(
-            list(item.get("matched_terms") or []) + query_terms,
+        item["matched_terms"] = prompt_cues.merge_unique_terms(
+            item.get("matched_terms") or (),
+            query_terms,
             limit=8,
         )
         candidates.append(item)

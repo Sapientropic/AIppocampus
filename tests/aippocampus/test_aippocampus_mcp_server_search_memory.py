@@ -16,7 +16,7 @@ class AippocampusMcpServerSearchMemoryTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.tmp.cleanup()
 
-    def _write_registry_thread(self, *, anchor: str) -> None:
+    def _write_registry_thread(self, *, anchor: str, text: str | None = None) -> None:
         clean = self.cwd / "registry-thread" / "clean-source"
         clean.mkdir(parents=True)
         (clean / "messages.jsonl").write_text(
@@ -29,7 +29,7 @@ class AippocampusMcpServerSearchMemoryTests(unittest.TestCase):
                     "phase": "final_answer",
                     "turn_index": 9,
                     "is_final": True,
-                    "text": f"The opened MCP source window contains {anchor}.",
+                    "text": text or f"The opened MCP source window contains {anchor}.",
                 },
                 ensure_ascii=False,
             )
@@ -95,6 +95,47 @@ class AippocampusMcpServerSearchMemoryTests(unittest.TestCase):
         self.assertIn(anchor, json.dumps(open_payload["source_window_preview"], ensure_ascii=False))
         self.assertNotIn("source_window", open_payload)
         self.assertNotIn(str(self.cwd), json.dumps(open_payload, ensure_ascii=False))
+
+    def test_search_memory_near_hit_candidate_opens_source_as_navigation(self) -> None:
+        query = "隐私保护 到底 要到什么程度"
+        source_text = "隐私保护 到底 要帮用户继续，而不是变成隐私阻断器。"
+        self._write_registry_thread(anchor="隐私保护", text=source_text)
+
+        search_payload = call_mcp_tool_payload(
+            "search_memory",
+            {
+                "query": query,
+                "scope": "all_registered_sources",
+                "registry_dir": str(self.cwd),
+                "cwd": str(self.cwd),
+            },
+        )
+        action = search_payload["foreground_action"]
+
+        self.assertFalse(search_payload["ok"])
+        self.assertEqual(search_payload["status"], "low_confidence_reopen_candidate")
+        self.assertEqual(action["id"], "inspect_low_confidence_registry_near_hit")
+        self.assertEqual(action["tool_name"], "search_memory")
+        self.assertTrue(action["arguments"]["open_source"])
+        self.assertEqual(action["claim_boundary"], "near_hit_navigation_only_no_claim")
+        self.assertNotIn("suppressed_low_coverage_matches", search_payload)
+
+        open_payload = call_mcp_tool_payload(
+            "search_memory",
+            {
+                **action["arguments"],
+                "registry_dir": str(self.cwd),
+                "cwd": str(self.cwd),
+            },
+        )
+
+        self.assertEqual(open_payload["kind"], "aippocampus_registry_source_window")
+        self.assertEqual(open_payload["source_boundary"]["authority"], "source_open")
+        self.assertIn("隐私保护", open_payload["primary_source_snippet"]["text"])
+        self.assertIn(
+            "隐私阻断器",
+            json.dumps(open_payload["source_window_preview"], ensure_ascii=False),
+        )
 
 
 if __name__ == "__main__":

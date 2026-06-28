@@ -505,7 +505,7 @@ def main(argv: list[str] | None = None) -> int:
             preferred_labels = (
                 {"review guidance", "install action hint hook", "refresh action hint cache"}
                 if not installed
-                else {"refresh action hint cache", "install action hint hook"}
+                else {"probe", "probe action hint hot path", "refresh action hint cache"}
             )
             preferred = next(
                 (

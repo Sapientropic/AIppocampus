@@ -6,12 +6,12 @@ from __future__ import annotations
 import argparse
 import json
 import re
-import tempfile
 from collections import Counter
 from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.core import compact_text, now_utc
+from aippocampus_runtime.io_integrity import atomic_write_json
 from aippocampus_runtime.navigation.associations import (
     extract_terms_from_text,
     source_text_is_noise,
@@ -428,26 +428,7 @@ def build_project_timeline(
 
 
 def save_project_timeline(path: Path, data: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp_path: Path | None = None
-    try:
-        with tempfile.NamedTemporaryFile(
-            "w",
-            encoding="utf-8",
-            newline="\n",
-            delete=False,
-            dir=path.parent,
-            prefix=f".{path.name}.",
-            suffix=".tmp",
-        ) as tmp:
-            tmp_path = Path(tmp.name)
-            json.dump(data, tmp, ensure_ascii=False, indent=2)
-        # Each writer gets its own same-directory temp file, so parallel timeline
-        # refreshes cannot remove a sibling writer's handoff before atomic replace.
-        tmp_path.replace(path)
-    finally:
-        if tmp_path is not None and tmp_path.exists():
-            tmp_path.unlink()
+    atomic_write_json(path, data, indent=2)
 
 
 def main() -> int:

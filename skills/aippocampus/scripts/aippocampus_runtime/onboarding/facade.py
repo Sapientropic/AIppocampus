@@ -198,6 +198,9 @@ def provider_status_report(
                 "why": "auto keeps the safest fully implemented default and lists other providers separately.",
             },
             "storage": storage,
+            # owner: onboarding operator diagnostics; removal: after registry
+            # migration smoke retires legacy host paths; default/exposure:
+            # operator JSON only, never compact frontstage.
             "legacy_aliases": legacy_alias_diagnostics(registry_resolution=storage),
             "detail_level": "operator" if detailed else "frontstage",
         },

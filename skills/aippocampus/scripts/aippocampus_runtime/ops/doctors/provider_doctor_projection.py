@@ -11,6 +11,7 @@ from aippocampus_runtime.contracts import (
     foreground_shell_action,
 )
 from aippocampus_runtime.model.routing import DEFAULT_DEEPSEEK_API_KEY_ENV
+from aippocampus_runtime.ops.doctors.common import as_dict
 
 SCHEMA_VERSION = 1
 DEFAULT_PROVIDER_ENV_VAR = DEFAULT_DEEPSEEK_API_KEY_ENV
@@ -20,10 +21,6 @@ def _public_token(value: Any, *, fallback: str = "unknown", limit: int = 96) -> 
     text = str(value or "").strip()
     clean = "".join(char for char in text[:limit] if char.isalnum() or char in {"_", "-", "."})
     return clean or fallback
-
-
-def _as_dict(value: Any) -> dict[str, Any]:
-    return value if isinstance(value, dict) else {}
 
 
 def _normalized_recommended_action(action: dict[str, Any]) -> dict[str, Any]:
@@ -93,7 +90,7 @@ def _provider_doctor_primary_action(
 def compact_provider_doctor_card(report: dict[str, Any]) -> dict[str, Any]:
     """Project provider doctor into the compact foreground decision-card shape."""
 
-    route = _as_dict(report.get("route"))
+    route = as_dict(report.get("route"))
     normalized_actions = [
         _normalized_recommended_action(action)
         for action in report.get("recommended_actions") or []
@@ -157,8 +154,8 @@ def compact_provider_doctor_card(report: dict[str, Any]) -> dict[str, Any]:
 
 
 def render_text(report: dict[str, Any]) -> str:
-    route = _as_dict(report.get("route"))
-    provider_env = _as_dict(report.get("provider_env"))
+    route = as_dict(report.get("route"))
+    provider_env = as_dict(report.get("provider_env"))
     lines = [
         "AIppocampus provider doctor",
         f"- Status: {report.get('status')}",
@@ -175,17 +172,17 @@ def render_text(report: dict[str, Any]) -> str:
         )
     else:
         lines.append("- Key env: not checked because route configuration failed")
-    cognitive_worker = _as_dict(report.get("cognitive_worker"))
+    cognitive_worker = as_dict(report.get("cognitive_worker"))
     if cognitive_worker:
         lines.append(f"- Cognitive worker mode: {cognitive_worker.get('status', 'unknown')}")
-    background_consent = _as_dict(report.get("background_model_consent"))
+    background_consent = as_dict(report.get("background_model_consent"))
     if background_consent:
         lines.append(
             "- Background model consent: "
             f"{background_consent.get('status', 'unknown')} "
             f"(env {background_consent.get('required_env', BACKGROUND_MODEL_CONSENT_ENV)})"
         )
-    hook_relevance = _as_dict(report.get("hook_relevance"))
+    hook_relevance = as_dict(report.get("hook_relevance"))
     if hook_relevance and not hook_relevance.get("actual_installed_hook_process_checked"):
         lines.extend(
             [
@@ -202,7 +199,7 @@ def render_text(report: dict[str, Any]) -> str:
 
 
 def render_config_text(report: dict[str, Any], *, detail: str = "compact") -> str:
-    data = _as_dict(report.get("data"))
+    data = as_dict(report.get("data"))
     knobs = list(data.get("knobs") or [])
     configured = [
         item for item in knobs if isinstance(item, dict) and item.get("configured")

@@ -14,7 +14,8 @@ from unittest.mock import patch
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 
-from aippocampus_runtime.ops import doctor_preflight, provider_doctor
+from aippocampus_runtime.ops import provider_doctor
+from aippocampus_runtime.ops.doctors import preflight as doctor_preflight
 
 PROVIDER_ENV_NAMES = [
     "AIPPOCAMPUS_DEEPSEEK_API_KEY",

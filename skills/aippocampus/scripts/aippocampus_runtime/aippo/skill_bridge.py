@@ -408,7 +408,6 @@ def build_skill_to_aippo_report(
     )
     seed = {
         "kind": "candidate_aippo_seed",
-        "compat_aliases": ["candidate_aiipo_seed"],
         "schema_version": SCHEMA_VERSION,
         "seed_id": f"seed_skill_{_slug(resolved_skill_id)}_v0",
         "source_kind": "skill_file",

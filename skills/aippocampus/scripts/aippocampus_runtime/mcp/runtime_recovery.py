@@ -59,7 +59,7 @@ def foreground_mcp_runtime_recovery_payload(
         "kind": "aippocampus_foreground_mcp_runtime_recovery",
         "ok": False,
         "status": "foreground_mcp_runtime_mismatch",
-        "tool": tool_name,
+        "tool_name": tool_name,
         "error": {
             "code": "foreground_mcp_runtime_mismatch",
             "message": "The current foreground MCP connection failed inside an agent-native AIppocampus tool.",
@@ -73,12 +73,6 @@ def foreground_mcp_runtime_recovery_payload(
             reload_action,
             safe_next_actions=[reload_action, cli_fallback_action],
         ),
-        "recovery_actions": [
-            "reload Codex Desktop or refresh plugin tools",
-            "restart the MCP transport if your host exposes that control",
-            "aippocampus plugin install --codex --verify --compact-json",
-            'aippocampus agent recall "{cue}" --json',
-        ],
         "source_boundary": {
             "local_paths_serialized": False,
             "cli_fallback_does_not_prove_foreground_mcp_recovered": True,

@@ -39,7 +39,11 @@ from aippocampus_runtime.reflection.reconsolidation import (
     should_surface_candidate,
 )
 from aippocampus_runtime.registry.api import unique_preserve
-from aippocampus_runtime.source.io_kernel import load_jsonl_dict_rows, source_ref_key
+from aippocampus_runtime.source.io_kernel import (
+    load_jsonl_dict_rows,
+    merge_source_refs,
+    source_ref_key,
+)
 
 SCHEMA_VERSION = 1
 PROMPT_VERSION = "aippocampus-coding-decision-events-v1"
@@ -185,18 +189,6 @@ def source_ref_for_message(message: Mapping[str, Any], *, thread_key: str | None
         "timestamp": message.get("timestamp"),
     }
     return {key: value for key, value in ref.items() if value not in {None, ""}}
-
-
-def merge_source_refs(refs: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
-    out: list[dict[str, Any]] = []
-    seen: set[tuple[str, str, str, str]] = set()
-    for ref in refs:
-        key = source_ref_key(ref)
-        if not key[0] or not any(key[1:]) or key in seen:
-            continue
-        seen.add(key)
-        out.append(dict(ref))
-    return out[:8]
 
 
 def group_messages_by_turn(messages: Sequence[Mapping[str, Any]]) -> list[list[Mapping[str, Any]]]:

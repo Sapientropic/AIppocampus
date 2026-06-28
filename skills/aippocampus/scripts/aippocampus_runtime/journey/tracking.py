@@ -20,7 +20,10 @@ from pathlib import Path
 from typing import Any, Literal
 
 from aippocampus_runtime.core import compact_text, now_utc
-from aippocampus_runtime.source.io_kernel import source_ref_key
+from aippocampus_runtime.source.io_kernel import (
+    merge_source_refs as merge_source_ref_groups,
+)
+from aippocampus_runtime.source.io_kernel import normalize_source_refs
 from aippocampus_runtime.source.texture_consumption import (
     select_texture_signals,
     texture_signal_summary,
@@ -148,32 +151,6 @@ def unique_preserve(values: Iterable[str], *, limit: int = 20) -> tuple[str, ...
     return tuple(out)
 
 
-def normalize_source_refs(value: object, *, thread_id: str | None = None) -> tuple[dict[str, Any], ...]:
-    if isinstance(value, Mapping):
-        raw_items: Iterable[object] = [value]
-    elif isinstance(value, (list, tuple)):
-        raw_items = value
-    elif isinstance(value, str) and value.strip():
-        raw_items = [{"source_ref": value.strip()}]
-    else:
-        raw_items = []
-
-    refs: list[dict[str, Any]] = []
-    seen: set[tuple[str, str, str, str]] = set()
-    for item in raw_items:
-        if not isinstance(item, Mapping):
-            continue
-        ref = dict(item)
-        if thread_id and not ref.get("thread_key") and not ref.get("thread_id"):
-            ref["thread_key"] = thread_id
-        key = source_ref_key(ref)
-        if not any(key) or key in seen:
-            continue
-        seen.add(key)
-        refs.append({k: v for k, v in ref.items() if v not in {None, ""}})
-    return tuple(refs)
-
-
 def waypoint_thread_id(row: Mapping[str, Any], refs: tuple[dict[str, Any], ...]) -> str:
     for key in ("thread_id", "thread_key"):
         value = row.get(key)
@@ -210,7 +187,12 @@ def frontier_hint_from_texture_signals(signals: Iterable[Mapping[str, Any]]) -> 
 
 
 def waypoint_from_mapping(row: Mapping[str, Any]) -> Waypoint | None:
-    refs = normalize_source_refs(row.get("source_refs") or row.get("source_ref"), thread_id=str(row.get("thread_id") or row.get("thread_key") or ""))
+    refs = normalize_source_refs(
+        row.get("source_refs") or row.get("source_ref"),
+        thread_key=str(row.get("thread_id") or row.get("thread_key") or ""),
+        require_thread=False,
+        allow_string_ref=True,
+    )
     if not refs:
         return None
     thread_id = waypoint_thread_id(row, refs)
@@ -521,20 +503,19 @@ def build_content_light_resonance(
     }
 
 
-def merge_source_refs(items: Iterable[Waypoint | Mapping[str, Any]], *, limit: int = 20) -> tuple[dict[str, Any], ...]:
-    refs: list[dict[str, Any]] = []
-    seen: set[tuple[str, str, str, str]] = set()
+def waypoint_source_refs(
+    items: Iterable[Waypoint | Mapping[str, Any]],
+    *,
+    limit: int = 20,
+) -> tuple[dict[str, Any], ...]:
+    groups: list[Iterable[Mapping[str, Any]]] = []
     for item in items:
-        item_refs = item.source_refs if isinstance(item, Waypoint) else normalize_source_refs(item)
-        for ref in item_refs:
-            key = source_ref_key(ref)
-            if key in seen:
-                continue
-            seen.add(key)
-            refs.append(dict(ref))
-            if len(refs) >= limit:
-                return tuple(refs)
-    return tuple(refs)
+        groups.append(
+            item.source_refs
+            if isinstance(item, Waypoint)
+            else normalize_source_refs(item, require_thread=False, allow_string_ref=True)
+        )
+    return tuple(merge_source_ref_groups(*groups, limit=limit, require_thread=False))
 
 
 def compute_expiry(last_seen: str, waypoint_count: int) -> str:
@@ -545,7 +526,7 @@ def compute_expiry(last_seen: str, waypoint_count: int) -> str:
 def build_current_frontier(waypoints: Iterable[Waypoint]) -> tuple[str, tuple[dict[str, Any], ...]]:
     ordered = sorted(tuple(waypoints), key=lambda item: parse_time(item.timestamp))
     recent = ordered[-3:]
-    refs = merge_source_refs(recent, limit=8)
+    refs = waypoint_source_refs(recent, limit=8)
     hint = next((item.frontier_hint for item in reversed(recent) if item.frontier_hint), "")
     if hint:
         return compact_text(hint, 360), refs
@@ -589,7 +570,7 @@ def create_journey(
         return JourneyInstantiationResult(False, "core_inquiry_not_specific")
 
     ordered = tuple(sorted(waypoints, key=lambda item: parse_time(item.timestamp)))
-    source_refs = merge_source_refs(ordered)
+    source_refs = waypoint_source_refs(ordered)
     current_frontier, frontier_refs = build_current_frontier(ordered)
     first_seen = ordered[0].timestamp
     last_seen = ordered[-1].timestamp
@@ -634,7 +615,7 @@ def append_waypoint(journey: Journey, waypoint_row: Mapping[str, Any]) -> Journe
             "waypoints": waypoints,
             "current_frontier": frontier,
             "current_frontier_source_refs": frontier_refs,
-            "source_refs": merge_source_refs(waypoints),
+            "source_refs": waypoint_source_refs(waypoints),
             "last_seen": waypoint.timestamp,
             "expires_at": compute_expiry(waypoint.timestamp, len(waypoints)),
             "status": "traveling",

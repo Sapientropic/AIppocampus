@@ -55,7 +55,7 @@ class UpdateAgentStatusTests(unittest.TestCase):
                     stack.enter_context(slow_patch)
                 child_probe = stack.enter_context(
                     patch(
-                        "aippocampus_runtime.ops.provider_doctor._child_process_env_visibility",
+                        "aippocampus_runtime.ops.doctors.provider_doctor._child_process_env_visibility",
                         side_effect=AssertionError("child process probe should be deferred"),
                     )
                 )
@@ -175,7 +175,7 @@ class UpdateAgentStatusTests(unittest.TestCase):
                     stack.enter_context(slow_patch)
                 stack.enter_context(
                     patch(
-                        "aippocampus_runtime.ops.provider_doctor._child_process_env_visibility",
+                        "aippocampus_runtime.ops.doctors.provider_doctor._child_process_env_visibility",
                         side_effect=AssertionError("child process probe should be deferred"),
                     )
                 )

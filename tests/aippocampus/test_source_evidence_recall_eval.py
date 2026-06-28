@@ -192,7 +192,7 @@ class SourceEvidenceRecallEvalTests(unittest.TestCase):
         self.assertIn("corpus rarity", result["selection"]["boundary"])
         self.assertEqual(result["selection"]["mode"], "semantic_sidecar_required")
         self.assertEqual(result["selection_explanation"]["mode"], "semantic_sidecar_required")
-        self.assertIn("dynamic semantic_scope_labels", result["selection_explanation"]["selector"])
+        self.assertIn("dynamic semantic_scope_labels", result["selection_explanation"]["selection_rule"])
         self.assertEqual(result["cases"][0]["prompt_kind"], "fuzzy_life_wide_source_evidence")
         self.assertTrue(result["cases"][0]["expected_evidence"].startswith("evidence:"))
         self.assertIn("personal_reflection", result["label_coverage"])

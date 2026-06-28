@@ -73,7 +73,12 @@ def overview_id(label: str) -> str:
 
 def registry_overview_from_episodes(episodes: list[dict[str, Any]]) -> dict[str, Any]:
     clusters_by_label: dict[str, list[dict[str, Any]]] = {}
-    for episode in episodes:
+    latest_first_episodes = sorted(
+        episodes,
+        key=lambda row: str(row.get("updated_at") or ""),
+        reverse=True,
+    )
+    for episode in latest_first_episodes:
         label = compact_text(
             str(episode.get("project_label") or episode.get("title") or "Registry episodes"),
             120,
@@ -82,7 +87,7 @@ def registry_overview_from_episodes(episodes: list[dict[str, Any]]) -> dict[str,
 
     clusters: list[dict[str, Any]] = []
     for label, rows in clusters_by_label.items():
-        ordered = sorted(rows, key=lambda row: str(row.get("updated_at") or ""), reverse=True)
+        ordered = rows
         thread_keys = unique_preserve(
             [str(row.get("thread_key") or "") for row in ordered if row.get("thread_key")],
             limit=12,

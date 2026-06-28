@@ -10,6 +10,7 @@ from typing import Any
 
 from aippocampus_runtime.core import compact_text
 from aippocampus_runtime.journey import tracking
+from aippocampus_runtime.source.io_kernel import normalize_source_refs, source_ref_key
 
 LIVE_REPLAY_KIND = "aippocampus_live_journey_time_sliced_replay"
 PUBLIC_TIME_SLICED_REPLAY_KIND = "aippocampus_public_journey_time_sliced_replay"
@@ -40,9 +41,9 @@ def _live_row_kind(row: Mapping[str, Any]) -> str:
 
 
 def _live_row_source_refs(row: Mapping[str, Any]) -> tuple[dict[str, Any], ...]:
-    return tracking.normalize_source_refs(
+    return normalize_source_refs(
         row.get("source_refs") or row.get("source_ref"),
-        thread_id=str(row.get("thread_id") or row.get("thread_key") or ""),
+        thread_key=str(row.get("thread_id") or row.get("thread_key") or ""),
     )
 
 
@@ -145,7 +146,7 @@ def _route_handle(journey_row: Mapping[str, Any]) -> str:
     refs = journey_row.get("source_refs") or []
     return "journey_route:" + tracking.stable_digest(
         journey_row.get("journey_id"),
-        [tracking.source_ref_key(ref) for ref in refs if isinstance(ref, Mapping)],
+        [source_ref_key(ref) for ref in refs if isinstance(ref, Mapping)],
         prefix="route",
         length=18,
     ).removeprefix("route_")

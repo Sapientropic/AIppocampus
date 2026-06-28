@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import time
 from collections.abc import Iterable, Iterator, Mapping
 from contextlib import contextmanager
@@ -74,6 +75,35 @@ def prepared_atomic_replace(path: Path) -> Iterator[Path]:
         except OSError:
             pass
         raise
+
+
+@contextmanager
+def prepared_directory_replace(path: Path) -> Iterator[Path]:
+    """Yield a unique same-directory tmp directory path and publish on success.
+
+    Plugin/cache publishers replace whole directory trees, not files. Keep that
+    directory-specific tmp cleanup and final replace here so installer paths do
+    not grow ad hoc fixed tmp names or partial cleanup rules.
+    """
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = _unique_tmp_path(path)
+    try:
+        yield tmp
+        tmp.replace(path)
+    except BaseException:
+        if tmp.exists():
+            if tmp.is_dir():
+                shutil.rmtree(tmp)
+            else:
+                tmp.unlink()
+        raise
+
+
+def replace_directory(source: Path, target: Path) -> None:
+    """Replace a directory path through the directory-publish owner."""
+
+    source.replace(target)
 
 
 def _atomic_replace_bytes(path: Path, payload_bytes: bytes) -> None:

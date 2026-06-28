@@ -32,7 +32,7 @@ COMMANDS = {
     "agent": CommandSpec("agent_continuity.py", "aippocampus_runtime.recall.agent_continuity"),
     "export": CommandSpec("export_bundle.py", "aippocampus_runtime.artifacts.export_bundle"),
     "import": CommandSpec("import_bundle.py", "aippocampus_runtime.artifacts.import_bundle"),
-    "doctor": CommandSpec("provider_doctor.py", "aippocampus_runtime.ops.provider_doctor"),
+    "doctor": CommandSpec("provider_doctor.py", "aippocampus_runtime.ops.doctors.provider_doctor"),
     "update": CommandSpec("update.py", "aippocampus_runtime.update.cli"),
     "plugin": CommandSpec("plugin.py", "aippocampus_runtime.update.plugin_installer"),
     "uninstall": CommandSpec("uninstall.py", "aippocampus_runtime.ops.uninstall"),
@@ -117,7 +117,7 @@ SCRIPT_MODULES = {
     "registry.py": "aippocampus_runtime.registry.api",
     "sync_bundle.py": "aippocampus_runtime.sync.bundle",
     "sync_object_storage.py": "aippocampus_runtime.sync.object_storage.cli",
-    "provider_doctor.py": "aippocampus_runtime.ops.provider_doctor",
+    "provider_doctor.py": "aippocampus_runtime.ops.doctors.provider_doctor",
     "cognitive_observatory.py": "aippocampus_runtime.ops.cognitive_observatory",
     "episode_arc_private_adjudication.py": (
         "aippocampus_runtime.coding.episode_arc_private_adjudication"

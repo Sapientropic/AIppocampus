@@ -917,7 +917,7 @@ def selection_explanation(
             "min_cases": int(min_cases),
             "sample_gap": sample_gap,
             "status": status,
-            "selector": (
+            "selection_rule": (
                 "Selects non-technical life-wide turns only when the turn already has "
                 "dynamic semantic_scope_labels from the semantic sidecar."
             ),
@@ -942,7 +942,7 @@ def selection_explanation(
         "min_cases": int(min_cases),
         "sample_gap": sample_gap,
         "status": status,
-        "selector": (
+        "selection_rule": (
             "Selects the same non-technical life-wide clean-source surface without requiring "
             "dynamic semantic_scope_labels."
         ),

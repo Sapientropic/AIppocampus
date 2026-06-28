@@ -865,7 +865,7 @@ class AippocampusMcpServerOpsTests(unittest.TestCase):
         self.assertEqual(payload["kind"], "aippocampus_foreground_mcp_runtime_recovery")
         self.assertEqual(payload["status"], "foreground_mcp_runtime_mismatch")
         self.assertEqual(payload["error"]["code"], "foreground_mcp_runtime_mismatch")
-        self.assertIn("reload", payload["recovery_actions"][0])
+        self.assertNotIn("recovery_actions", payload)
         self.assertEqual(payload["foreground_action"]["id"], "reload_mcp_transport")
         self.assertNotIn(payload["foreground_action"], payload["safe_next_actions"])
         self.assertIn("aippocampus agent recall", payload["safe_next_actions"][0]["command_template"])
@@ -904,10 +904,11 @@ class AippocampusMcpServerOpsTests(unittest.TestCase):
         encoded = json.dumps(payload, ensure_ascii=False)
         self.assertEqual(payload["kind"], "aippocampus_foreground_mcp_runtime_recovery")
         self.assertEqual(payload["status"], "foreground_mcp_runtime_mismatch")
-        self.assertEqual(payload["tool"], "agent_recall")
+        self.assertEqual(payload["tool_name"], "agent_recall")
         self.assertEqual(payload["error"]["code"], "foreground_mcp_runtime_mismatch")
         self.assertIn("reload", payload["foreground_action"]["id"])
-        self.assertIn("aippocampus plugin install --codex --verify", encoded)
+        self.assertNotIn("aippocampus plugin install --codex --verify", encoded)
+        self.assertIn("aippocampus agent recall", encoded)
         self.assertNotIn(str(self.cwd), encoded)
 
     def test_agent_recall_non_signature_type_error_stays_tool_failed(self) -> None:
