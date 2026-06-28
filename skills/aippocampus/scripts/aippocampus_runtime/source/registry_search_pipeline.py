@@ -120,8 +120,9 @@ def _registry_match(
     paths: Mapping[str, Any] = raw_paths if isinstance(raw_paths, Mapping) else {}
     thread_key = str(entry.get("thread_key") or "").strip()
     source_kind = str(hit.get("source") or "")
+    source_open_hit = source_kind in {"clean_source", "route_note"}
     message_id = hit.get("message_id") or (hit.get("id") if source_kind == "clean_source" else None)
-    route_line = hit.get("line") if source_kind == "clean_source" or message_id else None
+    route_line = hit.get("line") if source_open_hit or message_id else None
     # SQLite line numbers are index/raw positions, not clean-source reopen keys.
     # Keeping line-only index scent out of source_route prevents agents from
     # treating it as a copy-pasteable source-open handle.
@@ -171,8 +172,23 @@ def _registry_match(
         "artifact_demoted": bool(artifact_role.get("demote")),
         "source_route": source_route,
     }
+    route_note_profile = hit.get("query_match_profile")
+    if (
+        source_kind == "route_note"
+        and isinstance(route_note_profile, Mapping)
+        and route_note_profile.get("accepted")
+        and source_route
+    ):
+        match["_route_note_anchor_match"] = True
+        matched_terms = [
+            str(term) for term in hit.get("matched_route_note_terms") or [] if str(term).strip()
+        ]
+        if matched_terms:
+            match["_ranking_haystack"] = " ".join(matched_terms + [raw_snippet])
     if raw_snippet and raw_snippet != snippet:
-        match["_ranking_haystack"] = raw_snippet
+        match["_ranking_haystack"] = " ".join(
+            item for item in [str(match.get("_ranking_haystack") or ""), raw_snippet] if item
+        )
     if include_paths:
         match["local_diagnostic"] = {
             "workspace": paths.get("workspace"),
@@ -291,6 +307,14 @@ def _profile_registry_match(
     )
     if profile["accepted"]:
         return profile
+    if match.get("_route_note_anchor_match") and match_has_direct_source_open_route(match):
+        return {
+            **profile,
+            "accepted": True,
+            "suppression_reason": "",
+            "acceptance_reason": "route_note_anchor_terms",
+            "relationship_origin_override": "route_note_anchor_terms",
+        }
     thread = match.get("thread")
     thread_map = thread if isinstance(thread, Mapping) else {}
     origin_profile = relationship_origin_allows_low_coverage(

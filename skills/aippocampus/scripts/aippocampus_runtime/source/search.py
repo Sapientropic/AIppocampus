@@ -29,6 +29,7 @@ from aippocampus_runtime.source.registry_search import (
     add_registry_search_arguments,
     run_registry_search_cli,
 )
+from aippocampus_runtime.source.route_note_search import search_route_notes
 from aippocampus_runtime.source.route_topics import route_topic_low_coverage_acceptance
 from aippocampus_runtime.source.search_core import (
     iter_clean_messages,  # noqa: F401 - public aggregate import used by runtime callers.
@@ -253,6 +254,35 @@ def search_clean_source(
             as_int(item.get("source_line")),
         )
     )
+    route_notes_path = source_dir / "route-notes.jsonl"
+    if route_notes_path.exists():
+        route_note_matches, route_note_loss = search_route_notes(
+            route_notes_path,
+            terms,
+            limit=limit,
+            snippet_chars=snippet_chars,
+        )
+        if label_filter:
+            route_note_matches = [
+                item
+                for item in route_note_matches
+                if set(label_filter).intersection(item.get("scope_labels") or [])
+            ]
+        warning = jsonl_loss_warning(
+            route_note_loss,
+            stage="route_notes",
+            path_label=route_notes_path.name,
+        )
+        if warning:
+            warnings.append(warning)
+        matches.extend(route_note_matches)
+        matches.sort(
+            key=lambda item: (
+                1 if item.get("search_noise") or item.get("artifact_demoted") else 0,
+                -as_float(item.get("rank_score") or item.get("score")),
+                as_int(item.get("source_line")),
+            )
+        )
     if label_filter and missing_scope_label_count:
         warnings.append(
             {
@@ -265,8 +295,8 @@ def search_clean_source(
         "source": str(messages_path),
         "search_scope": "current_thread_clean_source",
         "scope_description": (
-            "current resolved thread clean-source directory only; this is not a "
-            "registry-wide memory search"
+            "current resolved thread clean-source directory plus joined route-note "
+            "navigation; this is not a registry-wide memory search"
         ),
         "query_terms": terms,
         "scope_labels": label_filter,

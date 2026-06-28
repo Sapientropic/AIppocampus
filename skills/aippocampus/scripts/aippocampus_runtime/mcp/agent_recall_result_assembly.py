@@ -190,9 +190,11 @@ def _annotate_route_action_priority(
     foreground_action: Mapping[str, Any],
     context: Any,
 ) -> list[dict[str, Any]]:
+    foreground_action_id = _action_id(foreground_action)
     primary_route_index = (
         _action_request_index(foreground_action)
         if str(foreground_action.get("tool_name") or "") == "agent_deepen"
+        and foreground_action_id != "deepen_associative_path_fallback"
         else None
     )
     low_specificity = bool(getattr(context, "labels_low_specificity", False))
@@ -204,9 +206,16 @@ def _annotate_route_action_priority(
         if primary_route_index is not None and row_index == primary_route_index:
             row["action_priority"] = "primary"
             row["primary_action_relation"] = "foreground_action_deepens_this_route"
-            row["actionability"] = (
-                "low_confidence_reopenable" if low_specificity else "reopenable"
-            ) if has_action else "preview_only"
+            existing_actionability = str(row.get("actionability") or "")
+            if has_action and existing_actionability in {
+                "low_confidence_reopenable",
+                "reopenable",
+            }:
+                row["actionability"] = existing_actionability
+            else:
+                row["actionability"] = (
+                    "low_confidence_reopenable" if low_specificity else "reopenable"
+                ) if has_action else "preview_only"
         elif primary_route_index is None:
             row["action_priority"] = "secondary_preview"
             row["actionability"] = (
@@ -231,6 +240,8 @@ def _annotate_foreground_route_relation(
     *,
     route_receipts: list[dict[str, Any]],
 ) -> dict[str, Any]:
+    if _action_id(foreground_action) == "deepen_associative_path_fallback":
+        return dict(foreground_action)
     route_index = _action_request_index(foreground_action)
     if route_index is None:
         return dict(foreground_action)

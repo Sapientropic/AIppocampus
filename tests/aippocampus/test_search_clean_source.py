@@ -457,7 +457,7 @@ class SearchCleanSourceTests(unittest.TestCase):
         output = stdout.getvalue()
         self.assertEqual(code, 1)
         self.assertIn("No source-backed snippet found", output)
-        self.assertIn("current resolved thread clean-source directory only", output)
+        self.assertIn("current resolved thread clean-source directory plus joined route-note navigation", output)
         self.assertIn("Next:", output)
         assert_semantic_human_output(self, output, max_lines=8)
         self.assertNotIn("Possible routes, not yet evidence", output)
@@ -935,7 +935,10 @@ class SearchCleanSourceTests(unittest.TestCase):
         self.assertNotIn("recovery_actions", payload)
         self.assertEqual(payload["fallback_command_template"], 'aippocampus agent recall "{cue}" --json')
         self.assertEqual(foreground_action_contract_violations(payload), [])
-        self.assertIn("current resolved thread clean-source directory only", payload["scope_description"])
+        self.assertIn(
+            "current resolved thread clean-source directory plus joined route-note navigation",
+            payload["scope_description"],
+        )
 
     def test_empty_query_json_is_needs_input_not_no_match(self) -> None:
         stdout = io.StringIO()

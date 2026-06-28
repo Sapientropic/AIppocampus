@@ -16,6 +16,7 @@ recovery flows, use the
 | File | Use |
 | --- | --- |
 | [agent-native-recall-facade.md](agent-native-recall-facade.md) | Minimal recall/deepen/explain facade over route packets for agent hosts. |
+| [agent-trace-admission-contract.md](agent-trace-admission-contract.md) | Admission levels, authority joins, graph/candidate/training boundaries for trace-derived navigation rows. |
 | [cognitive-load-sidecar.md](cognitive-load-sidecar.md) | Deterministic cognitive-load sidecar and live-calibration boundary. |
 | [continuity-domains.md](continuity-domains.md) | Source-trailed domains, pathlets, macro pointers, and situation glyph boundaries. |
 | [foreground-memory-ux-budget.md](foreground-memory-ux-budget.md) | Foreground memory packet size, review-needed, anti-nag, and no-profile-dump budget. |

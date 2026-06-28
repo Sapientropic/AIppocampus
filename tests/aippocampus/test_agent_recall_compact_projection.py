@@ -868,6 +868,88 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
         self.assertNotIn("route_availability_summary", public)
         assert_compact_frontstage_payload(self, public, max_top_level_diagnostics=1)
 
+    def test_apw_primary_deepen_does_not_bind_preview_route_by_request_index(
+        self,
+    ) -> None:
+        public = agent_continuity_cli_support.public_recall_projection(
+            {
+                "kind": "aippocampus_agent_continuity_path",
+                "schema_version": "agent-continuity-path-v1",
+                "mode": "recall",
+                "status": "no_routes",
+                "query": "source texture final answer closeout owner",
+                "opt_in_required": False,
+                "last_recall_cache_available": True,
+                "foreground_action_card": {
+                    "decision": "recover_low_confidence_route",
+                    "canonical_action": {
+                        "action_id": "search_registry_sources_for_original_cue_anchors",
+                        "tool_name": "search_memory",
+                        "arguments": {
+                            "query": "source texture final answer closeout owner",
+                            "scope": "all_registered_sources",
+                        },
+                        "claim_boundary": "source_reopen_required_before_claim",
+                    },
+                },
+                "memory_packets": [
+                    {
+                        "route_id": "route-ordinary-preview",
+                        "route_topic": "agent_native_recall_facade",
+                        "route_kind": "clean_source_route",
+                        "claim_permission": "no_claim_before_reopen",
+                    }
+                ],
+                "associative_path_policy": {
+                    "apw_candidate_input_available": True,
+                    "ordinary_recall_recovery_needed": True,
+                    "run_fallback": True,
+                    "promotion_mode": "semi_default_recovery",
+                },
+                "associative_path_fallback": {
+                    "kind": "aippocampus_associative_path_recall_fallback",
+                    "status": "route_candidate",
+                    "request_index": 1,
+                    "label": "APW source route: source_texture / closeout",
+                    "matched_cue_anchors": ["source_texture", "closeout", "owner"],
+                    "route_choice_posture": "associative_path_semi_default_recovery",
+                    "source_ref_digest": "digest-apw",
+                    "selected_source_ref_count": 1,
+                    "source_reopen_required_before_claim": True,
+                    "source_anchor_gate": {
+                        "status": "pass",
+                        "target_source_matched": True,
+                        "opened_anchor_hits": 3,
+                        "required_anchor_hits": 2,
+                    },
+                },
+                "metrics": {
+                    "memory_packet_count": 1,
+                    "deepen_request_count": 1,
+                    "route_label_specificity_floor": 0.7,
+                    "topic_label_present_count": 1,
+                },
+            }
+        )
+
+        action = public["foreground_action"]
+        self.assertEqual(action["id"], "deepen_associative_path_fallback")
+        self.assertEqual(action["tool_name"], "agent_deepen")
+        self.assertEqual(action["actionability"], "low_confidence_reopenable")
+        self.assertNotIn("route_index", action)
+        self.assertNotIn("primary_route_relation", action)
+        self.assertEqual(public["routes"][0]["action_priority"], "secondary_preview")
+        self.assertEqual(public["routes"][0]["actionability"], "preview_only")
+        self.assertNotIn("primary_action_relation", public["routes"][0])
+        self.assertNotIn("associative_path_policy", public)
+        self.assertNotIn("associative_path_fallback", public)
+        encoded = json.dumps(public, ensure_ascii=False)
+        self.assertNotIn("source_anchor_gate", encoded)
+        self.assertNotIn("source_ref_digest", encoded)
+        self.assertNotIn("apw_route_identity", encoded)
+        self.assertNotIn("source_refs", encoded)
+        assert_compact_frontstage_payload(self, public, max_top_level_diagnostics=1)
+
     def test_distinguishable_route_labels_keep_deepen_primary(self) -> None:
         public = agent_continuity_cli_support.public_recall_projection(
             {
