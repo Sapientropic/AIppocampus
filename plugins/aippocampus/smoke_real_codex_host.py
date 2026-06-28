@@ -11,6 +11,7 @@ removed in ``finally``.
 from __future__ import annotations
 
 import argparse
+import importlib
 import json
 import queue
 import shutil
@@ -19,10 +20,21 @@ import threading
 import time
 import uuid
 from pathlib import Path
+from types import ModuleType
 from typing import Any
 
-import build_plugin_package
-from smoke_plugin_install import default_build_output, safe_build_output
+
+def _plugin_peer_module(module_name: str) -> ModuleType:
+    try:
+        return importlib.import_module(f"plugins.aippocampus.{module_name}")
+    except ImportError:
+        return importlib.import_module(module_name)
+
+
+build_plugin_package = _plugin_peer_module("build_plugin_package")
+_smoke_plugin_install = _plugin_peer_module("smoke_plugin_install")
+default_build_output = _smoke_plugin_install.default_build_output
+safe_build_output = _smoke_plugin_install.safe_build_output
 
 PLUGIN_NAME = "aippocampus"
 REQUIRED_MCP_TOOLS = {

@@ -4,12 +4,14 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import shutil
 from pathlib import Path
 
 PLUGIN_SOURCE_DIR = Path(__file__).resolve().parent
 DEFAULT_OUTPUT = Path("dist") / "aippocampus-plugin"
+RUNTIME_GENERATION_MARKER = ".aippocampus-runtime-generation.json"
 IGNORED_NAMES = {
     "__pycache__",
     ".pytest_cache",
@@ -60,6 +62,54 @@ def safe_replace_dir(output_dir: Path, repo_root: Path) -> None:
         shutil.rmtree(output_dir)
 
 
+def _file_hash(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def runtime_generation_hash(package_root: Path) -> tuple[str, int]:
+    runtime_root = (
+        package_root
+        / "skills"
+        / "aippocampus"
+        / "scripts"
+        / "aippocampus_runtime"
+    )
+    rows: list[str] = []
+    if runtime_root.exists():
+        for path in sorted(runtime_root.rglob("*.py")):
+            rel = path.relative_to(runtime_root)
+            if any(part in IGNORED_NAMES for part in rel.parts):
+                continue
+            rows.append(f"{rel.as_posix()}:{_file_hash(path)}")
+    digest = hashlib.sha256("\n".join(rows).encode("utf-8")).hexdigest()
+    return digest, len(rows)
+
+
+def runtime_generation_marker_payload(package_root: Path) -> dict:
+    generation, file_count = runtime_generation_hash(package_root)
+    return {
+        "kind": "aippocampus_runtime_generation",
+        "schema_version": 1,
+        "generation": generation,
+        "runtime_file_count": file_count,
+        "claim_boundary": "runtime generation supports MCP transport refresh only; it is not source evidence",
+    }
+
+
+def write_runtime_generation_marker(package_root: Path) -> dict:
+    marker = runtime_generation_marker_payload(package_root)
+    (package_root / RUNTIME_GENERATION_MARKER).write_text(
+        json.dumps(marker, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+    return marker
+
+
 def build_package(repo_root: str | Path, output_dir: str | Path | None = None) -> dict:
     repo_root = Path(repo_root).resolve()
     output = Path(output_dir or repo_root / DEFAULT_OUTPUT)
@@ -86,6 +136,7 @@ def build_package(repo_root: str | Path, output_dir: str | Path | None = None) -
 
     skill_target = output / "skills" / "aippocampus"
     shutil.copytree(skill_source, skill_target, ignore=ignore_distribution_noise)
+    runtime_generation = write_runtime_generation_marker(output)
 
     copied_files = sum(1 for item in output.rglob("*") if item.is_file())
     manifest_path = output / ".codex-plugin" / "plugin.json"
@@ -97,6 +148,10 @@ def build_package(repo_root: str | Path, output_dir: str | Path | None = None) -
         "mcp_config": str(mcp_path),
         "skill": str(skill_target),
         "copied_files": copied_files,
+        "runtime_generation": {
+            "generation": runtime_generation["generation"],
+            "runtime_file_count": runtime_generation["runtime_file_count"],
+        },
         "hooks_auto_enabled": False,
     }
     return result

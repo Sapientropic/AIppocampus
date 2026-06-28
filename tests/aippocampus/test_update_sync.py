@@ -1914,6 +1914,9 @@ class UpdateSyncTests(unittest.TestCase):
             self.assertEqual(code, 0, payload)
             self.assertTrue((scenario.plugin_output / ".mcp.json").exists())
             self.assertTrue(
+                (scenario.plugin_output / ".aippocampus-runtime-generation.json").exists()
+            )
+            self.assertTrue(
                 (scenario.plugin_output / "skills" / "aippocampus" / "SKILL.md").exists()
             )
             self.assertFalse((scenario.plugin_output / ".pytest_cache").exists())
