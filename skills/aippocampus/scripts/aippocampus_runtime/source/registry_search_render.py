@@ -157,6 +157,119 @@ def _low_confidence_reopen_matches(
     return candidates
 
 
+def _semantic_position_reopen_matches(
+    evaluation: Any,
+    *,
+    inputs: Any,
+    include_paths: bool,
+    annotate_reopen_commands: AnnotateReopenCommands,
+) -> list[dict[str, Any]]:
+    matches = [
+        dict(match)
+        for match in getattr(evaluation, "semantic_position_candidates", []) or []
+        if isinstance(match, Mapping)
+    ][:1]
+    if not matches:
+        return []
+    annotate_reopen_commands(
+        matches,
+        registry_dir=inputs.registry_root,
+        include_paths=include_paths,
+    )
+    return [match for match in matches if str(match.get("reopen_command") or "").strip()]
+
+
+def _semantic_position_open_action(
+    *,
+    inputs: Any,
+    matches: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    if not matches:
+        return None
+    return registry_search_open_source_action(
+        query=inputs.query_text,
+        match=matches[0],
+        action_id="inspect_recall_semantic_position_source",
+        label="Inspect the positioned current-thread source",
+        why=(
+            "A prior explicit recall cue positioned this thread for these terms. "
+            "Open the source as navigation, not proof."
+        ),
+        claim_boundary="semantic_positioning_navigation_only_no_claim",
+    )
+
+
+def _registry_search_status(
+    *,
+    useful_target_hit: bool,
+    low_confidence_matches: list[dict[str, Any]],
+    semantic_position_matches: list[dict[str, Any]],
+    exact_identifier_query: bool,
+    no_phrase_like_matches: bool,
+    matches: list[dict[str, Any]],
+    low_coverage_only_matches: bool,
+) -> str:
+    if useful_target_hit:
+        return "ok"
+    if low_confidence_matches:
+        return "low_confidence_reopen_candidate"
+    if semantic_position_matches:
+        return "recall_semantic_position_candidate"
+    if exact_identifier_query:
+        return "identifier_not_found"
+    if no_phrase_like_matches:
+        return "no_phrase_like_matches"
+    if matches or low_coverage_only_matches:
+        return "matches_need_broadened_source_search"
+    return "no_matches"
+
+
+def _registry_search_boundaries(
+    *,
+    useful_target_hit: bool,
+    low_confidence_matches: list[dict[str, Any]],
+    semantic_position_matches: list[dict[str, Any]],
+) -> tuple[str, str]:
+    if useful_target_hit:
+        return "source_reopen_required_before_claim", "reopen_selected_registry_hit_before_claim"
+    if low_confidence_matches:
+        return (
+            "near_hit_navigation_only_no_claim",
+            "open_low_confidence_near_hit_as_navigation_before_claim",
+        )
+    if semantic_position_matches:
+        return (
+            "semantic_positioning_navigation_only_no_claim",
+            "open_semantic_positioning_source_as_navigation_before_claim",
+        )
+    return "search_miss_is_not_absence_of_memory", "search_miss_is_not_absence_of_memory"
+
+
+def _registry_source_boundary(
+    *,
+    useful_target_hit: bool,
+    low_confidence_matches: list[dict[str, Any]],
+    semantic_position_matches: list[dict[str, Any]],
+    evaluation: Any,
+    matches: list[dict[str, Any]],
+    low_coverage_only_matches: bool,
+    no_phrase_like_matches: bool,
+) -> dict[str, Any]:
+    return {
+        "authority": "bounded_evidence" if useful_target_hit else "direction_only",
+        "registry_wide_search": True,
+        "source_backed_claim_allowed": useful_target_hit,
+        "source_reopen_required_before_claim": True,
+        "low_confidence_reopen_candidate": bool(low_confidence_matches),
+        "recall_semantic_position_candidate": bool(semantic_position_matches),
+        "partial_search_results": evaluation.budget_exhausted,
+        "demoted_artifact_matches_are_diagnostic": bool(matches) and not useful_target_hit,
+        "search_miss_is_not_absence_of_memory": not bool(matches),
+        "low_coverage_matches_suppressed": low_coverage_only_matches,
+        "phrase_like_low_coverage_suppressed": no_phrase_like_matches,
+    }
+
+
 def render_registry_search_payload(
     inputs: Any,
     evaluation: Any,
@@ -218,6 +331,12 @@ def render_registry_search_payload(
             annotate_reopen_commands=annotate_reopen_commands,
         )
     )
+    semantic_position_matches = _semantic_position_reopen_matches(
+        evaluation,
+        inputs=inputs,
+        include_paths=include_paths,
+        annotate_reopen_commands=annotate_reopen_commands,
+    )
     if low_confidence_matches and not useful_target_hit:
         near_hit_action = registry_search_open_source_action(
             query=inputs.query_text,
@@ -232,6 +351,13 @@ def render_registry_search_payload(
         )
         if near_hit_action:
             actions = [near_hit_action, *actions]
+    if semantic_position_matches and not useful_target_hit:
+        semantic_position_action = _semantic_position_open_action(
+            inputs=inputs,
+            matches=semantic_position_matches,
+        )
+        if semantic_position_action:
+            actions = [semantic_position_action, *actions]
     if discussion_action:
         actions = [discussion_action, *actions]
 
@@ -248,21 +374,22 @@ def render_registry_search_payload(
         else [compact_registry_match(match) for match in matches]
     )
     next_reopen_command = str((actions[0] if actions else {}).get("command") or "")
+    claim_boundary, source_reopen_boundary = _registry_search_boundaries(
+        useful_target_hit=useful_target_hit,
+        low_confidence_matches=low_confidence_matches,
+        semantic_position_matches=semantic_position_matches,
+    )
     raw_payload: dict[str, Any] = {
         "kind": "aippocampus_registry_source_search",
         "ok": useful_target_hit,
-        "status": (
-            "ok"
-            if useful_target_hit
-            else "low_confidence_reopen_candidate"
-            if low_confidence_matches
-            else "identifier_not_found"
-            if inputs.query_gate.get("exact_identifier_query")
-            else "no_phrase_like_matches"
-            if no_phrase_like_matches
-            else "matches_need_broadened_source_search"
-            if matches or low_coverage_only_matches
-            else "no_matches"
+        "status": _registry_search_status(
+            useful_target_hit=useful_target_hit,
+            low_confidence_matches=low_confidence_matches,
+            semantic_position_matches=semantic_position_matches,
+            exact_identifier_query=bool(inputs.query_gate.get("exact_identifier_query")),
+            no_phrase_like_matches=no_phrase_like_matches,
+            matches=matches,
+            low_coverage_only_matches=low_coverage_only_matches,
         ),
         "search_scope": "registered_clean_source_and_indexes",
         "scope_description": (
@@ -312,6 +439,11 @@ def render_registry_search_payload(
             if low_confidence_matches
             else None
         ),
+        "recall_semantic_position_candidates": (
+            [diagnostic_registry_match(match) for match in semantic_position_matches]
+            if diagnostic_output and semantic_position_matches
+            else None
+        ),
         "match_evidence_diagnostics": (
             match_evidence_diagnostics(
                 matches,
@@ -334,20 +466,8 @@ def render_registry_search_payload(
         "diagnostic_fields_omitted": None,
         "diagnostic_detail_command": None,
         "detail_command": detail_command if not diagnostic_output else None,
-        "claim_boundary": (
-            "source_reopen_required_before_claim"
-            if useful_target_hit
-            else "near_hit_navigation_only_no_claim"
-            if low_confidence_matches
-            else "search_miss_is_not_absence_of_memory"
-        ),
-        "source_reopen_boundary": (
-            "reopen_selected_registry_hit_before_claim"
-            if useful_target_hit
-            else "open_low_confidence_near_hit_as_navigation_before_claim"
-            if low_confidence_matches
-            else "search_miss_is_not_absence_of_memory"
-        ),
+        "claim_boundary": claim_boundary,
+        "source_reopen_boundary": source_reopen_boundary,
         "suppression_boundary": (
             "phrase_like_low_coverage_suppressed"
             if no_phrase_like_matches
@@ -361,18 +481,15 @@ def render_registry_search_payload(
             else "foreground_safe_registry_source_routes"
         ),
         "source_boundary": (
-            {
-                "authority": "bounded_evidence" if useful_target_hit else "direction_only",
-                "registry_wide_search": True,
-                "source_backed_claim_allowed": useful_target_hit,
-                "source_reopen_required_before_claim": True,
-                "low_confidence_reopen_candidate": bool(low_confidence_matches),
-                "partial_search_results": evaluation.budget_exhausted,
-                "demoted_artifact_matches_are_diagnostic": bool(matches) and not useful_target_hit,
-                "search_miss_is_not_absence_of_memory": not bool(matches),
-                "low_coverage_matches_suppressed": low_coverage_only_matches,
-                "phrase_like_low_coverage_suppressed": no_phrase_like_matches,
-            }
+            _registry_source_boundary(
+                useful_target_hit=useful_target_hit,
+                low_confidence_matches=low_confidence_matches,
+                semantic_position_matches=semantic_position_matches,
+                evaluation=evaluation,
+                matches=matches,
+                low_coverage_only_matches=low_coverage_only_matches,
+                no_phrase_like_matches=no_phrase_like_matches,
+            )
             if diagnostic_output
             else None
         ),

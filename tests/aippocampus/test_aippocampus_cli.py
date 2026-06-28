@@ -18,6 +18,7 @@ SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 
 from aippocampus_runtime.source import latest_reply as latest_reply_module
 from tests.aippocampus.cli_fixtures import parse_cli_json, run_aippocampus_cli
+from tests.aippocampus.frontstage_assertions import assert_compact_frontstage_payload
 
 
 class AippocampusCliTests(unittest.TestCase):
@@ -231,7 +232,10 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertEqual(status_payload["foreground_action"]["id"], "review_semantic_guidance_candidate")
         self.assertEqual(status_payload["foreground_action_contract"], "foreground-action-v2")
         self.assertNotIn(status_payload["foreground_action"], status_payload["safe_next_actions"])
-        self.assertEqual(status_payload["next_actions"], status_payload["safe_next_actions"][: len(status_payload["next_actions"])])
+        self.assertEqual(status_payload["next_actions"], status_payload["safe_next_actions"])
+        self.assertLessEqual(len(status_payload["safe_next_actions"]), 1)
+        self.assertTrue(status_payload["more_actions_available_in_detail"])
+        assert_compact_frontstage_payload(self, status_payload)
         self.assertEqual(
             len(status_payload["safe_next_actions"]),
             len(
@@ -280,6 +284,11 @@ class AippocampusCliTests(unittest.TestCase):
             status_operator_payload["semantic_guidance_lifecycle"],
         )
         self.assertIn("guidance_lifecycle_ledger", status_operator_payload["operator_detail"])
+        self.assertIn("learning_frontdoor_actions", status_operator_payload["operator_detail"])
+        self.assertGreater(
+            len(status_operator_payload["operator_detail"]["learning_frontdoor_actions"]["safe_next_actions"]),
+            len(status_payload["safe_next_actions"]),
+        )
         self.assertIn("cannot_claim", status_operator_payload["boundary_detail"])
         self.assertNotIn("<events.jsonl>", status_encoded)
         self.assertNotIn("<sanitized-events.jsonl>", status_encoded)
@@ -332,6 +341,9 @@ class AippocampusCliTests(unittest.TestCase):
         self.assertEqual(guidance_payload["mode"], "guidance")
         self.assertNotIn("cannot_claim", guidance_payload)
         self.assertNotIn("cannot_claim", guidance_payload["boundary_detail"])
+        self.assertLessEqual(len(guidance_payload["safe_next_actions"]), 1)
+        self.assertTrue(guidance_payload["more_actions_available_in_detail"])
+        assert_compact_frontstage_payload(self, guidance_payload)
         self.assertIn("semantic_guidance", guidance_payload)
         self.assertGreaterEqual(guidance_payload["semantic_guidance"]["guidance_count"], 1)
         self.assertLessEqual(len(guidance_payload["current_guidance"]), 1)
@@ -362,6 +374,11 @@ class AippocampusCliTests(unittest.TestCase):
         guidance_operator_payload = parse_cli_json(self, learning_guidance_operator)
         self.assertIn("cannot_claim", guidance_operator_payload["boundary_detail"])
         self.assertIn("semantic_loop", guidance_operator_payload)
+        self.assertIn("learning_frontdoor_actions", guidance_operator_payload["operator_detail"])
+        self.assertGreater(
+            len(guidance_operator_payload["operator_detail"]["learning_frontdoor_actions"]["safe_next_actions"]),
+            len(guidance_payload["safe_next_actions"]),
+        )
         self.assertEqual(
             guidance_operator_payload["semantic_guidance"]["lifecycle"]["contract"],
             "semantic-guidance-lifecycle-v1",

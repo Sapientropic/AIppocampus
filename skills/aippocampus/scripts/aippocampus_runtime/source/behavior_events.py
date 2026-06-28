@@ -29,6 +29,17 @@ GENERATED_PATH_MARKERS = {
     "node_modules",
     "target",
 }
+PUBLIC_REPO_PATH_ROOTS = {
+    ".github",
+    "benchmarks",
+    "docs",
+    "examples",
+    "scripts",
+    "skills",
+    "sources",
+    "tests",
+    "tools",
+}
 SOURCE_EXTENSIONS = {"go", "js", "jsx", "py", "rs", "ts", "tsx"}
 CONFIG_EXTENSIONS = {"cfg", "conf", "ini", "json", "lock", "toml", "yaml", "yml"}
 DOC_EXTENSIONS = {"md", "rst", "txt"}
@@ -335,9 +346,22 @@ def _is_safe_relative_path_token(path_token: str) -> bool:
         return False
     if any(part in PRIVATE_PATH_MARKERS for part in parts):
         return False
-    if any(marker in lowered for marker in ("api_key", "apikey", "bearer", "password")):
+    if any(marker in lowered for marker in ("api_key", "apikey", "bearer", "password", "secret", "token")):
         return False
     return bool(parts)
+
+
+def _is_public_repo_relative_path_token(path_token: str) -> bool:
+    if not _is_safe_relative_path_token(path_token):
+        return False
+    parts = [part for part in path_token.replace("\\", "/").split("/") if part]
+    if not parts:
+        return False
+    if parts[0].casefold() not in PUBLIC_REPO_PATH_ROOTS:
+        return False
+    if any(part.casefold() in GENERATED_PATH_MARKERS for part in parts):
+        return False
+    return True
 
 
 def _path_tokens_from_input(tool_input: Any, command: str) -> list[str]:
@@ -371,6 +395,7 @@ def path_breadcrumbs(tool_input: Any, command: str = "") -> dict[str, Any]:
     kinds: set[str] = set()
     extensions: set[str] = set()
     hashes: list[str] = []
+    repo_relative_breadcrumbs: list[str] = []
     for token in sorted(normalized):
         kinds.update(_path_kinds(token))
         extension = _path_extension(token)
@@ -378,6 +403,8 @@ def path_breadcrumbs(tool_input: Any, command: str = "") -> dict[str, Any]:
             extensions.add(extension)
         if _is_safe_relative_path_token(token):
             hashes.append(f"sha256:{hashlib.sha256(token.casefold().encode('utf-8')).hexdigest()[:16]}")
+        if _is_public_repo_relative_path_token(token):
+            repo_relative_breadcrumbs.append(token)
     result: dict[str, Any] = {
         "path_count": len(normalized),
         "path_categories": sorted(kinds),
@@ -386,6 +413,8 @@ def path_breadcrumbs(tool_input: Any, command: str = "") -> dict[str, Any]:
     }
     if hashes:
         result["path_fingerprints"] = sorted(set(hashes))[:8]
+    if repo_relative_breadcrumbs:
+        result["repo_relative_breadcrumbs"] = sorted(set(repo_relative_breadcrumbs))[:8]
     if result["generated_file"]:
         result["generated_file_reason"] = "generated_path_marker"
     return result

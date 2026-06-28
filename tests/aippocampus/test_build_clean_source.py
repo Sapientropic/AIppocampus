@@ -992,6 +992,63 @@ class BuildCleanSourceTests(unittest.TestCase):
         self.assertNotIn("Traceback from", serialized)
         self.assertNotIn("python tests", serialized)
 
+    def test_clean_source_events_keep_safe_repo_relative_breadcrumbs_only(self) -> None:
+        safe_path = "skills\\aippocampus\\scripts\\aippocampus_runtime\\source\\behavior_events.py"
+        self._append(
+            {
+                "type": "response_item",
+                "timestamp": "2026-05-26T02:05:00Z",
+                "payload": {
+                    "type": "function_call",
+                    "name": "functions.shell_command",
+                    "call_id": "call-safe-path",
+                    "arguments": json.dumps(
+                        {
+                            "command": (
+                                f"Get-Content {safe_path} "
+                                "C:\\Users\\Administrator\\secret\\token.py"
+                            )
+                        },
+                        ensure_ascii=False,
+                    ),
+                },
+            }
+        )
+        self._append(
+            {
+                "type": "response_item",
+                "timestamp": "2026-05-26T02:05:01Z",
+                "payload": {
+                    "type": "function_call_output",
+                    "call_id": "call-safe-path",
+                    "output": "Exit code: 0\nWall time: 0.1s\nok",
+                },
+            }
+        )
+
+        result = clean_source.build_clean_source(self.cwd, rollout=self.rollout)
+        events = [
+            json.loads(line)
+            for line in Path(result["outputs"]["events_jsonl"])
+            .read_text(encoding="utf-8")
+            .splitlines()
+        ]
+        serialized = json.dumps(events, ensure_ascii=False)
+        safe_breadcrumb = safe_path.replace("\\", "/")
+
+        self.assertIn(safe_breadcrumb, serialized)
+        self.assertNotIn("C:\\Users", serialized)
+        self.assertNotIn("token.py", serialized)
+        self.assertNotIn("secret", serialized.casefold())
+        with_breadcrumbs = [
+            item for item in events if item.get("repo_relative_breadcrumbs")
+        ]
+        self.assertTrue(with_breadcrumbs)
+        self.assertEqual(
+            with_breadcrumbs[0]["repo_relative_breadcrumbs"],
+            [safe_breadcrumb],
+        )
+
     def test_clean_source_writes_source_texture_sidecar_without_weakening_source(self) -> None:
         self._append(
             {
