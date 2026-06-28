@@ -31,6 +31,19 @@ class SourceTextureTests(unittest.TestCase):
                 "content_sha256": "a" * 64,
                 "timestamp": "2026-06-06T01:00:00Z",
                 "text": "不是这个意思，我有点卡住，不确定后面怎么验证，先不要走 OAuth 路线。",
+            },
+            {
+                "source_id": "src_test",
+                "source_ref": "codex:session:test#L30",
+                "source_line": 30,
+                "message_id": "msg_final_1",
+                "turn_id": "turn_1",
+                "turn_index": 1,
+                "role": "assistant",
+                "phase": "final_answer",
+                "content_sha256": "c" * 64,
+                "timestamp": "2026-06-06T01:02:00Z",
+                "text": "完成 #2870，verified focused tests passed。下一步保留 #2865 风险。",
             }
         ]
         events = [
@@ -51,6 +64,26 @@ class SourceTextureTests(unittest.TestCase):
                 "exit_code": 1,
                 "path_fingerprints": ["sha256:0123456789abcdef"],
                 "observation_sha256": "b" * 64,
+            },
+            {
+                "event_id": "evt_success_1",
+                "source_id": "src_test",
+                "source_ref": "codex:session:test#L28",
+                "source_line": 28,
+                "turn_index": 1,
+                "hard_event_kind": "tool_call_succeeded",
+                "status": "succeeded",
+                "command_class": "test",
+                "command_family": "python_unittest",
+                "target_class": "focused_test_path",
+                "test_target_class": "focused_test_path",
+                "critical_operation_family": "test_check_command_result",
+                "exit_code": 0,
+                "repo_relative_breadcrumbs": [
+                    "tests/aippocampus/test_agent_trace_admission.py"
+                ],
+                "path_fingerprints": ["sha256:fedcba9876543210"],
+                "observation_sha256": "d" * 64,
             }
         ]
         route_notes = [
@@ -87,6 +120,8 @@ class SourceTextureTests(unittest.TestCase):
         self.assertIn("abandoned_direction", signal_kinds)
         self.assertIn("process_route_note", signal_kinds)
         self.assertIn("tool_failure_texture", signal_kinds)
+        self.assertIn("final_answer_closeout", signal_kinds)
+        self.assertIn("successful_behavior_receipt", signal_kinds)
         self.assertGreaterEqual(len(signal_kinds), 3)
 
         for row in rows:
@@ -103,11 +138,29 @@ class SourceTextureTests(unittest.TestCase):
         self.assertIn("visible_stuckness", details)
         self.assertIn("route_note_rejected_route", details)
         self.assertIn("verification_failure", details)
+        self.assertIn("verification_success", details)
+        self.assertTrue(
+            any(
+                "closeout_done" in row.get("signal_labels", [])
+                and "closeout_verified" in row.get("signal_labels", [])
+                for row in rows
+                if row["signal_kind"] == "final_answer_closeout"
+            )
+        )
+        self.assertTrue(
+            any(
+                row.get("source_fingerprints", {}).get("repo_relative_breadcrumbs")
+                == ["tests/aippocampus/test_agent_trace_admission.py"]
+                for row in rows
+                if row["signal_kind"] == "successful_behavior_receipt"
+            )
+        )
 
         serialized = json.dumps(rows, ensure_ascii=False)
         for raw in (
             "不是这个意思",
             "OAuth 路线",
+            "完成 #2870",
             "python tests",
             "Traceback",
             "C:\\Users",

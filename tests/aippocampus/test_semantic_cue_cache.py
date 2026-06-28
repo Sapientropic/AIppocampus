@@ -75,6 +75,19 @@ class SemanticCueCacheTests(unittest.TestCase):
             self.assertEqual(by_cue["外置海马体"]["script"], "Hani")
             self.assertEqual(by_cue["внешний гиппокамп"]["script"], "Cyrl")
             self.assertEqual(by_cue["ذاكرة سياقية"]["script"], "Arab")
+            self.assertEqual(by_cue["memoria externa"]["training_role"], "positive_demo")
+            self.assertEqual(
+                by_cue["memoria externa"]["candidate_lifecycle_state"],
+                "actionable_reopenable_route",
+            )
+            self.assertEqual(
+                by_cue["memoria externa"]["trace_admission_level"],
+                "reopenable_route",
+            )
+            self.assertIn(
+                by_cue["外置海马体"]["learning_priority"]["bucket"],
+                {"medium", "high_information"},
+            )
 
             triggers = cues.semantic_cue_triggers(cache_path)
             trigger_aliases = {
@@ -148,9 +161,73 @@ class SemanticCueCacheTests(unittest.TestCase):
             self.assertEqual(report["active_count"], 1)
             self.assertEqual(report["source_backed_count"], 1)
             self.assertEqual(report["false_positive_count"], 1)
+            self.assertEqual(report["training_role_counts"]["positive_demo"], 1)
+            self.assertIn("learning_priority_counts", report)
             self.assertIn("net_hit_buckets", report)
             self.assertNotIn("private cue text", encoded)
             self.assertNotIn("private prompt text", encoded)
+
+    def test_recall_semantic_position_records_no_hit_without_source_claim(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            cache_path = Path(tmp) / "semantic_cues.jsonl"
+
+            result = cues.record_recall_semantic_position(
+                cache_path,
+                prompt="activation live shadow PARK latest turn SECRET_TOKEN=abc",
+                terms=["activation", "live shadow", "PARK", "SECRET_TOKEN=abc"],
+                cwd=Path(tmp) / "workspace",
+                thread_key="session:current-thread",
+                source_generation={"message_count": 3, "source_thread_key": "session:current-thread"},
+                recall_status="no_routes",
+                route_count=0,
+            )
+            rows = cues.all_recall_positions(cache_path)
+            report = cues.semantic_cue_cache_report(cache_path)
+            encoded = json.dumps(rows + [report], ensure_ascii=False)
+
+            self.assertEqual(result["updated_count"], 1)
+            self.assertEqual(len(rows), 1)
+            row = rows[0]
+            self.assertEqual(row["kind"], "aippocampus_recall_semantic_position")
+            self.assertEqual(row["status"], "staging")
+            self.assertEqual(row["authority_level"], "direction_only")
+            self.assertEqual(row["training_role"], "replay_sample")
+            self.assertEqual(row["candidate_lifecycle_state"], "draft_candidate_staging")
+            self.assertEqual(row["route_count_bucket"], "no_hit")
+            self.assertTrue(row["source_reopen_required_before_claim"])
+            self.assertEqual(report["recall_position_count"], 1)
+            self.assertEqual(report["recall_position_training_role_counts"]["replay_sample"], 1)
+            self.assertNotIn("SECRET_TOKEN", encoded)
+            self.assertNotIn("abc", encoded)
+            self.assertNotIn(str(Path(tmp) / "workspace"), encoded)
+
+    def test_recall_positioning_preserves_source_backed_cues_in_same_owner_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            cache_path = Path(tmp) / "semantic_cues.jsonl"
+
+            cues.record_recall_semantic_position(
+                cache_path,
+                prompt="no hit current thread positioning",
+                terms=["current thread positioning"],
+                thread_key="session:current-thread",
+                recall_status="no_routes",
+                route_count=0,
+            )
+            for _ in range(2):
+                cues.record_semantic_cue_hits(
+                    cache_path,
+                    prompt="source backed alias",
+                    semantic_result={
+                        "available": True,
+                        "decision": "scent",
+                        "confidence": 0.9,
+                        "query_aliases": ["source backed alias"],
+                    },
+                    source_refs=[{"thread_key": "session:old", "message_id": "msg-old"}],
+                )
+
+            self.assertEqual(len(cues.all_recall_positions(cache_path)), 1)
+            self.assertEqual(len(cues.load_semantic_cues(cache_path)), 1)
 
 if __name__ == "__main__":
     unittest.main()

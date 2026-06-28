@@ -59,6 +59,13 @@ ABANDONED_DIRECTION_CUES = (
     ),
     ("visible_deferred_direction", ("暂缓", "搁置", "defer this route", "park this route")),
 )
+FINAL_ANSWER_CLOSEOUT_CUES = (
+    ("closeout_done", ("完成", "已完成", "done", "implemented", "merged", "closed")),
+    ("closeout_verified", ("验证", "verified", "tests passed", "checks passed", "preflight")),
+    ("closeout_risk", ("风险", "未验证", "risk", "remaining", "not verified")),
+    ("closeout_next", ("下一步", "next", "follow-up", "follow up")),
+    ("closeout_issue_pr", ("issue", "pr", "pull request", "#")),
+)
 SAFE_EVENT_REF_FIELDS = (
     "event_id",
     "source_id",
@@ -173,6 +180,11 @@ def _fingerprints(row: Mapping[str, Any]) -> dict[str, Any]:
     path_fingerprints = row.get("path_fingerprints")
     if isinstance(path_fingerprints, list) and path_fingerprints:
         values["path_fingerprints"] = [str(item) for item in path_fingerprints[:4]]
+    repo_relative_breadcrumbs = row.get("repo_relative_breadcrumbs")
+    if isinstance(repo_relative_breadcrumbs, list) and repo_relative_breadcrumbs:
+        values["repo_relative_breadcrumbs"] = [
+            str(item).replace("\\", "/") for item in repo_relative_breadcrumbs[:4]
+        ]
     return values
 
 
@@ -287,6 +299,23 @@ def _message_rows(messages: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]
                     **common,
                 )
             )
+        phase = str(message.get("phase") or "").casefold()
+        if role == "assistant" and phase == "final_answer":
+            closeout_details = [
+                detail
+                for detail, cues in FINAL_ANSWER_CLOSEOUT_CUES
+                if any(_matches(text, cue) for cue in cues)
+            ]
+            if closeout_details:
+                rows.append(
+                    _base_row(
+                        signal_kind="final_answer_closeout",
+                        signal_detail="_".join(closeout_details[:3]),
+                        origin="clean_source_message",
+                        signal_labels=["final_answer_closeout", *closeout_details[:6]],
+                        **common,
+                    )
+                )
     return rows
 
 
@@ -296,35 +325,58 @@ def _event_rows(events: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
         status = str(event.get("status") or "").casefold()
         hard_kind = str(event.get("hard_event_kind") or event.get("event_kind") or "").casefold()
         failure_family = str(event.get("failure_family") or "")
-        if status != "failed" and "failed" not in hard_kind and failure_family in {"", "none"}:
-            continue
         event_ref = _clean_event_ref(event)
         if not event_ref:
             continue
         command_class = str(event.get("command_class") or "")
         critical_family = str(event.get("critical_operation_family") or "")
-        detail = (
-            "verification_failure"
-            if command_class in {"test", "check"} or critical_family == "test_check_command_result"
-            else f"tool_failure_{failure_family or 'unknown'}"
-        )
-        rows.append(
-            _base_row(
-                signal_kind="tool_failure_texture",
-                signal_detail=detail,
-                origin="behavior_event",
-                source_refs=[event_ref],
-                event_refs=[event_ref],
-                source_fingerprints=_fingerprints(event),
-                role_scope="behavior_event",
-                signal_labels=[
-                    "tool_failure",
-                    command_class or "tool",
-                    failure_family or "unknown_failure",
-                    detail,
-                ],
+        if status == "failed" or "failed" in hard_kind or failure_family not in {"", "none"}:
+            detail = (
+                "verification_failure"
+                if command_class in {"test", "check"} or critical_family == "test_check_command_result"
+                else f"tool_failure_{failure_family or 'unknown'}"
             )
-        )
+            rows.append(
+                _base_row(
+                    signal_kind="tool_failure_texture",
+                    signal_detail=detail,
+                    origin="behavior_event",
+                    source_refs=[event_ref],
+                    event_refs=[event_ref],
+                    source_fingerprints=_fingerprints(event),
+                    role_scope="behavior_event",
+                    signal_labels=[
+                        "tool_failure",
+                        command_class or "tool",
+                        failure_family or "unknown_failure",
+                        detail,
+                    ],
+                )
+            )
+            continue
+        if status == "succeeded" and command_class in {"test", "check", "read", "search", "vcs"}:
+            detail = (
+                "verification_success"
+                if command_class in {"test", "check"} or critical_family == "test_check_command_result"
+                else f"successful_{command_class}_receipt"
+            )
+            rows.append(
+                _base_row(
+                    signal_kind="successful_behavior_receipt",
+                    signal_detail=detail,
+                    origin="behavior_event",
+                    source_refs=[event_ref],
+                    event_refs=[event_ref],
+                    source_fingerprints=_fingerprints(event),
+                    role_scope="behavior_event",
+                    signal_labels=[
+                        "successful_behavior_receipt",
+                        command_class or "tool",
+                        str(event.get("command_family") or command_class or "tool"),
+                        detail,
+                    ],
+                )
+            )
     return rows
 
 
@@ -458,6 +510,8 @@ def build_source_texture_boundary_hints(
         "abandoned_direction",
         "uncertainty_or_frontier_signal",
         "process_route_note",
+        "final_answer_closeout",
+        "successful_behavior_receipt",
     }
     for row in texture_rows:
         signal_kind = str(row.get("signal_kind") or "")
