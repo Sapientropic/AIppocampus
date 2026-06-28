@@ -8,15 +8,14 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from tests.aippocampus.import_path_helpers import import_smoke_module
+from tests.aippocampus.import_path_helpers import import_repo_root_module
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PLUGIN_ROOT = REPO_ROOT / "plugins" / "aippocampus"
 
-import build_plugin_package
-
-smoke_plugin_install = import_smoke_module("smoke_plugin_install")
-smoke_real_codex_host = import_smoke_module("smoke_real_codex_host")
+build_plugin_package = import_repo_root_module("plugins.aippocampus.build_plugin_package")
+smoke_plugin_install = import_repo_root_module("plugins.aippocampus.smoke_plugin_install")
+smoke_real_codex_host = import_repo_root_module("plugins.aippocampus.smoke_real_codex_host")
 
 class PluginDistributionTests(unittest.TestCase):
     def test_manifest_exposes_ui_metadata_and_mcp_without_auto_enabling_hooks(self) -> None:
@@ -79,6 +78,16 @@ class PluginDistributionTests(unittest.TestCase):
             self.assertEqual(built_root, output)
             self.assertTrue((built_root / ".codex-plugin" / "plugin.json").exists())
             self.assertTrue((built_root / ".mcp.json").exists())
+            marker = built_root / ".aippocampus-runtime-generation.json"
+            self.assertTrue(marker.exists())
+            marker_payload = json.loads(marker.read_text(encoding="utf-8"))
+            self.assertEqual(marker_payload["kind"], "aippocampus_runtime_generation")
+            self.assertRegex(marker_payload["generation"], r"^[0-9a-f]{64}$")
+            self.assertGreater(marker_payload["runtime_file_count"], 10)
+            self.assertEqual(
+                result["runtime_generation"]["generation"],
+                marker_payload["generation"],
+            )
             self.assertTrue((built_root / "skills" / "aippocampus" / "SKILL.md").exists())
             self.assertFalse(
                 (built_root / "skills" / "aippocampus" / "scripts" / "aippocampus_mcp_server.py").exists()

@@ -911,6 +911,97 @@ class AippocampusMcpServerOpsTests(unittest.TestCase):
         self.assertIn("aippocampus agent recall", encoded)
         self.assertNotIn(str(self.cwd), encoded)
 
+    def test_stdio_hot_reload_proxies_current_request_then_reexecs(self) -> None:
+        raw_request = json.dumps(
+            {
+                "jsonrpc": "2.0",
+                "id": 919,
+                "method": "tools/call",
+                "params": {"name": "agent_recall", "arguments": {"query": "hot reload"}},
+            }
+        )
+        fresh_stdout = json.dumps(
+            {
+                "jsonrpc": "2.0",
+                "id": 919,
+                "result": {
+                    "structuredContent": {
+                        "kind": "fresh_runtime_payload",
+                        "ok": True,
+                    },
+                    "content": [{"type": "text", "text": "fresh"}],
+                },
+            },
+            separators=(",", ":"),
+        )
+        completed = subprocess.CompletedProcess(
+            ["python", "-m", "aippocampus_runtime.cli.facade", "mcp"],
+            0,
+            fresh_stdout + "\n",
+            "",
+        )
+
+        with (
+            mock.patch.object(
+                mcp.runtime_hot_reload,
+                "runtime_generation_changed",
+                return_value=True,
+            ),
+            mock.patch.object(
+                mcp.runtime_hot_reload,
+                "proxy_request_through_fresh_runtime",
+                return_value=completed,
+            ) as proxy,
+        ):
+            dispatch = mcp.dispatch_stdio_message(raw_request)
+
+        proxy.assert_called_once_with(raw_request)
+        self.assertTrue(dispatch.reexec_after_response)
+        self.assertEqual(dispatch.output, fresh_stdout + "\n")
+
+    def test_stdio_hot_reload_proxy_failure_returns_runtime_recovery_card(self) -> None:
+        raw_request = json.dumps(
+            {
+                "jsonrpc": "2.0",
+                "id": 920,
+                "method": "tools/call",
+                "params": {"name": "agent_recall", "arguments": {"query": "hot reload"}},
+            }
+        )
+        completed = subprocess.CompletedProcess(
+            ["python", "-m", "aippocampus_runtime.cli.facade", "mcp"],
+            1,
+            "",
+            "boom",
+        )
+
+        with (
+            mock.patch.object(
+                mcp.runtime_hot_reload,
+                "runtime_generation_changed",
+                return_value=True,
+            ),
+            mock.patch.object(
+                mcp.runtime_hot_reload,
+                "proxy_request_through_fresh_runtime",
+                return_value=completed,
+            ),
+        ):
+            dispatch = mcp.dispatch_stdio_message(raw_request)
+
+        self.assertFalse(dispatch.reexec_after_response)
+        response = json.loads(dispatch.output)
+        self.assertEqual(response["id"], 920)
+        payload = json.loads(response["result"]["content"][0]["text"])
+        self.assertEqual(payload["kind"], "aippocampus_foreground_mcp_runtime_recovery")
+        self.assertEqual(payload["foreground_action"]["id"], "reload_mcp_transport")
+
+    def test_hot_reload_reexec_argv_uses_module_for_console_launchers(self) -> None:
+        with mock.patch.object(sys, "argv", ["aippocampus.exe", "mcp"]):
+            argv = mcp.runtime_hot_reload.current_reexec_argv()
+
+        self.assertEqual(argv[1:4], ["-m", "aippocampus_runtime.cli.facade", "mcp"])
+
     def test_agent_recall_non_signature_type_error_stays_tool_failed(self) -> None:
         original_handler = mcp.TOOL_CALLS["agent_recall"]
 
