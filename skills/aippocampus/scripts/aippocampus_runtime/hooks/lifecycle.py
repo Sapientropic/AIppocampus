@@ -323,7 +323,14 @@ def module_cmd(module: str, *args: str) -> list[str]:
 
 def run_health(cwd: Path) -> dict[str, Any]:
     return run_json_timeout(
-        module_cmd("aippocampus_runtime.health", "--cwd", str(cwd), "--json"),
+        module_cmd(
+            "aippocampus_runtime.health",
+            "--cwd",
+            str(cwd),
+            "--json",
+            "--detail",
+            "full",
+        ),
         timeout=5.0,
     )
 

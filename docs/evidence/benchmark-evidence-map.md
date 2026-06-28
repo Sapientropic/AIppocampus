@@ -1496,6 +1496,14 @@ pasting raw JSON into multiple docs.
   `docs/evidence/current-claims.md`, #1439, #1449; separates broad default foreground context
   from the tiny `agent_recall` hook-to-agent affordance and its host-faithful replay gate
 
+### Activation dogfood usefulness probe
+
+- **Entrypoint:** `benchmarks/aippocampus/benchmark_activation_dogfood_usefulness.py` and `tests/aippocampus/test_benchmark_activation_dogfood_usefulness.py`
+- **Primary evidence owner:** `docs/evidence/benchmarks/reports/recall-navigation/activation-dogfood-usefulness-2026-06-28.md`,
+  `docs/evidence/current-claims.md`, #2857; bounded dogfood/replay signal probe for
+  manual-search reduction, wrong-route drag, noisy surfacing, and source-open follow-through,
+  not live default foreground or Dream promotion evidence.
+
 ### Real-history semantic scope smoke
 
 - **Entrypoint:** `tools/aippocampus/smoke/smoke_semantic_scope_real_history.py`

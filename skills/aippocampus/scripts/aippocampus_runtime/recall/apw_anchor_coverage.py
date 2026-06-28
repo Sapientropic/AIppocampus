@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Any
 
+from aippocampus_runtime.recall.foreground import route_quality as foreground_route_quality
 from aippocampus_runtime.recall.query_policy import (
     normalize_term,
     split_query_terms,
@@ -34,7 +35,7 @@ GENERIC_FLOW_ANCHORS = {
     "source",
     "test",
     "tests",
-}
+} | foreground_route_quality.LOW_SIGNAL_ANCHOR_TERMS
 
 
 def cjk_context_anchor_terms(query: str, *, limit: int = 8) -> list[str]:
@@ -80,11 +81,21 @@ def low_actual_anchor_coverage_reason(
 ) -> str:
     """Require APW candidates to carry the advertised cue anchors."""
 
+    matched_terms = foreground_route_quality.term_sequence(matched_terms)
+    anchor_terms = foreground_route_quality.term_sequence(anchor_terms)
+    quality = foreground_route_quality.anchor_quality(
+        matched_terms=matched_terms,
+        anchor_terms=anchor_terms,
+    )
     anchors = {str(term).strip().casefold() for term in anchor_terms if str(term).strip()}
     matched = {str(term).strip().casefold() for term in matched_terms if str(term).strip()}
     cjk_context_anchors = {term for term in anchors if not term.isascii() and len(term) >= 2}
     if cjk_context_anchors and not (matched & cjk_context_anchors):
         return "missing_cjk_context_anchor"
+    if int(quality.get("meaningful_anchor_count") or 0) <= 0:
+        return "low_signal_apw_anchors_only"
+    if int(quality.get("meaningful_anchor_hits") or 0) <= 0:
+        return "low_meaningful_anchor_coverage"
     if len(anchors) <= 2:
         return "" if matched & anchors else "low_actual_source_anchor_coverage"
     meaningful_anchors = {
@@ -106,23 +117,40 @@ def source_anchor_gate(
     matched_terms: Sequence[str],
     anchor_terms: Sequence[str],
 ) -> dict[str, Any]:
+    matched_terms = foreground_route_quality.term_sequence(matched_terms)
+    anchor_terms = foreground_route_quality.term_sequence(anchor_terms)
+    quality = foreground_route_quality.anchor_quality(
+        matched_terms=matched_terms,
+        anchor_terms=anchor_terms,
+    )
     anchors = {str(term).strip().casefold() for term in anchor_terms if str(term).strip()}
     matched = {str(term).strip().casefold() for term in matched_terms if str(term).strip()}
     cjk_context_anchors = {term for term in anchors if not term.isascii() and len(term) >= 2}
     required = min(3, max(1, (len(anchors) + 1) // 2))
     hits = len(matched & anchors)
     missing_cjk_context = bool(cjk_context_anchors and not (matched & cjk_context_anchors))
-    passed = hits >= required and not missing_cjk_context
+    meaningful_anchor_count = int(quality.get("meaningful_anchor_count") or 0)
+    meaningful_anchor_hits = int(quality.get("meaningful_anchor_hits") or 0)
+    weak_only = meaningful_anchor_count <= 0
+    missing_meaningful = meaningful_anchor_count > 0 and meaningful_anchor_hits <= 0
+    passed = hits >= required and not missing_cjk_context and not weak_only and not missing_meaningful
     return {
         "status": "pass" if passed else "blocked",
         "reason": (
             "missing_cjk_context_anchor"
             if missing_cjk_context
+            else "low_signal_apw_anchors_only"
+            if weak_only
+            else "low_meaningful_anchor_coverage"
+            if missing_meaningful
             else "apw_source_anchor_coverage"
         ),
         "anchor_count": len(anchors),
         "opened_anchor_hits": hits,
         "required_anchor_hits": required,
+        "meaningful_anchor_count": meaningful_anchor_count,
+        "meaningful_anchor_hits": meaningful_anchor_hits,
+        "weak_anchor_hits": int(quality.get("weak_anchor_hits") or 0),
         "target_source_matched": passed,
     }
 

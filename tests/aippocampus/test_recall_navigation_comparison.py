@@ -5,6 +5,7 @@ import subprocess
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SMOKE = REPO_ROOT / "tools" / "aippocampus" / "smoke" / "smoke_recall_navigation_comparison.py"
@@ -18,6 +19,57 @@ from aippocampus_runtime.ops import (
 
 
 class RecallNavigationComparisonTests(unittest.TestCase):
+    def test_attention_router_does_not_promote_blocked_route_over_gate_compatible_top(self) -> None:
+        routes = [
+            {
+                "route_id": "baseline-pass",
+                "route_label": "Python typo source route",
+                "route_topic": "python typo",
+                "handle": {"kind": "source_ref", "source_refs": [{"message_id": "msg-pass"}]},
+                "source_anchor_gate": {"status": "passed", "target_source_matched": True},
+            },
+            {
+                "route_id": "router-blocked",
+                "route_label": "Route note route",
+                "route_topic": "route_note",
+                "source_refs": [{"source_id": "clean:blocked", "message_id": "msg-blocked"}],
+                "source_anchor_gate": {"status": "blocked", "target_source_matched": False},
+            },
+        ]
+        packets = [
+            {
+                "emitted": True,
+                "output_mode": "reopenable_route",
+                "route_id": "baseline-pass",
+                "router_diagnostics": {"score": 0.1, "threshold": 0.0, "reason_codes": []},
+            },
+            {
+                "emitted": True,
+                "output_mode": "reopenable_route",
+                "route_id": "router-blocked",
+                "router_diagnostics": {"score": 0.95, "threshold": 0.0, "reason_codes": []},
+            },
+        ]
+
+        with patch.object(
+            attention_route_projection.attention_hot_router,
+            "route_attention",
+            return_value=packets,
+        ):
+            ranked, diagnostics = attention_route_projection.rerank_routes_with_attention_router(
+                query="previous python typo failure",
+                routes=routes,
+                max_routes=2,
+            )
+
+        self.assertEqual(ranked[0]["route_id"], "baseline-pass")
+        self.assertFalse(diagnostics["top_route_changed"])
+        self.assertTrue(diagnostics["promotion_blocked_source_gate_incompatible"])
+        self.assertEqual(
+            diagnostics["promotion_blocked_route_id"],
+            "router-blocked",
+        )
+
     def test_route_packet_hints_improve_top1_without_claim_permission(self) -> None:
         query = "route packet hint integration"
         base_routes = [

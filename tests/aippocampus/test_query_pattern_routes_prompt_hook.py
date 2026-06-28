@@ -10,7 +10,10 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 
 from aippocampus_runtime.hooks import prompt as hook
+from aippocampus_runtime.recall import semantic_cue_cache
 from aippocampus_runtime.recall.prompt_recall_result_tiers import result_hot_path_funnel
+from aippocampus_runtime.recall.semantic import cue_learning as semantic_cue_learning
+from aippocampus_runtime.warm_ambient import query_pattern_routes
 from tests.aippocampus.redaction_fixtures import fake_test_windows_path
 
 
@@ -123,6 +126,42 @@ class QueryPatternRoutesPromptHookTests(unittest.TestCase):
         self.assertNotIn(private_alias, encoded_public + encoded_context)
         self.assertNotIn("raw private source text", encoded_public + encoded_context)
         self.assertNotIn("private-query-pattern", encoded_public + encoded_context)
+
+    def test_registry_publish_consumes_active_semantic_cue_cache_aliases(self) -> None:
+        cue_path = semantic_cue_cache.default_semantic_cues_path(registry_dir=self.registry.parent)
+        refs = [{"thread_key": "session:test-old", "message_id": "m7", "line": 14}]
+        for _ in range(2):
+            semantic_cue_learning.promote_recall_cue_after_source_open(
+                cue_path,
+                query="transport hot reload source anchor",
+                source_refs=refs,
+                route_id="route:transport-hot-reload",
+            )
+        registry_payload = json.loads(self.registry.read_text(encoding="utf-8"))
+
+        report = query_pattern_routes.publish_registry_query_pattern_routes(
+            registry_payload,
+            registry_dir=self.registry.parent,
+            max_routes=8,
+        )
+        routes = query_pattern_routes.load_query_pattern_routes(
+            self.registry.parent / "query_pattern_routes.jsonl"
+        )
+        packet = query_pattern_routes.select_query_pattern_packet(
+            "transport hot reload source anchor",
+            routes,
+        )
+        encoded_report = json.dumps(report, ensure_ascii=False, sort_keys=True)
+
+        self.assertTrue(report["ok"])
+        self.assertIn("semantic_cue_cache", {row["alias_source"] for row in routes})
+        self.assertGreaterEqual(packet["selected_count"], 1)
+        self.assertEqual(
+            set(packet["diagnostics"]["selected_count_by_alias_source"]),
+            {"semantic_cue_cache"},
+        )
+        self.assertTrue(packet["source_boundary"]["source_reopen_required_before_claim"])
+        self.assertNotIn("transport hot reload source anchor", encoded_report)
 
 if __name__ == "__main__":
     unittest.main()

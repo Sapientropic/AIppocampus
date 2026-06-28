@@ -19,6 +19,7 @@ from aippocampus_runtime.recall.apw_anchor_coverage import (
     query_anchor_terms,
     source_anchor_gate,
 )
+from aippocampus_runtime.recall.foreground import route_quality as foreground_route_quality
 from aippocampus_runtime.recall.query_policy import unique_preserve
 from aippocampus_runtime.source.artifact_role import match_is_demoted_artifact
 from aippocampus_runtime.source.registry_search import search_registry_sources
@@ -121,6 +122,12 @@ def _candidate_from_match(
         if skip_reasons is not None:
             skip_reasons[low_anchor_reason] += 1
         return None
+    anchor_quality = foreground_route_quality.anchor_quality(
+        matched_terms=matched_terms,
+        anchor_terms=anchor_terms,
+    )
+    meaningful_matched_terms = foreground_route_quality.meaningful_terms(matched_terms)
+    route_terms = unique_preserve(meaningful_matched_terms or matched_terms, limit=12)
     thread = match.get("thread")
     thread_map = thread if isinstance(thread, Mapping) else {}
     thread_key = str(ref.get("thread_key") or "")
@@ -137,14 +144,16 @@ def _candidate_from_match(
         "route_id": f"registry-clean-source:{public_id}",
         "candidate_id": f"registry-clean-source:{public_id}",
         "thread_key": _compact(thread_key, 120),
-        "route_terms": unique_preserve(matched_terms, limit=12),
+        "route_terms": route_terms,
         "query_anchor_terms": unique_preserve(anchor_terms, limit=12),
-        "actual_source_matched_terms": unique_preserve(matched_terms, limit=12),
+        "actual_source_matched_terms": route_terms,
+        "meaningful_matched_terms": route_terms,
+        "anchor_quality": anchor_quality,
         "source_anchor_gate": source_anchor_gate(
             matched_terms=matched_terms,
             anchor_terms=anchor_terms,
         ),
-        "route_label": "APW registry source route: " + " / ".join(matched_terms[:3]),
+        "route_label": "APW registry source route: " + " / ".join(route_terms[:3]),
         "source_refs": [ref],
         "scope_bucket": _scope_bucket(match),
         "freshness": "registered_source",

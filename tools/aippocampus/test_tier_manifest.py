@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import NamedTuple
 
+from test_tier_tag_overrides import TAG_OVERRIDES
+
 
 class TestModuleClassification(NamedTuple):
     primary_tier: str
@@ -81,6 +83,7 @@ TEST_MODULE_STEMS = frozenset(
         "test_agent_self_notes",
         "test_agent_slop_guard",
         "test_agent_trace_admission",
+        "test_agent_trajectory_packets",
         "test_aippo_clause_lifecycle",
         "test_aippo_feedback_eval_ficus",
         "test_aippo_skill_bridge",
@@ -114,6 +117,7 @@ TEST_MODULE_STEMS = frozenset(
         "test_avatar_illumination",
         "test_benchmark_attention_navigation_quality",
         "test_benchmark_associative_path_walker",
+        "test_benchmark_activation_dogfood_usefulness",
         "test_benchmark_attention_score_fusion_calibration",
         "test_benchmark_avatar_bounded_resonance",
         "test_benchmark_capability_provenance",
@@ -290,6 +294,7 @@ TEST_MODULE_STEMS = frozenset(
         "test_knowledge_source_schema",
         "test_knowledge_runtime_boundary",
         "test_legacy_aliases",
+        "test_latest_turn_freshness_after_stop",
         "test_life_wide_registry_smoke",
         "test_learning_loop_aippo_adapter",
         "test_learning_loop_behavioral_records",
@@ -498,6 +503,7 @@ QUICK_STEMS = frozenset(
         "test_action_hint_replay",
         "test_agent_fallback_executor",
         "test_agent_fallback_materializer",
+        "test_agent_trajectory_packets",
         "test_aippo_clause_lifecycle",
         "test_aippo_feedback_eval_ficus",
         "test_aippocampuslib",
@@ -589,6 +595,7 @@ INTEGRATION_STEMS = frozenset(
         "test_export_bundle",
         "test_import_bundle",
         "test_cognitive_worker_mode",
+        "test_latest_turn_freshness_after_stop",
         "test_model_client",
         "test_mcp_default_clean_source_resolution",
         "test_mcp_memory_health_recovery",
@@ -629,6 +636,7 @@ SLOW_STEMS = frozenset(
 BENCHMARK_STEMS = frozenset(
     {
         "test_benchmark_coding_decision_shadow",
+        "test_benchmark_activation_dogfood_usefulness",
         "test_benchmark_amemgym",
         "test_benchmark_amemgym_official",
         "test_benchmark_agent_continuity_loop",
@@ -701,6 +709,7 @@ BENCHMARK_STEMS = frozenset(
 BENCHMARK_SMOKE_STEMS = frozenset(
     {
         "test_benchmark_field_continuity",
+        "test_benchmark_activation_dogfood_usefulness",
         "test_benchmark_amemgym",
         "test_benchmark_amemgym_official",
         "test_benchmark_agent_continuity_loop",
@@ -746,88 +755,6 @@ BENCHMARK_SMOKE_STEMS = frozenset(
         "test_e2e50_seed_candidates",
     }
 )
-
-TAG_OVERRIDES = {
-    "test_aippocampus_mcp_server_catalog": ("mcp",),
-    "test_aippocampus_mcp_server_ops": ("mcp", "subprocess", "sync", "health"),
-    "test_aippocampus_mcp_server_recall": ("mcp", "recall", "registry"),
-    "test_aippocampus_mcp_server_search_memory": ("mcp", "registry", "source_open"),
-    "test_agent_trace_admission": ("recall", "trace_admission", "foreground_behavior"),
-    "test_agent_slop_guard": ("agent_guard", "tooling"),
-    "test_changed_surface_preflight": ("tooling", "test_runner"),
-    "test_browser_memory_companion": ("browser",),
-    "test_codex_long_session_smoke": ("host", "filesystem"),
-    "test_claude_code_hooks": ("hook", "subprocess", "claude-code"),
-    "test_cli_pulse": ("cli", "foreground_behavior"),
-    "test_codeql_workflow": ("ci", "github", "workflow"),
-    "test_command_quoting_contract": ("cli", "security", "quoting"),
-    "test_cognitive_worker_mode": ("provider",),
-    "test_cross_agent_continuity_smoke": ("cross_agent", "host"),
-    "test_deepseek_model_routing": ("provider",),
-    "test_diagnose_hooks": ("hook", "subprocess"),
-    "test_dream_lifecycle": ("dream", "lifecycle", "foreground_behavior"),
-    "test_dream_live_shadow_ab": ("host",),
-    "test_benchmark_e2e50_behavior_live": ("benchmark", "model-backed", "public_fixture"),
-    "test_e2e50_seed_candidates": ("benchmark", "public_fixture"),
-    "test_encrypted_sync_bundle": ("sync", "filesystem"),
-    "test_export_bundle": ("filesystem",),
-    "test_first_useful_recall_demo": ("docs", "public_fixture", "recall"),
-    "test_import_bundle": ("filesystem",),
-    "test_install_lifecycle_hook": ("install", "hook"),
-    "test_install_prompt_hook": ("install", "hook"),
-    "test_io_integrity": ("filesystem", "io"),
-    "test_learning_loop_behavioral_records": ("learning_loop", "privacy", "filesystem"),
-    "test_prompt_foreground_budget": ("hook",),
-    "test_prompt_hook_anti_nag_behavior": ("anti_nag", "foreground_behavior", "hook_behavior"),
-    "test_ambient_recall_policy": ("hook_behavior", "foreground_behavior"),
-    "test_prompt_hook_hot_path": ("hook_behavior", "foreground_behavior"),
-    "test_prompt_hook_latency_status": ("hook", "install", "foreground_behavior"),
-    "test_prompt_hook_semantic_diagnostics": ("hook", "semantic"),
-    "test_privacy_projection": ("privacy",),
-    "test_public_boundary_check": ("release", "privacy"),
-    "test_relationship_origin_recall": ("cli", "mcp", "recall", "registry"),
-    "test_search_quote_echo": ("search", "source_open", "real_history"),
-    "test_skill_entrypoint_docs": ("docs", "skill_surface"),
-    "test_benchmark_avatar_bounded_resonance": ("benchmark", "public_fixture"),
-    "test_benchmark_provider_conformance": ("provider", "mcp", "public_fixture"),
-    "test_benchmark_entrypoints": ("benchmark", "entrypoint", "subprocess"),
-    "test_life_wide_registry_smoke": ("smoke", "registry", "slow"),
-    "test_local_file_lock": ("filesystem", "lock_owner"),
-    "test_macos_install_smoke_workflow": ("install", "macos"),
-    "test_model_client": ("provider",),
-    "test_mcp_compact_boundaries": ("mcp", "foreground_behavior"),
-    "test_mcp_default_clean_source_resolution": ("mcp", "recall"),
-    "test_mcp_memory_health_recovery": ("mcp",),
-    "test_mcp_protocol_conformance": ("mcp", "protocol", "source_open"),
-    "test_mcp_search_memory_last_recall": ("mcp", "recall", "source_open"),
-    "test_multimodal_provider_routing": ("provider", "multimodal"),
-    "test_mutation_smoke": ("mutation_smoke", "tooling"),
-    "test_object_storage_sync": ("sync", "provider", "slow"),
-    "test_onboard_codex": ("install", "onboarding", "slow"),
-    "test_openai_agents_sdk_smoke": ("provider", "optional_dependency"),
-    "test_package_windows_binary": ("windows", "packaging"),
-    "test_plugin_distribution": ("packaging", "release", "slow"),
-    "test_project_triage": ("github",),
-    "test_provider_doctor": ("provider",),
-    "test_foreground_issue_sweep": ("foreground_behavior", "runtime", "docs"),
-    "test_provider_key_bridge": ("hook", "install", "provider"),
-    "test_prompt_loader_cache": ("filesystem", "performance"),
-    "test_question_confirmation_live": ("live_contract",),
-    "test_recall_owner_guard": ("docs", "architecture_guard", "recall"),
-    "test_route_note_recall_paths": ("mcp", "recall", "source_open"),
-    "test_semantic_result_cache": ("semantic", "cache", "lock_owner"),
-    "test_semantic_scope_real_history_smoke": ("real_history", "slow"),
-    "test_simulate_prompt_hook": ("hook",),
-    "test_stage_0_5_smoke": ("release", "slow"),
-    "test_sync_bundle": ("sync", "filesystem"),
-    "test_update_agent_status": ("install", "packaging"),
-    "test_update_foreground_actions": ("install", "hook", "packaging"),
-    "test_update_sync": ("install", "filesystem", "hook", "packaging"),
-    "test_uninstall_inventory": ("filesystem", "install", "privacy"),
-    "test_wheel_contract_release": ("release", "packaging"),
-    "test_worker_hook_handoff_smoke": ("smoke", "hook", "warm"),
-}
-
 
 def _module_name(stem: str) -> str:
     return f"tests.aippocampus.{stem}"

@@ -140,7 +140,7 @@ def _compact_recall_action_fields(
     if safe_actions:
         result["safe_next_actions"] = safe_actions
     if len(candidate_safe_actions) > len(safe_actions):
-        result["more_actions_available_in_detail"] = True
+        result["operator_details_available"] = True
     return result
 
 

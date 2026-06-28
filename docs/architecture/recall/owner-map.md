@@ -140,6 +140,11 @@ Owner boundary: semantic trigger/gate/cache behavior, semantic bridge maps,
 candidate effectiveness, and semantic diagnostics. Semantic findings remain
 navigation until source is reopened.
 
+Current owner package:
+
+- `semantic/__init__.py`
+- `semantic/cue_learning.py`
+
 Current flat files:
 
 - `agent_semantic_diagnostics.py`
@@ -156,6 +161,11 @@ Current flat files:
 
 Owner boundary: deepen requests, last-recall cache handles, source-anchor gate,
 source-gate context, source reopen budgets, and exact source-search support.
+
+Current owner package:
+
+- `source_open/__init__.py`
+- `source_open/cue_learning.py`
 
 Current flat files:
 
@@ -174,6 +184,11 @@ Current flat files:
 Owner boundary: agent facade/continuity output, CLI dispatch/support, compact
 foreground action cards, macro foreground surfaces, and user-facing confidence
 translation. Keep proof/debug fields out of compact foreground output.
+
+Current owner package:
+
+- `foreground/__init__.py`
+- `foreground/route_quality.py`
 
 Current flat files:
 

@@ -8,6 +8,7 @@ from typing import Any
 
 from aippocampus_runtime import core
 from aippocampus_runtime.contracts import shell_quote
+from aippocampus_runtime.recall.foreground import route_quality as foreground_route_quality
 
 
 @dataclass(frozen=True)
@@ -32,7 +33,8 @@ def public_route_label(packet: Mapping[str, Any]) -> str:
         label = raw.removeprefix("thread_candidate:")
         label = label.replace("_", " ").replace("·", " ")
         label = " ".join(label.split())
-        return core.compact_text(label[:1].upper() + label[1:] if label else "APW source route", 90)
+        label = core.compact_text(label[:1].upper() + label[1:] if label else "APW source route", 90)
+        return foreground_route_quality.repaired_public_label(packet, label)
     raw = str(
         packet.get("route_topic")
         or packet.get("route_label")
@@ -42,7 +44,8 @@ def public_route_label(packet: Mapping[str, Any]) -> str:
     label = raw.removeprefix("thread_candidate:")
     label = label.replace("_", " ").replace("·", " ")
     label = " ".join(label.split())
-    return core.compact_text(label[:1].upper() + label[1:] if label else "Memory route", 90)
+    label = core.compact_text(label[:1].upper() + label[1:] if label else "Memory route", 90)
+    return foreground_route_quality.repaired_public_label(packet, label)
 
 
 def route_deepen_action(
@@ -235,7 +238,7 @@ def _route_choice_explanation(
     labels_low_specificity: bool,
 ) -> str:
     if labels_low_specificity:
-        return "Potential route, but compact labels are not specific enough; refine or search source before choosing."
+        return "Route label is not discriminative enough; use the primary action or search/refine before choosing."
     if route_count <= 1:
         return "Best available route; reopen it before using source-backed details."
     output_mode = str(packet.get("output_mode") or packet.get("route_kind") or "")

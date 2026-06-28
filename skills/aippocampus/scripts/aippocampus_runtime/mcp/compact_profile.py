@@ -511,6 +511,7 @@ def compact_mcp_structured_content(payload: Any) -> Any:
             "reopen_more_if",
             "surface_class",
             "required_any",
+            "operator_details_available",
         )
         if key in payload and payload[key] not in (None, "")
     }

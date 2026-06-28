@@ -470,6 +470,17 @@ verdict:
   from theme/load/router rows, or source claims from the tiny affordance without
   recall/deepen/source reopen.
 
+#### `recall.activation_dogfood_usefulness_2026_06_28`
+
+- **What it shows:** Bounded #2857 dogfood/replay probe compares cold no-activation with warm replay
+  signal across four cases. Warm replay increases verifier-seen candidates from 2 to 5 while
+  keeping foreground exposure flat at 2, improves useful source-open hits from 1 to 2, lowers
+  manual-search fallback from 2 to 1, and lowers wrong-route drag / noisy surfacing from 1/1
+  to 0/0.
+- **Boundary:** Deterministic dogfood/replay usefulness probe only; not causal real-user lift, live
+  default foreground quality, private-history quality, Dream default delivery quality, or source
+  truth from activation signals.
+
 #### `map_rot.lifecycle_debt_2026_06_11`
 
 - **What it shows:** Public-safe lifecycle fixture covers 9 stale, challenged, quarantined, superseded,
@@ -2020,6 +2031,33 @@ back into giant Markdown table rows.
   broad private-history question/theme usefulness, theme rows as source truth, cognitive-load
   default foreground readiness, or source claims from the tiny affordance without
   recall/deepen/source reopen.
+
+### `recall.activation_dogfood_usefulness_2026_06_28`
+
+- **current_value:** Bounded #2857 dogfood/replay activation usefulness probe: 4 cases cover a
+  replayable behavior trajectory, hard-negative route feedback, parked low-specificity candidate
+  lifecycle, and source-openable route preservation. Cold no-activation totals:
+  generated candidates 2, foreground exposed 2, verifier seen 2, useful source-open hits 1,
+  source-open follow-through 1, manual-search fallback 2, wrong-route drag 1, noisy surfacing
+  1. Warm replay signal totals: generated candidates 5, foreground exposed 2, verifier seen 5,
+  useful source-open hits 2, source-open follow-through 2, manual-search fallback 1,
+  wrong-route drag 0, noisy surfacing 0. Deltas: manual-search fallback -1, wrong-route drag
+  -1, noisy surfacing -1, useful source-open hits +1. Decision:
+  `activation_probe_useful_on_bounded_replay=true`,
+  `default_live_claim_promoted=false`, and `dream_default_delivery_claim_promoted=false`.
+- **run_date:** 2026-06-28
+- **source_report:** [`activation-dogfood-usefulness-2026-06-28.md`](benchmarks/reports/recall-navigation/activation-dogfood-usefulness-2026-06-28.md)
+  and `python -m unittest tests.aippocampus.test_benchmark_activation_dogfood_usefulness -v`
+- **claim_level:** `bounded_dogfood_replay_activation_usefulness_probe`
+- **cohort:** Deterministic public-safe dogfood/replay slice only; no private history, live host calls,
+  model calls, raw source text, source refs, thread/message handles, local paths, provider
+  payloads, credentials, or source truth from activation signals.
+- **supersedes / superseded_by:** Closes #2857 as a bounded usefulness probe for activation signal roles,
+  manual-search fallback, route drag, noisy surfacing, and source-open follow-through; it does
+  not supersede default-hook adoption boundaries.
+- **cannot_claim:** Causal real-user lift, live default foreground quality, private-history quality,
+  default Dream delivery quality, source truth from activation signals, broad route-producer
+  quality, or default foreground adoption readiness.
 
 ### `map_rot.lifecycle_debt_2026_06_10`
 

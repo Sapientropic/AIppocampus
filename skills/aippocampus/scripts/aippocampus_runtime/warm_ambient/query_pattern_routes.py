@@ -22,6 +22,7 @@ from aippocampus_runtime.artifacts.publish import artifact_lease
 from aippocampus_runtime.core import sanitize_external_model_text
 from aippocampus_runtime.io_integrity import atomic_write_text
 from aippocampus_runtime.ops.route_readiness import safe_source_refs
+from aippocampus_runtime.recall import semantic_cue_cache
 from aippocampus_runtime.registry.api import unique_preserve
 from aippocampus_runtime.source.io_kernel import load_jsonl_dict_rows
 from aippocampus_runtime.warm_ambient.query_pattern_alias_hygiene import (
@@ -54,6 +55,7 @@ REGISTRY_ALIAS_SOURCE = "registry_metadata"
 UNSPECIFIED_ALIAS_SOURCE = "unspecified"
 GENERATED_ALIAS_SOURCES = {
     "reviewed_semantic",
+    "semantic_cue_cache",
     "local_offline_generated",
     "external_model_generated",
 }
@@ -620,6 +622,59 @@ def semantic_trigger_query_pattern_route_rows(
     return rows
 
 
+def semantic_cue_query_pattern_route_rows(
+    registry: Mapping[str, Any],
+    *,
+    registry_dir: Path,
+    max_routes: int = MAX_REGISTRY_ROUTES,
+    ttl_seconds: int = DEFAULT_REGISTRY_ROUTE_TTL_SECONDS,
+) -> list[dict[str, Any]]:
+    """Project active source-opened recall cue aliases into route rows."""
+
+    freshness_by_thread = _registry_freshness_by_thread(registry)
+    cue_path = semantic_cue_cache.default_semantic_cues_path(registry_dir=registry_dir)
+    rows: list[dict[str, Any]] = []
+    for trigger in semantic_cue_cache.semantic_cue_triggers(cue_path, limit=max_routes):
+        aliases = _aliases(trigger.get("aliases") or [])
+        refs = safe_source_refs(trigger.get("source_refs"))[:MAX_SOURCE_REFS]
+        if not aliases or not refs:
+            continue
+        thread_key = ""
+        for ref in refs:
+            raw_thread = str(ref.get("thread_key") or "").strip()
+            if raw_thread:
+                thread_key = raw_thread
+                break
+        freshness = freshness_by_thread.get(thread_key, {}) if thread_key else {}
+        source_id = freshness.get("source_id")
+        if source_id and not refs[0].get("source_id"):
+            refs[0] = {**refs[0], "source_id": source_id}
+        route_id = str(trigger.get("cue_id") or trigger.get("route") or "").strip()
+        rows.append(
+            {
+                "query_pattern_route_id": route_id,
+                "thread_key_hash": freshness.get("thread_key_hash")
+                or _sha(thread_key or route_id, prefix="thread"),
+                "source_generation_digest": freshness.get("source_generation_digest")
+                or str(trigger.get("source_generation_digest") or ""),
+                "query_aliases": aliases,
+                "alias_source": "semantic_cue_cache",
+                "source_refs": refs,
+                "confidence": _float_bucket(trigger.get("confidence"), default=0.82),
+                "state": "current",
+                "ttl_seconds": max(1, int(ttl_seconds)),
+                "navigation_only": True,
+                "output_authority": "navigation_only",
+                "source_reopen_required": True,
+                "sensitivity": "local_route_handle_only",
+                "privacy_state": "allowed",
+            }
+        )
+        if len(rows) >= max(0, int(max_routes)):
+            break
+    return rows
+
+
 def _reviewed_semantic_route_reserve(max_routes: int) -> int:
     """Reserve route budget so cheap metadata rows cannot starve reviewed aliases."""
 
@@ -651,18 +706,28 @@ def publish_registry_query_pattern_routes(
         registry_dir=root,
         max_routes=route_limit,
     )
+    cue_candidates = semantic_cue_query_pattern_route_rows(
+        registry,
+        registry_dir=root,
+        max_routes=route_limit,
+    )
     semantic_reserve = _reviewed_semantic_route_reserve(route_limit) if semantic_candidates else 0
     semantic_rows = semantic_candidates[:semantic_reserve]
+    cue_reserve = _reviewed_semantic_route_reserve(route_limit) if cue_candidates else 0
+    cue_rows = cue_candidates[: max(0, min(cue_reserve, route_limit - len(semantic_rows)))]
     registry_rows = registry_query_pattern_route_rows(
         registry,
-        max_routes=max(0, route_limit - len(semantic_rows)),
+        max_routes=max(0, route_limit - len(semantic_rows) - len(cue_rows)),
     )
-    remaining = max(0, route_limit - len(registry_rows) - len(semantic_rows))
+    remaining = max(0, route_limit - len(registry_rows) - len(semantic_rows) - len(cue_rows))
     if remaining:
         semantic_rows.extend(
             semantic_candidates[len(semantic_rows) : len(semantic_rows) + remaining]
         )
-    rows = [*registry_rows, *semantic_rows]
+    remaining = max(0, route_limit - len(registry_rows) - len(semantic_rows) - len(cue_rows))
+    if remaining:
+        cue_rows.extend(cue_candidates[len(cue_rows) : len(cue_rows) + remaining])
+    rows = [*registry_rows, *semantic_rows, *cue_rows]
     current_generation_by_thread = {
         str(row.get("thread_key_hash")): str(row.get("source_generation_digest") or "")
         for row in rows

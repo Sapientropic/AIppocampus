@@ -13,7 +13,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 ROOT = REPO_ROOT / "skills" / "aippocampus"
 SCRIPTS = ROOT / "scripts"
 
-from aippocampus_runtime.recall import agent_continuity
+from aippocampus_runtime.recall import agent_continuity, semantic_cue_cache
 from aippocampus_runtime.recall.agent_recall_cache import (
     recall_selector_cache_path,
     write_last_recall_cache,
@@ -24,6 +24,9 @@ from tests.aippocampus.frontstage_assertions import (
     assert_compact_frontstage_payload,
 )
 from tests.aippocampus.product_probe_helpers import (
+    SourceOpenExpectation,
+    assert_cli_recall_deepens_to_source,
+    assert_mcp_recall_deepens_to_source,
     call_mcp_tool_payload,
     run_agent_cli,
     write_clean_source_thread,
@@ -121,10 +124,11 @@ class AgentDeepenCompactProjectionTests(unittest.TestCase):
         self.assertNotIn("macro_navigation_diagnostics", compact_encoded)
         self.assertNotIn("cannot_claim", compact_payload)
         self.assertNotIn("claim_boundary", compact_payload)
-        self.assertEqual(compact_payload["source_scope"], "opened_window_only")
+        self.assertEqual(compact_payload["source_open_posture"], "source_opened_adjacent_evidence")
+        self.assertEqual(compact_payload["source_scope"], "opened_window_adjacent_context")
         self.assertEqual(
             compact_payload["use_this_for"],
-            "quote or paraphrase only the opened source window",
+            "adjacent context only; continue source search before answering the cue",
         )
         self.assertIn("wider context", compact_payload["reopen_more_if"])
         self.assertEqual(
@@ -145,6 +149,54 @@ class AgentDeepenCompactProjectionTests(unittest.TestCase):
         self.assertIn("source_window", full_payload["result"])
         self.assertIn("messages", full_payload["result"]["source_window"])
         self.assertIn("AIppocampus 使用 clean source", json.dumps(full_payload, ensure_ascii=False))
+
+    def test_cli_and_mcp_deepen_learn_recall_cue_alias_after_source_open(self) -> None:
+        expectation = SourceOpenExpectation(
+            message_id="msg_user",
+            window_terms=("source-backed continuity",),
+        )
+        cli_registry = self.cwd / "registry-cli"
+        mcp_registry = self.cwd / "registry-mcp"
+        cli_cache = self.cwd / "cli-last-recall.json"
+        mcp_cache = self.cwd / "mcp-last-recall.json"
+        cue = "小海马体 source-backed continuity anchor"
+
+        for _ in range(2):
+            assert_cli_recall_deepens_to_source(
+                self,
+                cue=cue,
+                cwd=self.cwd,
+                clean_source_dir=self.clean,
+                registry_dir=cli_registry,
+                last_recall_path=cli_cache,
+                expectation=expectation,
+            )
+            assert_mcp_recall_deepens_to_source(
+                self,
+                cue=cue,
+                cwd=self.cwd,
+                clean_source_dir=self.clean,
+                registry_dir=mcp_registry,
+                last_recall_path=mcp_cache,
+                expectation=expectation,
+            )
+
+        cli_rows = semantic_cue_cache.load_semantic_cues(
+            semantic_cue_cache.default_semantic_cues_path(registry_dir=cli_registry)
+        )
+        mcp_rows = semantic_cue_cache.load_semantic_cues(
+            semantic_cue_cache.default_semantic_cues_path(registry_dir=mcp_registry)
+        )
+        cli_encoded = json.dumps(cli_rows, ensure_ascii=False)
+        mcp_encoded = json.dumps(mcp_rows, ensure_ascii=False)
+
+        self.assertGreater(len(cli_rows), 0)
+        self.assertGreater(len(mcp_rows), 0)
+        self.assertTrue(all(row["alias_source"] == "agent_recall_source_open" for row in cli_rows))
+        self.assertTrue(all(row["alias_source"] == "agent_recall_source_open" for row in mcp_rows))
+        self.assertIn("msg_user", cli_encoded)
+        self.assertIn("msg_user", mcp_encoded)
+        self.assertNotIn(str(self.cwd), cli_encoded + mcp_encoded)
 
     def test_cli_agent_explain_json_defaults_to_compact_route_card(self) -> None:
         env = {
@@ -211,7 +263,7 @@ class AgentDeepenCompactProjectionTests(unittest.TestCase):
             expected_returncode=0,
             label="agent explain emitted action",
         )
-        self.assertEqual(action_payload["source_open_posture"], "target_evidence_opened")
+        self.assertEqual(action_payload["source_open_posture"], "source_opened_adjacent_evidence")
         self.assertIn("primary_source_snippet", action_payload)
         self.assertEqual(
             compact_payload["claim_boundary"],
@@ -359,27 +411,30 @@ class AgentDeepenCompactProjectionTests(unittest.TestCase):
             last_recall_action["arguments"],
         )
         self.assertEqual(last_recall_deepen["status"], "ok")
-        self.assertEqual(last_recall_deepen["source_open_posture"], "target_evidence_opened")
+        self.assertEqual(last_recall_deepen["source_open_posture"], "source_opened_adjacent_evidence")
         self.assertIn("primary_source_snippet", last_recall_deepen)
 
         compact_payload = call_mcp_tool_payload("agent_deepen", route_action["arguments"])
         compact_encoded = json.dumps(compact_payload, ensure_ascii=False)
         self.assertEqual(compact_payload["detail"], "compact")
         self.assertEqual(compact_payload["surface"], "mcp_agent_deepen_compact")
-        self.assertEqual(compact_payload["source_open_posture"], "target_evidence_opened")
+        self.assertEqual(compact_payload["source_open_posture"], "source_opened_adjacent_evidence")
         self.assertNotIn("source_window_summary", compact_payload)
         self.assertEqual(compact_payload["foreground_action_contract"], "foreground-action-v2")
-        self.assertEqual(compact_payload["foreground_action"]["id"], "use_opened_source_window")
+        self.assertEqual(
+            compact_payload["foreground_action"]["id"],
+            "continue_after_adjacent_source_open",
+        )
         self.assertNotIn("feedback_actions", compact_payload)
         self.assertNotIn("feedback_boundary", compact_payload)
         self.assertNotIn("result", compact_payload)
         self.assertNotIn("source_window", compact_payload)
         self.assertNotIn('"messages"', compact_encoded)
         self.assertNotIn("claim_boundary", compact_payload)
-        self.assertEqual(compact_payload["source_scope"], "opened_window_only")
+        self.assertEqual(compact_payload["source_scope"], "opened_window_adjacent_context")
         self.assertEqual(
             compact_payload["use_this_for"],
-            "quote or paraphrase only the opened source window",
+            "adjacent context only; continue source search before answering the cue",
         )
         self.assertIn("sensitive or stale claims", compact_payload["reopen_more_if"])
         self.assertEqual(
@@ -564,7 +619,7 @@ class AgentDeepenCompactProjectionTests(unittest.TestCase):
 
         self.assertEqual(payload["status"], "ok")
         self.assertEqual(payload["surface"], "mcp_agent_deepen_compact")
-        self.assertEqual(payload["source_open_posture"], "target_evidence_opened")
+        self.assertEqual(payload["source_open_posture"], "source_opened_adjacent_evidence")
         self.assertIn("primary_source_snippet", payload)
 
     def test_mcp_selector_uses_explicit_registry_without_private_cache_path(self) -> None:
@@ -627,7 +682,7 @@ class AgentDeepenCompactProjectionTests(unittest.TestCase):
 
         self.assertEqual(payload["status"], "ok")
         self.assertEqual(payload["surface"], "mcp_agent_deepen_compact")
-        self.assertEqual(payload["source_open_posture"], "target_evidence_opened")
+        self.assertEqual(payload["source_open_posture"], "source_opened_adjacent_evidence")
         self.assertIn("primary_source_snippet", payload)
 
 if __name__ == "__main__":

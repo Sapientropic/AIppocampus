@@ -36,8 +36,33 @@ MAX_PROMPT_HASHES = 8
 MAX_FALSE_POSITIVE_REASONS = 4
 MAX_POSITION_TERMS = 18
 MAX_POSITION_INTENTS = 6
+POSITIVE_RECALL_FEEDBACK_SIGNALS = {
+    "source_reopen_success",
+    "source_open",
+    "user_confirmed",
+    "explicit_useful",
+    "prevented_failure",
+}
+HARD_NEGATIVE_RECALL_FEEDBACK_SIGNALS = {
+    "wrong_route_drag",
+    "wrong_route",
+    "dismissed",
+    "ignored",
+    "manual_search_after_route",
+    "context_suppressed",
+    "blocked",
+}
+PARKED_RECALL_FEEDBACK_SIGNALS = {
+    "parked",
+    "park",
+    "privacy_blocked",
+    "stale",
+    "off_phase",
+    "needs_refine",
+    "duplicate",
+}
 SENSITIVE_TERM_RE = re.compile(
-    r"\b[A-Za-z0-9_]*(?:TOKEN|SECRET|PASSWORD|API_KEY|ACCESS_KEY)[A-Za-z0-9_]*\s*=",
+    r"\b[A-Za-z0-9_]*(?:TOKEN|SECRET|PASSWORD|API_KEY|ACCESS_KEY)[A-Za-z0-9_]*\s*=\s*\S+",
     re.I,
 )
 
@@ -170,11 +195,13 @@ def all_recall_positions(path: Path) -> list[dict[str, Any]]:
 def cue_is_active(row: dict[str, Any]) -> bool:
     hit_count = int(row.get("hit_count") or 0)
     false_positive_count = int(row.get("false_positive_count") or 0)
+    explicit_useful_count = int(row.get("explicit_useful_feedback_count") or 0)
     confidence = float(row.get("confidence") or 0.0)
+    positive_weight = hit_count + explicit_useful_count
     return bool(
         row.get("status") == "active"
-        and hit_count >= MIN_PROMOTION_HITS
-        and false_positive_count < hit_count
+        and (hit_count >= MIN_PROMOTION_HITS or explicit_useful_count > 0)
+        and false_positive_count < positive_weight
         and confidence >= 0.55
         and row.get("source_refs")
     )
@@ -183,9 +210,29 @@ def cue_is_active(row: dict[str, Any]) -> bool:
 def refresh_status(row: dict[str, Any]) -> dict[str, Any]:
     hit_count = int(row.get("hit_count") or 0)
     false_positive_count = int(row.get("false_positive_count") or 0)
+    explicit_useful_count = int(row.get("explicit_useful_feedback_count") or 0)
     confidence = float(row.get("confidence") or 0.0)
     has_refs = bool(row.get("source_refs"))
-    if hit_count >= MIN_PROMOTION_HITS and false_positive_count < hit_count and has_refs and confidence >= 0.55:
+    last_signal = str(row.get("last_feedback_signal") or "").casefold()
+    if last_signal in HARD_NEGATIVE_RECALL_FEEDBACK_SIGNALS:
+        row["status"] = "suppressed_hard_negative"
+        row["candidate_lifecycle_state"] = "rejected_hard_negative"
+        return row
+    if last_signal in PARKED_RECALL_FEEDBACK_SIGNALS:
+        row["status"] = "parked_recheck"
+        row["candidate_lifecycle_state"] = "parked_recheck"
+        return row
+    if last_signal == "expired":
+        row["status"] = "expired_recheck"
+        row["candidate_lifecycle_state"] = "expired_recheck"
+        return row
+    positive_weight = hit_count + explicit_useful_count
+    if (
+        (hit_count >= MIN_PROMOTION_HITS or explicit_useful_count > 0)
+        and false_positive_count < positive_weight
+        and has_refs
+        and confidence >= 0.55
+    ):
         row["status"] = "active"
     else:
         row["status"] = "staging"
@@ -222,7 +269,7 @@ def semantic_aliases_from_result(result: dict[str, Any]) -> list[str]:
     return unique_preserve(aliases, limit=24)
 
 
-def _rows_by_key(rows: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+def rows_by_key(rows: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     return {str(row.get("cue_id") or ""): dict(row) for row in rows if row.get("cue_id")}
 
 
@@ -234,7 +281,7 @@ def _position_rows_by_key(rows: list[dict[str, Any]]) -> dict[str, dict[str, Any
     }
 
 
-def _non_cue_rows(path: Path) -> list[dict[str, Any]]:
+def non_cue_rows(path: Path) -> list[dict[str, Any]]:
     return [
         row
         for row in load_jsonl_dict_rows(path).rows
@@ -256,7 +303,7 @@ def _non_position_rows(path: Path) -> list[dict[str, Any]]:
     ]
 
 
-def _sorted_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def sorted_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     rows.sort(
         key=lambda row: (
             row.get("status") == "active",
@@ -295,7 +342,7 @@ def record_semantic_cue_hits(
         return {"path": str(path), "updated_count": 0, "active_count": 0, "cues": []}
 
     now = now_utc()
-    rows = _rows_by_key(all_semantic_cues(path))
+    rows = rows_by_key(all_semantic_cues(path))
     confidence = float(semantic_result.get("confidence") or 0.0)
     prompt_id = prompt_hash(prompt)
     updated_ids: list[str] = []
@@ -352,8 +399,8 @@ def record_semantic_cue_hits(
         rows[key] = refresh_status(row)
         updated_ids.append(key)
 
-    all_rows = _sorted_rows(list(rows.values()))
-    write_jsonl_dict_rows(path, [*_non_cue_rows(path), *all_rows], sort_keys=True)
+    all_rows = sorted_rows(list(rows.values()))
+    write_jsonl_dict_rows(path, [*non_cue_rows(path), *all_rows], sort_keys=True)
     active_count = sum(1 for row in all_rows if row.get("cue_id") in updated_ids and cue_is_active(row))
     return {
         "path": str(path),
@@ -370,7 +417,7 @@ def record_semantic_cue_misses(
     reason: str = "",
 ) -> dict[str, Any]:
     wanted = {normalize_cue(cue).casefold() for cue in cues if normalize_cue(cue)}
-    rows = _rows_by_key(all_semantic_cues(path))
+    rows = rows_by_key(all_semantic_cues(path))
     updated = 0
     for row in rows.values():
         if str(row.get("cue") or "").casefold() not in wanted:
@@ -388,7 +435,7 @@ def record_semantic_cue_misses(
     if updated:
         write_jsonl_dict_rows(
             path,
-            [*_non_cue_rows(path), *_sorted_rows(list(rows.values()))],
+            [*non_cue_rows(path), *sorted_rows(list(rows.values()))],
             sort_keys=True,
         )
     return {"path": str(path), "updated_count": updated}
@@ -410,13 +457,17 @@ def _intent_buckets(terms: list[str]) -> list[str]:
     return unique_preserve(buckets, limit=MAX_POSITION_INTENTS) or ["continuity_positioning"]
 
 
-def _safe_position_terms(terms: list[str]) -> list[str]:
+def safe_position_terms(terms: list[str]) -> list[str]:
     safe_terms: list[str] = []
     for term in terms:
         cue = normalize_cue(term)
         if not (2 <= len(cue) <= MAX_CUE_LENGTH):
             continue
-        if SENSITIVE_TERM_RE.search(cue):
+        if SENSITIVE_TERM_RE.search(cue) or re.search(
+            r"\b(token|secret|password|api[_-]?key|access[_-]?key)\b",
+            cue,
+            re.I,
+        ):
             continue
         sanitized, policy = sanitize_external_model_text(cue)
         if policy.get("hard_block") or policy.get("redacted"):
@@ -447,7 +498,7 @@ def record_recall_semantic_position(
     source-backed alias promotion.
     """
 
-    safe_terms = _safe_position_terms(terms)
+    safe_terms = safe_position_terms(terms)
     prompt_id = prompt_hash(prompt)
     if not prompt_id or not safe_terms:
         return {"path": str(path), "updated_count": 0, "position_count": len(all_recall_positions(path))}
@@ -677,6 +728,7 @@ def semantic_cue_triggers(path: Path | None, *, limit: int = 64) -> list[dict[st
                 "script": row.get("script"),
                 "hit_count": row.get("hit_count"),
                 "false_positive_count": row.get("false_positive_count"),
+                "cue_id": row.get("cue_id"),
                 "source_refs": row.get("source_refs") or [],
             }
         )

@@ -244,9 +244,32 @@ def compact_agent_deepen_payload(
         if "recommended_evidence_route" in source
         else recall_gate_context.get("recommended_evidence_route")
     )
-    diagnostic_only = source_anchor_gate.get("status") == "blocked" or recommended_evidence_route is False
-    source_open_posture = "opened_diagnostic_only" if diagnostic_only else "target_evidence_opened"
-    if diagnostic_only:
+    gate_status = str(source_anchor_gate.get("status") or "").strip()
+    gate_present = bool(source_anchor_gate)
+    explicit_target_rejected = (
+        gate_present and source_anchor_gate.get("target_source_matched") is False
+    )
+    wrong_or_blocked = (
+        gate_status == "blocked"
+        or explicit_target_rejected
+        or recommended_evidence_route is False
+    )
+    target_evidence = (
+        target_source_matched is True
+        or (
+            gate_status in {"pass", "passed"}
+            and source_anchor_gate.get("target_source_matched") is not False
+        )
+    )
+    if wrong_or_blocked:
+        source_open_posture = "opened_diagnostic_only"
+    elif target_evidence:
+        source_open_posture = "target_evidence_opened"
+    elif gate_status in {"", "skipped"}:
+        source_open_posture = "source_opened_adjacent_evidence"
+    else:
+        source_open_posture = "opened_diagnostic_only"
+    if source_open_posture == "opened_diagnostic_only":
         primary_action = {
             "id": "treat_opened_source_as_diagnostic",
             "label": "Treat opened source as diagnostic",
@@ -256,6 +279,18 @@ def compact_agent_deepen_payload(
             "why": (
                 "Source opened, but recall did not accept it as the target evidence route; "
                 "use search or another deepen route before making source-backed claims."
+            ),
+        }
+    elif source_open_posture == "source_opened_adjacent_evidence":
+        primary_action = {
+            "id": "continue_after_adjacent_source_open",
+            "label": "Continue after adjacent source open",
+            "mutation_risk": "read_only",
+            "claim_boundary": "opened_source_adjacent_not_target_evidence",
+            "continue_without_command": True,
+            "why": (
+                "Source opened, but recall did not prove this window answers the cue; "
+                "use it as orientation and continue search/deepen before claiming."
             ),
         }
     else:
@@ -284,6 +319,8 @@ def compact_agent_deepen_payload(
             "evidence_level": (
                 result.get("evidence_level") or result.get("support_level")
                 if source_open_posture == "target_evidence_opened"
+                else "adjacent_evidence"
+                if source_open_posture == "source_opened_adjacent_evidence"
                 else "not_target_evidence"
             ),
             "route_id": result.get("route_id"),
@@ -304,11 +341,15 @@ def compact_agent_deepen_payload(
             "source_scope": (
                 "diagnostic_orientation_only"
                 if source_open_posture == "opened_diagnostic_only"
+                else "opened_window_adjacent_context"
+                if source_open_posture == "source_opened_adjacent_evidence"
                 else "opened_window_only"
             ),
             "use_this_for": (
                 "orientation only; do not make source-backed claims from this window"
                 if source_open_posture == "opened_diagnostic_only"
+                else "adjacent context only; continue source search before answering the cue"
+                if source_open_posture == "source_opened_adjacent_evidence"
                 else "quote or paraphrase only the opened source window"
             ),
             "reopen_more_if": [

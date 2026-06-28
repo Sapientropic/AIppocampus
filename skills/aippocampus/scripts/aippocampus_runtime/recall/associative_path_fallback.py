@@ -18,7 +18,10 @@ from typing import Any
 
 from aippocampus_runtime import core
 from aippocampus_runtime.mcp import recall_navigation
-from aippocampus_runtime.recall import agent_deepen_requests, apw_route_identity
+from aippocampus_runtime.recall import (
+    agent_deepen_requests,
+    apw_route_identity,
+)
 from aippocampus_runtime.recall.associative_path_fallback_policy import (
     MODE_OFF,
     MODE_OPT_IN,
@@ -31,6 +34,7 @@ from aippocampus_runtime.recall.associative_path_inputs import build_associative
 from aippocampus_runtime.recall.associative_path_source_shape import (
     build_associative_path_source_shape,
 )
+from aippocampus_runtime.recall.foreground import route_quality as foreground_route_quality
 from aippocampus_runtime.recall.query_policy import unique_preserve
 
 KIND = "aippocampus_associative_path_recall_fallback"
@@ -76,9 +80,18 @@ def _candidate_refs(candidate: Mapping[str, Any]) -> list[dict[str, Any]]:
 
 
 def _route_label(candidate: Mapping[str, Any]) -> str:
-    terms = [str(term) for term in candidate.get("matched_terms") or [] if str(term).strip()]
+    terms = [
+        str(term)
+        for term in (
+            candidate.get("meaningful_matched_terms")
+            or foreground_route_quality.meaningful_terms(candidate.get("matched_terms") or [])
+        )
+        if str(term).strip()
+    ]
     if terms:
         return "APW source route: " + _text(" / ".join(terms[:3]), 90)
+    if candidate.get("matched_terms"):
+        return "APW low-specificity route"
     route_id = _text(candidate.get("route_id"), 60)
     return f"APW source route: {route_id}" if route_id else "APW source route"
 
@@ -116,8 +129,19 @@ def _candidate_to_route(
         ],
         limit=5,
     )
-    matched_terms = unique_preserve(
+    raw_matched_terms = unique_preserve(
         [str(term) for term in candidate.get("matched_terms") or [] if str(term).strip()],
+        limit=5,
+    )
+    meaningful_matched_terms = unique_preserve(
+        [
+            str(term)
+            for term in (
+                candidate.get("meaningful_matched_terms")
+                or foreground_route_quality.meaningful_terms(raw_matched_terms)
+            )
+            if str(term).strip()
+        ],
         limit=5,
     )
     label = _route_label(candidate)
@@ -128,7 +152,7 @@ def _candidate_to_route(
         apw_candidate_id=_text(candidate.get("candidate_id"), 120),
         source_refs=refs,
         source_ref_digest_value=source_ref_digest,
-        matched_cue_anchors=matched_terms,
+        matched_cue_anchors=meaningful_matched_terms or raw_matched_terms,
         candidate_source_kind=candidate.get("candidate_source_kind"),
         source_shape_posture=projection.get("route_posture"),
     )
@@ -143,7 +167,10 @@ def _candidate_to_route(
         "route_label": label,
         "route_topic": "associative_path_recovery",
         "matched_cue_family": "associative_path_fallback",
-        "matched_cue_anchors": matched_terms,
+        "matched_cue_anchors": meaningful_matched_terms,
+        "raw_matched_cue_anchors": raw_matched_terms,
+        "meaningful_cue_anchors": meaningful_matched_terms,
+        "anchor_quality": candidate.get("anchor_quality"),
         "source_anchor_gate": candidate.get("source_anchor_gate"),
         "apw_candidate_route_id": route_id,
         "apw_candidate_id": _text(candidate.get("candidate_id"), 120),
@@ -154,7 +181,11 @@ def _candidate_to_route(
         "scope_bucket": "project_or_clean_source",
         "route_kind": "associative_path",
         "reopenable": True,
-        "label_granularity": "associative_path_terms",
+        "label_granularity": (
+            "associative_path_meaningful_terms"
+            if meaningful_matched_terms
+            else "associative_path_low_specificity"
+        ),
         "route_label_specificity_score": 0.7,
         "triage_rank_reason_codes": reason_codes,
         "risk_flags": unique_preserve(
@@ -299,6 +330,8 @@ def build_associative_path_agent_fallback(
             {
                 "matched_cue_family": "associative_path_fallback",
                 "matched_cue_anchors": route.get("matched_cue_anchors") or [],
+                "meaningful_cue_anchors": route.get("meaningful_cue_anchors") or [],
+                "anchor_quality": route.get("anchor_quality"),
                 "candidate_source_kind": route.get("candidate_source_kind"),
                 "source_ref_digest": route.get("source_ref_digest"),
                 "selected_source_ref_count": route.get("selected_source_ref_count"),
@@ -338,6 +371,8 @@ def build_associative_path_agent_fallback(
             "label": route["route_label"],
             "why_this_route": route["why_this_may_matter"],
             "matched_cue_anchors": route.get("matched_cue_anchors") or [],
+            "meaningful_cue_anchors": route.get("meaningful_cue_anchors") or [],
+            "anchor_quality": route.get("anchor_quality"),
             "candidate_source_kind": route.get("candidate_source_kind"),
             "route_posture": projection.get("route_posture"),
             "action_grammar": projection.get("action_grammar"),

@@ -19,6 +19,7 @@ from aippocampus_runtime.recall import (
     agent_continuity_cli_support,
     associative_path_fallback,
 )
+from aippocampus_runtime.recall.apw_anchor_coverage import source_anchor_gate
 from aippocampus_runtime.recall.associative_path_inputs import build_associative_path_diagnostic
 from aippocampus_runtime.source.registry_search import search_registry_sources
 
@@ -66,6 +67,28 @@ class AgentRecallApwFallbackTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.env_patch.stop()
         self.tmp.cleanup()
+
+    def test_apw_source_anchor_gate_rejects_low_signal_meta_anchors(self) -> None:
+        gate = source_anchor_gate(
+            matched_terms=["why", "generic", "route"],
+            anchor_terms=["why", "generic", "route", "recall"],
+        )
+
+        self.assertEqual(gate["status"], "blocked")
+        self.assertEqual(gate["reason"], "low_signal_apw_anchors_only")
+        self.assertEqual(gate["meaningful_anchor_hits"], 0)
+        self.assertFalse(gate["target_source_matched"])
+
+    def test_apw_source_anchor_gate_treats_string_inputs_as_terms(self) -> None:
+        gate = source_anchor_gate(
+            matched_terms="source-backed continuity",
+            anchor_terms="source-backed continuity",
+        )
+
+        self.assertEqual(gate["status"], "pass")
+        self.assertEqual(gate["anchor_count"], 1)
+        self.assertEqual(gate["opened_anchor_hits"], 1)
+        self.assertEqual(gate["meaningful_anchor_hits"], 1)
 
     def _write_jsonl(self, name: str, rows: list[dict[str, object]]) -> None:
         path = self.root / ".aippocampus" / name
@@ -577,12 +600,10 @@ class AgentRecallApwFallbackTests(unittest.TestCase):
             public["foreground_action"]["id"],
             "search_registry_sources_for_original_cue_anchors",
         )
-        self.assertEqual(
-            public["safe_next_actions"][0]["id"],
-            "reopen_background_finding_source_route",
-        )
         safe_ids = [action["id"] for action in public["safe_next_actions"]]
         self.assertNotIn("search_registry_sources_for_original_cue_anchors", safe_ids)
+        self.assertNotIn("reopen_background_finding_source_route", safe_ids)
+        self.assertEqual(public["safe_next_actions"][0]["id"], "inspect_low_confidence_route")
         self.assertIn(
             "current clean-source echo",
             public["foreground_action"]["why"],

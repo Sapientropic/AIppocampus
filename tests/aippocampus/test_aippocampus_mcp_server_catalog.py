@@ -612,7 +612,12 @@ class AippocampusMcpServerCatalogTests(unittest.TestCase):
         self.assertEqual(deepen_payload["mode"], "deepen")
         self.assertEqual(deepen_payload["status"], "ok")
         self.assertEqual(deepen_payload["detail"], "compact")
-        self.assertEqual(deepen_payload["source_open_posture"], "target_evidence_opened")
+        self.assertEqual(deepen_payload["source_open_posture"], "source_opened_adjacent_evidence")
+        self.assertEqual(deepen_payload["evidence_level"], "adjacent_evidence")
+        self.assertEqual(
+            deepen_payload["foreground_action"]["id"],
+            "continue_after_adjacent_source_open",
+        )
         self.assertNotIn("source_window_summary", deepen_payload)
         self.assertEqual(
             deepen_payload["primary_source_snippet"]["text"],
