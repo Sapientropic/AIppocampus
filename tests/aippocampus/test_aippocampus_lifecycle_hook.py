@@ -63,6 +63,18 @@ class MemoryMaintenanceHookTests(unittest.TestCase):
             },
         }
 
+    def test_lifecycle_health_probe_uses_full_payload_not_compact_foreground_card(
+        self,
+    ) -> None:
+        with mock.patch.object(hook, "run_json_timeout", return_value={"ok": True}) as run_json:
+            payload = hook.run_health(self.cwd)
+
+        command = run_json.call_args.args[0]
+        self.assertEqual(payload, {"ok": True})
+        self.assertIn("--json", command)
+        self.assertIn("--detail", command)
+        self.assertIn("full", command)
+
     def test_user_prompt_submit_never_schedules_maintenance(self) -> None:
         actions = hook.decide_actions(
             "UserPromptSubmit",

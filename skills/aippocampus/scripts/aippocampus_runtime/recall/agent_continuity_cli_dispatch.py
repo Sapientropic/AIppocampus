@@ -17,10 +17,12 @@ from aippocampus_runtime.cli.human_io import exit_code_for_payload
 from aippocampus_runtime.cli.recovery import action_command_text
 from aippocampus_runtime.mcp.agent_deepen_projection import compact_agent_deepen_payload
 from aippocampus_runtime.mcp.agent_explain_projection import project_agent_explain_cli_payload
+from aippocampus_runtime.mcp.agent_recall_action_menu import foreground_action_menu
 from aippocampus_runtime.public_output import emit_public_text
 from aippocampus_runtime.recall import (
     agent_deepen_requests,
     background_findings,
+    semantic_cue_cache,
     task_orientation,
 )
 from aippocampus_runtime.recall import (
@@ -52,7 +54,6 @@ from aippocampus_runtime.recall.agent_continuity_cli_support import (
     last_recall_unavailable_payload,
     macro_schema_help,
     macro_state_template,
-    mark_last_recall_request_opened,
     missing_feedback_route_payload,
     opened_route_keys_from_last_recall_cache,
     public_recall_projection,
@@ -67,6 +68,9 @@ from aippocampus_runtime.recall.agent_continuity_cli_support import (
     write_recall_selector_snapshot,
 )
 from aippocampus_runtime.recall.feedback import events as feedback_events
+from aippocampus_runtime.recall.source_open.cue_learning import (
+    record_source_open_recall_side_effects,
+)
 
 JsonOut = Callable[[Mapping[str, Any]], None]
 
@@ -139,13 +143,15 @@ def _run_recall_command(args: Namespace, json_out: JsonOut) -> int:
         if args.public_json or args.detail != "full":
             payload = public_recall_projection(payload, query=query)
         else:
+            action_menu = foreground_action_menu(payload, query=query)
             payload = {
                 "detail": "full",
                 "output_boundary": "local_private_diagnostic_full",
                 "foreground_guidance": (
                     "Use --detail full only for local diagnostics; foreground agents should "
-                    "prefer compact JSON or the human request-index action."
+                    "prefer compact JSON or foreground_action_menu for action choice."
                 ),
+                "foreground_action_menu": action_menu,
                 **payload,
             }
         json_out(payload)
@@ -345,22 +351,16 @@ def _run_deepen_command(args: Namespace, json_out: JsonOut) -> int:
         )
         payload.pop("policy_boundary", None)
         payload.pop("cannot_claim", None)
-    if request_index is not None and payload.get("status") == "ok":
-        try:
-            mark_last_recall_request_opened(
-                request_index,
-                path=selector_cache_path,
-                outcome="source_open",
-            )
-        except (OSError, ValueError, json.JSONDecodeError) as exc:
-            payload.setdefault("detail_warnings", []).append(
-                {
-                    "code": "last_recall_opened_marker_unavailable",
-                    "error_code": type(exc).__name__,
-                    "recovery": "source_open_succeeded_marker_not_written",
-                    "claim_boundary": "detail_only_cache_diagnostic",
-                }
-            )
+    record_source_open_recall_side_effects(
+        payload,
+        cached_context=cached_context,
+        selector_cache_path=selector_cache_path,
+        request_index=request_index,
+        registry_dir=args.registry_dir or cached_context.get("registry_dir"),
+        detail=args.detail,
+        surface="cli",
+        learning_detail_modes={"full"},
+    )
     if args.json:
         if args.detail == "full":
             payload = {"detail": "full", "output_boundary": "local_private_diagnostic_full", **payload}
@@ -474,6 +474,9 @@ def _run_feedback_command(args: Namespace, json_out: JsonOut) -> int:
             reason=args.reason,
             feedback_path=lane["path"],
             feedback_lane=lane,
+            semantic_cues_path=semantic_cue_cache.default_semantic_cues_path(
+                registry_dir=args.registry_dir,
+            ),
             schema_version=SCHEMA_VERSION,
             kind=KIND,
         )

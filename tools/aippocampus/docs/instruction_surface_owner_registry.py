@@ -27,6 +27,24 @@ INSTRUCTION_SURFACE_CLASSIFIED_FILES = {
             "route proof remains in deepen/open follow-through and detail output"
         ),
     },
+    "skills/aippocampus/scripts/aippocampus_runtime/mcp/agent_recall_action_menu.py": {
+        "classification": "agent_recall_foreground_action_menu_owner",
+        "owner": "#2880/#2876/#2651",
+        "why": (
+            "owns the full/detail foreground-compatible action menu; compact may "
+            "signal operator details exist, but proof and gates stay in "
+            "deepen/open follow-through, tests, or detail output"
+        ),
+    },
+    "skills/aippocampus/scripts/aippocampus_runtime/mcp/agent_recall_recovery_projection.py": {
+        "classification": "agent_recall_recovery_projection_owner",
+        "owner": "#2877/#2876/#2651",
+        "why": (
+            "owns APW and recovery-action projection gating; source_anchor_gate "
+            "fields are used to prevent bad foreground actions, not to expand "
+            "default compact proof"
+        ),
+    },
     "skills/aippocampus/scripts/aippocampus_runtime/mcp/agent_recall_route_projection.py": {
         "classification": "compact_route_receipt_owner",
         "owner": "#2679/#2636/#2651",
@@ -361,6 +379,15 @@ INSTRUCTION_SURFACE_CLASSIFIED_FILES = {
             "quote echo demotion; foreground proof belongs in source-open follow-through"
         ),
     },
+    "skills/aippocampus/scripts/aippocampus_runtime/recall/registry_source_apw_candidates.py": {
+        "classification": "registry_source_apw_candidate_filter_owner",
+        "owner": "#2877/#2543/#2651",
+        "why": (
+            "owns registry APW candidate filtering and low-signal cue-anchor "
+            "discounting; registry hits are navigation only until source-open "
+            "follow-through confirms the target evidence"
+        ),
+    },
     "skills/aippocampus/scripts/aippocampus_runtime/recall/continuity_domain_producer.py": {
         "classification": "continuity_domain_producer_owner",
         "owner": "#2668/#2631/#2651",
@@ -680,6 +707,15 @@ INSTRUCTION_SURFACE_CLASSIFIED_FILES = {
             "status output is operational guidance, not source proof"
         ),
     },
+    "skills/aippocampus/scripts/aippocampus_runtime/hooks/lifecycle.py": {
+        "classification": "lifecycle_hook_runtime_owner",
+        "owner": "#2859/#2631/#2651",
+        "why": (
+            "owns Codex lifecycle maintenance wording, fail-open budget text, and "
+            "detached-work diagnostics; hook status must not become foreground "
+            "source proof or block prompt responsiveness"
+        ),
+    },
     "skills/aippocampus/scripts/aippocampus_runtime/hooks/install_lifecycle.py": {
         "classification": "lifecycle_hook_install_owner",
         "owner": "#2674/#2651",
@@ -867,6 +903,15 @@ INSTRUCTION_SURFACE_CLASSIFIED_FILES = {
             "owns compact-vs-full recall projection fixture text and executable "
             "foreground-action assertions; tests should guard behavior, not "
             "promote diagnostics into compact output"
+        ),
+    },
+    "tests/aippocampus/test_agent_deepen_compact_projection.py": {
+        "classification": "agent_deepen_compact_projection_test_contract_owner",
+        "owner": "#2860/#2686/#2651",
+        "why": (
+            "owns CLI/MCP deepen compact-vs-detail source-open fixture text and "
+            "cue-learning follow-through assertions; fixture strings are test "
+            "contracts, not runtime foreground policy"
         ),
     },
     "tests/aippocampus/test_question_tracking.py": {

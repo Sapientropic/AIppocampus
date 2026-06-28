@@ -5,9 +5,15 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from aippocampus_runtime.contracts import executable_command_violations
 from aippocampus_runtime.mcp import server as mcp
 from aippocampus_runtime.mcp.compact_profile import mcp_tool_result_payload
-from aippocampus_runtime.recall import background_findings, background_recovery
+from aippocampus_runtime.recall import (
+    agent_continuity_cli_support,
+    background_findings,
+    background_recovery,
+)
+from tests.aippocampus.frontstage_assertions import assert_compact_frontstage_payload
 
 
 def write_background_working_memory(path: Path) -> None:
@@ -149,6 +155,42 @@ def write_sourceless_recall_working_memory(path: Path) -> None:
         + "\n",
         encoding="utf-8",
     )
+
+
+def projection_background_recovery_fixture() -> dict:
+    return {
+        "kind": "aippocampus_background_findings_card",
+        "detail": "compact",
+        "status": "ok",
+        "surface": "agent_background",
+        "finding_count": 1,
+        "best_finding": {
+            "finding_id": "wm_recall_natural",
+            "finding_title": "Recall naturalness",
+            "matched_terms": ["recall 不够自然", "辛苦去捞"],
+            "match_strength": "distinctive",
+            "source_finding_count": 1,
+        },
+        "foreground_action": {
+            "id": "reopen_background_finding_source_route",
+            "label": "Open this finding's source window",
+            "command": (
+                "aippocampus search --open-source --thread-key session:recall-natural "
+                "--message-id msg-recall-natural --line 284 --json"
+            ),
+            "tool_name": "search_memory",
+            "arguments": {
+                "query": "recall 不够自然 辛苦去捞",
+                "scope": "all_registered_sources",
+                "open_source": True,
+                "thread_key": "session:recall-natural",
+                "message_id": "msg-recall-natural",
+                "line": 284,
+            },
+            "mutation_risk": "read_only",
+            "claim_boundary": "source_reopen_required_before_claim",
+        },
+    }
 
 
 class AgentBackgroundTests(unittest.TestCase):
@@ -477,6 +519,68 @@ class AgentBackgroundTests(unittest.TestCase):
         self.assertIn("operator_detail", payload)
         self.assertIn("mark_background_finding_helpful", encoded)
         self.assertNotIn(str(working_memory), encoded)
+
+    def test_weak_background_recovery_does_not_replace_source_scoped_primary(self) -> None:
+        weak_background = projection_background_recovery_fixture()
+        weak_background["best_finding"] = {
+            **weak_background["best_finding"],
+            "finding_title": "Generic transition word",
+            "matched_terms": ["without"],
+            "match_strength": "weak",
+            "distinctive_match_count": 1,
+        }
+
+        public = agent_continuity_cli_support.public_recall_projection(
+            {
+                "kind": "aippocampus_agent_continuity_path",
+                "schema_version": "agent-continuity-path-v1",
+                "mode": "recall",
+                "status": "ok",
+                "query": "can an agent catch up without pretending it has innate memory?",
+                "opt_in_required": False,
+                "last_recall_cache_available": True,
+                "recall_selector_id": "sel_public_demo",
+                "foreground_action_card": {
+                    "decision": "use_route_first",
+                    "canonical_action": {
+                        "action_id": "agent_deepen_selected_route",
+                        "tool_name": "agent_deepen",
+                        "arguments": {"request_index": 1, "last_recall": True},
+                        "claim_boundary": "no_claim_before_reopen",
+                    },
+                },
+                "memory_packets": [
+                    {
+                        "route_id": "route_public_demo",
+                        "route_label": "public memory bundle source route",
+                        "route_topic": "source-backed continuity demo",
+                        "route_kind": "clean_source_route",
+                        "source_ref": "clean_source://public/msg_public_001",
+                        "output_mode": "reopenable_route",
+                        "claim_permission": "no_claim_before_reopen",
+                    }
+                ],
+                "metrics": {
+                    "memory_packet_count": 1,
+                    "deepen_request_count": 1,
+                    "route_label_specificity_floor": 0.9,
+                    "topic_label_present_count": 1,
+                },
+                "background_recovery": weak_background,
+            },
+            query="can an agent catch up without pretending it has innate memory?",
+        )
+
+        self.assertEqual(public["foreground_action"]["tool_name"], "agent_deepen")
+        self.assertEqual(public["foreground_action"]["id"], "agent_deepen_selected_route")
+        self.assertEqual(
+            public["foreground_action"]["arguments"],
+            {"request_index": 1, "recall_selector": "sel_public_demo"},
+        )
+        self.assertNotIn("background_recovery_card", public)
+        self.assertNotIn("without", json.dumps(public, ensure_ascii=False).casefold())
+        self.assertEqual(executable_command_violations(public), [])
+        assert_compact_frontstage_payload(self, public, max_top_level_diagnostics=1)
 
 if __name__ == "__main__":
     unittest.main()

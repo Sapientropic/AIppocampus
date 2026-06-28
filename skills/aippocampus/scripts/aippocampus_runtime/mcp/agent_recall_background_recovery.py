@@ -7,6 +7,7 @@ from typing import Any
 
 from aippocampus_runtime import core
 from aippocampus_runtime.contracts import normalize_foreground_action
+from aippocampus_runtime.recall.foreground import route_quality
 
 
 def _action_id(action: Mapping[str, Any]) -> str:
@@ -82,6 +83,10 @@ def _background_action(card: Mapping[str, Any]) -> dict[str, Any] | None:
 
 def _background_should_replace_primary(action: Mapping[str, Any]) -> bool:
     action_id = _action_id(action)
+    if str(action.get("route_choice_posture") or "") == "labels_low_specificity":
+        return True
+    if str(action.get("actionability") or "") == "low_confidence_reopenable":
+        return True
     if (
         action_id == "search_registry_sources_for_original_cue_anchors"
         and str(action.get("route_choice_posture") or "")
@@ -107,6 +112,23 @@ def _background_should_follow_primary(action: Mapping[str, Any]) -> bool:
     }
 
 
+def _background_has_foreground_strength(card: Mapping[str, Any]) -> bool:
+    """Keep weak background scents from stealing source-scoped primary actions."""
+
+    best = card.get("best_finding")
+    best_map = best if isinstance(best, Mapping) else {}
+    matched = best_map.get("matched_terms")
+    terms = route_quality.meaningful_terms(
+        matched if isinstance(matched, list | tuple) else [matched],
+        limit=4,
+    )
+    try:
+        distinctive_count = int(best_map.get("distinctive_match_count") or len(terms))
+    except (TypeError, ValueError):
+        distinctive_count = len(terms)
+    return len(terms) >= 2 and distinctive_count >= 2
+
+
 def apply_background_recovery(
     *,
     payload: Mapping[str, Any],
@@ -127,6 +149,8 @@ def apply_background_recovery(
     background_action = _background_action(card_map)
     background_recovery = _compact_background_recovery(card_map)
     if not background_action or not background_recovery:
+        return foreground_action, followup_actions, None
+    if not _background_has_foreground_strength(card_map):
         return foreground_action, followup_actions, None
     if _action_id(foreground_action) == _action_id(background_action):
         return foreground_action, followup_actions, background_recovery

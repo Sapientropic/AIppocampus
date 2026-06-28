@@ -20,6 +20,7 @@ from aippocampus_runtime.contracts import canonical_foreground_action_fields
 from aippocampus_runtime.mcp import memory_health_recovery
 from aippocampus_runtime.mcp.agent_deepen_projection import compact_agent_deepen_payload
 from aippocampus_runtime.mcp.agent_explain_projection import compact_agent_explain_payload
+from aippocampus_runtime.mcp.agent_recall_action_menu import foreground_action_menu
 from aippocampus_runtime.mcp.agent_recall_projection import compact_agent_recall_payload
 from aippocampus_runtime.mcp.clean_source_resolution import resolve_mcp_clean_source_dir
 from aippocampus_runtime.mcp.compact_profile import (
@@ -77,7 +78,6 @@ from aippocampus_runtime.recall.agent_continuity_cli_support import (
     attach_recall_gate_context_to_payload,
     compact_aippo_guidance_card,
     last_recall_unavailable_payload,
-    mark_last_recall_request_opened,
     missing_handle_payload,
     normalize_route_limit,
     opened_route_keys_from_last_recall_cache,
@@ -86,6 +86,9 @@ from aippocampus_runtime.recall.agent_continuity_cli_support import (
     write_recall_selector_snapshot,
 )
 from aippocampus_runtime.recall.background_findings import background_findings_card
+from aippocampus_runtime.recall.source_open.cue_learning import (
+    record_source_open_recall_side_effects,
+)
 from aippocampus_runtime.recall.why_diagnostics import recall_diagnostic_report
 from aippocampus_runtime.registry import api as registry
 from aippocampus_runtime.registry.store import RegistryWriteBusyError
@@ -590,6 +593,8 @@ def call_agent_recall(arguments: dict[str, Any]) -> dict[str, Any]:
     payload["last_recall_cache_available"] = cache_written
     payload["recall_selector_available"] = bool(selector_id)
     payload["recall_selector_id"] = selector_id
+    if detail_arg(arguments) != "compact":
+        payload["foreground_action_menu"] = foreground_action_menu(payload, query=query)
 
     return render_profiled_result(
         arguments,
@@ -693,25 +698,17 @@ def call_agent_deepen(arguments: dict[str, Any]) -> dict[str, Any]:
         if isinstance(result, dict):
             result["apw_route_identity"] = dict(apw_identity)
     attach_recall_gate_context_to_payload(payload, cached_context)
-    if request_index_arg is not None and payload.get("status") == "ok":
-        try:
-            mark_last_recall_request_opened(
-                request_index_arg,
-                path=selector_cache_path,
-                outcome="source_open",
-            )
-        except (OSError, ValueError, json.JSONDecodeError) as exc:
-            # aippocampus-debt-ok: broad-exception-boundary
-            # Best-effort selector-cache receipt writes must not break a
-            # successful source-open payload or force cache diagnostics into
-            # compact MCP output. The reopen result above remains authoritative.
-            payload.setdefault("detail_warnings", []).append(
-                {
-                    "code": "last_recall_open_receipt_not_marked",
-                    "message": "source opened, but the local selector cache receipt was not updated",
-                    "error_type": type(exc).__name__,
-                }
-            )
+    record_source_open_recall_side_effects(
+        payload,
+        cached_context=cached_context,
+        selector_cache_path=selector_cache_path,
+        request_index=request_index_arg,
+        registry_dir=arguments.get("registry_dir")
+        or cached_context.get("registry_dir")
+        or registry_dir_arg(arguments),
+        detail=detail_arg(arguments),
+        surface="mcp",
+    )
     is_error = payload.get("status") == "cannot_verify" or payload.get("ok") is False
     return _deepen_result(payload, is_error=is_error)
 

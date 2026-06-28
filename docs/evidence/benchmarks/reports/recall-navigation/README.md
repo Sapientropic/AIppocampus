@@ -20,6 +20,9 @@ evidence provenance; the current runner map lives in
   documentation alone.
 - Tiny hook-to-agent affordance: safer action-only candidate when it only tells
   the host to call `agent_recall`, not when it acts as source evidence.
+- Activation dogfood usefulness: bounded replay evidence shows warm replay
+  signals can reduce manual search and route drag, but this is not live default
+  foreground or Dream promotion evidence.
 - Source-joined/text-first remains the default decision boundary before quoting
   exact, stale, sensitive, or disputed claims.
 - Current owners: default-hook adoption boundaries are in
@@ -32,6 +35,7 @@ evidence provenance; the current runner map lives in
 | Report | Boundary |
 | --- | --- |
 | [`agent-continuity-loop.md`](agent-continuity-loop.md) | Agent continuity integration gate report. |
+| [`activation-dogfood-usefulness-2026-06-28.md`](activation-dogfood-usefulness-2026-06-28.md) | Bounded dogfood/replay activation usefulness probe; reduces manual search and route drag without promoting live defaults. |
 | [`attention-navigation-quality.md`](attention-navigation-quality.md) | Public-safe attention navigation quality gate. |
 | [`attention-score-fusion-calibration.md`](attention-score-fusion-calibration.md) | Score-fusion calibration/adoption report. |
 | [`cognitive-load-default-path-usefulness-2026-06-14.md`](cognitive-load-default-path-usefulness-2026-06-14.md) | Public-safe default-path cognitive-load replay; diagnostic-only maturity. |

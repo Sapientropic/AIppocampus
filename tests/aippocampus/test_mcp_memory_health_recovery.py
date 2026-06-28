@@ -116,8 +116,12 @@ class McpMemoryHealthRecoveryTests(unittest.TestCase):
         self.assertFalse(deepen_response["result"].get("isError", False), deepen_payload)
         self.assertEqual(deepen_payload["status"], "ok")
         self.assertEqual(deepen_payload["detail"], "compact")
-        self.assertEqual(deepen_payload["evidence_level"], "source_backed")
-        self.assertEqual(deepen_payload["source_open_posture"], "target_evidence_opened")
+        self.assertEqual(deepen_payload["evidence_level"], "adjacent_evidence")
+        self.assertEqual(deepen_payload["source_open_posture"], "source_opened_adjacent_evidence")
+        self.assertEqual(
+            deepen_payload["foreground_action"]["id"],
+            "continue_after_adjacent_source_open",
+        )
         self.assertNotIn("source_window_summary", deepen_payload)
         self.assertNotIn("result", deepen_payload)
 

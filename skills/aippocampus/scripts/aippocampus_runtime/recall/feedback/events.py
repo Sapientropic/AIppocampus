@@ -18,6 +18,16 @@ from typing import Any
 
 from aippocampus_runtime.core import now_utc, stable_json_join_id
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
+from aippocampus_runtime.recall.feedback.suppression_lifecycle import (
+    ACTIVE_FLOW_SIGNALS,
+    DEFAULT_SIGNAL_DELTAS,
+    OUTCOME_ALIASES,
+    current_feedback_state,
+    feedback_trace_family,
+    foreground_eligible,
+    route_reason_codes,
+    suppression_lifecycle_report,
+)
 from aippocampus_runtime.source.agent_trace_admission import (
     behavior_training_signal_from_trace,
     project_behavior_training_ledger,
@@ -48,39 +58,6 @@ SIGNAL_FAMILIES = {"text", "vector", "graph", "source_richness", "route_context"
 BLEND_CONTEXT_FALLBACK = "normal_recall"
 
 ROUTE_KINDS = {"pathlet", "continuity_domain", "sequence_packet", "active_path"}
-ACTIVE_FLOW_SIGNALS = {
-    "source_reopen_success",
-    "user_confirmed",
-    "prevented_failure",
-    "candidate_delivered",
-    "ignored",
-    "wrong_route_drag",
-    "blocked",
-    "superseded",
-    "expired",
-}
-DEFAULT_SIGNAL_DELTAS = {
-    "source_reopen_success": 1.0,
-    "user_confirmed": 0.75,
-    "prevented_failure": 0.75,
-    "candidate_delivered": 0.1,
-    "ignored": -0.15,
-    "wrong_route_drag": -1.0,
-    "blocked": -1.0,
-    "superseded": -0.8,
-    "expired": -0.4,
-}
-NON_FOREGROUND_SIGNALS = {"blocked", "wrong_route_drag", "superseded", "expired"}
-OUTCOME_ALIASES = {
-    "helped": "source_reopen_success",
-    "useful": "source_reopen_success",
-    "confirmed": "user_confirmed",
-    "wrong": "wrong_route_drag",
-    "wrong_route": "wrong_route_drag",
-    "noisy": "wrong_route_drag",
-    "stale": "expired",
-    "prevented": "prevented_failure",
-}
 
 
 class InvalidFeedbackValue(ValueError):
@@ -357,25 +334,6 @@ def suppress_context_event(
     }
 
 
-def _route_reason_codes(signals: Counter[str], score: float) -> list[str]:
-    reasons: list[str] = []
-    if signals.get("blocked"):
-        reasons.append("blocked_route_not_foreground_eligible")
-    if signals.get("wrong_route_drag"):
-        reasons.append("wrong_route_drag_demoted")
-    if signals.get("superseded"):
-        reasons.append("superseded_route_demoted")
-    if signals.get("expired"):
-        reasons.append("expired_route_decay_applied")
-    if signals.get("source_reopen_success"):
-        reasons.append("source_reopen_success_promoted")
-    if signals.get("user_confirmed"):
-        reasons.append("user_confirmed_promoted")
-    if score <= 0 and not reasons:
-        reasons.append("non_positive_activation_score")
-    return reasons
-
-
 def active_flow_activation_report(events: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
     event_rows = [event for event in events if isinstance(event, Mapping)]
     grouped: dict[tuple[str, str], dict[str, Any]] = {}
@@ -395,11 +353,13 @@ def active_flow_activation_report(events: Iterable[Mapping[str, Any]]) -> dict[s
                 "event_count": 0,
                 "signals": Counter(),
                 "source_ids": set(),
+                "last_signal": "",
             },
         )
         row["activation_score"] += safe_float(event.get("weight_delta"), DEFAULT_SIGNAL_DELTAS[signal])
         row["event_count"] += 1
         row["signals"][signal] += 1
+        row["last_signal"] = signal
         if event.get("source_id"):
             row["source_ids"].add(_safe_token(event.get("source_id"), fallback_prefix="source"))
         metrics[f"{signal}_count"] += 1
@@ -410,17 +370,18 @@ def active_flow_activation_report(events: Iterable[Mapping[str, Any]]) -> dict[s
     for row in grouped.values():
         signals: Counter[str] = row["signals"]
         score = round(float(row["activation_score"]), 6)
-        foreground_eligible = score > 0 and not any(signals.get(signal) for signal in NON_FOREGROUND_SIGNALS)
+        last_signal = str(row.get("last_signal") or "")
         routes.append(
             {
                 "route_id": row["route_id"],
                 "route_kind": row["route_kind"],
                 "activation_score": score,
                 "event_count": row["event_count"],
+                "current_feedback_state": current_feedback_state(last_signal),
                 "signal_counts": dict(sorted(signals.items())),
                 "source_ids": sorted(row["source_ids"]),
-                "foreground_eligible": foreground_eligible,
-                "reason_codes": _route_reason_codes(signals, score),
+                "foreground_eligible": foreground_eligible(signals, last_signal, score),
+                "reason_codes": route_reason_codes(signals, score),
                 "source_boundary": {
                     "activation_metadata_is_ranking_context_only": True,
                     "source_refs_preserved": True,
@@ -470,14 +431,6 @@ def active_flow_activation_report(events: Iterable[Mapping[str, Any]]) -> dict[s
     }
 
 
-def _feedback_trace_family(outcome: str) -> str:
-    if outcome in {"source_reopen_success", "user_confirmed", "prevented_failure"}:
-        return "successful_recall_deepen_source_open"
-    if outcome in {"wrong_route_drag", "blocked", "ignored", "superseded", "expired"}:
-        return "repo_breadcrumb"
-    return "joined_route_note"
-
-
 def feedback_training_signal_rows(events: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
     """Project route feedback into shared behavior-derived training signals."""
 
@@ -503,7 +456,7 @@ def feedback_training_signal_rows(events: Iterable[Mapping[str, Any]]) -> list[d
                 ensure_ascii=False,
                 default_str=False,
             ),
-            "trace_family": _feedback_trace_family(outcome),
+            "trace_family": feedback_trace_family(outcome),
             "outcome": outcome,
             "route_id": route_id,
             "cue_hash": event.get("cue_hash"),
@@ -514,91 +467,6 @@ def feedback_training_signal_rows(events: Iterable[Mapping[str, Any]]) -> list[d
         }
         rows.append(behavior_training_signal_from_trace(trace))
     return rows
-
-
-def suppression_lifecycle_report(
-    events: Iterable[Mapping[str, Any]],
-    *,
-    detail: str = "compact",
-) -> dict[str, Any]:
-    grouped: dict[str, dict[str, Any]] = {}
-    for index, event in enumerate(events):
-        if not isinstance(event, Mapping) or event.get("kind") not in {ACTIVE_FLOW_EVENT_KIND, RECALL_FEEDBACK_KIND}:
-            continue
-        if event.get("kind") == ACTIVE_FLOW_EVENT_KIND:
-            route_id = _safe_token(event.get("route_id"), fallback_prefix="route")
-            signal = _safe_kind(event.get("signal"), ACTIVE_FLOW_SIGNALS, "candidate_delivered")
-        else:
-            route_id = _safe_token(event.get("candidate_id"), fallback_prefix="candidate")
-            signal = _safe_kind(event.get("outcome"), RECALL_OUTCOMES, "candidate_delivered")
-        row = grouped.setdefault(
-            route_id,
-            {
-                "route_id": route_id,
-                "signal_counts": Counter(),
-                "last_index": -1,
-                "last_signal": "",
-            },
-        )
-        row["signal_counts"][signal] += 1
-        row["last_index"] = index
-        row["last_signal"] = signal
-
-    routes: list[dict[str, Any]] = []
-    for row in grouped.values():
-        counts: Counter[str] = row["signal_counts"]
-        last_signal = str(row["last_signal"])
-        negative = any(counts.get(signal) for signal in ("wrong_route_drag", "blocked", "ignored", "superseded"))
-        positive = any(counts.get(signal) for signal in ("source_reopen_success", "user_confirmed", "prevented_failure"))
-        expired = bool(counts.get("expired"))
-        if positive and last_signal in {"source_reopen_success", "user_confirmed", "prevented_failure"}:
-            status = "overridden_by_positive_source_open"
-            foreground_eligible = True
-        elif negative:
-            status = "suppressed_hard_negative"
-            foreground_eligible = False
-        elif expired:
-            status = "expired_recheck"
-            foreground_eligible = False
-        else:
-            status = "neutral"
-            foreground_eligible = False
-        routes.append(
-            {
-                "route_id": row["route_id"],
-                "status": status,
-                "foreground_eligible": foreground_eligible,
-                "signal_counts": dict(sorted(counts.items())),
-                "claim_boundary": "feedback_suppression_is_navigation_calibration_not_source_truth",
-            }
-        )
-    routes.sort(key=lambda item: (str(item["status"]), str(item["route_id"])))
-    status_counts = Counter(str(row["status"]) for row in routes)
-    if detail in {"detail", "full", "operator"}:
-        return {
-            "kind": "aippocampus_feedback_suppression_lifecycle",
-            "schema_version": SCHEMA_VERSION,
-            "detail": detail,
-            "route_count": len(routes),
-            "routes": routes,
-            "status_counts": dict(sorted(status_counts.items())),
-            "hard_negative_count": status_counts.get("suppressed_hard_negative", 0),
-            "overridden_by_positive_count": status_counts.get("overridden_by_positive_source_open", 0),
-            "policy_boundary": {
-                "suppression_is_route_local": True,
-                "suppression_is_reversible": True,
-                "feedback_is_not_source_truth": True,
-            },
-        }
-    return {
-        "kind": "aippocampus_feedback_suppression_lifecycle",
-        "schema_version": SCHEMA_VERSION,
-        "detail": "compact",
-        "status": "has_suppression" if status_counts.get("suppressed_hard_negative") else "clear",
-        "hard_negative_count": status_counts.get("suppressed_hard_negative", 0),
-        "overridden_by_positive_count": status_counts.get("overridden_by_positive_source_open", 0),
-        "claim_boundary": "feedback_suppression_is_navigation_calibration_not_source_truth",
-    }
 
 
 def recall_feedback_calibration_report(events: Iterable[Mapping[str, Any]]) -> dict[str, Any]:

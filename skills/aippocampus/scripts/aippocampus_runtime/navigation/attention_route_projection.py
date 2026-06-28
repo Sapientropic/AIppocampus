@@ -164,6 +164,24 @@ def _compatibility_score_penalty(value: Mapping[str, Any] | None) -> float:
     return min(0.36, max(0.0, severity * 0.12))
 
 
+def _foreground_gate_compatible_route(route: Mapping[str, Any] | None) -> bool:
+    if not isinstance(route, Mapping):
+        return False
+    gate = route.get("source_anchor_gate")
+    gate_map = dict_or_empty(gate)
+    if gate_map:
+        status = str(gate_map.get("status") or "").strip()
+        if status == "blocked" or gate_map.get("target_source_matched") is False:
+            return False
+    handle = route.get("handle")
+    if isinstance(handle, Mapping) and handle:
+        return True
+    # Attention packets may have source span tokens, but agent recall can only
+    # foreground a deepen action from the original route handle. Do not let the
+    # router promote a token-only route over a handle-backed baseline route.
+    return False
+
+
 def attention_token_for_route(
     route: Mapping[str, Any],
     *,
@@ -440,8 +458,15 @@ def rerank_routes_with_attention_router(
         and selected_overlap < original_top_overlap
         and not helpfulness["explicit_bridge_reason_present"]
     )
+    promotion_blocked_source_gate_incompatible = bool(
+        top_route_changed
+        and original_routes
+        and _foreground_gate_compatible_route(original_routes[0])
+        and not _foreground_gate_compatible_route(selected_route)
+    )
     blocked_candidate_route_id = new_top if promotion_blocked_lower_cue_fit else ""
-    if promotion_blocked_lower_cue_fit and original_routes:
+    if (promotion_blocked_lower_cue_fit or promotion_blocked_source_gate_incompatible) and original_routes:
+        blocked_candidate_route_id = new_top
         reordered = [
             dict(original_routes[0]),
             *[
@@ -492,6 +517,7 @@ def rerank_routes_with_attention_router(
         "selected_route_term_count": selected_specificity,
         "top_route_changed": top_route_changed,
         "promotion_blocked_lower_cue_fit": promotion_blocked_lower_cue_fit,
+        "promotion_blocked_source_gate_incompatible": promotion_blocked_source_gate_incompatible,
         "promotion_blocked_route_id": blocked_candidate_route_id or None,
         "attention_router_applied_but_no_help": applied_but_no_help,
         "compatibility_diagnostic_count": compatibility_report["diagnostic_count"],
@@ -543,6 +569,9 @@ def metrics_for_attention_navigation(diagnostics: Mapping[str, Any]) -> dict[str
         ),
         "attention_router_zero_overlap_without_bridge_count": int(
             bool(diagnostics.get("zero_overlap_without_bridge_reason"))
+        ),
+        "attention_router_top_changed_to_blocked_route_count": int(
+            bool(diagnostics.get("promotion_blocked_source_gate_incompatible"))
         ),
         "attention_router_route_label_specificity_floor": _float(
             diagnostics.get("route_label_specificity_floor")

@@ -33,9 +33,12 @@ def compact_associative_path_fallback_card(value: Any) -> dict[str, Any] | None:
             "request_index": value.get("request_index"),
             "source_ref_digest": value.get("source_ref_digest"),
             "selected_source_ref_count": value.get("selected_source_ref_count"),
+            "source_anchor_gate": value.get("source_anchor_gate"),
             "label": value.get("label"),
             "why_this_route": value.get("why_this_route"),
             "matched_cue_anchors": value.get("matched_cue_anchors"),
+            "meaningful_cue_anchors": value.get("meaningful_cue_anchors"),
+            "anchor_quality": value.get("anchor_quality"),
             "candidate_source_kind": value.get("candidate_source_kind"),
             "route_posture": value.get("route_posture"),
             "action_grammar": value.get("action_grammar"),
@@ -124,6 +127,18 @@ def associative_path_fallback_action(
 ) -> dict[str, Any] | None:
     if not isinstance(card, Mapping) or card.get("status") != "route_candidate":
         return None
+    gate = card.get("source_anchor_gate")
+    gate_map = gate if isinstance(gate, Mapping) else {}
+    anchor_quality = card.get("anchor_quality")
+    anchor_quality_map = anchor_quality if isinstance(anchor_quality, Mapping) else {}
+    if gate_map and gate_map.get("target_source_matched") is not True:
+        return None
+    if str(anchor_quality_map.get("status") or "") in {
+        "low_signal_anchors_only",
+        "missing_meaningful_anchor",
+        "no_anchor_hits",
+    }:
+        return None
     try:
         request_index = int(card.get("request_index") or 0)
     except (TypeError, ValueError):
@@ -136,7 +151,7 @@ def associative_path_fallback_action(
     action["label"] = f"Open {route_label}" if route_label else "Open APW source route"
     anchors = [
         str(anchor)
-        for anchor in card.get("matched_cue_anchors") or []
+        for anchor in (card.get("meaningful_cue_anchors") or card.get("matched_cue_anchors") or [])
         if str(anchor).strip()
     ]
     action["why"] = (

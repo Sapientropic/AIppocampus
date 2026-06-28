@@ -7,6 +7,7 @@ import unittest
 from pathlib import Path
 
 from aippocampus_runtime.recall import semantic_cue_cache as cues
+from aippocampus_runtime.recall.semantic import cue_learning as semantic_cue_learning
 
 
 class SemanticCueCacheTests(unittest.TestCase):
@@ -129,6 +130,61 @@ class SemanticCueCacheTests(unittest.TestCase):
             triggers = cues.semantic_cue_triggers(cache_path)
 
             self.assertEqual(triggers, [])
+
+    def test_recall_source_open_cue_promotes_and_demotes_route_locally(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            cache_path = Path(tmp) / "semantic_cues.jsonl"
+            refs = [{"thread_key": "session:hot", "message_id": "msg-hot", "line": 12}]
+            query = "小海马体 transport hot reload source anchor SECRET_TOKEN=abc"
+
+            first = semantic_cue_learning.promote_recall_cue_after_source_open(
+                cache_path,
+                query=query,
+                source_refs=refs,
+                route_id="route:hot-reload",
+            )
+            second = semantic_cue_learning.promote_recall_cue_after_source_open(
+                cache_path,
+                query="小海马体 transport hot reload source anchor",
+                source_refs=refs,
+                route_id="route:hot-reload",
+            )
+
+            self.assertEqual(first["active_count"], 0)
+            self.assertGreater(second["active_count"], 0)
+            active = cues.load_semantic_cues(cache_path)
+            self.assertGreaterEqual(len(active), 1)
+            self.assertTrue(all(row["alias_source"] == "agent_recall_source_open" for row in active))
+            self.assertTrue(all(row["source_reopen_required_before_claim"] for row in active))
+            self.assertTrue(all(row["training_role"] == "positive_demo" for row in active))
+            self.assertTrue(all(row["source_refs"] for row in active))
+
+            demoted = semantic_cue_learning.demote_recall_cue_route(
+                cache_path,
+                route_id="route:hot-reload",
+                reason="wrong_route_drag",
+                preferred_route_id="route:better",
+            )
+            suppressed = cues.all_semantic_cues(cache_path)
+            encoded = json.dumps(suppressed, ensure_ascii=False)
+
+            self.assertGreater(demoted["updated_count"], 0)
+            self.assertEqual(cues.semantic_cue_triggers(cache_path), [])
+            self.assertTrue(all(row["status"] == "suppressed_hard_negative" for row in suppressed))
+            self.assertTrue(all(row["training_role"] == "hard_negative" for row in suppressed))
+            self.assertIn("msg-hot", encoded)
+            self.assertNotIn("SECRET_TOKEN", encoded)
+            self.assertNotIn("abc", encoded)
+
+            restored = semantic_cue_learning.promote_recall_cue_after_source_open(
+                cache_path,
+                query="小海马体 transport hot reload source anchor",
+                source_refs=refs,
+                route_id="route:hot-reload",
+            )
+
+            self.assertGreater(restored["active_count"], 0)
+            self.assertGreater(len(cues.semantic_cue_triggers(cache_path)), 0)
 
     def test_semantic_cue_cache_report_is_count_only_and_source_backed(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

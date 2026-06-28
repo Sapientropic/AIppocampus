@@ -212,6 +212,43 @@ class NavigationDataQualityGuardTests(unittest.TestCase):
         self.assertNotIn("msg-positive", encoded)
         self.assertNotIn("route:bad", encoded)
 
+    def test_semantic_cue_aliases_project_to_typed_graph_candidates(self) -> None:
+        rows = [
+            {
+                "kind": "aippocampus_semantic_cue",
+                "cue_id": "sc_active",
+                "cue": "transport hot reload",
+                "status": "active",
+                "training_role": "positive_demo",
+                "trace_admission_level": "reopenable_route",
+                "candidate_lifecycle_state": "actionable_reopenable_route",
+                "source_refs": [{"thread_key": "session:cue", "message_id": "msg-cue", "line": 4}],
+            },
+            {
+                "kind": "aippocampus_semantic_cue",
+                "cue_id": "sc_suppressed",
+                "cue": "wrong transport alias",
+                "status": "suppressed_hard_negative",
+                "training_role": "hard_negative",
+                "trace_admission_level": "navigation_candidate",
+                "candidate_lifecycle_state": "rejected_hard_negative",
+                "source_refs": [{"thread_key": "session:cue", "message_id": "msg-bad", "line": 5}],
+            },
+        ]
+
+        candidates = contributions.trace_derived_graph_contribution_candidates(rows)
+        by_id = {row["signal_id"]: row for row in candidates}
+        encoded = json.dumps(candidates, ensure_ascii=False)
+
+        self.assertEqual(by_id["sc_active"]["edge_type"], "cue_alias_for_route")
+        self.assertEqual(by_id["sc_active"]["status"], "verified")
+        self.assertTrue(by_id["sc_active"]["active_graph_edge"])
+        self.assertEqual(by_id["sc_suppressed"]["edge_type"], "cue_alias_for_route")
+        self.assertEqual(by_id["sc_suppressed"]["status"], "parked")
+        self.assertFalse(by_id["sc_suppressed"]["active_graph_edge"])
+        self.assertNotIn("transport hot reload", encoded)
+        self.assertNotIn("wrong transport alias", encoded)
+
 
 if __name__ == "__main__":
     unittest.main()

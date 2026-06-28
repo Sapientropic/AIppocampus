@@ -95,6 +95,7 @@ EDGE_CONTRIBUTION_COLUMNS = [
 ]
 
 TRACE_DERIVED_GRAPH_SOURCE_FAMILY = "trace_derived_training_signal"
+SEMANTIC_CUE_KIND = "aippocampus_semantic_cue"
 
 EdgeKey = tuple[str, str, str, str]
 SliceRef = tuple[str, str]
@@ -719,6 +720,63 @@ def copy_all_temp_contributions(con: sqlite3.Connection) -> tuple[int, int]:
     return max(0, node_cursor.rowcount), max(0, edge_cursor.rowcount)
 
 
+def _semantic_cue_source_digest(row: dict[str, Any]) -> str:
+    refs = [
+        {
+            "thread_key": str(ref.get("thread_key") or "")[:120],
+            "message_id": str(ref.get("message_id") or "")[:80],
+            "turn_id": str(ref.get("turn_id") or "")[:80],
+            "line": ref.get("line") or ref.get("source_line"),
+        }
+        for ref in row.get("source_refs") or []
+        if isinstance(ref, dict)
+    ][:8]
+    if not refs:
+        return ""
+    material = json.dumps(refs, ensure_ascii=False, sort_keys=True, default=str)
+    return hashlib.sha256(material.encode("utf-8")).hexdigest()[:20]
+
+
+def _semantic_cue_graph_candidate(row: dict[str, Any]) -> dict[str, Any] | None:
+    status_value = str(row.get("status") or "").casefold()
+    source_refs = [ref for ref in row.get("source_refs") or [] if isinstance(ref, dict)]
+    source_count = len(source_refs)
+    if status_value == "active" and source_count:
+        status = "verified"
+        active = True
+        lifecycle_reason = "cue_alias_source_open_promoted"
+    elif status_value == "suppressed_hard_negative":
+        status = "parked"
+        active = False
+        lifecycle_reason = "cue_alias_hard_negative_demotion"
+    elif status_value in {"parked_recheck", "expired_recheck"}:
+        status = "parked"
+        active = False
+        lifecycle_reason = "cue_alias_waiting_recheck"
+    elif source_count:
+        status = "staging"
+        active = False
+        lifecycle_reason = "cue_alias_waiting_repeat_source_open"
+    else:
+        return None
+    return {
+        "kind": "aippocampus_trace_derived_graph_candidate",
+        "source_family": TRACE_DERIVED_GRAPH_SOURCE_FAMILY,
+        "signal_id": row.get("cue_id"),
+        "training_role": row.get("training_role") or "positive_demo",
+        "admission_level": row.get("trace_admission_level") or "reopenable_route",
+        "edge_type": "cue_alias_for_route",
+        "status": status,
+        "active_graph_edge": active,
+        "lifecycle_reason": lifecycle_reason,
+        "source_ref_count": source_count,
+        "source_ref_digest": _semantic_cue_source_digest(row),
+        "candidate_lifecycle_state": row.get("candidate_lifecycle_state"),
+        "learning_priority": row.get("learning_priority") or {},
+        "claim_boundary": "cue_alias_graph_candidate_not_source_truth",
+    }
+
+
 def trace_derived_graph_contribution_candidates(
     rows: list[dict[str, Any]] | tuple[dict[str, Any], ...],
 ) -> list[dict[str, Any]]:
@@ -733,6 +791,11 @@ def trace_derived_graph_contribution_candidates(
     candidates: list[dict[str, Any]] = []
     for row in rows:
         if not isinstance(row, dict):
+            continue
+        if row.get("kind") == SEMANTIC_CUE_KIND:
+            candidate = _semantic_cue_graph_candidate(row)
+            if candidate:
+                candidates.append(candidate)
             continue
         signal = row if row.get("kind") == TRAINING_SIGNAL_KIND else behavior_training_signal_from_trace(row)
         role = str(signal.get("training_role") or "none")

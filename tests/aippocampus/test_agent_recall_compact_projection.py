@@ -5,6 +5,7 @@ import shlex
 import unittest
 
 from aippocampus_runtime.contracts import executable_command_violations
+from aippocampus_runtime.mcp.agent_recall_action_menu import foreground_action_menu
 from aippocampus_runtime.mcp.agent_recall_projection import compact_agent_recall_payload
 from aippocampus_runtime.mcp.compact_profile import compact_mcp_structured_content
 from aippocampus_runtime.recall import (
@@ -241,7 +242,7 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
         self.assertNotIn("secondary_action", action)
         safe_by_id = {item["id"]: item for item in public["safe_next_actions"]}
         self.assertEqual(set(safe_by_id), {"refine_low_specificity_recall_cue"})
-        self.assertTrue(public["more_actions_available_in_detail"])
+        self.assertTrue(public["operator_details_available"])
         refine_action = safe_by_id["refine_low_specificity_recall_cue"]
         self.assertEqual(refine_action["id"], "refine_low_specificity_recall_cue")
         self.assertNotIn("previous_low_specificity_cue", refine_action)
@@ -288,6 +289,55 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
         self.assertNotIn("C:\\", encoded)
         assert_compact_frontstage_payload(self, public, max_top_level_diagnostics=1)
 
+    def test_full_action_menu_is_foreground_compatible_without_detail_switch_claim(self) -> None:
+        payload = {
+            "kind": "aippocampus_agent_continuity_path",
+            "schema_version": "agent-continuity-path-v1",
+            "mode": "recall",
+            "status": "ok",
+            "query": "recall labels too generic route label generic",
+            "last_recall_cache_available": True,
+            "foreground_action_card": {
+                "decision": "use_route_first",
+                "canonical_action": {
+                    "action_id": "agent_deepen_selected_route",
+                    "tool_name": "agent_deepen",
+                    "arguments": {"request_index": 1, "last_recall": True},
+                    "claim_boundary": "no_claim_before_reopen",
+                },
+            },
+            "memory_packets": [
+                {
+                    "route_id": "route_generic",
+                    "route_label": "thread_candidate: AIppocampus",
+                    "route_kind": "thread_candidate",
+                    "output_mode": "reopenable_route",
+                },
+                {
+                    "route_id": "route_boundary",
+                    "route_label": "Source reopen boundary",
+                    "route_kind": "thread_candidate",
+                    "output_mode": "reopenable_route",
+                },
+            ],
+            "metrics": {
+                "memory_packet_count": 2,
+                "deepen_request_count": 2,
+                "route_label_specificity_floor": 0.0,
+                "topic_label_present_count": 0,
+            },
+        }
+
+        compact = agent_continuity_cli_support.public_recall_projection(payload)
+        menu = foreground_action_menu(payload)
+
+        self.assertNotIn("more_actions_available_in_detail", compact)
+        self.assertTrue(compact["operator_details_available"])
+        self.assertEqual(menu["detail"], "foreground_action_menu")
+        self.assertIn("foreground_action", menu)
+        self.assertIn("routes", menu)
+        self.assertTrue(menu["operator_details_available"])
+
     def test_no_route_recall_uses_reviewed_background_before_broad_search(self) -> None:
         public = agent_continuity_cli_support.public_recall_projection(
             {
@@ -325,7 +375,7 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
         self.assertEqual(executable_command_violations(public), [])
         assert_compact_frontstage_payload(self, public, max_top_level_diagnostics=2)
 
-    def test_low_specificity_recall_keeps_route_primary_but_background_before_broad_search(self) -> None:
+    def test_low_specificity_recall_prefers_background_source_open_over_route_primary(self) -> None:
         public = agent_continuity_cli_support.public_recall_projection(
             {
                 "kind": "aippocampus_agent_continuity_path",
@@ -371,10 +421,10 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
             query="recall 不够自然 辛苦去捞",
         )
 
-        self.assertEqual(public["foreground_action"]["id"], "deepen_top_route_low_confidence")
+        self.assertEqual(public["foreground_action"]["id"], "reopen_background_finding_source_route")
         safe_ids = [action["id"] for action in public["safe_next_actions"]]
-        self.assertEqual(safe_ids, ["reopen_background_finding_source_route"])
-        self.assertTrue(public["more_actions_available_in_detail"])
+        self.assertEqual(safe_ids, ["deepen_top_route_low_confidence"])
+        self.assertTrue(public["operator_details_available"])
         self.assertEqual(public["background_recovery_card"]["primary_action"], "reopen_background_finding_source_route")
         encoded = json.dumps(public, ensure_ascii=False)
         self.assertNotIn("use_boundary", encoded)
@@ -849,7 +899,7 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
         self.assertEqual(public["routes"][0]["action_priority"], "primary")
         self.assertEqual(
             public["routes"][0]["why_this_route"],
-            "Potential route, but compact labels are not specific enough; refine or search source before choosing.",
+            "Route label is not discriminative enough; use the primary action or search/refine before choosing.",
         )
         action = public["foreground_action"]
         self.assertEqual(action["id"], "deepen_top_route_low_confidence")

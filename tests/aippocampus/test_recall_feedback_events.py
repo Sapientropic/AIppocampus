@@ -158,6 +158,66 @@ class RecallFeedbackEventTests(unittest.TestCase):
         self.assertNotIn("source:good", encoded)
         self.assertNotIn("source:bad", encoded)
 
+    def test_suppression_lifecycle_maps_dismiss_park_expiry_and_positive_override(self) -> None:
+        dismissed = feedback.active_flow_event(
+            route_id="route:dismissed",
+            route_kind="active_path",
+            signal="dismiss",
+            source_id="source:dismissed",
+        )
+        parked = feedback.active_flow_event(
+            route_id="route:parked",
+            route_kind="active_path",
+            signal="PARK",
+            source_id="source:parked",
+        )
+        expired = feedback.active_flow_event(
+            route_id="route:expired",
+            route_kind="active_path",
+            signal="expired",
+            source_id="source:expired",
+        )
+        negative_then_positive = [
+            feedback.active_flow_event(
+                route_id="route:recovered",
+                route_kind="active_path",
+                signal="manual_search_after_route",
+                source_id="source:recovered",
+            ),
+            feedback.active_flow_event(
+                route_id="route:recovered",
+                route_kind="active_path",
+                signal="source_reopen_success",
+                source_id="source:recovered",
+                weight_delta=1.25,
+            ),
+        ]
+
+        lifecycle = feedback.suppression_lifecycle_report(
+            [dismissed, parked, expired, *negative_then_positive],
+            detail="operator",
+        )
+        compact = feedback.suppression_lifecycle_report([dismissed, parked], detail="compact")
+        activation = feedback.active_flow_activation_report(negative_then_positive)
+        by_route = {row["route_id"]: row for row in lifecycle["routes"]}
+
+        self.assertEqual(dismissed["signal"], "dismissed")
+        self.assertEqual(parked["signal"], "parked")
+        self.assertEqual(by_route["route:dismissed"]["status"], "suppressed_hard_negative")
+        self.assertEqual(by_route["route:parked"]["status"], "parked_recheck")
+        self.assertEqual(by_route["route:expired"]["status"], "expired_recheck")
+        self.assertEqual(
+            by_route["route:recovered"]["status"],
+            "overridden_by_positive_source_open",
+        )
+        self.assertEqual(compact["hard_negative_count"], 1)
+        self.assertNotIn("routes", compact)
+        self.assertTrue(activation["routes"][0]["foreground_eligible"])
+        self.assertEqual(
+            activation["routes"][0]["current_feedback_state"],
+            "overridden_by_positive_source_open",
+        )
+
     def test_public_route_feedback_fixture_file_is_replayable(self) -> None:
         fixture_path = REPO_ROOT / "benchmark_corpus" / "route_feedback" / "fixture.json"
         payload = json.loads(fixture_path.read_text(encoding="utf-8"))

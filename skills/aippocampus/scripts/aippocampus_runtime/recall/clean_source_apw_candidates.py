@@ -14,6 +14,7 @@ from aippocampus_runtime.recall.apw_anchor_coverage import (
     query_anchor_terms,
     source_anchor_gate,
 )
+from aippocampus_runtime.recall.foreground import route_quality as foreground_route_quality
 from aippocampus_runtime.recall.query_policy import unique_preserve
 from aippocampus_runtime.source.clean_source_resolver import resolve_clean_source_dir
 from aippocampus_runtime.source.search import process_noise_reason
@@ -424,6 +425,11 @@ def clean_source_candidate_rows(
             control_reason_counts[low_anchor_reason] += 1
             low_actual_anchor_filtered_count += 1
             continue
+        anchor_quality = foreground_route_quality.anchor_quality(
+            matched_terms=matched_terms,
+            anchor_terms=anchor_terms,
+        )
+        meaningful_matched_terms = foreground_route_quality.meaningful_terms(matched_terms)
         ref = _source_ref_from_current_clean_message(message)
         if not ref:
             continue
@@ -434,7 +440,7 @@ def clean_source_candidate_rows(
             or f"line:{message.get('source_line') or ordinal}",
             100,
         )
-        route_terms = unique_preserve(matched_terms, limit=12)
+        route_terms = unique_preserve(meaningful_matched_terms or matched_terms, limit=12)
         reason_codes = ["control_source_explicitly_requested"] if control_reason else []
         rows.append(
             (
@@ -446,11 +452,13 @@ def clean_source_candidate_rows(
                     "route_terms": route_terms,
                     "query_anchor_terms": unique_preserve(anchor_terms, limit=12),
                     "actual_source_matched_terms": route_terms,
+                    "meaningful_matched_terms": route_terms,
+                    "anchor_quality": anchor_quality,
                     "source_anchor_gate": source_anchor_gate(
                         matched_terms=matched_terms,
                         anchor_terms=anchor_terms,
                     ),
-                    "route_label": "APW source route: " + " / ".join(matched_terms[:3]),
+                    "route_label": "APW source route: " + " / ".join(route_terms[:3]),
                     "source_refs": [ref],
                     "scope_bucket": _message_scope_bucket(message),
                     "freshness": _compact(message.get("freshness") or message.get("status") or "current", 80),
