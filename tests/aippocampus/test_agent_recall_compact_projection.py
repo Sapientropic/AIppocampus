@@ -114,7 +114,7 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
         self.assertNotIn("operator_detail_command", safe)
         self.assertNotIn("operator_detail_command_template", safe)
         assert_no_recall_protocol_envelope(self, safe)
-        self.assertEqual(safe["claim_boundary"], "route_selection_ok_after_source_reopen")
+        self.assertNotIn("claim_boundary", safe)
         self.assertNotIn("old decision or handoff cue", json.dumps(safe, ensure_ascii=False))
 
         template_only = agent_continuity_cli_support.public_recall_projection(
@@ -134,7 +134,7 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
         self.assertNotIn("operator_detail_command_template", template_only)
         self.assertNotIn("operator_detail_requires", template_only)
         assert_no_recall_protocol_envelope(self, template_only)
-        self.assertEqual(template_only["claim_boundary"], "route_selection_ok_after_source_reopen")
+        self.assertNotIn("claim_boundary", template_only)
         self.assertEqual(executable_command_violations(template_only), [])
 
     def test_mcp_compact_route_actionability_matches_primary_foreground_action(self) -> None:
@@ -242,7 +242,7 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
         self.assertNotIn("secondary_action", action)
         safe_by_id = {item["id"]: item for item in public["safe_next_actions"]}
         self.assertEqual(set(safe_by_id), {"refine_low_specificity_recall_cue"})
-        self.assertTrue(public["operator_details_available"])
+        self.assertTrue(public["details_available"])
         refine_action = safe_by_id["refine_low_specificity_recall_cue"]
         self.assertEqual(refine_action["id"], "refine_low_specificity_recall_cue")
         self.assertNotIn("previous_low_specificity_cue", refine_action)
@@ -263,7 +263,7 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
         self.assertNotIn("last_recall_cache_available", public)
         self.assertEqual(len(public["routes"]), 3)
         first_route = public["routes"][0]
-        self.assertEqual(first_route["claim_boundary"], "no_claim_before_reopen")
+        self.assertNotIn("claim_boundary", first_route)
         self.assertEqual(first_route["actionability"], "low_confidence_reopenable")
         self.assertEqual(first_route["action_priority"], "primary")
         self.assertEqual(
@@ -276,7 +276,7 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
         encoded_route = json.dumps(first_route, ensure_ascii=False)
         self.assertNotIn("route_choice_posture", encoded_route)
         self.assertNotIn("low_confidence_navigation", encoded_route)
-        self.assertEqual(public["claim_boundary"], "next_action_only_reopen_before_claims")
+        self.assertNotIn("claim_boundary", public)
         self.assertNotIn("weak_route_recovery_card", public)
         self.assertNotIn("route_availability_summary", public)
         encoded = json.dumps(public, ensure_ascii=False, sort_keys=True)
@@ -332,7 +332,7 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
         menu = foreground_action_menu(payload)
 
         self.assertNotIn("more_actions_available_in_detail", compact)
-        self.assertTrue(compact["operator_details_available"])
+        self.assertTrue(compact["details_available"])
         self.assertEqual(menu["detail"], "foreground_action_menu")
         self.assertIn("foreground_action", menu)
         self.assertIn("routes", menu)
@@ -424,7 +424,7 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
         self.assertEqual(public["foreground_action"]["id"], "reopen_background_finding_source_route")
         safe_ids = [action["id"] for action in public["safe_next_actions"]]
         self.assertEqual(safe_ids, ["deepen_top_route_low_confidence"])
-        self.assertTrue(public["operator_details_available"])
+        self.assertTrue(public["details_available"])
         self.assertEqual(public["background_recovery_card"]["primary_action"], "reopen_background_finding_source_route")
         encoded = json.dumps(public, ensure_ascii=False)
         self.assertNotIn("use_boundary", encoded)
@@ -507,7 +507,7 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
             {"request_index": 2, "recall_selector": "sel_semantic_recovery"},
         )
         self.assertIn("--request 2", action["command"])
-        self.assertEqual(action["claim_boundary"], "semantic_navigation_only_until_source_reopen")
+        self.assertNotIn("claim_boundary", action)
         self.assertIn("source-shaped semantic candidate", action["why"])
         safe_ids = [item["id"] for item in public["safe_next_actions"]]
         self.assertEqual(safe_ids, ["deepen_top_route_low_confidence"])
@@ -795,11 +795,11 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
                 "5000",
             ],
         )
-        self.assertEqual(action["claim_boundary"], "source_reopen_required_before_quote")
+        self.assertNotIn("claim_boundary", action)
         self.assertEqual(public["routes"][0]["action_priority"], "secondary_preview")
         self.assertEqual(public["routes"][0]["actionability"], "low_confidence_reopenable")
         self.assertNotIn("primary_action_relation", public["routes"][0])
-        self.assertEqual(public["claim_boundary"], "next_action_only_reopen_before_claims")
+        self.assertNotIn("claim_boundary", public)
         self.assertTrue(
             any(action.get("tool_name") == "agent_deepen" for action in public["safe_next_actions"])
         )
@@ -1481,7 +1481,7 @@ class AgentRecallCompactProjectionTests(unittest.TestCase):
         self.assertIn("--recall-selector {recall_selector}", action["command_template"])
         self.assertEqual(action["requires"], ["request_index", "recall_selector"])
         self.assertIn("current compact payload has no source-window receipt", action["why"])
-        self.assertEqual(action["claim_boundary"], "no_claim_before_reopen")
+        self.assertNotIn("claim_boundary", action)
         self.assertNotIn("discussion_atlas_pointer", public)
         self.assertEqual(public["routes"][0]["already_opened"], True)
         self.assertEqual(public["routes"][0]["action"]["tool_name"], "agent_deepen")

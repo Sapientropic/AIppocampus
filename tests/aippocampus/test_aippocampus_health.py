@@ -10,6 +10,7 @@ from unittest import mock
 
 from aippocampus_runtime import health as health
 from aippocampus_runtime import health_stages
+from aippocampus_runtime.health_freshness import clean_source_expected_stats
 from aippocampus_runtime.warm_ambient.hook_seen_threads import (
     hook_seen_ledger_path_for_registry,
     hook_seen_thread_ref,
@@ -29,6 +30,43 @@ class TtyStringIO(StringIO):
 
 
 class AippocampusHealthTests(unittest.TestCase):
+    def test_clean_source_expected_stats_ignores_rows_filtered_empty(self) -> None:
+        kept_count, turn_count, last_line = clean_source_expected_stats(
+            [
+                {
+                    "turn_index": 1,
+                    "role": "user",
+                    "line": 10,
+                    "text": "<subagent_notification>{\"path\":\"C:\\\\private\"}</subagent_notification>",
+                },
+                {
+                    "turn_index": 1,
+                    "role": "assistant",
+                    "is_final": True,
+                    "line": 11,
+                    "text": "Visible final answer survives.",
+                },
+                {
+                    "turn_index": 2,
+                    "role": "user",
+                    "line": 20,
+                    "text": "<subagent_notification>{\"only\":\"host internal\"}</subagent_notification>",
+                },
+                {
+                    "turn_index": 2,
+                    "role": "assistant",
+                    "is_final": True,
+                    "line": 21,
+                    "text": "",
+                },
+            ],
+            [{"id": 1}, {"id": 2}],
+        )
+
+        self.assertEqual(kept_count, 1)
+        self.assertEqual(turn_count, 2)
+        self.assertEqual(last_line, 11)
+
     def test_agent_json_health_is_compact_and_path_redacted(self) -> None:
         private_path = "C:/private/aippocampus/clean-source/messages.jsonl"
         with (

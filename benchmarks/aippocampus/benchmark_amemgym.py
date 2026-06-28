@@ -27,6 +27,7 @@ import _paths
 
 _paths.ensure_paths()
 
+from benchmarks.aippocampus.jsonl_helpers import write_jsonl_rows
 from benchmarks.aippocampus.shared.claim_boundary_refs import claim_boundary_ref
 
 SCHEMA_VERSION = 1
@@ -509,14 +510,6 @@ def build_prediction_template(cases: list[AMemGymCase]) -> list[dict[str, Any]]:
     ]
 
 
-def write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        "".join(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n" for row in rows),
-        encoding="utf-8",
-    )
-
-
 def safe_cases(cases: list[AMemGymCase]) -> list[dict[str, Any]]:
     return [
         {
@@ -668,7 +661,7 @@ def run_amemgym_smoke(
     template_status = "not_requested"
     if prediction_template_output:
         template_path = Path(prediction_template_output)
-        write_jsonl(template_path, build_prediction_template(cases))
+        write_jsonl_rows(template_path, build_prediction_template(cases))
         template_status = "written"
 
     status = "overlay_metrics_smoke" if predictions else "metadata_smoke"

@@ -69,7 +69,6 @@ def route_deepen_action(
         "tool_name": "agent_deepen",
         "arguments": arguments,
         "mutation_risk": "read_only",
-        "claim_boundary": "no_claim_before_reopen",
     }
     if clean_selector:
         action["command"] = command
@@ -232,7 +231,6 @@ def project_route_receipts(
                         labels_low_specificity=labels_low_specificity,
                     ),
                     "already_opened": already_opened or None,
-                    "source_boundary": "reopen_required_before_claim",
                     "actionability": actionability,
                     "action": route_deepen_action(
                         index,
@@ -254,7 +252,6 @@ def project_route_receipts(
         for receipt in route_receipts:
             receipt["route_choice_posture"] = "labels_low_specificity"
             receipt["confidence"] = "low_confidence_navigation"
-            receipt["claim_boundary"] = "no_claim_before_reopen"
     return RouteReceiptProjection(
         route_receipts=route_receipts,
         duplicate_label_omissions=duplicate_label_omissions,

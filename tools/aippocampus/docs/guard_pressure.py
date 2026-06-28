@@ -38,22 +38,69 @@ def low_margin_owner_issue(rel_path: str) -> str:
     return LOW_MARGIN_OWNER_ISSUES.get(rel_path, "")
 
 
+def _owner_state_value(
+    owner_issue: str,
+    owner_issue_states: Mapping[str, object] | None,
+) -> tuple[str, str]:
+    if not owner_issue:
+        return "", ""
+    states = owner_issue_states or {}
+    raw = states.get(owner_issue) or states.get(owner_issue.lstrip("#"))
+    if isinstance(raw, Mapping):
+        state = str(raw.get("state") or raw.get("owner_issue_state") or "unknown").casefold()
+        kind = str(raw.get("kind") or raw.get("owner_issue_kind") or "issue").casefold()
+        return state, kind
+    if raw is None:
+        return "unknown", "issue"
+    return str(raw).casefold(), "issue"
+
+
+def owner_issue_metadata(
+    owner_issue: str,
+    *,
+    owner_issue_states: Mapping[str, object] | None = None,
+) -> dict[str, object]:
+    """Classify owner issue coverage without treating history as active work.
+
+    Guard-pressure rows use owner issues as provenance, but only a confirmed
+    open issue is active coverage. Closed, merged, and unknown states are kept
+    visible so future agents can follow the history, while the acceptance gate
+    still asks for a fresh split/trim owner before growing the pressured file.
+    """
+
+    state, kind = _owner_state_value(owner_issue, owner_issue_states)
+    active = bool(owner_issue) and state == "open"
+    historical = state in {"closed", "merged"}
+    return {
+        "owner_issue": owner_issue,
+        "owner_issue_state": state,
+        "owner_issue_kind": kind,
+        "owner_issue_active": active,
+        "owner_issue_history_only": bool(owner_issue) and (historical or not active),
+        "tracked_owner_issue": active,
+    }
+
+
 def pressure_row(
     row: Mapping[str, object],
     *,
     split_boundaries: Mapping[str, str],
     layer_for_path: Callable[[str], str],
+    owner_issue_states: Mapping[str, object] | None = None,
 ) -> dict[str, object]:
     rel_path = str(row["path"])
     owner_issue = low_margin_owner_issue(rel_path)
+    owner_metadata = owner_issue_metadata(
+        owner_issue,
+        owner_issue_states=owner_issue_states,
+    )
     return {
         "path": rel_path,
         "layer": layer_for_path(rel_path),
         "current_count": int(row["current_count"]),
         "guard_budget": int(row["guard_budget"]),
         "margin": int(row["margin"]),
-        "owner_issue": owner_issue,
-        "tracked_owner_issue": bool(owner_issue),
+        **owner_metadata,
         "next_split_boundary": split_boundaries.get(
             rel_path,
             "Open or assign a focused split owner before growing this file.",
@@ -72,6 +119,7 @@ def changed_surface_guard_pressure(
     split_boundaries: Mapping[str, str],
     layer_for_path: Callable[[str], str],
     margin_limit: int,
+    owner_issue_states: Mapping[str, object] | None = None,
 ) -> list[dict[str, object]]:
     """Return low-headroom budget rows touched by this PR surface.
 
@@ -108,6 +156,7 @@ def changed_surface_guard_pressure(
             row,
             split_boundaries=split_boundaries,
             layer_for_path=layer_for_path,
+            owner_issue_states=owner_issue_states,
         )
         for row in candidate_rows
         if int(row["margin"]) <= margin_limit
@@ -123,5 +172,6 @@ __all__ = [
     "LOW_MARGIN_OWNER_ISSUES",
     "changed_surface_guard_pressure",
     "low_margin_owner_issue",
+    "owner_issue_metadata",
     "pressure_row",
 ]

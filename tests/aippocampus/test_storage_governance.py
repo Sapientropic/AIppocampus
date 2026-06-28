@@ -442,6 +442,12 @@ class StorageGovernanceTests(unittest.TestCase):
             "apply_rebuildable_after_audit",
             [action["id"] for action in payload["safe_next_actions"]],
         )
+        retention_action = next(
+            action
+            for action in payload["safe_next_actions"]
+            if action["id"] == "generate_retention_report"
+        )
+        self.assertIn("aippocampus_runtime.ops.retention_report", retention_action["command"])
         self.assertTrue(payload["safe_next_action"]["continue_without_command"])
         self.assertNotIn("command", payload["safe_next_action"])
         self.assertEqual(
@@ -515,13 +521,18 @@ class StorageGovernanceTests(unittest.TestCase):
             plan["foreground_action"]["command"],
             "aippocampus storage gc --dry-run --summary-json --cwd .",
         )
-        self.assertEqual(
+        self.assertEqual(plan["safe_next_actions"][0]["id"], "generate_retention_report")
+        self.assertIn(
+            "aippocampus_runtime.ops.retention_report",
             plan["safe_next_actions"][0]["command"],
-            "aippocampus storage gc --dry-run --json --top 1 --cwd .",
         )
-        self.assertTrue(plan["safe_next_actions"][1]["operator_only"])
         self.assertEqual(
             plan["safe_next_actions"][1]["command"],
+            "aippocampus storage gc --dry-run --json --top 1 --cwd .",
+        )
+        self.assertTrue(plan["safe_next_actions"][2]["operator_only"])
+        self.assertEqual(
+            plan["safe_next_actions"][2]["command"],
             "aippocampus storage gc --dry-run --json --full --cwd .",
         )
         self.assertTrue(

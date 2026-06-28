@@ -124,6 +124,7 @@ class DebtReportTests(unittest.TestCase):
                     "Split seed-family builders before adding new dream-pack families."
                 )
             },
+            owner_issue_states={"#2548": "open"},
         )
 
         pressure = system_weight["single_digit_guard_pressure"]
@@ -135,6 +136,12 @@ class DebtReportTests(unittest.TestCase):
                 "owner_issue"
             ],
             "#2548",
+        )
+        self.assertEqual(
+            by_path["skills/aippocampus/scripts/aippocampus_runtime/dream/input_pack.py"][
+                "owner_issue_state"
+            ],
+            "open",
         )
         self.assertTrue(
             by_path["skills/aippocampus/scripts/aippocampus_runtime/dream/input_pack.py"][
@@ -174,6 +181,36 @@ class DebtReportTests(unittest.TestCase):
         self.assertEqual(pressure_warning["count"], 2)
         self.assertEqual(pressure_warning["unowned_count"], 1)
 
+    def test_closed_or_unknown_owner_issue_is_history_not_active_coverage(self) -> None:
+        path = "skills/aippocampus/scripts/aippocampus_runtime/dream/input_pack.py"
+        row = {
+            "path": path,
+            "current_count": 856,
+            "guard_budget": 860,
+            "margin": 4,
+            "over_budget": False,
+        }
+
+        closed = debt_report.build_system_weight(
+            [row],
+            split_boundaries={},
+            owner_issue_states={"#2548": "closed"},
+        )
+        unknown = debt_report.build_system_weight([row], split_boundaries={})
+
+        closed_row = closed["single_digit_guard_pressure"][0]
+        unknown_row = unknown["single_digit_guard_pressure"][0]
+        self.assertEqual(closed_row["owner_issue"], "#2548")
+        self.assertEqual(closed_row["owner_issue_state"], "closed")
+        self.assertFalse(closed_row["tracked_owner_issue"])
+        self.assertTrue(closed_row["owner_issue_history_only"])
+        self.assertEqual(
+            closed["guard_headroom_summary"]["unowned_single_digit_guard_pressure_count"],
+            1,
+        )
+        self.assertEqual(unknown_row["owner_issue_state"], "unknown")
+        self.assertFalse(unknown_row["tracked_owner_issue"])
+
     def test_changed_surface_guard_pressure_identifies_touched_pressure_rows(self) -> None:
         owned_path = "skills/aippocampus/scripts/aippocampus_runtime/recall/owned.py"
         unowned_path = "skills/aippocampus/scripts/aippocampus_runtime/recall/unowned.py"
@@ -206,6 +243,7 @@ class DebtReportTests(unittest.TestCase):
                 [owned_path, unowned_path],
                 rows=rows,
                 split_boundaries={owned_path: "Split projection before adding another lane."},
+                owner_issue_states={"#9999": "open"},
             )
 
         by_path = {row["path"]: row for row in pressure}
@@ -554,10 +592,14 @@ class DebtReportTests(unittest.TestCase):
         projection_owner = debt_report.changed_surface_debt(
             ["skills/aippocampus/scripts/aippocampus_runtime/mcp/agent_recall_projection.py"]
         )
-        self.assertEqual(projection_owner["status"], "pass")
+        self.assertEqual(projection_owner["status"], "fail")
         self.assertEqual(
             projection_owner["instruction_surface"]["classified_file_count"],
             1,
+        )
+        self.assertIn(
+            "changed_surface_unowned_guard_pressure",
+            {warning["code"] for warning in projection_owner["warnings"]},
         )
 
         with tempfile.TemporaryDirectory() as tmp:

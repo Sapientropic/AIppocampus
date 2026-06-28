@@ -35,4 +35,4 @@ def assert_recall_template_action(
     if full_detail:
         test.assertIn("--detail full", command_template)
     test.assertEqual(action["mutation_risk"], "read_only")
-    test.assertEqual(action["claim_boundary"], "no_claim_before_reopen")
+    test.assertNotIn("claim_boundary", action)

@@ -14,82 +14,18 @@ from typing import Any
 
 from aippocampus_runtime.core import stable_json_join_id
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
+from aippocampus_runtime.recall.feedback.vocabulary import (
+    DEFAULT_SIGNAL_DELTAS,
+    HARD_NEGATIVE_FEEDBACK_SIGNALS,
+    NON_FOREGROUND_SIGNALS,
+    PARKED_FEEDBACK_SIGNALS,
+    POSITIVE_FEEDBACK_SIGNALS,
+    normalize_feedback_signal,
+)
 
-ACTIVE_FLOW_SIGNALS = {
-    "source_reopen_success",
-    "user_confirmed",
-    "prevented_failure",
-    "candidate_delivered",
-    "ignored",
-    "wrong_route_drag",
-    "dismissed",
-    "manual_search_after_route",
-    "context_suppressed",
-    "blocked",
-    "superseded",
-    "parked",
-    "privacy_blocked",
-    "stale",
-    "off_phase",
-    "needs_refine",
-    "duplicate",
-    "expired",
-}
-POSITIVE_SUPPRESSION_SIGNALS = {"source_reopen_success", "user_confirmed", "prevented_failure", "reopened_deepened"}
-HARD_NEGATIVE_SUPPRESSION_SIGNALS = {
-    "wrong_route_drag",
-    "dismissed",
-    "manual_search_after_route",
-    "context_suppressed",
-    "ignored",
-    "blocked",
-    "superseded",
-}
-PARKED_SUPPRESSION_SIGNALS = {
-    "parked",
-    "privacy_blocked",
-    "stale",
-    "off_phase",
-    "needs_refine",
-    "duplicate",
-}
-NON_FOREGROUND_SIGNALS = HARD_NEGATIVE_SUPPRESSION_SIGNALS | PARKED_SUPPRESSION_SIGNALS | {"expired"}
-DEFAULT_SIGNAL_DELTAS = {
-    "source_reopen_success": 1.0,
-    "user_confirmed": 0.75,
-    "prevented_failure": 0.75,
-    "candidate_delivered": 0.1,
-    "ignored": -0.15,
-    "wrong_route_drag": -1.0,
-    "dismissed": -0.9,
-    "manual_search_after_route": -1.0,
-    "context_suppressed": -0.9,
-    "blocked": -1.0,
-    "superseded": -0.8,
-    "parked": -0.35,
-    "privacy_blocked": -0.35,
-    "stale": -0.35,
-    "off_phase": -0.25,
-    "needs_refine": -0.25,
-    "duplicate": -0.25,
-    "expired": -0.4,
-}
-OUTCOME_ALIASES = {
-    "helped": "source_reopen_success",
-    "useful": "source_reopen_success",
-    "confirmed": "user_confirmed",
-    "wrong": "wrong_route_drag",
-    "wrong_route": "wrong_route_drag",
-    "noisy": "wrong_route_drag",
-    "dismiss": "dismissed",
-    "manual_search": "manual_search_after_route",
-    "context_suppression": "context_suppressed",
-    "park": "parked",
-    "PARK": "parked",
-    "privacy": "privacy_blocked",
-    "stale": "expired",
-    "prevented": "prevented_failure",
-}
+POSITIVE_SUPPRESSION_SIGNALS = POSITIVE_FEEDBACK_SIGNALS
+HARD_NEGATIVE_SUPPRESSION_SIGNALS = HARD_NEGATIVE_FEEDBACK_SIGNALS
+PARKED_SUPPRESSION_SIGNALS = PARKED_FEEDBACK_SIGNALS
 
 
 def _safe_token(value: Any, *, fallback_prefix: str) -> str:
@@ -103,8 +39,7 @@ def _safe_token(value: Any, *, fallback_prefix: str) -> str:
 
 
 def _safe_signal(value: Any) -> str:
-    signal = str(value or "").strip()
-    return signal if signal in ACTIVE_FLOW_SIGNALS else "candidate_delivered"
+    return normalize_feedback_signal(value)
 
 
 def _safe_float(value: Any, default: float) -> float:

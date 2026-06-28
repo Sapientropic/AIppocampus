@@ -25,6 +25,7 @@ import _paths
 
 _paths.ensure_paths()
 
+from benchmarks.aippocampus.jsonl_helpers import write_jsonl_rows
 from benchmarks.aippocampus.shared.benchmark_statistics import binomial_rate_report
 
 SCHEMA_VERSION = 1
@@ -237,14 +238,6 @@ def load_predictions(path: Path) -> dict[str, Prediction]:
         )
         predictions[case_id] = Prediction(case_id=case_id, evidence_ids=evidence_ids)
     return predictions
-
-
-def write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        "".join(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n" for row in rows),
-        encoding="utf-8",
-    )
 
 
 def build_case_pack(dataset: LocomoDataset) -> dict[str, Any]:
@@ -594,7 +587,7 @@ def run_benchmark(
     prediction_template_path: Path | None = None
     if prediction_template_output:
         prediction_template_path = Path(prediction_template_output)
-        write_jsonl(prediction_template_path, build_prediction_template(dataset))
+        write_jsonl_rows(prediction_template_path, build_prediction_template(dataset))
 
     if predictions_file:
         prediction_source = "external_predictions"

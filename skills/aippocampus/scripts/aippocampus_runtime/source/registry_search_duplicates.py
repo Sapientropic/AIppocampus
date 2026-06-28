@@ -47,7 +47,15 @@ def compact_registry_match(match: Mapping[str, Any]) -> dict[str, Any]:
     return {
         key: value
         for key, value in match.items()
-        if key not in {"score", "query_match_profile", "_ranking_haystack", "_route_note_anchor_match"}
+        if key
+        not in {
+            "artifact_demoted",
+            "artifact_role",
+            "score",
+            "query_match_profile",
+            "_ranking_haystack",
+            "_route_note_anchor_match",
+        }
     }
 
 

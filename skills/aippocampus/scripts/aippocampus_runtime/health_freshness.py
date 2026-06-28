@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.source.host_internal_filter import filter_host_internal_clean_text
 from aippocampus_runtime.source.rollout import normalize_rollout
 
 
@@ -48,6 +49,11 @@ def clean_source_expected_stats(
             assistant = next((item for item in items if item.get("line") == fallback_line), None)
         for item in (user, assistant):
             if not item:
+                continue
+            text, _host_internal_filtered = filter_host_internal_clean_text(
+                item.get("text") or ""
+            )
+            if not str(text or "").strip():
                 continue
             kept_count += 1
             line = item.get("line")

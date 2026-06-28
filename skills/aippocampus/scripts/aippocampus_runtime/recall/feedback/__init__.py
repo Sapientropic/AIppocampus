@@ -12,4 +12,5 @@ __all__ = [
     "capture",
     "events",
     "outcome",
+    "vocabulary",
 ]

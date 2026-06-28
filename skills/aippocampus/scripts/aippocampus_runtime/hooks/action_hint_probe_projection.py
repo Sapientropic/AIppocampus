@@ -6,6 +6,11 @@ import json
 from collections.abc import Mapping
 from typing import Any
 
+from aippocampus_runtime.foreground_compact_language import (
+    compact_details_flag,
+    strip_compact_policy_vocabulary,
+)
+
 SCHEMA_VERSION = 1
 
 
@@ -74,7 +79,7 @@ def compact_probe_report(report: Mapping[str, Any]) -> dict[str, Any]:
             "authority": str(hint.get("authority") or "navigation_only"),
             "source_ref_count": int(hint.get("source_ref_count") or 0),
         }
-    return {
+    payload = {
         "schema_version": int(report.get("schema_version") or SCHEMA_VERSION),
         "kind": "aippocampus_action_hint_probe_compact",
         "detail": "compact",
@@ -100,7 +105,10 @@ def compact_probe_report(report: Mapping[str, Any]) -> dict[str, Any]:
             report.get("claim_boundary")
             or "action_hints_are_navigation_not_source_truth"
         ),
+        "operator_detail_command": "aippocampus hooks action probe --json",
     }
+    payload.update(compact_details_flag(payload))
+    return strip_compact_policy_vocabulary(payload)
 
 
 __all__ = ["compact_probe_report"]

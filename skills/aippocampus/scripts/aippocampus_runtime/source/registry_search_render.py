@@ -8,6 +8,10 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.contracts import canonical_foreground_action_fields, shell_quote
+from aippocampus_runtime.foreground_compact_language import (
+    compact_details_flag,
+    strip_compact_policy_vocabulary,
+)
 from aippocampus_runtime.privacy import (
     LOCAL_PATH_REDACTION,
     redact_private_paths,
@@ -270,6 +274,171 @@ def _registry_source_boundary(
     }
 
 
+def _first_match_usefulness_payload(
+    *,
+    first_match: Mapping[str, Any] | None,
+    first_match_status: str,
+    first_match_profile: Mapping[str, Any],
+    diagnostic_output: bool,
+) -> dict[str, Any] | None:
+    if first_match is None:
+        return None
+    payload = {
+        "status": first_match_status,
+        "first_hit_demoted": match_is_demoted_artifact(first_match),
+        "matched_distinctive_anchor_count": first_match_profile.get(
+            "matched_distinctive_anchor_count"
+        ),
+    }
+    if diagnostic_output:
+        payload["artifact_role"] = first_match.get("artifact_role")
+    return payload
+
+
+def _registry_search_raw_payload(
+    *,
+    inputs: Any,
+    evaluation: Any,
+    matches: list[dict[str, Any]],
+    duplicate_metrics: Mapping[str, int],
+    include_paths: bool,
+    diagnostic_output: bool,
+    detail_command: str | None,
+    output_matches: list[dict[str, Any]],
+    useful_target_hit: bool,
+    low_confidence_matches: list[dict[str, Any]],
+    semantic_position_matches: list[dict[str, Any]],
+    no_phrase_like_matches: bool,
+    low_coverage_only_matches: bool,
+    first_match: Mapping[str, Any] | None,
+    first_match_profile: Mapping[str, Any],
+    first_match_status: str,
+    discussion_pointer: dict[str, Any] | None,
+    next_reopen_command: str,
+    claim_boundary: str,
+    source_reopen_boundary: str,
+) -> dict[str, Any]:
+    return {
+        "kind": "aippocampus_registry_source_search",
+        "ok": useful_target_hit,
+        "status": _registry_search_status(
+            useful_target_hit=useful_target_hit,
+            low_confidence_matches=low_confidence_matches,
+            semantic_position_matches=semantic_position_matches,
+            exact_identifier_query=bool(inputs.query_gate.get("exact_identifier_query")),
+            no_phrase_like_matches=no_phrase_like_matches,
+            matches=matches,
+            low_coverage_only_matches=low_coverage_only_matches,
+        ),
+        "search_scope": "registered_clean_source_and_indexes",
+        "scope_description": (
+            "registered clean-source/index entries across the local registry; "
+            "a miss is not proof that no memory exists"
+        ),
+        "registry": str(inputs.registry_json),
+        "query_text": inputs.query_text,
+        "query_terms": inputs.terms if diagnostic_output else None,
+        "query_match_gate": inputs.query_gate if diagnostic_output else None,
+        "matches": output_matches,
+        "match_count": len(matches),
+        "useful_target_hit": useful_target_hit,
+        "partial": True if evaluation.budget_exhausted else None,
+        "degraded_reason": (
+            "foreground_search_time_budget_exhausted" if evaluation.budget_exhausted else None
+        ),
+        "max_elapsed_ms": evaluation.max_elapsed_ms,
+        "elapsed_ms": evaluation.elapsed_ms,
+        "unsearched_entry_count": (
+            evaluation.unsearched_entry_count if evaluation.budget_exhausted else None
+        ),
+        "next_precise_reopen_command": (
+            next_reopen_command if evaluation.budget_exhausted and next_reopen_command else None
+        ),
+        "first_match_usefulness": _first_match_usefulness_payload(
+            first_match=first_match,
+            first_match_status=first_match_status,
+            first_match_profile=first_match_profile,
+            diagnostic_output=diagnostic_output,
+        ),
+        "duplicate_cluster_count": duplicate_metrics["duplicate_cluster_count"],
+        "duplicate_collapsed_hit_count": duplicate_metrics["duplicate_hit_count"],
+        "repo_doc_match_count": len(inputs.repo_doc_matches),
+        "discussion_atlas_pointer": discussion_pointer,
+        "suppressed_low_coverage_match_count": len(evaluation.suppressed_matches),
+        "low_confidence_reopen_candidates": (
+            [compact_registry_match(match) for match in low_confidence_matches]
+            if low_confidence_matches
+            else None
+        ),
+        "recall_semantic_position_candidates": (
+            [diagnostic_registry_match(match) for match in semantic_position_matches]
+            if diagnostic_output and semantic_position_matches
+            else None
+        ),
+        "match_evidence_diagnostics": (
+            match_evidence_diagnostics(
+                matches,
+                query_text=inputs.query_text,
+                suppressed_count=len(evaluation.suppressed_matches),
+            )
+            if diagnostic_output
+            else None
+        ),
+        "suppressed_low_coverage_matches": (
+            evaluation.suppressed_matches[:3] if diagnostic_output else None
+        ),
+        "searched_entry_count": evaluation.searched_entry_count,
+        "skipped_entry_count": len(evaluation.skipped_entries),
+        "skipped_reason_counts": evaluation.skipped_reason_counts or None,
+        "skipped_entries": evaluation.skipped_entries[:20] if diagnostic_output else None,
+        "maintenance_actions": skipped_maintenance_actions(evaluation.skipped_entries) or None,
+        "unavailable_source_count": evaluation.unavailable_source_count,
+        "warnings": evaluation.warnings,
+        "diagnostic_fields_omitted": None,
+        "diagnostic_detail_command": None,
+        "detail_command": detail_command if not diagnostic_output else None,
+        "claim_boundary": claim_boundary,
+        "source_reopen_boundary": source_reopen_boundary,
+        "suppression_boundary": (
+            "phrase_like_low_coverage_suppressed"
+            if no_phrase_like_matches
+            else "low_coverage_matches_suppressed"
+            if low_coverage_only_matches
+            else None
+        ),
+        "output_boundary": (
+            "local_private_source_routes_with_paths"
+            if include_paths
+            else "foreground_safe_registry_source_routes"
+        ),
+        "source_boundary": (
+            _registry_source_boundary(
+                useful_target_hit=useful_target_hit,
+                low_confidence_matches=low_confidence_matches,
+                semantic_position_matches=semantic_position_matches,
+                evaluation=evaluation,
+                matches=matches,
+                low_coverage_only_matches=low_coverage_only_matches,
+                no_phrase_like_matches=no_phrase_like_matches,
+            )
+            if diagnostic_output
+            else None
+        ),
+        "privacy": (
+            {
+                "paths_included": include_paths,
+                "path_redaction": "none" if include_paths else LOCAL_PATH_REDACTION,
+                "raw_source_snippets_emitted": False,
+                "capped_source_snippets_emitted": bool(matches),
+                "full_session_metadata_emitted": False,
+                "last_search_cache_contains_paths": False,
+            }
+            if diagnostic_output
+            else None
+        ),
+    }
+
+
 def render_registry_search_payload(
     inputs: Any,
     evaluation: Any,
@@ -379,133 +548,28 @@ def render_registry_search_payload(
         low_confidence_matches=low_confidence_matches,
         semantic_position_matches=semantic_position_matches,
     )
-    raw_payload: dict[str, Any] = {
-        "kind": "aippocampus_registry_source_search",
-        "ok": useful_target_hit,
-        "status": _registry_search_status(
-            useful_target_hit=useful_target_hit,
-            low_confidence_matches=low_confidence_matches,
-            semantic_position_matches=semantic_position_matches,
-            exact_identifier_query=bool(inputs.query_gate.get("exact_identifier_query")),
-            no_phrase_like_matches=no_phrase_like_matches,
-            matches=matches,
-            low_coverage_only_matches=low_coverage_only_matches,
-        ),
-        "search_scope": "registered_clean_source_and_indexes",
-        "scope_description": (
-            "registered clean-source/index entries across the local registry; "
-            "a miss is not proof that no memory exists"
-        ),
-        "registry": str(inputs.registry_json),
-        "query_text": inputs.query_text,
-        "query_terms": inputs.terms if diagnostic_output else None,
-        "query_match_gate": inputs.query_gate if diagnostic_output else None,
-        "matches": output_matches,
-        "match_count": len(matches),
-        "useful_target_hit": useful_target_hit,
-        "partial": True if evaluation.budget_exhausted else None,
-        "degraded_reason": (
-            "foreground_search_time_budget_exhausted" if evaluation.budget_exhausted else None
-        ),
-        "max_elapsed_ms": evaluation.max_elapsed_ms,
-        "elapsed_ms": evaluation.elapsed_ms,
-        "unsearched_entry_count": (
-            evaluation.unsearched_entry_count if evaluation.budget_exhausted else None
-        ),
-        "next_precise_reopen_command": (
-            next_reopen_command if evaluation.budget_exhausted and next_reopen_command else None
-        ),
-        "first_match_usefulness": (
-            {
-                "status": first_match_status,
-                "artifact_role": first_match.get("artifact_role") if first_match else None,
-                "first_hit_demoted": bool(
-                    first_match is not None and match_is_demoted_artifact(first_match)
-                ),
-                "matched_distinctive_anchor_count": first_match_profile.get(
-                    "matched_distinctive_anchor_count"
-                ),
-            }
-            if first_match
-            else None
-        ),
-        "duplicate_cluster_count": duplicate_metrics["duplicate_cluster_count"],
-        "duplicate_collapsed_hit_count": duplicate_metrics["duplicate_hit_count"],
-        "repo_doc_match_count": len(inputs.repo_doc_matches),
-        "discussion_atlas_pointer": discussion_pointer,
-        "suppressed_low_coverage_match_count": len(evaluation.suppressed_matches),
-        "low_confidence_reopen_candidates": (
-            [compact_registry_match(match) for match in low_confidence_matches]
-            if low_confidence_matches
-            else None
-        ),
-        "recall_semantic_position_candidates": (
-            [diagnostic_registry_match(match) for match in semantic_position_matches]
-            if diagnostic_output and semantic_position_matches
-            else None
-        ),
-        "match_evidence_diagnostics": (
-            match_evidence_diagnostics(
-                matches,
-                query_text=inputs.query_text,
-                suppressed_count=len(evaluation.suppressed_matches),
-            )
-            if diagnostic_output
-            else None
-        ),
-        "suppressed_low_coverage_matches": (
-            evaluation.suppressed_matches[:3] if diagnostic_output else None
-        ),
-        "searched_entry_count": evaluation.searched_entry_count,
-        "skipped_entry_count": len(evaluation.skipped_entries),
-        "skipped_reason_counts": evaluation.skipped_reason_counts or None,
-        "skipped_entries": evaluation.skipped_entries[:20] if diagnostic_output else None,
-        "maintenance_actions": skipped_maintenance_actions(evaluation.skipped_entries) or None,
-        "unavailable_source_count": evaluation.unavailable_source_count,
-        "warnings": evaluation.warnings,
-        "diagnostic_fields_omitted": None,
-        "diagnostic_detail_command": None,
-        "detail_command": detail_command if not diagnostic_output else None,
-        "claim_boundary": claim_boundary,
-        "source_reopen_boundary": source_reopen_boundary,
-        "suppression_boundary": (
-            "phrase_like_low_coverage_suppressed"
-            if no_phrase_like_matches
-            else "low_coverage_matches_suppressed"
-            if low_coverage_only_matches
-            else None
-        ),
-        "output_boundary": (
-            "local_private_source_routes_with_paths"
-            if include_paths
-            else "foreground_safe_registry_source_routes"
-        ),
-        "source_boundary": (
-            _registry_source_boundary(
-                useful_target_hit=useful_target_hit,
-                low_confidence_matches=low_confidence_matches,
-                semantic_position_matches=semantic_position_matches,
-                evaluation=evaluation,
-                matches=matches,
-                low_coverage_only_matches=low_coverage_only_matches,
-                no_phrase_like_matches=no_phrase_like_matches,
-            )
-            if diagnostic_output
-            else None
-        ),
-        "privacy": (
-            {
-                "paths_included": include_paths,
-                "path_redaction": "none" if include_paths else LOCAL_PATH_REDACTION,
-                "raw_source_snippets_emitted": False,
-                "capped_source_snippets_emitted": bool(matches),
-                "full_session_metadata_emitted": False,
-                "last_search_cache_contains_paths": False,
-            }
-            if diagnostic_output
-            else None
-        ),
-    }
+    raw_payload = _registry_search_raw_payload(
+        inputs=inputs,
+        evaluation=evaluation,
+        matches=matches,
+        duplicate_metrics=duplicate_metrics,
+        include_paths=include_paths,
+        diagnostic_output=diagnostic_output,
+        detail_command=detail_command,
+        output_matches=output_matches,
+        useful_target_hit=useful_target_hit,
+        low_confidence_matches=low_confidence_matches,
+        semantic_position_matches=semantic_position_matches,
+        no_phrase_like_matches=no_phrase_like_matches,
+        low_coverage_only_matches=low_coverage_only_matches,
+        first_match=first_match,
+        first_match_profile=first_match_profile,
+        first_match_status=first_match_status,
+        discussion_pointer=discussion_pointer,
+        next_reopen_command=next_reopen_command,
+        claim_boundary=claim_boundary,
+        source_reopen_boundary=source_reopen_boundary,
+    )
     payload = {key: item for key, item in raw_payload.items() if item not in (None, "", {})}
     if actions:
         payload.update(
@@ -516,4 +580,7 @@ def render_registry_search_payload(
                 safe_next_read_only_only=True,
             )
         )
+    if not diagnostic_output:
+        payload.update(compact_details_flag(payload))
+        payload = strip_compact_policy_vocabulary(payload)
     return payload if include_paths else redact_sensitive_values(redact_private_paths(payload))

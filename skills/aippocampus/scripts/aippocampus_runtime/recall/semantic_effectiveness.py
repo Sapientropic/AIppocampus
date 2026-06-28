@@ -15,13 +15,16 @@ from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.recall.feedback.vocabulary import (
+    feedback_signal_is_negative,
+    feedback_signal_is_positive,
+    normalize_feedback_signal,
+)
 from aippocampus_runtime.source.io_kernel import append_jsonl_dict_rows, load_jsonl_dict_rows
 
 SCHEMA_VERSION = 1
 REPORT_KIND = "aippocampus_semantic_candidate_effectiveness_report"
 ROW_KIND = "aippocampus_semantic_candidate_effectiveness"
-POSITIVE_OUTCOMES = {"source_reopen_success", "reopened_deepened", "user_confirmed"}
-NEGATIVE_OUTCOMES = {"ignored", "wrong_route_drag", "blocked", "superseded", "expired", "corrected"}
 SURFACE_OUTCOMES = {"candidate_delivered"}
 PRIVATE_BUCKETS = {"private", "restricted", "personal", "user_private", "machine_private"}
 
@@ -109,13 +112,12 @@ def _event_candidate_id(row: Mapping[str, Any]) -> str:
 
 
 def _event_outcome(row: Mapping[str, Any]) -> str:
-    outcome = _text(row.get("outcome") or row.get("signal") or "")
-    return "wrong_route_drag" if outcome == "wrong_route" else outcome
+    return normalize_feedback_signal(row.get("outcome") or row.get("signal"), default="")
 
 
 def _bounded_delta(counts: Counter[str], event_count: int) -> tuple[float, bool, bool]:
-    positive = sum(counts[outcome] for outcome in POSITIVE_OUTCOMES)
-    negative = sum(counts[outcome] for outcome in NEGATIVE_OUTCOMES)
+    positive = sum(count for outcome, count in counts.items() if feedback_signal_is_positive(outcome))
+    negative = sum(count for outcome, count in counts.items() if feedback_signal_is_negative(outcome))
     sparse = event_count < 2
     conflicting = positive > 0 and negative > 0
     if sparse or conflicting:

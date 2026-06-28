@@ -515,12 +515,15 @@ def _foreground_action_shape_violations(action: Mapping[str, object], *, field: 
     Alias equality protects machines from precedence ambiguity, but it does not
     stop a skeletal card from reaching the foreground. The v1 card must also
     tell the next agent what the action is, why it is safe/useful, and what risk
-    and claim boundary it carries. Healthy no-work cards use an explicit
-    continue/no-op marker instead of pretending to have a shell command.
+    it matters. Source-claim boundaries remain available on detail/source-open
+    surfaces, but default compact actions should not force foreground agents to
+    parse policy taxonomy before taking the next read-only step. Healthy
+    no-work cards use an explicit continue/no-op marker instead of pretending
+    to have a shell command.
     """
 
     violations: list[dict[str, str]] = []
-    for key in ("id", "label", "mutation_risk", "claim_boundary", "why"):
+    for key in ("id", "label", "mutation_risk", "why"):
         value = action.get(key)
         if not isinstance(value, str) or not value.strip():
             violations.append(

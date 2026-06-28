@@ -9,6 +9,7 @@ from aippocampus_runtime.contracts import (
     foreground_shell_action,
     foreground_template_action,
 )
+from aippocampus_runtime.foreground_compact_language import strip_compact_policy_vocabulary
 from aippocampus_runtime.mcp.tool_catalog import TOOLS
 
 KEY_AGENT_NATIVE_TOOLS = (
@@ -92,13 +93,15 @@ def _workflow_guide(
             enables_next = [
                 name for name in enables_next if name not in {"recall_context", "recall_deepen"}
             ]
-        guide[tool_name] = {
+        row = {
             "workflow": metadata.get("workflow"),
-            "posture": metadata.get("posture"),
-            "claim_boundary": metadata.get("claim_boundary"),
             "requires_prior": requires_prior,
             "enables_next": enables_next,
         }
+        if include_legacy_edges:
+            row["posture"] = metadata.get("posture")
+            row["claim_boundary"] = metadata.get("claim_boundary")
+        guide[tool_name] = row
         if metadata.get("legacy"):
             guide[tool_name]["legacy"] = True
         if metadata.get("foreground_recommended") is not None:
@@ -124,7 +127,7 @@ def _tool_use_guide(*, detail: str = "compact") -> dict[str, Any]:
             ),
             "route_selector_missing": "Run agent_recall again or request detail=full only for local diagnostics.",
         },
-        "boundary": "tool_discovery_routes_attention_source_claims_require_recall_or_deepen",
+        "status_note": "Tool discovery guides recall/deepen choice; open source before relying on a memory claim.",
     }
     if detail == "full":
         guide["legacy_workflow"] = _workflow_guide(
@@ -249,4 +252,6 @@ def tool_readiness_summary(*, detail: str = "compact") -> dict[str, Any]:
         )
         if detail == "full":
             payload["operator_write_actions"] = [_feedback_operator_action()]
+    if detail == "compact":
+        return strip_compact_policy_vocabulary(payload)
     return payload

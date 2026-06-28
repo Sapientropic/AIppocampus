@@ -412,7 +412,7 @@ class AippocampusMaintenanceTests(unittest.TestCase):
         self.assertEqual(payload["remaining_recommended_action_count"], 0)
         self.assertFalse(payload["read_only"])
         self.assertEqual(payload["foreground_action"]["id"], "inspect_maintenance_status")
-        self.assertFalse(payload["foreground_action"]["mutates"])
+        self.assertNotIn("mutates", payload["foreground_action"])
         self.assertIn("build_index_final_catchup", payload["action_ids"])
         self.assertIn("prepare_graphify_corpus_final_catchup", payload["action_ids"])
         self.assertEqual(
@@ -465,7 +465,7 @@ class AippocampusMaintenanceTests(unittest.TestCase):
         self.assertEqual(payload["mode"], "summary")
         self.assertTrue(payload["read_only"])
         self.assertEqual(payload["foreground_action"]["id"], "continue_without_maintenance")
-        self.assertFalse(payload["foreground_action"]["mutates"])
+        self.assertNotIn("mutates", payload["foreground_action"])
         apply_actions = [
             item for item in payload["safe_next_actions"] if item["id"] == "apply_after_user_consent"
         ]
@@ -479,12 +479,9 @@ class AippocampusMaintenanceTests(unittest.TestCase):
         self.assertNotIn("health_final", payload)
         self.assertEqual(payload["health_probe"]["status"], "compact_readiness_probe")
         self.assertTrue(payload["health_probe"]["full_diagnostics_deferred"])
-        self.assertEqual(payload["full_audit_flag"], "--json")
+        self.assertTrue(payload["details_available"])
         self.assertNotIn("operator_detail", payload)
-        self.assertEqual(
-            payload["operator_detail_command"],
-            "aippocampus maintenance plan --json",
-        )
+        self.assertNotIn("operator_detail_command", payload)
         self.assertEqual(payload["apply_command"], "aippocampus maintenance apply --summary-json")
         self.assertEqual(health_calls, [])
 
@@ -566,7 +563,7 @@ class AippocampusMaintenanceTests(unittest.TestCase):
         self.assertTrue(payload["plan_generated"])
         self.assertEqual(payload["maintenance_status"], "attention_needed")
         self.assertEqual(payload["foreground_action"]["id"], "review_maintenance_plan")
-        self.assertFalse(payload["foreground_action"]["mutates"])
+        self.assertNotIn("mutates", payload["foreground_action"])
         self.assertEqual(
             payload["foreground_action"]["command"],
             "aippocampus maintenance plan --summary-json",
@@ -575,13 +572,11 @@ class AippocampusMaintenanceTests(unittest.TestCase):
             item for item in payload["safe_next_actions"] if item["id"] == "apply_after_user_consent"
         )
         self.assertEqual(apply_action["command"], "aippocampus maintenance apply --summary-json")
-        self.assertTrue(apply_action["requires_user_consent"])
-        self.assertIn("git status --short", apply_action["preflight_commands"])
+        self.assertNotIn("requires_user_consent", apply_action)
+        self.assertNotIn("preflight_commands", apply_action)
         self.assertNotIn("operator_detail", payload)
-        self.assertEqual(
-            payload["operator_detail_command"],
-            "aippocampus maintenance plan --json",
-        )
+        self.assertTrue(payload["details_available"])
+        self.assertNotIn("operator_detail_command", payload)
         self.assertNotIn("health_error", payload)
 
     def test_plan_projects_health_state_without_nested_health_error_or_duplicate_actions(self) -> None:
@@ -634,10 +629,8 @@ class AippocampusMaintenanceTests(unittest.TestCase):
         self.assertNotIn("health_returncode", payload)
         self.assertNotIn("best_next_action", payload)
         self.assertNotIn("operator_detail", payload)
-        self.assertEqual(
-            payload["operator_detail_command"],
-            "aippocampus maintenance plan --json",
-        )
+        self.assertTrue(payload["details_available"])
+        self.assertNotIn("operator_detail_command", payload)
         self.assertEqual(payload["user_impact"]["recall_usable"], "degraded")
         self.assertEqual(payload["user_impact"]["first_recall_phase"], "cold_start_maintenance_required")
         self.assertTrue(payload["user_impact"]["cold_start_expected"])
@@ -693,7 +686,7 @@ class AippocampusMaintenanceTests(unittest.TestCase):
         self.assertEqual(payload["would_run_action_ids"], ["build_index", "build_cognitive_map"])
         self.assertEqual(payload["apply_command"], "aippocampus maintenance apply --summary-json")
         self.assertEqual(payload["foreground_action"]["id"], "review_maintenance_plan")
-        self.assertFalse(payload["foreground_action"]["mutates"])
+        self.assertNotIn("mutates", payload["foreground_action"])
         self.assertEqual(payload["foreground_action_contract"], "foreground-action-v2")
         self.assertNotIn("agent_next_action", payload)
 
@@ -736,7 +729,7 @@ class AippocampusMaintenanceTests(unittest.TestCase):
 
         self.assertEqual(code, 0)
         self.assertEqual(payload["foreground_action"]["id"], "review_maintenance_plan")
-        self.assertFalse(payload["foreground_action"]["mutates"])
+        self.assertNotIn("mutates", payload["foreground_action"])
         action_ids = [action["id"] for action in payload["safe_next_actions"]]
         self.assertIn("storage_gc_audit", action_ids)
         storage_action = next(
@@ -797,7 +790,7 @@ class AippocampusMaintenanceTests(unittest.TestCase):
         storage_action = next(
             action for action in payload["safe_next_actions"] if action["id"] == "storage_gc_audit"
         )
-        self.assertFalse(storage_action["mutates"])
+        self.assertNotIn("mutates", storage_action)
         self.assertEqual(
             storage_action["command"],
             "aippocampus storage gc --dry-run --json --top 1 --cwd .",
@@ -863,10 +856,7 @@ class AippocampusMaintenanceTests(unittest.TestCase):
             cleanup_action["command"],
             "aippocampus maintenance apply --cleanup-interrupted-writes --summary-json",
         )
-        self.assertEqual(
-            cleanup_action["mutation_risk"],
-            "explicit_local_delete_of_ai_owned_tmp_artifacts",
-        )
+        self.assertNotIn("mutation_risk", cleanup_action)
 
     def test_apply_cleanup_interrupted_writes_deletes_only_ai_owned_tmp(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -957,7 +947,7 @@ class AippocampusMaintenanceTests(unittest.TestCase):
         self.assertIn("cleanup_interrupted_writes", payload["action_ids"])
         self.assertNotIn("build_index_final_catchup", payload["action_ids"])
         self.assertEqual(payload["interrupted_write_recovery"]["status"], "ok")
-        self.assertEqual(payload["interrupted_write_recovery"]["safe_next_actions"], [])
+        self.assertEqual(payload["interrupted_write_recovery"].get("safe_next_actions", []), [])
 
     def test_default_help_hides_activation_compaction_flags(self) -> None:
         with (

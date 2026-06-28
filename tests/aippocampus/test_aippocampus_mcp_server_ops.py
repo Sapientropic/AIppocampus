@@ -568,10 +568,7 @@ class AippocampusMcpServerOpsTests(unittest.TestCase):
         self.assertEqual(payload["foreground_action"]["tool_name"], "get_turn_context")
         self.assertEqual(payload["foreground_action"]["arguments"]["message_id"], "msg_final")
         self.assertIn("aippocampus search --open-current-source", payload["foreground_action"]["command"])
-        self.assertEqual(
-            payload["foreground_action"]["claim_boundary"],
-            "source_reopen_required_before_claim",
-        )
+        self.assertNotIn("claim_boundary", payload["foreground_action"])
         self.assertIsInstance(payload["foreground_action"], dict)
         self.assertIn("foreground_action", payload)
         self.assertNotIn("matches", payload)

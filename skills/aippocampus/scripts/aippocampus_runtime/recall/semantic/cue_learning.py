@@ -16,6 +16,7 @@ from typing import Any
 
 from aippocampus_runtime.core import compact_text, now_utc
 from aippocampus_runtime.recall import semantic_cue_cache as cue_cache
+from aippocampus_runtime.recall.feedback.vocabulary import normalize_feedback_signal
 from aippocampus_runtime.recall.query_policy import split_query_terms
 from aippocampus_runtime.recall.semantic.confidence_policy import SOURCE_REOPEN_CONFIDENCE
 from aippocampus_runtime.registry.api import unique_preserve
@@ -148,17 +149,7 @@ def demote_recall_cue_route(
     """Apply route-local negative feedback to learned recall cue aliases."""
 
     route = _safe_route_token(route_id)
-    safe_reason = str(reason or "wrong_route_drag").casefold()
-    if safe_reason in {"wrong_route", "wrong"}:
-        safe_reason = "wrong_route_drag"
-    elif safe_reason in {"dismiss", "dismissed"}:
-        safe_reason = "dismissed"
-    elif safe_reason in {"manual_search", "manual_search_after_route"}:
-        safe_reason = "manual_search_after_route"
-    elif safe_reason in {"context_suppression", "context_suppressed"}:
-        safe_reason = "context_suppressed"
-    elif safe_reason in {"park", "parked"}:
-        safe_reason = "parked"
+    safe_reason = normalize_feedback_signal(reason or "wrong_route_drag", default="wrong_route_drag")
     wanted = {cue_cache.normalize_cue(cue).casefold() for cue in (cues or []) if cue_cache.normalize_cue(cue)}
     rows = cue_cache.rows_by_key(cue_cache.all_semantic_cues(path))
     updated = 0

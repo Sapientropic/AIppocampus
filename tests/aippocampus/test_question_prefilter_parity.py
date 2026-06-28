@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from tests.aippocampus.import_path_helpers import import_smoke_module
+from tests.aippocampus.jsonl_helpers import write_jsonl_rows
 
 parity = import_smoke_module("smoke_question_prefilter_parity")
 
@@ -40,18 +41,12 @@ def question_row(index: int, group: str) -> dict[str, Any]:
         "concepts": [group, "source refs"],
     }
 
-def write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
-    path.write_text(
-        "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows),
-        encoding="utf-8",
-    )
-
 class QuestionPrefilterParitySmokeTests(unittest.TestCase):
     def test_smoke_reports_structural_parity_without_private_leakage(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             jobs_path = root / "subconscious_jobs.jsonl"
-            write_jsonl(
+            write_jsonl_rows(
                 jobs_path,
                 [
                     question_row(1, "context continuity"),
@@ -85,7 +80,7 @@ class QuestionPrefilterParitySmokeTests(unittest.TestCase):
     def test_smoke_surfaces_coverage_gap_as_not_default_safe(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             jobs_path = Path(tmp) / "subconscious_jobs.jsonl"
-            write_jsonl(
+            write_jsonl_rows(
                 jobs_path,
                 [
                     question_row(1, "context continuity"),

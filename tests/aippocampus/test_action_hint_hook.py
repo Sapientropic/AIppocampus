@@ -293,8 +293,11 @@ class ActionHintHookTests(unittest.TestCase):
         self.assertNotIn("privacy_boundary", payload)
         self.assertNotIn("diagnostic_fields_omitted", payload)
         self.assertNotIn("operator_detail_command", payload)
+        self.assertNotIn("source_reopen_boundary", payload)
+        self.assertNotIn("claim_boundary", payload)
         self.assertNotIn("safe_next_actions", payload)
         self.assertEqual(payload["foreground_action"]["tool_name"], "agent_deepen")
+        self.assertNotIn("claim_boundary", payload["foreground_action"])
         self.assertIn("agent deepen", payload["foreground_action"]["command"])
         self.assertEqual(
             payload["foreground_action"]["arguments"]["recall_selector"],
@@ -331,6 +334,7 @@ class ActionHintHookTests(unittest.TestCase):
         self.assertEqual(stale_payload["foreground_action"]["id"], "refresh_probe_source_route")
         self.assertNotIn("agent deepen", stale_payload["foreground_action"]["command"])
         self.assertEqual(stale_payload["foreground_action"]["mutation_risk"], "read_only")
+        self.assertNotIn("claim_boundary", stale_payload["foreground_action"])
 
     def test_compact_probe_labels_cache_refresh_as_explicit_write(self) -> None:
         payload = action_hint.compact_probe_report(
@@ -349,6 +353,10 @@ class ActionHintHookTests(unittest.TestCase):
         self.assertEqual(action["id"], "refresh_probe_source_route")
         self.assertIn("refresh-cache --write", action["command"])
         self.assertEqual(action["mutation_risk"], "explicit_local_cache_write")
+        self.assertNotIn("claim_boundary", action)
+        self.assertNotIn("claim_boundary", payload)
+        self.assertNotIn("source_reopen_boundary", payload)
+        self.assertTrue(payload["details_available"])
         self.assertFalse(payload["useful"])
 
     def test_probe_auto_chains_missing_cache_before_foregrounding_refresh(self) -> None:
@@ -437,7 +445,7 @@ class ActionHintHookTests(unittest.TestCase):
         self.assertEqual(code, 0, payload)
         self.assertTrue(payload["auto_chained"])
         self.assertEqual(payload["auto_chain_status"], "auto_chained")
-        self.assertEqual(payload["deferred_auto_chain_reason"], "")
+        self.assertNotIn("deferred_auto_chain_reason", payload)
         self.assertTrue(payload["useful"])
         self.assertEqual(payload["foreground_action"]["id"], "deepen_probe_source_route")
         self.assertNotIn("refresh-cache --write", encoded)
