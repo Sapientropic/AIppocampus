@@ -12,6 +12,7 @@ concurrency:
 
 permissions:
   contents: read
+  pull-requests: read
 
 jobs:
   checks:
@@ -58,9 +59,9 @@ jobs:
       - name: PR closeout audit
         if: ${{ github.event_name == 'pull_request' }}
         env:
-          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
           GITHUB_TOKEN: ${{ github.token }}
-        run: python tools/aippocampus/github/closeout_audit.py --body-env PR_BODY --github-repo "${{ github.repository }}" --github-annotations
+        run: python tools/aippocampus/github/closeout_audit.py --pr "$PR_NUMBER" --github-repo "${{ github.repository }}" --github-annotations
 
       - name: PR test tier with canonical coverage
         run: |

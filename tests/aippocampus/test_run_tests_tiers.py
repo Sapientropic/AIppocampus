@@ -933,7 +933,12 @@ class RunTestsTierTests(unittest.TestCase):
         self.assertIn("--tier pr", workflow)
         self.assertIn("--tier broad-pr", workflow)
         self.assertIn("concurrency:", workflow)
+        self.assertIn("pull-requests: read", workflow)
         self.assertIn("PR test tier with canonical coverage", workflow)
+        self.assertIn("PR_NUMBER: ${{ github.event.pull_request.number }}", workflow)
+        self.assertIn('--pr "$PR_NUMBER"', workflow)
+        self.assertNotIn("github.event.pull_request.body", workflow)
+        self.assertNotIn("--body-env PR_BODY", workflow)
         self.assertIn("Python 3.13 quick compatibility tier", workflow)
         self.assertIn("--tier quick", workflow)
         self.assertIn(
