@@ -11,9 +11,12 @@ from aippocampus_runtime.update.agent_callable import (
     command_availability,
     mcp_command_repair_options,
 )
+from aippocampus_runtime.update.mcp_launch import (
+    is_current_mcp_host_launch,
+    portable_mcp_module_command,
+)
 
 OLD_MCP_SCRIPT_NAMES = ("aippocampus_mcp_server.py",)
-CURRENT_MCP_MARKERS = ("aippocampus_runtime.mcp.server", "aippocampus mcp")
 
 
 def status_mcp(repo_root: Path, mcp_config: Path | None = None) -> dict[str, Any]:
@@ -45,9 +48,7 @@ def status_mcp(repo_root: Path, mcp_config: Path | None = None) -> dict[str, Any
     command = str(server.get("command") or "")
     args = [str(item) for item in server.get("args") or []]
     stale = any(name in serialized for name in OLD_MCP_SCRIPT_NAMES)
-    current = any(marker in serialized for marker in CURRENT_MCP_MARKERS) or (
-        command == "aippocampus" and args[:1] == ["mcp"]
-    )
+    current = is_current_mcp_host_launch(command, args)
     if stale:
         status = "stale"
     elif current:
@@ -82,7 +83,7 @@ def status_mcp(repo_root: Path, mcp_config: Path | None = None) -> dict[str, Any
         ]
         if not availability["resolves"]
         else [],
-        "portable_module_command": f"{Path(sys.executable).name} -m aippocampus_runtime.mcp.server",
+        "portable_module_command": portable_mcp_module_command(Path(sys.executable).name),
         "safety_notes": [
             "MCP package artifacts are not the same as foreground host tool visibility",
             "MCP host/user config is preserved; update reports stale commands instead of rewriting it",

@@ -729,7 +729,7 @@ Package modules remain available as operator fallbacks when the facade is not
 installed or you are repairing a packaging failure:
 
 ```sh
-PYTHONPATH=./skills/aippocampus/scripts python3 -m aippocampus_runtime.mcp.server --list-tools
+PYTHONPATH=./skills/aippocampus/scripts python3 -m aippocampus_runtime.cli.facade mcp list-tools
 PYTHONPATH="${CODEX_HOME}/skills/aippocampus/scripts" python3 -m aippocampus_runtime.onboarding.facade --provider codex --all --format json
 ```
 
