@@ -44,7 +44,26 @@ FAMILY_ALIASES = {
 TRACE_FAMILY_PRODUCER_CONTRACT = {
     "rollout_search.final_assistant_payload": ASSISTANT_FINAL_PRODUCER_FAMILY,
     "behavior_events.successful_tool_call": TOOL_CALL_SUCCEEDED_PRODUCER_FAMILY,
-    "test_check.successful_check": TEST_CHECK_SUCCEEDED_PRODUCER_FAMILY,
+}
+TRACE_FAMILY_RUNTIME_PRODUCER_SITES = {
+    ASSISTANT_FINAL_PRODUCER_FAMILY: (
+        "skills/aippocampus/scripts/aippocampus_runtime/recall/rollout_search.py",
+        "ASSISTANT_FINAL_PRODUCER_FAMILY",
+    ),
+    TOOL_CALL_SUCCEEDED_PRODUCER_FAMILY: (
+        "skills/aippocampus/scripts/aippocampus_runtime/source/behavior_events.py",
+        "TOOL_CALL_SUCCEEDED_PRODUCER_FAMILY",
+    ),
+}
+TRACE_FAMILY_NON_RUNTIME_PRODUCER_CONTRACT = {
+    "test_check.successful_check": {
+        "family": TEST_CHECK_SUCCEEDED_PRODUCER_FAMILY,
+        "category": "external_or_future_or_test_only",
+        "reason": (
+            "Admitted as a known receipt family, but no AIppocampus runtime "
+            "producer currently emits this token."
+        ),
+    }
 }
 KNOWN_TRACE_FAMILIES = (
     RAW_TRACE_FAMILIES
@@ -79,6 +98,16 @@ def declared_trace_family_producer_values() -> frozenset[str]:
     """
 
     return frozenset(TRACE_FAMILY_PRODUCER_CONTRACT.values())
+
+
+def declared_non_runtime_trace_family_producer_values() -> frozenset[str]:
+    """Return admitted producer tokens that are not runtime coverage claims."""
+
+    return frozenset(
+        str(item.get("family") or "")
+        for item in TRACE_FAMILY_NON_RUNTIME_PRODUCER_CONTRACT.values()
+        if item.get("family")
+    )
 
 
 def _safe_family_id(value: Any) -> str:

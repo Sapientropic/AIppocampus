@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import unittest
+from pathlib import Path
 
 from aippocampus_runtime.recall.feedback.suppression_lifecycle import feedback_trace_family
 from aippocampus_runtime.recall.rollout_search import rollout_payload_class
@@ -129,6 +130,9 @@ class AgentTraceAdmissionTests(unittest.TestCase):
 
     def test_trace_family_producer_values_are_known_or_declared_aliases(self) -> None:
         producer_values = agent_trace_families.declared_trace_family_producer_values()
+        non_runtime_values = (
+            agent_trace_families.declared_non_runtime_trace_family_producer_values()
+        )
         known_or_alias = agent_trace_families.KNOWN_TRACE_FAMILIES | set(
             agent_trace_families.FAMILY_ALIASES
         )
@@ -138,15 +142,41 @@ class AgentTraceAdmissionTests(unittest.TestCase):
             agent_trace_families.TOOL_CALL_SUCCEEDED_PRODUCER_FAMILY,
             producer_values,
         )
+        self.assertNotIn(
+            agent_trace_families.TEST_CHECK_SUCCEEDED_PRODUCER_FAMILY,
+            producer_values,
+        )
+        self.assertIn(
+            agent_trace_families.TEST_CHECK_SUCCEEDED_PRODUCER_FAMILY,
+            non_runtime_values,
+        )
         self.assertNotIn("fixture_only_family", producer_values)
         self.assertEqual(
             agent_trace_families.raw_family({"trace_family_under_test": "fixture_only_family"}),
             "",
         )
         self.assertLessEqual(producer_values, known_or_alias)
+        self.assertLessEqual(non_runtime_values, known_or_alias)
         self.assertLessEqual(
             set(agent_trace_families.FAMILY_ALIASES.values()),
             agent_trace_families.KNOWN_TRACE_FAMILIES,
+        )
+
+    def test_runtime_trace_family_contract_values_have_runtime_sites(self) -> None:
+        repo_root = Path(__file__).resolve().parents[2]
+        for family, (relative_path, required_token) in (
+            agent_trace_families.TRACE_FAMILY_RUNTIME_PRODUCER_SITES.items()
+        ):
+            source = repo_root / relative_path
+            self.assertTrue(source.exists(), relative_path)
+            self.assertIn(required_token, source.read_text(encoding="utf-8"))
+            self.assertIn(
+                family,
+                agent_trace_families.declared_trace_family_producer_values(),
+            )
+        self.assertNotIn(
+            agent_trace_families.TEST_CHECK_SUCCEEDED_PRODUCER_FAMILY,
+            agent_trace_families.TRACE_FAMILY_RUNTIME_PRODUCER_SITES,
         )
 
     def test_project_admission_joins_closeout_to_matching_behavior_receipt(self) -> None:

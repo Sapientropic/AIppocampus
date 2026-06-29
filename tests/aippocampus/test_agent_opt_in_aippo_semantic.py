@@ -522,6 +522,98 @@ class AgentOptInAippoSemanticTests(unittest.TestCase):
         self.assertNotIn("<task_cue>", encoded)
         self.assertEqual(executable_command_violations(payload), [])
 
+    def test_cli_agent_aippo_operator_json_flag_implies_parseable_json(self) -> None:
+        proc = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "aippocampus_runtime.cli.facade",
+                "agent",
+                "aippo",
+                "--task",
+                "host probe",
+                "--operator-json",
+            ],
+            cwd=SCRIPTS,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            check=False,
+        )
+        with_json = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "aippocampus_runtime.cli.facade",
+                "agent",
+                "aippo",
+                "--task",
+                "host probe",
+                "--json",
+                "--operator-json",
+            ],
+            cwd=SCRIPTS,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            check=False,
+        )
+
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(with_json.returncode, 0, with_json.stderr)
+        payload = json.loads(proc.stdout)
+        payload_with_json = json.loads(with_json.stdout)
+        self.assertEqual(payload["surface"], payload_with_json["surface"])
+        self.assertEqual(payload["activation_packet"], payload_with_json["activation_packet"])
+
+    def test_cli_agent_background_operator_json_flag_implies_parseable_json(self) -> None:
+        proc = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "aippocampus_runtime.cli.facade",
+                "agent",
+                "background",
+                "compact foreground audit",
+                "--operator-json",
+            ],
+            cwd=SCRIPTS,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            check=False,
+        )
+        with_json = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "aippocampus_runtime.cli.facade",
+                "agent",
+                "background",
+                "compact foreground audit",
+                "--json",
+                "--operator-json",
+            ],
+            cwd=SCRIPTS,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            check=False,
+        )
+
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(with_json.returncode, 0, with_json.stderr)
+        payload = json.loads(proc.stdout)
+        payload_with_json = json.loads(with_json.stdout)
+        self.assertEqual(payload["surface"], "agent_background")
+        self.assertEqual(payload["surface"], payload_with_json["surface"])
+        self.assertEqual(payload["status"], payload_with_json["status"])
+        self.assertEqual(payload["detail"], "operator")
+
     def test_cli_agent_aippo_core_product_journeys_are_not_empty_contracts(self) -> None:
         proc = subprocess.run(
             [

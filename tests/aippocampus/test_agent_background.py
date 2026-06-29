@@ -223,6 +223,9 @@ class AgentBackgroundTests(unittest.TestCase):
         self.assertNotIn("boundary", payload)
         self.assertNotIn("output_boundary", payload)
         self.assertNotIn("cue_used", payload)
+        self.assertNotIn("claim_boundary", encoded)
+        self.assertNotIn("source_boundary", encoded)
+        self.assertNotIn("cannot_claim", encoded)
         self.assertNotIn(payload["best_finding"], payload.get("finding_summaries", []))
         self.assertNotIn("boundary", finding)
         self.assertNotIn("source_summary", finding)
@@ -434,7 +437,10 @@ class AgentBackgroundTests(unittest.TestCase):
 
         payload = self.tool_payload(response)
         action = payload["foreground_action"]
+        result = response["result"]
         self.assertTrue(response["result"].get("isError", False), payload)
+        self.assertIsInstance(result.get("structuredContent"), dict)
+        self.assertFalse(result["content"][0]["text"].lstrip().startswith("{"))
         self.assertEqual(payload["foreground_action_contract"], "foreground-action-v2")
         self.assertEqual(action["id"], "background_for_task_cue")
         self.assertEqual(action["tool_name"], "agent_background")
@@ -445,6 +451,10 @@ class AgentBackgroundTests(unittest.TestCase):
         self.assertIn("cli_fallback", action)
         self.assertEqual(action["cli_fallback"]["command_template"], 'aippocampus agent background "{task_cue}" --json')
         self.assertTrue(action["cli_fallback"]["template_only"])
+        encoded = json.dumps(payload, ensure_ascii=False)
+        self.assertNotIn("claim_boundary", encoded)
+        self.assertNotIn("source_boundary", encoded)
+        self.assertNotIn("cannot_claim", encoded)
         self.assertNotIn("agent_next_action", payload)
         self.assertNotIn(action, payload["safe_next_actions"])
 
@@ -488,6 +498,9 @@ class AgentBackgroundTests(unittest.TestCase):
         self.assertNotIn("operator_detail_command", payload)
         self.assertNotIn("boundary", payload)
         self.assertNotIn("output_boundary", payload)
+        self.assertNotIn("claim_boundary", encoded)
+        self.assertNotIn("source_boundary", encoded)
+        self.assertNotIn("cannot_claim", encoded)
         self.assertNotIn(str(working_memory), encoded)
 
     def test_agent_background_mcp_full_detail_keeps_operator_payload(self) -> None:

@@ -32,6 +32,7 @@ CLI_COMMANDS = (
     "aippocampus hooks action status --json",
     "aippocampus hooks claude-code status --json",
     "aippocampus agent background --json",
+    'aippocampus agent background "compact foreground audit" --json',
     'aippocampus agent aippo --task "AIppocampus host probe schema freshness" --json',
     "aippocampus warm status --json",
     "aippocampus dream status --json",
@@ -212,6 +213,10 @@ def scan_mcp_key_tool_compact_cards(*, cwd: Path) -> list[dict[str, Any]]:
                     "cwd": str(cwd),
                 }
             ),
+        ),
+        _mcp_tool_structured_content_check(
+            "mcp_tool:agent_background_missing_input",
+            tool_handlers.call_agent_background({}),
         ),
     ]
 

@@ -265,12 +265,14 @@ class AgentFeedbackMacroCliTests(unittest.TestCase):
     def test_cli_agent_macro_missing_state_explains_schema_repair(self) -> None:
         proc = self.run_agent("macro", "--cwd", str(self.cwd))
         json_proc = self.run_agent("macro", "--cwd", str(self.cwd), "--json")
+        operator_proc = self.run_agent("macro", "--cwd", str(self.cwd), "--operator-json")
         full_json_proc = self.run_agent(
             "macro", "--cwd", str(self.cwd), "--json", "--detail", "full"
         )
 
         self.assertEqual(proc.returncode, 0, proc.stderr)
         self.assertEqual(json_proc.returncode, 0, json_proc.stderr)
+        self.assertEqual(operator_proc.returncode, 0, operator_proc.stderr)
         self.assertEqual(full_json_proc.returncode, 0, full_json_proc.stderr)
         self.assertIn("AIppocampus agent macro: missing_macro_state_path", proc.stdout)
         self.assertIn('aippocampus agent recall "{cue}" --json', proc.stdout)
@@ -278,6 +280,7 @@ class AgentFeedbackMacroCliTests(unittest.TestCase):
         self.assertIn("aippocampus agent macro --init-template --json", proc.stdout)
         self.assertNotIn('"memory_packets"', proc.stdout)
         payload = json.loads(json_proc.stdout)
+        operator_payload = json.loads(operator_proc.stdout)
         full_payload = json.loads(full_json_proc.stdout)
         encoded = json.dumps(payload, ensure_ascii=False)
         self.assertTrue(payload["ok"])
@@ -299,6 +302,10 @@ class AgentFeedbackMacroCliTests(unittest.TestCase):
         self.assertNotIn("operator_detail_command", payload)
         self.assertNotIn("claim_boundary", encoded)
         self.assertIn("policy_boundary", full_payload)
+        self.assertIn("policy_boundary", operator_payload)
+        self.assertIn("red_lines", operator_payload)
+        self.assertIn("memory_packets", operator_payload)
+        self.assertIn("metrics", operator_payload)
         self.assertNotIn(payload["foreground_action"], payload["safe_next_actions"])
         self.assertEqual(payload["foreground_action"]["id"], "recall_project_macro_orientation")
         self.assertIn("command_template", payload["foreground_action"])

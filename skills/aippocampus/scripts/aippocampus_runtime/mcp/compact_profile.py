@@ -162,9 +162,11 @@ def is_compact_foreground_payload(payload: Any) -> bool:
         or (
             kind
             in {
+                "aippocampus_background_findings_card",
                 "aippocampus_search_result",
                 "aippocampus_memory_health_recovery",
                 "aippocampus_health_card",
+                "aippocampus_background_route_recovery",
                 "aippocampus_foreground_recovery",
             }
             and isinstance(payload.get("foreground_action"), dict)
