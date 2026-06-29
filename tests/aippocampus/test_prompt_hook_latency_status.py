@@ -87,16 +87,8 @@ class PromptHookLatencyStatusTests(unittest.TestCase):
             ambient["latency_risk"]["historical_status"],
             "historical_near_timeout_seen",
         )
-        self.assertEqual(
-            ambient["latency_risk"]["foreground_latency_red_line_violation_count"],
-            0,
-        )
-        self.assertGreaterEqual(
-            ambient["latency_risk"][
-                "historical_foreground_latency_red_line_violation_count"
-            ],
-            1,
-        )
+        self.assertNotIn("foreground_latency_red_line_violation_count", ambient["latency_risk"])
+        self.assertNotIn("historical_foreground_latency_red_line_violation_count", ambient["latency_risk"])
 
 
 if __name__ == "__main__":

@@ -26,7 +26,7 @@ from aippocampus_runtime.first_recall_readiness import (
     start_first_recall_readiness,
     start_first_recall_readiness_diagnostic,
 )
-from aippocampus_runtime.foreground_compact_language import strip_compact_policy_vocabulary
+from aippocampus_runtime.foreground_compact_language import compact_frontstage_projection
 from aippocampus_runtime.onboarding.facade import provider_status_report
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 from aippocampus_runtime.public_output import emit_public_json, emit_public_text
@@ -619,7 +619,7 @@ def _public_start_card(card: dict[str, Any], *, detail: str = "compact") -> dict
     public = redact_sensitive_values(redact_private_paths(card))
     if detail == "full":
         return public
-    compact = strip_compact_policy_vocabulary(public)
+    compact = compact_frontstage_projection(public)
     if "safe_next_actions" in public and "safe_next_actions" not in compact:
         compact["safe_next_actions"] = []
     return compact

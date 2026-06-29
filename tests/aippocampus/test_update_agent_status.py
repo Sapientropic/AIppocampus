@@ -11,6 +11,7 @@ from unittest.mock import patch
 
 from aippocampus_runtime.contracts import executable_command_violations
 from aippocampus_runtime.update import cli as update_cli
+from tests.aippocampus.frontstage_assertions import assert_no_compact_policy_fields
 from tests.aippocampus.test_update_sync import REPO_ROOT, provider_env
 
 PROVIDER_KEY_ENV_NAMES = (
@@ -91,22 +92,19 @@ class UpdateAgentStatusTests(unittest.TestCase):
         self.assertIn("hooks_status", deferred)
         self.assertIn("llm_child_process", deferred)
         self.assertEqual(payload["setup_card"]["state"], "partial_foreground_status")
-        self.assertIsNone(payload["ambient_recall"]["prompt_hook_installed"])
-        self.assertIsNone(payload["ambient_recall"]["lifecycle_hook_installed"])
-        self.assertIsNone(payload["ambient_recall"]["action_hints_installed"])
+        self.assertNotIn("prompt_hook_installed", payload["ambient_recall"])
+        self.assertNotIn("lifecycle_hook_installed", payload["ambient_recall"])
+        self.assertNotIn("action_hints_installed", payload["ambient_recall"])
         self.assertEqual(payload["ambient_recall"]["action_hints_stage"], "deferred")
-        self.assertIsNone(payload["ambient_recall"]["action_hints_useful"])
-        self.assertIsNone(payload["ambient_recall"]["hot_path_active"])
+        self.assertNotIn("action_hints_useful", payload["ambient_recall"])
+        self.assertNotIn("hot_path_active", payload["ambient_recall"])
         self.assertEqual(payload["ambient_recall"]["provider"]["status"], "deferred")
-        self.assertIsNone(payload["ambient_recall"]["provider"]["degraded"])
+        self.assertNotIn("degraded", payload["ambient_recall"]["provider"])
         self.assertIn("not_checked_fields", payload["ambient_recall"])
-        self.assertIsNone(payload["summary"]["agent_callable_ready"])
+        self.assertNotIn("agent_callable_ready", payload["summary"])
         self.assertEqual(payload["summary"]["agent_callable_readiness_state"], "not_checked")
-        self.assertEqual(
-            payload["setup_card"]["operator_detail_command"],
-            "aippocampus update status --operator-json",
-        )
-        self.assertTrue(payload["operator_detail_available"])
+        self.assertNotIn("operator_detail_command", payload["setup_card"])
+        self.assertTrue(payload["details_available"])
         self.assertNotIn("operator_detail_command", payload)
         self.assertEqual(payload["foreground_action"]["surface"], "agent_callable")
         self.assertEqual(
@@ -130,12 +128,14 @@ class UpdateAgentStatusTests(unittest.TestCase):
             "--foreground-key-tools-callable",
             payload["foreground_action"]["command"],
         )
-        surfaces = {item.get("surface") for item in payload["safe_next_actions"]}
+        safe_next_actions = payload.get("safe_next_actions", [])
+        surfaces = {item.get("surface") for item in safe_next_actions}
         self.assertNotIn("operator_detail", surfaces)
         self.assertNotIn("agent_callable", surfaces)
-        self.assertEqual(payload["safe_next_actions"], [])
-        violations = executable_command_violations(payload["safe_next_actions"])
+        self.assertEqual(safe_next_actions, [])
+        violations = executable_command_violations(safe_next_actions)
         self.assertEqual(violations, [])
+        assert_no_compact_policy_fields(self, payload, surface="update.status.partial")
 
     def test_agent_json_reports_visible_tools_callability_as_not_checked(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, provider_env({"AIPPOCAMPUS_DEEPSEEK_API_KEY": "test"}):
@@ -194,19 +194,20 @@ class UpdateAgentStatusTests(unittest.TestCase):
 
         payload = json.loads(stdout.getvalue())
         self.assertEqual(code, 0, payload)
-        self.assertIsNone(payload["summary"]["agent_callable_ready"])
+        self.assertNotIn("agent_callable_ready", payload["summary"])
         self.assertEqual(payload["summary"]["agent_callable_readiness_state"], "not_checked")
         self.assertTrue(payload["summary"]["agent_callable_host_ready"])
         self.assertTrue(payload["summary"]["agent_callable_current_thread_visible"])
-        self.assertIsNone(payload["summary"]["agent_callable_current_thread_callable"])
+        self.assertNotIn("agent_callable_current_thread_callable", payload["summary"])
         self.assertEqual(
             payload["summary"]["agent_callable_status"],
             "host_live_probe_ok_current_thread_unverified",
         )
-        self.assertNotIn("agent_callable", payload["summary"]["needs_action"])
+        self.assertNotIn("agent_callable", payload["summary"].get("needs_action", []))
         self.assertIn("--foreground-key-tools-callable", payload["foreground_action"]["command"])
         self.assertIn("agent_recall", payload["foreground_action"]["manual_instruction"])
         self.assertIn("agent_deepen", payload["foreground_action"]["manual_instruction"])
+        assert_no_compact_policy_fields(self, payload, surface="update.status.visible_tools")
 
     def test_operator_status_omits_provider_key_env_names(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, {}, clear=False):

@@ -343,6 +343,34 @@ class RecallFeedbackEventTests(unittest.TestCase):
         self.assertEqual(lifecycle["hard_negative_count"], 2)
         self.assertEqual(calibration["outcome_counts"]["user_correction"], 2)
 
+    def test_recall_outcome_aliases_apply_explicit_calibration_deltas(self) -> None:
+        cases = {
+            "confirmed": ("user_confirmed_helpful", 0.75, True),
+            "helped": ("source_reopen_success", 1.0, True),
+            "corrected": ("user_correction", -1.0, False),
+            "wrong_route": ("wrong_route_drag", -1.0, False),
+            "manual_search_avoided": ("manual_search_avoided", 0.75, True),
+            "recall_added_noise": ("recall_added_noise", -0.75, False),
+        }
+        events = [
+            feedback.recall_feedback_event(
+                candidate_id=f"route:{raw}",
+                source_id=f"source:{raw}",
+                outcome=raw,
+            )
+            for raw in cases
+            for _ in range(2)
+        ]
+
+        calibration = feedback.recall_feedback_calibration_report(events)
+        by_route = {row["route_id"]: row for row in calibration["deltas"]}
+
+        for raw, (outcome, delta, foreground_eligible) in cases.items():
+            route = by_route[f"route:{raw}"]
+            self.assertEqual(route["signal_counts"], {outcome: 2})
+            self.assertEqual(route["route_weight_delta"], delta)
+            self.assertEqual(route["foreground_eligible"], foreground_eligible)
+
     def test_unknown_persisted_active_flow_signal_fails_closed(self) -> None:
         persisted = {
             "kind": "aippocampus_active_flow_event",

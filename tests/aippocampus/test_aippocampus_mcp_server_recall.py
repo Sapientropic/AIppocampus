@@ -19,7 +19,10 @@ from aippocampus_runtime.recall import (
 )
 from aippocampus_runtime.registry import store as registry_store
 from conversation_sources import ConversationSourceRef
-from tests.aippocampus.frontstage_assertions import assert_compact_detail_affordances
+from tests.aippocampus.frontstage_assertions import (
+    assert_compact_detail_affordances,
+    assert_no_compact_policy_fields,
+)
 from tests.aippocampus.mcp_server_fixtures import (
     assert_recall_template_action,
     field_path_count,
@@ -1055,12 +1058,12 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
         self.assertNotIn("output_boundary", payload)
         self.assertNotIn("route_count", payload)
         self.assertNotIn("metrics", payload)
-        self.assertIn("source_backed_claims", payload["claim_boundary"]["must_reopen_for"])
+        self.assertNotIn("claim_boundary", payload)
         self.assertEqual(payload.get("safe_next_actions", []), [])
         self.assertNotIn("source_boundary", payload)
         route = payload["routes"][0]
         self.assertEqual(route["evidence_level"], "needs_reopen")
-        self.assertEqual(route["claim_boundary"], "legacy_detail_only_rerun_full_or_agent_recall")
+        self.assertNotIn("claim_boundary", route)
         self.assertNotIn("action", route)
         self.assertNotIn("summary", route)
         self.assertNotIn("handle", route)
@@ -1076,6 +1079,7 @@ class AippocampusMcpServerRecallTests(unittest.TestCase):
         self.assertLessEqual(len(encoded.encode("utf-8")), 5_000)
         self.assertLessEqual(len(payload), 20)
         self.assertLessEqual(field_path_count(payload), 120)
+        assert_no_compact_policy_fields(self, payload, surface="mcp.recall_context_legacy_compact")
 
     def test_recall_context_full_detail_keeps_callable_navigation_handle(self) -> None:
         response = mcp.handle_request(

@@ -15,6 +15,7 @@ from aippocampus_runtime.update import (
     status_actions,
 )
 from aippocampus_runtime.update import cli as update_cli
+from tests.aippocampus.frontstage_assertions import assert_no_compact_policy_fields
 from tests.aippocampus.test_update_sync import (
     provider_env,
     run_update,
@@ -120,14 +121,14 @@ class UpdateForegroundActionTests(unittest.TestCase):
         self.assertEqual(deferred["ambient_recall"]["stage"], "installed")
         self.assertIn("hooks:deferred", deferred["ambient_recall"]["issue_codes"])
         self.assertIn("hooks_status", deferred["summary"]["deferred_components"])
-        self.assertIsNone(deferred["ambient_recall"]["prompt_hook_installed"])
-        self.assertIsNone(deferred["ambient_recall"]["lifecycle_hook_installed"])
-        self.assertIsNone(deferred["ambient_recall"]["action_hints_installed"])
+        self.assertNotIn("prompt_hook_installed", deferred["ambient_recall"])
+        self.assertNotIn("lifecycle_hook_installed", deferred["ambient_recall"])
+        self.assertNotIn("action_hints_installed", deferred["ambient_recall"])
         self.assertEqual(deferred["ambient_recall"]["action_hints_stage"], "deferred")
-        self.assertIsNone(deferred["ambient_recall"]["action_hints_useful"])
-        self.assertIsNone(deferred["ambient_recall"]["hot_path_active"])
+        self.assertNotIn("action_hints_useful", deferred["ambient_recall"])
+        self.assertNotIn("hot_path_active", deferred["ambient_recall"])
         self.assertEqual(deferred["ambient_recall"]["provider"]["status"], "deferred")
-        self.assertIsNone(deferred["ambient_recall"]["provider"]["degraded"])
+        self.assertNotIn("degraded", deferred["ambient_recall"]["provider"])
         self.assertEqual(
             set(deferred["ambient_recall"]["not_checked_fields"]["hooks_status"]),
             {
@@ -145,7 +146,9 @@ class UpdateForegroundActionTests(unittest.TestCase):
         )
         self.assertEqual(missing["ambient_recall"]["stage"], "installed")
         self.assertIn("hooks:missing", missing["ambient_recall"]["issue_codes"])
-        self.assertNotIn("hooks_status", missing["summary"]["deferred_components"])
+        self.assertNotIn("hooks_status", missing["summary"].get("deferred_components", []))
+        assert_no_compact_policy_fields(self, deferred, surface="update.status.deferred")
+        assert_no_compact_policy_fields(self, missing, surface="update.status.missing")
 
     def test_plugin_cache_recovery_splits_path_template_from_executable_command(self) -> None:
         fields = status_actions.executable_update_action_fields(
@@ -216,6 +219,7 @@ class UpdateForegroundActionTests(unittest.TestCase):
         payload = json.loads(stdout.getvalue())
         self.assertEqual(code, 0, payload)
         self.assertEqual(payload["mode"], "plan")
-        self.assertTrue(payload["write_boundary"]["no_write_happened"])
+        self.assertNotIn("write_boundary", payload)
         self.assertEqual(payload["summary"]["plan_scope"], "selected_surfaces")
         self.assertEqual(payload["summary"]["plan_surface_filter"], ["hooks"])
+        assert_no_compact_policy_fields(self, payload, surface="update.apply.dry_run")

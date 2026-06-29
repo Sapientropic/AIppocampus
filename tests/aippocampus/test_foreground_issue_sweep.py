@@ -110,7 +110,8 @@ class ForegroundIssueSweepTests(unittest.TestCase):
         self.assertEqual(dream_status.exit_code, 0, dream_status.stderr)
         status_payload = json.loads(dream_status.stdout)
         self.assertEqual(status_payload["kind"], "aippocampus_dream_status")
-        self.assertIn("dream_output_status_card", status_payload)
+        self.assertNotIn("dream_output_status_card", status_payload)
+        self.assertTrue(status_payload["details_available"])
         self.assertEqual(subconscious.exit_code, 2)
         self.assertEqual(subconscious.stderr, "")
         self.assertNotIn("unknown command", dream.stderr)
@@ -237,9 +238,10 @@ class ForegroundIssueSweepTests(unittest.TestCase):
         self.assertEqual(payload["foreground_action"]["surface"], "agent_callable")
         self.assertIn("--foreground-tools-visible --agent-json", payload["foreground_action"]["command"])
         self.assertNotIn("--foreground-key-tools-callable", payload["foreground_action"]["command"])
+        safe_actions = payload.get("safe_next_actions", [])
         self.assertFalse(
-            any(action.get("surface") == "operator_detail" for action in payload["safe_next_actions"]),
-            payload["safe_next_actions"],
+            any(action.get("surface") == "operator_detail" for action in safe_actions),
+            safe_actions,
         )
 
     def test_agent_json_status_prioritizes_measured_ambient_blockers_over_tool_review(self) -> None:
@@ -302,9 +304,6 @@ class ForegroundIssueSweepTests(unittest.TestCase):
             [
                 "prompt_hook_latency",
                 "warm_ambient",
-                "provider",
-                "action_hints",
-                "agent_callable",
             ],
         )
         self.assertEqual(

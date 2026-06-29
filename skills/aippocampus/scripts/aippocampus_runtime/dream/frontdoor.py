@@ -18,6 +18,7 @@ from aippocampus_runtime.contracts import (
 from aippocampus_runtime.dream import lifecycle as dream_lifecycle
 from aippocampus_runtime.dream import sleep_cycle
 from aippocampus_runtime.dream import status as dream_status
+from aippocampus_runtime.foreground_compact_language import compact_frontstage_projection
 from aippocampus_runtime.registry.store import registry_root
 
 
@@ -129,6 +130,38 @@ def dream_status_payload(
     return payload
 
 
+def public_dream_status_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    """Project Dream status into the default foreground card.
+
+    Dream lifecycle examples and retention diagnostics are useful, but they are
+    operator material. The default card should explain whether reviewed
+    background guidance exists and point the agent at `agent background` with a
+    concrete task cue.
+    """
+
+    card = payload.get("dream_output_status_card")
+    output = card if isinstance(card, dict) else {}
+    public = {
+        "kind": payload.get("kind"),
+        "ok": bool(payload.get("ok", True)),
+        "read_only": True,
+        "status": payload.get("status"),
+        "lane": payload.get("lane"),
+        "status_alias": payload.get("status_alias"),
+        "surface": payload.get("surface"),
+        "counts": payload.get("counts") or {},
+        "output_status": output.get("status"),
+        "primary_next_action": output.get("primary_next_action"),
+        "reason_buckets": output.get("reason_buckets") or {},
+        "retention_decision_counts": output.get("retention_decision_counts") or {},
+        "operator_detail_available": True,
+        "foreground_action_contract": payload.get("foreground_action_contract"),
+        "foreground_action": payload.get("foreground_action") or {},
+        "safe_next_actions": payload.get("safe_next_actions") or [],
+    }
+    return compact_frontstage_projection(public)
+
+
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="aippocampus dream", description=__doc__)
     sub = parser.add_subparsers(dest="command")
@@ -141,6 +174,17 @@ def build_arg_parser() -> argparse.ArgumentParser:
     status_parser.add_argument("--findings-jsonl", type=Path)
     status_parser.add_argument("--working-memory-jsonl", type=Path)
     status_parser.add_argument("--json", action="store_true", dest="json_output")
+    status_parser.add_argument(
+        "--detail",
+        choices=["compact", "full"],
+        default="compact",
+        help="Use full for lifecycle/operator diagnostics; default JSON is compact.",
+    )
+    status_parser.add_argument(
+        "--operator-json",
+        action="store_true",
+        help="Emit full Dream status diagnostics as JSON.",
+    )
     return parser
 
 
@@ -183,8 +227,13 @@ def main(argv: list[str] | None = None) -> int:
         findings_jsonl=args.findings_jsonl,
         working_memory_jsonl=args.working_memory_jsonl,
     )
-    if args.json_output:
-        print(json.dumps(payload, ensure_ascii=False, indent=2))
+    if args.json_output or args.operator_json:
+        output_payload = (
+            payload
+            if args.operator_json or args.detail == "full"
+            else public_dream_status_payload(payload)
+        )
+        print(json.dumps(output_payload, ensure_ascii=False, indent=2))
     else:
         card = payload["dream_output_status_card"]
         print(

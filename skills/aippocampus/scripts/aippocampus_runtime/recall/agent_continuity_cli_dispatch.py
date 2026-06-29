@@ -15,6 +15,7 @@ from typing import Any
 
 from aippocampus_runtime.cli.human_io import exit_code_for_payload
 from aippocampus_runtime.cli.recovery import action_command_text
+from aippocampus_runtime.foreground_compact_language import compact_frontstage_projection
 from aippocampus_runtime.mcp.agent_deepen_projection import compact_agent_deepen_payload
 from aippocampus_runtime.mcp.agent_explain_projection import project_agent_explain_cli_payload
 from aippocampus_runtime.mcp.agent_recall_action_menu import foreground_action_menu
@@ -179,7 +180,7 @@ def _run_aippo_command(args: Namespace, json_out: JsonOut) -> int:
                 task=task,
             )
         else:
-            payload = guidance_card
+            payload = compact_frontstage_projection(guidance_card)
         json_out(payload)
     else:
         print(render_aippo_human(payload))

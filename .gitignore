@@ -21,6 +21,7 @@ node_modules/
 !.env.example
 
 .aippocampus/
+.aippocampus-runtime-generation.json
 aippocampus-registry/
 /thread-anchors.md
 *.sqlite

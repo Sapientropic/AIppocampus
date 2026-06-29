@@ -1444,7 +1444,9 @@ class AippocampusCliRecoveryCardTests(unittest.TestCase):
             shlex.split(payload["foreground_action"]["command"]),
             ["aippocampus", "agent", "recall", "old cue", "--json"],
         )
-        self.assertIn("macro --explain-schema", json.dumps(payload, ensure_ascii=False))
+        self.assertLessEqual(len(payload.get("safe_next_actions") or []), 1)
+        self.assertNotIn("macro --explain-schema", json.dumps(payload, ensure_ascii=False))
+        assert_compact_frontstage_payload(self, payload, max_safe_actions=1)
 
     def test_sync_plan_outputs_direction_cards_without_private_paths(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

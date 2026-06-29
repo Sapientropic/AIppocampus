@@ -649,6 +649,15 @@ INSTRUCTION_SURFACE_CLASSIFIED_FILES = {
             "wording; compact hook output stays action-sized"
         ),
     },
+    "skills/aippocampus/scripts/aippocampus_runtime/hooks/claude_code.py": {
+        "classification": "claude_code_hook_status_owner",
+        "owner": "#2947/#2651",
+        "why": (
+            "owns Claude Code hook setup/status error and next-action wording; "
+            "official-contract and host diagnostics stay in detail/operator or "
+            "tests, while default compact output remains action-sized"
+        ),
+    },
     "skills/aippocampus/scripts/aippocampus_runtime/hooks/diagnose.py": {
         "classification": "hook_diagnostic_operator_owner",
         "owner": "#2629/#2651",

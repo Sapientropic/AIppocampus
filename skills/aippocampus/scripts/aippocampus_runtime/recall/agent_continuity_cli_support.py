@@ -896,21 +896,19 @@ def compact_aippo_guidance_card(payload: Mapping[str, Any], *, task: str = "") -
                 "claim_boundary": "no_aippo_guidance_no_claim",
                 "why": "AIppo needs a concrete task description before it can choose a working contract.",
             }
-    safe_next_actions: list[dict[str, Any]] = [dict(foreground_action)]
+    refresh_action: dict[str, Any] | None = None
     if task_text and (use_hint_available or (status == "ok" and direct_guidance_available)):
-        safe_next_actions.append(
-            {
-                "id": "refresh_aippo_guidance_for_task",
-                "action_id": "refresh_aippo_guidance_for_task",
-                "label": "Refresh AIppo guidance for this task",
-                "tool_name": "agent_aippo",
-                "arguments": {"task": task_text},
-                "command": f"aippocampus agent aippo --task {shell_quote(task_text)} --json",
-                "mutation_risk": "read_only",
-                "claim_boundary": "working_guidance_not_source_truth",
-                "why": "Re-run AIppo only if the task wording has changed or the card needs refreshing.",
-            }
-        )
+        refresh_action = {
+            "id": "refresh_aippo_guidance_for_task",
+            "action_id": "refresh_aippo_guidance_for_task",
+            "label": "Refresh AIppo guidance for this task",
+            "tool_name": "agent_aippo",
+            "arguments": {"task": task_text},
+            "command": f"aippocampus agent aippo --task {shell_quote(task_text)} --json",
+            "mutation_risk": "read_only",
+            "claim_boundary": "working_guidance_not_source_truth",
+            "why": "Re-run AIppo only if the task wording has changed or the card needs refreshing.",
+        }
     no_task_family_match = bool(not families and task_text)
     contract_action_allowed = bool(
         contract_action
@@ -919,41 +917,28 @@ def compact_aippo_guidance_card(payload: Mapping[str, Any], *, task: str = "") -
         and not no_task_family_match
         and (families or guidance or active_clause_count > 0 or available_active_clause_count > 0)
     )
+    follow_up_action: dict[str, Any] | None
     if not task_text:
-        safe_next_actions.append(
-            {
-                "id": "run_agent_recall_if_prior_source_matters",
-                "action_id": "run_agent_recall_if_prior_source_matters",
-                "label": "Run recall if prior source matters",
-                "tool_name": "agent_recall",
-                "arguments_template": {"query": "{continuity_cue}"},
-                "cli_command_template": 'aippocampus agent recall "{continuity_cue}" --json',
-                "requires": ["continuity_cue"],
-                "template_only": True,
-                "mutation_risk": "read_only",
-                "claim_boundary": "source_reopen_required_before_claims",
-                "why": "Use recall first when the task depends on old local source context.",
-            }
-        )
-        safe_next_actions.append(
-            {
-                "id": "inspect_operator_detail",
-                "action_id": "inspect_operator_detail",
-                "label": "Inspect AIppo operator detail",
-                "tool_name": "agent_aippo",
-                "arguments_template": {"task": "{task_cue}", "operator_json": True},
-                "cli_command_template": (
-                    'aippocampus agent aippo --task "{task_cue}" --json --operator-json'
-                ),
-                "requires": ["task_cue"],
-                "template_only": True,
-                "mutation_risk": "read_only",
-                "claim_boundary": "local_operator_diagnostic_not_public_claim",
-                "why": "Open the full activation packet only for local operator diagnostics.",
-            }
-        )
+        follow_up_action = {
+            "id": "run_agent_recall_if_prior_source_matters",
+            "action_id": "run_agent_recall_if_prior_source_matters",
+            "label": "Run recall if prior source matters",
+            "tool_name": "agent_recall",
+            "arguments_template": {"query": "{continuity_cue}"},
+            "cli_command_template": 'aippocampus agent recall "{continuity_cue}" --json',
+            "requires": ["continuity_cue"],
+            "template_only": True,
+            "mutation_risk": "read_only",
+            "claim_boundary": "source_reopen_required_before_claims",
+            "why": "Use recall first when the task depends on old local source context.",
+        }
     elif contract_action is not None and contract_action_allowed:
-        safe_next_actions.append(dict(contract_action))
+        follow_up_action = dict(contract_action)
+    else:
+        follow_up_action = refresh_action
+    safe_next_actions: list[dict[str, Any]] = [dict(foreground_action)]
+    if follow_up_action:
+        safe_next_actions.append(follow_up_action)
     reason_codes: list[str] = []
     no_contract_reason = str(packet.get("no_active_contract_reason") or "").strip()
     if no_contract_reason:
@@ -988,6 +973,7 @@ def compact_aippo_guidance_card(payload: Mapping[str, Any], *, task: str = "") -
             "kind": payload.get("kind"),
             "schema_version": payload.get("schema_version"),
             "mode": "aippo",
+            "detail": "compact",
             "surface": "agent_aippo_guidance_card",
             "status": card_status,
             "ok": card_status == "ok",

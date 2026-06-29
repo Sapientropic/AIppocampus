@@ -6,11 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import queue
 import shutil
-import subprocess
-import threading
-import time
 from pathlib import Path
 from typing import Any, Callable, cast
 
@@ -33,6 +29,7 @@ from aippocampus_runtime.update.cli import (
     _load_plugin_builder,
     find_repo_root,
 )
+from aippocampus_runtime.update.codex_app_server_client import CodexAppServerClient
 from aippocampus_runtime.update.codex_plugin_cli import (
     CommandRunner,
     installed_cache_dir,
@@ -76,6 +73,13 @@ from aippocampus_runtime.update.plugin_uninstall_preview import (
 
 REQUIRED_HOST_TOOLS = {"memory_health", "search_memory", "sync_status"}
 KEY_TOOL_SMOKE_ARGUMENTS: dict[str, dict[str, Any]] = {
+    "search_memory": {
+        "query": "AIppocampus host probe schema freshness",
+        "scope": "all_registered_sources",
+        "max": 1,
+        "detail": "compact",
+        "max_elapsed_ms": 5000,
+    },
     "agent_recall": {
         "query": "AIppocampus host probe schema freshness",
         "max": 1,
@@ -90,6 +94,7 @@ KEY_TOOL_SMOKE_ARGUMENTS: dict[str, dict[str, Any]] = {
         "limit": 1,
     },
 }
+HOST_PROBE_COMPACT_FORBIDDEN_FIELDS = {"claim_boundary", "source_boundary"}
 IGNORED_TREE_NAMES = {"__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache", ".tox", ".eggs"}
 IGNORED_TREE_SUFFIXES = (".pyc", ".pyo")
 
@@ -98,132 +103,6 @@ HostProbeRunner = Callable[..., dict[str, Any]]
 
 def default_host_probe_report_path(codex_home_path: Path) -> Path:
     return _default_host_probe_report_path(codex_home_path)
-
-
-class AppServerError(RuntimeError):
-    """Raised when the Codex app-server JSON protocol cannot complete."""
-
-
-class CodexAppServerClient:
-    """Small newline-delimited JSON client for ``codex app-server``.
-
-    This duplicates only the host-facing probe client needed by the install
-    command. The plugin smoke script has cleanup-heavy test behavior; this
-    runtime path needs a stable verification probe without mutating plugin state.
-    """
-
-    def __init__(self, command: list[str], cwd: Path) -> None:
-        self._stdout: queue.Queue[str | None] = queue.Queue()
-        self._stderr_lines: list[str] = []
-        self._notifications: list[dict[str, Any]] = []
-        self._protocol_noise: list[str] = []
-        self._next_id = 1
-        self._proc = subprocess.Popen(
-            command,
-            cwd=cwd,
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-        )
-        self._stdout_thread = threading.Thread(target=self._read_stdout, daemon=True)
-        self._stderr_thread = threading.Thread(target=self._read_stderr, daemon=True)
-        self._stdout_thread.start()
-        self._stderr_thread.start()
-
-    @property
-    def notifications(self) -> list[dict[str, Any]]:
-        return list(self._notifications)
-
-    @property
-    def protocol_noise(self) -> list[str]:
-        return list(self._protocol_noise)
-
-    @property
-    def stderr_tail(self) -> str:
-        return "".join(self._stderr_lines)[-4000:]
-
-    def _read_stdout(self) -> None:
-        assert self._proc.stdout is not None
-        try:
-            for line in self._proc.stdout:
-                self._stdout.put(line)
-        finally:
-            self._stdout.put(None)
-
-    def _read_stderr(self) -> None:
-        assert self._proc.stderr is not None
-        for line in self._proc.stderr:
-            self._stderr_lines.append(line)
-            if len(self._stderr_lines) > 200:
-                self._stderr_lines = self._stderr_lines[-200:]
-
-    def request(
-        self,
-        method: str,
-        params: dict[str, Any] | None = None,
-        *,
-        timeout: float = 60.0,
-        raise_on_error: bool = True,
-    ) -> dict[str, Any]:
-        if self._proc.poll() is not None:
-            raise AppServerError(
-                f"codex app-server exited before {method}: {self._proc.returncode}"
-            )
-        request_id = self._next_id
-        self._next_id += 1
-        payload: dict[str, Any] = {"id": request_id, "method": method}
-        if params is not None:
-            payload["params"] = params
-        assert self._proc.stdin is not None
-        self._proc.stdin.write(json.dumps(payload, ensure_ascii=False) + "\n")
-        self._proc.stdin.flush()
-
-        deadline = time.monotonic() + timeout
-        while True:
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                raise TimeoutError(f"timed out waiting for {method}")
-            try:
-                raw_response = self._stdout.get(timeout=min(remaining, 1.0))
-            except queue.Empty:
-                if self._proc.poll() is not None:
-                    raise AppServerError(
-                        "codex app-server exited while waiting for "
-                        f"{method}: {self._proc.returncode}"
-                    ) from None
-                continue
-            if raw_response is None:
-                raise AppServerError(f"codex app-server closed stdout while waiting for {method}")
-            try:
-                response = json.loads(raw_response)
-            except json.JSONDecodeError:
-                self._protocol_noise.append(raw_response[:240])
-                if len(self._protocol_noise) > 20:
-                    self._protocol_noise = self._protocol_noise[-20:]
-                continue
-            if response.get("id") != request_id:
-                self._notifications.append(response)
-                continue
-            if raise_on_error and response.get("error"):
-                raise AppServerError(f"{method} failed: {response['error']}")
-            return response
-
-    def close(self) -> None:
-        if self._proc.poll() is None:
-            try:
-                assert self._proc.stdin is not None
-                self._proc.stdin.close()
-            except (OSError, ValueError):
-                pass
-            try:
-                self._proc.terminate()
-                self._proc.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                self._proc.kill()
-                self._proc.wait(timeout=5)
 
 
 def _json_default(value: Any) -> str:
@@ -286,6 +165,28 @@ def _resolve_manifest_root(path: Path) -> Path:
 
 def _plugin_version(root: Path) -> str:
     return str(_read_manifest(root).get("version") or "")
+
+
+def _write_source_runtime_generation_marker(builder: Any, repo: Path) -> dict[str, Any]:
+    writer = getattr(builder, "write_runtime_generation_marker", None)
+    if not callable(writer):
+        return {"status": "not_written", "reason": "builder_has_no_marker_writer"}
+    try:
+        marker = writer(repo)
+    except Exception as exc:
+        return {
+            "status": "write_failed",
+            "error_code": type(exc).__name__,
+            "error_message": str(exc),
+        }
+    marker_map = marker if isinstance(marker, dict) else {}
+    return {
+        "status": "written",
+        "generation": marker_map.get("generation"),
+        "runtime_file_count": marker_map.get("runtime_file_count"),
+        "ignored_by_git": True,
+        "reason": "source_checkout_mcp_hot_reload_marker",
+    }
 
 
 def _write_owner_marker(marketplace_root: Path, marketplace_name: str) -> None:
@@ -473,6 +374,17 @@ def _extract_tool_payload(tool_response: dict[str, Any]) -> dict[str, Any]:
     return parsed if isinstance(parsed, dict) else {}
 
 
+def _has_forbidden_compact_field(value: Any, forbidden: set[str]) -> bool:
+    if isinstance(value, dict):
+        return any(
+            str(key) in forbidden or _has_forbidden_compact_field(item, forbidden)
+            for key, item in value.items()
+        )
+    if isinstance(value, list):
+        return any(_has_forbidden_compact_field(item, forbidden) for item in value)
+    return False
+
+
 def _extract_sync_status_payload(tool_response: dict[str, Any]) -> dict[str, Any]:
     return _extract_tool_payload(tool_response)
 
@@ -481,14 +393,21 @@ def _tool_smoke_result(tool_name: str, tool_response: dict[str, Any]) -> dict[st
     payload = _extract_tool_payload(tool_response)
     result = tool_response.get("result") if isinstance(tool_response.get("result"), dict) else {}
     is_error = bool((result or {}).get("isError") or tool_response.get("error"))
+    structured_content_present = isinstance((result or {}).get("structuredContent"), dict)
+    forbidden_field_leak = _has_forbidden_compact_field(
+        payload,
+        HOST_PROBE_COMPACT_FORBIDDEN_FIELDS,
+    )
     raw_payload_error = payload.get("error")
     error = cast("dict[str, Any]", raw_payload_error) if isinstance(raw_payload_error, dict) else {}
     raw_tool_error = tool_response.get("error")
     tool_error = cast("dict[str, Any]", raw_tool_error) if isinstance(raw_tool_error, dict) else {}
     return {
         "tool": tool_name,
-        "ok": not is_error,
+        "ok": not is_error and structured_content_present and not forbidden_field_leak,
         "is_error": is_error,
+        "structured_content_present": structured_content_present,
+        "forbidden_compact_field_leak": forbidden_field_leak,
         "error_code": error.get("code") or tool_error.get("code"),
         "error_message": error.get("message") or tool_error.get("message"),
         "payload_kind": payload.get("kind"),
@@ -535,7 +454,12 @@ def _validate_host_probe(result: dict[str, Any]) -> list[str]:
     for item in key_smokes:
         if not item.get("ok"):
             tool = str(item.get("tool") or "key_tool")
-            message = str(item.get("error_message") or item.get("error_code") or "tool smoke failed")
+            if not item.get("structured_content_present"):
+                message = "compact MCP result did not include structuredContent"
+            elif item.get("forbidden_compact_field_leak"):
+                message = "compact MCP result leaked source/claim boundary fields"
+            else:
+                message = str(item.get("error_message") or item.get("error_code") or "tool smoke failed")
             failures.append(f"{tool} key tool smoke failed: {message}")
     return failures
 
@@ -721,6 +645,7 @@ def install_codex_plugin(
         raise RuntimeError("plugin package builder is not available")
 
     build_result = builder.build_package(repo, output)
+    source_runtime_generation = _write_source_runtime_generation_marker(builder, repo)
     package_root = Path(str(build_result["output_dir"])).resolve()
     marketplace_result = write_local_marketplace(
         marketplace,
@@ -781,6 +706,7 @@ def install_codex_plugin(
         "repo_root": str(repo),
         "codex_home": str(codex_home_resolved),
         "plugin_package": build_result,
+        "source_runtime_generation": source_runtime_generation,
         "marketplace": marketplace_result,
         "marketplace_source": marketplace_source,
         "marketplace_add": marketplace_add,

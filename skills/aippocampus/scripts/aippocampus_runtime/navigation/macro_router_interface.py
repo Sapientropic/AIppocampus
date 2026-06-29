@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+from aippocampus_runtime.macro import momentum as momentum_runtime
 from aippocampus_runtime.macro import state as macro_state
 from aippocampus_runtime.macro import three_powers
 from aippocampus_runtime.macro.hexagram import perturbation_band
@@ -15,6 +16,21 @@ AUTHORITY_LEVEL = "navigation_only"
 ACTION_GRAMMAR = "direction_only"
 CLAIM_PERMISSION = "no_claim_before_reopen"
 SCHEMA_VERSION = 1
+MOMENTUM_BASIS_KEYS = momentum_runtime.MOMENTUM_BASIS_KEYS
+ROUTER_OBSERVATION_MOMENTUM_BASIS = {
+    "support_delta": "source_handle_ratio",
+    "counter_evidence_delta": "stale_or_conflict_reason_ratio",
+    "route_success_delta": "emitted_packet_ratio",
+    "staleness_delta": "stale_or_conflict_reason_ratio",
+    "user_correction_delta": "user_correction_reason_or_feedback_ratio",
+}
+USER_CORRECTION_REASON_CODES = {
+    "explicit_user_correction",
+    "negative_route_feedback",
+    "newer_source_correction",
+    "source_correction",
+    "user_correction",
+}
 
 
 def _macro_entry(value: Mapping[str, Any]) -> Mapping[str, Any]:
@@ -282,6 +298,39 @@ def _reason_codes(packet: Mapping[str, Any]) -> list[str]:
     return []
 
 
+def _feedback_values(packet: Mapping[str, Any]) -> list[str]:
+    values: list[str] = []
+    for key in ("feedback_signal", "feedback_kind", "feedback_reason"):
+        value = packet.get(key)
+        if isinstance(value, str) and value.strip():
+            values.append(value)
+    feedback = packet.get("feedback")
+    if isinstance(feedback, Mapping):
+        for key in ("signal", "kind", "reason", "reason_code"):
+            value = feedback.get(key)
+            if isinstance(value, str) and value.strip():
+                values.append(value)
+        raw_codes = feedback.get("reason_codes")
+        if isinstance(raw_codes, list):
+            values.extend(str(code) for code in raw_codes if str(code or "").strip())
+    raw_signals = packet.get("feedback_signals")
+    if isinstance(raw_signals, list):
+        values.extend(str(signal) for signal in raw_signals if str(signal or "").strip())
+    return values
+
+
+def _is_user_correction_signal(value: str) -> bool:
+    folded = value.strip().casefold()
+    if folded in USER_CORRECTION_REASON_CODES:
+        return True
+    return "user_correction" in folded or "source_correction" in folded
+
+
+def _user_correction_pressure(packet: Mapping[str, Any]) -> bool:
+    signals = [*_reason_codes(packet), *_feedback_values(packet)]
+    return any(_is_user_correction_signal(signal) for signal in signals)
+
+
 def _source_handle_count(packet: Mapping[str, Any]) -> int:
     handles = packet.get("source_handles")
     return len(handles) if isinstance(handles, list) else 0
@@ -309,6 +358,7 @@ def build_router_macro_observation(
     reason_codes = [code for packet in router_packets for code in _reason_codes(packet)]
     stale_conflict = sum(1 for code in reason_codes if "stale" in code or "conflict" in code)
     repeated_failures = sum(1 for code in reason_codes if "repeated_route_failure" in code)
+    user_corrections = sum(1 for packet in router_packets if _user_correction_pressure(packet))
     distribution = _layer_distribution(router_packets)
     active_layer = max(distribution, key=lambda layer: distribution[layer])
     update_reasons = ["router_observation_only"]
@@ -316,6 +366,8 @@ def build_router_macro_observation(
         update_reasons.append("stale_or_conflict_observed")
     if repeated_failures:
         update_reasons.append("repeated_route_failure")
+    if user_corrections:
+        update_reasons.append("user_correction_observed")
     return {
         "kind": "router_macro_observation",
         "schema_version": SCHEMA_VERSION,
@@ -331,8 +383,10 @@ def build_router_macro_observation(
             "support_delta": round(source_supported / total, 3),
             "counter_evidence_delta": round(stale_conflict / total, 3),
             "staleness_delta": round(stale_conflict / total, 3),
+            "user_correction_delta": round(user_corrections / total, 3),
             "repeated_route_failure_count": repeated_failures,
             "stale_conflict_count": stale_conflict,
+            "user_correction_count": user_corrections,
         },
         "candidate_macro_update": {
             "movement_state": "stalled" if stale_conflict or repeated_failures else "advanced",
@@ -347,6 +401,26 @@ def build_router_macro_observation(
             "source_refs_required_before_macro_update": True,
             "single_hot_router_result_cannot_flip_project_state": True,
         },
+    }
+
+
+def router_macro_observation_momentum_basis_inventory() -> dict[str, Any]:
+    produced = set(ROUTER_OBSERVATION_MOMENTUM_BASIS)
+    return {
+        "kind": "router_macro_observation_momentum_basis_inventory",
+        "schema_version": SCHEMA_VERSION,
+        "keys": [
+            {
+                "basis_key": key,
+                "producer_status": (
+                    "router_observation_signal"
+                    if key in produced
+                    else "not_expected_from_router_observation"
+                ),
+                "producer_path": ROUTER_OBSERVATION_MOMENTUM_BASIS.get(key, ""),
+            }
+            for key in MOMENTUM_BASIS_KEYS
+        ],
     }
 
 
@@ -463,9 +537,11 @@ __all__ = [
     "ACTION_GRAMMAR",
     "AUTHORITY_LEVEL",
     "CLAIM_PERMISSION",
+    "MOMENTUM_BASIS_KEYS",
     "SCHEMA_VERSION",
     "build_macro_router_context",
     "build_macro_router_interface_fixture_report",
     "build_router_macro_observation",
     "macro_field_projection_attention_guidance",
+    "router_macro_observation_momentum_basis_inventory",
 ]

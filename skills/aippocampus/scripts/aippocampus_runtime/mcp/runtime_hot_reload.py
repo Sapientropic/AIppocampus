@@ -54,7 +54,13 @@ def runtime_generation_changed() -> bool:
     """Return whether the installed runtime changed after this process started."""
 
     current = read_runtime_generation()
-    return bool(STARTUP_RUNTIME_GENERATION and current and current != STARTUP_RUNTIME_GENERATION)
+    if STARTUP_RUNTIME_GENERATION is None:
+        # Editable/source-checkout MCP launches used to start without a marker,
+        # so they could never notice a later plugin install. Treat a newly
+        # written marker as a generation change; the proxy/re-exec path will
+        # then switch to the fresh runtime before answering the consumed request.
+        return current is not None
+    return bool(current and current != STARTUP_RUNTIME_GENERATION)
 
 
 def current_reexec_argv() -> list[str]:
@@ -104,7 +110,7 @@ def hot_reload_state() -> dict[str, Any]:
         "kind": "aippocampus_mcp_runtime_generation",
         "startup_generation_known": STARTUP_RUNTIME_GENERATION is not None,
         "current_generation_known": current is not None,
-        "changed": bool(STARTUP_RUNTIME_GENERATION and current and current != STARTUP_RUNTIME_GENERATION),
+        "changed": runtime_generation_changed(),
         "claim_boundary": "runtime generation is transport freshness evidence, not source evidence",
     }
 

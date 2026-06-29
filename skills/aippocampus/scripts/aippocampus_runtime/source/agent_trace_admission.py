@@ -85,6 +85,14 @@ def _has_receipt(row: Mapping[str, Any]) -> bool:
     return _has_refs(row, "receipt_refs") or bool(row.get("receipt_state") == "matched")
 
 
+def _unknown_family_source_state(row: Mapping[str, Any]) -> str:
+    if _has_refs(row) and _has_receipt(row):
+        return "unknown_family_source_refs_and_receipts"
+    if _has_refs(row):
+        return "unknown_family_source_refs_without_receipt"
+    return "unknown_family_missing_source_or_receipt"
+
+
 def _success(row: Mapping[str, Any]) -> bool:
     status = _text(row.get("status") or row.get("outcome")).casefold()
     if status in {"ok", "pass", "passed", "success", "succeeded"}:
@@ -274,6 +282,11 @@ def classify_trace_row(row: Mapping[str, Any]) -> dict[str, Any]:
         admission_level = "operator_only"
         authority_join = "raw_or_private_trace_operator_only"
         reason = "raw_or_private_trace_material"
+    elif unknown_family:
+        admission_level = "operator_only"
+        authority_join = "trace_family_registration_required"
+        source_state = _unknown_family_source_state(row)
+        reason = "unknown_trace_family_requires_registration"
     elif family in agent_trace_families.FINAL_CLOSEOUT_FAMILIES:
         if _has_refs(row) and _has_receipt(row):
             admission_level = "reopenable_route"

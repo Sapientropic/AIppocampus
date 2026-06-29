@@ -459,21 +459,40 @@ class PluginInstallerTests(unittest.TestCase):
             shutil.rmtree(output, ignore_errors=True)
 
     def test_codex_host_probe_calls_key_agent_tools_not_only_sync_status(self) -> None:
-        result, calls = self._run_fake_codex_host_probe(structured_content=False)
+        result, calls = self._run_fake_codex_host_probe(structured_content=True)
 
         self.assertTrue(result["validation_ok"], result)
-        self.assertEqual(calls, ["sync_status", "agent_recall", "agent_aippo", "agent_background"])
+        self.assertEqual(
+            calls,
+            ["sync_status", "search_memory", "agent_recall", "agent_aippo", "agent_background"],
+        )
         self.assertEqual(
             [item["tool"] for item in result["key_tool_smokes"]],
-            ["agent_recall", "agent_aippo", "agent_background"],
+            ["search_memory", "agent_recall", "agent_aippo", "agent_background"],
         )
         self.assertTrue(all(item["ok"] for item in result["key_tool_smokes"]))
+
+    def test_codex_host_probe_rejects_text_only_key_tool_smokes(self) -> None:
+        result, calls = self._run_fake_codex_host_probe(structured_content=False)
+
+        self.assertFalse(result["validation_ok"], result)
+        self.assertEqual(
+            calls,
+            ["sync_status", "search_memory", "agent_recall", "agent_aippo", "agent_background"],
+        )
+        self.assertTrue(
+            any("structuredContent" in failure for failure in result["failures"]),
+            result["failures"],
+        )
 
     def test_codex_host_probe_reads_structured_content_before_compact_text(self) -> None:
         result, calls = self._run_fake_codex_host_probe(structured_content=True)
 
         self.assertTrue(result["validation_ok"], result)
-        self.assertEqual(calls, ["sync_status", "agent_recall", "agent_aippo", "agent_background"])
+        self.assertEqual(
+            calls,
+            ["sync_status", "search_memory", "agent_recall", "agent_aippo", "agent_background"],
+        )
         self.assertEqual(result["mcp_tool_payload"]["status"], "available_requires_sync_dir")
         self.assertTrue(all(item["ok"] for item in result["key_tool_smokes"]))
 

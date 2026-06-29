@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import shutil
 import sys
 from collections.abc import Mapping
@@ -17,6 +18,7 @@ from aippocampus_runtime.update import status_actions
 PLUGIN_NAME = "aippocampus"
 MARKETPLACE_NAME = "aippocampus-local"
 MANIFEST_RELATIVE = Path(".codex-plugin") / "plugin.json"
+PACKAGE_RUNTIME_RELATIVE = Path("skills") / "aippocampus" / "scripts"
 IGNORED_DIR_NAMES = {
     "__pycache__",
     ".pytest_cache",
@@ -77,14 +79,14 @@ def _mcp_server_config(root: Path | None) -> Mapping[str, Any] | None:
     return server if isinstance(server, Mapping) else None
 
 
-def _current_mcp_server_config(server: Mapping[str, Any] | None) -> bool:
+def _mcp_server_python_module_launch_current(server: Mapping[str, Any] | None) -> bool:
     if server is None:
         return False
     command = str(server.get("command") or "")
     args = [str(item) for item in server.get("args") or []]
     command_name = Path(command).name.casefold()
     if command_name in {"aippocampus", "aippocampus.exe"}:
-        return args[:1] == ["mcp"]
+        return False
     if len(args) >= 2 and args[0] == "-m":
         module_name = args[1]
         if module_name == "aippocampus_runtime.cli.facade":
@@ -92,6 +94,12 @@ def _current_mcp_server_config(server: Mapping[str, Any] | None) -> bool:
         if module_name == "aippocampus_runtime.mcp.server":
             return True
     return False
+
+
+def _current_mcp_server_config(server: Mapping[str, Any] | None) -> bool:
+    if not _mcp_server_has_package_runtime_env(server):
+        return False
+    return _mcp_server_python_module_launch_current(server)
 
 
 def _mcp_launch_kind(command: str, args: list[str]) -> str:
@@ -103,6 +111,27 @@ def _mcp_launch_kind(command: str, args: list[str]) -> str:
     if Path(command).is_absolute():
         return "absolute_command"
     return "host_command"
+
+
+def _mcp_server_env(server: Mapping[str, Any] | None) -> Mapping[str, Any]:
+    raw_env = server.get("env") if isinstance(server, Mapping) else None
+    return raw_env if isinstance(raw_env, Mapping) else {}
+
+
+def _pythonpath_parts(value: Any) -> list[str]:
+    text = str(value or "").strip()
+    if not text:
+        return []
+    return [part for part in text.split(os.pathsep) if part]
+
+
+def _mcp_server_has_package_runtime_env(server: Mapping[str, Any] | None) -> bool:
+    env = _mcp_server_env(server)
+    parts = _pythonpath_parts(env.get("PYTHONPATH"))
+    return any(
+        part.replace("\\", "/").rstrip("/").endswith("skills/aippocampus/scripts")
+        for part in parts
+    )
 
 
 def _mcp_launch_info(root: Path | None) -> dict[str, Any]:
@@ -119,6 +148,7 @@ def _mcp_launch_info(root: Path | None) -> dict[str, Any]:
     args = [str(item) for item in server.get("args") or []]
     env = server.get("env")
     env_keys = {str(key) for key in env} if isinstance(env, Mapping) else set()
+    package_runtime_env_present = _mcp_server_has_package_runtime_env(server)
     return {
         "exists": True,
         "current": _current_mcp_server_config(server),
@@ -130,6 +160,11 @@ def _mcp_launch_info(root: Path | None) -> dict[str, Any]:
         "uses_python_module": len(args) >= 2 and args[0] == "-m",
         "uses_absolute_command": Path(command).is_absolute() if command else False,
         "env_key_count": len(env_keys),
+        "pythonpath_env_present": "PYTHONPATH" in env_keys,
+        "package_runtime_env_present": package_runtime_env_present,
+        "runtime_generation_marker_present": (
+            bool((root / ".aippocampus-runtime-generation.json").exists()) if root else False
+        ),
         "codex_home_env_present": "CODEX_HOME" in env_keys,
         "registry_dir_env_present": "AIPPOCAMPUS_REGISTRY_DIR" in env_keys,
         "claim_boundary": "installed-cache MCP launch shape is host setup evidence, not recall quality evidence",
@@ -462,7 +497,7 @@ def _portable_mcp_config(path: Path) -> bool:
     command = str(server.get("command") or "") if isinstance(server, Mapping) else ""
     if Path(command).name.casefold() in {"aippocampus", "aippocampus.exe"}:
         return False
-    return _current_mcp_server_config(server if isinstance(server, Mapping) else None)
+    return _mcp_server_python_module_launch_current(server if isinstance(server, Mapping) else None)
 
 
 def _codex_home_from_installed_cache_path(installed_root: Path) -> Path | None:
@@ -487,14 +522,14 @@ def _ensure_installed_mcp_host_launch(
     server = dict(server) if isinstance(server, Mapping) else {}
     original_command = str(server.get("command") or "")
     original_args = [str(item) for item in server.get("args") or []]
-    original_current = _current_mcp_server_config(server)
+    original_launch_current = _mcp_server_python_module_launch_current(server)
     original_console_script = Path(original_command).name.casefold() in {
         "aippocampus",
         "aippocampus.exe",
     }
     original_absolute_command = Path(original_command).is_absolute()
     command_updated = False
-    if not original_current or original_console_script or not original_absolute_command:
+    if not original_launch_current or original_console_script or not original_absolute_command:
         # The public plugin package stays portable (`aippocampus mcp`), but the
         # installed Codex cache is host-local. GUI MCP hosts do not always
         # inherit the shell PATH. Keep the installed layer deterministic by
@@ -511,6 +546,13 @@ def _ensure_installed_mcp_host_launch(
     resolved_codex_home = codex_home_path or _codex_home_from_installed_cache_path(installed_root)
     env_keys_added: list[str] = []
     env_keys_updated: list[str] = []
+    package_runtime_path = str((installed_root / PACKAGE_RUNTIME_RELATIVE).resolve())
+    previous_pythonpath = env.get("PYTHONPATH")
+    env["PYTHONPATH"] = package_runtime_path
+    if previous_pythonpath is None:
+        env_keys_added.append("PYTHONPATH")
+    elif str(previous_pythonpath) != package_runtime_path:
+        env_keys_updated.append("PYTHONPATH")
     if resolved_codex_home is not None:
         codex_home_text = str(resolved_codex_home.resolve())
         registry_dir_text = str((resolved_codex_home.resolve() / "aippocampus-registry"))
@@ -535,6 +577,9 @@ def _ensure_installed_mcp_host_launch(
         "env_keys_added": env_keys_added,
         "env_keys_updated": env_keys_updated,
         "env_key_count": len(env),
+        "pythonpath_env_present": "PYTHONPATH" in env,
+        "package_runtime_env_present": _mcp_server_has_package_runtime_env(server),
+        "runtime_generation_marker_present": bool((installed_root / ".aippocampus-runtime-generation.json").exists()),
         "codex_home_env_present": "CODEX_HOME" in env,
         "registry_dir_env_present": "AIPPOCAMPUS_REGISTRY_DIR" in env,
         "command_kind": _mcp_launch_info(installed_root).get("command_kind"),

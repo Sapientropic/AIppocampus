@@ -12,6 +12,7 @@ from typing import Any
 
 from aippocampus_runtime.contracts import canonical_foreground_action_fields
 from aippocampus_runtime.core import compact_text
+from aippocampus_runtime.foreground_compact_language import compact_frontstage_projection
 from aippocampus_runtime.privacy import redact_private_paths, redact_sensitive_values
 from aippocampus_runtime.update import status_actions as update_actions
 from aippocampus_runtime.update.agent_status_deferred_projection import (
@@ -611,7 +612,7 @@ def build_compact_status_payload(
         "claim_boundary": "Setup status is operational guidance, not memory evidence; reopen source before claims.",
         "operator_detail_available": True,
     }
-    return redact_sensitive_values(redact_private_paths(public))
+    return redact_sensitive_values(redact_private_paths(compact_frontstage_projection(public)))
 
 
 def build_compact_agent_status_report(

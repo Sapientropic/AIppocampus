@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import importlib
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -86,6 +87,33 @@ def mcp_command_from_config(plugin_dir: Path) -> list[str]:
     return [executable, *args]
 
 
+def _resolve_env_value(plugin_dir: Path, key: str, value: Any) -> str:
+    text = str(value)
+    if key != "PYTHONPATH":
+        return text
+    resolved_parts: list[str] = []
+    for part in text.split(os.pathsep):
+        if not part:
+            continue
+        path = Path(part)
+        resolved_parts.append(str((plugin_dir / path).resolve()) if not path.is_absolute() else str(path))
+    return os.pathsep.join(resolved_parts)
+
+
+def mcp_env_from_config(plugin_dir: Path) -> dict[str, str]:
+    config = json.loads((plugin_dir / ".mcp.json").read_text(encoding="utf-8"))
+    server = (config.get("mcpServers") or {}).get(PLUGIN_NAME) or {}
+    raw_env = server.get("env") if isinstance(server, dict) else {}
+    env = os.environ.copy()
+    if isinstance(raw_env, dict):
+        for key, value in raw_env.items():
+            env[str(key)] = _resolve_env_value(plugin_dir, str(key), value)
+    runtime = plugin_dir / "skills" / "aippocampus" / "scripts"
+    if "PYTHONPATH" not in env and runtime.exists():
+        env["PYTHONPATH"] = str(runtime.resolve())
+    return env
+
+
 def run_mcp_jsonrpc_smoke(plugin_dir: Path) -> dict[str, Any]:
     requests: list[dict[str, Any]] = [
         {
@@ -107,6 +135,7 @@ def run_mcp_jsonrpc_smoke(plugin_dir: Path) -> dict[str, Any]:
     proc = subprocess.run(
         mcp_command_from_config(plugin_dir),
         cwd=plugin_dir,
+        env=mcp_env_from_config(plugin_dir),
         input=stdin,
         text=True,
         encoding="utf-8",
@@ -129,9 +158,17 @@ def run_mcp_jsonrpc_smoke(plugin_dir: Path) -> dict[str, Any]:
         ]
         tool_result = responses[2].get("result", {})
         tool_is_error = bool(tool_result.get("isError"))
-        content = tool_result.get("content") or []
-        if content:
-            tool_payload = json.loads(str(content[0].get("text") or "{}"))
+        structured = tool_result.get("structuredContent")
+        if isinstance(structured, dict):
+            tool_payload = structured
+        else:
+            content = tool_result.get("content") or []
+            if content:
+                try:
+                    parsed = json.loads(str(content[0].get("text") or "{}"))
+                except json.JSONDecodeError:
+                    parsed = {}
+                tool_payload = parsed if isinstance(parsed, dict) else {}
     ok = (
         proc.returncode == 0
         and [item.get("id") for item in responses] == [1, 2, 3]

@@ -955,6 +955,17 @@ class AippocampusMcpServerOpsTests(unittest.TestCase):
         self.assertTrue(dispatch.reexec_after_response)
         self.assertEqual(dispatch.output, fresh_stdout + "\n")
 
+    def test_hot_reload_detects_marker_created_after_source_checkout_startup(self) -> None:
+        with (
+            mock.patch.object(mcp.runtime_hot_reload, "STARTUP_RUNTIME_GENERATION", None),
+            mock.patch.object(
+                mcp.runtime_hot_reload,
+                "read_runtime_generation",
+                return_value="fresh-source-generation",
+            ),
+        ):
+            self.assertTrue(mcp.runtime_hot_reload.runtime_generation_changed())
+
     def test_stdio_hot_reload_proxy_failure_returns_runtime_recovery_card(self) -> None:
         raw_request = json.dumps(
             {
@@ -988,7 +999,7 @@ class AippocampusMcpServerOpsTests(unittest.TestCase):
         self.assertFalse(dispatch.reexec_after_response)
         response = json.loads(dispatch.output)
         self.assertEqual(response["id"], 920)
-        payload = json.loads(response["result"]["content"][0]["text"])
+        payload = response["result"]["structuredContent"]
         self.assertEqual(payload["kind"], "aippocampus_foreground_mcp_runtime_recovery")
         self.assertEqual(payload["foreground_action"]["id"], "reload_mcp_transport")
 

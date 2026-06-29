@@ -78,6 +78,42 @@ class MacroRouterInterfaceTests(unittest.TestCase):
         self.assertFalse(no_source["candidate_macro_update"]["eligible_for_macro_update"])
         self.assertEqual(no_source["macro_state_mutation_count"], 0)
 
+    def test_user_correction_reason_reaches_candidate_momentum_basis(self) -> None:
+        observation = interface.build_router_macro_observation(
+            scope="project:AIppocampus",
+            router_packets=[
+                {
+                    "macro_layer": "human",
+                    "emitted": False,
+                    "router_diagnostics": {"reason_codes": ["user_correction"]},
+                }
+            ],
+            source_event_refs=("issue:#2950",),
+        )
+        candidate = orientation_producer.build_candidate_from_router_observation(observation)
+
+        self.assertGreater(observation["signals"]["user_correction_delta"], 0.0)
+        self.assertEqual(candidate["momentum_basis"]["user_correction_delta"], 1.0)
+        self.assertEqual(candidate["momentum"]["phase"], "bo")
+        self.assertNotEqual(candidate["momentum"]["direction"], "peaking")
+        self.assertIn(
+            "user_correction_observed",
+            observation["candidate_macro_update"]["reason_codes"],
+        )
+
+    def test_router_observation_momentum_basis_inventory_covers_sibling_keys(self) -> None:
+        inventory = interface.router_macro_observation_momentum_basis_inventory()
+        by_key = {row["basis_key"]: row for row in inventory["keys"]}
+
+        self.assertEqual(set(by_key), set(interface.MOMENTUM_BASIS_KEYS))
+        self.assertEqual(
+            by_key["user_correction_delta"]["producer_status"],
+            "router_observation_signal",
+        )
+        self.assertTrue(
+            all(row["producer_status"] != "consumer_only_unowned" for row in by_key.values())
+        )
+
     def test_router_observation_stages_reviewed_macro_state_without_hot_path_write(self) -> None:
         observation = interface.build_router_macro_observation(
             scope="project:AIppocampus",

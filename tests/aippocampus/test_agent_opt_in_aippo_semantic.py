@@ -16,7 +16,10 @@ from aippocampus_runtime.macro import state as macro_state
 from aippocampus_runtime.recall import (
     agent_continuity,
 )
-from tests.aippocampus.frontstage_assertions import assert_semantic_human_output
+from tests.aippocampus.frontstage_assertions import (
+    assert_no_compact_policy_fields,
+    assert_semantic_human_output,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
@@ -321,33 +324,21 @@ class AgentOptInAippoSemanticTests(unittest.TestCase):
         self.assertEqual(payload["foreground_action"]["action_type"], "use_project_working_guidance")
         self.assertNotIn("tool_name", payload["foreground_action"])
         self.assertNotIn("arguments", payload["foreground_action"])
-        refresh_action = next(
+        deepen_action = next(
             action
             for action in payload["safe_next_actions"]
-            if action["id"] == "refresh_aippo_guidance_for_task"
+            if action["id"] == "deepen_aippo_working_contract"
         )
-        self.assertEqual(refresh_action["tool_name"], "agent_aippo")
-        self.assertEqual(refresh_action["arguments"], {"task": "benchmark reporting issue closeout"})
-        self.assertEqual(
-            refresh_action["command"],
-            "aippocampus agent aippo --task 'benchmark reporting issue closeout' --json",
-        )
+        self.assertEqual(deepen_action["tool_name"], "agent_deepen")
+        self.assertIn("handle", deepen_action["arguments"])
+        self.assertLessEqual(len(payload["safe_next_actions"]), 1)
         self.assertCanonicalForegroundAction(payload)
         self.assertNotIn("cannot_claim", payload)
-        self.assertIn("source_backed_facts", payload["claim_boundary"]["must_reopen_for"])
+        self.assertNotIn("claim_boundary", payload)
+        self.assertTrue(payload["details_available"])
         self.assertNotIn("operator_detail", payload)
         self.assertNotIn("operator_json_command_template", payload)
-        self.assertEqual(
-            payload["operator_json_command"],
-            (
-                "aippocampus agent aippo --task "
-                "'benchmark reporting issue closeout' --json --operator-json"
-            ),
-        )
-        self.assertEqual(
-            payload["claim_boundary"]["detail_available_with_command"],
-            payload["operator_json_command"],
-        )
+        self.assertNotIn("operator_json_command", payload)
         self.assertNotIn("operator_json_requires", payload)
         self.assertNotIn("activation_packet", payload)
         self.assertNotIn("metrics", payload)
@@ -420,9 +411,10 @@ class AgentOptInAippoSemanticTests(unittest.TestCase):
         self.assertEqual(payload["foreground_action"]["tool_name"], "agent_recall")
         self.assertIn("no_task_family_match", payload["reason_codes"])
         self.assertEqual(len(payload["reason_codes"]), len(set(payload["reason_codes"])))
+        assert_no_compact_policy_fields(self, payload, surface="cli.agent_aippo.no_match")
         self.assertNotIn(
             "deepen_aippo_working_contract",
-            {action.get("id") for action in payload["safe_next_actions"]},
+            {action.get("id") for action in payload.get("safe_next_actions", [])},
         )
 
     def test_cli_agent_aippo_no_task_returns_needs_input_action_card(self) -> None:
@@ -457,8 +449,8 @@ class AgentOptInAippoSemanticTests(unittest.TestCase):
         self.assertEqual(action["blocked_by"], ["task_cue_required"])
         self.assertNotIn("operator_detail", payload)
         self.assertNotIn("operator_json_command", payload)
-        self.assertIn("operator_json_command_template", payload)
-        self.assertEqual(payload["operator_json_requires"], ["task_cue"])
+        self.assertTrue(payload["details_available"])
+        assert_no_compact_policy_fields(self, payload, surface="cli.agent_aippo.needs_input")
         self.assertNotIn("<task_cue>", encoded)
         self.assertEqual(executable_command_violations(payload), [])
 

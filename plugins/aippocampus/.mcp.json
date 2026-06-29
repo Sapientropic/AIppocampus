@@ -1,8 +1,10 @@
 {
   "mcpServers": {
     "aippocampus": {
-      "command": "aippocampus",
+      "command": "python",
       "args": [
+        "-m",
+        "aippocampus_runtime.cli.facade",
         "mcp"
       ]
     }

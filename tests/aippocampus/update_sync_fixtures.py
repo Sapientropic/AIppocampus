@@ -117,6 +117,7 @@ def write_plugin_package(
     version: str,
     mcp_command: str = "aippocampus",
     mcp_args: list[str] | None = None,
+    mcp_env: dict[str, str] | None = None,
     include_skill: bool = True,
 ) -> None:
     root.mkdir(parents=True, exist_ok=True)
@@ -125,17 +126,14 @@ def write_plugin_package(
         json.dumps({"name": "aippocampus", "version": version, "mcpServers": "./.mcp.json"}),
         encoding="utf-8",
     )
+    server = {
+        "command": mcp_command,
+        "args": mcp_args if mcp_args is not None else ["mcp"],
+    }
+    if mcp_env is not None:
+        server["env"] = mcp_env
     (root / ".mcp.json").write_text(
-        json.dumps(
-            {
-                "mcpServers": {
-                    "aippocampus": {
-                        "command": mcp_command,
-                        "args": mcp_args if mcp_args is not None else ["mcp"],
-                    }
-                }
-            }
-        ),
+        json.dumps({"mcpServers": {"aippocampus": server}}),
         encoding="utf-8",
     )
     if include_skill:

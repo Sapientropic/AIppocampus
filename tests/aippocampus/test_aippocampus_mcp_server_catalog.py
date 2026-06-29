@@ -13,7 +13,10 @@ from aippocampus_runtime.mcp import server as mcp
 from aippocampus_runtime.mcp import tool_handlers as mcp_handlers
 from aippocampus_runtime.mcp import tool_readiness
 from aippocampus_runtime.ops import provider_key_bridge
-from tests.aippocampus.frontstage_assertions import assert_no_compact_debug_fields
+from tests.aippocampus.frontstage_assertions import (
+    assert_no_compact_debug_fields,
+    assert_no_compact_policy_fields,
+)
 from tests.aippocampus.mcp_server_fixtures import (
     assert_recall_template_action,
     field_path_count,
@@ -683,21 +686,17 @@ class AippocampusMcpServerCatalogTests(unittest.TestCase):
         self.assertEqual(aippo_payload["surface"], "agent_aippo_guidance_card")
         self.assertEqual(aippo_payload["foreground_action"]["action_type"], "use_project_working_guidance")
         self.assertNotIn("tool_name", aippo_payload["foreground_action"])
-        self.assertEqual(aippo_payload["safe_next_actions"][0]["tool_name"], "agent_aippo")
-        self.assertEqual(aippo_payload["safe_next_actions"][0]["arguments"], {"task": "product usability closeout"})
+        self.assertEqual(aippo_payload["safe_next_actions"][0]["tool_name"], "agent_deepen")
+        self.assertIn("handle", aippo_payload["safe_next_actions"][0]["arguments"])
         self.assertIn("foreground_action", aippo_payload)
         self.assertNotIn(aippo_payload["foreground_action"], aippo_payload["safe_next_actions"])
-        self.assertTrue(aippo_payload["boundary"]["navigation_only_not_fact"])
         self.assertNotIn("cannot_claim", aippo_payload)
-        self.assertIn("source_backed_facts", aippo_payload["claim_boundary"]["must_reopen_for"])
         self.assertNotIn("contract_action", aippo_payload)
         self.assertNotIn("operator_detail", aippo_payload)
         self.assertNotIn("operator_json_command_template", aippo_payload)
-        self.assertEqual(
-            aippo_payload["operator_json_command"],
-            "aippocampus agent aippo --task 'product usability closeout' --json --operator-json",
-        )
         self.assertNotIn("activation_packet", aippo_payload)
+        self.assertLessEqual(len(aippo_payload["safe_next_actions"]), 1)
+        assert_no_compact_policy_fields(self, aippo_payload, surface="mcp.agent_aippo")
 
         aippo_no_task_response = mcp.handle_request(
             {
@@ -727,9 +726,10 @@ class AippocampusMcpServerCatalogTests(unittest.TestCase):
             aippo_no_task_payload["safe_next_actions"],
         )
         self.assertNotIn("operator_json_command", aippo_no_task_payload)
-        self.assertIn("operator_json_command_template", aippo_no_task_payload)
         self.assertNotIn("operator_detail", aippo_no_task_payload)
         self.assertNotIn("<task_cue>", encoded_no_task)
+        self.assertLessEqual(len(aippo_no_task_payload["safe_next_actions"]), 1)
+        assert_no_compact_policy_fields(self, aippo_no_task_payload, surface="mcp.agent_aippo.no_task")
         self.assertEqual(executable_command_violations(aippo_no_task_payload), [])
 
     def test_agent_recall_rejects_explicit_invalid_max_values(self) -> None:

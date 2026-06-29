@@ -60,8 +60,9 @@ class PluginDistributionTests(unittest.TestCase):
             self.assertTrue((PLUGIN_ROOT / asset.removeprefix("./")).exists())
 
         server = mcp_config["mcpServers"]["aippocampus"]
-        self.assertEqual(server["command"], "aippocampus")
-        self.assertEqual(server["args"], ["mcp"])
+        self.assertEqual(server["command"], "python")
+        self.assertEqual(server["args"], ["-m", "aippocampus_runtime.cli.facade", "mcp"])
+        self.assertNotIn("env", server)
 
     def test_build_package_copies_skill_mcp_config_and_package_hook_owners(self) -> None:
         output = REPO_ROOT / "dist" / "test-aippocampus-plugin"
@@ -78,6 +79,9 @@ class PluginDistributionTests(unittest.TestCase):
             self.assertEqual(built_root, output)
             self.assertTrue((built_root / ".codex-plugin" / "plugin.json").exists())
             self.assertTrue((built_root / ".mcp.json").exists())
+            built_mcp = json.loads((built_root / ".mcp.json").read_text(encoding="utf-8"))
+            built_server = built_mcp["mcpServers"]["aippocampus"]
+            self.assertNotIn("env", built_server)
             marker = built_root / ".aippocampus-runtime-generation.json"
             self.assertTrue(marker.exists())
             marker_payload = json.loads(marker.read_text(encoding="utf-8"))

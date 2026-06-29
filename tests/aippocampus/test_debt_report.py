@@ -211,6 +211,36 @@ class DebtReportTests(unittest.TestCase):
         self.assertEqual(unknown_row["owner_issue_state"], "unknown")
         self.assertFalse(unknown_row["tracked_owner_issue"])
 
+    def test_parked_single_digit_guard_pressure_is_visible_but_not_unowned(self) -> None:
+        path = "skills/aippocampus/scripts/aippocampus_runtime/subconscious/jobs.py"
+        row = {
+            "path": path,
+            "current_count": 867,
+            "guard_budget": 870,
+            "margin": 3,
+            "over_budget": False,
+        }
+
+        system_weight = debt_report.build_system_weight(
+            [row],
+            split_boundaries={path: "Split semantic runner orchestration before growth."},
+        )
+        pressure_row = system_weight["single_digit_guard_pressure"][0]
+
+        self.assertEqual(pressure_row["pressure_owner_state"], "parked_touch_time_split")
+        self.assertTrue(pressure_row["parked_by_policy"])
+        self.assertEqual(pressure_row["owner_issue"], "#2631")
+        self.assertEqual(pressure_row["park_owner_issue"], "#2951")
+        self.assertIn("parked_reason", pressure_row)
+        self.assertEqual(
+            system_weight["guard_headroom_summary"]["parked_single_digit_guard_pressure_count"],
+            1,
+        )
+        self.assertEqual(
+            system_weight["guard_headroom_summary"]["unowned_single_digit_guard_pressure_count"],
+            0,
+        )
+
     def test_changed_surface_guard_pressure_identifies_touched_pressure_rows(self) -> None:
         owned_path = "skills/aippocampus/scripts/aippocampus_runtime/recall/owned.py"
         unowned_path = "skills/aippocampus/scripts/aippocampus_runtime/recall/unowned.py"
@@ -285,6 +315,33 @@ class DebtReportTests(unittest.TestCase):
             owned_changed = debt_report.changed_surface_debt(["docs/guides/install-guide.md"])
         self.assertEqual(owned_changed["status"], "pass")
         self.assertEqual(owned_changed["guard_pressure"]["touched_count"], 1)
+
+    def test_changed_surface_debt_blocks_parked_guard_pressure(self) -> None:
+        parked_row = {
+            "path": "skills/aippocampus/scripts/aippocampus_runtime/subconscious/jobs.py",
+            "layer": "runtime",
+            "current_count": 867,
+            "guard_budget": 870,
+            "margin": 3,
+            "tracked_owner_issue": False,
+            "parked_by_policy": True,
+            "pressure_owner_state": "parked_touch_time_split",
+            "next_split_boundary": "Split semantic runner orchestration before growth.",
+        }
+
+        with mock.patch.object(
+            debt_report,
+            "changed_surface_guard_pressure",
+            return_value=[parked_row],
+        ):
+            changed = debt_report.changed_surface_debt(["docs/guides/install-guide.md"])
+
+        self.assertEqual(changed["status"], "fail")
+        self.assertEqual(changed["guard_pressure"]["parked_touched_count"], 1)
+        self.assertIn(
+            "changed_surface_parked_guard_pressure",
+            {warning["code"] for warning in changed["warnings"]},
+        )
 
     def test_count_drift_classifies_small_positive_and_stale_allowance(self) -> None:
         self.assertEqual(

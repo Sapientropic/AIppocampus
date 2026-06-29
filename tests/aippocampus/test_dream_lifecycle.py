@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import contextlib
 import json
 import tempfile
 import unittest
+from io import StringIO
 from pathlib import Path
 
 from aippocampus_runtime.dream import frontdoor, lifecycle
@@ -100,6 +102,39 @@ class DreamLifecycleTests(unittest.TestCase):
         self.assertEqual(report["counts"]["speculative_navigation_hypothesis"], 1)
         self.assertEqual(report["examples"][0]["state"], "speculative_navigation_hypothesis")
         self.assertEqual(working_rows, [])
+
+    def test_operator_json_flag_emits_parseable_full_status_json_without_json_flag(self) -> None:
+        parked = wm.background_adjudicate_dream_finding(
+            dream_finding(source_refs=[], bridge_claims=[])
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            findings = root / "dream_findings.jsonl"
+            findings.write_text(json.dumps(parked, ensure_ascii=False) + "\n", encoding="utf-8")
+
+            stdout = StringIO()
+            with contextlib.redirect_stdout(stdout):
+                code = frontdoor.main(
+                    [
+                        "dream",
+                        "status",
+                        "--registry-dir",
+                        str(root),
+                        "--findings-jsonl",
+                        str(findings),
+                        "--working-memory-jsonl",
+                        str(root / "missing_working_memory.jsonl"),
+                        "--operator-json",
+                    ]
+                )
+
+        self.assertEqual(code, 0)
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(payload["kind"], "aippocampus_dream_status")
+        self.assertIn("dream_lifecycle_report", payload)
+        self.assertIn("privacy_boundary", payload)
+        self.assertIn("write_contract", payload)
 
 
 if __name__ == "__main__":

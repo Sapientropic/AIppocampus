@@ -207,11 +207,19 @@ def cue_feedback_allows_foreground(row: dict[str, Any]) -> bool:
     return cue_feedback_score(row) >= MIN_ACTIVE_CUE_FEEDBACK_SCORE
 
 
+def remember_semantic_hit_confidence_basis(row: dict[str, Any], confidence: float) -> None:
+    """Keep generic semantic-hit confidence as a basis, not the visible decayed score."""
+
+    existing = float(row.get("semantic_hit_confidence_basis") or row.get("confidence") or 0.0)
+    row["semantic_hit_confidence_basis"] = round(max(existing, confidence), 4)
+
+
 def refresh_status(row: dict[str, Any]) -> dict[str, Any]:
     hit_count = int(row.get("hit_count") or 0)
     explicit_useful_count = int(row.get("explicit_useful_feedback_count") or 0)
-    if int(row.get("source_open_success_count") or 0) > 0:
-        row["confidence"] = feedback_aware_recall_cue_confidence(row)
+    if int(row.get("source_open_success_count") or 0) <= 0 and "semantic_hit_confidence_basis" not in row:
+        row["semantic_hit_confidence_basis"] = round(float(row.get("confidence") or 0.0), 4)
+    row["confidence"] = feedback_aware_recall_cue_confidence(row)
     confidence = float(row.get("confidence") or 0.0)
     has_refs = bool(row.get("source_refs"))
     raw_last_signal = str(row.get("last_feedback_signal") or "").casefold()
@@ -381,7 +389,8 @@ def record_semantic_cue_hits(
         row["last_seen_at"] = now
         row["last_seen_unix"] = time.time()
         row["hit_count"] = int(row.get("hit_count") or 0) + 1
-        row["confidence"] = round(max(float(row.get("confidence") or 0.0), confidence), 4)
+        remember_semantic_hit_confidence_basis(row, confidence)
+        row["confidence"] = feedback_aware_recall_cue_confidence(row)
         row["source_refs"] = merge_semantic_source_refs(list(row.get("source_refs") or []), refs)
         row["prompt_hashes"] = unique_preserve(
             [str(value) for value in row.get("prompt_hashes") or []] + [prompt_id],

@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from aippocampus_runtime.core import codex_home
+from aippocampus_runtime.foreground_compact_language import compact_frontstage_projection
 from aippocampus_runtime.hooks.debug_log import prompt_hook_audit_status
 from aippocampus_runtime.hooks.foreground_status import (
     hook_install_closeout_contract,
@@ -446,6 +447,8 @@ def status(
             # next useful step.
             result.pop("last_prompt_hook", None)
             result.pop("prompt_hook_latency_risk", None)
+    if not include_operator_detail:
+        return compact_frontstage_projection(result)
     return result
 
 

@@ -92,7 +92,7 @@ class InstallActionHintHookTests(unittest.TestCase):
         self.assertTrue(any("hooks action probe --compact-json" in command for command in commands))
         self.assertFalse(any("refresh-cache" in command for command in commands))
         self.assertFalse(any("uninstall" in command for command in commands))
-        self.assertEqual(result["manage_command"], "aippocampus hooks action uninstall --json")
+        self.assertNotIn("manage_command", result)
         self.assertNotIn(str(self.codex_home), encoded)
         self.assertNotIn(str(SCRIPTS.resolve()), encoded)
 
@@ -104,7 +104,7 @@ class InstallActionHintHookTests(unittest.TestCase):
         action_ids = [action["id"] for action in result["safe_next_actions"]]
         self.assertEqual(action_ids, ["check_action_hint_status"])
         self.assertNotIn("follow_up_action", result["foreground_action"])
-        self.assertEqual(result["manage_command"], "aippocampus hooks action install --json")
+        self.assertNotIn("manage_command", result)
         self.assertNotIn(
             "refresh-cache --write",
             result["foreground_action"].get("command", ""),
@@ -170,7 +170,7 @@ class InstallActionHintHookTests(unittest.TestCase):
         self.assertNotIn("refresh_action_hint_cache", action_ids)
         self.assertIn("check_action_hint_status", action_ids)
         self.assertNotIn("rollback_action_hint_hook", action_ids)
-        self.assertEqual(result["manage_command"], "aippocampus hooks action uninstall --json")
+        self.assertNotIn("manage_command", result)
         self.assertEqual(
             result["foreground_action"]["mutation_risk"],
             "low_risk_local_cache_write",
@@ -254,7 +254,7 @@ class InstallActionHintHookTests(unittest.TestCase):
             "rollback_action_hint_hook",
             [action["id"] for action in result["safe_next_actions"]],
         )
-        self.assertEqual(result["manage_command"], "aippocampus hooks action uninstall --json")
+        self.assertNotIn("manage_command", result)
 
     def test_unsupported_host_status_does_not_pretend_installation(self) -> None:
         result = installer.status(self.hooks_json, host="claude-code", include_private_paths=True)
@@ -400,7 +400,6 @@ class InstallActionHintHookTests(unittest.TestCase):
                     "--codex-home",
                     str(self.codex_home),
                     "--operator-json",
-                    "--json",
                 ]
             )
         operator_payload = json.loads(operator_stdout.getvalue())

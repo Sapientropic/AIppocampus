@@ -33,6 +33,37 @@ LOW_MARGIN_OWNER_ISSUES = {
     "tools/aippocampus/test_tier_manifest.py": "#2691",
 }
 
+PARKED_LOW_MARGIN_PRESSURE = {
+    "skills/aippocampus/scripts/aippocampus_runtime/learning_loop/core.py": {
+        "park_owner_issue": "#2951",
+        "parked_reason": "Parked as freeze-except-delete/split; split a named learning-loop boundary before growth.",
+    },
+    "skills/aippocampus/scripts/aippocampus_runtime/ops/telepathy_handoff_store.py": {
+        "park_owner_issue": "#2951",
+        "parked_reason": "Parked as freeze-except-delete/split; split a handoff projection or validation boundary before growth.",
+    },
+    "skills/aippocampus/scripts/aippocampus_runtime/recall/agent_recall_pipeline.py": {
+        "park_owner_issue": "#2951",
+        "parked_reason": "Parked as freeze-except-delete/split; split a recall pipeline stage before growth.",
+    },
+    "skills/aippocampus/scripts/aippocampus_runtime/recall/prompt_foreground_budget.py": {
+        "park_owner_issue": "#2951",
+        "parked_reason": "Parked as freeze-except-delete/split; split result-tier or card rendering before growth.",
+    },
+    "skills/aippocampus/scripts/aippocampus_runtime/subconscious/jobs.py": {
+        "park_owner_issue": "#2951",
+        "parked_reason": "Parked as freeze-except-delete/split; split runner orchestration before growth.",
+    },
+    "skills/aippocampus/scripts/aippocampus_runtime/update/plugin_installer.py": {
+        "park_owner_issue": "#2951",
+        "parked_reason": "Parked as freeze-except-delete/split; split host/probe or replacement helpers before growth.",
+    },
+    "tools/aippocampus/recall_integration_readiness.py": {
+        "park_owner_issue": "#2951",
+        "parked_reason": "Parked as freeze-except-delete/split; split cue catalog or result projection before growth.",
+    },
+}
+
 
 def low_margin_owner_issue(rel_path: str) -> str:
     return LOW_MARGIN_OWNER_ISSUES.get(rel_path, "")
@@ -81,6 +112,98 @@ def owner_issue_metadata(
     }
 
 
+def pressure_owner_metadata(
+    rel_path: str,
+    *,
+    owner_issue_states: Mapping[str, object] | None = None,
+) -> dict[str, object]:
+    metadata = owner_issue_metadata(
+        low_margin_owner_issue(rel_path),
+        owner_issue_states=owner_issue_states,
+    )
+    if metadata.get("tracked_owner_issue"):
+        owner_state = "active_owner"
+    elif metadata.get("owner_issue_history_only"):
+        owner_state = "history_only_owner"
+    else:
+        owner_state = "unowned"
+    metadata.update(
+        {
+            "pressure_owner_state": owner_state,
+            "parked_by_policy": False,
+        }
+    )
+    parked = PARKED_LOW_MARGIN_PRESSURE.get(rel_path)
+    if parked:
+        metadata.update(
+            {
+                "pressure_owner_state": "parked_touch_time_split",
+                "parked_by_policy": True,
+                "park_owner_issue": parked["park_owner_issue"],
+                "parked_reason": parked["parked_reason"],
+                "touch_time_guard": (
+                    "changed_surface_guard_pressure_blocks_until_split_trim_or_active_owner"
+                ),
+            }
+        )
+    return metadata
+
+
+def pressure_row_is_unowned(row: Mapping[str, object]) -> bool:
+    return not row.get("tracked_owner_issue") and not row.get("parked_by_policy")
+
+
+def pressure_summary(rows: list[dict[str, object]]) -> dict[str, int]:
+    return {
+        "single_digit_guard_pressure_count": len(rows),
+        "active_single_digit_guard_pressure_count": sum(
+            1 for row in rows if row.get("tracked_owner_issue")
+        ),
+        "parked_single_digit_guard_pressure_count": sum(
+            1 for row in rows if row.get("parked_by_policy")
+        ),
+        "unowned_single_digit_guard_pressure_count": sum(
+            1 for row in rows if pressure_row_is_unowned(row)
+        ),
+    }
+
+
+def changed_surface_warning(row: Mapping[str, object]) -> dict[str, object] | None:
+    if row.get("tracked_owner_issue"):
+        return None
+    if row.get("parked_by_policy"):
+        return {
+            "code": "changed_surface_parked_guard_pressure",
+            "path": row["path"],
+            "layer": row["layer"],
+            "current_count": row["current_count"],
+            "guard_budget": row["guard_budget"],
+            "margin": row["margin"],
+            "next_split_boundary": row["next_split_boundary"],
+            "park_owner_issue": row.get("park_owner_issue"),
+            "parked_reason": row.get("parked_reason"),
+            "acceptance_bearing": True,
+            "message": (
+                "Touched parked single-digit guard owner; split, shrink, "
+                "or unpark with an active owner before closeout."
+            ),
+        }
+    return {
+        "code": "changed_surface_unowned_guard_pressure",
+        "path": row["path"],
+        "layer": row["layer"],
+        "current_count": row["current_count"],
+        "guard_budget": row["guard_budget"],
+        "margin": row["margin"],
+        "next_split_boundary": row["next_split_boundary"],
+        "acceptance_bearing": True,
+        "message": (
+            "Touched exact-zero or single-digit guard owner without an issue/action "
+            "pointer; split, shrink, or assign an owner before closeout."
+        ),
+    }
+
+
 def pressure_row(
     row: Mapping[str, object],
     *,
@@ -89,9 +212,8 @@ def pressure_row(
     owner_issue_states: Mapping[str, object] | None = None,
 ) -> dict[str, object]:
     rel_path = str(row["path"])
-    owner_issue = low_margin_owner_issue(rel_path)
-    owner_metadata = owner_issue_metadata(
-        owner_issue,
+    owner_metadata = pressure_owner_metadata(
+        rel_path,
         owner_issue_states=owner_issue_states,
     )
     return {
@@ -170,8 +292,13 @@ def changed_surface_guard_pressure(
 
 __all__ = [
     "LOW_MARGIN_OWNER_ISSUES",
+    "PARKED_LOW_MARGIN_PRESSURE",
     "changed_surface_guard_pressure",
     "low_margin_owner_issue",
     "owner_issue_metadata",
+    "pressure_owner_metadata",
+    "pressure_row_is_unowned",
+    "pressure_summary",
+    "changed_surface_warning",
     "pressure_row",
 ]

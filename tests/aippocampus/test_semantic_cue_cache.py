@@ -134,6 +134,70 @@ class SemanticCueCacheTests(unittest.TestCase):
 
             self.assertEqual(triggers, [])
 
+    def test_generic_cue_confidence_decays_across_miss_history_and_later_hits(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            cache_path = Path(tmp) / "semantic_cues.jsonl"
+            semantic_result = {
+                "available": True,
+                "decision": "scent",
+                "confidence": 0.91,
+                "query_aliases": ["generic continuity"],
+            }
+            source_refs = [{"thread_key": "session:aippocampus", "message_id": "m1"}]
+
+            for _ in range(3):
+                cues.record_semantic_cue_hits(
+                    cache_path,
+                    prompt="continue the generic continuity thread",
+                    semantic_result=semantic_result,
+                    source_refs=source_refs,
+                    route="semantic_gate",
+                )
+            clean = cues.all_semantic_cues(cache_path)[0]
+            clean_confidence = clean["confidence"]
+
+            cues.record_semantic_cue_misses(
+                cache_path,
+                cues=["generic continuity"],
+                reason="matched an unrelated project",
+            )
+            cues.record_semantic_cue_misses(
+                cache_path,
+                cues=["generic continuity"],
+                reason="matched an unrelated project again",
+            )
+            after_misses = cues.all_semantic_cues(cache_path)[0]
+
+            cues.record_semantic_cue_hits(
+                cache_path,
+                prompt="continue the generic continuity thread after feedback",
+                semantic_result=semantic_result,
+                source_refs=source_refs,
+                route="semantic_gate",
+            )
+            after_later_hit = cues.all_semantic_cues(cache_path)[0]
+            no_false_positive_cache = Path(tmp) / "semantic_cues_clean.jsonl"
+            for _ in range(4):
+                cues.record_semantic_cue_hits(
+                    no_false_positive_cache,
+                    prompt="continue the generic continuity thread",
+                    semantic_result=semantic_result,
+                    source_refs=source_refs,
+                    route="semantic_gate",
+                )
+            clean_equivalent = cues.all_semantic_cues(no_false_positive_cache)[0]
+
+            self.assertEqual(clean["status"], "active")
+            self.assertEqual(after_misses["status"], "staging")
+            self.assertEqual(after_later_hit["status"], "staging")
+            self.assertEqual(after_misses["feedback_score"], 1)
+            self.assertEqual(after_later_hit["feedback_score"], 2)
+            self.assertLess(after_misses["confidence"], clean_confidence)
+            self.assertLess(after_later_hit["confidence"], clean_confidence)
+            self.assertLess(after_later_hit["confidence"], clean_equivalent["confidence"])
+            self.assertEqual(after_later_hit["false_positive_count"], 2)
+            self.assertEqual(after_later_hit["hit_count"], 4)
+
     def test_recall_source_open_cue_promotes_and_demotes_route_locally(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             cache_path = Path(tmp) / "semantic_cues.jsonl"
