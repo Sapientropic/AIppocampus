@@ -101,6 +101,33 @@ class DebtReportTests(unittest.TestCase):
         )
         self.assertEqual(warnings, [])
 
+    def test_compact_debt_warnings_are_advisory_not_clean_pass(self) -> None:
+        warning = {
+            "code": "architecture_debt_register_count_drift",
+            "message": "1 architecture debt register current-count row(s) drift.",
+            "refresh_command": debt_report.REFRESH_REGISTER_COUNTS_COMMAND,
+        }
+        headroom = debt_report.compact_headroom_report(
+            {
+                "ok": True,
+                "missing_files": [],
+                "over_budget": [],
+                "stale_allowances": [],
+                "warnings": [warning],
+            }
+        )
+        full = debt_report.compact_debt_report(
+            {"ok": True, "warnings": [warning]},
+            changed_files=[],
+        )
+
+        for payload in (headroom, full):
+            self.assertTrue(payload["ok"])
+            self.assertEqual(payload["status"], "advisory_action_recommended")
+            self.assertEqual(payload["warning_count"], 1)
+            self.assertEqual(payload["first_warning"]["code"], warning["code"])
+            self.assertEqual(payload["refresh_command"], debt_report.REFRESH_REGISTER_COUNTS_COMMAND)
+
     def test_single_digit_guard_pressure_is_explicitly_owned_or_warned(self) -> None:
         system_weight = debt_report.build_system_weight(
             [

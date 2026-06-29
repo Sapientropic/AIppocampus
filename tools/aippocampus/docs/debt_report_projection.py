@@ -64,6 +64,14 @@ def _changed_surface_summary(changed_files: Sequence[str]) -> dict[str, Any]:
     return summary
 
 
+def _status_with_advisory(*, ok: object, warnings: Sequence[Mapping[str, Any]]) -> str:
+    if not ok:
+        return "fail"
+    if warnings:
+        return "advisory_action_recommended"
+    return "pass"
+
+
 def compact_headroom_report(report: Mapping[str, Any]) -> dict[str, Any]:
     warnings = list(report.get("warnings") or [])
     blockers: list[dict[str, Any]] = []
@@ -84,7 +92,7 @@ def compact_headroom_report(report: Mapping[str, Any]) -> dict[str, Any]:
     return {
         "kind": "aippocampus_debt_headroom_compact",
         "ok": report.get("ok"),
-        "status": "pass" if report.get("ok") else "fail",
+        "status": _status_with_advisory(ok=report.get("ok"), warnings=warnings),
         "blockers": blockers,
         "warning_count": len(warnings),
         "first_warning": _first_warning(warnings),
@@ -129,7 +137,7 @@ def compact_debt_report(
     return {
         "kind": "aippocampus_debt_report_compact",
         "ok": report.get("ok"),
-        "status": "pass" if report.get("ok") else "fail",
+        "status": _status_with_advisory(ok=report.get("ok"), warnings=warnings),
         "changed_surface": _changed_surface_summary(changed_files),
         "blockers": warnings if not report.get("ok") else [],
         "warning_count": len(warnings),
