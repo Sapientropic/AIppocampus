@@ -158,6 +158,13 @@ class RegistrySearchBudgetTests(unittest.TestCase):
             registry_dir=registry_dir,
             limit=1,
         )
+        searched_full = source_registry_search.search_registry_sources(
+            [cue],
+            cwd=cwd,
+            registry_dir=registry_dir,
+            detail="full",
+            limit=1,
+        )
         action = searched["foreground_action"]
         reopened = source_registry_search.open_registry_source_window(
             registry_dir=registry_dir,
@@ -176,6 +183,13 @@ class RegistrySearchBudgetTests(unittest.TestCase):
         self.assertEqual(searched["status"], "recall_semantic_position_candidate")
         self.assertEqual(action["id"], "inspect_recall_semantic_position_source")
         self.assertNotIn("claim_boundary", action)
+        semantic_profile = searched_full["recall_semantic_position_candidates"][0][
+            "query_match_profile"
+        ]
+        self.assertFalse(semantic_profile["exact_phrase_match"])
+        self.assertGreater(semantic_profile["matched_distinctive_anchor_count"], 0)
+        self.assertGreater(semantic_profile["distinctive_anchor_coverage"], 0.0)
+        self.assertLessEqual(semantic_profile["distinctive_anchor_coverage"], 1.0)
         self.assertEqual(action["arguments"]["thread_key"], thread_key)
         self.assertEqual(action["arguments"]["message_id"], "msg-latest-positioned")
         self.assertTrue(reopened["ok"], reopened)
@@ -184,6 +198,112 @@ class RegistrySearchBudgetTests(unittest.TestCase):
             "latest source row",
             reopened["source_window"][0]["text"],
         )
+
+    def test_visible_registry_hit_blocks_stale_semantic_position_primary_action(self) -> None:
+        cwd = self.root / "project"
+        positioned_clean = self.root / "project-clean-source"
+        artifact_clean = self.root / "artifact-clean-source"
+        registry_dir = self.root / "registry"
+        cwd.mkdir(parents=True)
+        positioned_clean.mkdir(parents=True)
+        artifact_clean.mkdir(parents=True)
+        registry_dir.mkdir(parents=True)
+        positioned_message = {
+            "id": "msg-latest-positioned",
+            "message_id": "msg-latest-positioned",
+            "turn_id": "turn-latest-positioned",
+            "source_line": 17,
+            "role": "assistant",
+            "phase": "final_answer",
+            "turn_index": 7,
+            "is_final": True,
+            "text": "This latest source row is only a semantic-position fallback.",
+        }
+        artifact_message = {
+            "id": "msg-field-count",
+            "message_id": "msg-field-count",
+            "turn_id": "turn-field-count",
+            "source_line": 23,
+            "role": "user",
+            "phase": "",
+            "turn_index": 2,
+            "is_final": False,
+            "text": (
+                "Locate foreground_action compact projection field_count 计算 "
+                "and report the minimal patch."
+            ),
+        }
+        (positioned_clean / "messages.jsonl").write_text(
+            json.dumps(positioned_message, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+        (artifact_clean / "messages.jsonl").write_text(
+            json.dumps(artifact_message, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+        current_thread_key = core.workspace_thread_key(cwd)
+        (registry_dir / "threads.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "threads": [
+                        {
+                            "thread_key": current_thread_key,
+                            "title": "Current positioned thread",
+                            "paths": {
+                                "clean_source_messages_jsonl": str(
+                                    positioned_clean / "messages.jsonl"
+                                ),
+                            },
+                        },
+                        {
+                            "thread_key": "session:field-count-artifact",
+                            "title": "Field-count artifact",
+                            "paths": {
+                                "clean_source_messages_jsonl": str(
+                                    artifact_clean / "messages.jsonl"
+                                ),
+                            },
+                        },
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        cue = "field_count 计算"
+
+        recall = agent_continuity.recall(
+            cue,
+            cwd=cwd,
+            clean_source_dir=positioned_clean,
+            registry_dir=registry_dir,
+            max_routes=1,
+        )
+        searched = source_registry_search.search_registry_sources(
+            [cue],
+            cwd=cwd,
+            registry_dir=registry_dir,
+            detail="full",
+            limit=1,
+        )
+
+        self.assertIn(recall["status"], {"ok", "no_routes"})
+        self.assertFalse(searched["ok"])
+        self.assertEqual(searched["status"], "matches_need_broadened_source_search")
+        self.assertEqual(searched["match_count"], 1)
+        self.assertEqual(searched["matches"][0]["message_id"], "msg-field-count")
+        self.assertEqual(searched["first_match_usefulness"]["status"], "demoted_artifact")
+        self.assertNotEqual(
+            searched["foreground_action"]["id"],
+            "inspect_recall_semantic_position_source",
+        )
+        self.assertEqual(
+            searched["foreground_action"]["id"],
+            "broaden_registry_search_for_topic_bearing_hit",
+        )
+        self.assertIn("--search-budget deep", searched["foreground_action"]["command"])
+        self.assertIn("recall_semantic_position_candidates", searched)
 
     def test_deep_registry_search_budget_can_request_more_context(self) -> None:
         captured: dict = {}
@@ -402,15 +522,93 @@ class RegistrySourceSearchUsefulnessTests(unittest.TestCase):
                 registry_dir=self.root,
                 cwd=self.root,
                 record_last_search=True,
+                detail="full",
             )
 
         self.assertTrue(result["ok"])
         self.assertEqual(result["matches"][0]["message_id"], "msg_user_exact")
         self.assertFalse(result["first_match_usefulness"]["first_hit_demoted"])
-        self.assertNotIn("artifact_role", result["matches"][0])
-        self.assertNotIn("artifact_demoted", result["matches"][0])
+        self.assertFalse(result["matches"][0]["artifact_demoted"])
+        self.assertTrue(result["matches"][0]["artifact_role"]["user_exact_phrase_source"])
         self.assertIn("--message-id msg_user_exact", result["foreground_action"]["command"])
         self.assertNotIn("--message-id msg_route_note", result["foreground_action"]["command"])
+
+    def test_line_only_route_note_loses_to_reopenable_clean_source(self) -> None:
+        exact_phrase = "orchid ledger bounded source window anchor"
+        self.messages.write_text(
+            json.dumps(
+                {
+                    "id": "msg_clean_anchor",
+                    "message_id": "msg_clean_anchor",
+                    "source_line": 44,
+                    "role": "assistant",
+                    "phase": "final_answer",
+                    "is_final": True,
+                    "text": f"{exact_phrase} lives in clean source, not only a route note.",
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        def fake_deep_search_entry_result(
+            entry: dict,
+            terms: list[str],
+            *,
+            max_hits: int,
+            search_budget: object = None,
+            deadline: object = None,
+        ) -> dict:
+            del entry, terms, max_hits, search_budget, deadline
+            return {
+                "hits": [
+                    {
+                        "source": "route_note",
+                        "line": 12,
+                        "role": "assistant",
+                        "phase": "route_note",
+                        "score": 500.0,
+                        "snippet": f"Route note anchors: {exact_phrase}",
+                        "matched_route_note_terms": ["agent", "recall", "deepen"],
+                        "query_match_profile": {"accepted": True},
+                    },
+                    {
+                        "source": "clean_source",
+                        "message_id": "msg_clean_anchor",
+                        "line": 44,
+                        "role": "assistant",
+                        "phase": "final_answer",
+                        "is_final": True,
+                        "score": 10.0,
+                        "snippet": exact_phrase,
+                    },
+                ]
+            }
+
+        with patch.object(
+            registry_search,
+            "deep_search_entry_result",
+            side_effect=fake_deep_search_entry_result,
+        ):
+            result = source_registry_search.search_registry_sources(
+                [exact_phrase],
+                registry_dir=self.root,
+                cwd=self.root,
+                record_last_search=True,
+            )
+
+        self.assertTrue(result["ok"], result)
+        self.assertEqual(result["matches"][0]["message_id"], "msg_clean_anchor")
+        self.assertIn("--message-id msg_clean_anchor", result["foreground_action"]["command"])
+
+        reopened = source_registry_search.open_registry_source_window(
+            registry_dir=self.root,
+            hit_index=1,
+            use_last_search=True,
+        )
+        self.assertTrue(reopened["ok"], reopened)
+        self.assertIn(exact_phrase, json.dumps(reopened["source_window"], ensure_ascii=False))
 
     def test_useful_target_hit_requires_top_hit_query_anchor(self) -> None:
         def fake_deep_search_entry_result(
@@ -445,6 +643,7 @@ class RegistrySourceSearchUsefulnessTests(unittest.TestCase):
                 ["机械飞升 基因飞升"],
                 registry_dir=self.root,
                 cwd=self.root,
+                detail="full",
             )
 
         self.assertFalse(result["useful_target_hit"])
@@ -452,8 +651,6 @@ class RegistrySourceSearchUsefulnessTests(unittest.TestCase):
         self.assertEqual(result["match_count"], 0)
         self.assertEqual(result["suppressed_low_coverage_match_count"], 1)
         self.assertNotIn("first_match_usefulness", result)
-        self.assertNotIn("claim_boundary", result)
-        self.assertNotIn("source_reopen_boundary", result)
         self.assertEqual(result["suppression_boundary"], "low_coverage_matches_suppressed")
         self.assertEqual(
             result["foreground_action"]["id"],
@@ -517,6 +714,7 @@ class RegistrySourceSearchUsefulnessTests(unittest.TestCase):
                 registry_dir=self.root,
                 cwd=self.root,
                 record_last_search=True,
+                detail="full",
             )
 
         self.assertFalse(result["ok"])
@@ -524,14 +722,16 @@ class RegistrySourceSearchUsefulnessTests(unittest.TestCase):
         self.assertEqual(result["status"], "low_confidence_reopen_candidate")
         self.assertEqual(result["match_count"], 0)
         self.assertEqual(result["suppressed_low_coverage_match_count"], 1)
-        self.assertNotIn("claim_boundary", result)
-        self.assertNotIn("source_reopen_boundary", result)
         self.assertEqual(
             result["foreground_action"]["id"],
             "inspect_low_confidence_registry_near_hit",
         )
-        self.assertNotIn("claim_boundary", result["foreground_action"])
-        self.assertNotIn("suppressed_low_coverage_matches", result)
+        self.assertEqual(
+            result["suppressed_low_coverage_matches"][0]["query_match_profile"][
+                "suppression_reason"
+            ],
+            "distinctive_anchor_coverage_too_low_for_query",
+        )
         candidate = result["low_confidence_reopen_candidates"][0]
         self.assertEqual(candidate["candidate_kind"], "low_confidence_reopen_candidate")
         self.assertEqual(candidate["message_id"], "msg_privacy_near_hit")
@@ -583,6 +783,7 @@ class RegistrySourceSearchUsefulnessTests(unittest.TestCase):
                 ["session:00000000-0000-0000-0000-000000000000"],
                 registry_dir=self.root,
                 cwd=self.root,
+                detail="full",
             )
 
         self.assertFalse(result["ok"])
@@ -628,6 +829,7 @@ class RegistrySourceSearchUsefulnessTests(unittest.TestCase):
                 registry_dir=self.root,
                 cwd=self.root,
                 record_last_search=True,
+                detail="full",
             )
 
         self.assertFalse(result["ok"])
@@ -639,8 +841,6 @@ class RegistrySourceSearchUsefulnessTests(unittest.TestCase):
             result["foreground_action"]["id"],
             "broaden_registry_search_for_query_anchors",
         )
-        self.assertNotIn("claim_boundary", result)
-        self.assertNotIn("source_reopen_boundary", result)
         self.assertEqual(result["suppression_boundary"], "low_coverage_matches_suppressed")
 
     def test_sqlite_line_only_hit_does_not_emit_source_open_action(self) -> None:
@@ -675,6 +875,7 @@ class RegistrySourceSearchUsefulnessTests(unittest.TestCase):
                 ["开发者真实水平 小号"],
                 registry_dir=self.root,
                 cwd=self.root,
+                detail="full",
             )
 
         self.assertFalse(result["ok"])
@@ -691,8 +892,6 @@ class RegistrySourceSearchUsefulnessTests(unittest.TestCase):
             result["foreground_action"]["id"],
             "broaden_registry_search_for_reopenable_source",
         )
-        self.assertNotIn("claim_boundary", result)
-        self.assertNotIn("source_reopen_boundary", result)
         reopened = source_registry_search.open_registry_source_window(
             registry_dir=self.root,
             hit_index=1,
@@ -776,6 +975,7 @@ class RegistrySourceSearchUsefulnessTests(unittest.TestCase):
             ["previous agent decided old source source_texture"],
             registry_dir=self.root,
             cwd=self.root,
+            detail="full",
         )
 
         self.assertTrue(result["ok"], result)
@@ -920,6 +1120,7 @@ class RegistrySourceSearchUsefulnessTests(unittest.TestCase):
                 registry_dir=self.root,
                 cwd=self.root,
                 record_last_search=True,
+                detail="full",
             )
 
         self.assertTrue(result["ok"])
@@ -1046,6 +1247,7 @@ class RegistrySourceSearchUsefulnessTests(unittest.TestCase):
                 cwd=self.root,
                 record_last_search=True,
                 max_elapsed_ms=5000,
+                detail="full",
             )
 
         self.assertTrue(result["ok"])
@@ -1054,8 +1256,6 @@ class RegistrySourceSearchUsefulnessTests(unittest.TestCase):
         self.assertEqual(result["max_elapsed_ms"], 5000)
         self.assertGreaterEqual(result["elapsed_ms"], 0)
         self.assertEqual(result["unsearched_entry_count"], 1)
-        self.assertNotIn("claim_boundary", result)
-        self.assertNotIn("source_reopen_boundary", result)
         self.assertEqual(result["foreground_action"]["id"], "open_registry_search_source_window")
         self.assertIn("--open-source", result["foreground_action"]["command"])
         self.assertIn("--thread-key session:exact", result["foreground_action"]["command"])
@@ -1210,6 +1410,7 @@ class RegistrySourceSearchUsefulnessTests(unittest.TestCase):
             cwd=self.root,
             record_last_search=True,
             limit=10,
+            detail="full",
         )
         duplicate = result["matches"][0]
 

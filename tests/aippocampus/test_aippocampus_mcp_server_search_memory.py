@@ -86,7 +86,8 @@ class AippocampusMcpServerSearchMemoryTests(unittest.TestCase):
         )
 
         self.assertEqual(open_payload["kind"], "aippocampus_registry_source_window")
-        self.assertEqual(open_payload["source_boundary"]["authority"], "source_open")
+        self.assertEqual(open_payload["source_scope"], "opened_source_window")
+        self.assertNotIn("source_boundary", open_payload)
         self.assertEqual(
             open_payload["primary_source_snippet"]["message_id"],
             action["arguments"]["message_id"],
@@ -131,7 +132,8 @@ class AippocampusMcpServerSearchMemoryTests(unittest.TestCase):
         )
 
         self.assertEqual(open_payload["kind"], "aippocampus_registry_source_window")
-        self.assertEqual(open_payload["source_boundary"]["authority"], "source_open")
+        self.assertEqual(open_payload["source_scope"], "opened_source_window")
+        self.assertNotIn("source_boundary", open_payload)
         self.assertIn("隐私保护", open_payload["primary_source_snippet"]["text"])
         self.assertIn(
             "隐私阻断器",

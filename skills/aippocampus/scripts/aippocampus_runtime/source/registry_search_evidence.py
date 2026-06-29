@@ -75,7 +75,10 @@ def match_has_direct_source_open_route(match: Mapping[str, Any]) -> bool:
         return bool(match.get("source_window_command") or match.get("reopen_command"))
     if not str(route.get("thread_key") or "").strip():
         return False
-    if str(match.get("source") or "") == "sqlite" and not route.get("message_id"):
+    source_kind = str(match.get("source") or "")
+    if source_kind == "sqlite" and not route.get("message_id"):
+        return False
+    if source_kind == "route_note" and not route.get("message_id"):
         return False
     return bool(route.get("message_id") or route.get("line"))
 

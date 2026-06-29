@@ -66,23 +66,24 @@ class InstallActionHintHookTests(unittest.TestCase):
         self.assertEqual(result["cache_status"], "with_missing_cache_file")
         self.assertEqual(result["cache_record_count"], 0)
         self.assertEqual(result["support_status"], "supported_by_codex_hooks_json")
-        self.assertEqual(result["authority"], "navigation_only")
         self.assertTrue(result["fail_open"])
         self.assertFalse(result["optional"])
         self.assertFalse(result["recall_blocking"])
         self.assertEqual(result["setup_role"], "cleanup_or_prepare_required")
         self.assertEqual(result["cache_path_label"], DEFAULT_CACHE_LABEL)
         self.assertEqual(result["cache_scope"], "current_workspace")
-        self.assertTrue(result["operator_json_available"])
-        self.assertEqual(
-            result["operator_detail_command"],
-            "aippocampus hooks action status --operator-json",
-        )
         self.assertNotIn("frontstage_card", result)
         self.assertNotIn("path", result)
         self.assertNotIn("commands", result)
         self.assertNotIn("cache_path", result)
         self.assertNotIn("provider_counts", result)
+        self.assertNotIn("authority", result)
+        self.assertNotIn("operator_json_available", result)
+        self.assertNotIn("operator_detail_command", result)
+        self.assertNotIn("diagnostic_fields_omitted", result)
+        self.assertNotIn("claim_boundary", encoded)
+        self.assertNotIn("source_boundary", encoded)
+        self.assertNotIn("navigation_only", encoded)
         commands = [
             action.get("command")
             for action in [result["foreground_action"], *result["safe_next_actions"]]
@@ -377,6 +378,12 @@ class InstallActionHintHookTests(unittest.TestCase):
         self.assertEqual(payload["stage"], "callable")
         self.assertEqual(payload["cache_status"], "with_empty_cache")
         self.assertEqual(payload["foreground_action"]["id"], "probe_action_hint_hot_path")
+        self.assertNotIn("claim_boundary", encoded)
+        self.assertNotIn("source_boundary", encoded)
+        self.assertNotIn("operator_detail_command", encoded)
+        self.assertNotIn("operator_json_available", encoded)
+        self.assertNotIn("diagnostic_fields_omitted", encoded)
+        self.assertNotIn("navigation_only", encoded)
         self.assertNotIn("frontstage_card", payload)
         self.assertNotIn("commands", payload)
         self.assertNotIn("cache_path", payload)
@@ -403,6 +410,10 @@ class InstallActionHintHookTests(unittest.TestCase):
         self.assertEqual(operator_payload["cache_status"], "with_empty_cache")
         self.assertTrue(operator_payload["cache_exists"])
         self.assertEqual(operator_payload["cache_path"], str(empty))
+        self.assertEqual(
+            operator_payload["frontstage_card"]["claim_boundary"],
+            "Hints are route guidance only; reopen or deepen source before claims.",
+        )
         self.assertIn("frontstage_card", operator_payload)
         self.assertIn("commands", operator_payload)
         self.assertIn("aippocampus_runtime.hooks.action_hint", operator_encoded)

@@ -7,6 +7,7 @@ from typing import Any
 
 from aippocampus_runtime import core
 from aippocampus_runtime.contracts import canonical_foreground_action_fields, shell_quote
+from aippocampus_runtime.foreground_compact_language import strip_compact_policy_vocabulary
 from aippocampus_runtime.mcp.compact_profile import strip_compact_foreground_debug_fields
 from aippocampus_runtime.mcp.contracts import MCPCompactResponseContract, build_mcp_compact_card
 from aippocampus_runtime.privacy import (
@@ -58,7 +59,6 @@ def _primary_source_snippet(messages: list[dict[str, Any]]) -> dict[str, Any]:
             "max_chars": SOURCE_SNIPPET_CHAR_LIMIT,
             "truncated": len(text) > len(compact),
             "source_scope": "opened_window_primary_message",
-            "claim_boundary": "exact_wording_inside_this_snippet_only",
         }
         role = str(message.get("role") or "").strip()
         phase = str(message.get("phase") or "").strip()
@@ -362,6 +362,6 @@ def compact_agent_deepen_payload(
         }
     )
     return build_mcp_compact_card(
-        strip_compact_foreground_debug_fields(compact),
+        strip_compact_foreground_debug_fields(strip_compact_policy_vocabulary(compact)),
         surface=surface,
     )

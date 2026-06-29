@@ -900,6 +900,7 @@ def run_contract(
     keep_temp: bool = False,
     include_live_provider: bool = False,
     import_only: bool = False,
+    detail: str = "compact",
 ) -> dict[str, Any]:
     checks: list[Check] = []
     temp_context = tempfile.TemporaryDirectory(prefix="aippocampus-wheel-contract-")
@@ -910,7 +911,12 @@ def run_contract(
         if selected_wheel is None:
             selected_wheel = build_wheel(repo, work_dir / "dist", checks)
             if selected_wheel is None:
-                return render_result(checks, work_dir=work_dir if keep_temp else None, import_only=import_only)
+                return render_result(
+                    checks,
+                    work_dir=work_dir if keep_temp else None,
+                    import_only=import_only,
+                    detail=detail,
+                )
         else:
             add(checks, "build_wheel", "pass", "using prebuilt wheel", {"wheel": selected_wheel.name})
 
@@ -925,7 +931,12 @@ def run_contract(
                 check_package_data(venv, work_dir, env, checks)
                 check_generic_jsonl_reopen_path(venv, work_dir, env, checks)
                 check_hooks_isolated_rollback(venv, work_dir, env, checks)
-        return render_result(checks, work_dir=work_dir if keep_temp else None, import_only=import_only)
+        return render_result(
+            checks,
+            work_dir=work_dir if keep_temp else None,
+            import_only=import_only,
+            detail=detail,
+        )
     finally:
         if keep_temp:
             temp_context.cleanup = lambda: None  # type: ignore[method-assign]
@@ -937,31 +948,60 @@ def render_result(
     *,
     work_dir: Path | None = None,
     import_only: bool = False,
+    detail: str = "compact",
 ) -> dict[str, Any]:
+    detail = "full" if str(detail or "").strip().casefold() == "full" else "compact"
     summary: dict[str, int] = {"pass": 0, "fail": 0, "warn": 0}
     for check in checks:
         summary[check.status] = summary.get(check.status, 0) + 1
     failures = [check for check in checks if check.status == "fail"]
+    compact_checks = [
+        {"id": check.id, "status": check.status, "message": check.message}
+        for check in checks
+    ]
+    compact_contract = {
+        "fresh_venv": True,
+        "no_network_install": True,
+        "live_provider_default": False,
+        "source_tree_imports_forbidden": True,
+        "import_only": import_only,
+        "public_import_module_count": len(PUBLIC_IMPORT_MODULES),
+        "public_cli_help_command_count": len(PUBLIC_CLI_HELP_COMMANDS),
+        "expected_mcp_tool_count": len(EXPECTED_MCP_TOOLS),
+    }
+    next_command = (
+        "python tools/aippocampus/release/check_wheel_contract.py --import-only --json"
+        if import_only
+        else "python tools/aippocampus/release/check_wheel_contract.py --json"
+    )
+    detail_command = (
+        "python tools/aippocampus/release/check_wheel_contract.py --import-only --json --detail full"
+        if import_only
+        else "python tools/aippocampus/release/check_wheel_contract.py --json --detail full"
+    )
+    detail_command_for_result = f"{detail_command} --keep-temp" if failures else detail_command
     result: dict[str, Any] = {
         "kind": "aippocampus_wheel_contract_check",
         "schema_version": 1,
         "ok": summary.get("fail", 0) == 0,
         "status": "fail" if failures else "pass",
         "mode": "import_only" if import_only else "full",
+        "detail": detail,
         "summary": summary,
-        "checks": [asdict(check) for check in checks],
+        "checks": [asdict(check) for check in checks] if detail == "full" else compact_checks,
         "first_failure": asdict(failures[0]) if failures else None,
-        "next_command": (
-            "python tools/aippocampus/release/check_wheel_contract.py --import-only --json"
-            if import_only
-            else "python tools/aippocampus/release/check_wheel_contract.py --json"
-        ),
-        "detail_command": (
-            "python tools/aippocampus/release/check_wheel_contract.py --import-only --json --keep-temp"
-            if import_only
-            else "python tools/aippocampus/release/check_wheel_contract.py --json --keep-temp"
-        ),
-        "contract": {
+        "next_command": next_command,
+        "detail_command": detail_command_for_result,
+        "contract": compact_contract,
+    }
+    if detail == "compact":
+        result["summary_text"] = (
+            f"{summary.get('pass', 0)} checks passed"
+            if not failures
+            else f"blocked at {failures[0].id}: {failures[0].message}"
+        )
+    else:
+        result["contract"] = {
             "fresh_venv": True,
             "no_network_install": True,
             "live_provider_default": False,
@@ -970,8 +1010,7 @@ def render_result(
             "public_import_modules": list(PUBLIC_IMPORT_MODULES),
             "public_cli_help_commands": [list(args) for args in PUBLIC_CLI_HELP_COMMANDS],
             "expected_mcp_tools": list(EXPECTED_MCP_TOOLS),
-        },
-    }
+        }
     if work_dir is not None:
         result["work_dir"] = str(work_dir)
     return result
@@ -998,6 +1037,12 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Do not scrub provider/token-like environment variables. Off by default.",
     )
+    parser.add_argument(
+        "--detail",
+        choices=("compact", "full"),
+        default="compact",
+        help="JSON detail level. Default is a compact pass/fail card; full includes contract inventories.",
+    )
     parser.add_argument("--json", action="store_true", dest="json_output")
     return parser
 
@@ -1012,6 +1057,7 @@ def main(argv: list[str] | None = None) -> int:
         keep_temp=args.keep_temp,
         include_live_provider=args.include_live_provider,
         import_only=args.import_only,
+        detail=args.detail,
     )
     if args.json_output:
         print(json.dumps(result, ensure_ascii=False, indent=2))

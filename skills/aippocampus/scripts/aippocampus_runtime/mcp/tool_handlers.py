@@ -529,6 +529,7 @@ def call_agent_recall(arguments: dict[str, Any]) -> dict[str, Any]:
         payload = agent_recall_missing_query_payload(
             schema_version=str(getattr(agent_continuity_module(), "SCHEMA_VERSION", "agent-continuity-path-v1")),
             kind="aippocampus_agent_continuity_path",
+            detail=detail_arg(arguments),
         )
         return render_profiled_result(
             arguments,
@@ -673,6 +674,7 @@ def call_agent_deepen(arguments: dict[str, Any]) -> dict[str, Any]:
             mode="deepen",
             schema_version=str(getattr(agent_continuity_module(), "SCHEMA_VERSION", "agent-continuity-path-v1")),
             kind="aippocampus_agent_continuity_path",
+            detail=detail_arg(arguments),
         )
         return _deepen_result(payload, is_error=True)
     agent = agent_continuity_module()
@@ -754,6 +756,7 @@ def call_agent_explain(arguments: dict[str, Any]) -> dict[str, Any]:
             mode="explain",
             schema_version=str(getattr(agent_continuity_module(), "SCHEMA_VERSION", "agent-continuity-path-v1")),
             kind="aippocampus_agent_continuity_path",
+            detail=detail_arg(arguments),
         )
         return _explain_result(payload, is_error=True)
     agent = agent_continuity_module()

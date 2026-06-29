@@ -893,6 +893,85 @@ class CloseoutAuditTests(unittest.TestCase):
         self.assertEqual(metadata[2713]["labels"], [{"name": "readiness:guard-tooling"}])
         run.assert_called_once()
 
+    def test_github_metadata_fetch_falls_back_to_gh_cli_on_remote_disconnect(self) -> None:
+        completed = subprocess.CompletedProcess(
+            args=["gh", "issue", "view"],
+            returncode=0,
+            stdout=json.dumps(
+                {
+                    "title": "Closeout audit transient",
+                    "body": "REST disconnected; gh fallback should preserve JSON output.",
+                    "labels": [{"name": "readiness:guard-tooling"}],
+                }
+            ),
+            stderr="",
+        )
+
+        with (
+            mock.patch.object(
+                closeout_audit.closeout_audit_followthrough.urllib.request,
+                "urlopen",
+                side_effect=closeout_audit.closeout_audit_followthrough.http.client.RemoteDisconnected(
+                    "remote closed"
+                ),
+            ),
+            mock.patch.object(
+                closeout_audit.closeout_audit_followthrough.subprocess,
+                "run",
+                return_value=completed,
+            ) as run,
+        ):
+            metadata = closeout_audit.closeout_audit_followthrough.fetch_github_issue_metadata(
+                repo="Sapientropic/AIppocampus",
+                issue_numbers=[2933],
+            )
+
+        self.assertEqual(metadata[2933]["title"], "Closeout audit transient")
+        self.assertEqual(
+            metadata[2933]["body"],
+            "REST disconnected; gh fallback should preserve JSON output.",
+        )
+        run.assert_called_once()
+
+    def test_cli_metadata_fetch_failure_still_returns_parseable_json(self) -> None:
+        completed = subprocess.CompletedProcess(
+            args=["gh", "issue", "view"],
+            returncode=1,
+            stdout="",
+            stderr="temporary gh failure",
+        )
+
+        with (
+            mock.patch.object(
+                closeout_audit.closeout_audit_followthrough.urllib.request,
+                "urlopen",
+                side_effect=closeout_audit.closeout_audit_followthrough.http.client.RemoteDisconnected(
+                    "remote closed"
+                ),
+            ),
+            mock.patch.object(
+                closeout_audit.closeout_audit_followthrough.subprocess,
+                "run",
+                return_value=completed,
+            ),
+            mock.patch("sys.stdout", new_callable=io.StringIO) as stdout,
+        ):
+            code = closeout_audit.main(
+                [
+                    "--body",
+                    "Closes #2933\n\nFixes the metadata fallback.",
+                    "--github-repo",
+                    "Sapientropic/AIppocampus",
+                    "--json",
+                ]
+            )
+
+        payload = json.loads(stdout.getvalue())
+        self.assertIn(code, {0, 1})
+        self.assertIn("ok", payload)
+        self.assertIn("status", payload)
+        self.assertEqual(payload["kind"], "aippocampus_closeout_audit_compact")
+
     def test_cli_reads_body_file_and_returns_json(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             body = Path(tmp) / "body.md"

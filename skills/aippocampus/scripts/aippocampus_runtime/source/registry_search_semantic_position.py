@@ -18,6 +18,12 @@ def _as_int(value: Any, default: int = 0) -> int:
         return default
 
 
+def _semantic_anchor_coverage(position: Mapping[str, Any]) -> float:
+    matched_count = max(0, _as_int(position.get("matched_term_count")))
+    term_count = max(1, _as_int(position.get("term_count"), default=matched_count or 1))
+    return round(min(1.0, matched_count / term_count), 6)
+
+
 def _messages_path(entry: Mapping[str, Any]) -> Path | None:
     paths_value = entry.get("paths")
     paths: Mapping[str, Any] = paths_value if isinstance(paths_value, Mapping) else {}
@@ -127,7 +133,7 @@ def semantic_position_registry_candidates(
             "acceptance_reason": "",
             "suppression_reason": "semantic_positioning_navigation_only",
             "matched_distinctive_anchor_count": position.get("matched_term_count"),
-            "distinctive_anchor_coverage": 0.0,
+            "distinctive_anchor_coverage": _semantic_anchor_coverage(position),
             "exact_phrase_match": False,
         }
         if match_has_direct_source_open_route(match):

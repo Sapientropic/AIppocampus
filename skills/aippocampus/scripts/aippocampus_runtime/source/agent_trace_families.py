@@ -31,12 +31,20 @@ CHECK_RECEIPT_FAMILIES = {"successful_test_check_event", "successful_tool_check_
 ROUTE_NOTE_FAMILIES = {"joined_route_note", "agent_trajectory"}
 FINAL_CLOSEOUT_FAMILIES = {"final_answer_closeout", "assistant_final_answer_closeout"}
 REPO_BREADCRUMB_FAMILIES = {"repo_breadcrumb", "safe_repo_relative_breadcrumb"}
+ASSISTANT_FINAL_PRODUCER_FAMILY = "assistant_final"
+TOOL_CALL_SUCCEEDED_PRODUCER_FAMILY = "tool_call_succeeded"
+TEST_CHECK_SUCCEEDED_PRODUCER_FAMILY = "test_check_succeeded"
 FAMILY_ALIASES = {
-    "assistant_final": "final_answer_closeout",
+    ASSISTANT_FINAL_PRODUCER_FAMILY: "final_answer_closeout",
     "assistant_final_answer": "assistant_final_answer_closeout",
     "final_closeout": "final_answer_closeout",
-    "tool_call_succeeded": "successful_tool_check_receipt",
-    "test_check_succeeded": "successful_test_check_event",
+    TOOL_CALL_SUCCEEDED_PRODUCER_FAMILY: "successful_tool_check_receipt",
+    TEST_CHECK_SUCCEEDED_PRODUCER_FAMILY: "successful_test_check_event",
+}
+TRACE_FAMILY_PRODUCER_CONTRACT = {
+    "rollout_search.final_assistant_payload": ASSISTANT_FINAL_PRODUCER_FAMILY,
+    "behavior_events.successful_tool_call": TOOL_CALL_SUCCEEDED_PRODUCER_FAMILY,
+    "test_check.successful_check": TEST_CHECK_SUCCEEDED_PRODUCER_FAMILY,
 }
 KNOWN_TRACE_FAMILIES = (
     RAW_TRACE_FAMILIES
@@ -60,6 +68,17 @@ SECRET_OR_PATH_RE = re.compile(
 
 def _text(value: Any) -> str:
     return str(value or "").strip()
+
+
+def declared_trace_family_producer_values() -> frozenset[str]:
+    """Return runtime-owned producer family tokens that must stay admitted.
+
+    Tests read this owner contract instead of mirroring producer values in a
+    second hand-written set. Producers should reference the constants above so
+    a future token change updates the producer and consumer boundary together.
+    """
+
+    return frozenset(TRACE_FAMILY_PRODUCER_CONTRACT.values())
 
 
 def _safe_family_id(value: Any) -> str:

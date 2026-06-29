@@ -29,7 +29,10 @@ from aippocampus_runtime.recall.feedback.vocabulary import (
     ACTIVE_FLOW_SIGNALS,
     DEFAULT_SIGNAL_DELTAS,
     OUTCOME_ALIASES,
+    RECALL_OUTCOME_ALIASES,
+    RECALL_OUTCOME_SIGNALS,
     normalize_feedback_signal,
+    normalize_recall_outcome_signal,
 )
 from aippocampus_runtime.source.agent_trace_admission import (
     behavior_training_signal_from_trace,
@@ -47,16 +50,8 @@ ACTIVE_FLOW_REPORT_KIND = "aippocampus_active_flow_activation_report"
 FEEDBACK_CALIBRATION_REPORT_KIND = "aippocampus_feedback_calibration_report"
 PUBLIC_FIXTURE_KIND = "public_route_feedback_fixture"
 
-RECALL_OUTCOMES = {
-    "candidate_delivered",
-    "source_reopen_success",
-    "reopened_deepened",
-    "ignored",
-    "corrected",
-    "superseded",
-    "blocked",
-    "expired",
-}
+RECALL_OUTCOMES = RECALL_OUTCOME_SIGNALS
+RECALL_OUTCOME_ERROR_ALIASES = {**OUTCOME_ALIASES, **RECALL_OUTCOME_ALIASES}
 SIGNAL_FAMILIES = {"text", "vector", "graph", "source_richness", "route_context"}
 BLEND_CONTEXT_FALLBACK = "normal_recall"
 
@@ -116,6 +111,49 @@ def _safe_kind(value: Any, accepted: Collection[str], default: str) -> str:
     return text if text in accepted else default
 
 
+def _persisted_active_flow_signal(value: Any) -> str:
+    signal = normalize_feedback_signal(value, default="")
+    return signal if signal in ACTIVE_FLOW_SIGNALS else ""
+
+
+def _persisted_recall_feedback_outcome(value: Any) -> str:
+    outcome = normalize_recall_outcome_signal(value, default="")
+    return outcome if outcome in RECALL_OUTCOMES else ""
+
+
+def _validated_recall_feedback_outcome(value: Any) -> str:
+    outcome = _persisted_recall_feedback_outcome(value)
+    if outcome:
+        return outcome
+    raise InvalidFeedbackValue(
+        "outcome",
+        str(value or "").strip(),
+        RECALL_OUTCOMES,
+        RECALL_OUTCOME_ERROR_ALIASES,
+    )
+
+
+def _invalid_signal_sample(event: Mapping[str, Any], *, route_id: str = "") -> dict[str, str]:
+    return {
+        "route_id": route_id or _safe_token(event.get("route_id"), fallback_prefix="route"),
+        "signal": _safe_token(event.get("signal") or event.get("outcome"), fallback_prefix="signal"),
+        "reason": "unknown_feedback_signal_quarantined",
+    }
+
+
+def _record_invalid_signal(
+    event: Mapping[str, Any],
+    *,
+    invalid_signal_counts: Counter[str],
+    invalid_signal_samples: list[dict[str, str]],
+    route_id: str = "",
+) -> None:
+    sample = _invalid_signal_sample(event, route_id=route_id)
+    invalid_signal_counts[sample["signal"]] += 1
+    if len(invalid_signal_samples) < 8:
+        invalid_signal_samples.append(sample)
+
+
 def _validated_kind(
     value: Any,
     accepted: Collection[str],
@@ -156,7 +194,7 @@ def recall_feedback_event(
         "source_id": _safe_token(source_id, fallback_prefix="source"),
         "blend_context": str(blend_context or BLEND_CONTEXT_FALLBACK),
         "signal_family": _safe_kind(signal_family, SIGNAL_FAMILIES, "route_context"),
-        "outcome": _safe_kind(outcome, RECALL_OUTCOMES, "candidate_delivered"),
+        "outcome": _validated_recall_feedback_outcome(outcome),
         "route_kind": _safe_kind(route_kind, ROUTE_KINDS, "active_path"),
         "privacy_boundary": {
             "stores_raw_prompt_text": False,
@@ -182,6 +220,8 @@ def recall_feedback_report(events: Iterable[Mapping[str, Any]]) -> dict[str, Any
     event_rows = [event for event in events if isinstance(event, Mapping)]
     by_context: dict[str, dict[str, Any]] = {}
     outcome_counts: Counter[str] = Counter()
+    invalid_signal_counts: Counter[str] = Counter()
+    invalid_signal_samples: list[dict[str, str]] = []
     event_count = 0
     for event in event_rows:
         if event.get("kind") not in {RECALL_FEEDBACK_KIND, ACTIVE_FLOW_EVENT_KIND}:
@@ -189,8 +229,25 @@ def recall_feedback_report(events: Iterable[Mapping[str, Any]]) -> dict[str, Any
         event_count += 1
         context = str(event.get("blend_context") or BLEND_CONTEXT_FALLBACK)
         family = _safe_kind(event.get("signal_family"), SIGNAL_FAMILIES, "route_context")
-        outcome = str(event.get("outcome") or event.get("signal") or "candidate_delivered")
-        outcome = _safe_kind(outcome, RECALL_OUTCOMES | ACTIVE_FLOW_SIGNALS, "candidate_delivered")
+        if event.get("kind") == ACTIVE_FLOW_EVENT_KIND:
+            outcome = _persisted_active_flow_signal(event.get("signal"))
+            if not outcome:
+                _record_invalid_signal(
+                    event,
+                    invalid_signal_counts=invalid_signal_counts,
+                    invalid_signal_samples=invalid_signal_samples,
+                )
+                continue
+        else:
+            outcome = _persisted_recall_feedback_outcome(event.get("outcome"))
+            if not outcome:
+                _record_invalid_signal(
+                    event,
+                    invalid_signal_counts=invalid_signal_counts,
+                    invalid_signal_samples=invalid_signal_samples,
+                    route_id=_safe_token(event.get("candidate_id"), fallback_prefix="candidate"),
+                )
+                continue
         route_kind = _safe_kind(event.get("route_kind"), ROUTE_KINDS, "active_path")
         context_row = by_context.setdefault(context, {"signal_families": {}})
         family_row = context_row["signal_families"].setdefault(family, _empty_signal_group())
@@ -211,6 +268,8 @@ def recall_feedback_report(events: Iterable[Mapping[str, Any]]) -> dict[str, Any
         "created_at": now_utc(),
         "event_count": event_count,
         "outcome_counts": dict(sorted(outcome_counts.items())),
+        "invalid_signal_count": sum(invalid_signal_counts.values()),
+        "invalid_signal_samples": invalid_signal_samples,
         "by_blend_context": by_context,
         "privacy_boundary": {
             "stores_raw_prompt_text": False,
@@ -378,12 +437,22 @@ def active_flow_activation_report(events: Iterable[Mapping[str, Any]]) -> dict[s
     event_rows = [event for event in events if isinstance(event, Mapping)]
     grouped: dict[tuple[str, str], dict[str, Any]] = {}
     metrics: Counter[str] = Counter()
+    invalid_signal_counts: Counter[str] = Counter()
+    invalid_signal_samples: list[dict[str, str]] = []
     for event in event_rows:
         if event.get("kind") != ACTIVE_FLOW_EVENT_KIND:
             continue
         route_id = _safe_token(event.get("route_id"), fallback_prefix="route")
         route_kind = _safe_kind(event.get("route_kind"), ROUTE_KINDS, "active_path")
-        signal = _safe_kind(event.get("signal"), ACTIVE_FLOW_SIGNALS, "candidate_delivered")
+        signal = _persisted_active_flow_signal(event.get("signal"))
+        if not signal:
+            _record_invalid_signal(
+                event,
+                invalid_signal_counts=invalid_signal_counts,
+                invalid_signal_samples=invalid_signal_samples,
+                route_id=route_id,
+            )
+            continue
         row = grouped.setdefault(
             (route_id, route_kind),
             {
@@ -436,8 +505,10 @@ def active_flow_activation_report(events: Iterable[Mapping[str, Any]]) -> dict[s
         "wrong_route_drag_count",
         "blocked_count",
         "decay_applied_count",
+        "invalid_signal_count",
     ):
         metrics.setdefault(key, 0)
+    metrics["invalid_signal_count"] = sum(invalid_signal_counts.values())
     calibration = recall_feedback_calibration_report(event_rows)
     training_signals = feedback_training_signal_rows(event_rows)
     suppression = suppression_lifecycle_report(event_rows, detail="operator")
@@ -447,6 +518,8 @@ def active_flow_activation_report(events: Iterable[Mapping[str, Any]]) -> dict[s
         "created_at": now_utc(),
         "routes": routes,
         "metrics": dict(sorted(metrics.items())),
+        "invalid_signal_count": sum(invalid_signal_counts.values()),
+        "invalid_signal_samples": invalid_signal_samples,
         "policy_boundary": {
             "activation_weights_are_not_source_truth": True,
             "default_route_weighting_unchanged": False,
@@ -480,10 +553,14 @@ def feedback_training_signal_rows(events: Iterable[Mapping[str, Any]]) -> list[d
             continue
         kind = event.get("kind")
         if kind == ACTIVE_FLOW_EVENT_KIND:
-            outcome = _safe_kind(event.get("signal"), ACTIVE_FLOW_SIGNALS, "candidate_delivered")
+            outcome = _persisted_active_flow_signal(event.get("signal"))
+            if not outcome:
+                continue
             route_id = event.get("route_id")
         elif kind == RECALL_FEEDBACK_KIND:
-            outcome = _safe_kind(event.get("outcome"), RECALL_OUTCOMES, "candidate_delivered")
+            outcome = _persisted_recall_feedback_outcome(event.get("outcome"))
+            if not outcome:
+                continue
             route_id = event.get("candidate_id")
         else:
             continue
@@ -525,17 +602,35 @@ def recall_feedback_calibration_report(events: Iterable[Mapping[str, Any]]) -> d
 
     grouped: dict[tuple[str, str], dict[str, Any]] = {}
     totals: Counter[str] = Counter()
+    invalid_signal_counts: Counter[str] = Counter()
+    invalid_signal_samples: list[dict[str, str]] = []
     for event in events:
         kind = event.get("kind")
         if kind == ACTIVE_FLOW_EVENT_KIND:
             route_id = _safe_token(event.get("route_id"), fallback_prefix="route")
             route_kind = _safe_kind(event.get("route_kind"), ROUTE_KINDS, "active_path")
-            outcome = _safe_kind(event.get("signal"), ACTIVE_FLOW_SIGNALS, "candidate_delivered")
+            outcome = _persisted_active_flow_signal(event.get("signal"))
+            if not outcome:
+                _record_invalid_signal(
+                    event,
+                    invalid_signal_counts=invalid_signal_counts,
+                    invalid_signal_samples=invalid_signal_samples,
+                    route_id=route_id,
+                )
+                continue
             event_delta = safe_float(event.get("weight_delta"), DEFAULT_SIGNAL_DELTAS[outcome])
         elif kind == RECALL_FEEDBACK_KIND:
             route_id = _safe_token(event.get("candidate_id"), fallback_prefix="candidate")
             route_kind = _safe_kind(event.get("route_kind"), ROUTE_KINDS, "active_path")
-            outcome = _safe_kind(event.get("outcome"), RECALL_OUTCOMES, "candidate_delivered")
+            outcome = _persisted_recall_feedback_outcome(event.get("outcome"))
+            if not outcome:
+                _record_invalid_signal(
+                    event,
+                    invalid_signal_counts=invalid_signal_counts,
+                    invalid_signal_samples=invalid_signal_samples,
+                    route_id=route_id,
+                )
+                continue
             event_delta = DEFAULT_SIGNAL_DELTAS.get(outcome, 0.0)
         else:
             continue
@@ -592,6 +687,8 @@ def recall_feedback_calibration_report(events: Iterable[Mapping[str, Any]]) -> d
         "delta_count": len(deltas),
         "deltas": deltas,
         "outcome_counts": dict(sorted(totals.items())),
+        "invalid_signal_count": sum(invalid_signal_counts.values()),
+        "invalid_signal_samples": invalid_signal_samples,
         "consumer": "bounded_route_activation_metadata",
         "policy_boundary": {
             "calibration_evidence_not_source_truth": True,

@@ -11,10 +11,12 @@ from aippocampus_runtime.source.route_topics import (
     route_topic_for_clean_hit,
     route_topic_low_coverage_acceptance,
 )
+from tests.aippocampus.cli_fixtures import parse_cli_json, run_aippocampus_cli
 from tests.aippocampus.product_probe_helpers import (
     SourceOpenExpectation,
     assert_cli_recall_deepens_to_source,
     assert_mcp_recall_deepens_to_source,
+    call_mcp_tool_payload,
     write_clean_source_thread,
 )
 
@@ -347,10 +349,7 @@ class RelationshipOriginRecallTests(unittest.TestCase):
             "origin_reflection",
             {packet.get("source_chain_role") for packet in recall["memory_packets"]},
         )
-        self.assertIn(
-            "recap_orientation",
-            {packet.get("source_chain_role") for packet in recall["memory_packets"]},
-        )
+        self.assertNotIn("msg_generic", json.dumps(recall["memory_packets"], ensure_ascii=False))
         semantic = recall["recall_context_diagnostics"]["semantic_trigger_diagnostics"]
         self.assertGreaterEqual(semantic["reviewed_seed_trigger_match_count"], 1)
         self.assertTrue(semantic["reviewed_seed_triggers_are_query_scent_only"])
@@ -455,36 +454,110 @@ class RelationshipOriginRecallTests(unittest.TestCase):
         self.assertEqual(accepted["acceptance_reason"], "shared_route_topic_label_navigation_only")
         self.assertEqual(unrelated, {})
 
-    def test_registry_wide_source_hit_becomes_cli_and_mcp_deepen_route(self) -> None:
+    def test_registry_wide_source_hit_becomes_cli_and_mcp_search_open_action(self) -> None:
         cli_cache = self.cwd / "cli-registry-source-last-recall.json"
-        expectation = SourceOpenExpectation(
-            recall_matched_cue_family="registry_source_search",
-            thread_key="session:registry-technical-source",
-            window_terms=("黏菌", "探索算法"),
+        cue = "黏菌 联想回忆 探索算法"
+        cli_recall_proc = run_aippocampus_cli(
+            "agent",
+            "recall",
+            cue,
+            "--cwd",
+            str(self.cwd),
+            "--clean-source-dir",
+            str(self.clean),
+            "--registry-dir",
+            str(self.registry),
+            "--last-recall-path",
+            str(cli_cache),
+            "--detail",
+            "compact",
+            "--json",
         )
-        cli_recall, _cli_deepen = assert_cli_recall_deepens_to_source(
+        cli_recall = parse_cli_json(
             self,
-            cue="黏菌 联想回忆 探索算法",
-            cwd=self.cwd,
-            clean_source_dir=self.clean,
-            registry_dir=self.registry,
-            last_recall_path=cli_cache,
-            expectation=expectation,
+            cli_recall_proc,
+            expected_returncode=2,
+            label="aippocampus agent recall registry search recovery",
         )
         self.assertEqual(
-            cli_recall["foreground_action_card"]["canonical_action"]["action_id"],
-            "agent_deepen_selected_route",
+            cli_recall["foreground_action"]["id"],
+            "search_registry_sources_for_original_cue_anchors",
         )
+        cli_search_proc = run_aippocampus_cli(
+            "search",
+            "--all",
+            cue,
+            "--cwd",
+            str(self.cwd),
+            "--registry-dir",
+            str(self.registry),
+            "--json",
+        )
+        cli_search = parse_cli_json(self, cli_search_proc)
+        self.assertEqual(cli_search["foreground_action"]["id"], "open_registry_search_source_window")
+        self.assertEqual(
+            cli_search["foreground_action"]["arguments"]["thread_key"],
+            "session:registry-technical-source",
+        )
+        cli_open_proc = run_aippocampus_cli(
+            "search",
+            "--open-source",
+            "--thread-key",
+            cli_search["foreground_action"]["arguments"]["thread_key"],
+            "--message-id",
+            cli_search["foreground_action"]["arguments"]["message_id"],
+            "--line",
+            str(cli_search["foreground_action"]["arguments"]["line"]),
+            "--registry-dir",
+            str(self.registry),
+            "--json",
+        )
+        cli_open = parse_cli_json(self, cli_open_proc)
+        self.assertEqual(cli_open["status"], "ok")
+        self.assertIn("黏菌", json.dumps(cli_open["source_window"], ensure_ascii=False))
+        self.assertIn("探索算法", json.dumps(cli_open["source_window"], ensure_ascii=False))
 
         mcp_cache = self.cwd / "mcp-registry-source-last-recall.json"
-        assert_mcp_recall_deepens_to_source(
-            self,
-            cue="黏菌 联想回忆 探索算法",
-            cwd=self.cwd,
-            clean_source_dir=self.clean,
-            registry_dir=self.registry,
-            last_recall_path=mcp_cache,
-            expectation=expectation,
+        mcp_recall = call_mcp_tool_payload(
+            "agent_recall",
+            {
+                "query": cue,
+                "cwd": str(self.cwd),
+                "clean_source_dir": str(self.clean),
+                "registry_dir": str(self.registry),
+                "last_recall_path": str(mcp_cache),
+                "detail": "compact",
+            },
+        )
+        self.assertEqual(
+            mcp_recall["foreground_action"]["id"],
+            "search_registry_sources_for_original_cue_anchors",
+        )
+        mcp_search = call_mcp_tool_payload(
+            "search_memory",
+            {
+                "cwd": str(self.cwd),
+                "registry_dir": str(self.registry),
+                **mcp_recall["foreground_action"]["arguments"],
+            },
+        )
+        self.assertEqual(mcp_search["foreground_action"]["id"], "open_registry_search_source_window")
+        mcp_open = call_mcp_tool_payload(
+            "search_memory",
+            {
+                "cwd": str(self.cwd),
+                "registry_dir": str(self.registry),
+                **mcp_search["foreground_action"]["arguments"],
+            },
+        )
+        self.assertEqual(mcp_open["source_scope"], "opened_source_window")
+        self.assertIn(
+            "黏菌",
+            json.dumps(mcp_open["source_window_preview"], ensure_ascii=False),
+        )
+        self.assertIn(
+            "探索算法",
+            json.dumps(mcp_open["source_window_preview"], ensure_ascii=False),
         )
 
     def test_source_backed_semantic_trigger_becomes_deepen_route(self) -> None:

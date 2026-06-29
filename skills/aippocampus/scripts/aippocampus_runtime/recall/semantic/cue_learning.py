@@ -97,7 +97,11 @@ def promote_recall_cue_after_source_open(
         if explicit_useful:
             row["explicit_useful_feedback_count"] = int(row.get("explicit_useful_feedback_count") or 0) + 1
         row["last_feedback_signal"] = "explicit_useful" if explicit_useful else "source_open"
-        row["confidence"] = round(max(float(row.get("confidence") or 0.0), confidence), 4)
+        row["source_open_confidence_basis"] = round(
+            max(float(row.get("source_open_confidence_basis") or 0.0), confidence),
+            4,
+        )
+        row["confidence"] = cue_cache.feedback_aware_recall_cue_confidence(row)
         row["source_refs"] = cue_cache.merge_semantic_source_refs(list(row.get("source_refs") or []), refs)
         row["prompt_hashes"] = unique_preserve(
             [str(value) for value in row.get("prompt_hashes") or []] + [prompt_id],

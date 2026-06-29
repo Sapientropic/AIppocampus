@@ -7,7 +7,11 @@ from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
-from aippocampus_runtime.contracts import canonical_foreground_action_fields, shell_quote
+from aippocampus_runtime.contracts import (
+    canonical_foreground_action_fields,
+    foreground_shell_action,
+    shell_quote,
+)
 from aippocampus_runtime.foreground_compact_language import (
     compact_details_flag,
     strip_compact_policy_vocabulary,
@@ -40,6 +44,7 @@ from aippocampus_runtime.source.registry_search_evidence import (
 from aippocampus_runtime.source.registry_search_skips import skipped_maintenance_actions
 
 AnnotateReopenCommands = Callable[..., None]
+FOREGROUND_MATCH_LIMIT = 3
 
 
 def _as_int(value: Any, default: int = 0) -> int:
@@ -159,6 +164,18 @@ def _low_confidence_reopen_matches(
         if len(candidates) >= limit:
             break
     return candidates
+
+
+def _has_visible_reopenable_search_match(matches: list[dict[str, Any]]) -> bool:
+    """Return whether registry search already found a foregroundable source route.
+
+    A visible, reopenable search hit is the product's freshest cue-specific
+    route. Lower-confidence suppressed matches and prior semantic-position
+    hints can still be useful diagnostics, but they must not become the compact
+    primary action ahead of the search hit or its refine/deepen action.
+    """
+
+    return any(match_has_direct_source_open_route(match) for match in matches)
 
 
 def _semantic_position_reopen_matches(
@@ -293,6 +310,110 @@ def _first_match_usefulness_payload(
     if diagnostic_output:
         payload["artifact_role"] = first_match.get("artifact_role")
     return payload
+
+
+def _compact_foreground_match(match: Mapping[str, Any], *, public_output: bool) -> dict[str, Any]:
+    public_fields = {
+        "source": match.get("source"),
+        "role": match.get("role"),
+        "phase": match.get("phase"),
+        "snippet": match.get("snippet"),
+        "scope_labels": match.get("scope_labels"),
+        "semantic_scope_labels": match.get("semantic_scope_labels"),
+    }
+    if public_output:
+        return {
+            key: value
+            for key, value in {"rank": match.get("hit_index"), **public_fields}.items()
+            if value not in (None, "", [], {})
+        }
+    local_fields = {
+        "hit_index": match.get("hit_index"),
+        "hit_selector": match.get("hit_selector"),
+        "message_id": match.get("message_id"),
+        "line": match.get("line"),
+        "reopen_command": match.get("reopen_command"),
+    }
+    return {
+        key: value
+        for key, value in {**local_fields, **public_fields}.items()
+        if value not in (None, "", [], {})
+    }
+
+
+def _compact_foreground_matches(
+    matches: list[dict[str, Any]],
+    *,
+    public_output: bool,
+) -> list[dict[str, Any]]:
+    return [
+        hit
+        for hit in (
+            _compact_foreground_match(match, public_output=public_output)
+            for match in matches[:FOREGROUND_MATCH_LIMIT]
+        )
+        if hit
+    ]
+
+
+def _public_registry_search_action(query: str) -> dict[str, Any]:
+    action = foreground_shell_action(
+        action_id="rerun_registry_search_locally",
+        label="Rerun registry search locally",
+        command=f"aippocampus search --all {shell_quote(query)} --json",
+        why=(
+            "Public output omits local source handles; rerun the search locally "
+            "to get a source-open action before making claims."
+        ),
+        mutation_risk="read_only",
+        claim_boundary="public_search_summary_requires_local_source_reopen",
+    )
+    action["tool_name"] = "search_memory"
+    action["arguments"] = {"query": query, "scope": "all_registered_sources"}
+    return action
+
+
+def _degraded_state(raw_payload: Mapping[str, Any]) -> dict[str, Any] | None:
+    if not raw_payload.get("partial") and not raw_payload.get("degraded_reason"):
+        return None
+    return {
+        key: value
+        for key, value in {
+            "partial": bool(raw_payload.get("partial")),
+            "reason": raw_payload.get("degraded_reason"),
+            "max_elapsed_ms": raw_payload.get("max_elapsed_ms"),
+            "unsearched_entry_count": raw_payload.get("unsearched_entry_count"),
+        }.items()
+        if value not in (None, "", [], {})
+    }
+
+
+def _registry_search_compact_payload(
+    raw_payload: Mapping[str, Any],
+    *,
+    output_matches: list[dict[str, Any]],
+    public_output: bool,
+) -> dict[str, Any]:
+    payload = {
+        "detail": "compact",
+        "kind": raw_payload.get("kind"),
+        "ok": raw_payload.get("ok"),
+        "status": raw_payload.get("status"),
+        "search_scope": raw_payload.get("search_scope"),
+        "query_text": raw_payload.get("query_text"),
+        "match_count": raw_payload.get("match_count"),
+        "shown_match_count": min(len(output_matches), FOREGROUND_MATCH_LIMIT),
+        "useful_target_hit": raw_payload.get("useful_target_hit"),
+        "matches": _compact_foreground_matches(output_matches, public_output=public_output),
+        "discussion_atlas_pointer": raw_payload.get("discussion_atlas_pointer"),
+        "degraded_state": _degraded_state(raw_payload),
+        "source_boundary": raw_payload.get("source_boundary"),
+        "suppression_boundary": raw_payload.get("suppression_boundary"),
+        "details_available": True if raw_payload.get("detail_command") else None,
+        "detail_command": raw_payload.get("detail_command") if not public_output else None,
+        "public_output": True if public_output else None,
+    }
+    return {key: value for key, value in payload.items() if value not in (None, "", [], {})}
 
 
 def _registry_search_raw_payload(
@@ -447,6 +568,8 @@ def render_registry_search_payload(
     duplicate_metrics: Mapping[str, int],
     include_paths: bool,
     search_budget: str,
+    detail: str = "compact",
+    public_output: bool = False,
     annotate_reopen_commands: AnnotateReopenCommands,
 ) -> dict[str, Any]:
     first_match = matches[0] if matches else None
@@ -506,10 +629,17 @@ def render_registry_search_payload(
         include_paths=include_paths,
         annotate_reopen_commands=annotate_reopen_commands,
     )
-    if low_confidence_matches and not useful_target_hit:
+    visible_reopenable_search_match = _has_visible_reopenable_search_match(matches)
+    foreground_low_confidence_matches = (
+        [] if visible_reopenable_search_match else low_confidence_matches
+    )
+    foreground_semantic_position_matches = (
+        [] if visible_reopenable_search_match else semantic_position_matches
+    )
+    if foreground_low_confidence_matches and not useful_target_hit:
         near_hit_action = registry_search_open_source_action(
             query=inputs.query_text,
-            match=low_confidence_matches[0],
+            match=foreground_low_confidence_matches[0],
             action_id="inspect_low_confidence_registry_near_hit",
             label="Inspect a low-confidence near-hit source",
             why=(
@@ -520,17 +650,17 @@ def render_registry_search_payload(
         )
         if near_hit_action:
             actions = [near_hit_action, *actions]
-    if semantic_position_matches and not useful_target_hit:
+    if foreground_semantic_position_matches and not useful_target_hit:
         semantic_position_action = _semantic_position_open_action(
             inputs=inputs,
-            matches=semantic_position_matches,
+            matches=foreground_semantic_position_matches,
         )
         if semantic_position_action:
             actions = [semantic_position_action, *actions]
     if discussion_action:
         actions = [discussion_action, *actions]
 
-    diagnostic_output = include_paths or search_budget == "deep"
+    diagnostic_output = (include_paths or search_budget == "deep" or detail == "full") and not public_output
     detail_command = (
         f"aippocampus search --all {shell_quote(inputs.query_text)} "
         "--search-budget deep --json --max-elapsed-ms 15000"
@@ -545,8 +675,8 @@ def render_registry_search_payload(
     next_reopen_command = str((actions[0] if actions else {}).get("command") or "")
     claim_boundary, source_reopen_boundary = _registry_search_boundaries(
         useful_target_hit=useful_target_hit,
-        low_confidence_matches=low_confidence_matches,
-        semantic_position_matches=semantic_position_matches,
+        low_confidence_matches=foreground_low_confidence_matches,
+        semantic_position_matches=foreground_semantic_position_matches,
     )
     raw_payload = _registry_search_raw_payload(
         inputs=inputs,
@@ -558,8 +688,8 @@ def render_registry_search_payload(
         detail_command=detail_command,
         output_matches=output_matches,
         useful_target_hit=useful_target_hit,
-        low_confidence_matches=low_confidence_matches,
-        semantic_position_matches=semantic_position_matches,
+        low_confidence_matches=foreground_low_confidence_matches,
+        semantic_position_matches=foreground_semantic_position_matches,
         no_phrase_like_matches=no_phrase_like_matches,
         low_coverage_only_matches=low_coverage_only_matches,
         first_match=first_match,
@@ -570,6 +700,12 @@ def render_registry_search_payload(
         claim_boundary=claim_boundary,
         source_reopen_boundary=source_reopen_boundary,
     )
+    if diagnostic_output and semantic_position_matches and not raw_payload.get(
+        "recall_semantic_position_candidates"
+    ):
+        raw_payload["recall_semantic_position_candidates"] = [
+            diagnostic_registry_match(match) for match in semantic_position_matches
+        ]
     payload = {key: item for key, item in raw_payload.items() if item not in (None, "", {})}
     if actions:
         payload.update(
@@ -581,6 +717,22 @@ def render_registry_search_payload(
             )
         )
     if not diagnostic_output:
+        if public_output:
+            actions = [_public_registry_search_action(inputs.query_text)] if inputs.query_text else []
+        payload = _registry_search_compact_payload(
+            payload,
+            output_matches=output_matches,
+            public_output=public_output,
+        )
+        if actions:
+            payload.update(
+                canonical_foreground_action_fields(
+                    actions[0],
+                    safe_next_actions=actions,
+                    max_safe_next_actions=1,
+                    safe_next_read_only_only=True,
+                )
+            )
         payload.update(compact_details_flag(payload))
         payload = strip_compact_policy_vocabulary(payload)
     return payload if include_paths else redact_sensitive_values(redact_private_paths(payload))

@@ -235,6 +235,30 @@ class SemanticCueCacheTests(unittest.TestCase):
                     for row in rows
                 )
             )
+            self.assertTrue(
+                all(row["confidence"] < confidence_policy.ACTIVE_CUE_CONFIDENCE for row in rows)
+            )
+
+            later = semantic_cue_learning.promote_recall_cue_after_source_open(
+                cache_path,
+                query="transport hot reload anchor",
+                source_refs=refs,
+                route_id="route:hot-reload",
+            )
+            later_rows = cues.all_semantic_cues(cache_path)
+
+            self.assertEqual(later["active_count"], 0)
+            self.assertEqual(cues.semantic_cue_triggers(cache_path), [])
+            self.assertTrue(all(row["status"] == "staging" for row in later_rows))
+            self.assertEqual({row["feedback_score"] for row in later_rows}, {2})
+            self.assertTrue(
+                all(
+                    row["confidence"] < confidence_policy.ACTIVE_CUE_CONFIDENCE
+                    for row in later_rows
+                )
+            )
+            self.assertEqual({row["source_open_success_count"] for row in later_rows}, {4})
+            self.assertEqual({row["false_positive_count"] for row in later_rows}, {2})
 
     def test_semantic_confidence_policy_owner_preserves_threshold_behavior(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

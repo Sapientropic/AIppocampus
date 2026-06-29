@@ -5,10 +5,14 @@ import unittest
 
 from aippocampus_runtime.recall.feedback.suppression_lifecycle import feedback_trace_family
 from aippocampus_runtime.recall.rollout_search import rollout_payload_class
+from aippocampus_runtime.source import agent_trace_families
 from aippocampus_runtime.source.agent_trace_admission import (
+    ACCEPTED_RECEIPT_FIELDS,
     ADMISSION_LEVELS,
+    RECEIPT_FIELD_CONTRACT,
     TRAINING_ROLES,
     TRAINING_SIGNAL_KIND,
+    adapt_trace_rows_with_receipts,
     behavior_training_signal_from_trace,
     classify_trace_row,
     draft_navigation_candidate_from_signal,
@@ -122,6 +126,82 @@ class AgentTraceAdmissionTests(unittest.TestCase):
         self.assertTrue(classified["family_alias_applied"])
         self.assertEqual(classified["admission_level"], "reopenable_route")
         self.assertEqual(classified["reason"], "closeout_joined_to_receipt")
+
+    def test_trace_family_producer_values_are_known_or_declared_aliases(self) -> None:
+        producer_values = agent_trace_families.declared_trace_family_producer_values()
+        known_or_alias = agent_trace_families.KNOWN_TRACE_FAMILIES | set(
+            agent_trace_families.FAMILY_ALIASES
+        )
+
+        self.assertIn(rollout_payload_class({"role": "assistant", "is_final": True}), producer_values)
+        self.assertIn(
+            agent_trace_families.TOOL_CALL_SUCCEEDED_PRODUCER_FAMILY,
+            producer_values,
+        )
+        self.assertNotIn("fixture_only_family", producer_values)
+        self.assertEqual(
+            agent_trace_families.raw_family({"trace_family_under_test": "fixture_only_family"}),
+            "",
+        )
+        self.assertLessEqual(producer_values, known_or_alias)
+        self.assertLessEqual(
+            set(agent_trace_families.FAMILY_ALIASES.values()),
+            agent_trace_families.KNOWN_TRACE_FAMILIES,
+        )
+
+    def test_project_admission_joins_closeout_to_matching_behavior_receipt(self) -> None:
+        closeout = {
+            "trace_id": "final-joined",
+            "family": "assistant_final",
+            "source_refs": [{"message_id": "msg-joined", "line": 7}],
+        }
+        receipt = {
+            "trace_id": "source-open-joined",
+            "trace_family": "successful_recall_deepen_source_open",
+            "source_refs": [{"message_id": "msg-joined", "line": 7}],
+        }
+        source_only = classify_trace_row(closeout)
+        adapted = adapt_trace_rows_with_receipts([closeout, receipt])
+        adapted_closeout = next(row for row in adapted if row["trace_id"] == "final-joined")
+        joined_closeout = classify_trace_row(adapted_closeout)
+        detail = project_trace_admission([closeout, receipt], detail="operator")
+        ledger = project_behavior_training_ledger([closeout, receipt], detail="operator")
+
+        self.assertEqual(source_only["admission_level"], "navigation_candidate")
+        self.assertEqual(source_only["authority_join"], "agent_reported_navigation_only")
+        self.assertEqual(adapted_closeout["receipt_state"], "matched")
+        self.assertEqual(joined_closeout["admission_level"], "reopenable_route")
+        self.assertEqual(
+            joined_closeout["authority_join"],
+            "reported_and_receipted_navigation",
+        )
+        self.assertEqual(detail["admission_counts"]["reopenable_route"], 1)
+        self.assertEqual(detail["admission_counts"]["bounded_evidence_after_open"], 1)
+        self.assertEqual(ledger["training_role_counts"]["process_supervision"], 1)
+        self.assertEqual(ledger["training_role_counts"]["positive_demo"], 1)
+
+    def test_receipt_field_contract_is_adapter_owned_not_test_fixture_only(self) -> None:
+        self.assertEqual(set(ACCEPTED_RECEIPT_FIELDS), set(RECEIPT_FIELD_CONTRACT))
+        self.assertEqual(
+            {row["status"] for row in RECEIPT_FIELD_CONTRACT.values()},
+            {"adapter_produced"},
+        )
+        self.assertEqual(
+            {row["adapter"] for row in RECEIPT_FIELD_CONTRACT.values()},
+            {"adapt_trace_rows_with_receipts"},
+        )
+
+        test_only_field = classify_trace_row(
+            {
+                "trace_id": "final-test-only",
+                "family": "assistant_final",
+                "source_refs": [{"message_id": "msg-test-only", "line": 2}],
+                "test_receipt_refs": [{"event_id": "fixture-only"}],
+            }
+        )
+
+        self.assertEqual(test_only_field["admission_level"], "navigation_candidate")
+        self.assertEqual(test_only_field["reason"], "closeout_self_report_only")
 
     def test_operator_detail_reports_unknown_family_without_compact_inventory(self) -> None:
         rows = [{"trace_id": "unknown-1", "family": "brand_new_family"}]

@@ -1,9 +1,20 @@
 from __future__ import annotations
 
+import ast
 import re
+from pathlib import Path
 from typing import Any, Mapping
 
 OWNER_DOC = "docs/architecture/ops/guard-lifecycle-registry.md"
+REPO_ROOT = Path(__file__).resolve().parents[2]
+RUNTIME_COMPACT_LANGUAGE = (
+    REPO_ROOT
+    / "skills"
+    / "aippocampus"
+    / "scripts"
+    / "aippocampus_runtime"
+    / "foreground_compact_language.py"
+)
 
 GATE_CLASSES = frozenset({"hard", "advisory", "ci_owned", "manual_required"})
 VERIFICATION_OWNERS = frozenset(
@@ -23,6 +34,37 @@ FIELD_CLASSES = frozenset(
         "internal_only",
     }
 )
+
+
+def _runtime_compact_policy_denylist() -> frozenset[str]:
+    tree = ast.parse(RUNTIME_COMPACT_LANGUAGE.read_text(encoding="utf-8"))
+    for node in tree.body:
+        if not isinstance(node, ast.Assign):
+            continue
+        if not any(
+            isinstance(target, ast.Name) and target.id == "COMPACT_POLICY_FIELD_DENYLIST"
+            for target in node.targets
+        ):
+            continue
+        value = node.value
+        if (
+            isinstance(value, ast.Call)
+            and isinstance(value.func, ast.Name)
+            and value.func.id == "frozenset"
+            and value.args
+        ):
+            value = value.args[0]
+        if isinstance(value, (ast.Set, ast.List, ast.Tuple)):
+            fields = {
+                item.value
+                for item in value.elts
+                if isinstance(item, ast.Constant) and isinstance(item.value, str)
+            }
+            return frozenset(fields)
+    raise RuntimeError("COMPACT_POLICY_FIELD_DENYLIST not found in runtime foreground compact language")
+
+
+RUNTIME_COMPACT_POLICY_FIELD_DENYLIST = _runtime_compact_policy_denylist()
 
 COMMAND_METADATA_KEYS = (
     "gate_class",
@@ -425,6 +467,9 @@ COMPACT_FIELD_CLASSIFICATIONS: dict[str, str] = {
     "rows": "internal_only",
     "internal": "internal_only",
 }
+
+for field in RUNTIME_COMPACT_POLICY_FIELD_DENYLIST:
+    COMPACT_FIELD_CLASSIFICATIONS[field] = "trace_operator_only"
 
 
 def scope_base(scope: str) -> str:

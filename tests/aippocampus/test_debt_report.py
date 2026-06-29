@@ -589,9 +589,26 @@ class DebtReportTests(unittest.TestCase):
         clean = debt_report.changed_surface_debt(["docs/guides/install-guide.md"])
         self.assertEqual(clean["status"], "pass")
 
-        projection_owner = debt_report.changed_surface_debt(
-            ["skills/aippocampus/scripts/aippocampus_runtime/mcp/agent_recall_projection.py"]
+        guard_pressure_path = (
+            "skills/aippocampus/scripts/aippocampus_runtime/mcp/agent_recall_projection.py"
         )
+        with mock.patch.object(
+            debt_report,
+            "changed_surface_guard_pressure",
+            return_value=[
+                {
+                    "path": guard_pressure_path,
+                    "layer": "runtime",
+                    "current_count": 699,
+                    "guard_budget": 700,
+                    "margin": 1,
+                    "next_split_boundary": "extract projection owner",
+                    "tracked_owner_issue": False,
+                }
+            ],
+        ):
+            projection_owner = debt_report.changed_surface_debt([guard_pressure_path])
+
         self.assertEqual(projection_owner["status"], "fail")
         self.assertEqual(
             projection_owner["instruction_surface"]["classified_file_count"],

@@ -7,19 +7,13 @@ from typing import Any
 from aippocampus_runtime.recall.agent_continuity_cli_support import feedback_lane_resolution
 from aippocampus_runtime.recall.ambient_policy import anti_nag_tokens_from_card
 from aippocampus_runtime.recall.feedback.events import load_feedback_calibration_report
+from aippocampus_runtime.recall.feedback.vocabulary import (
+    default_signal_delta,
+    feedback_signal_is_negative,
+    normalize_feedback_signal,
+)
 
-NEGATIVE_FEEDBACK_SIGNALS = {
-    "blocked",
-    "expired",
-    "ignored",
-    "superseded",
-    "wrong_route_drag",
-}
-POSITIVE_FEEDBACK_SIGNALS = {
-    "prevented_failure",
-    "source_reopen_success",
-    "user_confirmed",
-}
+QUIET_ROUTE_PRESSURE_THRESHOLD = -0.5
 
 
 def feedback_report_for_prompt(
@@ -67,10 +61,22 @@ def _quiet_feedback_route_ids(report: Mapping[str, Any] | None) -> set[str]:
     for row in _feedback_deltas(report):
         raw_counts = row.get("signal_counts")
         counts: Mapping[str, Any] = raw_counts if isinstance(raw_counts, Mapping) else {}
-        negative = sum(int(counts.get(signal) or 0) for signal in NEGATIVE_FEEDBACK_SIGNALS)
-        positive = sum(int(counts.get(signal) or 0) for signal in POSITIVE_FEEDBACK_SIGNALS)
+        negative = 0
+        cumulative_pressure = 0.0
+        for raw_signal, raw_count in counts.items():
+            signal = normalize_feedback_signal(raw_signal, default="")
+            try:
+                count = int(raw_count or 0)
+            except (TypeError, ValueError):
+                count = 0
+            if feedback_signal_is_negative(signal):
+                negative += count
+            cumulative_pressure += default_signal_delta(signal) * count
         route_id = str(row.get("route_id") or "").strip()
-        if route_id and negative > 0 and positive == 0:
+        # Feedback is navigation pressure, not evidence. A route quiets only
+        # while cumulative delivery history is net harmful; later useful source
+        # opens can recover it instead of being erased by one old negative.
+        if route_id and negative > 0 and cumulative_pressure <= QUIET_ROUTE_PRESSURE_THRESHOLD:
             quiet.update(_id_variants(route_id))
     return quiet
 

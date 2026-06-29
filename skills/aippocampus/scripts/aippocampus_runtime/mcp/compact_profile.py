@@ -299,7 +299,6 @@ def _primary_source_snippet(payload: Mapping[str, Any]) -> dict[str, Any]:
     snippet = _compact_source_window_message(window[selected_index], text_key="text")
     if snippet:
         snippet["source_scope"] = "opened_window_primary_message"
-        snippet["claim_boundary"] = "exact_wording_inside_this_snippet_only"
         snippet["max_chars"] = 420
     return snippet
 
@@ -383,7 +382,6 @@ def compact_search_memory_payload(
         "aippocampus_registry_source_window",
         "aippocampus_last_recall_source_window",
     }:
-        source_boundary = _compact_source_boundary(payload.get("source_boundary"))
         metrics = payload.get("metrics")
         metrics_map = metrics if isinstance(metrics, Mapping) else {}
         source_open_card = {
@@ -396,8 +394,9 @@ def compact_search_memory_payload(
             if payload.get("ok")
             else "Source window could not be opened; rerun search for a fresh source route."
         )
-        if source_boundary:
-            source_open_card["source_boundary"] = source_boundary
+        source_open_card["source_scope"] = (
+            "opened_source_window" if payload.get("ok") else "source_window_unavailable"
+        )
         window_count = metrics_map.get("window_message_count")
         if isinstance(window_count, int):
             source_open_card["source_window_summary"] = {"message_count": window_count}
@@ -456,9 +455,7 @@ def compact_search_memory_payload(
         safe_next_actions = [action for action in safe_next_actions if action][:1]
         if safe_next_actions:
             card["safe_next_actions"] = safe_next_actions
-    source_boundary = _compact_source_boundary(payload.get("source_boundary"))
-    if source_boundary:
-        card["source_boundary"] = source_boundary
+    card["source_scope"] = "source_open_required" if action else "no_source_route"
     hits = [
         _compact_search_hit(match, include_source_snippets=include_source_snippets)
         for match in matches[:2]

@@ -7,6 +7,7 @@ from typing import Any
 
 from aippocampus_runtime import core
 from aippocampus_runtime.contracts import canonical_foreground_action_fields, shell_quote
+from aippocampus_runtime.foreground_compact_language import strip_compact_policy_vocabulary
 from aippocampus_runtime.mcp.compact_profile import strip_compact_foreground_debug_fields
 from aippocampus_runtime.mcp.contracts import MCPCompactResponseContract, build_mcp_compact_card
 
@@ -167,7 +168,7 @@ def compact_agent_explain_payload(
             }
         )
         return build_mcp_compact_card(
-            strip_compact_foreground_debug_fields(card),
+            strip_compact_foreground_debug_fields(strip_compact_policy_vocabulary(card)),
             surface=surface,
         )
     reason_codes = core.list_or_empty(explanation.get("reason_codes"))
@@ -210,7 +211,7 @@ def compact_agent_explain_payload(
         }
     )
     return build_mcp_compact_card(
-        strip_compact_foreground_debug_fields(card),
+        strip_compact_foreground_debug_fields(strip_compact_policy_vocabulary(card)),
         surface=surface,
     )
 

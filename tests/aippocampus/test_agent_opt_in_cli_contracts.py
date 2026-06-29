@@ -79,6 +79,59 @@ class AgentOptInCliContractsTests(unittest.TestCase):
             self.assertEqual(payload["foreground_action_contract"], "foreground-action-v2")
             self.assertEqual(foreground_action_contract_violations(payload), [])
 
+    def test_cli_missing_cue_compact_strips_policy_vocabulary(self) -> None:
+        compact = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "aippocampus_runtime.cli.facade",
+                "agent",
+                "recall",
+                "--json",
+            ],
+            cwd=SCRIPTS,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            check=False,
+        )
+        full = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "aippocampus_runtime.cli.facade",
+                "agent",
+                "recall",
+                "--json",
+                "--detail",
+                "full",
+            ],
+            cwd=SCRIPTS,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            check=False,
+        )
+
+        self.assertEqual(compact.returncode, 2, compact.stderr)
+        self.assertEqual(full.returncode, 2, full.stderr)
+        compact_payload = json.loads(compact.stdout)
+        full_payload = json.loads(full.stdout)
+        encoded = json.dumps(compact_payload, ensure_ascii=False)
+        self.assertEqual(compact_payload["status"], "needs_input")
+        self.assertEqual(compact_payload["foreground_action"]["id"], "recall_vague_cue")
+        for forbidden in (
+            "claim_boundary",
+            "policy_boundary",
+            "source_boundary",
+            "operator_detail_command",
+        ):
+            self.assertNotIn(forbidden, encoded)
+        self.assertIn("claim_boundary", full_payload)
+        self.assertIn("policy_boundary", full_payload)
+
     def _append_clean_rows(self, rows: list[dict[str, object]]) -> None:
         with (self.clean / "messages.jsonl").open("a", encoding="utf-8", newline="\n") as f:
             for row in rows:
@@ -751,11 +804,39 @@ class AgentOptInCliContractsTests(unittest.TestCase):
         self.assertEqual(payload["kind"], "aippocampus_route_explain_card")
         self.assertEqual(payload["foreground_action"]["tool_name"], "agent_deepen")
         self.assertEqual(payload["foreground_action"]["arguments"]["request_index"], 1)
-        self.assertEqual(payload["claim_boundary"], "navigation_only_until_source_reopened")
+        self.assertNotIn("claim_boundary", payload)
         self.assertNotIn("macro_navigation_diagnostics", payload)
         self.assertNotIn("cannot_claim", encoded)
         self.assertNotIn(str(last_recall_path), encoded)
         self.assertNotIn("local_reopen_token", encoded)
+
+        full_proc = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "aippocampus_runtime.cli.facade",
+                "agent",
+                "explain",
+                "--request",
+                "1",
+                "--last-recall",
+                "--last-recall-path",
+                str(last_recall_path),
+                "--detail",
+                "full",
+                "--json",
+            ],
+            cwd=SCRIPTS,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(full_proc.returncode, 0, full_proc.stderr)
+        full_payload = json.loads(full_proc.stdout)
+        self.assertEqual(full_payload["detail"], "full")
+        self.assertEqual(full_payload["output_boundary"], "local_private_diagnostic_full")
 
     def test_cli_agent_recall_help_marks_full_json_as_local_diagnostic(self) -> None:
         proc = subprocess.run(

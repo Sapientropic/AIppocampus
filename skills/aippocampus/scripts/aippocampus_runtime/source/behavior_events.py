@@ -9,6 +9,7 @@ import re
 from pathlib import Path
 from typing import Any
 
+from aippocampus_runtime.source import agent_trace_families
 from aippocampus_runtime.source.rollout import iter_rollout_jsonl
 
 TOOL_EXIT_CODE_RE = re.compile(r"Exit code:\s*(-?\d+)", re.IGNORECASE)
@@ -501,10 +502,14 @@ def extract_rollout_behavior_events(rollout: Path) -> list[dict[str, Any]]:
         hard_event_kind = "tool_call_observed"
         if exit_code is not None:
             status = "succeeded" if exit_code == 0 else "failed"
-            hard_event_kind = "tool_call_succeeded" if exit_code == 0 else "tool_call_failed"
+            hard_event_kind = (
+                agent_trace_families.TOOL_CALL_SUCCEEDED_PRODUCER_FAMILY
+                if exit_code == 0
+                else "tool_call_failed"
+            )
         elif ptype == "web_search_call":
             status = "succeeded"
-            hard_event_kind = "tool_call_succeeded"
+            hard_event_kind = agent_trace_families.TOOL_CALL_SUCCEEDED_PRODUCER_FAMILY
         tool_name = prior.get("tool_name") or _tool_name(payload)
         command_class = str(prior.get("command_class") or classify_tool_command(str(tool_name), ""))
         observed = {

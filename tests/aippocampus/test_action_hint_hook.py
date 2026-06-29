@@ -14,8 +14,11 @@ from unittest import mock
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = REPO_ROOT / "skills" / "aippocampus" / "scripts"
 
-from aippocampus_runtime.hooks import action_hint, action_hint_cache, foreground_status
-from aippocampus_runtime.hooks.install_action_hint_projection import action_hint_frontstage_card
+from aippocampus_runtime.hooks import action_hint, action_hint_cache
+from aippocampus_runtime.hooks.install_action_hint_projection import (
+    action_hint_frontstage_card,
+    action_hint_status_contract,
+)
 
 
 def source_ref(name: str) -> dict[str, str]:
@@ -31,7 +34,7 @@ class ActionHintHookTests(unittest.TestCase):
                 "fresh_record_count": 1,
             }
         )
-        status = foreground_status.action_hint_status_contract(card)
+        status = action_hint_status_contract(card)
 
         self.assertEqual(status["foreground_action"]["id"], "probe_action_hint_hot_path")
         self.assertEqual(

@@ -193,7 +193,8 @@ class LatestTurnFreshnessAfterStopTests(unittest.TestCase):
                 **search["foreground_action"]["arguments"],
             },
         )
-        self.assertEqual(search_opened["source_boundary"]["authority"], "source_open")
+        self.assertEqual(search_opened["source_scope"], "opened_source_window")
+        self.assertEqual(search_opened["status"], "ok")
         self.assertIn(
             self.latest_anchor,
             json.dumps(search_opened["source_window_preview"], ensure_ascii=False),

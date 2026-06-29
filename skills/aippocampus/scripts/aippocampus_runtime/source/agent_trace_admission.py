@@ -20,7 +20,12 @@ from aippocampus_runtime.recall.feedback.vocabulary import (
     normalize_feedback_signal,
 )
 from aippocampus_runtime.source import agent_trace_families
-from aippocampus_runtime.source.io_kernel import normalize_source_refs
+from aippocampus_runtime.source.agent_trace_receipts import (
+    ACCEPTED_RECEIPT_FIELDS,
+    RECEIPT_FIELD_CONTRACT,
+    adapt_trace_row,
+    adapt_trace_rows_with_receipts,
+)
 
 ADMISSION_LEVELS = (
     "ignore",
@@ -66,66 +71,9 @@ TRACE_NEGATIVE_OUTCOMES = {
 REPLAY_OUTCOMES = {"missed_opportunity", "manual_recovered", "replay_sample"}
 HINDSIGHT_OUTCOMES = {"hindsight_relabel", "narrower_route_found", "failed_but_relabelable"}
 
-SOURCE_REF_INLINE_FIELDS = (
-    "thread_key",
-    "thread_id",
-    "message_id",
-    "turn_id",
-    "turn_index",
-    "source_ref",
-    "source_id",
-    "source_line",
-    "line",
-)
 
 def _text(value: Any) -> str:
     return str(value or "").strip()
-
-
-def _inline_ref_has_anchor(ref: Mapping[str, Any]) -> bool:
-    return any(
-        ref.get(key) not in (None, "", [])
-        for key in (
-            "message_id",
-            "turn_id",
-            "turn_index",
-            "source_line",
-            "line",
-            "source_id",
-        )
-    )
-
-
-def _behavior_source_refs(row: Mapping[str, Any]) -> list[dict[str, Any]]:
-    raw_refs: list[Mapping[str, Any]] = []
-    refs = row.get("source_refs")
-    if isinstance(refs, list):
-        raw_refs.extend(ref for ref in refs if isinstance(ref, Mapping))
-    inline = {
-        key: row.get(key)
-        for key in SOURCE_REF_INLINE_FIELDS
-        if row.get(key) not in (None, "", [])
-    }
-    if inline and _inline_ref_has_anchor(inline):
-        raw_refs.append(inline)
-    normalized = normalize_source_refs(
-        raw_refs,
-        limit=8,
-        require_anchor=True,
-        require_thread=False,
-        identity_key=True,
-        allow_string_ref=False,
-    )
-    return [dict(ref) for ref in normalized]
-
-
-def _adapt_trace_row(row: Mapping[str, Any]) -> dict[str, Any]:
-    adapted = dict(row)
-    source_refs = _behavior_source_refs(row)
-    if source_refs:
-        adapted["source_refs"] = source_refs
-        adapted["source_ref_count"] = len(source_refs)
-    return adapted
 
 
 def _has_refs(row: Mapping[str, Any], key: str = "source_refs") -> bool:
@@ -306,7 +254,7 @@ def _data_card(
 
 
 def classify_trace_row(row: Mapping[str, Any]) -> dict[str, Any]:
-    row = _adapt_trace_row(row)
+    row = adapt_trace_row(row)
     family = agent_trace_families.normalized_family(row)
     producer_family = agent_trace_families.raw_family(row)
     unknown_family = agent_trace_families.unknown_family(row)
@@ -499,12 +447,13 @@ def project_behavior_training_ledger(
     *,
     detail: str = "compact",
 ) -> dict[str, Any]:
+    row_items = [row for row in rows if isinstance(row, Mapping)]
+    adapted_rows = adapt_trace_rows_with_receipts(row_items)
     signals = [
         dict(row)
         if row.get("kind") == TRAINING_SIGNAL_KIND
         else behavior_training_signal_from_trace(row)
-        for row in rows
-        if isinstance(row, Mapping)
+        for row in adapted_rows
     ]
     role_counts = Counter(str(row.get("training_role") or "none") for row in signals)
     admission_counts = Counter(str(row.get("admission_level") or "operator_only") for row in signals)
@@ -742,7 +691,7 @@ def project_trace_admission(
     *,
     detail: str = "compact",
 ) -> dict[str, Any]:
-    admitted = [classify_trace_row(row) for row in rows]
+    admitted = [classify_trace_row(row) for row in adapt_trace_rows_with_receipts(rows)]
     counts = Counter(item["admission_level"] for item in admitted)
     training_counts = Counter(item["training_role"] for item in admitted)
     graph_counts = Counter(item["graph_projection"] for item in admitted)
@@ -806,12 +755,15 @@ def project_trace_admission(
 
 __all__ = [
     "ADMISSION_LEVELS",
+    "ACCEPTED_RECEIPT_FIELDS",
     "CANDIDATE_SCHEMA_VERSION",
     "LEDGER_SCHEMA_VERSION",
+    "RECEIPT_FIELD_CONTRACT",
     "SPECULATIVE_CANDIDATE_KIND",
     "TRAINING_SIGNAL_KIND",
     "TRAINING_ROLES",
     "VERIFIER_OUTCOMES",
+    "adapt_trace_rows_with_receipts",
     "behavior_training_signal_from_trace",
     "classify_trace_row",
     "dedupe_navigation_candidates",

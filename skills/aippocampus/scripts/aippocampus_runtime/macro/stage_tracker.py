@@ -4,6 +4,7 @@ import json
 from collections.abc import Iterable, Mapping, Sequence
 from typing import Any, Literal, TypeAlias
 
+from aippocampus_runtime.macro import momentum as momentum_runtime
 from aippocampus_runtime.macro.hexagram import (
     Hexagram,
     HexagramRef,
@@ -102,16 +103,32 @@ def _numeric_event_sum(events: Iterable[Mapping[str, Any]], key: str) -> float:
     return round(total, 3)
 
 
+def _numeric_mapping_value(values: Mapping[str, object], key: str) -> float:
+    value = values.get(key)
+    if isinstance(value, int | float) and not isinstance(value, bool):
+        return float(value)
+    return 0.0
+
+
 def _momentum_summary(events: Sequence[Mapping[str, Any]]) -> dict[str, object]:
-    support = _numeric_event_sum(events, "support_delta")
-    counter = _numeric_event_sum(events, "counter_evidence_delta")
-    route_success = _numeric_event_sum(events, "route_success_delta")
-    staleness = _numeric_event_sum(events, "staleness_delta")
+    basis = momentum_runtime.normalize_momentum_basis(
+        {
+            key: _numeric_event_sum(events, key)
+            for key in momentum_runtime.MOMENTUM_BASIS_KEYS
+        }
+    )
+    block = momentum_runtime.build_momentum_block(basis)
+    raw_trend = block.get("trend")
+    trend: Mapping[str, object] = raw_trend if isinstance(raw_trend, Mapping) else {}
+    support = _numeric_mapping_value(trend, "supporting_delta")
+    friction = _numeric_mapping_value(trend, "friction_delta")
+    net = _numeric_mapping_value(trend, "net_delta")
+    route_success = float(basis["route_success_delta"])
     if not events:
         phase = "hibernating"
-    elif counter > support or staleness > 0:
+    elif friction > support:
         phase = "declining"
-    elif counter > 0 and support > 0:
+    elif friction > 0 and support > 0:
         phase = "turning"
     elif support >= 2 and route_success > 0:
         phase = "peaking"
@@ -121,12 +138,9 @@ def _momentum_summary(events: Sequence[Mapping[str, Any]]) -> dict[str, object]:
         phase = "hibernating"
     return {
         "phase_hint": phase,
-        "basis": {
-            "support_delta": support,
-            "counter_evidence_delta": counter,
-            "route_success_delta": route_success,
-            "staleness_delta": staleness,
-        },
+        "basis": basis,
+        "trend": {"supporting_delta": support, "friction_delta": friction, "net_delta": net},
+        "momentum_phase": block.get("phase"),
         "authority_level": AUTHORITY_LEVEL,
         "status": "compact_trend_hint_not_full_xiaoxi_phase",
     }

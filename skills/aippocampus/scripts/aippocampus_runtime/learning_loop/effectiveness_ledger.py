@@ -107,6 +107,57 @@ def _priority_delta(status: str, outcome: str) -> float:
     return 0.0
 
 
+def _safe_float(value: Any) -> float:
+    try:
+        return float(value or 0.0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _bounded_priority_delta(rows: Sequence[Mapping[str, Any]]) -> float:
+    raw = sum(_safe_float(row.get("priority_delta")) for row in rows)
+    return round(max(-1.0, min(1.0, raw)), 6)
+
+
+def _aggregate_status(rows: Sequence[Mapping[str, Any]], *, priority_delta: float) -> str:
+    statuses = Counter(str(row.get("effectiveness_status") or "unknown") for row in rows)
+    if statuses.get("archived") and priority_delta <= 0:
+        return "archived"
+    if priority_delta < 0:
+        return "ineffective"
+    if priority_delta > 0:
+        return "useful_signal"
+    if statuses.get("review_overdue"):
+        return "review_overdue"
+    return "unproven"
+
+
+def _aggregate_effectiveness_rows(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    """Collapse append-only rows into one navigation-pressure decision.
+
+    The ledger is an audit trail, not a latest-state table. Future agents are
+    tempted to let the newest positive row overwrite repeated failures because
+    it is the easiest dict assignment; keep the cumulative rule here so cache
+    eligibility follows the whole same-lesson history.
+    """
+
+    materialized = [row for row in rows if isinstance(row, Mapping)]
+    priority_delta = _bounded_priority_delta(materialized)
+    status = _aggregate_status(materialized, priority_delta=priority_delta)
+    return {
+        "effectiveness_status": status,
+        "priority_delta": priority_delta,
+        "ledger_row_count": len(materialized),
+        "status_counts": dict(
+            sorted(Counter(str(row.get("effectiveness_status") or "unknown") for row in materialized).items())
+        ),
+        "outcome_counts": dict(
+            sorted(Counter(str(row.get("outcome") or "unknown") for row in materialized).items())
+        ),
+        "aggregate_policy": "bounded_cumulative_navigation_pressure",
+    }
+
+
 def ledger_rows_from_guidance_outcomes(
     surfaced_guidance: Iterable[Mapping[str, Any]],
     outcomes: Iterable[Mapping[str, Any]],
@@ -203,23 +254,29 @@ def apply_effectiveness_to_guidance(
     guidance: Iterable[Mapping[str, Any]],
     ledger_rows: Iterable[Mapping[str, Any]],
 ) -> list[dict[str, Any]]:
-    latest: dict[str, Mapping[str, Any]] = {}
+    rows_by_lesson: dict[str, list[Mapping[str, Any]]] = {}
     for row in ledger_rows:
         if not isinstance(row, Mapping):
             continue
         lesson = _lesson_id(row)
         if lesson:
-            latest[lesson] = row
+            rows_by_lesson.setdefault(lesson, []).append(row)
+    aggregates = {
+        lesson: _aggregate_effectiveness_rows(rows)
+        for lesson, rows in rows_by_lesson.items()
+    }
     projected: list[dict[str, Any]] = []
     for item in guidance:
         if not isinstance(item, Mapping):
             continue
         row = dict(item)
         lesson = _lesson_id(row)
-        ledger = latest.get(lesson)
+        ledger = aggregates.get(lesson)
         if ledger:
             row["effectiveness_status"] = ledger.get("effectiveness_status")
             row["navigation_priority_delta"] = ledger.get("priority_delta")
+            row["effectiveness_ledger_row_count"] = ledger.get("ledger_row_count")
+            row["effectiveness_aggregate_policy"] = ledger.get("aggregate_policy")
             if ledger.get("effectiveness_status") in {"ineffective", "archived"}:
                 row["freshness"] = "stale"
                 row["status"] = "archived" if ledger.get("effectiveness_status") == "archived" else "review"

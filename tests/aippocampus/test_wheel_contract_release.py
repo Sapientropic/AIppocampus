@@ -190,9 +190,53 @@ class WheelContractReleaseTests(unittest.TestCase):
         self.assertFalse(result["ok"])
         self.assertEqual(result["status"], "fail")
         self.assertEqual(result["mode"], "import_only")
+        self.assertEqual(result["detail"], "compact")
         self.assertEqual(result["first_failure"]["id"], "public_import_matrix")
         self.assertIn("recall.foreground", result["first_failure"]["message"])
         self.assertIn("--import-only --json", result["next_command"])
+        self.assertIn("--detail full", result["detail_command"])
+        self.assertIn("--keep-temp", result["detail_command"])
+
+    def test_import_only_contract_defaults_to_compact_success_card(self) -> None:
+        result = wheel_contract.render_result(
+            [
+                wheel_contract.Check("build_wheel", "pass", "built one wheel"),
+                wheel_contract.Check(
+                    "public_import_matrix",
+                    "pass",
+                    "documented public modules import from the installed wheel",
+                    {"module_count": len(wheel_contract.PUBLIC_IMPORT_MODULES)},
+                ),
+            ],
+            import_only=True,
+        )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["detail"], "compact")
+        self.assertEqual(result["contract"]["import_only"], True)
+        self.assertEqual(
+            result["contract"]["public_import_module_count"],
+            len(wheel_contract.PUBLIC_IMPORT_MODULES),
+        )
+        self.assertNotIn("public_import_modules", result["contract"])
+        self.assertNotIn("public_cli_help_commands", result["contract"])
+        self.assertNotIn("expected_mcp_tools", result["contract"])
+        self.assertIn("--detail full", result["detail_command"])
+        self.assertNotIn("--keep-temp", result["detail_command"])
+        self.assertLess(len(json.dumps(result, ensure_ascii=False)), 1600)
+
+    def test_wheel_contract_full_detail_retains_contract_inventory(self) -> None:
+        result = wheel_contract.render_result(
+            [wheel_contract.Check("build_wheel", "pass", "built one wheel")],
+            import_only=True,
+            detail="full",
+        )
+
+        self.assertEqual(result["detail"], "full")
+        self.assertIn("public_import_modules", result["contract"])
+        self.assertIn("public_cli_help_commands", result["contract"])
+        self.assertIn("expected_mcp_tools", result["contract"])
+        self.assertIn("aippocampus_runtime.cli.facade", result["contract"]["public_import_modules"])
 
     def test_release_docs_and_workflows_run_fresh_wheel_contract(self) -> None:
         checklist = RELEASE_CHECKLIST.read_text(encoding="utf-8")

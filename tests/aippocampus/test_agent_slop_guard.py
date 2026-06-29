@@ -15,6 +15,7 @@ GUARD = REPO_ROOT / "tools" / "aippocampus" / "agent_slop_guard.py"
 FIXTURES = REPO_ROOT / "tests" / "aippocampus" / "agent_slop_guard_fixtures"
 
 agent_slop_guard = import_tool_root_module("agent_slop_guard")
+guard_registry = import_tool_root_module("guard_registry")
 
 
 class AgentSlopGuardTests(unittest.TestCase):
@@ -393,7 +394,6 @@ def compact_card():
         "blocker_count": 1,
         "error": {"code": "demo"},
         "likely_cause": "demo cause",
-        "source_boundary": {"local_paths_serialized": False},
         "detail_command": "python tool.py --detail full",
     }
 """
@@ -402,6 +402,35 @@ def compact_card():
         findings = agent_slop_guard.analyze_text(text, path=path, changed_files={path})
 
         self.assertEqual(findings, [])
+
+    def test_runtime_compact_policy_denylist_is_detail_only_in_guard_registry(self) -> None:
+        for field in guard_registry.RUNTIME_COMPACT_POLICY_FIELD_DENYLIST:
+            with self.subTest(field=field):
+                self.assertNotEqual(guard_registry.classify_compact_field(field), "compact_contract")
+
+    def test_public_compact_field_classification_blocks_boundary_policy_fields(self) -> None:
+        text = """
+def compact_card():
+    return {
+        "kind": "demo",
+        "status": "pass",
+        "claim_boundary": "no_claim_before_reopen",
+        "source_boundary": {"local_paths_serialized": False},
+        "operator_detail_command": "python tool.py --detail full",
+    }
+"""
+        path = "tools/aippocampus/test_plan_projection.py"
+
+        findings = agent_slop_guard.analyze_text(text, path=path, changed_files={path})
+
+        self.assertEqual(
+            [item["rule_id"] for item in findings],
+            [
+                "public_compact_field_misplaced",
+                "public_compact_field_misplaced",
+                "public_compact_field_misplaced",
+            ],
+        )
 
     def test_public_compact_field_classification_blocks_detail_fields(self) -> None:
         text = """

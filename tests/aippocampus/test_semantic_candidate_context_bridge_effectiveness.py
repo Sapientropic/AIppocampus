@@ -14,6 +14,7 @@ from aippocampus_runtime.recall.semantic_bridge_map import (
     reduce_semantic_bridge_candidates,
 )
 from aippocampus_runtime.recall.semantic_effectiveness import (
+    ROW_KIND,
     append_semantic_effectiveness_rows,
     apply_semantic_effectiveness_to_candidates,
     load_semantic_effectiveness_rows,
@@ -312,6 +313,74 @@ class SemanticCandidateContextBridgeEffectivenessTests(unittest.TestCase):
         self.assertEqual(projected[0]["status"], "demoted")
         self.assertNotIn("effectiveness_recommendation", projected[1])
         self.assertEqual(rows[0]["producer_kind"], "dream_probe")
+
+    def test_semantic_effectiveness_applies_cumulative_append_only_pressure(self) -> None:
+        candidates = [
+            {
+                "candidate_id": "bridge:mixed",
+                "kind": "semantic_bridge",
+                "source_refs": [source_ref("mixed")],
+                "scope_bucket": "project",
+            },
+            {
+                "candidate_id": "bridge:recovered",
+                "kind": "semantic_bridge",
+                "source_refs": [source_ref("recovered")],
+                "scope_bucket": "project",
+            },
+        ]
+        rows = [
+            {
+                "kind": ROW_KIND,
+                "candidate_id": "bridge:mixed",
+                "scope_bucket": "project",
+                "outcome_counts": {"wrong_route_drag": 2},
+                "bounded_route_delta": -1.0,
+                "recommendation": "demote",
+            },
+            {
+                "kind": ROW_KIND,
+                "candidate_id": "bridge:mixed",
+                "scope_bucket": "project",
+                "outcome_counts": {"source_reopen_success": 2},
+                "bounded_route_delta": 1.0,
+                "recommendation": "promote_for_routing",
+            },
+            {
+                "kind": ROW_KIND,
+                "candidate_id": "bridge:recovered",
+                "scope_bucket": "project",
+                "outcome_counts": {"wrong_route_drag": 1},
+                "bounded_route_delta": -1.0,
+                "recommendation": "demote",
+            },
+            {
+                "kind": ROW_KIND,
+                "candidate_id": "bridge:recovered",
+                "scope_bucket": "project",
+                "outcome_counts": {"source_reopen_success": 3},
+                "bounded_route_delta": 1.0,
+                "recommendation": "promote_for_routing",
+            },
+        ]
+
+        projected = {
+            row["candidate_id"]: row
+            for row in apply_semantic_effectiveness_to_candidates(candidates, rows)
+        }
+
+        self.assertEqual(
+            projected["bridge:mixed"]["effectiveness_recommendation"],
+            "conflicting_feedback_hold",
+        )
+        self.assertEqual(projected["bridge:mixed"]["navigation_priority_delta"], 0.0)
+        self.assertEqual(projected["bridge:mixed"]["semantic_effectiveness_ledger_row_count"], 2)
+        self.assertEqual(
+            projected["bridge:recovered"]["effectiveness_recommendation"],
+            "promote_for_routing",
+        )
+        self.assertEqual(projected["bridge:recovered"]["navigation_priority_delta"], 0.5)
+        self.assertEqual(projected["bridge:recovered"]["status"], "accepted")
 
 if __name__ == "__main__":
     unittest.main()

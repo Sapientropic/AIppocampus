@@ -55,16 +55,6 @@ class ForegroundSelection:
 
 
 @dataclass(frozen=True)
-class ApwProjectionState:
-    foreground_action: dict[str, Any]
-    safe_next_actions: list[dict[str, Any]]
-    weak_route_recovery_card: dict[str, Any] | None
-    associative_path_fallback: dict[str, Any] | None
-    associative_path_policy: dict[str, Any] | None
-    apw_recovery: dict[str, Any] | None
-
-
-@dataclass(frozen=True)
 class FallbackPromotionState:
     foreground_action: dict[str, Any]
     safe_next_actions: list[dict[str, Any]]
@@ -232,28 +222,6 @@ def _with_recall_selector(action: Mapping[str, Any], recall_selector: str) -> di
     payload.pop("last_recall_fallback_command", None)
     payload.pop("last_recall_fallback_boundary", None)
     return payload
-
-
-def _associative_path_fallback_action(
-    card: Mapping[str, Any] | None,
-    *,
-    recall_selector: str,
-    cache_available: bool,
-) -> dict[str, Any] | None:
-    if not isinstance(card, Mapping) or card.get("status") != "route_candidate":
-        return None
-    try:
-        request_index = int(card.get("request_index") or 0)
-    except (TypeError, ValueError):
-        request_index = 0
-    if request_index <= 0 or not cache_available:
-        return None
-    return recovery_projection.associative_path_fallback_action(
-        card,
-        recall_selector=recall_selector,
-        cache_available=cache_available,
-        deepen_action_builder=route_projection.route_deepen_action,
-    )
 
 
 def _projection_context(payload: Mapping[str, Any]) -> RecallProjectionContext:
@@ -468,165 +436,6 @@ def _apply_source_open_and_exact_search_actions(
     return foreground_action, safe_next_actions, exact_wording_source_search_primary
 
 
-def _apply_associative_path_recovery(
-    payload: Mapping[str, Any],
-    context: RecallProjectionContext,
-    *,
-    foreground_action: dict[str, Any],
-    safe_next_actions: list[dict[str, Any]],
-    weak_route_recovery_card: dict[str, Any] | None,
-) -> ApwProjectionState:
-    raw_associative_path_fallback = payload.get("associative_path_fallback")
-    raw_associative_path_fallback = (
-        raw_associative_path_fallback if isinstance(raw_associative_path_fallback, Mapping) else None
-    )
-    associative_path_fallback = recovery_projection.compact_associative_path_fallback_card(
-        raw_associative_path_fallback
-    )
-    associative_path_policy = recovery_projection.compact_associative_path_policy(
-        payload.get("associative_path_policy")
-    )
-    apw_recovery = recovery_projection.associative_path_recovery_state(
-        associative_path_policy,
-        associative_path_fallback,
-    )
-    associative_path_action = _associative_path_fallback_action(
-        associative_path_fallback,
-        recall_selector=context.recall_selector,
-        cache_available=context.cache_available,
-    )
-    apw_requested_but_unwired = (
-        isinstance(associative_path_policy, dict)
-        and associative_path_policy.get("explicit_requested")
-        and isinstance(associative_path_fallback, dict)
-        and associative_path_fallback.get("status") == "abstained"
-        and not associative_path_policy.get("apw_candidate_input_available")
-    )
-    if apw_requested_but_unwired and context.labels_low_specificity:
-        foreground_action, safe_next_actions, weak_route_recovery_card = (
-            _prefer_apw_recovery_over_low_confidence_routes(
-                raw_associative_path_fallback=raw_associative_path_fallback,
-                associative_path_fallback=associative_path_fallback,
-                foreground_action=foreground_action,
-                safe_next_actions=safe_next_actions,
-                weak_route_recovery_card=weak_route_recovery_card,
-                recovery_cue=context.recovery_cue,
-            )
-        )
-    if associative_path_action:
-        ordinary_recovery_action = core.strip_empty(
-            normalize_foreground_action(foreground_action)
-        )
-        ordinary_action_id = str(ordinary_recovery_action.get("id") or ordinary_recovery_action.get("action_id") or "")
-        apw_primary = current_source_route_policy.apw_allows_primary_for_current_foreground(
-            should_replace=recovery_projection.apw_should_replace_foreground_action(foreground_action),
-            associative_path_policy=associative_path_policy,
-            raw_associative_path_fallback=raw_associative_path_fallback,
-            foreground_action=ordinary_recovery_action,
-            recall_payload=payload,
-        )
-        if apw_primary:
-            if ordinary_recovery_action:
-                safe_next_actions = [ordinary_recovery_action, *safe_next_actions]
-            foreground_action = associative_path_action
-        if isinstance(associative_path_fallback, dict):
-            if apw_primary:
-                associative_path_fallback["primary_action"] = "deepen_associative_path_fallback"
-                if ordinary_action_id:
-                    associative_path_fallback["ordinary_recovery_action_id"] = ordinary_action_id
-            else:
-                # APW is a foreground recovery surface, not a parallel route chooser.
-                # Keep it in detail when ordinary recall has a safe primary.
-                associative_path_fallback = None
-                associative_path_policy = None
-    else:
-        foreground_action, safe_next_actions = (
-            apw_meta_echo_projection.maybe_promote_original_anchor_search(
-                associative_path_fallback=associative_path_fallback,
-                foreground_action=foreground_action,
-                safe_next_actions=safe_next_actions,
-                recovery_cue=context.recovery_cue,
-                source_open_primary_action=_source_open_primary_action,
-            )
-        )
-        associative_policy_action = recovery_projection.associative_path_policy_recovery_action(
-            associative_path_policy,
-            recovery_cue=context.recovery_cue,
-        )
-        if associative_policy_action and "secondary_action" not in foreground_action:
-            foreground_action["secondary_action"] = associative_policy_action
-            if isinstance(associative_path_policy, dict):
-                associative_path_policy["secondary_action"] = associative_policy_action["id"]
-    return ApwProjectionState(
-        foreground_action=foreground_action,
-        safe_next_actions=safe_next_actions,
-        weak_route_recovery_card=weak_route_recovery_card,
-        associative_path_fallback=associative_path_fallback,
-        associative_path_policy=associative_path_policy,
-        apw_recovery=apw_recovery,
-)
-
-
-def _prefer_apw_recovery_over_low_confidence_routes(
-    *,
-    raw_associative_path_fallback: Mapping[str, Any] | None,
-    associative_path_fallback: dict[str, Any] | None,
-    foreground_action: dict[str, Any],
-    safe_next_actions: list[dict[str, Any]],
-    weak_route_recovery_card: dict[str, Any] | None,
-    recovery_cue: str,
-) -> tuple[dict[str, Any], list[dict[str, Any]], dict[str, Any] | None]:
-    # A foreground APW request is stronger evidence of user intent than a
-    # generic relationship/task-management route. When APW cannot produce a
-    # source-openable candidate, keep ordinary low-confidence routes as
-    # secondary navigation only and make the primary action recover the cue.
-    ordinary_recovery_action = core.strip_empty(normalize_foreground_action(foreground_action))
-    if ordinary_recovery_action:
-        ordinary_recovery_action["route_choice_posture"] = (
-            ordinary_recovery_action.get("route_choice_posture")
-            or "ordinary_low_confidence_not_apw"
-        )
-        safe_next_actions = [ordinary_recovery_action, *safe_next_actions]
-    registry_match_count = 0
-    if isinstance(raw_associative_path_fallback, Mapping):
-        registry_match_count = int(raw_associative_path_fallback.get("registry_match_count") or 0)
-    registry_fallback = (
-        recall_choices.registry_source_search_fallback_action(recovery_cue)
-        if registry_match_count > 0
-        else None
-    )
-    foreground_action = registry_fallback or {
-        "id": "refine_apw_recovery_cue",
-        "label": "Refine APW recovery cue",
-        "tool_name": "agent_recall",
-        "command_template": 'aippocampus agent recall "{tighter_cue}" --apw-fallback --json',
-        "requires": ["tighter_cue"],
-        "template_only": True,
-        "mutation_risk": "read_only",
-        "claim_boundary": "apw_navigation_only_until_source_reopened",
-        "why": (
-            "APW was explicitly requested but found no source-reopenable route; "
-            "tighten the cue instead of deepening a low-confidence ordinary route."
-        ),
-    }
-    foreground_action["route_choice_posture"] = "apw_requested_no_source_reopenable_candidate"
-    foreground_action["why"] = (
-        "APW was explicitly requested but did not find a source-reopenable candidate; "
-        "search or refine the original cue before choosing an ordinary low-confidence route."
-    )
-    if isinstance(associative_path_fallback, dict):
-        associative_path_fallback["primary_action"] = (
-            foreground_action.get("id") or foreground_action.get("action_id")
-        )
-        associative_path_fallback["ordinary_low_confidence_routes_demoted"] = True
-    if isinstance(weak_route_recovery_card, dict):
-        weak_route_recovery_card["primary_action"] = (
-            foreground_action.get("id") or foreground_action.get("action_id")
-        )
-        weak_route_recovery_card["posture"] = "apw_requested_no_source_reopenable_candidate"
-    return foreground_action, safe_next_actions, weak_route_recovery_card
-
-
 def _apply_fallback_promotions(
     payload: Mapping[str, Any],
     context: RecallProjectionContext,
@@ -711,13 +520,19 @@ def compact_agent_recall_payload(payload: dict[str, Any]) -> MCPCompactResponseC
         foreground_action=foreground_action,
         followup_actions=safe_next_actions,
         recall_selector=context.recall_selector,
+        anchor_gate=payload.get("source_anchor_gate"),
     )
-    apw_state = _apply_associative_path_recovery(
+    apw_state = recovery_projection.apply_associative_path_recovery(
         payload,
-        context,
+        recovery_cue=context.recovery_cue,
+        recall_selector=context.recall_selector,
+        cache_available=context.cache_available,
+        labels_low_specificity=context.labels_low_specificity,
         foreground_action=foreground_action,
         safe_next_actions=safe_next_actions,
         weak_route_recovery_card=selection.weak_route_recovery_card,
+        deepen_action_builder=route_projection.route_deepen_action,
+        source_open_primary_action=_source_open_primary_action,
     )
     fallback_state = _apply_fallback_promotions(
         payload,
